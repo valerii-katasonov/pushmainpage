@@ -2,14 +2,15 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Plan lekcji</title>
-    <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;600;700&family=Chalkduster&display=swap" rel="stylesheet">
     <style>
         body {
             font-family: 'Open Sans', sans-serif;
             background-image: url('https://zastavki.gas-kvas.com/uploads/posts/2024-09/zastavki-gas-kvas-com-35bo-p-zastavki-pro-shkolu-9.jpg');
             background-size: cover;
+            background-position: center;
             color: #333;
             margin: 0;
             padding: 0;
@@ -28,69 +29,107 @@
             gap: 10px;
             flex-wrap: wrap;
             width: 100%;
-            box-sizing: border-box; /* Для корректного отображения ширины */
+            box-sizing: border-box;
         }
         header img {
             width: 90px;
             height: 90px;
             border-radius: 15px;
+            opacity: 0;
+            transform: scale(0.5);
+            animation: logoAppear 1s ease forwards;
+        }
+        @keyframes logoAppear {
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
         }
         header h1 {
-            /* font-weight: bolder;  Усиление жирности текста */
-           /* color: black;  Обеспечивает видимость текста на белом фоне */
+            font-family: 'Chalkduster', cursive;
+            font-size: 2.5em;
+            color: white;
+            text-shadow: 
+                -1px -1px 0 black, 
+                1px -1px 0 black, 
+                -1px 1px 0 black, 
+                1px 1px 0 black;
+            margin: 0;
+            opacity: 0;
+            transform: translateY(-20px);
+            animation: titleAppear 1s ease forwards;
+            animation-delay: 0.5s;
+        }
+        @keyframes titleAppear {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
         .container {
-            background: rgba(255, 255, 255, 0.6);
+            background: rgba(0, 0, 0, 0.5);
             padding: 30px;
             border-radius: 20px;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
             text-align: center;
             max-width: 1200px;
-            width: 100%;
+            width: 90%;
             margin: auto;
-        }
-        h1 {
-            color: white;
-            text-shadow:
-                -3px -3px 0 black,
-                3px -3px 0 black,
-                -3px 3px 0 black,
-                3px 3px 0 black,
-                0px -3px 0 black,
-                0px 3px 0 black,
-                -3px 0px 0 black,
-                3px 0px 0 black;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-grow: 1;
         }
         .schedule-links {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
             gap: 20px;
+            width: 100%;
         }
         .schedule-link {
             display: flex;
             justify-content: center;
             align-items: center;
-            background-color: rgba(0, 188, 213, 0.8); /* Цвет фона с прозрачностью */
-            color: black;
+            background-color: rgba(255, 255, 255, 0.2);
+            color: white;
             text-decoration: none;
             border-radius: 15px;
             padding: 15px;
             transition: all 0.3s ease;
-            box-shadow: 0 3px 6px rgba(0,0,0,0.16), 0 3px 6px rgba(0,0,0,0.23);
+            box-shadow: 0 3px 6px rgba(0, 0, 0, 0.16), 0 3px 6px rgba(0, 0, 0, 0.23);
             font-size: 1.2em;
+            font-family: 'Chalkduster', cursive;
+            min-height: 44px; /* Минимальная высота для удобства нажатия на iPhone */
         }
         .schedule-link:hover {
-            background-color: rgba(0, 255, 255, 0.8); /* Изменение цвета фона при наведении */
+            background-color: rgba(255, 255, 255, 0.4);
             transform: translateY(-3px);
         }
+        /* Адаптация для iPhone и других мобильных устройств */
         @media (max-width: 600px) {
+            header {
+                padding: 0.5em 0; /* Уменьшаем отступы в шапке */
+            }
+            header img {
+                width: 70px; /* Уменьшаем логотип */
+                height: 70px;
+            }
+            header h1 {
+                font-size: 1.8em; /* Уменьшаем заголовок */
+            }
+            .container {
+                padding: 15px; /* Уменьшаем отступы в контейнере */
+            }
             .schedule-links {
-                grid-template-columns: 1fr;
+                grid-template-columns: 1fr; /* Один столбец на маленьких экранах */
+                gap: 10px; /* Уменьшаем расстояние между кнопками */
             }
             .schedule-link {
-                font-size: 1em;
+                font-size: 1em; /* Уменьшаем шрифт кнопок */
+                padding: 12px; /* Удобный размер для нажатий */
             }
         }
+        /* Дополнительная адаптация для больших экранов */
         @media (min-width: 1200px) {
             .container {
                 padding: 50px;
@@ -103,8 +142,8 @@
 </head>
 <body>
     <header>
-        <img src="https://push-school.com/wp-content/themes/push/images/LOGO.png" alt="Logo Push School">
-        <h1><strong>Plan lekcji<br>Push School Warsaw</strong></h1>
+        <img src="https://i.postimg.cc/WbY9TdDp/PushIco.png" alt="Logo Push School">
+        <h1>Plan lekcji<br>Push School Warsaw</h1>
     </header>
     <div class="container">
         <div class="schedule-links">
