@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Plan lekcji</title>
-    <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;600;700&family=Chalkduster&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;600;700&family=Schoolbell&display=swap" rel="stylesheet">
     <style>
         body {
             font-family: 'Open Sans', sans-serif;
@@ -19,7 +19,7 @@
             min-height: 100vh;
         }
         header {
-            background-color: rgba(0, 75, 82, 0.8); /* Изменено на #004b52 с прозрачностью */
+            background-color: rgba(0, 75, 82, 0.8);
             color: black;
             text-align: center;
             padding: 1em 0;
@@ -46,7 +46,7 @@
             }
         }
         header h1 {
-            font-family: 'Chalkduster', cursive;
+            font-family: 'Schoolbell', cursive;
             font-size: 2.5em;
             color: white;
             text-shadow: 
@@ -99,37 +99,35 @@
             box-shadow: 0 3px 6px rgba(0, 0, 0, 0.16), 0 3px 6px rgba(0, 0, 0, 0.23);
             font-size: 1.2em;
             font-family: 'Chalkduster', cursive;
-            min-height: 44px; /* Минимальная высота для удобства нажатия на iPhone */
+            min-height: 44px;
         }
         .schedule-link:hover {
             background-color: rgba(255, 255, 255, 0.4);
             transform: translateY(-3px);
         }
-        /* Адаптация для iPhone и других мобильных устройств */
         @media (max-width: 600px) {
             header {
-                padding: 0.5em 0; /* Уменьшаем отступы в шапке */
+                padding: 0.5em 0;
             }
             header img {
-                width: 70px; /* Уменьшаем логотип */
+                width: 70px;
                 height: 70px;
             }
             header h1 {
-                font-size: 1.8em; /* Уменьшаем заголовок */
+                font-size: 1.8em;
             }
             .container {
-                padding: 15px; /* Уменьшаем отступы в контейнере */
+                padding: 15px;
             }
             .schedule-links {
-                grid-template-columns: 1fr; /* Один столбец на маленьких экранах */
-                gap: 10px; /* Уменьшаем расстояние между кнопками */
+                grid-template-columns: 1fr;
+                gap: 10px;
             }
             .schedule-link {
-                font-size: 1em; /* Уменьшаем шрифт кнопок */
-                padding: 12px; /* Удобный размер для нажатий */
+                font-size: 1em;
+                padding: 12px;
             }
         }
-        /* Дополнительная адаптация для больших экранов */
         @media (min-width: 1200px) {
             .container {
                 padding: 50px;
