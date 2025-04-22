@@ -728,6 +728,7 @@
     document.querySelectorAll('.lang-toggle').forEach(button => {
       button.addEventListener('click', () => {
         currentLanguage = button.dataset.lang;
+        console.log('Вибрана мова:', currentLanguage); // Для відладки
         document.querySelectorAll('.lang-toggle').forEach(btn => btn.classList.remove('active'));
         button.classList.add('active');
         updateStaticTexts();
@@ -737,11 +738,20 @@
         renderCurrentLesson();
 
         const image = document.querySelector('.google-image');
-        if (currentLanguage === 'pl') {
-          image.src = 'https://i.postimg.cc/gcZFYcfn/PL.png';
-        } else {
-          image.src = 'https://i.postimg.cc/W1RVp0n2/2.png';
+        if (!image) {
+          console.error('Елемент .google-image не знайдено');
+          return;
         }
+        const timestamp = new Date().getTime();
+        const newSrc = currentLanguage === 'pl'
+          ? `https://i.postimg.cc/gcZFYcfn/PL.png?t=${timestamp}`
+          : `https://i.postimg.cc/W1RVp0n2/2.png?t=${timestamp}`;
+        console.log('Змінюємо src на:', newSrc); // Для відладки
+        image.src = newSrc;
+        image.onerror = () => {
+          console.error('Помилка завантаження зображення:', image.src);
+          image.src = 'https://i.postimg.cc/W1RVp0n2/2.png'; // Запасне зображення
+        };
       });
     });
 
