@@ -1,0 +1,187 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plan wydarzeń kulturalnych - Szkoła Podstawowa</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700&family=Open+Sans:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Open Sans', sans-serif;
+            background-image: url('https://zastavki.gas-kvas.com/uploads/posts/2024-09/zastavki-gas-kvas-com-35bo-p-zastavki-pro-shkolu-9.jpg');
+            background-size: cover;
+            background-position: center;
+            color: #333;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+        header {
+            background-color: rgba(0, 75, 82, 0.8);
+            color: black;
+            text-align: center;
+            padding: 1em 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        header img {
+            width: 90px;
+            height: 90px;
+            border-radius: 15px;
+            opacity: 0;
+            transform: scale(0.5);
+            animation: logoAppear 1s ease forwards;
+        }
+        @keyframes logoAppear {
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+        header h1 {
+            font-family: 'Montserrat', sans-serif;
+            font-weight: 700;
+            font-size: 2.5em;
+            color: white;
+            text-shadow: 
+                -1px -1px 0 black, 
+                1px -1px 0 black, 
+                -1px 1px 0 black, 
+                1px 1px 0 black;
+            margin: 0;
+            opacity: 0;
+            transform: translateY(-20px);
+            animation: titleAppear 1s ease forwards;
+            animation-delay: 0.5s;
+        }
+        @keyframes titleAppear {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        .container {
+            background: rgba(0, 0, 0, 0.5);
+            padding: 30px;
+            border-radius: 20px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+            text-align: center;
+            max-width: 1200px;
+            width: 90%;
+            margin: auto;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-grow: 1;
+        }
+        .content {
+            color: white;
+            text-align: left;
+            max-width: 800px;
+        }
+        .content h2 {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 2em;
+            margin-bottom: 20px;
+        }
+        .content p {
+            font-size: 1.2em;
+            margin-bottom: 20px;
+        }
+        .content ul {
+            list-style: none;
+            padding: 0;
+        }
+        .content li {
+            font-size: 1.1em;
+            margin-bottom: 15px;
+            line-height: 1.5;
+        }
+        @media (max-width: 600px) {
+            header {
+                padding: 0.5em 0;
+            }
+            header img {
+                width: 70px;
+                height: 70px;
+            }
+            header h1 {
+                font-size: 1.8em;
+            }
+            .container {
+                padding: 15px;
+            }
+            .content h2 {
+                font-size: 1.5em;
+            }
+            .content p, .content li {
+                font-size: 1em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <img src="https://i.postimg.cc/WbY9TdDp/PushIco.png" alt="Logo Push School">
+        <h1>Plan wydarzeń kulturalnych<br>Szkoła Podstawowa</h1>
+    </header>
+    <div class="container">
+        <div class="content">
+            <h2>Plan wydarzeń kulturalnych na okres 22-25 kwietnia</h2>
+            <p>Temat tygodnia: Ekologia i środowisko (22 kwietnia – Dzień Ziemi) 🌱 🌳🌿</p>
+            <ul>
+                <li>🌱 Akcja „Kwitnąca szkoła”<br>(Uczniowie klasy 3, wraz z p. Tają i Tomaszem, będą sadzić kwiaty na szkolnej rabacie) inicjatywa klasy p. Tai💚</li>
+                <li>🌱 5-minutowa eko-rozmowa<br>– Proste pytanie dla wszystkich: „Co już zrobiłeś/zrobiłaś dzisiaj dla Ziemi?” (można przeprowadzić w klasie lub na zewnątrz)</li>
+                <li>🌱 Rozmowy tematyczne „Ja i mój ekologiczny nawyk”<br>(Indywidualnie z wychowawcami klas)</li>
+                <li>🌱 Aktywne przerwy<br>Organizacja aktywności muzycznych, tanecznych lub gier podczas dużej przerwy💚</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>
