@@ -105,21 +105,56 @@
         }
         .content h2 {
             font-family: 'Montserrat', sans-serif;
-            font-size: 2em;
-            margin-bottom: 20px;
+            font-size: 2.2em;
+            margin-bottom: 30px;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
         }
         .content p {
             font-size: 1.2em;
             margin-bottom: 20px;
+            text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.5);
         }
         .content ul {
             list-style: none;
             padding: 0;
         }
         .content li {
-            font-size: 1.1em;
-            margin-bottom: 15px;
-            line-height: 1.5;
+            font-size: 1.2em;
+            line-height: 1.6;
+            margin-bottom: 20px;
+            background-color: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            opacity: 0;
+            transform: translateY(20px);
+            animation: itemAppear 0.5s ease forwards;
+            animation-delay: calc(0.2s * var(--index));
+        }
+        @keyframes itemAppear {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        .content li:hover {
+            background-color: rgba(255, 255, 255, 0.2);
+            transform: translateY(-3px);
+            transition: all 0.3s ease;
+        }
+        .back-button {
+            display: inline-block;
+            background-color: rgba(255, 255, 255, 0.2);
+            color: white;
+            text-decoration: none;
+            padding: 10px 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            transition: all 0.3s ease;
+        }
+        .back-button:hover {
+            background-color: rgba(255, 255, 255, 0.4);
+            transform: translateY(-3px);
         }
         @media (max-width: 600px) {
             header {
@@ -136,7 +171,7 @@
                 padding: 15px;
             }
             .content h2 {
-                font-size: 1.5em;
+                font-size: 1.8em;
             }
             .content p, .content li {
                 font-size: 1em;
@@ -157,13 +192,14 @@
     </header>
     <div class="container">
         <div class="content">
+            <a href="index.html" class="back-button">Powrót do strony głównej</a>
             <h2>Plan wydarzeń kulturalnych na okres 22-25 kwietnia</h2>
             <p>Temat tygodnia: Ekologia i środowisko (22 kwietnia – Dzień Ziemi) 🌱 🌳🌿</p>
             <ul>
-                <li>🌱 Akcja „Kwitnąca szkoła”<br>(Uczniowie klasy 3, wraz z p. Tają i Tomaszem, będą sadzić kwiaty na szkolnej rabacie) inicjatywa klasy p. Tai💚</li>
-                <li>🌱 5-minutowa eko-rozmowa<br>– Proste pytanie dla wszystkich: „Co już zrobiłeś/zrobiłaś dzisiaj dla Ziemi?” (można przeprowadzić w klasie lub na zewnątrz)</li>
-                <li>🌱 Rozmowy tematyczne „Ja i mój ekologiczny nawyk”<br>(Indywidualnie z wychowawcami klas)</li>
-                <li>🌱 Aktywne przerwy<br>Organizacja aktywności muzycznych, tanecznych lub gier podczas dużej przerwy💚</li>
+                <li style="--index: 1;">🌱 Akcja „Kwitnąca szkoła”<br>(Uczniowie klasy 3, wraz z p. Tają i Tomaszem, będą sadzić kwiaty na szkolnej rabacie) inicjatywa klasy p. Tai💚</li>
+                <li style="--index: 2;">🌱 5-minutowa eko-rozmowa<br>– Proste pytanie dla wszystkich: „Co już zrobiłeś/zrobiłaś dzisiaj dla Ziemi?” (można przeprowadzić w klasie lub na zewnątrz)</li>
+                <li style="--index: 3;">🌱 Rozmowy tematyczne „Ja i mój ekologiczny nawyk”<br>(Indywidualnie z wychowawcami klas)</li>
+                <li style="--index: 4;">🌱 Aktywne przerwy<br>Organizacja aktywności muzycznych, tanecznych lub gier podczas dużej przerwy💚</li>
             </ul>
         </div>
     </div>
