@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>План культурних заходів - Початкова школа</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700&family=Open+Sans:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Open Sans', sans-serif;
+            background-image: url('https://zastavki.gas-kvas.com/uploads/posts/2024-09/zastavki-gas-kvas-com-35bo-p-zastavki-pro-shkolu-9.jpg');
+            background-size: cover;
+            background-position: center;
+            color: #333;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+        header {
+            background-color: rgba(0, 75, 82, 0.8);
+            color: black;
+            text-align: center;
+            padding: 1em 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            width: 100%;
+            box-sizing: border-box;
+            position: relative;
+        }
+        header img {
+            width: 90px;
+            height: 90px;
+            border-radius: 15px;
+            opacity: 0;
+            transform: scale(0.5);
+            animation: logoAppear 1s ease forwards;
+        }
+        @keyframes logoAppear {
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+        header h1 {
+            font-family: 'Montserrat', sans-serif;
+            font-weight: 700;
+            font-size: 2.5em;
+            color: white;
+            text-shadow: 
+                -1px -1px 0 black, 
+                1px -1px 0 black, 
+                -1px 1px 0 black, 
+                1px 1px 0 black;
+            margin: 0;
+            opacity: 0;
+            transform: translateY(-20px);
+            animation: titleAppear 1s ease forwards;
+            animation-delay: 0.5s;
+        }
+        @keyframes titleAppear {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        .language-switch {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+        }
+        .language-switch a {
+            color: white;
+            text-decoration: none;
+            margin: 0 5px;
+            font-size: 1em;
+        }
+        .language-switch span {
+            color: white;
+            margin: 0 5px;
+            font-weight: bold;
+        }
+        .container {
+            background: rgba(0, 0, 0, 0.5);
+            padding: 30px;
+            border-radius: 20px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+            text-align: center;
+            max-width: 1200px;
+            width: 90%;
+            margin: auto;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-grow: 1;
+        }
+        .content {
+            color: white;
+            text-align: left;
+            max-width: 800px;
+        }
+        .content h2 {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 2em;
+            margin-bottom: 20px;
+        }
+        .content p {
+            font-size: 1.2em;
+            margin-bottom: 20px;
+        }
+        .content ul {
+            list-style: none;
+            padding: 0;
+        }
+        .content li {
+            font-size: 1.1em;
+            margin-bottom: 15px;
+            line-height: 1.5;
+        }
+        @media (max-width: 600px) {
+            header {
+                padding: 0.5em 0;
+            }
+            header img {
+                width: 70px;
+                height: 70px;
+            }
+            header h1 {
+                font-size: 1.8em;
+            }
+            .container {
+                padding: 15px;
+            }
+            .content h2 {
+                font-size: 1.5em;
+            }
+            .content p, .content li {
+                font-size: 1em;
+            }
+            .language-switch {
+                font-size: 0.9em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <a href="index-uk.html"><img src="https://i.postimg.cc/WbY9TdDp/PushIco.png" alt="Logo Push School"></a>
+        <h1>План культурних заходів<br>Початкова школа</h1>
+        <div class="language-switch">
+            <a href="cultural-junior.html">Polski</a> | <span>Українська</span>
+        </div>
+    </header>
+    <div class="container">
+        <div class="content">
+            <h2>План культурних заходів на період 22-25 квітня</h2>
+            <p>Тема тижня: Екологія та довкілля (22 квітня – День Землі) 🌱 🌳🌿</p>
+            <ul>
+                <li>🌱 Акція «Квітуча школа»<br>(Учні 3 класу разом із п. Таєю та Томасом саджатимуть квіти на шкільній клумбі) ініціатива класу п. Таї💚</li>
+                <li>🌱 5-хвилинний екозум<br>– Просте питання для всіх: «Що ти вже зробив/зробила сьогодні для Землі?» (можна провести в класі або на вулиці)</li>
+                <li>🌱 Тематичні бесіди «Я і моя екологічна звичка»<br>(Індивідуально з класними керівниками)</li>
+                <li>🌱 Активні перерви<br>Організація музичних, танцювальних або ігрових активностей під час великої перерви💚</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>
