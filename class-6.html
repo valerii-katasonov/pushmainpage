@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Розклад уроків - 6 клас</title>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <style>
+    body {
+      font-family: 'Montserrat', sans-serif;
+      margin: 0;
+      padding: 0;
+      background-image: url('https://zastavki.gas-kvas.com/uploads/posts/2024-09/zastavki-gas-kvas-com-35bo-p-zastavki-pro-shkolu-9.jpg');
+      background-size: cover;
+      background-position: center;
+      background-attachment: fixed;
+      min-height: 100vh;
+      transition: background 0.5s ease, color 0.5s ease;
+      position: relative;
+      font-size: 16px;
+      color: #333;
+    }
+
+    body.dark-theme {
+      background: linear-gradient(135deg, rgba(0, 43, 51, 0.6) 0%, rgba(0, 77, 87, 0.6) 100%), url('https://zastavki.gas-kvas.com/uploads/posts/2024-09/zastavki-gas-kvas-com-35bo-p-zastavki-pro-shkolu-9.jpg');
+      background-size: cover;
+      background-position: center;
+      background-attachment: fixed;
+      color: #fff;
+    }
+
+    header {
+      background: linear-gradient(45deg, #00bfd1, #006d77);
+      color: white;
+      padding: 1.5rem 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 1rem;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+      position: relative;
+    }
+
+    body.dark-theme header {
+      background: linear-gradient(45deg, #003d44, #006d77);
+    }
+
+    header img {
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      border: 3px solid rgba(255,255,255,0.2);
+      opacity: 0;
+      animation: fadeInHeader 1s ease-in forwards 1.5s;
+    }
+
+    header h1 {
+      font-size: 1.8rem;
+      margin: 0;
+      font-weight: 700;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+      animation: fadeIn 1s ease-in;
+    }
+
+    .theme-toggle, .notify-toggle {
+      position: absolute;
+      top: 1rem;
+      background: none;
+      border: none;
+      color: white;
+      font-size: 1.5rem;
+      cursor: pointer;
+      padding: 0.5rem;
+    }
+
+    .theme-toggle { right: 3.5rem; }
+    .notify-toggle { right: 1rem; }
+
+    .lang-switcher {
+      position: absolute;
+      top: 1rem;
+      left: 1rem;
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .lang-toggle {
+      background: none;
+      border: 1px solid white;
+      border-radius: 4px;
+      color: white;
+      font-size: 1rem;
+      cursor: pointer;
+      padding: 0.5rem;
+      transition: background 0.3s ease;
+    }
+
+    .lang-toggle:hover {
+      background: rgba(255,255,255,0.2);
+    }
+
+    .lang-toggle.active {
+      background: white;
+      color: #006d77;
+    }
+
+    @media screen and (max-width: 480px) {
+      .lang-switcher {
+        flex-direction: column;
+        top: 0.5rem;
+        left: 0.5rem;
+      }
+
+      .lang-toggle {
+        padding: 0.4rem;
+        font-size: 0.9rem;
+      }
+    }
+
+    .logo-intro {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      border: 3px solid rgba(255,255,255,0.2);
+      animation: logoIntro 1s ease-in-out forwards;
+      z-index: 1000;
+    }
+
+    @keyframes logoIntro {
+      0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+      50% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+      100% { opacity: 0; transform: translate(-50%, -50%) scale(1.1); }
+    }
+
+    @keyframes fadeInHeader {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    .container {
+      max-width: 2000px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+      display: flex;
+      gap: 1.5rem;
+      justify-content: center;
+      animation: fadeInUp 0.8s ease-in;
+    }
+
+    .current-lesson {
+      font-size: 1.2rem;
+      color: #1a1a66;
+      background: white;
+      border-left: 6px solid #4CAF50;
+      padding: 1rem;
+      margin: 0 0 1.5rem;
+      border-radius: 12px;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    body.dark-theme .current-lesson {
+      background: #333;
+      color: #fff;
+    }
+
+    .current-lesson:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 8px 20px rgba(0,0,0,0.12);
+    }
+
+    .day-filter {
+      display: flex;
+      justify-content: center;
+      gap: 0.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .day-filter button {
+      padding: 0.8rem 1rem;
+      border: none;
+      background: #f8f9fa;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.3s ease;
+      min-width: 44px;
+      min-height: 44px;
+      font-size: 1rem;
+    }
+
+    .day-filter button.active {
+      background: #4CAF50;
+      color: white;
+    }
+
+    body.dark-theme .day-filter button {
+      background: #555;
+      color: #fff;
+    }
+
+    body.dark-theme .day-filter button.active {
+      background: #66BB6A;
+    }
+
+    .table-wrapper {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      margin-bottom: 1.5rem;
+      background: white;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+    }
+
+    body.dark-theme table {
+      background: #444;
+      color: #fff;
+    }
+
+    th, td {
+      padding: 0.8rem 1rem;
+      text-align: center;
+      border-bottom: 1px solid rgba(0,0,0,0.05);
+      font-size: 1rem;
+    }
+
+    body.dark-theme th, body.dark-theme td {
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+
+    th {
+      background: #f8f9fa;
+      font-weight: 600;
+      color: #333;
+    }
+
+    body.dark-theme th {
+      background: #555;
+    }
+
+    .highlight {
+      background: #f5f5f5;
+      font-style: italic;
+    }
+
+    body.dark-theme .highlight {
+      background: #555;
+    }
+
+    .monday { background: rgba(173, 216, 230, 0.6); }
+    .tuesday { background: rgba(144, 238, 144, 0.6); }
+    .wednesday { background: rgba(255, 255, 224, 0.6); }
+    .thursday { background: rgba(255, 218, 185, 0.6); }
+    .friday { background: rgba(255, 192, 203, 0.6); }
+    .current-day { background: rgba(76, 175, 80, 0.3); }
+
+    .tables-container {
+      padding: 1.5rem;
+      background: white;
+      border-radius: 15px;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+      margin: 0;
+      min-width: 600px;
+      flex: 1;
+    }
+
+    body.dark-theme .tables-container {
+      background: #333;
+    }
+
+    .links-container {
+      padding: 1.5rem;
+      background: white;
+      border-radius: 15px;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+      max-width: 350px;
+      min-width: 300px;
+      transition: transform 0.3s ease;
+    }
+
+    body.dark-theme .links-container {
+      background: #333;
+    }
+
+    .links-container:hover {
+      transform: translateY(-5px);
+    }
+
+    .links-container h3 {
+      color: #1a1a66;
+      margin: 0 0 1rem;
+      font-size: 1.2rem;
+    }
+
+    body.dark-theme .links-container h3 {
+      color: #fff;
+    }
+
+    .links-container a {
+      color: #2d2d99;
+      text-decoration: none;
+      transition: color 0.3s ease;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.8rem 0;
+      font-size: 1rem;
+    }
+
+    body.dark-theme .links-container a {
+      color: #4CAF50;
+    }
+
+    .links-container a:hover {
+      color: #4CAF50;
+    }
+
+    body.dark-theme .links-container a:hover {
+      color: #66BB6A;
+    }
+
+    .image-container-right {
+      padding: 1.5rem;
+      background: white;
+      border-radius: 15px;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+      max-width: 450px;
+      min-width: 300px;
+      transition: transform 0.3s ease;
+    }
+
+    body.dark-theme .image-container-right {
+      background: #333;
+    }
+
+    .image-container-right:hover {
+      transform: translateY(-5px);
+    }
+
+    .google-image {
+      width: 100%;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: transform 0.3s ease;
+      touch-action: pinch-zoom;
+    }
+
+    h2 {
+      color: #1a1a66;
+      font-size: 1.5rem;
+      margin: 0 0 1.5rem;
+      text-align: center;
+    }
+
+    body.dark-theme h2 {
+      color: #fff;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @media screen and (max-width: 768px) {
+      .container {
+        flex-direction: column;
+        padding: 0 0.5rem;
+      }
+
+      .links-container, .image-container-right, .tables-container {
+        max-width: 100%;
+        min-width: 0;
+        margin: 0 0 1.5rem;
+      }
+
+      header {
+        padding: 1rem 0;
+      }
+
+      header img {
+        width: 80px;
+        height: 80px;
+      }
+
+      header h1 {
+        font-size: 1.5rem;
+      }
+
+      .day-filter {
+        flex-wrap: wrap;
+      }
+
+      .current-lesson {
+        font-size: 1.1rem;
+      }
+    }
+
+    @media screen and (max-width: 480px) {
+      header h1 {
+        font-size: 1.2rem;
+      }
+
+      header img {
+        width: 60px;
+        height: 60px;
+      }
+
+      .theme-toggle, .notify-toggle {
+        font-size: 1.2rem;
+        top: 0.8rem;
+      }
+
+      .day-filter button {
+        padding: 0.6rem 0.8rem;
+        font-size: 0.9rem;
+      }
+
+      th, td {
+        padding: 0.6rem 0.8rem;
+        font-size: 0.9rem;
+      }
+
+      .links-container a {
+        font-size: 0.9rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <img src="https://i.postimg.cc/WbY9TdDp/PushIco.png" alt="Push School Logo Intro" class="logo-intro">
+
+  <header>
+    <div class="lang-switcher">
+      <button class="lang-toggle" data-lang="ua">UA</button>
+      <button class="lang-toggle" data-lang="pl">PL</button>
+    </div>
+    <a href="index-uk.html"><img src="https://i.postimg.cc/WbY9TdDp/PushIco.png" alt="Push School Logo"></a>
+    <h1 id="header">Розклад уроків<br>6 клас<br>Push School Warsaw</h1>
+    <button class="theme-toggle" aria-label="Переключити тему"><i class="fas fa-moon"></i></button>
+    <button class="notify-toggle" aria-label="Увімкнути сповіщення"><i class="fas fa-bell"></i></button>
+  </header>
+  <div class="container">
+    <div class="links-container">
+      <h3 id="useful-links">Корисні посилання:</h3>
+      <ul>
+        <li><a href="https://prosvita.net/" target="_blank"><i class="fas fa-link"></i> Prosvita</a></li>
+        <li><a href="https://pushschoolwarsaw.edupage.org/" target="_blank"><i class="fas fa-link"></i> PushSchoolWarsaw</a></li>
+      </ul>
+      <h3 id="textbooks">Підручники:</h3>
+      <ul>
+        <li><a href="https://shkola.in.ua/2818-matematyka-6-klas-merzlyak-2023.html" target="_blank"><i class="fas fa-book"></i> Математика 6 клас / Мерзляк</a></li>
+        <li><a href="https://shkola.in.ua/2819-ukrainska-mova-6-klas-zabolotnyi-2023.html" target="_blank"><i class="fas fa-book"></i> Українська мова 6 клас / Заболотний</a></li>
+        <li><a href="https://shkola.in.ua/2820-ukrainska-literatura-6-klas-avramenko-2023.html" target="_blank"><i class="fas fa-book"></i> Українська література 6 клас / Авраменко</a></li>
+        <li><a href="https://online.flipbuilder.com/sdtta/acoy/" target="_blank"><i class="fas fa-book"></i> Academy Stars 6: Pupil's book</a></li>
+      </ul>
+    </div>
+    <div class="tables-container">
+      <div class="current-lesson" id="current-lesson" role="alert">Зараз немає уроків.</div>
+      <h2 id="schedule-today">Розклад на сьогодні</h2>
+      <div class="day-filter" id="day-filter"></div>
+      <div class="table-wrapper">
+        <table id="daily-schedule" role="grid">
+          <thead>
+            <tr>
+              <th id="th-number">№</th>
+              <th id="th-subject">Урок</th>
+              <th id="th-time">Час</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <h2 id="schedule-week">Розклад на тиждень</h2>
+      <div class="table-wrapper">
+        <table role="grid">
+          <thead>
+            <tr>
+              <th id="th-day">День</th>
+              <th id="th-number-week">№</th>
+              <th id="th-subject-week">Урок</th>
+              <th id="th-time-week">Час</th>
+            </tr>
+          </thead>
+          <tbody id="weekly-schedule"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="image-container-right">
+      <img class="google-image" src="https://i.postimg.cc/W1RVp0n2/2.png" alt="Google Drive Image">
+    </div>
+  </div>
+
+  <script src="schedule-class-6.js"></script>
+  <script>
+    const translations = {
+      header: {
+        ua: 'Розклад уроків<br>6 клас<br>Push School Warsaw',
+        pl: 'Plan lekcji<br>6 klasa<br>Push School Warsaw'
+      },
+      usefulLinks: { ua: 'Корисні посилання:', pl: 'Przydatne linki:' },
+      textbooks: { ua: 'Підручники:', pl: 'Podręczniki:' },
+      scheduleToday: { ua: 'Розклад на сьогодні', pl: 'Plan na dziś' },
+      scheduleWeek: { ua: 'Розклад на тиждень', pl: 'Plan na tydzień' },
+      noLessons: { ua: 'Зараз немає уроків.', pl: 'Obecnie nie ma lekcji.' },
+      currentLesson: { ua: 'Зараз урок: ', pl: 'Obecnie lekcja: ' },
+      currentBreak: { ua: 'Зараз: ', pl: 'Obecnie: ' },
+      lessonsFinished: { ua: 'Заняття закінчилися.', pl: 'Zajęcia się zakończyły.' },
+      thDay: { ua: 'День', pl: 'Dzień' },
+      thNumber: { ua: '№', pl: 'Nr' },
+      thSubject: { ua: 'Урок', pl: 'Lekcja' },
+      thTime: { ua: 'Час', pl: 'Czas' }
+    };
+
+    let currentLanguage = 'ua';
+    const dayKeys = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+    let selectedDay = dayKeys[new Date().getDay()];
+
+    function cacheSchedule() {
+      localStorage.setItem('schedule', JSON.stringify(schedule));
+    }
+
+    function loadCachedSchedule() {
+      const cached = localStorage.getItem('schedule');
+      return cached ? JSON.parse(cached) : schedule;
+    }
+
+    function getCurrentLesson(daySchedule) {
+      const now = new Date();
+      const currentHour = now.getHours();
+      const currentMinutes = now.getMinutes();
+      const currentTime = currentHour * 60 + currentMinutes;
+
+      for (let lesson of daySchedule) {
+        const [start, end] = lesson.time.split(" - ").map(time => {
+          const [hours, minutes] = time.split(":").map(Number);
+          return hours * 60 + minutes;
+        });
+
+        if (currentTime >= start && currentTime < end) {
+          if (lesson.subject.ua === "Перерва" || lesson.subject.ua.includes("Обід")) {
+            return { type: "break", lesson };
+          }
+          return { type: "lesson", lesson };
+        }
+      }
+
+      if (daySchedule.length > 0) {
+        const lastLessonEnd = daySchedule[daySchedule.length - 1].time.split(" - ")[1];
+        const [hours, minutes] = lastLessonEnd.split(":").map(Number);
+        const lastLessonEndTime = hours * 60 + minutes;
+
+        if (currentTime >= lastLessonEndTime) {
+          return { type: "finished" };
+        }
+      }
+
+      return null;
+    }
+
+    function updateStaticTexts() {
+      document.getElementById('header').innerHTML = translations.header[currentLanguage];
+      document.getElementById('useful-links').textContent = translations.usefulLinks[currentLanguage];
+      document.getElementById('textbooks').textContent = translations.textbooks[currentLanguage];
+      document.getElementById('schedule-today').textContent = translations.scheduleToday[currentLanguage];
+      document.getElementById('schedule-week').textContent = translations.scheduleWeek[currentLanguage];
+      document.getElementById('th-day').textContent = translations.thDay[currentLanguage];
+      document.getElementById('th-number').textContent = translations.thNumber[currentLanguage];
+      document.getElementById('th-number-week').textContent = translations.thNumber[currentLanguage];
+      document.getElementById('th-subject').textContent = translations.thSubject[currentLanguage];
+      document.getElementById('th-subject-week').textContent = translations.thSubject[currentLanguage];
+      document.getElementById('th-time').textContent = translations.thTime[currentLanguage];
+      document.getElementById('th-time-week').textContent = translations.thTime[currentLanguage];
+    }
+
+    function renderCurrentLesson() {
+      const today = new Date().getDay();
+      const todayKey = dayKeys[today];
+      const cachedSchedule = loadCachedSchedule();
+      const daySchedule = cachedSchedule[todayKey] || [];
+      const currentLessonData = getCurrentLesson(daySchedule);
+      const currentLessonDiv = document.getElementById("current-lesson");
+
+      if (currentLessonData) {
+        if (currentLessonData.type === "lesson") {
+          const lesson = currentLessonData.lesson;
+          currentLessonDiv.textContent = `${translations.currentLesson[currentLanguage]} ${lesson.subject[currentLanguage]} (${lesson.time})`;
+          if (notificationsEnabled) notifyLesson(lesson);
+        } else if (currentLessonData.type === "break") {
+          const lesson = currentLessonData.lesson;
+          currentLessonDiv.textContent = `${translations.currentBreak[currentLanguage]} ${lesson.subject[currentLanguage]} (${lesson.time})`;
+        } else if (currentLessonData.type === "finished") {
+          currentLessonDiv.textContent = translations.lessonsFinished[currentLanguage];
+        }
+      } else {
+        currentLessonDiv.textContent = translations.noLessons[currentLanguage];
+      }
+    }
+
+    function renderDailySchedule(selectedDay) {
+      const cachedSchedule = loadCachedSchedule();
+      const daySchedule = cachedSchedule[selectedDay] || [];
+      const dailyScheduleTable = document.querySelector("#daily-schedule tbody");
+      dailyScheduleTable.innerHTML = '';
+
+      daySchedule.forEach(lesson => {
+        const isBreak = lesson.subject.ua === "Перерва" || lesson.subject.ua.includes("Обід");
+        const row = `<tr class="${isBreak ? 'highlight' : ''}">
+          <td>${lesson.number}</td>
+          <td>${lesson.subject[currentLanguage]}</td>
+          <td>${lesson.time}</td>
+        </tr>`;
+        dailyScheduleTable.innerHTML += row;
+      });
+    }
+
+    function renderWeeklySchedule() {
+      const cachedSchedule = loadCachedSchedule();
+      const weeklyScheduleTable = document.querySelector("#weekly-schedule");
+      weeklyScheduleTable.innerHTML = '';
+      const today = new Date().getDay();
+      const todayKey = dayKeys[today];
+
+      const dayClasses = {
+        "Monday": "monday",
+        "Tuesday": "tuesday",
+        "Wednesday": "wednesday",
+        "Thursday": "thursday",
+        "Friday": "friday",
+      };
+
+      for (const day in cachedSchedule) {
+        const dayLessons = cachedSchedule[day];
+        const dayClass = dayClasses[day] || "";
+        const isToday = day === todayKey ? "current-day" : "";
+        const dayName = dayNames[day][currentLanguage];
+
+        dayLessons.forEach((lesson, index) => {
+          const isBreak = lesson.subject.ua === "Перерва" || lesson.subject.ua.includes("Обід");
+          const rowClass = isBreak ? "highlight" : `${dayClass} ${isToday}`;
+          const row = `<tr class="${rowClass}">
+            ${index === 0 ? `<td rowspan="${dayLessons.length}">${dayName}</td>` : ''}
+            <td>${lesson.number}</td>
+            <td>${lesson.subject[currentLanguage]}</td>
+            <td>${lesson.time}</td>
+          </tr>`;
+          weeklyScheduleTable.innerHTML += row;
+        });
+      }
+    }
+
+    function renderDayFilter() {
+      const daysOfWeek = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
+      const filterContainer = document.getElementById("day-filter");
+      filterContainer.innerHTML = '';
+
+      daysOfWeek.forEach((day) => {
+        const button = document.createElement("button");
+        button.textContent = dayNames[day][currentLanguage];
+        button.dataset.day = day;
+        if (day === selectedDay) button.classList.add("active");
+        button.addEventListener("click", () => {
+          selectedDay = day;
+          document.querySelectorAll(".day-filter button").forEach(btn => btn.classList.remove("active"));
+          button.classList.add("active");
+          renderDailySchedule(day);
+        });
+        filterContainer.appendChild(button);
+      });
+    }
+
+    let notificationsEnabled = false;
+
+    function requestNotificationPermission() {
+      if (!("Notification" in window)) {
+        alert("Ваш браузер не підтримує сповіщення.");
+        return;
+      }
+
+      Notification.requestPermission().then(permission => {
+        if (permission === "granted") {
+          notificationsEnabled = true;
+          document.querySelector('.notify-toggle i').classList.replace('fa-bell', 'fa-bell-slash');
+        }
+      });
+    }
+
+    function notifyLesson(lesson) {
+      if (notificationsEnabled && Notification.permission === "granted") {
+        new Notification(translations.currentLesson[currentLanguage], {
+          body: `${lesson.subject[currentLanguage]} (${lesson.time})`,
+          icon: "https://cdn-icons-png.flaticon.com/512/4751/4751951.png"
+        });
+      }
+    }
+
+    function handleTouchZoom(img) {
+      let scale = 1;
+      let startDistance = 0;
+
+      img.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 2) {
+          startDistance = Math.hypot(
+            e.touches[0].pageX - e.touches[1].pageX,
+            e.touches[0].pageY - e.touches[1].pageY
+          );
+        }
+      });
+
+      img.addEventListener('touchmove', (e) => {
+        if (e.touches.length === 2) {
+          const currentDistance = Math.hypot(
+            e.touches[0].pageX - e.touches[1].pageX,
+            e.touches[0].pageY - e.touches[1].pageY
+          );
+          scale = currentDistance / startDistance;
+          img.style.transform = `scale(${Math.min(Math.max(scale, 1), 2)})`;
+          e.preventDefault();
+        }
+      });
+
+      img.addEventListener('touchend', () => {
+        if (scale < 1.5) img.style.transform = 'scale(1)';
+      });
+
+      img.addEventListener('click', () => {
+        if (img.style.transform === "scale(2)") {
+          img.style.transform = "scale(1)";
+        } else {
+          img.style.transform = "scale(2)";
+        }
+        img.style.transition = "transform 0.3s ease";
+      });
+    }
+
+    document.querySelectorAll('.lang-toggle').forEach(button => {
+      button.addEventListener('click', () => {
+        currentLanguage = button.dataset.lang;
+        document.querySelectorAll('.lang-toggle').forEach(btn => btn.classList.remove('active'));
+        button.classList.add('active');
+        updateStaticTexts();
+        renderDayFilter();
+        renderDailySchedule(selectedDay);
+        renderWeeklySchedule();
+        renderCurrentLesson();
+
+        const image = document.querySelector('.google-image');
+        if (currentLanguage === 'pl') {
+          image.src = 'https://i.postimg.cc/gcZFYcfn/PL.png';
+        } else {
+          image.src = 'https://i.postimg.cc/W1RVp0n2/2.png';
+        }
+      });
+    });
+
+    document.querySelector('.theme-toggle').addEventListener('click', () => {
+      document.body.classList.toggle('dark-theme');
+      const icon = document.querySelector('.theme-toggle i');
+      icon.classList.toggle('fa-moon');
+      icon.classList.toggle('fa-sun');
+    });
+
+    document.querySelector('.notify-toggle').addEventListener('click', () => {
+      if (!notificationsEnabled) {
+        requestNotificationPermission();
+      } else {
+        notificationsEnabled = false;
+        document.querySelector('.notify-toggle i').classList.replace('fa-bell-slash', 'fa-bell');
+      }
+    });
+
+    const image = document.querySelector('.google-image');
+    handleTouchZoom(image);
+
+    document.querySelector('.lang-toggle[data-lang="ua"]').classList.add('active');
+    const today = new Date().getDay();
+    selectedDay = dayKeys[today];
+    if (!schedule[selectedDay]) selectedDay = "Monday";
+    updateStaticTexts();
+    renderDayFilter();
+    renderDailySchedule(selectedDay);
+    renderWeeklySchedule();
+    renderCurrentLesson();
+    setInterval(renderCurrentLesson, 30000);
+    cacheSchedule();
+  </script>
+</body>
+</html>
