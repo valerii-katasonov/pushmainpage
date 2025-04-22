@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Розклад уроків</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700&family=Open+Sans:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Open Sans', sans-serif;
+            background-image: url('https://zastavki.gas-kvas.com/uploads/posts/2024-09/zastavki-gas-kvas-com-35bo-p-zastavki-pro-shkolu-9.jpg');
+            background-size: cover;
+            background-position: center;
+            color: #333;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+        header {
+            background-color: rgba(0, 75, 82, 0.8);
+            color: black;
+            text-align: center;
+            padding: 1em 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            width: 100%;
+            box-sizing: border-box;
+            position: relative;
+        }
+        header img {
+            width: 90px;
+            height: 90px;
+            border-radius: 15px;
+            opacity: 0;
+            transform: scale(0.5);
+            animation: logoAppear 1s ease forwards;
+        }
+        @keyframes logoAppear {
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+        header h1 {
+            font-family: 'Montserrat', sans-serif;
+            font-weight: 700;
+            font-size: 2.5em;
+            color: white;
+            text-shadow: 
+                -1px -1px 0 black, 
+                1px -1px 0 black, 
+                -1px 1px 0 black, 
+                1px 1px 0 black;
+            margin: 0;
+            opacity: 0;
+            transform: translateY(-20px);
+            animation: titleAppear 1s ease forwards;
+            animation-delay: 0.5s;
+        }
+        @keyframes titleAppear {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        .language-switch {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+        }
+        .language-switch a {
+            color: white;
+            text-decoration: none;
+            margin: 0 5px;
+            font-size: 1em;
+        }
+        .language-switch span {
+            color: white;
+            margin: 0 5px;
+            font-weight: bold;
+        }
+        .container {
+            background: rgba(0, 0, 0, 0.5);
+            padding: 30px;
+            border-radius: 20px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+            text-align: center;
+            max-width: 1200px;
+            width: 90%;
+            margin: auto;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            flex-grow: 1;
+        }
+        .section {
+            width: 100%;
+            margin-bottom: 30px;
+        }
+        .section:last-child {
+            margin-bottom: 0;
+        }
+        .section h2 {
+            font-family: 'Montserrat', sans-serif;
+            font-weight: 700;
+            font-size: 1.8em;
+            color: white;
+            text-shadow: -1px -1px 0 black, 1px -1px 0 black, -1px 1px 0 black, 1px 1px 0 black;
+            margin-bottom: 15px;
+        }
+        .grid-links {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+        }
+        .flex-links {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+        }
+        .schedule-link {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: rgba(255, 255, 255, 0.2);
+            color: white;
+            text-decoration: none;
+            border-radius: 15px;
+            padding: 15px;
+            transition: all 0.3s ease;
+            box-shadow: 0 3px 6px rgba(0, 0, 0, 0.16), 0 3px 6px rgba(0, 0, 0, 0.23);
+            font-size: 1.2em;
+            font-family: 'Chalkduster', cursive;
+            min-height: 44px;
+        }
+        .schedule-link:hover {
+            background-color: rgba(255, 255, 255, 0.4);
+            transform: translateY(-3px);
+        }
+        @media (max-width: 600px) {
+            header {
+                padding: 0.5em 0;
+            }
+            header img {
+                width: 70px;
+                height: 70px;
+            }
+            header h1 {
+                font-size: 1.8em;
+            }
+            .container {
+                padding: 15px;
+            }
+            .grid-links {
+                grid-template-columns: 1fr;
+            }
+            .flex-links {
+                flex-direction: column;
+                align-items: center;
+            }
+            .schedule-link {
+                font-size: 1em;
+                padding: 12px;
+            }
+            .section h2 {
+                font-size: 1.5em;
+            }
+            .language-switch {
+                font-size: 0.9em;
+            }
+        }
+        @media (min-width: 1200px) {
+            .container {
+                padding: 50px;
+            }
+            .schedule-link {
+                font-size: 1.5em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <a href="index-uk.html"><img src="https://i.postimg.cc/WbY9TdDp/PushIco.png" alt="Logo Push School"></a>
+        <h1>Розклад уроків<br>Push School Warsaw</h1>
+        <div class="language-switch">
+            <a href="index.html">Polski</a> | <span>Українська</span>
+        </div>
+    </header>
+    <div class="container">
+        <div class="section class-schedules">
+            <h2>Розклади уроків класів</h2>
+            <div class="grid-links">
+                <a class="schedule-link" href="https://1-push.netlify.app/">Klasa 1</a>
+                <a class="schedule-link" href="https://2a-push.netlify.app/">Klasa 2A</a>
+                <a class="schedule-link" href="https://2b-push.netlify.app/">Klasa 2B</a>
+                <a class="schedule-link" href="https://3-push.netlify.app/">Klasa 3</a>
+                <a class="schedule-link" href="https://4-push.netlify.app/">Klasa 4</a>
+                <a class="schedule-link" href="https://5-push.netlify.app/">Klasa 5</a>
+                <a class="schedule-link" href="https://6-push.netlify.app/">Klasa 6</a>
+                <a class="schedule-link" href="https://7-push.netlify.app/">Klasa 7</a>
+                <a class="schedule-link" href="https://8-push.netlify.app/">Klasa 8</a>
+                <a class="schedule-link" href="https://9-push.netlify.app/">Klasa 9</a>
+                <a class="schedule-link" href="https://10-push.netlify.app/">Klasa 10</a>
+                <a class="schedule-link" href="https://11-push.netlify.app/">Klasa 11</a>
+            </div>
+        </div>
+        <div class="section cultural-events">
+            <h2>Плани культурних заходів</h2>
+            <div class="flex-links">
+                <a class="schedule-link" href="cultural-junior-uk.html">План культурних заходів (початкова школа)</a>
+                <a class="schedule-link" href="#">План культурних заходів (середня школа)</a>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
