@@ -554,7 +554,7 @@
         });
 
         if (currentTime >= start && currentTime < end) {
-          if (lesson.subject.ua === "Перерва" || lesson.subject.ua.includes("Обід") || lesson.subject.ua.includes("Очікування") || lesson.subject.ua.includes("Шлях")) {
+          if (lesson.subject.ua === "Перерва" || lesson.subject.ua.includes("Обід")) {
             return { type: "break", lesson };
           }
           return { type: "lesson", lesson };
@@ -589,6 +589,30 @@
       document.getElementById('th-time-week').textContent = translations.thTime[currentLanguage];
     }
 
+    function renderCurrentLesson() {
+      const today = new Date().getDay();
+      const todayKey = dayKeys[today];
+      const cachedSchedule = loadCachedSchedule();
+      const daySchedule = cachedSchedule[todayKey] || [];
+      const currentLessonData = getCurrentLesson(daySchedule);
+      const currentLessonDiv = document.getElementById("current-lesson");
+
+      if (currentLessonData) {
+        if (currentLessonData.type === "lesson") {
+          const lesson = currentLessonData.lesson;
+          currentLessonDiv.textContent = `${translations.currentLesson[currentLanguage]} ${lesson.subject[currentLanguage]} (${lesson.time})`;
+          if (notificationsEnabled) notifyLesson(lesson);
+        } else if (currentLessonData.type === "break") {
+          const lesson = currentLessonData.lesson;
+          currentLessonDiv.textContent = `${translations.currentBreak[currentLanguage]} ${lesson.subject[currentLanguage]} (${lesson.time})`;
+        } else if (currentLessonData.type === "finished") {
+          currentLessonDiv.textContent = translations.lessonsFinished[currentLanguage];
+        }
+      } else {
+        currentLessonDiv.textContent = translations.noLessons[currentLanguage];
+      }
+    }
+
     function renderDailySchedule(selectedDay) {
       const cachedSchedule = loadCachedSchedule();
       const daySchedule = cachedSchedule[selectedDay] || [];
@@ -596,7 +620,7 @@
       dailyScheduleTable.innerHTML = '';
 
       daySchedule.forEach(lesson => {
-        const isBreak = lesson.subject.ua === "Перерва" || lesson.subject.ua.includes("Обід") || lesson.subject.ua.includes("Очікування") || lesson.subject.ua.includes("Шлях");
+        const isBreak = lesson.subject.ua === "Перерва" || lesson.subject.ua.includes("Обід");
         const row = `<tr class="${isBreak ? 'highlight' : ''}">
           <td>${lesson.number}</td>
           <td>${lesson.subject[currentLanguage]}</td>
@@ -628,7 +652,7 @@
         const dayName = dayNames[day][currentLanguage];
 
         dayLessons.forEach((lesson, index) => {
-          const isBreak = lesson.subject.ua === "Перерва" || lesson.subject.ua.includes("Обід") || lesson.subject.ua.includes("Очікування") || lesson.subject.ua.includes("Шлях");
+          const isBreak = lesson.subject.ua === "Перерва" || lesson.subject.ua.includes("Обід");
           const rowClass = isBreak ? "highlight" : `${dayClass} ${isToday}`;
           const row = `<tr class="${rowClass}">
             ${index === 0 ? `<td rowspan="${dayLessons.length}">${dayName}</td>` : ''}
