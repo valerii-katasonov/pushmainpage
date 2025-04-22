@@ -10,7 +10,7 @@ const dayNames = {
 
 const schedule = {
   Monday: [
-    { number: 1, subject: { ua: "Ранкова освіта", pl: "Edukacja wczesnoszkolna" }, time: "9:00 - 9:45" },
+    { number: 1, subject: { ua: "Edukacja wczesnoszkolna", pl: "Edukacja wczesnoszkolna" }, time: "9:00 - 9:45" },
     { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "9:45 - 9:55" },
     { number: 2, subject: { ua: "Польська мова", pl: "Język polski" }, time: "9:55 - 10:40" },
     { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "10:40 - 10:50" },
