@@ -1,191 +1,77 @@
-<!DOCTYPE html>
-<html lang="uk">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="robots" content="noindex, nofollow">
-  <title>Розклад уроків - 4 клас</title>
-  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-  <style>
-    body {
-      font-family: 'Montserrat', sans-serif;
-      margin: 0;
-      padding: 0;
-      background-image: url('https://zastavki.gas-kvas.com/uploads/posts/2024-09/zastavki-gas-kvas-com-35bo-p-zastavki-pro-shkolu-9.jpg');
-      background-size: cover;
-      background-position: center;
-      background-attachment: fixed;
-      min-height: 100vh;
-      transition: background 0.5s ease, color 0.5s ease;
-      position: relative;
-      font-size: 16px;
-      color: #333;
-    }
+const dayNames = {
+  Monday: { ua: "Понеділок", pl: "Poniedziałek" },
+  Tuesday: { ua: "Вівторок", pl: "Wtorek" },
+  Wednesday: { ua: "Середа", pl: "Środa" },
+  Thursday: { ua: "Четвер", pl: "Czwartek" },
+  Friday: { ua: "П'ятниця", pl: "Piątek" },
+  Saturday: { ua: "Субота", pl: "Sobota" },
+  Sunday: { ua: "Неділя", pl: "Niedziela" }
+};
 
-    body.dark-theme {
-      background: linear-gradient(135deg, rgba(0, 43, 51, 0.6) 0%, rgba(0, 77, 87, 0.6) 100%), url('https://zastavki.gas-kvas.com/uploads/posts/2024-09/zastavki-gas-kvas-com-35bo-p-zastavki-pro-shkolu-9.jpg');
-      background-size: cover;
-      background-position: center;
-      background-attachment: fixed;
-      color: #fff;
-    }
+const schedule = {
+  Monday: [
+    { number: 1, subject: { ua: "Читання", pl: "Czytanie" }, time: "9:00 - 9:45" },
+    { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "9:45 - 9:55" },
+    { number: 2, subject: { ua: "Українська мова", pl: "Język ukraiński" }, time: "9:55 - 10:40" },
+    { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "10:40 - 10:50" },
+    { number: 3, subject: { ua: "Математика", pl: "Matematyka" }, time: "10:50 - 11:35" },
+    { number: " ", subject: { ua: "Обід 1-4 класи", pl: "Obiad klasy 1-4" }, time: "11:35 - 11:55" },
+    { number: 4, subject: { ua: "Польська мова", pl: "Język polski" }, time: "11:55 - 12:40" },
+    { number: " ", subject: { ua: "Обід 5-6 класи", pl: "Obiad klasy 5-6" }, time: "12:40 - 13:00" },
+    { number: 5, subject: { ua: "Класна година", pl: "Godzina wychowawcza" }, time: "13:00 - 13:45" }
+  ],
+  Tuesday: [
+    { number: 1, subject: { ua: "Читання", pl: "Czytanie" }, time: "9:00 - 9:45" },
+    { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "9:45 - 9:55" },
+    { number: 2, subject: { ua: "Українська мова", pl: "Język ukraiński" }, time: "9:55 - 10:40" },
+    { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "10:40 - 10:50" },
+    { number: 3, subject: { ua: "Польська мова", pl: "Język polski" }, time: "10:50 - 11:35" },
+    { number: " ", subject: { ua: "Обід 1-4 класи", pl: "Obiad klasy 1-4" }, time: "11:35 - 11:55" },
+    { number: 4, subject: { ua: "Математика", pl: "Matematyka" }, time: "11:55 - 12:40" },
+    { number: " ", subject: { ua: "Обід 5-6 класи", pl: "Obiad klasy 5-6" }, time: "12:40 - 13:00" },
+    { number: 5, subject: { ua: "Англійська мова", pl: "Język angielski" }, time: "13:00 - 13:45" },
+    { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "13:45 - 13:55" },
+    { number: 6, subject: { ua: "Edukacja wczesnoszkolna", pl: "Edukacja wczesnoszkolna" }, time: "13:55 - 14:40" }
+  ],
+  Wednesday: [
+    { number: 1, subject: { ua: "Читання", pl: "Czytanie" }, time: "9:00 - 9:45" },
+    { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "9:45 - 9:55" },
+    { number: 2, subject: { ua: "Англійська мова", pl: "Język angielski" }, time: "9:55 - 10:40" },
+    { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "10:40 - 10:50" },
+    { number: 3, subject: { ua: "Українська мова", pl: "Język ukraiński" }, time: "10:50 - 11:35" },
+    { number: " ", subject: { ua: "Обід 1-4 класи", pl: "Obiad klasy 1-4" }, time: "11:35 - 11:55" },
+    { number: 4, subject: { ua: "Математика", pl: "Matematyka" }, time: "11:55 - 12:40" },
+    { number: " ", subject: { ua: "Обід 5-6 класи", pl: "Obiad klasy 5-6" }, time: "12:40 - 13:00" },
+    { number: 5, subject: { ua: "Przyroda", pl: "Przyroda" }, time: "13:00 - 13:45" },
+    { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "13:45 - 13:55" },
+    { number: 6, subject: { ua: "Інформатика", pl: "Informatyka" }, time: "13:55 - 14:40" }
+  ],
+  Thursday: [
+    { number: 1, subject: { ua: "Польська мова", pl: "Język polski" }, time: "9:00 - 9:45" },
+    { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "9:45 - 9:55" },
+    { number: 2, subject: { ua: "Українська мова", pl: "Język ukraiński" }, time: "9:55 - 10:40" },
+    { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "10:40 - 10:50" },
+    { number: 3, subject: { ua: "Математика", pl: "Matematyka" }, time: "10:50 - 11:35" },
+    { number: " ", subject: { ua: "Обід 1-4 класи", pl: "Obiad klasy 1-4" }, time: "11:35 - 11:55" },
+    { number: 4, subject: { ua: "Англійська мова", pl: "Język angielski" }, time: "11:55 - 12:40" },
+    { number: " ", subject: { ua: "Обід 5-6 класи", pl: "Obiad klasy 5-6" }, time: "12:40 - 13:00" },
+    { number: 5, subject: { ua: "Przyroda", pl: "Przyroda" }, time: "13:00 - 13:45" }
+  ],
+  Friday: [
+    { number: 1, subject: { ua: "Математика", pl: "Matematyka" }, time: "9:00 - 9:45" },
+    { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "9:45 - 9:55" },
+    { number: 2, subject: { ua: "Przyroda", pl: "Przyroda" }, time: "9:55 - 10:40" },
+    { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "10:40 - 10:50" },
+    { number: 3, subject: { ua: "Plastyka", pl: "Plastyka" }, time: "10:50 - 11:35" },
+    { number: " ", subject: { ua: "Обід 1-4 класи", pl: "Obiad klasy 1-4" }, time: "11:35 - 11:55" },
+    { number: 4, subject: { ua: "Англійська мова", pl: "Język angielski" }, time: "11:55 - 12:40" },
+    { number: " ", subject: { ua: "Обід 5-6 класи", pl: "Obiad klasy 5-6" }, time: "12:40 - 13:00" },
+    { number: " ", subject: { ua: "Очікування автобуса", pl: "Oczekiwanie na autobus" }, time: "13:00 - 13:20" },
+    { number: " ", subject: { ua: "Шлях зі школи до басейну на автобусі", pl: "Droga ze szkoły na basen autobusem" }, time: "13:20 - 13:45" },
+    { number: 5, subject: { ua: "Фізичне виховання (басейн)", pl: "Wychowanie fizyczne (basen)" }, time: "14:00 - 15:00" },
+    { number: " ", subject: { ua: "Шлях з басену до школи на автобусі", pl: "Droga z basenu do szkoły autobusem" }, time: "15:30 - 16:00" }
+  ]
+};
 
-    header {
-      background: linear-gradient(45deg, #00bfd1, #006d77);
-      color: white;
-      padding: 1.5rem 0;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      gap: 1rem;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-      position: relative;
-    }
-
-    body.dark-theme header {
-      background: linear-gradient(45deg, #003d44, #006d77);
-    }
-
-    header img {
-      width: 100px;
-      height: 100px;
-      border-radius: 50%;
-      border: 3px solid rgba(255,255,255,0.2);
-      opacity: 0;
-      animation: fadeInHeader 1s ease-in forwards 1.5s;
-    }
-
-    header h1 {
-      font-size: 1.8rem;
-      margin: 0;
-      font-weight: 700;
-      text-shadow: 0 2px 4px rgba(0,0,0,0.2);
-      animation: fadeIn 1s ease-in;
-    }
-
-    .theme-toggle, .notify-toggle {
-      position: absolute;
-      top: 1rem;
-      background: none;
-      border: none;
-      color: white;
-      font-size: 1.5rem;
-      cursor: pointer;
-      padding: 0.5rem;
-    }
-
-    .theme-toggle { right: 3.5rem; }
-    .notify-toggle { right: 1rem; }
-
-    .lang-switcher {
-      position: absolute;
-      top: 1rem;
-      left: 1rem;
-      display: flex;
-      gap: 0.5rem;
-    }
-
-    .lang-toggle {
-      background: none;
-      border: 1px solid white;
-      border-radius: 4px;
-      color: white;
-      font-size: 1rem;
-      cursor: pointer;
-      padding: 0.5rem;
-      transition: background 0.3s ease;
-    }
-
-    .lang-toggle:hover {
-      background: rgba(255,255,255,0.2);
-    }
-
-    .lang-toggle.active {
-      background: white;
-      color: #006d77;
-    }
-
-    @media screen and (max-width: 480px) {
-      .lang-switcher {
-        flex-direction: column;
-        top: 0.5rem;
-        left: 0.5rem;
-      }
-
-      .lang-toggle {
-        padding: 0.4rem;
-        font-size: 0.9rem;
-      }
-    }
-
-    .logo-intro {
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      width: 120px;
-      height: 120px;
-      border-radius: 50%;
-      border: 3px solid rgba(255,255,255,0.2);
-      animation: logoIntro 1s ease-in-out forwards;
-      z-index: 1000;
-    }
-
-    @keyframes logoIntro {
-      0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
-      50% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-      100% { opacity: 0; transform: translate(-50%, -50%) scale(1.1); }
-    }
-
-    @keyframes fadeInHeader {
-      from { opacity: 0; }
-      to { opacity: 1; }
-    }
-
-    .container {
-      max-width: 2000px;
-      margin: 2rem auto;
-      padding: 0 1rem;
-      display: flex;
-      gap: 1.5rem;
-      justify-content: center;
-      animation: fadeInUp 0.8s ease-in;
-    }
-
-    .current-lesson {
-      font-size: 1.2rem;
-      color: #1a1a66;
-      background: white;
-      border-left: 6px solid #4CAF50;
-      padding: 1rem;
-      margin: 0 0 1.5rem;
-      border-radius: 12px;
-      box-shadow: 0 5px 15px rgba(0,0,0,0.08);
-      transition: transform 0.3s ease, box-shadow 0.3s ease;
-    }
-
-    body.dark-theme .current-lesson {
-      background: #333;
-      color: #fff;
-    }
-
-    .current-lesson:hover {
-      transform: translateY(-5px);
-      box-shadow: 0 8px 20px rgba(0,0,0,0.12);
-    }
-
-    .day-filter {
-      display: flex;
-      justify-content: center;
-      gap: 0.5rem;
-      margin-bottom: 1.5rem;
-    }
-
-    .day-filter button {
-      padding: 0.8rem 1rem;
-      border: none;
-      background: #f8f9fa;
-      border-radius: 8px;
-      cursor: pointer;
-      transition:
+window.schedule = schedule;
+window.dayNames = dayNames;
