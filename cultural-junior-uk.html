@@ -78,6 +78,47 @@
     .theme-toggle { right: 3.5rem; }
     .notify-toggle { right: 1rem; }
 
+    .lang-switcher {
+      position: absolute;
+      top: 1rem;
+      left: 1rem;
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .lang-toggle {
+      background: none;
+      border: 1px solid white;
+      border-radius: 4px;
+      color: white;
+      font-size: 1rem;
+      cursor: pointer;
+      padding: 0.5rem;
+      transition: background 0.3s ease;
+    }
+
+    .lang-toggle:hover {
+      background: rgba(255,255,255,0.2);
+    }
+
+    .lang-toggle.active {
+      background: white;
+      color: #006d77;
+    }
+
+    @media screen and (max-width: 480px) {
+      .lang-switcher {
+        flex-direction: column;
+        top: 0.5rem;
+        left: 0.5rem;
+      }
+
+      .lang-toggle {
+        padding: 0.4rem;
+        font-size: 0.9rem;
+      }
+    }
+
     .logo-intro {
       position: fixed;
       top: 50%;
@@ -276,29 +317,45 @@
   <img src="https://i.postimg.cc/WbY9TdDp/PushIco.png" alt="Push School Logo Intro" class="logo-intro">
 
   <header>
+    <div class="lang-switcher">
+      <button class="lang-toggle active" data-lang="ua">UA</button>
+      <button class="lang-toggle" data-lang="pl">PL</button>
+    </div>
     <a href="index-uk.html"><img src="https://i.postimg.cc/WbY9TdDp/PushIco.png" alt="Push School Logo"></a>
-    <h1>Культурні заходи<br>Початкові класи<br>Push School Warsaw</h1>
+    <h1 id="header">Культурні заходи<br>Початкові класи<br>Push School Warsaw</h1>
     <button class="theme-toggle" aria-label="Переключити тему"><i class="fas fa-moon"></i></button>
     <button class="notify-toggle" aria-label="Увімкнути сповіщення"><i class="fas fa-bell"></i></button>
   </header>
 
   <div class="container">
     <div class="events-container">
-      <h2>Заходи</h2>
+      <h2 id="events-title">Заходи</h2>
       <div id="events-content" class="events-content"></div>
     </div>
   </div>
 
   <script>
+    const translations = {
+      header: {
+        ua: 'Культурні заходи<br>Початкові класи<br>Push School Warsaw',
+        pl: 'Wydarzenia kulturalne<br>Klasy początkowe<br>Push School Warsaw'
+      },
+      eventsTitle: { ua: 'Заходи', pl: 'Wydarzenia' },
+      errorMessage: { ua: 'Не вдалося завантажити заходи.', pl: 'Nie udało się załadować wydarzeń.' }
+    };
+
+    let currentLanguage = 'ua';
+
     async function loadEvents() {
       try {
-        const response = await fetch('events-uk.txt');
-        if (!response.ok) throw new Error('Не вдалося завантажити events-uk.txt');
+        const file = currentLanguage === 'ua' ? 'events-uk.txt' : 'events-pl.txt';
+        const response = await fetch(file);
+        if (!response.ok) throw new Error(`Не вдалося завантажити ${file}`);
         const text = await response.text();
         renderEvents(text);
       } catch (error) {
         console.error('Помилка завантаження подій:', error);
-        document.getElementById('events-content').innerHTML = `<p>Не вдалося завантажити заходи.</p>`;
+        document.getElementById('events-content').innerHTML = `<p>${translations.errorMessage[currentLanguage]}</p>`;
       }
     }
 
@@ -306,7 +363,6 @@
       const eventsContent = document.getElementById('events-content');
       eventsContent.innerHTML = '';
 
-      // Розбиваємо текст на рядки та обробляємо
       const lines = text.split('\n');
       let html = '';
       let inEvent = false;
@@ -319,10 +375,11 @@
         }
 
         // Визначаємо заголовки
-        if (line.startsWith('План культурних заходів') || line.startsWith('Тема тижня')) {
+        if (line.startsWith('План культурних заходів') || line.startsWith('Plan wydarzeń kulturalnych') || 
+            line.startsWith('Тема тижня') || line.startsWith('Temat tygodnia')) {
           html += `<h1>${line}</h1>`;
           inEvent = false;
-        } else if (line.startsWith('🌱 ') && !line.includes('–')) {
+        } else if (line.startsWith('🌱')) {
           html += `<h3 class="highlight">${line}</h3>`;
           inEvent = true;
         } else if (line.startsWith('– ')) {
@@ -334,6 +391,22 @@
 
       eventsContent.innerHTML = html;
     }
+
+    function updateStaticTexts() {
+      document.getElementById('header').innerHTML = translations.header[currentLanguage];
+      document.getElementById('events-title').textContent = translations.eventsTitle[currentLanguage];
+      document.querySelector('a[href]').href = currentLanguage === 'ua' ? 'index-uk.html' : 'index-pl.html';
+    }
+
+    document.querySelectorAll('.lang-toggle').forEach(button => {
+      button.addEventListener('click', () => {
+        currentLanguage = button.dataset.lang;
+        document.querySelectorAll('.lang-toggle').forEach(btn => btn.classList.remove('active'));
+        button.classList.add('active');
+        updateStaticTexts();
+        loadEvents();
+      });
+    });
 
     document.querySelector('.theme-toggle').addEventListener('click', () => {
       document.body.classList.toggle('dark-theme');
@@ -347,7 +420,7 @@
     document.querySelector('.notify-toggle').addEventListener('click', () => {
       if (!notificationsEnabled) {
         if (!("Notification" in window)) {
-          alert("Ваш браузер не підтримує сповіщення.");
+          alert(currentLanguage === 'ua' ? "Ваш браузер не підтримує сповіщення." : "Twoja przeglądarka nie obsługuje powiadomień.");
           return;
         }
 
@@ -363,6 +436,8 @@
       }
     });
 
+    document.querySelector('.lang-toggle[data-lang="ua"]').classList.add('active');
+    updateStaticTexts();
     loadEvents();
   </script>
 </body>
