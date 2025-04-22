@@ -1,44 +1,5 @@
-<script type="text/javascript">
-        var gk_isXlsx = false;
-        var gk_xlsxFileLookup = {};
-        var gk_fileData = {};
-        function filledCell(cell) {
-          return cell !== '' && cell != null;
-        }
-        function loadFileData(filename) {
-        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
-            try {
-                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
-                var firstSheetName = workbook.SheetNames[0];
-                var worksheet = workbook.Sheets[firstSheetName];
-
-                // Convert sheet to JSON to filter blank rows
-                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
-                // Filter out blank rows (rows where all cells are empty, null, or undefined)
-                var filteredData = jsonData.filter(row => row.some(filledCell));
-
-                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
-                var headerRowIndex = filteredData.findIndex((row, index) =>
-                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
-                );
-                // Fallback
-                if (headerRowIndex === -1 || headerRowIndex > 25) {
-                  headerRowIndex = 0;
-                }
-
-                // Convert filtered JSON back to CSV
-                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
-                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
-                return csv;
-            } catch (e) {
-                console.error(e);
-                return "";
-            }
-        }
-        return gk_fileData[filename] || "";
-        }
-        </script><!DOCTYPE html>
-<html lang="ru">
+<!DOCTYPE html>
+<html lang="pl">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -69,6 +30,7 @@
             flex-wrap: wrap;
             width: 100%;
             box-sizing: border-box;
+            position: relative;
         }
         header img {
             width: 90px;
@@ -105,6 +67,22 @@
                 opacity: 1;
                 transform: translateY(0);
             }
+        }
+        .language-switch {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+        }
+        .language-switch a {
+            color: white;
+            text-decoration: none;
+            margin: 0 5px;
+            font-size: 1em;
+        }
+        .language-switch span {
+            color: white;
+            margin: 0 5px;
+            font-weight: bold;
         }
         .container {
             background: rgba(0, 0, 0, 0.5);
@@ -192,6 +170,9 @@
             .section h2 {
                 font-size: 1.5em;
             }
+            .language-switch {
+                font-size: 0.9em;
+            }
         }
         @media (min-width: 1200px) {
             .container {
@@ -205,8 +186,11 @@
 </head>
 <body>
     <header>
-        <img src="https://i.postimg.cc/WbY9TdDp/PushIco.png" alt="Logo Push School">
+        <a href="index.html"><img src="https://i.postimg.cc/WbY9TdDp/PushIco.png" alt="Logo Push School"></a>
         <h1>Plan lekcji<br>Push School Warsaw</h1>
+        <div class="language-switch">
+            <span>Polski</span> | <a href="index-uk.html">Українська</a>
+        </div>
     </header>
     <div class="container">
         <div class="section class-schedules">
