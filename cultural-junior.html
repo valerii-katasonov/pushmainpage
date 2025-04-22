@@ -462,7 +462,7 @@
       document.getElementById('header').innerHTML = translations.header[currentLanguage];
       document.getElementById('events-title').textContent = translations.eventsTitle[currentLanguage];
       document.getElementById('home-button').innerHTML = `<i class="fas fa-home"></i> ${translations.homeButton[currentLanguage]}`;
-      document.querySelector('a[href]').href = currentLanguage === 'ua' ? 'index-uk.html' : 'index-pl.html';
+      document.querySelector('a[href]').href = currentLanguage === 'ua' ? 'index-uk.html' : 'index.html';
     }
 
     function initializeEventListeners() {
