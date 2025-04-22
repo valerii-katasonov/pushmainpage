@@ -1,207 +1,369 @@
 <!DOCTYPE html>
 <html lang="uk">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>План культурних заходів - Початкова школа</title>
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700&family=Open+Sans:wght@300;400;600;700&display=swap" rel="stylesheet">
-    <style>
-        body {
-            font-family: 'Open Sans', sans-serif;
-            background-image: url('https://zastavki.gas-kvas.com/uploads/posts/2024-09/zastavki-gas-kvas-com-35bo-p-zastavki-pro-shkolu-9.jpg');
-            background-size: cover;
-            background-position: center;
-            color: #333;
-            margin: 0;
-            padding: 0;
-            display: flex;
-            flex-direction: column;
-            min-height: 100vh;
-        }
-        header {
-            background-color: rgba(0, 75, 82, 0.8);
-            color: black;
-            text-align: center;
-            padding: 1em 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 10px;
-            flex-wrap: wrap;
-            width: 100%;
-            box-sizing: border-box;
-            position: relative;
-        }
-        header img {
-            width: 90px;
-            height: 90px;
-            border-radius: 15px;
-            opacity: 0;
-            transform: scale(0.5);
-            animation: logoAppear 1s ease forwards;
-        }
-        @keyframes logoAppear {
-            to {
-                opacity: 1;
-                transform: scale(1);
-            }
-        }
-        header h1 {
-            font-family: 'Montserrat', sans-serif;
-            font-weight: 700;
-            font-size: 2.5em;
-            color: white;
-            text-shadow: 
-                -1px -1px 0 black, 
-                1px -1px 0 black, 
-                -1px 1px 0 black, 
-                1px 1px 0 black;
-            margin: 0;
-            opacity: 0;
-            transform: translateY(-20px);
-            animation: titleAppear 1s ease forwards;
-            animation-delay: 0.5s;
-        }
-        @keyframes titleAppear {
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-        .language-switch {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-        }
-        .language-switch a {
-            color: white;
-            text-decoration: none;
-            margin: 0 5px;
-            font-size: 1em;
-        }
-        .language-switch span {
-            color: white;
-            margin: 0 5px;
-            font-weight: bold;
-        }
-        .container {
-            background: rgba(0, 0, 0, 0.5);
-            padding: 30px;
-            border-radius: 20px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-            text-align: center;
-            max-width: 1200px;
-            width: 90%;
-            margin: auto;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            flex-grow: 1;
-        }
-        .content {
-            color: white;
-            text-align: left;
-            max-width: 800px;
-        }
-        .content h2 {
-            font-family: 'Montserrat', sans-serif;
-            font-size: 2.2em;
-            margin-bottom: 30px;
-            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
-        }
-        .content p {
-            font-size: 1.2em;
-            margin-bottom: 20px;
-            text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.5);
-        }
-        .content ul {
-            list-style: none;
-            padding: 0;
-        }
-        .content li {
-            font-size: 1.2em;
-            line-height: 1.6;
-            margin-bottom: 20px;
-            background-color: rgba(255, 255, 255, 0.1);
-            padding: 15px;
-            border-radius: 10px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-            opacity: 0;
-            transform: translateY(20px);
-            animation: itemAppear 0.5s ease forwards;
-            animation-delay: calc(0.2s * var(--index));
-        }
-        @keyframes itemAppear {
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-        .content li:hover {
-            background-color: rgba(255, 255, 255, 0.2);
-            transform: translateY(-3px);
-            transition: all 0.3s ease;
-        }
-        .back-button {
-            display: inline-block;
-            background-color: rgba(255, 255, 255, 0.2);
-            color: white;
-            text-decoration: none;
-            padding: 10px 20px;
-            border-radius: 10px;
-            margin-bottom: 20px;
-            transition: all 0.3s ease;
-        }
-        .back-button:hover {
-            background-color: rgba(255, 255, 255, 0.4);
-            transform: translateY(-3px);
-        }
-        @media (max-width: 600px) {
-            header {
-                padding: 0.5em 0;
-            }
-            header img {
-                width: 70px;
-                height: 70px;
-            }
-            header h1 {
-                font-size: 1.8em;
-            }
-            .container {
-                padding: 15px;
-            }
-            .content h2 {
-                font-size: 1.8em;
-            }
-            .content p, .content li {
-                font-size: 1em;
-            }
-            .language-switch {
-                font-size: 0.9em;
-            }
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Культурні заходи - Початкові класи</title>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <style>
+    body {
+      font-family: 'Montserrat', sans-serif;
+      margin: 0;
+      padding: 0;
+      background-image: url('https://zastavki.gas-kvas.com/uploads/posts/2024-09/zastavki-gas-kvas-com-35bo-p-zastavki-pro-shkolu-9.jpg');
+      background-size: cover;
+      background-position: center;
+      background-attachment: fixed;
+      min-height: 100vh;
+      transition: background 0.5s ease, color 0.5s ease;
+      position: relative;
+      font-size: 16px;
+      color: #333;
+    }
+
+    body.dark-theme {
+      background: linear-gradient(135deg, rgba(0, 43, 51, 0.6) 0%, rgba(0, 77, 87, 0.6) 100%), url('https://zastavki.gas-kvas.com/uploads/posts/2024-09/zastavki-gas-kvas-com-35bo-p-zastavki-pro-shkolu-9.jpg');
+      background-size: cover;
+      background-position: center;
+      background-attachment: fixed;
+      color: #fff;
+    }
+
+    header {
+      background: linear-gradient(45deg, #00bfd1, #006d77);
+      color: white;
+      padding: 1.5rem 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 1rem;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+      position: relative;
+    }
+
+    body.dark-theme header {
+      background: linear-gradient(45deg, #003d44, #006d77);
+    }
+
+    header img {
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      border: 3px solid rgba(255,255,255,0.2);
+      opacity: 0;
+      animation: fadeInHeader 1s ease-in forwards 1.5s;
+    }
+
+    header h1 {
+      font-size: 1.8rem;
+      margin: 0;
+      font-weight: 700;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+      animation: fadeIn 1s ease-in;
+    }
+
+    .theme-toggle, .notify-toggle {
+      position: absolute;
+      top: 1rem;
+      background: none;
+      border: none;
+      color: white;
+      font-size: 1.5rem;
+      cursor: pointer;
+      padding: 0.5rem;
+    }
+
+    .theme-toggle { right: 3.5rem; }
+    .notify-toggle { right: 1rem; }
+
+    .logo-intro {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      border: 3px solid rgba(255,255,255,0.2);
+      animation: logoIntro 1s ease-in-out forwards;
+      z-index: 1000;
+    }
+
+    @keyframes logoIntro {
+      0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+      50% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+      100% { opacity: 0; transform: translate(-50%, -50%) scale(1.1); }
+    }
+
+    @keyframes fadeInHeader {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+      animation: fadeInUp 0.8s ease-in;
+    }
+
+    .events-container {
+      padding: 1.5rem;
+      background: white;
+      border-radius: 15px;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+      transition: transform 0.3s ease;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+
+    body.dark-theme .events-container {
+      background: #333;
+      color: #fff;
+    }
+
+    .events-container:hover {
+      transform: translateY(-5px);
+    }
+
+    .events-content {
+      font-size: 1rem;
+      line-height: 1.6;
+      color: #333;
+    }
+
+    body.dark-theme .events-content {
+      color: #ddd;
+    }
+
+    .events-content h1 {
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: #1a1a66;
+      margin: 0 0 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .events-content h2 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: #1a1a66;
+      margin: 1rem 0 0.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .events-content h3 {
+      font-size: 1.3rem;
+      font-weight: 600;
+      color: #1a1a66;
+      margin: 0.5rem 0;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    body.dark-theme .events-content h1,
+    body.dark-theme .events-content h2,
+    body.dark-theme .events-content h3 {
+      color: #fff;
+    }
+
+    .events-content p {
+      margin: 0.5rem 0;
+    }
+
+    .events-content .highlight {
+      background: rgba(76, 175, 80, 0.1);
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+    }
+
+    h2 {
+      color: #1a1a66;
+      font-size: 1.5rem;
+      margin: 0 0 1.5rem;
+      text-align: center;
+    }
+
+    body.dark-theme h2 {
+      color: #fff;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @media screen and (max-width: 768px) {
+      .container {
+        padding: 0 0.5rem;
+      }
+
+      header {
+        padding: 1rem 0;
+      }
+
+      header img {
+        width: 80px;
+        height: 80px;
+      }
+
+      header h1 {
+        font-size: 1.5rem;
+      }
+
+      .events-content h1 {
+        font-size: 1.6rem;
+      }
+
+      .events-content h2 {
+        font-size: 1.3rem;
+      }
+
+      .events-content h3 {
+        font-size: 1.1rem;
+      }
+    }
+
+    @media screen and (max-width: 480px) {
+      header h1 {
+        font-size: 1.2rem;
+      }
+
+      header img {
+        width: 60px;
+        height: 60px;
+      }
+
+      .theme-toggle, .notify-toggle {
+        font-size: 1.2rem;
+        top: 0.8rem;
+      }
+
+      .events-content {
+        font-size: 0.9rem;
+      }
+
+      .events-content h1 {
+        font-size: 1.4rem;
+      }
+
+      .events-content h2 {
+        font-size: 1.2rem;
+      }
+
+      .events-content h3 {
+        font-size: 1rem;
+      }
+    }
+  </style>
 </head>
 <body>
-    <header>
-        <a href="index-uk.html"><img src="https://i.postimg.cc/WbY9TdDp/PushIco.png" alt="Logo Push School"></a>
-        <h1>План культурних заходів<br>Початкова школа</h1>
-        <div class="language-switch">
-            <a href="cultural-junior.html">Polski</a> | <span>Українська</span>
-        </div>
-    </header>
-    <div class="container">
-        <div class="content">
-            <a href="index-uk.html" class="back-button">Повернутися на головну</a>
-            <h2>План культурних заходів на період 22-25 квітня</h2>
-            <p>Тема тижня: Екологія та довкілля (22 квітня – День Землі) 🌱 🌳🌿</p>
-            <ul>
-                <li style="--index: 1;">🌱 Акція «Квітуча школа»<br>(Учні 3 класу разом із п. Таєю та Томасом саджатимуть квіти на шкільній клумбі) ініціатива класу п. Таї💚</li>
-                <li style="--index: 2;">🌱 5-хвилинний екозум<br>– Просте питання для всіх: «Що ти вже зробив/зробила сьогодні для Землі?» (можна провести в класі або на вулиці)</li>
-                <li style="--index: 3;">🌱 Тематичні бесіди «Я і моя екологічна звичка»<br>(Індивідуально з класними керівниками)</li>
-                <li style="--index: 4;">🌱 Активні перерви<br>Організація музичних, танцювальних або ігрових активностей під час великої перерви💚</li>
-            </ul>
-        </div>
+  <img src="https://i.postimg.cc/WbY9TdDp/PushIco.png" alt="Push School Logo Intro" class="logo-intro">
+
+  <header>
+    <a href="index-uk.html"><img src="https://i.postimg.cc/WbY9TdDp/PushIco.png" alt="Push School Logo"></a>
+    <h1>Культурні заходи<br>Початкові класи<br>Push School Warsaw</h1>
+    <button class="theme-toggle" aria-label="Переключити тему"><i class="fas fa-moon"></i></button>
+    <button class="notify-toggle" aria-label="Увімкнути сповіщення"><i class="fas fa-bell"></i></button>
+  </header>
+
+  <div class="container">
+    <div class="events-container">
+      <h2>Заходи</h2>
+      <div id="events-content" class="events-content"></div>
     </div>
+  </div>
+
+  <script>
+    async function loadEvents() {
+      try {
+        const response = await fetch('events-uk.txt');
+        if (!response.ok) throw new Error('Не вдалося завантажити events-uk.txt');
+        const text = await response.text();
+        renderEvents(text);
+      } catch (error) {
+        console.error('Помилка завантаження подій:', error);
+        document.getElementById('events-content').innerHTML = `<p>Не вдалося завантажити заходи.</p>`;
+      }
+    }
+
+    function renderEvents(text) {
+      const eventsContent = document.getElementById('events-content');
+      eventsContent.innerHTML = '';
+
+      // Розбиваємо текст на рядки та обробляємо
+      const lines = text.split('\n');
+      let html = '';
+      let inEvent = false;
+
+      lines.forEach(line => {
+        line = line.trimEnd();
+        if (!line) {
+          html += '<br>';
+          return;
+        }
+
+        // Визначаємо заголовки
+        if (line.startsWith('План культурних заходів') || line.startsWith('Тема тижня')) {
+          html += `<h1>${line}</h1>`;
+          inEvent = false;
+        } else if (line.startsWith('🌱 ') && !line.includes('–')) {
+          html += `<h3 class="highlight">${line}</h3>`;
+          inEvent = true;
+        } else if (line.startsWith('– ')) {
+          html += `<p class="highlight">${line.substring(2)}</p>`;
+        } else {
+          html += inEvent ? `<p>${line}</p>` : `<p>${line}</p>`;
+        }
+      });
+
+      eventsContent.innerHTML = html;
+    }
+
+    document.querySelector('.theme-toggle').addEventListener('click', () => {
+      document.body.classList.toggle('dark-theme');
+      const icon = document.querySelector('.theme-toggle i');
+      icon.classList.toggle('fa-moon');
+      icon.classList.toggle('fa-sun');
+    });
+
+    let notificationsEnabled = false;
+
+    document.querySelector('.notify-toggle').addEventListener('click', () => {
+      if (!notificationsEnabled) {
+        if (!("Notification" in window)) {
+          alert("Ваш браузер не підтримує сповіщення.");
+          return;
+        }
+
+        Notification.requestPermission().then(permission => {
+          if (permission === "granted") {
+            notificationsEnabled = true;
+            document.querySelector('.notify-toggle i').classList.replace('fa-bell', 'fa-bell-slash');
+          }
+        });
+      } else {
+        notificationsEnabled = false;
+        document.querySelector('.notify-toggle i').classList.replace('fa-bell-slash', 'fa-bell');
+      }
+    });
+
+    loadEvents();
+  </script>
 </body>
 </html>
