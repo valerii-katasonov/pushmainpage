@@ -73,6 +73,7 @@
       font-size: 1.5rem;
       cursor: pointer;
       padding: 0.5rem;
+      pointer-events: auto;
     }
 
     .theme-toggle { right: 3.5rem; }
@@ -84,6 +85,7 @@
       left: 1rem;
       display: flex;
       gap: 0.5rem;
+      pointer-events: auto;
     }
 
     .lang-toggle {
@@ -95,6 +97,7 @@
       cursor: pointer;
       padding: 0.5rem;
       transition: background 0.3s ease;
+      pointer-events: auto;
     }
 
     .lang-toggle:hover {
@@ -120,6 +123,7 @@
       padding: 0.75rem 1.5rem;
       transition: background 0.3s ease, transform 0.2s ease;
       margin: 1rem 0;
+      pointer-events: auto;
     }
 
     .home-button:hover {
@@ -387,22 +391,30 @@
         pl: 'Wydarzenia kulturalne<br>Klasy początkowe<br>Push School Warsaw'
       },
       eventsTitle: { ua: 'Заходи', pl: 'Wydarzenia' },
-      errorMessage: { ua: 'Не вдалося завантажити заходи.', pl: 'Nie udało się załadować wydarzeń.' },
+      errorMessage: { 
+        ua: 'Не вдалося завантажити заходи. Перевірте наявність файлу та підключення до мережі.', 
+        pl: 'Nie udało się załadować wydarzeń. Sprawdź dostępność pliku i połączenie sieciowe.' 
+      },
       homeButton: { ua: 'Повернутися на головну', pl: 'Wróć do strony głównej' }
     };
 
     let currentLanguage = 'ua';
 
     async function loadEvents() {
+      const eventsContent = document.getElementById('events-content');
       try {
         const file = currentLanguage === 'ua' ? 'events-uk.txt' : 'events-pl.txt';
-        const response = await fetch(file);
-        if (!response.ok) throw new Error(`Не вдалося завантажити ${file}`);
+        console.log(`Спроба завантажити файл: ${file}`);
+        const response = await fetch(file, { cache: 'no-store' });
+        if (!response.ok) {
+          throw new Error(`HTTP помилка: ${response.status} ${response.statusText}`);
+        }
         const text = await response.text();
+        console.log(`Файл ${file} успішно завантажено`);
         renderEvents(text);
       } catch (error) {
-        console.error('Помилка завантаження подій:', error);
-        document.getElementById('events-content').innerHTML = `<p>${translations.errorMessage[currentLanguage]}</p>`;
+        console.error('Помилка завантаження подій:', error.message);
+        eventsContent.innerHTML = `<p>${translations.errorMessage[currentLanguage]}</p>`;
       }
     }
 
@@ -428,7 +440,6 @@
         }
         emptyLineCount = 0;
 
-        // Визначаємо заголовки
         if (line.startsWith('План культурних заходів') || line.startsWith('Plan wydarzeń kulturalnych') || 
             line.startsWith('Тема тижня') || line.startsWith('Temat tygodnia')) {
           html += `<h1>${line}</h1>`;
@@ -447,55 +458,69 @@
     }
 
     function updateStaticTexts() {
+      console.log('Оновлення статичних текстів для мови:', currentLanguage);
       document.getElementById('header').innerHTML = translations.header[currentLanguage];
-      document.getElementById('events-title').textContent = translations.events'ingTitle[currentLanguage];
+      document.getElementById('events-title').textContent = translations.eventsTitle[currentLanguage];
       document.getElementById('home-button').innerHTML = `<i class="fas fa-home"></i> ${translations.homeButton[currentLanguage]}`;
       document.querySelector('a[href]').href = currentLanguage === 'ua' ? 'index-uk.html' : 'index-pl.html';
-      document.getElementById('home-button').onclick = () => {
-        window.location.href = currentLanguage === 'ua' ? 'index-uk.html' : 'index-pl.html';
-      };
     }
 
-    document.querySelectorAll('.lang-toggle').forEach(button => {
-      button.addEventListener('click', () => {
-        currentLanguage = button.dataset.lang;
-        document.querySelectorAll('.lang-toggle').forEach(btn => btn.classList.remove('active'));
-        button.classList.add('active');
-        updateStaticTexts();
-        loadEvents();
-      });
-    });
-
-    document.querySelector('.theme-toggle').addEventListener('click', () => {
-      document.body.classList.toggle('dark-theme');
-      const icon = document.querySelector('.theme-toggle i');
-      icon.classList.toggle('fa-moon');
-      icon.classList.toggle('fa-sun');
-    });
-
-    let notificationsEnabled = false;
-
-    document.querySelector('.notify-toggle').addEventListener('click', () => {
-      if (!notificationsEnabled) {
-        if (!("Notification" in window)) {
-          alert(currentLanguage === 'ua' ? "Ваш браузер не підтримує сповіщення." : "Twoja przeglądarka nie obsługuje powiadomień.");
-          return;
-        }
-
-        Notification.requestPermission().then(permission => {
-          if (permission === "granted") {
-            notificationsEnabled = true;
-            document.querySelector('.notify-toggle i').classList.replace('fa-bell', 'fa-bell-slash');
-          }
+    function initializeEventListeners() {
+      console.log('Ініціалізація обробників подій');
+      
+      // Перемикач мов
+      document.querySelectorAll('.lang-toggle').forEach(button => {
+        button.addEventListener('click', () => {
+          console.log('Клік на перемикач мови:', button.dataset.lang);
+          currentLanguage = button.dataset.lang;
+          document.querySelectorAll('.lang-toggle').forEach(btn => btn.classList.remove('active'));
+          button.classList.add('active');
+          updateStaticTexts();
+          loadEvents();
         });
-      } else {
-        notificationsEnabled = false;
-        document.querySelector('.notify-toggle i').classList.replace('fa-bell-slash', 'fa-bell');
-      }
-    });
+      });
 
-    document.querySelector('.lang-toggle[data-lang="ua"]').classList.add('active');
+      // Кнопка повернення на головну
+      document.getElementById('home-button').addEventListener('click', () => {
+        console.log('Клік на кнопку повернення:', currentLanguage === 'ua' ? 'index-uk.html' : 'index-pl.html');
+        window.location.href = currentLanguage === 'ua' ? 'index-uk.html' : 'index-pl.html';
+      });
+
+      // Перемикач теми
+      document.querySelector('.theme-toggle').addEventListener('click', () => {
+        console.log('Клік на перемикач теми');
+        document.body.classList.toggle('dark-theme');
+        const icon = document.querySelector('.theme-toggle i');
+        icon.classList.toggle('fa-moon');
+        icon.classList.toggle('fa-sun');
+      });
+
+      // Перемикач сповіщень
+      let notificationsEnabled = false;
+      document.querySelector('.notify-toggle').addEventListener('click', () => {
+        console.log('Клік на перемикач сповіщень');
+        if (!notificationsEnabled) {
+          if (!("Notification" in window)) {
+            alert(currentLanguage === 'ua' ? "Ваш браузер не підтримує сповіщення." : "Twoja przeglądarka nie obsługuje powiadomień.");
+            return;
+          }
+          Notification.requestPermission().then(permission => {
+            if (permission === "granted") {
+              notificationsEnabled = true;
+              document.querySelector('.notify-toggle i').classList.replace('fa-bell', 'fa-bell-slash');
+            }
+          });
+        } else {
+          notificationsEnabled = false;
+          document.querySelector('.notify-toggle i').classList.replace('fa-bell-slash', 'fa-bell');
+        }
+      });
+    }
+
+    // Ініціалізація
+    console.log('Сторінка завантажена, ініціалізація...');
     updateStaticTexts();
+    initializeEventListeners();
     loadEvents();
   </script>
 </body>
