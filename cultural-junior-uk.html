@@ -107,41 +107,39 @@
     }
 
     .home-button {
-      position: absolute;
-      top: 1rem;
-      left: 6rem;
-      background: rgba(255,255,255,0.2);
-      border: 1px solid white;
-      border-radius: 4px;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: #006d77;
+      border: none;
+      border-radius: 8px;
       color: white;
       font-size: 1rem;
+      font-weight: 600;
       cursor: pointer;
-      padding: 0.5rem 1rem;
-      transition: background 0.3s ease;
+      padding: 0.75rem 1.5rem;
+      transition: background 0.3s ease, transform 0.2s ease;
+      margin: 1rem 0;
     }
 
     .home-button:hover {
-      background: rgba(255,255,255,0.4);
+      background: #00bfd1;
+      transform: translateY(-2px);
     }
 
-    @media screen and (max-width: 480px) {
-      .lang-switcher {
-        flex-direction: column;
-        top: 0.5rem;
-        left: 0.5rem;
-      }
+    .home-button i {
+      font-size: 1.2rem;
+    }
 
-      .lang-toggle {
-        padding: 0.4rem;
-        font-size: 0.9rem;
-      }
-
-      .home-button {
-        left: 0.5rem;
-        top: 3rem;
-        padding: 0.4rem 0.8rem;
-        font-size: 0.9rem;
-      }
+    .container {
+      max-width: 1200px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+      animation: fadeInUp 0.8s ease-in;
+      padding-top: env(safe-area-inset-top);
     }
 
     .logo-intro {
@@ -166,16 +164,6 @@
     @keyframes fadeInHeader {
       from { opacity: 0; }
       to { opacity: 1; }
-    }
-
-    .container {
-      max-width: 1200px;
-      margin: 2rem auto;
-      padding: 0 1rem;
-      display: flex;
-      flex-direction: column;
-      gap: 1.5rem;
-      animation: fadeInUp 0.8s ease-in;
     }
 
     .events-container {
@@ -320,6 +308,27 @@
         top: 0.8rem;
       }
 
+      .lang-switcher {
+        flex-direction: column;
+        top: 0.5rem;
+        left: 0.5rem;
+        padding-top: env(safe-area-inset-top);
+      }
+
+      .lang-toggle {
+        padding: 0.4rem;
+        font-size: 0.9rem;
+      }
+
+      .home-button {
+        padding: 0.5rem 1rem;
+        font-size: 0.9rem;
+      }
+
+      .home-button i {
+        font-size: 1rem;
+      }
+
       .events-content {
         font-size: 0.9rem;
       }
@@ -336,6 +345,17 @@
         font-size: 1rem;
       }
     }
+
+    @media screen and (max-width: 375px) {
+      .home-button {
+        padding: 0.4rem 0.8rem;
+        font-size: 0.85rem;
+      }
+
+      .home-button i {
+        font-size: 0.9rem;
+      }
+    }
   </style>
 </head>
 <body>
@@ -348,12 +368,12 @@
     </div>
     <a href="index-uk.html"><img src="https://i.postimg.cc/WbY9TdDp/PushIco.png" alt="Push School Logo"></a>
     <h1 id="header">Культурні заходи<br>Початкові класи<br>Push School Warsaw</h1>
-    <button id="home-button" class="home-button">Повернутися на головну</button>
     <button class="theme-toggle" aria-label="Переключити тему"><i class="fas fa-moon"></i></button>
     <button class="notify-toggle" aria-label="Увімкнути сповіщення"><i class="fas fa-bell"></i></button>
   </header>
 
   <div class="container">
+    <button id="home-button" class="home-button"><i class="fas fa-home"></i> Повернутися на головну</button>
     <div class="events-container">
       <h2 id="events-title">Заходи</h2>
       <div id="events-content" class="events-content"></div>
@@ -393,14 +413,20 @@
       const lines = text.split('\n');
       let html = '';
       let inEvent = false;
+      let emptyLineCount = 0;
 
       lines.forEach(line => {
         line = line.trimEnd();
         if (!line) {
+          emptyLineCount++;
+          if (emptyLineCount >= 2) {
+            inEvent = false;
+            emptyLineCount = 0;
+          }
           html += '<br>';
-          inEvent = false;
           return;
         }
+        emptyLineCount = 0;
 
         // Визначаємо заголовки
         if (line.startsWith('План культурних заходів') || line.startsWith('Plan wydarzeń kulturalnych') || 
@@ -422,8 +448,8 @@
 
     function updateStaticTexts() {
       document.getElementById('header').innerHTML = translations.header[currentLanguage];
-      document.getElementById('events-title').textContent = translations.eventsTitle[currentLanguage];
-      document.getElementById('home-button').textContent = translations.homeButton[currentLanguage];
+      document.getElementById('events-title').textContent = translations.events'ingTitle[currentLanguage];
+      document.getElementById('home-button').innerHTML = `<i class="fas fa-home"></i> ${translations.homeButton[currentLanguage]}`;
       document.querySelector('a[href]').href = currentLanguage === 'ua' ? 'index-uk.html' : 'index-pl.html';
       document.getElementById('home-button').onclick = () => {
         window.location.href = currentLanguage === 'ua' ? 'index-uk.html' : 'index-pl.html';
