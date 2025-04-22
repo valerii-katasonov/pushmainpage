@@ -144,7 +144,7 @@
     }
 
     .container {
-      max-width: 1200px;
+      max-width: 2000px;
       margin: 2rem auto;
       padding: 0 1rem;
       display: flex;
@@ -272,6 +272,8 @@
       border-radius: 15px;
       box-shadow: 0 5px 15px rgba(0,0,0,0.08);
       margin: 0;
+      min-width: 600px; /* Додано для запобігання стисканню */
+      flex: 1; /* Дозволяє таблиці розтягуватися */
     }
 
     body.dark-theme .tables-container {
@@ -284,6 +286,7 @@
       border-radius: 15px;
       box-shadow: 0 5px 15px rgba(0,0,0,0.08);
       max-width: 350px;
+      min-width: 300px; /* Додано для запобігання стисканню */
       transition: transform 0.3s ease;
     }
 
@@ -334,6 +337,7 @@
       border-radius: 15px;
       box-shadow: 0 5px 15px rgba(0,0,0,0.08);
       max-width: 450px;
+      min-width: 300px; /* Додано для запобігання стисканню */
       transition: transform 0.3s ease;
     }
 
@@ -380,13 +384,10 @@
         padding: 0 0.5rem;
       }
 
-      .links-container, .image-container-right {
+      .links-container, .image-container-right, .tables-container {
         max-width: 100%;
+        min-width: 0; /* Скидаємо min-width для мобільних */
         margin: 0 0 1.5rem;
-      }
-
-      .tables-container {
-        width: 100%;
       }
 
       header {
