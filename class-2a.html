@@ -12,15 +12,22 @@
       font-family: 'Montserrat', sans-serif;
       margin: 0;
       padding: 0;
-      background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+      background-image: url('https://zastavki.gas-kvas.com/uploads/posts/2024-09/zastavki-gas-kvas-com-35bo-p-zastavki-pro-shkolu-9.jpg');
+      background-size: cover;
+      background-position: center;
+      background-attachment: fixed;
       min-height: 100vh;
-      transition: background 0.5s ease;
+      transition: background 0.5s ease, color 0.5s ease;
       position: relative;
       font-size: 16px;
+      color: #333;
     }
 
     body.dark-theme {
-      background: linear-gradient(135deg, #002b33 0%, #004d57 100%);
+      background: linear-gradient(135deg, rgba(0, 43, 51, 0.6) 0%, rgba(0, 77, 87, 0.6) 100%), url('https://zastavki.gas-kvas.com/uploads/posts/2024-09/zastavki-gas-kvas-com-35bo-p-zastavki-pro-shkolu-9.jpg');
+      background-size: cover;
+      background-position: center;
+      background-attachment: fixed;
       color: #fff;
     }
 
@@ -265,6 +272,8 @@
       border-radius: 15px;
       box-shadow: 0 5px 15px rgba(0,0,0,0.08);
       margin: 0;
+      min-width: 600px; /* Додано для запобігання стисканню */
+      flex: 1; /* Дозволяє таблиці розтягуватися */
     }
 
     body.dark-theme .tables-container {
@@ -277,6 +286,7 @@
       border-radius: 15px;
       box-shadow: 0 5px 15px rgba(0,0,0,0.08);
       max-width: 350px;
+      min-width: 300px; /* Додано для запобігання стисканню */
       transition: transform 0.3s ease;
     }
 
@@ -327,6 +337,7 @@
       border-radius: 15px;
       box-shadow: 0 5px 15px rgba(0,0,0,0.08);
       max-width: 450px;
+      min-width: 300px; /* Додано для запобігання стисканню */
       transition: transform 0.3s ease;
     }
 
@@ -373,13 +384,10 @@
         padding: 0 0.5rem;
       }
 
-      .links-container, .image-container-right {
+      .links-container, .image-container-right, .tables-container {
         max-width: 100%;
+        min-width: 0; /* Скидаємо min-width для мобільних */
         margin: 0 0 1.5rem;
-      }
-
-      .tables-container {
-        width: 100%;
       }
 
       header {
@@ -506,7 +514,7 @@
     const translations = {
       header: {
         ua: 'Розклад уроків<br>2A клас<br>Push School Warsaw',
-        pl: 'Plan lekcji<br>2A klasa<br>Push School Warsaw'
+        pl: 'Plan lekcji<br>Klasa 2A<br>Push School Warsaw'
       },
       usefulLinks: { ua: 'Корисні посилання:', pl: 'Przydatne linki:' },
       textbooks: { ua: 'Підручники:', pl: 'Podręczniki:' },
