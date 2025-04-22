@@ -106,6 +106,24 @@
       color: #006d77;
     }
 
+    .home-button {
+      position: absolute;
+      top: 1rem;
+      left: 6rem;
+      background: rgba(255,255,255,0.2);
+      border: 1px solid white;
+      border-radius: 4px;
+      color: white;
+      font-size: 1rem;
+      cursor: pointer;
+      padding: 0.5rem 1rem;
+      transition: background 0.3s ease;
+    }
+
+    .home-button:hover {
+      background: rgba(255,255,255,0.4);
+    }
+
     @media screen and (max-width: 480px) {
       .lang-switcher {
         flex-direction: column;
@@ -115,6 +133,13 @@
 
       .lang-toggle {
         padding: 0.4rem;
+        font-size: 0.9rem;
+      }
+
+      .home-button {
+        left: 0.5rem;
+        top: 3rem;
+        padding: 0.4rem 0.8rem;
         font-size: 0.9rem;
       }
     }
@@ -323,6 +348,7 @@
     </div>
     <a href="index-uk.html"><img src="https://i.postimg.cc/WbY9TdDp/PushIco.png" alt="Push School Logo"></a>
     <h1 id="header">Культурні заходи<br>Початкові класи<br>Push School Warsaw</h1>
+    <button id="home-button" class="home-button">Повернутися на головну</button>
     <button class="theme-toggle" aria-label="Переключити тему"><i class="fas fa-moon"></i></button>
     <button class="notify-toggle" aria-label="Увімкнути сповіщення"><i class="fas fa-bell"></i></button>
   </header>
@@ -341,7 +367,8 @@
         pl: 'Wydarzenia kulturalne<br>Klasy początkowe<br>Push School Warsaw'
       },
       eventsTitle: { ua: 'Заходи', pl: 'Wydarzenia' },
-      errorMessage: { ua: 'Не вдалося завантажити заходи.', pl: 'Nie udało się załadować wydarzeń.' }
+      errorMessage: { ua: 'Не вдалося завантажити заходи.', pl: 'Nie udało się załadować wydarzeń.' },
+      homeButton: { ua: 'Повернутися на головну', pl: 'Wróć do strony głównej' }
     };
 
     let currentLanguage = 'ua';
@@ -371,6 +398,7 @@
         line = line.trimEnd();
         if (!line) {
           html += '<br>';
+          inEvent = false;
           return;
         }
 
@@ -385,7 +413,7 @@
         } else if (line.startsWith('– ')) {
           html += `<p class="highlight">${line.substring(2)}</p>`;
         } else {
-          html += inEvent ? `<p>${line}</p>` : `<p>${line}</p>`;
+          html += inEvent ? `<p class="highlight">${line}</p>` : `<p>${line}</p>`;
         }
       });
 
@@ -395,7 +423,11 @@
     function updateStaticTexts() {
       document.getElementById('header').innerHTML = translations.header[currentLanguage];
       document.getElementById('events-title').textContent = translations.eventsTitle[currentLanguage];
+      document.getElementById('home-button').textContent = translations.homeButton[currentLanguage];
       document.querySelector('a[href]').href = currentLanguage === 'ua' ? 'index-uk.html' : 'index-pl.html';
+      document.getElementById('home-button').onclick = () => {
+        window.location.href = currentLanguage === 'ua' ? 'index-uk.html' : 'index-pl.html';
+      };
     }
 
     document.querySelectorAll('.lang-toggle').forEach(button => {
