@@ -424,40 +424,47 @@
 
       const lines = text.split('\n').map(line => line.trimEnd());
       let html = '';
-      let lineNumber = 1;
+      let lineNumber = 0; // Tracks total lines (including empty ones) for the pattern
+      let contentIndex = 0; // Tracks non-empty lines for headings and line 4
 
       lines.forEach((line, index) => {
-        // Handle empty lines
+        lineNumber++;
+
+        // Handle empty lines in source
         if (!line) {
           html += '<br>';
           return;
         }
 
-        // First three lines as <h1>
-        if (lineNumber <= 3) {
+        contentIndex++;
+
+        // First three non-empty lines as <h1>
+        if (contentIndex <= 3) {
           html += `<h1>${line}</h1>`;
-        } else {
-          // Line 4: normal with highlight
-          if (lineNumber === 4) {
-            html += `<p class="highlight">${line}</p>`;
-          }
-          // From line 5: apply highlight and bold/normal/empty pattern
-          else if (lineNumber >= 5) {
-            const patternIndex = (lineNumber - 5) % 3;
-            if (patternIndex === 0) {
-              // Bold line (5th, 8th, 11th, etc.)
-              html += `<p class="highlight"><strong>${line}</strong></p>`;
-            } else if (patternIndex === 1) {
-              // Normal line (6th, 9th, 12th, etc.)
-              html += `<p class="highlight">${line}</p>`;
-            } else {
-              // Empty line (7th, 10th, 13th, etc.)
-              html += `<br>`;
-            }
-          }
+          return;
         }
 
-        lineNumber++;
+        // Line 4: normal with highlight
+        if (contentIndex === 4) {
+          html += `<p class="highlight">${line}</p>`;
+          return;
+        }
+
+        // From line 5: apply bold/normal/empty pattern based on lineNumber
+        if (contentIndex >= 5) {
+          const patternIndex = (lineNumber - 5) % 3;
+          if (patternIndex === 0) {
+            // Bold line (5th, 8th, 11th, etc.)
+            html += `<p class="highlight"><strong>${line}</strong></p>`;
+          } else if (patternIndex === 1) {
+            // Normal line (6th, 9th, 12th, etc.), followed by empty line
+            html += `<p class="highlight">${line}</p>`;
+            html += '<br>'; // Add empty line after normal line
+          } else {
+            // Empty line (7th, 10th, 13th, etc.), but render the content anyway
+            html += `<p class="highlight">${line}</p>`;
+          }
+        }
       });
 
       eventsContent.innerHTML = html;
