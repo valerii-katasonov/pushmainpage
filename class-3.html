@@ -613,7 +613,7 @@
       const cachedSchedule = loadCachedSchedule();
       const daySchedule = cachedSchedule[todayKey] || [];
       const currentLessonData = getCurrentLesson(daySchedule);
-      const currentLessonDiv = document.getElementBy comptesId("current-lesson");
+      const currentLessonDiv = document.getElementById("current-lesson");
 
       if (currentLessonData) {
         if (currentLessonData.type === "lesson") {
