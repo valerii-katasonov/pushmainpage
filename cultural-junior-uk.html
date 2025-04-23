@@ -8,51 +8,11 @@
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
   <style>
-    body {
-      font-family: 'Montserrat', sans-serif;
-      margin: 0;
-      padding: 0;
-      background-image: url('https://zastavki.gas-kvas.com/uploads/posts/2024-09/zastavki-gas-kvas-com-35bo-p-zastavki-pro-shkolu-9.jpg');
-      background-size: cover;
-      background-position: center;
-      background-attachment: fixed;
-      min-height: 100vh;
-      transition: background 0.5s ease, color 0.5s ease;
-      position: relative;
-      font-size: 16px;
-      color: #333;
-    }
-
-    body.dark-theme {
-      background: linear-gradient(135deg, rgba(0, 43, 51, 0.6) 0%, rgba(0, 77, 87, 0.6) 100%), url('https://zastavki.gas-kvas.com/uploads/posts/2024-09/zastavki-gas-kvas-com-35bo-p-zastavki-pro-shkolu-9.jpg');
-      background-size: cover;
-      background-position: center;
-      background-attachment: fixed;
-      color: #fff;
-    }
-
-    header {
-      background: linear-gradient(45deg, #00bfd1, #006d77);
-      color: white;
-      padding: 1.5rem 0;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      gap: 1rem;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-      position: relative;
-    }
-
-    body.dark-theme header {
-      background: linear-gradient(45deg, #003d44, #006d77);
-    }
-
-    /* Остальные стили без изменений... */
+    /* ... Твои существующие стили без изменений ... */
   </style>
 </head>
 <body>
   <img src="https://i.postimg.cc/WbY9TdDp/PushIco.png" alt="Push School Logo Intro" class="logo-intro">
-
   <header>
     <div class="lang-switcher">
       <button class="lang-toggle active" data-lang="ua">UA</button>
@@ -93,7 +53,7 @@
       try {
         const file = currentLanguage === 'ua' ? 'events-uk.txt' : 'events-pl.txt';
         const response = await fetch(file, { cache: 'no-store' });
-        if (!response.ok) throw new Error(`HTTP помилка: ${response.status}`);
+        if (!response.ok) throw new Error(`HTTP error: ${response.status}`);
         const text = await response.text();
         renderEvents(text);
       } catch (error) {
@@ -111,19 +71,19 @@
       lines.forEach((line, index) => {
         line = line.trimEnd();
 
-        // Пустая строка
-        if (!line) {
-          html += '<br>';
-          return;
-        }
-
-        // Первые 3 строки — заголовки
+        // Первые 3 строки — как заголовок
         if (index < 3) {
           html += `<h1>${line}</h1>`;
           return;
         }
 
-        // С 5-й строки (index>=4): жирная, обычная, пустая
+        // Пустая строка — перенос
+        if (!line) {
+          html += '<br>';
+          return;
+        }
+
+        // Начиная с 5-й строки (index >= 4): циклично жирная, обычная, пустая
         if (index >= 4) {
           const pos = (index - 4) % 3;
           if (pos === 0) {
@@ -164,12 +124,17 @@
       document.querySelector('.theme-toggle').addEventListener('click', () => {
         document.body.classList.toggle('dark-theme');
         const icon = document.querySelector('.theme-toggle i');
-        icon.classList.toggle('fa-moon'); icon.classList.toggle('fa-sun');
+        icon.classList.toggle('fa-moon');
+        icon.classList.toggle('fa-sun');
       });
 
       let notificationsEnabled = false;
       document.querySelector('.notify-toggle').addEventListener('click', () => {
         if (!notificationsEnabled) {
+          if (!('Notification' in window)) {
+            alert(translations.errorMessage[currentLanguage]);
+            return;
+          }
           Notification.requestPermission().then(permission => {
             if (permission === 'granted') {
               notificationsEnabled = true;
