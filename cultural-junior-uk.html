@@ -165,9 +165,10 @@
       100% { opacity: 0; transform: translate(-50%, -50%) scale(1.1); }
     }
 
-    @keyframes fadeInHeader { from { opacity: 0; } to { opacity: 1; } }
-    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-    @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes fadeInHeader {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
 
     .events-container {
       padding: 1.5rem;
@@ -180,11 +181,13 @@
     }
 
     body.dark-theme .events-container {
-      background: #333酷派: #333;
+      background: #333;
       color: #fff;
     }
 
-    .events-container:hover { transform: translateY(-5px); }
+    .events-container:hover {
+      transform: translateY(-5px);
+    }
 
     .events-content {
       font-size: 1rem;
@@ -192,7 +195,9 @@
       color: #333;
     }
 
-    body.dark-theme .events-content { color: #ddd; }
+    body.dark-theme .events-content {
+      color: #ddd;
+    }
 
     .events-content h1 {
       font-size: 1.8rem;
@@ -210,7 +215,7 @@
       color: #1a1a66;
       margin: 1rem 0 0.5rem;
       display: flex;
-      align-items:、防抖动 center;
+      align-items: center;
       gap: 0.5rem;
     }
 
@@ -230,12 +235,38 @@
       color: #fff;
     }
 
-    .events-content p { margin: 0.5rem 0; }
-    .events-content .highlight { background: rgba(76, 175, 80, 0.1); padding: 0.2rem 0.5rem; border-radius: 4px; }
+    .events-content p {
+      margin: 0.5rem 0;
+    }
 
-    h2 { text-align: center; font-size: 1.5rem; margin: 0 0 1.5rem; color: #1a1a66; }
-    body.dark-theme h2 { color: #fff; }
+    .events-content .highlight {
+      background: rgba(76, 175, 80, 0.1);
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+    }
 
+    h2 {
+      color: #1a1a66;
+      font-size: 1.5rem;
+      margin: 0 0 1.5rem;
+      text-align: center;
+    }
+
+    body.dark-theme h2 {
+      color: #fff;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Адаптив */
     @media screen and (max-width: 768px) {
       .container { padding: 0 0.5rem; }
       header { padding: 1rem 0; }
@@ -245,29 +276,28 @@
       .events-content h2 { font-size: 1.3rem; }
       .events-content h3 { font-size: 1.1rem; }
     }
-
     @media screen and (max-width: 480px) {
       header h1 { font-size: 1.2rem; }
       header img { width: 60px; height: 60px; }
       .theme-toggle, .notify-toggle { font-size: 1.2rem; top: 0.8rem; }
-      .lang-switcher { top: 0.5rem; left: 0.5rem; flex-direction: column; padding-top: env(safe-area-inset-top); }
-      .lang-toggle { font-size: 0.9rem; padding: 0.4rem; }
-      .home-button { font-size: 0.9rem; padding: 0.5rem 1rem; }
+      .lang-switcher { flex-direction: column; top: 0.5rem; left: 0.5rem; padding-top: env(safe-area-inset-top); }
+      .lang-toggle { padding: 0.4rem; font-size: 0.9rem; }
+      .home-button { padding: 0.5rem 1rem; font-size: 0.9rem; }
       .home-button i { font-size: 1rem; }
       .events-content { font-size: 0.9rem; }
       .events-content h1 { font-size: 1.4rem; }
       .events-content h2 { font-size: 1.2rem; }
       .events-content h3 { font-size: 1rem; }
     }
-
     @media screen and (max-width: 375px) {
-      .home-button { font-size: 0.85rem; padding: 0.4rem 0.8rem; }
+      .home-button { padding: 0.4rem 0.8rem; font-size: 0.85rem; }
       .home-button i { font-size: 0.9rem; }
     }
   </style>
 </head>
 <body>
   <img src="https://i.postimg.cc/WbY9TdDp/PushIco.png" alt="Push School Logo Intro" class="logo-intro">
+
   <header>
     <div class="lang-switcher">
       <button class="lang-toggle active" data-lang="ua">UA</button>
@@ -278,6 +308,7 @@
     <button class="theme-toggle" aria-label="Переключити тему"><i class="fas fa-moon"></i></button>
     <button class="notify-toggle" aria-label="Увімкнути сповіщення"><i class="fas fa-bell"></i></button>
   </header>
+
   <div class="container">
     <button id="home-button" class="home-button"><i class="fas fa-home"></i> Повернутися на головну</button>
     <div class="events-container">
@@ -285,6 +316,7 @@
       <div id="events-content" class="events-content"></div>
     </div>
   </div>
+
   <script>
     const translations = {
       header: {
@@ -292,12 +324,13 @@
         pl: 'Wydarzenia kulturalne<br>Klasy początkowe<br>Push School Warsaw'
       },
       eventsTitle: { ua: 'Заходи', pl: 'Wydarzenia' },
-      errorMessage: {
-        ua: 'Не вдалося завантажити заходи. Перевірте наявність файлу та підключення до мережі.',
-        pl: 'Nie udało się załadować wydarzeń. Sprawdź dostępność pliku i połączenie sieciowe.'
+      errorMessage: { 
+        ua: 'Не вдалося завантажити заходи. Перевірте наявність файлу та підключення до мережі.', 
+        pl: 'Nie udało się załadować wydarzeń. Sprawdź dostępność pliku i połączenie sieciowe.' 
       },
       homeButton: { ua: 'Повернутися на головну', pl: 'Wróć do strony głównej' }
     };
+
     let currentLanguage = 'ua';
 
     async function loadEvents() {
@@ -322,23 +355,25 @@
     function renderEvents(text) {
       const eventsContent = document.getElementById('events-content');
       eventsContent.innerHTML = '';
-
       const lines = text.split('\n');
       let html = '';
 
       lines.forEach((line, index) => {
         line = line.trimEnd();
 
+        // Первые 3 строки — заголовки
         if (index < 3) {
           html += `<h1>${line}</h1>`;
           return;
         }
 
+        // Пустая строка — <br>
         if (!line) {
           html += '<br>';
           return;
         }
 
+        // Начиная с 5-й (index >= 4) по циклу: жирная, обычная, пустая
         if (index >= 4) {
           const pos = (index - 4) % 3;
           if (pos === 0) {
@@ -386,12 +421,12 @@
       let notificationsEnabled = false;
       document.querySelector('.notify-toggle').addEventListener('click', () => {
         if (!notificationsEnabled) {
-          if (!('Notification' in window)) {
+          if (!("Notification" in window)) {
             alert(translations.errorMessage[currentLanguage]);
             return;
           }
           Notification.requestPermission().then(permission => {
-            if (permission === 'granted') {
+            if (permission === "granted") {
               notificationsEnabled = true;
               document.querySelector('.notify-toggle i').classList.replace('fa-bell', 'fa-bell-slash');
             }
@@ -403,6 +438,7 @@
       });
     }
 
+    // Инициализация
     updateStaticTexts();
     initializeEventListeners();
     loadEvents();
