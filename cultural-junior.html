@@ -441,8 +441,8 @@
           if (lineNumber === 5) {
             html += `<p class="highlight"><strong>${line}</strong></p>`;
           } else {
-            // All other lines from line 4 onward: normal with highlight
-            html += `<p class="highlight">${line}</p>`;
+            // All other lines (4, 6+): normal without highlight
+            html += `<p>${line}</p>`;
           }
         }
 
