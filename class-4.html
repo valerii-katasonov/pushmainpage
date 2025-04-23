@@ -25,6 +25,7 @@
       font-size: 16px;
       color: #333;
     }
+
     body.dark-theme {
       background: linear-gradient(135deg, rgba(0, 43, 51, 0.6) 0%, rgba(0, 77, 87, 0.6) 100%), url('https://zastavki.gas-kvas.com/uploads/posts/2024-09/zastavki-gas-kvas-com-35bo-p-zastavki-pro-shkolu-9.jpg');
       background-size: cover;
@@ -32,6 +33,7 @@
       background-attachment: fixed;
       color: #fff;
     }
+
     header {
       background: linear-gradient(45deg, #00bfd1, #006d77);
       color: white;
@@ -43,9 +45,11 @@
       box-shadow: 0 2px 10px rgba(0,0,0,0.2);
       position: relative;
     }
+
     body.dark-theme header {
       background: linear-gradient(45deg, #003d44, #006d77);
     }
+
     header img {
       width: 100px;
       height: 100px;
@@ -54,6 +58,7 @@
       opacity: 0;
       animation: fadeInHeader 1s ease-in forwards 1.5s;
     }
+
     header h1 {
       font-size: 1.8rem;
       margin: 0;
@@ -61,6 +66,7 @@
       text-shadow: 0 2px 4px rgba(0,0,0,0.2);
       animation: fadeIn 1s ease-in;
     }
+
     .theme-toggle, .notify-toggle {
       position: absolute;
       top: 1rem;
@@ -71,8 +77,10 @@
       cursor: pointer;
       padding: 0.5rem;
     }
+
     .theme-toggle { right: 3.5rem; }
     .notify-toggle { right: 1rem; }
+
     .lang-switcher {
       position: absolute;
       top: 1rem;
@@ -80,6 +88,7 @@
       display: flex;
       gap: 0.5rem;
     }
+
     .lang-toggle {
       background: none;
       border: 1px solid white;
@@ -90,24 +99,29 @@
       padding: 0.5rem;
       transition: background 0.3s ease;
     }
+
     .lang-toggle:hover {
       background: rgba(255,255,255,0.2);
     }
+
     .lang-toggle.active {
       background: white;
       color: #006d77;
     }
+
     @media screen and (max-width: 480px) {
       .lang-switcher {
         flex-direction: column;
         top: 0.5rem;
         left: 0.5rem;
       }
+
       .lang-toggle {
         padding: 0.4rem;
         font-size: 0.9rem;
       }
     }
+
     .logo-intro {
       position: fixed;
       top: 50%;
@@ -120,15 +134,18 @@
       animation: logoIntro 1s ease-in-out forwards;
       z-index: 1000;
     }
+
     @keyframes logoIntro {
       0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
       50% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
       100% { opacity: 0; transform: translate(-50%, -50%) scale(1.1); }
     }
+
     @keyframes fadeInHeader {
       from { opacity: 0; }
       to { opacity: 1; }
     }
+
     .container {
       max-width: 2000px;
       margin: 2rem auto;
@@ -138,6 +155,7 @@
       justify-content: center;
       animation: fadeInUp 0.8s ease-in;
     }
+
     .current-lesson {
       font-size: 1.2rem;
       color: #1a1a66;
@@ -149,20 +167,24 @@
       box-shadow: 0 5px 15px rgba(0,0,0,0.08);
       transition: transform 0.3s ease, box-shadow 0.3s ease;
     }
+
     body.dark-theme .current-lesson {
       background: #333;
       color: #fff;
     }
+
     .current-lesson:hover {
       transform: translateY(-5px);
       box-shadow: 0 8px 20px rgba(0,0,0,0.12);
     }
+
     .day-filter {
       display: flex;
       justify-content: center;
       gap: 0.5rem;
       margin-bottom: 1.5rem;
     }
+
     .day-filter button {
       padding: 0.8rem 1rem;
       border: none;
@@ -174,21 +196,26 @@
       min-height: 44px;
       font-size: 1rem;
     }
+
     .day-filter button.active {
       background: #4CAF50;
       color: white;
     }
+
     body.dark-theme .day-filter button {
       background: #555;
       color: #fff;
     }
+
     body.dark-theme .day-filter button.active {
       background: #66BB6A;
     }
+
     .table-wrapper {
       overflow-x: auto;
       -webkit-overflow-scrolling: touch;
     }
+
     table {
       width: 100%;
       border-collapse: separate;
@@ -199,40 +226,49 @@
       overflow: hidden;
       box-shadow: 0 5px 15px rgba(0,0,0,0.08);
     }
+
     body.dark-theme table {
       background: #444;
       color: #fff;
     }
+
     th, td {
       padding: 0.8rem 1rem;
       text-align: center;
       border-bottom: 1px solid rgba(0,0,0,0.05);
       font-size: 1rem;
     }
+
     body.dark-theme th, body.dark-theme td {
       border-bottom: 1px solid rgba(255,255,255,0.1);
     }
+
     th {
       background: #f8f9fa;
       font-weight: 600;
       color: #333;
     }
+
     body.dark-theme th {
       background: #555;
     }
+
     .highlight {
       background: #f5f5f5;
       font-style: italic;
     }
+
     body.dark-theme .highlight {
       background: #555;
     }
+
     .monday { background: rgba(173, 216, 230, 0.6); }
     .tuesday { background: rgba(144, 238, 144, 0.6); }
     .wednesday { background: rgba(255, 255, 224, 0.6); }
     .thursday { background: rgba(255, 218, 185, 0.6); }
     .friday { background: rgba(255, 192, 203, 0.6); }
     .current-day { background: rgba(76, 175, 80, 0.3); }
+
     .tables-container {
       padding: 1.5rem;
       background: white;
@@ -242,9 +278,11 @@
       min-width: 600px;
       flex: 1;
     }
+
     body.dark-theme .tables-container {
       background: #333;
     }
+
     .links-container {
       padding: 1.5rem;
       background: white;
@@ -254,20 +292,25 @@
       min-width: 300px;
       transition: transform 0.3s ease;
     }
+
     body.dark-theme .links-container {
       background: #333;
     }
+
     .links-container:hover {
       transform: translateY(-5px);
     }
+
     .links-container h3 {
       color: #1a1a66;
       margin: 0 0 1rem;
       font-size: 1.2rem;
     }
+
     body.dark-theme .links-container h3 {
       color: #fff;
     }
+
     .links-container a {
       color: #2d2d99;
       text-decoration: none;
@@ -278,15 +321,19 @@
       padding: 0.8rem 0;
       font-size: 1rem;
     }
+
     body.dark-theme .links-container a {
       color: #4CAF50;
     }
+
     .links-container a:hover {
       color: #4CAF50;
     }
+
     body.dark-theme .links-container a:hover {
       color: #66BB6A;
     }
+
     .image-container-right {
       padding: 1.5rem;
       background: white;
@@ -296,12 +343,15 @@
       min-width: 300px;
       transition: transform 0.3s ease;
     }
+
     body.dark-theme .image-container-right {
       background: #333;
     }
+
     .image-container-right:hover {
       transform: translateY(-5px);
     }
+
     .google-image {
       width: 100%;
       border-radius: 10px;
@@ -309,70 +359,87 @@
       transition: transform 0.3s ease;
       touch-action: pinch-zoom;
     }
+
     h2 {
       color: #1a1a66;
       font-size: 1.5rem;
       margin: 0 0 1.5rem;
       text-align: center;
     }
+
     body.dark-theme h2 {
       color: #fff;
     }
+
     @keyframes fadeIn {
       from { opacity: 0; }
       to { opacity: 1; }
     }
+
     @keyframes fadeInUp {
       from { opacity: 0; transform: translateY(20px); }
       to { opacity: 1; transform: translateY(0); }
     }
+
     @media screen and (max-width: 768px) {
       .container {
         flex-direction: column;
         padding: 0 0.5rem;
       }
+
       .links-container, .image-container-right, .tables-container {
         max-width: 100%;
         min-width: 0;
         margin: 0 0 1.5rem;
       }
+
       header {
         padding: 1rem 0;
       }
+
       header img {
         width: 80px;
         height: 80px;
       }
+
       header h1 {
         font-size: 1.5rem;
       }
+
       .day-filter {
         flex-wrap: wrap;
       }
+
       .current-lesson {
         font-size: 1.1rem;
       }
     }
+
     @media screen and (max-width: 480px) {
       header h1 {
         font-size: 1.2rem;
       }
+
       header img {
         width: 60px;
         height: 60px;
       }
+
       .theme-toggle, .notify-toggle {
         font-size: 1.2rem;
         top: 0.8rem;
       }
+
       .day-filter button {
         padding: 0.6rem 0.8rem;
         font-size: 0.9rem;
       }
+
       th, td {
         padding: 0.6rem 0.8rem;
         font-size: 0.9rem;
       }
+
       .links-container a {
         font-size: 0.9rem;
       }
@@ -381,6 +448,7 @@
 </head>
 <body>
   <img src="https://i.postimg.cc/WbY9TdDp/PushIco.png" alt="Push School Logo Intro" class="logo-intro">
+
   <header>
     <div class="lang-switcher">
       <button class="lang-toggle" data-lang="ua">UA</button>
@@ -400,7 +468,10 @@
       </ul>
       <h3 id="textbooks">Підручники:</h3>
       <ul>
-        <!-- Додайте підручники для 4 класу -->
+        <li><a href="https://example.com/math-4" target="_blank"><i class="fas fa-book"></i> Математика 4 клас</a></li>
+        <li><a href="https://example.com/ukr-4" target="_blank"><i class="fas fa-book"></i> Українська мова 4 клас</a></li>
+        <li><a href="https://example.com/reading-4" target="_blank"><i class="fas fa-book"></i> Літературне читання 4 клас</a></li>
+        <li><a href="https://example.com/nature-4" target="_blank"><i class="fas fa-book"></i> Природознавство 4 клас</a></li>
       </ul>
     </div>
     <div class="tables-container">
@@ -438,6 +509,7 @@
       <img class="google-image" src="https://i.postimg.cc/W1RVp0n2/2.png" alt="Google Drive Image">
     </div>
   </div>
+
   <script src="schedule-class-4.js"></script>
   <script>
     const translations = {
@@ -458,23 +530,17 @@
       thSubject: { ua: 'Урок', pl: 'Lekcja' },
       thTime: { ua: 'Час', pl: 'Czas' }
     };
-    const dayNames = {
-      Monday: { ua: 'Понеділок', pl: 'Poniedziałek' },
-      Tuesday: { ua: 'Вівторок', pl: 'Wtorek' },
-      Wednesday: { ua: 'Середа', pl: 'Środa' },
-      Thursday: { ua: 'Четвер', pl: 'Czwartek' },
-      Friday: { ua: 'П’ятниця', pl: 'Piątek' },
-      Saturday: { ua: 'Субота', pl: 'Sobota' },
-      Sunday: { ua: 'Неділя', pl: 'Niedziela' }
-    };
+
     let currentLanguage = 'ua';
     const dayKeys = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
     let selectedDay = dayKeys[new Date().getDay()];
     const classId = 'class4';
+
     function cacheSchedule() {
       console.log(`Кешування розкладу для ${classId}`);
       localStorage.setItem(`schedule-${classId}`, JSON.stringify(schedule));
     }
+
     function loadCachedSchedule() {
       console.log(`Завантаження кешованого розкладу для ${classId}`);
       const cached = localStorage.getItem(`schedule-${classId}`);
@@ -486,20 +552,24 @@
       console.log(`Кеш відсутній, використовується розклад із schedule-class-4.js`);
       return schedule;
     }
+
     function clearOldCache() {
       console.log('Очищення старого кешу');
       localStorage.removeItem('schedule');
     }
+
     function getCurrentLesson(daySchedule) {
       const now = new Date();
       const currentHour = now.getHours();
       const currentMinutes = now.getMinutes();
       const currentTime = currentHour * 60 + currentMinutes;
+
       for (let lesson of daySchedule) {
         const [start, end] = lesson.time.split(" - ").map(time => {
           const [hours, minutes] = time.split(":").map(Number);
           return hours * 60 + minutes;
         });
+
         if (currentTime >= start && currentTime < end) {
           if (lesson.subject.ua === "Перерва" || lesson.subject.ua.includes("Обід")) {
             return { type: "break", lesson };
@@ -507,16 +577,20 @@
           return { type: "lesson", lesson };
         }
       }
+
       if (daySchedule.length > 0) {
         const lastLessonEnd = daySchedule[daySchedule.length - 1].time.split(" - ")[1];
         const [hours, minutes] = lastLessonEnd.split(":").map(Number);
         const lastLessonEndTime = hours * 60 + minutes;
+
         if (currentTime >= lastLessonEndTime) {
           return { type: "finished" };
         }
       }
+
       return null;
     }
+
     function updateStaticTexts() {
       console.log('Оновлення статичних текстів для мови:', currentLanguage);
       document.getElementById('header').innerHTML = translations.header[currentLanguage];
@@ -532,6 +606,7 @@
       document.getElementById('th-time').textContent = translations.thTime[currentLanguage];
       document.getElementById('th-time-week').textContent = translations.thTime[currentLanguage];
     }
+
     function renderCurrentLesson() {
       const today = new Date().getDay();
       const todayKey = dayKeys[today];
@@ -539,6 +614,7 @@
       const daySchedule = cachedSchedule[todayKey] || [];
       const currentLessonData = getCurrentLesson(daySchedule);
       const currentLessonDiv = document.getElementById("current-lesson");
+
       if (currentLessonData) {
         if (currentLessonData.type === "lesson") {
           const lesson = currentLessonData.lesson;
@@ -554,12 +630,14 @@
         currentLessonDiv.textContent = translations.noLessons[currentLanguage];
       }
     }
+
     function renderDailySchedule(selectedDay) {
       console.log(`Рендеринг щоденного розкладу для дня: ${selectedDay}`);
       const cachedSchedule = loadCachedSchedule();
       const daySchedule = cachedSchedule[selectedDay] || [];
       const dailyScheduleTable = document.querySelector("#daily-schedule tbody");
       dailyScheduleTable.innerHTML = '';
+
       daySchedule.forEach(lesson => {
         const isBreak = lesson.subject.ua === "Перерва" || lesson.subject.ua.includes("Обід");
         const row = `<tr class="${isBreak ? 'highlight' : ''}">
@@ -570,6 +648,7 @@
         dailyScheduleTable.innerHTML += row;
       });
     }
+
     function renderWeeklySchedule() {
       console.log('Рендеринг тижневого розкладу');
       const cachedSchedule = loadCachedSchedule();
@@ -577,6 +656,7 @@
       weeklyScheduleTable.innerHTML = '';
       const today = new Date().getDay();
       const todayKey = dayKeys[today];
+
       const dayClasses = {
         "Monday": "monday",
         "Tuesday": "tuesday",
@@ -584,11 +664,13 @@
         "Thursday": "thursday",
         "Friday": "friday",
       };
+
       for (const day in cachedSchedule) {
         const dayLessons = cachedSchedule[day];
         const dayClass = dayClasses[day] || "";
         const isToday = day === todayKey ? "current-day" : "";
         const dayName = dayNames[day][currentLanguage];
+
         dayLessons.forEach((lesson, index) => {
           const isBreak = lesson.subject.ua === "Перерва" || lesson.subject.ua.includes("Обід");
           const rowClass = isBreak ? "highlight" : `${dayClass} ${isToday}`;
@@ -602,11 +684,13 @@
         });
       }
     }
+
     function renderDayFilter() {
       console.log('Рендеринг фільтру днів');
       const daysOfWeek = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
       const filterContainer = document.getElementById("day-filter");
       filterContainer.innerHTML = '';
+
       daysOfWeek.forEach((day) => {
         const button = document.createElement("button");
         button.textContent = dayNames[day][currentLanguage];
@@ -621,12 +705,15 @@
         filterContainer.appendChild(button);
       });
     }
+
     let notificationsEnabled = false;
+
     function requestNotificationPermission() {
       if (!("Notification" in window)) {
         alert(currentLanguage === 'ua' ? "Ваш браузер не підтримує сповіщення." : "Twoja przeglądarka nie obsługuje powiadomień.");
         return;
       }
+
       Notification.requestPermission().then(permission => {
         if (permission === "granted") {
           notificationsEnabled = true;
@@ -634,6 +721,7 @@
         }
       });
     }
+
     function notifyLesson(lesson) {
       if (notificationsEnabled && Notification.permission === "granted") {
         new Notification(translations.currentLesson[currentLanguage], {
@@ -642,9 +730,11 @@
         });
       }
     }
+
     function handleTouchZoom(img) {
       let scale = 1;
       let startDistance = 0;
+
       img.addEventListener('touchstart', (e) => {
         if (e.touches.length === 2) {
           startDistance = Math.hypot(
@@ -653,6 +743,7 @@
           );
         }
       });
+
       img.addEventListener('touchmove', (e) => {
         if (e.touches.length === 2) {
           const currentDistance = Math.hypot(
@@ -664,9 +755,11 @@
           e.preventDefault();
         }
       });
+
       img.addEventListener('touchend', () => {
         if (scale < 1.5) img.style.transform = 'scale(1)';
       });
+
       img.addEventListener('click', () => {
         if (img.style.transform === "scale(2)") {
           img.style.transform = "scale(1)";
@@ -676,6 +769,7 @@
         img.style.transition = "transform 0.3s ease";
       });
     }
+
     function initialize() {
       console.log('Ініціалізація сторінки для 4 класу');
       clearOldCache();
@@ -687,6 +781,7 @@
       renderCurrentLesson();
       setInterval(renderCurrentLesson, 30000);
     }
+
     document.querySelectorAll('.lang-toggle').forEach(button => {
       button.addEventListener('click', () => {
         console.log('Перемикання мови на:', button.dataset.lang);
@@ -698,6 +793,7 @@
         renderDailySchedule(selectedDay);
         renderWeeklySchedule();
         renderCurrentLesson();
+
         const image = document.querySelector('.google-image');
         if (currentLanguage === 'pl') {
           image.src = 'https://i.postimg.cc/gcZFYcfn/PL.png';
@@ -706,6 +802,7 @@
         }
       });
     });
+
     document.querySelector('.theme-toggle').addEventListener('click', () => {
       console.log('Перемикання теми');
       document.body.classList.toggle('dark-theme');
@@ -713,6 +810,7 @@
       icon.classList.toggle('fa-moon');
       icon.classList.toggle('fa-sun');
     });
+
     document.querySelector('.notify-toggle').addEventListener('click', () => {
       console.log('Перемикання сповіщень');
       if (!notificationsEnabled) {
@@ -722,8 +820,10 @@
         document.querySelector('.notify-toggle i').classList.replace('fa-bell-slash', 'fa-bell');
       }
     });
+
     const image = document.querySelector('.google-image');
     handleTouchZoom(image);
+
     document.querySelector('.lang-toggle[data-lang="ua"]').classList.add('active');
     const today = new Date().getDay();
     selectedDay = dayKeys[today];
