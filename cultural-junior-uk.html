@@ -194,34 +194,12 @@
 
     body.dark-theme .events-content { color: #ddd; }
 
+    /* Новый renderEvents логика */
     .events-content h1, .events-content h2, .events-content h3 {
       display: flex;
       align-items: center;
       gap: 0.5rem;
     }
-
-    .events-content h1 {
-      font-size: 1.8rem;
-      font-weight: 700;
-      color: #1a1a66;
-      margin: 0 0 1rem;
-    }
-
-    .events-content h2 {
-      font-size: 1.5rem;
-      font-weight: 600;
-      color: #1a1a66;
-      margin: 1rem 0 0.5rem;
-    }
-
-    .events-content h3 {
-      font-size: 1.3rem;
-      font-weight: 600;
-      color: #1a1a66;
-      margin: 0.5rem 0;
-    }
-
-    body.dark-theme .events-content h1, body.dark-theme .events-content h2, body.dark-theme .events-content h3 { color: #fff; }
 
     .events-content p { margin: 0.5rem 0; }
     .events-content .highlight { background: rgba(76, 175, 80, 0.1); padding: 0.2rem 0.5rem; border-radius: 4px; }
@@ -275,19 +253,112 @@
     const translations = {
       header: { ua: 'Культурні заходи<br>Початкові класи<br>Push School Warsaw', pl: 'Wydarzenia kulturalne<br>Klasy początkowe<br>Push School Warsaw' },
       eventsTitle: { ua: 'Заходи', pl: 'Wydarzenia' },
-      errorMessage: { ua: 'Не вдалося завантажити заходи. Перевірте наявність файлу та підключення до мережі.', pl: 'Nie udało się załadować wydarzeń. Sprawdź dostępność pliku i połączenie sieciowe.' },
+      errorMessage: { ua: 'Не вдалося завантажити заходи. Перевірте наявність файлу та підключення до мережі.', pl: 'Nie udało się заładować wydarzeń. Sprawdź dostępність pliku i połączenie sieciowe.' },
       homeButton: { ua: 'Повернутися на головну', pl: 'Wróć do strony głównej' }
     };
     let currentLanguage = 'ua';
+
     async function loadEvents() {
       const eventsContent = document.getElementById('events-content');
-      try { const file = currentLanguage==='ua'?'events-uk.txt':'events-pl.txt'; const res = await fetch(file,{cache:'no-store'}); if(!res.ok) throw Error(`HTTP ${res.status}`); const text=await res.text(); renderEvents(text);} catch{eventsContent.innerHTML=`<p>${translations.errorMessage[currentLanguage]}</p>`;}
+      try {
+        const file = currentLanguage === 'ua' ? 'events-uk.txt' : 'events-pl.txt';
+        const response = await fetch(file, { cache: 'no-store' });
+        if (!response.ok) throw new Error(`HTTP error: ${response.status}`);
+        const text = await response.text();
+        renderEvents(text);
+      } catch (error) {
+        eventsContent.innerHTML = `<p>${translations.errorMessage[currentLanguage]}</p>`;
+      }
     }
-    function renderEvents(text){ const eventsContent=document.getElementById('events-content'); const lines=text.split('\n'); let html=''; lines.forEach((line,i)=>{line=line.trimEnd(); if(i<3){html+=`<h1>${line}</h1>`;return;} if(!line){html+='<br>';return;} const pos=(i-4)%3; if(i>=4){ if(pos===0) html+=`<p class="highlight"><strong>${line}</strong></p>`; else if(pos===1) html+=`<p class="highlight">${line}</p>`; else html+='<br>';}}); eventsContent.innerHTML=html; }
-    function updateStaticTexts(){ document.getElementById('header').innerHTML=translations.header[currentLanguage]; document.getElementById('events-title').textContent=translations.eventsTitle[currentLanguage]; document.getElementById('home-button').innerHTML=`<i class="fas fa-home"></i> ${translations.homeButton[currentLanguage]}`; document.querySelector('a[href]').href=currentLanguage==='ua'?'index-uk.html':'index-pl.html'; }
-    function initializeEventListeners(){ document.querySelectorAll('.lang-toggle').forEach(btn=>btn.addEventListener('click',()=>{currentLanguage=btn.dataset.lang; document.querySelectorAll('.lang-toggle').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); updateStaticTexts(); loadEvents();})); document.getElementById('home-button').addEventListener('click',()=>window.location.href=currentLanguage==='ua'?'index-uk.html':'index-pl.html'); document.querySelector('.theme-toggle').addEventListener('click',()=>{document.body.classList.toggle('dark-theme'); const icon=document.querySelector('.theme-toggle i'); icon.classList.toggle('fa-moon'); icon.classList.toggle('fa-sun');}); let notificationsEnabled=false; document.querySelector('.notify-toggle').addEventListener('click',()=>{if(!notificationsEnabled){if(!('Notification' in window)){alert(translations.errorMessage[currentLanguage]);return;} Notification.requestPermission().then(p=>{if(p==='granted'){notificationsEnabled=true; document.querySelector('.notify-toggle i').classList.replace('fa-bell','fa-bell-slash');}});} else{notificationsEnabled=false; document.querySelector('.notify-toggle i').classList.replace('fa-bell-slash','fa-bell');}});
+
+    function renderEvents(text) {
+      const eventsContent = document.getElementById('events-content');
+      eventsContent.innerHTML = '';
+
+      const lines = text.split('\n');
+      let html = '';
+
+      lines.forEach((line, index) => {
+        line = line.trimEnd();
+
+        // Первые три строки — заголовки
+        if (index < 3) {
+          html += `<h1>${line}</h1>`;
+          return;
+        }
+
+        // Пустой перенос
+        if (!line) {
+          html += '<br>';
+          return;
+        }
+
+        // С пятой строки: цикличная логика жирная, обычная, пустая
+        if (index >= 4) {
+          const pos = (index - 4) % 3;
+          if (pos === 0) {
+            html += `<p class="highlight"><strong>${line}</strong></p>`;
+          } else if (pos === 1) {
+            html += `<p class="highlight">${line}</p>`;
+          } else {
+            html += '<br>';
+          }
+        }
+      });
+
+      eventsContent.innerHTML = html;
     }
-    updateStaticTexts(); initializeEventListeners(); loadEvents();
+
+    function updateStaticTexts() {
+      document.getElementById('header').innerHTML = translations.header[currentLanguage];
+      document.getElementById('events-title').textContent = translations.eventsTitle[currentLanguage];
+      document.getElementById('home-button').innerHTML = `<i class="fas fa-home"></i> ${translations.homeButton[currentLanguage]}`;
+      document.querySelector('a[href]').href = currentLanguage === 'ua' ? 'index-uk.html' : 'index-pl.html';
+    }
+
+    function initializeEventListeners() {
+      document.querySelectorAll('.lang-toggle').forEach(btn => {
+        btn.addEventListener('click', () => {
+          currentLanguage = btn.dataset.lang;
+          document.querySelectorAll('.lang-toggle').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          updateStaticTexts();
+          loadEvents();
+        });
+      });
+
+      document.getElementById('home-button').addEventListener('click', () => {
+        window.location.href = currentLanguage === 'ua' ? 'index-uk.html' : 'index-pl.html';
+      });
+
+      document.querySelector('.theme-toggle').addEventListener('click', () => {
+        document.body.classList.toggle('dark-theme');
+        const icon = document.querySelector('.theme-toggle i');
+        icon.classList.toggle('fa-moon');
+        icon.classList.toggle('fa-sun');
+      });
+
+      let notificationsEnabled = false;
+      document.querySelector('.notify-toggle').addEventListener('click', () => {
+        if (!notificationsEnabled) {
+          if (!('Notification' in window)) { alert(translations.errorMessage[currentLanguage]); return; }
+          Notification.requestPermission().then(permission => {
+            if (permission === 'granted') {
+              notificationsEnabled = true;
+              document.querySelector('.notify-toggle i').classList.replace('fa-bell', 'fa-bell-slash');
+            }
+          });
+        } else {
+          notificationsEnabled = false;
+          document.querySelector('.notify-toggle i').classList.replace('fa-bell-slash', 'fa-bell');
+        }
+      });
+    }
+
+    // Инициализация при загрузке
+    updateStaticTexts();
+    initializeEventListeners();
+    loadEvents();
   </script>
 </body>
 </html>
