@@ -4,6 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="noindex, nofollow">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <title>Розклад уроків - 1 клас</title>
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
@@ -272,8 +275,8 @@
       border-radius: 15px;
       box-shadow: 0 5px 15px rgba(0,0,0,0.08);
       margin: 0;
-      min-width: 600px; /* Додано для запобігання стисканню */
-      flex: 1; /* Дозволяє таблиці розтягуватися */
+      min-width: 600px;
+      flex: 1;
     }
 
     body.dark-theme .tables-container {
@@ -286,7 +289,7 @@
       border-radius: 15px;
       box-shadow: 0 5px 15px rgba(0,0,0,0.08);
       max-width: 350px;
-      min-width: 300px; /* Додано для запобігання стисканню */
+      min-width: 300px;
       transition: transform 0.3s ease;
     }
 
@@ -337,7 +340,7 @@
       border-radius: 15px;
       box-shadow: 0 5px 15px rgba(0,0,0,0.08);
       max-width: 450px;
-      min-width: 300px; /* Додано для запобігання стисканню */
+      min-width: 300px;
       transition: transform 0.3s ease;
     }
 
@@ -386,7 +389,7 @@
 
       .links-container, .image-container-right, .tables-container {
         max-width: 100%;
-        min-width: 0; /* Скидаємо min-width для мобільних */
+        min-width: 0;
         margin: 0 0 1.5rem;
       }
 
@@ -533,14 +536,29 @@
     let currentLanguage = 'ua';
     const dayKeys = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
     let selectedDay = dayKeys[new Date().getDay()];
+    const classId = 'class1'; // Унікальний ідентифікатор для класу
 
     function cacheSchedule() {
-      localStorage.setItem('schedule', JSON.stringify(schedule));
+      console.log(`Кешування розкладу для ${classId}`);
+      localStorage.setItem(`schedule-${classId}`, JSON.stringify(schedule));
     }
 
     function loadCachedSchedule() {
-      const cached = localStorage.getItem('schedule');
-      return cached ? JSON.parse(cached) : schedule;
+      console.log(`Завантаження кешованого розкладу для ${classId}`);
+      const cached = localStorage.getItem(`schedule-${classId}`);
+      const parsed = cached ? JSON.parse(cached) : null;
+      if (parsed) {
+        console.log(`Використано кешований розклад для ${classId}`);
+        return parsed;
+      }
+      console.log(`Кеш відсутній, використовується розклад із schedule-class-1.js`);
+      return schedule;
+    }
+
+    function clearOldCache() {
+      console.log('Очищення старого кешу');
+      // Очищаємо тільки застарілий ключ 'schedule'
+      localStorage.removeItem('schedule');
     }
 
     function getCurrentLesson(daySchedule) {
@@ -577,6 +595,7 @@
     }
 
     function updateStaticTexts() {
+      console.log('Оновлення статичних текстів для мови:', currentLanguage);
       document.getElementById('header').innerHTML = translations.header[currentLanguage];
       document.getElementById('useful-links').textContent = translations.usefulLinks[currentLanguage];
       document.getElementById('textbooks').textContent = translations.textbooks[currentLanguage];
@@ -616,6 +635,7 @@
     }
 
     function renderDailySchedule(selectedDay) {
+      console.log(`Рендеринг щоденного розкладу для дня: ${selectedDay}`);
       const cachedSchedule = loadCachedSchedule();
       const daySchedule = cachedSchedule[selectedDay] || [];
       const dailyScheduleTable = document.querySelector("#daily-schedule tbody");
@@ -633,6 +653,7 @@
     }
 
     function renderWeeklySchedule() {
+      console.log('Рендеринг тижневого розкладу');
       const cachedSchedule = loadCachedSchedule();
       const weeklyScheduleTable = document.querySelector("#weekly-schedule");
       weeklyScheduleTable.innerHTML = '';
@@ -668,6 +689,7 @@
     }
 
     function renderDayFilter() {
+      console.log('Рендеринг фільтру днів');
       const daysOfWeek = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
       const filterContainer = document.getElementById("day-filter");
       filterContainer.innerHTML = '';
@@ -691,7 +713,7 @@
 
     function requestNotificationPermission() {
       if (!("Notification" in window)) {
-        alert("Ваш браузер не підтримує сповіщення.");
+        alert(currentLanguage === 'ua' ? "Ваш браузер не підтримує сповіщення." : "Twoja przeglądarka nie obsługuje powiadomień.");
         return;
       }
 
@@ -751,8 +773,21 @@
       });
     }
 
+    function initialize() {
+      console.log('Ініціалізація сторінки для 1 класу');
+      clearOldCache();
+      cacheSchedule();
+      updateStaticTexts();
+      renderDayFilter();
+      renderDailySchedule(selectedDay);
+      renderWeeklySchedule();
+      renderCurrentLesson();
+      setInterval(renderCurrentLesson, 30000);
+    }
+
     document.querySelectorAll('.lang-toggle').forEach(button => {
       button.addEventListener('click', () => {
+        console.log('Перемикання мови на:', button.dataset.lang);
         currentLanguage = button.dataset.lang;
         document.querySelectorAll('.lang-toggle').forEach(btn => btn.classList.remove('active'));
         button.classList.add('active');
@@ -772,6 +807,7 @@
     });
 
     document.querySelector('.theme-toggle').addEventListener('click', () => {
+      console.log('Перемикання теми');
       document.body.classList.toggle('dark-theme');
       const icon = document.querySelector('.theme-toggle i');
       icon.classList.toggle('fa-moon');
@@ -779,6 +815,7 @@
     });
 
     document.querySelector('.notify-toggle').addEventListener('click', () => {
+      console.log('Перемикання сповіщень');
       if (!notificationsEnabled) {
         requestNotificationPermission();
       } else {
@@ -790,17 +827,12 @@
     const image = document.querySelector('.google-image');
     handleTouchZoom(image);
 
+    // Ініціалізація
     document.querySelector('.lang-toggle[data-lang="ua"]').classList.add('active');
     const today = new Date().getDay();
     selectedDay = dayKeys[today];
     if (!schedule[selectedDay]) selectedDay = "Monday";
-    updateStaticTexts();
-    renderDayFilter();
-    renderDailySchedule(selectedDay);
-    renderWeeklySchedule();
-    renderCurrentLesson();
-    setInterval(renderCurrentLesson, 30000);
-    cacheSchedule();
+    initialize();
   </script>
 </body>
 </html>
