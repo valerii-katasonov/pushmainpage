@@ -437,22 +437,12 @@
         if (lineNumber <= 3) {
           html += `<h1>${line}</h1>`;
         } else {
-          // Starting from line 5, apply highlight and pattern
-          if (lineNumber >= 5) {
-            const patternIndex = (lineNumber - 5) % 3;
-            if (patternIndex === 0) {
-              // Bold line (5th, 8th, 11th, etc.)
-              html += `<p class="highlight"><strong>${line}</strong></p>`;
-            } else if (patternIndex === 1) {
-              // Normal line (6th, 9th, 12th, etc.)
-              html += `<p class="highlight">${line}</p>`;
-            } else {
-              // Empty line (7th, 10th, 13th, etc.), but since it's not empty, treat as normal
-              html += `<p class="highlight">${line}</p>`;
-            }
+          // Line 5: bold with highlight
+          if (lineNumber === 5) {
+            html += `<p class="highlight"><strong>${line}</strong></p>`;
           } else {
-            // Line 4 (no highlight, normal)
-            html += `<p>${line}</p>`;
+            // All other lines from line 4 onward: normal with highlight
+            html += `<p class="highlight">${line}</p>`;
           }
         }
 
