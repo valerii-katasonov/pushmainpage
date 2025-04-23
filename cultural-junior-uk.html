@@ -180,7 +180,7 @@
     }
 
     body.dark-theme .events-container {
-      background: #333;
+      background: #333酷派: #333;
       color: #fff;
     }
 
@@ -194,11 +194,40 @@
 
     body.dark-theme .events-content { color: #ddd; }
 
-    /* Новый renderEvents логика */
-    .events-content h1, .events-content h2, .events-content h3 {
+    .events-content h1 {
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: #1a1a66;
+      margin: 0 0 1rem;
       display: flex;
       align-items: center;
       gap: 0.5rem;
+    }
+
+    .events-content h2 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: #1a1a66;
+      margin: 1rem 0 0.5rem;
+      display: flex;
+      align-items:、防抖动 center;
+      gap: 0.5rem;
+    }
+
+    .events-content h3 {
+      font-size: 1.3rem;
+      font-weight: 600;
+      color: #1a1a66;
+      margin: 0.5rem 0;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    body.dark-theme .events-content h1,
+    body.dark-theme .events-content h2,
+    body.dark-theme .events-content h3 {
+      color: #fff;
     }
 
     .events-content p { margin: 0.5rem 0; }
@@ -207,26 +236,33 @@
     h2 { text-align: center; font-size: 1.5rem; margin: 0 0 1.5rem; color: #1a1a66; }
     body.dark-theme h2 { color: #fff; }
 
-    @media (max-width:768px) {
-      header img { width:80px; height:80px; }
-      header h1 { font-size:1.5rem; }
-      .events-content h1 { font-size:1.6rem; }
-      .events-content h2 { font-size:1.3rem; }
-      .events-content h3 { font-size:1.1rem; }
+    @media screen and (max-width: 768px) {
+      .container { padding: 0 0.5rem; }
+      header { padding: 1rem 0; }
+      header img { width: 80px; height: 80px; }
+      header h1 { font-size: 1.5rem; }
+      .events-content h1 { font-size: 1.6rem; }
+      .events-content h2 { font-size: 1.3rem; }
+      .events-content h3 { font-size: 1.1rem; }
     }
-    @media (max-width:480px) {
-      .theme-toggle, .notify-toggle { font-size:1.2rem; top:0.8rem; }
-      .lang-switcher { top:0.5rem; left:0.5rem; flex-direction:column; padding-top:env(safe-area-inset-top); }
-      .lang-toggle { font-size:0.9rem; padding:0.4rem; }
-      .home-button { font-size:0.9rem; padding:0.5rem 1rem; }
-      .events-content { font-size:0.9rem; }
-      .events-content h1 { font-size:1.4rem; }
-      .events-content h2 { font-size:1.2rem; }
-      .events-content h3 { font-size:1rem; }
+
+    @media screen and (max-width: 480px) {
+      header h1 { font-size: 1.2rem; }
+      header img { width: 60px; height: 60px; }
+      .theme-toggle, .notify-toggle { font-size: 1.2rem; top: 0.8rem; }
+      .lang-switcher { top: 0.5rem; left: 0.5rem; flex-direction: column; padding-top: env(safe-area-inset-top); }
+      .lang-toggle { font-size: 0.9rem; padding: 0.4rem; }
+      .home-button { font-size: 0.9rem; padding: 0.5rem 1rem; }
+      .home-button i { font-size: 1rem; }
+      .events-content { font-size: 0.9rem; }
+      .events-content h1 { font-size: 1.4rem; }
+      .events-content h2 { font-size: 1.2rem; }
+      .events-content h3 { font-size: 1rem; }
     }
-    @media (max-width:375px) {
-      .home-button { font-size:0.85rem; padding:0.4rem 0.8rem; }
-      .home-button i { font-size:0.9rem; }
+
+    @media screen and (max-width: 375px) {
+      .home-button { font-size: 0.85rem; padding: 0.4rem 0.8rem; }
+      .home-button i { font-size: 0.9rem; }
     }
   </style>
 </head>
@@ -251,9 +287,15 @@
   </div>
   <script>
     const translations = {
-      header: { ua: 'Культурні заходи<br>Початкові класи<br>Push School Warsaw', pl: 'Wydarzenia kulturalne<br>Klasy początkowe<br>Push School Warsaw' },
+      header: {
+        ua: 'Культурні заходи<br>Початкові класи<br>Push School Warsaw',
+        pl: 'Wydarzenia kulturalne<br>Klasy początkowe<br>Push School Warsaw'
+      },
       eventsTitle: { ua: 'Заходи', pl: 'Wydarzenia' },
-      errorMessage: { ua: 'Не вдалося завантажити заходи. Перевірте наявність файлу та підключення до мережі.', pl: 'Nie udało się заładować wydarzeń. Sprawdź dostępність pliku i połączenie sieciowe.' },
+      errorMessage: {
+        ua: 'Не вдалося завантажити заходи. Перевірте наявність файлу та підключення до мережі.',
+        pl: 'Nie udało się załadować wydarzeń. Sprawdź dostępność pliku i połączenie sieciowe.'
+      },
       homeButton: { ua: 'Повернутися на головну', pl: 'Wróć do strony głównej' }
     };
     let currentLanguage = 'ua';
@@ -261,12 +303,18 @@
     async function loadEvents() {
       const eventsContent = document.getElementById('events-content');
       try {
-        const file = currentLanguage === 'ua' ? 'events-uk.txt' : 'events-pl.txt';
+        const file = currentLanguage === 'ua' ? `events-uk.txt?${new Date().getTime()}` : `events-pl.txt?${new Date().getTime()}`;
         const response = await fetch(file, { cache: 'no-store' });
         if (!response.ok) throw new Error(`HTTP error: ${response.status}`);
         const text = await response.text();
+        if (!text.trim()) {
+          eventsContent.innerHTML = `<p>Файл подій порожній.</p>`;
+          return;
+        }
+        console.log('Загруженный текст:', text); // Для отладки
         renderEvents(text);
       } catch (error) {
+        console.error('Ошибка загрузки:', error); // Для отладки
         eventsContent.innerHTML = `<p>${translations.errorMessage[currentLanguage]}</p>`;
       }
     }
@@ -281,19 +329,16 @@
       lines.forEach((line, index) => {
         line = line.trimEnd();
 
-        // Первые три строки — заголовки
         if (index < 3) {
           html += `<h1>${line}</h1>`;
           return;
         }
 
-        // Пустой перенос
         if (!line) {
           html += '<br>';
           return;
         }
 
-        // С пятой строки: цикличная логика жирная, обычная, пустая
         if (index >= 4) {
           const pos = (index - 4) % 3;
           if (pos === 0) {
@@ -313,7 +358,7 @@
       document.getElementById('header').innerHTML = translations.header[currentLanguage];
       document.getElementById('events-title').textContent = translations.eventsTitle[currentLanguage];
       document.getElementById('home-button').innerHTML = `<i class="fas fa-home"></i> ${translations.homeButton[currentLanguage]}`;
-      document.querySelector('a[href]').href = currentLanguage === 'ua' ? 'index-uk.html' : 'index-pl.html';
+      document.querySelector('a[href]').href = currentLanguage === 'ua' ? 'index-uk.html' : 'index.html';
     }
 
     function initializeEventListeners() {
@@ -328,7 +373,7 @@
       });
 
       document.getElementById('home-button').addEventListener('click', () => {
-        window.location.href = currentLanguage === 'ua' ? 'index-uk.html' : 'index-pl.html';
+        window.location.href = currentLanguage === 'ua' ? 'index-uk.html' : 'index.html';
       });
 
       document.querySelector('.theme-toggle').addEventListener('click', () => {
@@ -341,7 +386,10 @@
       let notificationsEnabled = false;
       document.querySelector('.notify-toggle').addEventListener('click', () => {
         if (!notificationsEnabled) {
-          if (!('Notification' in window)) { alert(translations.errorMessage[currentLanguage]); return; }
+          if (!('Notification' in window)) {
+            alert(translations.errorMessage[currentLanguage]);
+            return;
+          }
           Notification.requestPermission().then(permission => {
             if (permission === 'granted') {
               notificationsEnabled = true;
@@ -355,7 +403,6 @@
       });
     }
 
-    // Инициализация при загрузке
     updateStaticTexts();
     initializeEventListeners();
     loadEvents();
