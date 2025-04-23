@@ -424,7 +424,7 @@
 
       const lines = text.split('\n').map(line => line.trimEnd());
       let html = '';
-      let lineNumber = 0; // Tracks total lines (including empty ones) for the pattern
+      let lineNumber = 0; // Tracks total lines for the pattern
       let contentIndex = 0; // Tracks non-empty lines for headings and line 4
 
       lines.forEach((line, index) => {
@@ -457,12 +457,11 @@
             // Bold line (5th, 8th, 11th, etc.)
             html += `<p class="highlight"><strong>${line}</strong></p>`;
           } else if (patternIndex === 1) {
-            // Normal line (6th, 9th, 12th, etc.), followed by empty line
+            // Normal line (6th, 9th, 12th, etc.)
             html += `<p class="highlight">${line}</p>`;
-            html += '<br>'; // Add empty line after normal line
           } else {
-            // Empty line (7th, 10th, 13th, etc.), but render the content anyway
-            html += `<p class="highlight">${line}</p>`;
+            // Empty line (7th, 10th, 13th, etc.)
+            html += '<br>';
           }
         }
       });
