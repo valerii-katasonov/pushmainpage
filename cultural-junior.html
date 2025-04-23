@@ -422,36 +422,41 @@
       const eventsContent = document.getElementById('events-content');
       eventsContent.innerHTML = '';
 
-      const lines = text.split('\n');
+      const lines = text.split('\n').map(line => line.trimEnd());
       let html = '';
-      let inEvent = false;
-      let emptyLineCount = 0;
+      let lineNumber = 1;
 
-      lines.forEach(line => {
-        line = line.trimEnd();
+      lines.forEach((line, index) => {
+        // Handle empty lines
         if (!line) {
-          emptyLineCount++;
-          if (emptyLineCount >= 2) {
-            inEvent = false;
-            emptyLineCount = 0;
-          }
           html += '<br>';
           return;
         }
-        emptyLineCount = 0;
 
-        if (line.startsWith('План культурних заходів') || line.startsWith('Plan wydarzeń kulturalnych') || 
-            line.startsWith('Тема тижня') || line.startsWith('Temat tygodnia')) {
+        // First three lines as <h1>
+        if (lineNumber <= 3) {
           html += `<h1>${line}</h1>`;
-          inEvent = false;
-        } else if (line.startsWith('🌱')) {
-          html += `<h3 class="highlight">${line}</h3>`;
-          inEvent = true;
-        } else if (line.startsWith('– ')) {
-          html += `<p class="highlight">${line.substring(2)}</p>`;
         } else {
-          html += inEvent ? `<p class="highlight">${line}</p>` : `<p>${line}</p>`;
+          // Starting from line 5, apply highlight and pattern
+          if (lineNumber >= 5) {
+            const patternIndex = (lineNumber - 5) % 3;
+            if (patternIndex === 0) {
+              // Bold line (5th, 8th, 11th, etc.)
+              html += `<p class="highlight"><strong>${line}</strong></p>`;
+            } else if (patternIndex === 1) {
+              // Normal line (6th, 9th, 12th, etc.)
+              html += `<p class="highlight">${line}</p>`;
+            } else {
+              // Empty line (7th, 10th, 13th, etc.), but since it's not empty, treat as normal
+              html += `<p class="highlight">${line}</p>`;
+            }
+          } else {
+            // Line 4 (no highlight, normal)
+            html += `<p>${line}</p>`;
+          }
         }
+
+        lineNumber++;
       });
 
       eventsContent.innerHTML = html;
