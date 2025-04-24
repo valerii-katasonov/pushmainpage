@@ -53,7 +53,7 @@ const schedule = {
     { number: " ", subject: { ua: "Обід 1-4 класи", pl: "Obiad klasy 1-4" }, time: "11:35 - 11:55" },
     { number: 4, subject: { ua: "Przyroda", pl: "Przyroda" }, time: "11:55 - 12:40" },
     { number: " ", subject: { ua: "Обід 5-6 класи", pl: "Obiad klasy 5-6" }, time: "12:40 - 13:00" },
-    { number: 5, subject: { ua: "Польська мова", pl: "Język polski" }, time: "10:50 - 11:35" }
+    { number: 5, subject: { ua: "Польська мова", pl: "Język polski" }, time: "13:00 - 13:45" }
   ],
   Friday: [
     { number: 1, subject: { ua: "Англійська мова", pl: "Język angielski" }, time: "9:00 - 9:45" },
