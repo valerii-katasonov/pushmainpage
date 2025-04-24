@@ -336,12 +336,18 @@
     async function loadEvents() {
       const eventsContent = document.getElementById('events-content');
       try {
-        const file = currentLanguage === 'ua' ? 'events-uk.txt' : 'events-pl.txt';
+        const file = currentLanguage === 'ua' ? `events-uk.txt?${new Date().getTime()}` : `events-pl.txt?${new Date().getTime()}`;
         const response = await fetch(file, { cache: 'no-store' });
         if (!response.ok) throw new Error(`HTTP error: ${response.status}`);
         const text = await response.text();
+        if (!text.trim()) {
+          eventsContent.innerHTML = `<p>Plik wydarzeń jest pusty.</p>`;
+          return;
+        }
+        console.log('Załadowany tekst:', text); // Dla debugowania
         renderEvents(text);
       } catch (error) {
+        console.error('Błąd ładowania:', error); // Dla debugowania
         eventsContent.innerHTML = `<p>${translations.errorMessage[currentLanguage]}</p>`;
       }
     }
@@ -349,35 +355,23 @@
     function renderEvents(text) {
       const eventsContent = document.getElementById('events-content');
       eventsContent.innerHTML = '';
-      const lines = text.split('\n');
+      const lines = text.split('\n').map(line => line.trimEnd());
       let html = '';
 
       lines.forEach((line, index) => {
-        line = line.trimEnd();
-
-        // Первые 3 строки — заголовки
-        if (index < 3) {
-          html += `<h1>${line}</h1>`;
-          return;
-        }
-
-        // Пустая строка — <br>
         if (!line) {
           html += '<br>';
           return;
         }
 
-        // Начиная с 5-й (index >= 4) по циклу: жирная, обычная, пустая
-        if (index >= 4) {
-          const pos = (index - 4) % 3;
-          if (pos === 0) {
-            html += `<p class="highlight"><strong>${line}</strong></p>`;
-          } else if (pos === 1) {
-            html += `<p class="highlight">${line}</p>`;
-          } else {
-            html += '<br>';
-          }
+        // Pierwsze trzy linie — nagłówki
+        if (index < 3) {
+          html += `<h1>${line}</h1>`;
+          return;
         }
+
+        // Wszystkie pozostałe linie — pogrubione
+        html += `<p class="highlight"><strong>${line}</strong></p>`;
       });
 
       eventsContent.innerHTML = html;
@@ -432,7 +426,7 @@
       });
     }
 
-    // Инициализация
+    // Inicjalizacja
     updateStaticTexts();
     initializeEventListeners();
     loadEvents();
