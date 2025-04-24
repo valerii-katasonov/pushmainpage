@@ -355,33 +355,30 @@
     function renderEvents(text) {
       const eventsContent = document.getElementById('events-content');
       eventsContent.innerHTML = '';
-      const lines = text.split('\n');
+      const lines = text.split('\n').map(line => line.trimEnd());
       let html = '';
 
       lines.forEach((line, index) => {
-        line = line.trimEnd();
-
-        // Первые 3 строки — заголовки
-        if (index < 3) {
-          html += `<h1>${line}</h1>`;
-          return;
-        }
-
-        // Пустая строка — <br>
         if (!line) {
           html += '<br>';
           return;
         }
 
-        // Начиная с 5-й (index >= 4) по циклу: жирная, обычная, пустая
-        if (index >= 4) {
-          const pos = (index - 4) % 3;
+        // Первые три строки — заголовки в верхнем регистре
+        if (index < 3) {
+          html += `<h1>${line.toUpperCase()}</h1>`;
+          return;
+        }
+
+        // Начиная с 4-й строки (index >= 3), цикл: обычная, жирная, обычная, обычная
+        if (index >= 3) {
+          const pos = (index - 3) % 4;
           if (pos === 0) {
-            html += `<p class="highlight"><strong>${line}</strong></p>`;
-          } else if (pos === 1) {
             html += `<p class="highlight">${line}</p>`;
-          } else {
-            html += '<br>';
+          } else if (pos === 1) {
+            html += `<p class="highlight"><strong>${line}</strong></p>`;
+          } else if (pos === 2 || pos === 3) {
+            html += `<p class="highlight">${line}</p>`;
           }
         }
       });
