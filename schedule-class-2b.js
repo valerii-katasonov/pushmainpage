@@ -41,7 +41,8 @@ const schedule = {
     { number: 4, subject: { ua: "Українська мова", pl: "Język ukraiński" }, time: "11:55 - 12:40" },
     { number: " ", subject: { ua: "Обід 5-6 класи", pl: "Obiad klasy 5-6" }, time: "12:40 - 13:00" },
     { number: 5, subject: { ua: "Przyroda", pl: "Przyroda" }, time: "13:00 - 13:45" },
-    { number: " ", subject: { ua: "Англійська мова", pl: "Język angielski" }, time: "13:45 - 14:30" }
+    { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "13:45 - 13:55" },
+    { number: 6, subject: { ua: "Англійська мова", pl: "Język angielski" }, time: "13:55 - 14:40" }
   ],
   Thursday: [
     { number: 1, subject: { ua: "Англійська мова", pl: "Język angielski" }, time: "9:00 - 9:45" },
