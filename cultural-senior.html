@@ -336,7 +336,7 @@
     async function loadEvents() {
       const eventsContent = document.getElementById('events-content');
       try {
-        const file = currentLanguage === 'ua' ? `events-uk.txt?${new Date().getTime()}` : `events-pl.txt?${new Date().getTime()}`;
+        const file = currentLanguage === 'ua' ? `events-senior-uk.txt?${new Date().getTime()}` : `events-senior-pl.txt?${new Date().getTime()}`;
         const response = await fetch(file, { cache: 'no-store' });
         if (!response.ok) throw new Error(`HTTP error: ${response.status}`);
         const text = await response.text();
