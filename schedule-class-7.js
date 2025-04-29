@@ -54,7 +54,7 @@ const schedule = {
     { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "12:40 - 13:00" },
     { number: 5, subject: { ua: "Геометрія", pl: "Geometria" }, time: "13:00 - 13:45" },
     { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "13:45 - 13:55" },
-    { number: 6, subject: { ua: "Географія", pl: "Geografia" }, time: "13:55 - 14:40" }
+    { number: 6, subject: { ua: "Географія (польською)", pl: "Geografia(Polska)" }, time: "13:55 - 14:40" }
   ],
   "Friday": [
     { number: 1, subject: { ua: "Математика (термінологія)", pl: "Matematyka (terminologia)" }, time: "9:00 - 9:45" },
