@@ -109,7 +109,6 @@
       padding: 0 1rem;
       display: flex;
       flex-direction: column;
-      gap: 1.5rem;
       animation: fadeInUp 0.8s ease-in;
       padding-top: env(safe-area-inset-top);
     }
@@ -144,6 +143,7 @@
       border-radius: 15px;
       box-shadow: 0 5px 15px rgba(0,0,0,0.08);
       transition: transform 0.3s ease;
+      min-height: 1200px; /* Задаємо велику мінімальну висоту */
     }
 
     body.dark-theme .form-container {
@@ -155,9 +155,13 @@
       transform: translateY(-5px);
     }
 
+    .form-content {
+      height: 100%; /* Вміст займає всю висоту контейнера */
+    }
+
     .form-content iframe {
       width: 100%;
-      height: 800px;
+      height: 1200px; /* Фіксована висота для iframe */
       border: none;
     }
 
@@ -188,7 +192,8 @@
       header { padding: 1rem 0; }
       header img { width: 80px; height: 80px; }
       header h1 { font-size: 1.5rem; }
-      .form-content iframe { height: 600px; }
+      .form-container { min-height: 800px; }
+      .form-content iframe { height: 800px; }
     }
     @media screen and (max-width: 480px) {
       header h1 { font-size: 1.2rem; }
@@ -196,7 +201,8 @@
       .theme-toggle { font-size: 1.2rem; top: 0.8rem; }
       .home-button { padding: 0.5rem 1rem; font-size: 0.9rem; }
       .home-button i { font-size: 1rem; }
-      .form-content iframe { height: 500px; }
+      .form-container { min-height: 600px; }
+      .form-content iframe { height: 600px; }
     }
     @media screen and (max-width: 375px) {
       .home-button { padding: 0.4rem 0.8rem; font-size: 0.85rem; }
