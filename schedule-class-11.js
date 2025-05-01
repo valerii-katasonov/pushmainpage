@@ -1,3 +1,11 @@
+const dayNames = {
+  "Monday": { ua: "Понеділок", pl: "Poniedziałek" },
+  "Tuesday": { ua: "Вівторок", pl: "Wtorek" },
+  "Wednesday": { ua: "Середа", pl: "Środa" },
+  "Thursday": { ua: "Четвер", pl: "Czwartek" },
+  "Friday": { ua: "П’ятниця", pl: "Piątek" }
+};
+
 const schedule = {
   "Monday": [
     { number: 1, subject: { ua: "Польська мова", pl: "Język polski" }, time: "9:00 - 9:45" },
@@ -66,14 +74,6 @@ const schedule = {
     { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "12:40 - 13:00" },
     { number: 5, subject: { "Українська мова", pl: "Język ukraiński" }, time: "13:00 - 13:45" }
   ]
-};
-
-const dayNames = {
-  "Monday": { ua: "Понеділок", pl: "Poniedziałek" },
-  "Tuesday": { ua: "Вівторок", pl: "Wtorek" },
-  "Wednesday": { ua: "Середа", pl: "Środa" },
-  "Thursday": { ua: "Четвер", pl: "Czwartek" },
-  "Friday": { ua: "П’ятниця", pl: "Piątek" }
 };
 
 window.schedule = schedule;
