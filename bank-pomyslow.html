@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Bank pomysłów szkolnych</title>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <style>
+    body {
+      font-family: 'Montserrat', sans-serif;
+      margin: 0;
+      padding: 0;
+      background-image: url('https://zastavki.gas-kvas.com/uploads/posts/2024-09/zastavki-gas-kvas-com-35bo-p-zastavki-pro-shkolu-9.jpg');
+      background-size: cover;
+      background-position: center;
+      background-attachment: fixed;
+      min-height: 100vh;
+      transition: background 0.5s ease, color 0.5s ease;
+      position: relative;
+      font-size: 16px;
+      color: #333;
+    }
+
+    body.dark-theme {
+      background: linear-gradient(135deg, rgba(0, 43, 51, 0.6) 0%, rgba(0, 77, 87, 0.6) 100%), url('https://zastavki.gas-kvas.com/uploads/posts/2024-09/zastavki-gas-kvas-com-35bo-p-zastavki-pro-shkolu-9.jpg');
+      background-size: cover;
+      background-position: center;
+      background-attachment: fixed;
+      color: #fff;
+    }
+
+    header {
+      background: linear-gradient(45deg, #00bfd1, #006d77);
+      color: white;
+      padding: 1.5rem 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 1rem;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+      position: relative;
+    }
+
+    body.dark-theme header {
+      background: linear-gradient(45deg, #003d44, #006d77);
+    }
+
+    header img {
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      border: 3px solid rgba(255,255,255,0.2);
+      opacity: 0;
+      animation: fadeInHeader 1s ease-in forwards 1.5s;
+    }
+
+    header h1 {
+      font-size: 1.8rem;
+      margin: 0;
+      font-weight: 700;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+      animation: fadeIn 1s ease-in;
+    }
+
+    .theme-toggle {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      background: none;
+      border: none;
+      color: white;
+      font-size: 1.5rem;
+      cursor: pointer;
+      padding: 0.5rem;
+      pointer-events: auto;
+    }
+
+    .home-button {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: #006d77;
+      border: none;
+      border-radius: 8px;
+      color: white;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      padding: 0.75rem 1.5rem;
+      transition: background 0.3s ease, transform 0.2s ease;
+      margin: 1rem 0;
+      pointer-events: auto;
+    }
+
+    .home-button:hover {
+      background: #00bfd1;
+      transform: translateY(-2px);
+    }
+
+    .home-button i {
+      font-size: 1.2rem;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+      animation: fadeInUp 0.8s ease-in;
+      padding-top: env(safe-area-inset-top);
+    }
+
+    .logo-intro {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      border: 3px solid rgba(255,255,255,0.2);
+      animation: logoIntro 1s ease-in-out forwards;
+      z-index: 1000;
+    }
+
+    @keyframes logoIntro {
+      0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+      50% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+      100% { opacity: 0; transform: translate(-50%, -50%) scale(1.1); }
+    }
+
+    @keyframes fadeInHeader {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    .form-container {
+      padding: 1.5rem;
+      background: white;
+      border-radius: 15px;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+      transition: transform 0.3s ease;
+    }
+
+    body.dark-theme .form-container {
+      background: #333;
+      color: #fff;
+    }
+
+    .form-container:hover {
+      transform: translateY(-5px);
+    }
+
+    .form-content iframe {
+      width: 100%;
+      height: 800px;
+      border: none;
+    }
+
+    h2 {
+      color: #1a1a66;
+      font-size: 1.5rem;
+      margin: 0 0 1.5rem;
+      text-align: center;
+    }
+
+    body.dark-theme h2 {
+      color: #fff;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Адаптив */
+    @media screen and (max-width: 768px) {
+      .container { padding: 0 0.5rem; }
+      header { padding: 1rem 0; }
+      header img { width: 80px; height: 80px; }
+      header h1 { font-size: 1.5rem; }
+      .form-content iframe { height: 600px; }
+    }
+    @media screen and (max-width: 480px) {
+      header h1 { font-size: 1.2rem; }
+      header img { width: 60px; height: 60px; }
+      .theme-toggle { font-size: 1.2rem; top: 0.8rem; }
+      .home-button { padding: 0.5rem 1rem; font-size: 0.9rem; }
+      .home-button i { font-size: 1rem; }
+      .form-content iframe { height: 500px; }
+    }
+    @media screen and (max-width: 375px) {
+      .home-button { padding: 0.4rem 0.8rem; font-size: 0.85rem; }
+      .home-button i { font-size: 0.9rem; }
+    }
+  </style>
+</head>
+<body>
+  <img src="https://i.postimg.cc/WbY9TdDp/PushIco.png" alt="Push School Logo Intro" class="logo-intro">
+
+  <header>
+    <a href="index.html"><img src="https://i.postimg.cc/WbY9TdDp/PushIco.png" alt="Push School Logo"></a>
+    <h1>Push School Warsaw<br>Bank pomysłów szkolnych</h1>
+    <button class="theme-toggle" aria-label="Przełącz motyw"><i class="fas fa-moon"></i></button>
+  </header>
+
+  <div class="container">
+    <button id="home-button" class="home-button"><i class="fas fa-home"></i> Wróć do strony głównej</button>
+    <div class="form-container">
+      <div class="form-content">
+        <iframe src="https://docs.google.com/forms/d/e/1FAIpQLScz0ty1YXA-xkiAnWO8avru1it5iIbHwli7S2WJ7IwtqP7aCQ/viewform?embedded=true" title="Google Form"></iframe>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    document.getElementById('home-button').addEventListener('click', () => {
+      window.location.href = 'index.html';
+    });
+
+    document.querySelector('.theme-toggle').addEventListener('click', () => {
+      document.body.classList.toggle('dark-theme');
+      const icon = document.querySelector('.theme-toggle i');
+      icon.classList.toggle('fa-moon');
+      icon.classList.toggle('fa-sun');
+    });
+  </script>
+</body>
+</html>
