@@ -59,9 +59,9 @@ const schedule = {
     { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "12:40 - 13:00" },
     { number: 5, subject: { ua: "Історія Польщі", pl: "Historia Polski" }, time: "13:00 - 13:45" },
     { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "13:45 - 13:55" },
-    { number: 6, subject: { ua: "Українська література", pl: "Ukraińska literatura" }, time: "13:55 - 14:40" },
-    { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "13:45 - 13:55" },
     { number: 6, subject: { ua: "Інформатика", pl: "Informatyka" }, time: "13:55 - 14:40" },
+    { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "14:40 - 14:50" },
+    { number: 7, subject: { ua: "Українська література", pl: "Ukraińska literatura" }, time: "14:50 - 15:35" },
   ],
   "Friday": [
     { number: 1, subject: { ua: "Математика", pl: "Matematyka" }, time: "9:00 - 9:45" },
@@ -72,9 +72,21 @@ const schedule = {
     { number: " ", subject: { ua: "Обід", pl: "Obiad" }, time: "11:35 - 11:55" },
     { number: 4, subject: { ua: "Математика", pl: "Matematyka" }, time: "11:55 - 12:40" },
     { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "12:40 - 13:00" },
-    { number: 5, subject: { "Українська мова", pl: "Język ukraiński" }, time: "13:00 - 13:45" },
+    { number: 5, subject: { ua: "Українська мова", pl: "Język ukraiński" }, time: "13:00 - 13:45" },
   ]
 };
+
+// Проверка данных на корректность
+Object.values(schedule).forEach((day, dayIndex) => {
+  day.forEach((lesson, lessonIndex) => {
+    if (!lesson.subject || !lesson.subject.ua || !lesson.subject.pl) {
+      console.error(`Invalid subject format in schedule at ${Object.keys(schedule)[dayIndex]} lesson ${lessonIndex + 1}:`, lesson);
+    }
+    if (!lesson.time || !lesson.time.includes(' - ')) {
+      console.error(`Invalid time format in schedule at ${Object.keys(schedule)[dayIndex]} lesson ${lessonIndex + 1}:`, lesson);
+    }
+  });
+});
 
 window.schedule = schedule;
 window.dayNames = dayNames;
