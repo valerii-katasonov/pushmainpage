@@ -18,7 +18,7 @@ const schedule = {
     { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "12:40 - 13:00" },
     { number: 5, subject: { ua: "Англійська мова", pl: "Język angielski" }, time: "13:00 - 13:45" },
     { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "13:45 - 13:55" },
-    { number: 6, subject: { ua: "Підготовка до НМТ з історії", pl: "Przygotowanie do NMT z historii" }, time: "13:55 - 14:40" }
+    { number: 6, subject: { ua: "Підготовка до НМТ з історії", pl: "Przygotowanie do NMT z historii" }, time: "13:55 - 14:40" },
   ],
   "Tuesday": [
     { number: 1, subject: { ua: "Українська література", pl: "Ukrainska literatura" }, time: "9:00 - 9:45" },
@@ -33,7 +33,7 @@ const schedule = {
     { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "13:45 - 13:55" },
     { number: 6, subject: { ua: "Математика", pl: "Matematyka" }, time: "13:55 - 14:40" },
     { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "14:40 - 14:50" },
-    { number: 7, subject: { ua: "Математика", pl: "Matematyka" }, time: "14:50 - 15:35" }
+    { number: 7, subject: { ua: "Математика", pl: "Matematyka" }, time: "14:50 - 15:35" },
   ],
   "Wednesday": [
     { number: 1, subject: { ua: "Біологія", pl: "Biologia" }, time: "9:00 - 9:45" },
@@ -46,7 +46,7 @@ const schedule = {
     { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "12:40 - 13:00" },
     { number: 5, subject: { ua: "Фізика", pl: "Fizyka" }, time: "13:00 - 13:45" },
     { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "13:45 - 13:55" },
-    { number: 6, subject: { ua: "Фізика", pl: "Fizyka" }, time: "13:55 - 14:40" }
+    { number: 6, subject: { ua: "Фізика", pl: "Fizyka" }, time: "13:55 - 14:40" },
   ],
   "Thursday": [
     { number: 1, subject: { ua: "Англійська мова", pl: "Język angielski" }, time: "9:00 - 9:45" },
@@ -61,7 +61,7 @@ const schedule = {
     { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "13:45 - 13:55" },
     { number: 6, subject: { ua: "Українська література", pl: "Ukraińska literatura" }, time: "13:55 - 14:40" },
     { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "13:45 - 13:55" },
-    { number: 6, subject: { ua: "Інформатика", pl: "Informatyka" }, time: "13:55 - 14:40" }
+    { number: 6, subject: { ua: "Інформатика", pl: "Informatyka" }, time: "13:55 - 14:40" },
   ],
   "Friday": [
     { number: 1, subject: { ua: "Математика", pl: "Matematyka" }, time: "9:00 - 9:45" },
@@ -72,7 +72,7 @@ const schedule = {
     { number: " ", subject: { ua: "Обід", pl: "Obiad" }, time: "11:35 - 11:55" },
     { number: 4, subject: { ua: "Математика", pl: "Matematyka" }, time: "11:55 - 12:40" },
     { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "12:40 - 13:00" },
-    { number: 5, subject: { "Українська мова", pl: "Język ukraiński" }, time: "13:00 - 13:45" }
+    { number: 5, subject: { "Українська мова", pl: "Język ukraiński" }, time: "13:00 - 13:45" },
   ]
 };
 
