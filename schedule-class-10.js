@@ -75,3 +75,6 @@ const dayNames = {
   "Thursday": { ua: "Четвер", pl: "Czwartek" },
   "Friday": { ua: "П’ятниця", pl: "Piątek" }
 };
+
+window.schedule = schedule;
+window.dayNames = dayNames;
