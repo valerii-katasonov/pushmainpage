@@ -7,7 +7,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <title>Розклад уроків - 1 клас</title>
+  <title>Розклад уроків - 2 клас</title>
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
   <style>
@@ -455,7 +455,7 @@
       <button class="lang-toggle" data-lang="pl">PL</button>
     </div>
     <a href="index-uk.html"><img src="https://i.postimg.cc/WbY9TdDp/PushIco.png" alt="Push School Logo"></a>
-    <h1 id="header">Розклад уроків<br>1 клас<br>Push School Warsaw</h1>
+    <h1 id="header">Розклад уроків<br>2А клас<br>Push School Warsaw</h1>
     <button class="theme-toggle" aria-label="Переключити тему"><i class="fas fa-moon"></i></button>
     <button class="notify-toggle" aria-label="Увімкнути сповіщення"><i class="fas fa-bell"></i></button>
   </header>
@@ -468,12 +468,9 @@
       </ul>
       <h3 id="textbooks">Підручники:</h3>
       <ul>
-        <li><a href="https://online.flipbuilder.com/sdtta/acov/" target="_blank"><i class="fas fa-book"></i> Academy Stars 1: Pupil's book</a></li>
-        <li><a href="https://online.flipbuilder.com/sdtta/mxjn/" target="_blank"><i class="fas fa-book"></i> Academy Stars 1: Workbook</a></li>
-        <li><a href="https://shkola.in.ua/1185-bukvar-1-klas-ponomarova-2018-chastyna-1.html" target="_blank"><i class="fas fa-book"></i> Буквар 1 клас (частина 1) / Пономарьова</a></li>
-        <li><a href="https://shkola.in.ua/1186-bukvar-1-klas-ponomarova-2018-chastyna-2.html" target="_blank"><i class="fas fa-book"></i> Буквар 1 клас (частина 2) / Пономарьова</a></li>
-        <li><a href="https://znayshov.com/FR/12164/Propisi_1kl_Ponomarova_2.pdf" target="_blank"><i class="fas fa-book"></i> Мій перший зошит. Прописи. 1 клас / Гусельнікова</a></li>
-        <li><a href="https://shkola.in.ua/2808-matematyka-1-klas-his-2023.html" target="_blank"><i class="fas fa-book"></i> Математика 1 клас / Гісь</a></li>
+        <!-- Приклад посилань на підручники для 2А класу -->
+        <li><a href="https://example.com/math-2" target="_blank"><i class="fas fa-book"></i> Математика 2 клас</a></li>
+        <li><a href="https://example.com/ukr-2" target="_blank"><i class="fas fa-book"></i> Українська мова 2 клас</a></li>
       </ul>
     </div>
     <div class="tables-container">
@@ -508,16 +505,16 @@
       </div>
     </div>
     <div class="image-container-right">
-      <img class="google-image" src="https://i.postimg.cc/W1RVp0n2/2.png" alt="Google Drive Image">
+      <img class="google-image" src="https://i.postimg.cc/5NQjHJ8L/2025-2026.png" alt="Google Drive Image">
     </div>
   </div>
 
-  <script src="schedule-class-1.js"></script>
+  <script src="schedule-class-2.js"></script>
   <script>
     const translations = {
       header: {
-        ua: 'Розклад уроків<br>1 клас<br>Push School Warsaw',
-        pl: 'Plan lekcji<br>1 klasa<br>Push School Warsaw'
+        ua: 'Розклад уроків<br>2А клас<br>Push School Warsaw',
+        pl: 'Plan lekcji<br>2А klasa<br>Push School Warsaw'
       },
       usefulLinks: { ua: 'Корисні посилання:', pl: 'Przydatne linki:' },
       textbooks: { ua: 'Підручники:', pl: 'Podręczniki:' },
@@ -536,7 +533,7 @@
     let currentLanguage = 'ua';
     const dayKeys = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
     let selectedDay = dayKeys[new Date().getDay()];
-    const classId = 'class1'; // Унікальний ідентифікатор для класу
+    const classId = 'class2';
 
     function cacheSchedule() {
       console.log(`Кешування розкладу для ${classId}`);
@@ -551,13 +548,12 @@
         console.log(`Використано кешований розклад для ${classId}`);
         return parsed;
       }
-      console.log(`Кеш відсутній, використовується розклад із schedule-class-1.js`);
+      console.log(`Кеш відсутній, використовується розклад із schedule-class-2.js`);
       return schedule;
     }
 
     function clearOldCache() {
       console.log('Очищення старого кешу');
-      // Очищаємо тільки застарілий ключ 'schedule'
       localStorage.removeItem('schedule');
     }
 
@@ -774,7 +770,7 @@
     }
 
     function initialize() {
-      console.log('Ініціалізація сторінки для 1 класу');
+      console.log('Ініціалізація сторінки для 2А класу');
       clearOldCache();
       cacheSchedule();
       updateStaticTexts();
@@ -827,7 +823,6 @@
     const image = document.querySelector('.google-image');
     handleTouchZoom(image);
 
-    // Ініціалізація
     document.querySelector('.lang-toggle[data-lang="ua"]').classList.add('active');
     const today = new Date().getDay();
     selectedDay = dayKeys[today];
