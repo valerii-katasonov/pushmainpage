@@ -2,50 +2,102 @@
 <html lang="uk">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>🍴 Меню школи</title>
   <style>
     body {
-      font-family: Arial, sans-serif;
+      font-family: 'Montserrat', sans-serif;
+      margin: 0;
+      padding: 0;
       background-image: url('https://zastavki.gas-kvas.com/uploads/posts/2024-09/zastavki-gas-kvas-com-35bo-p-zastavki-pro-shkolu-9.jpg');
       background-size: cover;
       background-position: center;
-      margin: 0;
-      padding: 0;
+      background-attachment: fixed;
+      color: #333;
     }
+
     .container {
-      background: rgba(255, 255, 255, 0.95);
-      border-radius: 12px;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.3);
       max-width: 1000px;
       margin: 40px auto;
+      background: rgba(255,255,255,0.95);
+      border-radius: 12px;
       padding: 20px;
-    }
-    h1 {
+      box-shadow: 0 4px 10px rgba(0,0,0,0.3);
       text-align: center;
-      font-size: 36px; /* размер для заголовка */
+    }
+
+    h1 {
+      font-size: 36px;
       margin-bottom: 20px;
     }
+
     iframe {
       width: 100%;
-      height: 600px; /* можно увеличить при необходимости */
+      height: 600px;
       border: none;
       border-radius: 10px;
     }
+
+    .home-button {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: #006d77;
+      border: none;
+      border-radius: 8px;
+      color: white;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      padding: 0.75rem 1.5rem;
+      margin-bottom: 20px;
+      transition: background 0.3s ease, transform 0.2s ease;
+    }
+
+    .home-button:hover {
+      background: #00bfd1;
+      transform: translateY(-2px);
+    }
+
+    .home-button i {
+      font-size: 1.2rem;
+    }
+
+    @media screen and (max-width: 768px) {
+      h1 { font-size: 28px; }
+      iframe { height: 500px; }
+    }
+    @media screen and (max-width: 480px) {
+      h1 { font-size: 24px; }
+      iframe { height: 400px; }
+      .home-button { font-size: 0.9rem; padding: 0.5rem 1rem; }
+    }
   </style>
   <script>
-    // добавляем случайный параметр к ссылке, чтобы сбрасывать кеш
+    // подставляем параметр для сброса кеша Google Sheets
     function updateIframe() {
       const iframe = document.getElementById("menuFrame");
       const baseUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT6bRUJjCi4W9hIDS8lmbODR6wcvHy0_I9v_A-tCDhfN4hTj-PVT_TPX8HCCECBw9O2pKyYdtYp0ghK/pubhtml?widget=true&headers=false";
       iframe.src = baseUrl + "&cachebust=" + new Date().getTime();
     }
+
+    function goHome() {
+      window.location.href = 'index-uk.html';
+    }
+
     window.onload = updateIframe;
   </script>
 </head>
 <body>
   <div class="container">
     <h1>🍴 Меню школи</h1>
-    <iframe id="menuFrame"></iframe>
+    <button class="home-button" onclick="goHome()">
+      <i class="fas fa-home"></i> Повернутися на головну
+    </button>
+    <iframe id="menuFrame" title="Google Sheet"></iframe>
   </div>
+
+  <!-- Font Awesome для иконки кнопки -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/js/all.min.js"></script>
 </body>
 </html>
