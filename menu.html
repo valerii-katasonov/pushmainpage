@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>🍴 Меню школи</title>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
   <style>
     body {
       font-family: 'Montserrat', sans-serif;
@@ -31,13 +33,6 @@
       margin-bottom: 20px;
     }
 
-    iframe {
-      width: 100%;
-      height: 600px;
-      border: none;
-      border-radius: 10px;
-    }
-
     .home-button {
       display: inline-flex;
       align-items: center;
@@ -63,18 +58,41 @@
       font-size: 1.2rem;
     }
 
-    @media screen and (max-width: 768px) {
-      h1 { font-size: 28px; }
-      iframe { height: 500px; }
+    .responsive-iframe {
+      width: 100%;
+      overflow: hidden;
     }
-    @media screen and (max-width: 480px) {
+
+    .responsive-iframe iframe {
+      width: 1200px;  /* реальная ширина таблицы в Google Sheets */
+      height: 600px;
+      border: none;
+      border-radius: 10px;
+      transform-origin: top left;
+    }
+
+    /* Планшет */
+    @media (max-width: 768px) {
+      .responsive-iframe iframe {
+        transform: scale(0.7);
+        width: calc(1200px * 0.7);
+        height: calc(600px * 0.7);
+      }
+      h1 { font-size: 28px; }
+    }
+
+    /* Телефон */
+    @media (max-width: 480px) {
+      .responsive-iframe iframe {
+        transform: scale(0.5);
+        width: calc(1200px * 0.5);
+        height: calc(600px * 0.5);
+      }
       h1 { font-size: 24px; }
-      iframe { height: 400px; }
       .home-button { font-size: 0.9rem; padding: 0.5rem 1rem; }
     }
   </style>
   <script>
-    // подставляем параметр для сброса кеша Google Sheets
     function updateIframe() {
       const iframe = document.getElementById("menuFrame");
       const baseUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT6bRUJjCi4W9hIDS8lmbODR6wcvHy0_I9v_A-tCDhfN4hTj-PVT_TPX8HCCECBw9O2pKyYdtYp0ghK/pubhtml?widget=true&headers=false";
@@ -94,10 +112,12 @@
     <button class="home-button" onclick="goHome()">
       <i class="fas fa-home"></i> Повернутися на головну
     </button>
-    <iframe id="menuFrame" title="Google Sheet"></iframe>
+    <div class="responsive-iframe">
+      <iframe id="menuFrame" title="Google Sheet"></iframe>
+    </div>
   </div>
 
-  <!-- Font Awesome для иконки кнопки -->
+  <!-- Font Awesome для кнопки -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/js/all.min.js"></script>
 </body>
 </html>
