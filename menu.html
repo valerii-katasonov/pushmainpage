@@ -132,13 +132,32 @@
       position: relative;
     }
 
-    .sheet-container {
+    .sheet-wrapper {
       width: 100%;
       overflow: auto;
       -webkit-overflow-scrolling: touch;
       border-radius: 10px;
       background: transparent;
       min-height: 600px;
+      position: relative;
+    }
+
+    .sheet-container {
+      width: 100%;
+      min-width: 100%;
+      position: relative;
+    }
+
+    /* Для мобильных устройств увеличиваем ширину в 2 раза */
+    @media (max-width: 768px) {
+      .sheet-container {
+        width: 200%;
+        min-width: 200%;
+      }
+      
+      .scroll-hint {
+        display: block;
+      }
     }
 
     .sheet-container iframe {
@@ -148,17 +167,27 @@
       display: block;
     }
 
+    .scroll-hint {
+      display: none;
+      text-align: center;
+      margin-top: 10px;
+      color: var(--primary-color);
+      font-size: 0.9rem;
+      animation: pulse 2s infinite;
+    }
+
+    .scroll-hint i {
+      margin-right: 5px;
+    }
+
     /* Адаптивность для мобильных устройств */
     @media (max-width: 768px) {
-      .sheet-container {
+      .sheet-wrapper {
         min-height: 500px;
       }
       
       .sheet-container iframe {
         height: 500px;
-        zoom: 0.9;
-        -moz-transform: scale(0.9);
-        -moz-transform-origin: 0 0;
       }
     }
 
@@ -184,42 +213,31 @@
         height: 80px;
       }
       
-      .sheet-container {
+      .sheet-wrapper {
         min-height: 400px;
       }
       
       .sheet-container iframe {
         height: 400px;
-        zoom: 0.8;
-        -moz-transform: scale(0.8);
-        -moz-transform-origin: 0 0;
       }
     }
 
     /* Горизонтальная ориентация для очень маленьких экранов */
     @media (max-width: 380px) {
-      .sheet-container {
+      .sheet-wrapper {
         min-height: 350px;
       }
       
       .sheet-container iframe {
         height: 350px;
-        zoom: 0.7;
-        -moz-transform: scale(0.7);
-        -moz-transform-origin: 0 0;
       }
     }
 
     /* Специальные стили для iPhone */
     @supports (-webkit-touch-callout: none) {
-      .sheet-container {
+      .sheet-wrapper {
         /* Улучшаем скроллинг на iOS */
         overflow: auto;
-      }
-      
-      .sheet-container iframe {
-        /* Улучшаем отображение на iOS */
-        -webkit-overflow-scrolling: touch;
       }
     }
 
@@ -243,6 +261,12 @@
         transform: translateY(0); 
       } 
     }
+    
+    @keyframes pulse {
+      0% { opacity: 0.7; }
+      50% { opacity: 1; }
+      100% { opacity: 0.7; }
+    }
   </style>
 </head>
 <body>
@@ -256,9 +280,14 @@
     <button id="home-button" class="home-button"><i class="fas fa-home"></i> Повернутися на головну</button>
     
     <div class="form-container">
-      <div class="sheet-container">
-        <iframe id="menuFrame" title="Google Sheet" scrolling="yes" 
-                src="https://docs.google.com/spreadsheets/d/e/2PACX-1vTSY0MOa39vDI7x9K_u_uQJ4YLLwsUOdjgEG0yel_9bZkqOY5MWJXXOeHUy2l51I_MVa6ghdyNNBChM/pubhtml?gid=0&amp;single=true&amp;widget=true&amp;headers=false"></iframe>
+      <div class="sheet-wrapper">
+        <div class="sheet-container">
+          <iframe id="menuFrame" title="Google Sheet" scrolling="no" 
+                  src="https://docs.google.com/spreadsheets/d/e/2PACX-1vTSY0MOa39vDI7x9K_u_uQJ4YLLwsUOdjgEG0yel_9bZkqOY5MWJXXOeHUy2l51I_MVa6ghdyNNBChM/pubhtml?gid=0&amp;single=true&amp;widget=true&amp;headers=false"></iframe>
+        </div>
+      </div>
+      <div class="scroll-hint">
+        <i class="fas fa-arrows-alt-h"></i> Гортання вліво-вправо для перегляду всієї таблиці
       </div>
     </div>
   </div>
@@ -294,31 +323,31 @@
     document.documentElement.style.setProperty('--sab', 'env(safe-area-inset-bottom)');
     document.documentElement.style.setProperty('--sal', 'env(safe-area-inset-left)');
 
-    // Улучшенное масштабирование для мобильных устройств
-    function adjustSheetSize() {
-      const sheetContainer = document.querySelector('.sheet-container');
-      const iframe = document.getElementById('menuFrame');
-      
-      if (window.innerWidth <= 480) {
-        // Для мобильных устройств
-        iframe.style.width = "125%";
-        iframe.style.height = "500px";
-        sheetContainer.style.overflow = "auto";
-        sheetContainer.style.webkitOverflowScrolling = "touch";
-      } else if (window.innerWidth <= 768) {
-        // Для планшетов
-        iframe.style.width = "110%";
-        iframe.style.height = "550px";
-      } else {
-        // Для десктопов
+    // Функция для определения мобильных устройств
+    function isMobileDevice() {
+      return (typeof window.orientation !== "undefined") || (navigator.userAgent.indexOf('IEMobile') !== -1);
+    }
+
+    // Настройка iframe для мобильных устройств
+    function setupMobileView() {
+      if (isMobileDevice()) {
+        const iframe = document.getElementById('menuFrame');
+        const sheetContainer = document.querySelector('.sheet-container');
+        
+        // Увеличиваем ширину контейнера для горизонтального скроллинга
+        sheetContainer.style.width = "200%";
+        
+        // Настраиваем iframe
         iframe.style.width = "100%";
-        iframe.style.height = "600px";
+        iframe.style.height = "500px";
+        
+        // Показываем подсказку о скроллинге
+        document.querySelector('.scroll-hint').style.display = "block";
       }
     }
 
-    // Вызываем при загрузке и изменении размера окна
-    window.addEventListener('load', adjustSheetSize);
-    window.addEventListener('resize', adjustSheetSize);
+    // Вызываем при загрузке
+    window.addEventListener('load', setupMobileView);
   </script>
 </body>
 </html>
