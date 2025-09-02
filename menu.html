@@ -15,12 +15,16 @@
       --bg-color: #fff;
       --header-bg: linear-gradient(45deg, #00bfd1, #006d77);
       --shadow: 0 2px 10px rgba(0,0,0,0.2);
+      --table-header-bg: #66c8c9;
+      --table-border: 1px solid #ddd;
     }
 
     body.dark-theme {
       --text-color: #fff;
       --bg-color: #333;
       --header-bg: linear-gradient(45deg, #003d44, #006d77);
+      --table-header-bg: #2a7d7e;
+      --table-border: 1px solid #555;
     }
 
     body {
@@ -128,116 +132,113 @@
       border-radius: 15px;
       box-shadow: 0 5px 15px rgba(0,0,0,0.08);
       transition: transform 0.3s ease, background 0.3s ease;
-      min-height: 600px;
       overflow: hidden;
       position: relative;
     }
 
-    .form-content {
+    .menu-title {
+      text-align: center;
+      margin-bottom: 1.5rem;
+      color: var(--primary-color);
+      font-weight: 700;
+      font-size: 1.5rem;
+    }
+
+    .menu-table {
       width: 100%;
+      border-collapse: collapse;
+      background: var(--bg-color);
+      border-radius: 8px;
       overflow: hidden;
-      position: relative;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      font-size: 1rem;
     }
 
-    .loading {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      text-align: center;
-      z-index: 5;
+    .menu-table th {
+      background-color: var(--table-header-bg);
+      color: var(--text-color);
+      font-weight: 700;
+      padding: 14px;
+      text-align: left;
+      border: var(--table-border);
     }
 
-    .spinner {
-      border: 4px solid rgba(0, 0, 0, 0.1);
-      border-radius: 50%;
-      border-top: 4px solid var(--primary-color);
-      width: 40px;
-      height: 40px;
-      animation: spin 1s linear infinite;
-      margin: 0 auto 1rem;
+    .menu-table td {
+      padding: 14px;
+      border: var(--table-border);
+      vertical-align: top;
     }
 
-    .form-content iframe {
-      width: 100%;
-      height: 1200px;
-      border: none;
-      border-radius: 10px;
-      display: block;
-      background: transparent;
-      opacity: 1;
-      transition: opacity 0.3s ease;
-      /* Убираем масштабирование через transform */
-      transform: none;
-      transform-origin: unset;
+    .menu-table tr:nth-child(even) {
+      background-color: rgba(0,0,0,0.03);
     }
 
-    .error-message {
-      display: none;
-      text-align: center;
-      padding: 2rem;
-      color: #e74c3c;
+    body.dark-theme .menu-table tr:nth-child(even) {
+      background-color: rgba(255,255,255,0.05);
     }
 
-    .error-message i {
-      font-size: 3rem;
-      margin-bottom: 1rem;
+    .day-cell {
+      font-weight: 600;
+      color: var(--primary-color);
     }
 
-    .retry-button {
-      margin-top: 1rem;
-      padding: 0.5rem 1.5rem;
-      background: var(--primary-color);
-      color: white;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-    }
-
-    /* планшеты */
+    /* Адаптивность для мобильных устройств */
     @media (max-width: 768px) {
-      .form-content iframe {
-        height: 1000px;
-        zoom: 0.9;
-        -moz-transform: scale(0.9);
-        -moz-transform-origin: 0 0;
+      .menu-table {
+        font-size: 0.9rem;
+      }
+      
+      .menu-table th,
+      .menu-table td {
+        padding: 10px 8px;
       }
     }
 
-    /* телефоны */
     @media (max-width: 480px) {
-      .form-content iframe {
-        height: 900px;
-        zoom: 0.8;
-        -moz-transform: scale(0.8);
-        -moz-transform-origin: 0 0;
-      }
       header h1 { 
         font-size: 1.3rem; 
         text-align: center;
       }
+      
       .home-button { 
         font-size: 0.9rem; 
         padding: 0.5rem 1rem; 
       }
+      
       header {
         flex-direction: column;
         text-align: center;
         padding: 1rem 0;
       }
+      
       header img {
         width: 80px;
         height: 80px;
       }
+      
+      .menu-table {
+        font-size: 0.85rem;
+      }
+      
+      .menu-table th,
+      .menu-table td {
+        padding: 8px 6px;
+      }
+      
+      .menu-title {
+        font-size: 1.2rem;
+      }
     }
 
-    /* Очень маленькие телефоны */
+    /* Горизонтальная ориентация для очень маленьких экранов */
     @media (max-width: 380px) {
-      .form-content iframe {
-        height: 850px;
-        zoom: 0.7;
-        -moz-transform: scale(0.7);
-        -moz-transform-origin: 0 0;
+      .menu-table {
+        font-size: 0.8rem;
+      }
+      
+      .menu-table th,
+      .menu-table td {
+        padding: 6px 4px;
       }
     }
 
@@ -261,11 +262,6 @@
         transform: translateY(0); 
       } 
     }
-    
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
   </style>
 </head>
 <body>
@@ -277,132 +273,44 @@
 
   <div class="container">
     <button id="home-button" class="home-button"><i class="fas fa-home"></i> Повернутися на головну</button>
+    
     <div class="form-container">
-      <div class="form-content" id="sheetWrapper">
-        <div class="loading" id="loadingIndicator">
-          <div class="spinner"></div>
-          <p>Завантаження меню...</p>
-        </div>
-        <div class="error-message" id="errorMessage">
-          <i class="fas fa-exclamation-triangle"></i>
-          <h3>Не вдалося завантажити меню</h3>
-          <p>Перевірте підключення до інтернету та спробуйте ще раз</p>
-          <button class="retry-button" id="retryButton">Спробувати знову</button>
-        </div>
-        <iframe id="menuFrame" title="Google Sheet" scrolling="no"></iframe>
-      </div>
+      <h2 class="menu-title">Меню на тиждень: 08.09-12.09</h2>
+      
+      <table class="menu-table">
+        <thead>
+          <tr>
+            <th>День</th>
+            <th>Страва</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="day-cell">Понеділок</td>
+            <td>Котлети з курки, картопляне пюре, овочевий салат</td>
+          </tr>
+          <tr>
+            <td class="day-cell">Вівторок</td>
+            <td>Борщ український, домашні сметанники, хліб</td>
+          </tr>
+          <tr>
+            <td class="day-cell">Середа</td>
+            <td>Гречка з грибною підливою, салат з капусти та моркви</td>
+          </tr>
+          <tr>
+            <td class="day-cell">Четвер</td>
+            <td>Суп сирний з куркою, грінки з часником, овочі</td>
+          </tr>
+          <tr>
+            <td class="day-cell">П'ятниця</td>
+            <td>Картопляні кнедлі з м'ясом, квашена капуста, компот</td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   </div>
 
   <script>
-    // Конфигурация
-    const CONFIG = {
-      SHEET_URL: "https://docs.google.com/spreadsheets/d/e/2PACX-1vTSY0MOa39vDI7x9K_u_uQJ4YLLwsUOdjgEG0yel_9bZkqOY5MWJXXOeHUy2l51I_MVa6ghdyNNBChM/pubhtml?gid=0&single=true",
-      RETRY_DELAY: 3000,
-      MAX_RETRIES: 3
-    };
-
-    // Элементы DOM
-    const menuFrame = document.getElementById('menuFrame');
-    const loadingIndicator = document.getElementById('loadingIndicator');
-    const errorMessage = document.getElementById('errorMessage');
-    const retryButton = document.getElementById('retryButton');
-
-    // Загрузка Google Sheets
-    function loadIframe() {
-      showLoading();
-      hideError();
-      
-      // Добавляем параметр для предотвращения кеширования
-      const timestamp = new Date().getTime();
-      menuFrame.src = `${CONFIG.SHEET_URL}&cachebust=${timestamp}`;
-      
-      // Устанавливаем таймаут для обработки ошибок загрузки
-      const loadTimeout = setTimeout(() => {
-        // Проверяем, загрузился ли iframe
-        try {
-          const iframeDoc = menuFrame.contentDocument || menuFrame.contentWindow.document;
-          if (iframeDoc && iframeDoc.body.children.length === 0) {
-            handleLoadError();
-          } else {
-            handleLoadSuccess();
-          }
-        } catch (e) {
-          // Если доступ к документу заблокирован (CORS), считаем что загрузка успешна
-          handleLoadSuccess();
-        }
-      }, 5000);
-      
-      // Слушаем событие загрузки iframe
-      menuFrame.addEventListener('load', function() {
-        clearTimeout(loadTimeout);
-        handleLoadSuccess();
-      });
-      
-      menuFrame.addEventListener('error', function() {
-        clearTimeout(loadTimeout);
-        handleLoadError();
-      });
-    }
-
-    // Обработка успешной загрузки
-    function handleLoadSuccess() {
-      hideLoading();
-      hideError();
-      menuFrame.style.opacity = 1;
-      
-      // Попытка скрыть элементы управления Google
-      try {
-        const iframeDoc = menuFrame.contentDocument || menuFrame.contentWindow.document;
-        const googleBars = iframeDoc.querySelectorAll('[id*="google"], [class*="google"]');
-        googleBars.forEach(el => {
-          if (el.id.includes("toolbar") || el.id.includes("header") || el.classList.contains("google")) {
-            el.style.display = 'none';
-          }
-        });
-      } catch (e) {
-        // Игнорируем ошибки CORS
-        console.log("Не удалось скрыть элементы Google из-за политики безопасности");
-      }
-    }
-
-    // Обработка ошибки загрузки
-    function handleLoadError() {
-      hideLoading();
-      showError();
-    }
-
-    // Показать индикатор загрузки
-    function showLoading() {
-      loadingIndicator.style.display = 'block';
-    }
-
-    // Скрыть индикатор загрузки
-    function hideLoading() {
-      loadingIndicator.style.display = 'none';
-    }
-
-    // Показать сообщение об ошибке
-    function showError() {
-      errorMessage.style.display = 'block';
-    }
-
-    // Скрыть сообщение об ошибке
-    function hideError() {
-      errorMessage.style.display = 'none';
-    }
-
-    // Инициализация
-    function init() {      
-      // Кнопка повторной попытки
-      retryButton.addEventListener('click', () => {
-        loadIframe();
-      });
-      
-      // Начальная загрузка
-      loadIframe();
-    }
-
     // Навигация и переключение темы
     document.getElementById('home-button').addEventListener('click', () => {
       window.location.href = 'index-uk.html';
@@ -427,8 +335,11 @@
       icon.classList.add('fa-sun');
     }
 
-    // Инициализация при загрузке страницы
-    window.addEventListener('load', init);
+    // Добавляем поддержку безопасных зон на iPhone
+    document.documentElement.style.setProperty('--sat', 'env(safe-area-inset-top)');
+    document.documentElement.style.setProperty('--sar', 'env(safe-area-inset-right)');
+    document.documentElement.style.setProperty('--sab', 'env(safe-area-inset-bottom)');
+    document.documentElement.style.setProperty('--sal', 'env(safe-area-inset-left)');
   </script>
 </body>
 </html>
