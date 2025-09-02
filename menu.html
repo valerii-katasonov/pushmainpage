@@ -36,12 +36,21 @@
       color: var(--text-color);
       font-size: 16px;
       position: relative;
+      /* Отключаем масштабирование на мобильных */
+      touch-action: manipulation;
+      -webkit-text-size-adjust: 100%;
     }
 
     body.dark-theme {
       background: linear-gradient(135deg, rgba(0,43,51,0.6) 0%, rgba(0,77,87,0.6) 100%), url('https://zastavki.gas-kvas.com/uploads/posts/2024-09/zastavki-gas-kvas-com-35bo-p-zastavki-pro-shkolu-9.jpg');
       background-size: cover;
       background-position: center;
+    }
+
+    /* Фиксируем ширину контента как на ПК */
+    .desktop-width {
+      width: 1200px;
+      margin: 0 auto;
     }
 
     header {
@@ -113,13 +122,12 @@
     }
 
     .container {
-      max-width: 1200px;
+      width: 1200px;
       margin: 2rem auto;
       padding: 0 1rem;
       display: flex;
       flex-direction: column;
       animation: fadeInUp 0.8s ease-in;
-      padding-top: env(safe-area-inset-top);
     }
 
     .form-container {
@@ -144,20 +152,7 @@
 
     .sheet-container {
       width: 100%;
-      min-width: 100%;
       position: relative;
-    }
-
-    /* Для мобильных устройств увеличиваем ширину в 2 раза */
-    @media (max-width: 768px) {
-      .sheet-container {
-        width: 200%;
-        min-width: 200%;
-      }
-      
-      .scroll-hint {
-        display: block;
-      }
     }
 
     .sheet-container iframe {
@@ -180,64 +175,34 @@
       margin-right: 5px;
     }
 
-    /* Адаптивность для мобильных устройств */
-    @media (max-width: 768px) {
-      .sheet-wrapper {
-        min-height: 500px;
+    /* Стили для мобильных устройств */
+    @media (max-width: 1200px) {
+      body {
+        overflow-x: auto;
       }
       
-      .sheet-container iframe {
-        height: 500px;
-      }
-    }
-
-    @media (max-width: 480px) {
-      header h1 { 
-        font-size: 1.3rem; 
-        text-align: center;
+      .desktop-width {
+        width: 1200px;
       }
       
-      .home-button { 
-        font-size: 0.9rem; 
-        padding: 0.5rem 1rem; 
-      }
-      
-      header {
-        flex-direction: column;
-        text-align: center;
-        padding: 1rem 0;
-      }
-      
-      header img {
-        width: 80px;
-        height: 80px;
-      }
-      
-      .sheet-wrapper {
-        min-height: 400px;
-      }
-      
-      .sheet-container iframe {
-        height: 400px;
-      }
-    }
-
-    /* Горизонтальная ориентация для очень маленьких экранов */
-    @media (max-width: 380px) {
-      .sheet-wrapper {
-        min-height: 350px;
-      }
-      
-      .sheet-container iframe {
-        height: 350px;
+      .scroll-hint {
+        display: block;
+        position: fixed;
+        bottom: 20px;
+        left: 0;
+        right: 0;
+        background: rgba(0, 109, 119, 0.9);
+        color: white;
+        padding: 10px;
+        z-index: 100;
       }
     }
 
     /* Специальные стили для iPhone */
     @supports (-webkit-touch-callout: none) {
       .sheet-wrapper {
-        /* Улучшаем скроллинг на iOS */
         overflow: auto;
+        -webkit-overflow-scrolling: touch;
       }
     }
 
@@ -270,26 +235,29 @@
   </style>
 </head>
 <body>
-  <header>
-    <a href="index-uk.html"><img src="https://i.postimg.cc/WbY9TdDp/PushIco.png" alt="Push School Logo"></a>
-    <h1>Push School Warsaw<br>Меню на тиждень</h1>
-    <button class="theme-toggle" aria-label="Переключити тему"><i class="fas fa-moon"></i></button>
-  </header>
+  <div class="desktop-width">
+    <header>
+      <a href="index-uk.html"><img src="https://i.postimg.cc/WbY9TdDp/PushIco.png" alt="Push School Logo"></a>
+      <h1>Push School Warsaw<br>Меню на тиждень</h1>
+      <button class="theme-toggle" aria-label="Переключити тему"><i class="fas fa-moon"></i></button>
+    </header>
 
-  <div class="container">
-    <button id="home-button" class="home-button"><i class="fas fa-home"></i> Повернутися на головну</button>
-    
-    <div class="form-container">
-      <div class="sheet-wrapper">
-        <div class="sheet-container">
-          <iframe id="menuFrame" title="Google Sheet" scrolling="no" 
-                  src="https://docs.google.com/spreadsheets/d/e/2PACX-1vTSY0MOa39vDI7x9K_u_uQJ4YLLwsUOdjgEG0yel_9bZkqOY5MWJXXOeHUy2l51I_MVa6ghdyNNBChM/pubhtml?gid=0&amp;single=true&amp;widget=true&amp;headers=false"></iframe>
+    <div class="container">
+      <button id="home-button" class="home-button"><i class="fas fa-home"></i> Повернутися на головну</button>
+      
+      <div class="form-container">
+        <div class="sheet-wrapper">
+          <div class="sheet-container">
+            <iframe id="menuFrame" title="Google Sheet" scrolling="no" 
+                    src="https://docs.google.com/spreadsheets/d/e/2PACX-1vTSY0MOa39vDI7x9K_u_uQJ4YLLwsUOdjgEG0yel_9bZkqOY5MWJXXOeHUy2l51I_MVa6ghdyNNBChM/pubhtml?gid=0&amp;single=true&amp;widget=true&amp;headers=false"></iframe>
+          </div>
         </div>
       </div>
-      <div class="scroll-hint">
-        <i class="fas fa-arrows-alt-h"></i> Гортання вліво-вправо для перегляду всієї таблиці
-      </div>
     </div>
+  </div>
+
+  <div class="scroll-hint">
+    <i class="fas fa-arrows-alt-h"></i> Гортання вліво-вправо для перегляду всієї сторінки
   </div>
 
   <script>
@@ -328,21 +296,28 @@
       return (typeof window.orientation !== "undefined") || (navigator.userAgent.indexOf('IEMobile') !== -1);
     }
 
-    // Настройка iframe для мобильных устройств
+    // Настройка для мобильных устройств
     function setupMobileView() {
       if (isMobileDevice()) {
+        // Устанавливаем фиксированную ширину для iframe
         const iframe = document.getElementById('menuFrame');
-        const sheetContainer = document.querySelector('.sheet-container');
-        
-        // Увеличиваем ширину контейнера для горизонтального скроллинга
-        sheetContainer.style.width = "200%";
-        
-        // Настраиваем iframe
-        iframe.style.width = "100%";
-        iframe.style.height = "500px";
+        iframe.style.width = "1200px";
+        iframe.style.height = "600px";
         
         // Показываем подсказку о скроллинге
         document.querySelector('.scroll-hint').style.display = "block";
+        
+        // Отключаем масштабирование на мобильных
+        document.addEventListener('touchmove', function(event) {
+          if (event.scale !== 1) {
+            event.preventDefault();
+          }
+        }, { passive: false });
+        
+        // Блокируем масштабирование жестом
+        document.addEventListener('gesturestart', function(e) {
+          e.preventDefault();
+        });
       }
     }
 
