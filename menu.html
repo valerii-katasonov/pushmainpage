@@ -9,7 +9,6 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
   <style>
     :root {
-      --sheet-scale: 1;
       --primary-color: #006d77;
       --secondary-color: #00bfd1;
       --text-color: #333;
@@ -160,20 +159,17 @@
     }
 
     .form-content iframe {
-      width: calc(100% / var(--sheet-scale));
-      height: calc(1200px / var(--sheet-scale));
-      transform: scale(var(--sheet-scale));
-      transform-origin: 0 0;
+      width: 100%;
+      height: 1200px;
       border: none;
       border-radius: 10px;
       display: block;
       background: transparent;
-      opacity: 0;
-      transition: opacity 0.3s ease;
-    }
-
-    .form-content iframe.loaded {
       opacity: 1;
+      transition: opacity 0.3s ease;
+      /* Убираем масштабирование через transform */
+      transform: none;
+      transform-origin: unset;
     }
 
     .error-message {
@@ -201,14 +197,20 @@
     /* планшеты */
     @media (max-width: 768px) {
       .form-content iframe {
-        height: calc(1000px / var(--sheet-scale));
+        height: 1000px;
+        zoom: 0.9;
+        -moz-transform: scale(0.9);
+        -moz-transform-origin: 0 0;
       }
     }
 
     /* телефоны */
     @media (max-width: 480px) {
       .form-content iframe {
-        height: calc(900px / var(--sheet-scale));
+        height: 900px;
+        zoom: 0.8;
+        -moz-transform: scale(0.8);
+        -moz-transform-origin: 0 0;
       }
       header h1 { 
         font-size: 1.3rem; 
@@ -226,6 +228,16 @@
       header img {
         width: 80px;
         height: 80px;
+      }
+    }
+
+    /* Очень маленькие телефоны */
+    @media (max-width: 380px) {
+      .form-content iframe {
+        height: 850px;
+        zoom: 0.7;
+        -moz-transform: scale(0.7);
+        -moz-transform-origin: 0 0;
       }
     }
 
@@ -285,42 +297,16 @@
   <script>
     // Конфигурация
     const CONFIG = {
-      BASE_HEIGHT: 1200,
       SHEET_URL: "https://docs.google.com/spreadsheets/d/e/2PACX-1vTSY0MOa39vDI7x9K_u_uQJ4YLLwsUOdjgEG0yel_9bZkqOY5MWJXXOeHUy2l51I_MVa6ghdyNNBChM/pubhtml?gid=0&single=true",
       RETRY_DELAY: 3000,
       MAX_RETRIES: 3
     };
-
-    // Глобальные переменные
-    let retryCount = 0;
-    let currentScale = 1;
 
     // Элементы DOM
     const menuFrame = document.getElementById('menuFrame');
     const loadingIndicator = document.getElementById('loadingIndicator');
     const errorMessage = document.getElementById('errorMessage');
     const retryButton = document.getElementById('retryButton');
-
-    // Вычисление масштаба для разных устройств
-    function computeScale() {
-      const w = window.innerWidth;
-      const h = window.innerHeight;
-      
-      // Более точное вычисление масштаба с учетом высоты экрана
-      if (w <= 380) return 1.6;
-      if (w <= 480) return 1.5;
-      if (w <= 600) return 1.4;
-      if (w <= 768) return 1.3;
-      if (w <= 1024) return 1.1;
-      return 1.0;
-    }
-
-    // Применение масштаба
-    function applyScale(scale) {
-      currentScale = scale;
-      document.documentElement.style.setProperty('--sheet-scale', scale);
-      menuFrame.style.height = Math.round(CONFIG.BASE_HEIGHT / scale) + 'px';
-    }
 
     // Загрузка Google Sheets
     function loadIframe() {
@@ -332,28 +318,58 @@
       menuFrame.src = `${CONFIG.SHEET_URL}&cachebust=${timestamp}`;
       
       // Устанавливаем таймаут для обработки ошибок загрузки
-      setTimeout(() => {
-        if (menuFrame.src && !menuFrame.contentDocument || menuFrame.contentDocument && menuFrame.contentDocument.body.innerHTML === '') {
-          handleLoadError();
+      const loadTimeout = setTimeout(() => {
+        // Проверяем, загрузился ли iframe
+        try {
+          const iframeDoc = menuFrame.contentDocument || menuFrame.contentWindow.document;
+          if (iframeDoc && iframeDoc.body.children.length === 0) {
+            handleLoadError();
+          } else {
+            handleLoadSuccess();
+          }
+        } catch (e) {
+          // Если доступ к документу заблокирован (CORS), считаем что загрузка успешна
+          handleLoadSuccess();
         }
-      }, 10000);
+      }, 5000);
+      
+      // Слушаем событие загрузки iframe
+      menuFrame.addEventListener('load', function() {
+        clearTimeout(loadTimeout);
+        handleLoadSuccess();
+      });
+      
+      menuFrame.addEventListener('error', function() {
+        clearTimeout(loadTimeout);
+        handleLoadError();
+      });
     }
 
     // Обработка успешной загрузки
     function handleLoadSuccess() {
       hideLoading();
-      menuFrame.classList.add('loaded');
+      hideError();
+      menuFrame.style.opacity = 1;
+      
+      // Попытка скрыть элементы управления Google
+      try {
+        const iframeDoc = menuFrame.contentDocument || menuFrame.contentWindow.document;
+        const googleBars = iframeDoc.querySelectorAll('[id*="google"], [class*="google"]');
+        googleBars.forEach(el => {
+          if (el.id.includes("toolbar") || el.id.includes("header") || el.classList.contains("google")) {
+            el.style.display = 'none';
+          }
+        });
+      } catch (e) {
+        // Игнорируем ошибки CORS
+        console.log("Не удалось скрыть элементы Google из-за политики безопасности");
+      }
     }
 
     // Обработка ошибки загрузки
     function handleLoadError() {
       hideLoading();
       showError();
-      retryCount++;
-      
-      if (retryCount < CONFIG.MAX_RETRIES) {
-        setTimeout(loadIframe, CONFIG.RETRY_DELAY);
-      }
     }
 
     // Показать индикатор загрузки
@@ -377,35 +393,15 @@
     }
 
     // Инициализация
-    function init() {
-      const scale = computeScale();
-      applyScale(scale);
-      
-      // Обработчики событий для iframe
-      menuFrame.addEventListener('load', handleLoadSuccess);
-      menuFrame.addEventListener('error', handleLoadError);
-      
+    function init() {      
       // Кнопка повторной попытки
       retryButton.addEventListener('click', () => {
-        retryCount = 0;
         loadIframe();
       });
       
       // Начальная загрузка
       loadIframe();
     }
-
-    // Обработчик изменения размера окна
-    let resizeTimer;
-    window.addEventListener('resize', () => {
-      clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(() => {
-        const newScale = computeScale();
-        if (newScale !== currentScale) {
-          applyScale(newScale);
-        }
-      }, 250);
-    });
 
     // Навигация и переключение темы
     document.getElementById('home-button').addEventListener('click', () => {
