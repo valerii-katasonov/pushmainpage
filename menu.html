@@ -15,16 +15,12 @@
       --bg-color: #fff;
       --header-bg: linear-gradient(45deg, #00bfd1, #006d77);
       --shadow: 0 2px 10px rgba(0,0,0,0.2);
-      --table-header-bg: #66c8c9;
-      --table-border: 1px solid #ddd;
     }
 
     body.dark-theme {
       --text-color: #fff;
       --bg-color: #333;
       --header-bg: linear-gradient(45deg, #003d44, #006d77);
-      --table-header-bg: #2a7d7e;
-      --table-border: 1px solid #555;
     }
 
     body {
@@ -136,61 +132,33 @@
       position: relative;
     }
 
-    .menu-title {
-      text-align: center;
-      margin-bottom: 1.5rem;
-      color: var(--primary-color);
-      font-weight: 700;
-      font-size: 1.5rem;
-    }
-
-    .menu-table {
+    .sheet-container {
       width: 100%;
-      border-collapse: collapse;
-      background: var(--bg-color);
-      border-radius: 8px;
-      overflow: hidden;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-      font-size: 1rem;
+      overflow: auto;
+      -webkit-overflow-scrolling: touch;
+      border-radius: 10px;
+      background: transparent;
+      min-height: 600px;
     }
 
-    .menu-table th {
-      background-color: var(--table-header-bg);
-      color: var(--text-color);
-      font-weight: 700;
-      padding: 14px;
-      text-align: left;
-      border: var(--table-border);
-    }
-
-    .menu-table td {
-      padding: 14px;
-      border: var(--table-border);
-      vertical-align: top;
-    }
-
-    .menu-table tr:nth-child(even) {
-      background-color: rgba(0,0,0,0.03);
-    }
-
-    body.dark-theme .menu-table tr:nth-child(even) {
-      background-color: rgba(255,255,255,0.05);
-    }
-
-    .day-cell {
-      font-weight: 600;
-      color: var(--primary-color);
+    .sheet-container iframe {
+      width: 100%;
+      height: 600px;
+      border: none;
+      display: block;
     }
 
     /* Адаптивность для мобильных устройств */
     @media (max-width: 768px) {
-      .menu-table {
-        font-size: 0.9rem;
+      .sheet-container {
+        min-height: 500px;
       }
       
-      .menu-table th,
-      .menu-table td {
-        padding: 10px 8px;
+      .sheet-container iframe {
+        height: 500px;
+        zoom: 0.9;
+        -moz-transform: scale(0.9);
+        -moz-transform-origin: 0 0;
       }
     }
 
@@ -216,29 +184,42 @@
         height: 80px;
       }
       
-      .menu-table {
-        font-size: 0.85rem;
+      .sheet-container {
+        min-height: 400px;
       }
       
-      .menu-table th,
-      .menu-table td {
-        padding: 8px 6px;
-      }
-      
-      .menu-title {
-        font-size: 1.2rem;
+      .sheet-container iframe {
+        height: 400px;
+        zoom: 0.8;
+        -moz-transform: scale(0.8);
+        -moz-transform-origin: 0 0;
       }
     }
 
     /* Горизонтальная ориентация для очень маленьких экранов */
     @media (max-width: 380px) {
-      .menu-table {
-        font-size: 0.8rem;
+      .sheet-container {
+        min-height: 350px;
       }
       
-      .menu-table th,
-      .menu-table td {
-        padding: 6px 4px;
+      .sheet-container iframe {
+        height: 350px;
+        zoom: 0.7;
+        -moz-transform: scale(0.7);
+        -moz-transform-origin: 0 0;
+      }
+    }
+
+    /* Специальные стили для iPhone */
+    @supports (-webkit-touch-callout: none) {
+      .sheet-container {
+        /* Улучшаем скроллинг на iOS */
+        overflow: auto;
+      }
+      
+      .sheet-container iframe {
+        /* Улучшаем отображение на iOS */
+        -webkit-overflow-scrolling: touch;
       }
     }
 
@@ -275,38 +256,10 @@
     <button id="home-button" class="home-button"><i class="fas fa-home"></i> Повернутися на головну</button>
     
     <div class="form-container">
-      <h2 class="menu-title">Меню на тиждень: 08.09-12.09</h2>
-      
-      <table class="menu-table">
-        <thead>
-          <tr>
-            <th>День</th>
-            <th>Страва</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td class="day-cell">Понеділок</td>
-            <td>Котлети з курки, картопляне пюре, овочевий салат</td>
-          </tr>
-          <tr>
-            <td class="day-cell">Вівторок</td>
-            <td>Борщ український, домашні сметанники, хліб</td>
-          </tr>
-          <tr>
-            <td class="day-cell">Середа</td>
-            <td>Гречка з грибною підливою, салат з капусти та моркви</td>
-          </tr>
-          <tr>
-            <td class="day-cell">Четвер</td>
-            <td>Суп сирний з куркою, грінки з часником, овочі</td>
-          </tr>
-          <tr>
-            <td class="day-cell">П'ятниця</td>
-            <td>Картопляні кнедлі з м'ясом, квашена капуста, компот</td>
-          </tr>
-        </tbody>
-      </table>
+      <div class="sheet-container">
+        <iframe id="menuFrame" title="Google Sheet" scrolling="yes" 
+                src="https://docs.google.com/spreadsheets/d/e/2PACX-1vTSY0MOa39vDI7x9K_u_uQJ4YLLwsUOdjgEG0yel_9bZkqOY5MWJXXOeHUy2l51I_MVa6ghdyNNBChM/pubhtml?gid=0&amp;single=true&amp;widget=true&amp;headers=false"></iframe>
+      </div>
     </div>
   </div>
 
@@ -340,6 +293,32 @@
     document.documentElement.style.setProperty('--sar', 'env(safe-area-inset-right)');
     document.documentElement.style.setProperty('--sab', 'env(safe-area-inset-bottom)');
     document.documentElement.style.setProperty('--sal', 'env(safe-area-inset-left)');
+
+    // Улучшенное масштабирование для мобильных устройств
+    function adjustSheetSize() {
+      const sheetContainer = document.querySelector('.sheet-container');
+      const iframe = document.getElementById('menuFrame');
+      
+      if (window.innerWidth <= 480) {
+        // Для мобильных устройств
+        iframe.style.width = "125%";
+        iframe.style.height = "500px";
+        sheetContainer.style.overflow = "auto";
+        sheetContainer.style.webkitOverflowScrolling = "touch";
+      } else if (window.innerWidth <= 768) {
+        // Для планшетов
+        iframe.style.width = "110%";
+        iframe.style.height = "550px";
+      } else {
+        // Для десктопов
+        iframe.style.width = "100%";
+        iframe.style.height = "600px";
+      }
+    }
+
+    // Вызываем при загрузке и изменении размера окна
+    window.addEventListener('load', adjustSheetSize);
+    window.addEventListener('resize', adjustSheetSize);
   </script>
 </body>
 </html>
