@@ -1,13 +1,18 @@
 <!DOCTYPE html>
 <html lang="uk">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="robots" content="noindex, nofollow">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="robots" content="noindex, nofollow"/>
   <title>Меню на тиждень</title>
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
   <style>
+    :root {
+      /* sheet-scale будет устанавливаться из JS */
+      --sheet-scale: 1;
+    }
+
     body {
       font-family: 'Montserrat', sans-serif;
       margin: 0;
@@ -61,6 +66,7 @@
       font-weight: 700;
       text-shadow: 0 2px 4px rgba(0,0,0,0.2);
       animation: fadeIn 1s ease-in;
+      text-align: left;
     }
 
     .theme-toggle {
@@ -101,7 +107,7 @@
     }
 
     .container {
-      max-width: 1200px;
+      max-width: 1200px; /* сохраняем твой ограничитель — можно изменить */
       margin: 2rem auto;
       padding: 0 1rem;
       display: flex;
@@ -130,24 +136,33 @@
       overflow: hidden;
     }
 
+    /* ---- здесь ключ: iframe зум/масштабирование ----
+       Мы масштабируем содержимое iframe (визуально увеличиваем таблицу) и
+       одновременно уменьшаем базовую ширину iframe (width: calc(100% / scale))
+       чтобы масштабированное содержимое заполнило контейнер без горизонтальной прокрутки.
+    */
     .form-content iframe {
-      width: 100%;         /* теперь iframe растягивается по ширине */
-      height: 1200px;      /* увеличил высоту */
+      width: calc(100% / var(--sheet-scale));
+      height: calc(1200px / var(--sheet-scale)); /* базовая высота делится на scale */
+      transform: scale(var(--sheet-scale));
+      transform-origin: 0 0;
       border: none;
       border-radius: 10px;
+      display: block;
+      background: transparent;
     }
 
-    /* Масштабирование под планшеты */
+    /* планшеты */
     @media (max-width: 768px) {
       .form-content iframe {
-        height: 1000px;
+        height: calc(1000px / var(--sheet-scale));
       }
     }
 
-    /* Масштабирование под телефоны */
+    /* телефоны */
     @media (max-width: 480px) {
       .form-content iframe {
-        height: 900px;
+        height: calc(900px / var(--sheet-scale));
       }
       header h1 { font-size: 1.3rem; }
       .home-button { font-size: 0.9rem; padding: 0.5rem 1rem; }
@@ -168,20 +183,71 @@
   <div class="container">
     <button id="home-button" class="home-button"><i class="fas fa-home"></i> Повернутися на головну</button>
     <div class="form-container">
-      <div class="form-content">
-        <iframe id="menuFrame" title="Google Sheet"></iframe>
+      <div class="form-content" id="sheetWrapper">
+        <!-- iframe подгружается JS (updateIframe) -->
+        <iframe id="menuFrame" title="Google Sheet" scrolling="no"></iframe>
+
+        <!--
+          Альтернатива: если хочешь рисовать собственную таблицу (без белого обрамления Google),
+          можно включить fetchCSVRender() (ниже в скрипте) и опубликовать лист в CSV.
+          Закомментировано по умолчанию.
+        -->
       </div>
     </div>
   </div>
 
   <script>
-    // Загружаем Google Sheets без белого обрамления
+    // ---------- ПАРАМЕТРЫ (можешь подправить) ----------
+    // базовая высота, которую мы считаем "1x" (в пикселях)
+    const BASE_HEIGHT = 1200;
+    // масштаб для разных экранов будет устанавливаться в computeScale()
+    function computeScale() {
+      const w = window.innerWidth;
+      // Подобранные значения — можно подточить:
+      if (w <= 380) return 1.6;   // маленькие телефоны — сильнее увеличиваем
+      if (w <= 480) return 1.5;
+      if (w <= 768) return 1.3;   // планшеты/малые экраны
+      if (w <= 1024) return 1.1;
+      return 1.0;                 // десктоп — оригинальный масштаб
+    }
+
+    function applyScale(scale) {
+      document.documentElement.style.setProperty('--sheet-scale', scale);
+      // Поддержка высоты — установим реальную высоту iframe в зависимости от scale
+      const iframe = document.getElementById('menuFrame');
+      // используем BASE_HEIGHT, делённый на scale — чтобы итоговый видимая высота совпадала
+      iframe.style.height = Math.round(BASE_HEIGHT / scale) + 'px';
+      // для безопасности снимаем горизонтальную прокрутку у wrapper
+      const wrapper = document.getElementById('sheetWrapper');
+      wrapper.style.overflowX = 'hidden';
+    }
+
+    // Загружаем Google Sheets без белого обрамления (single=true)
     function updateIframe() {
       const iframe = document.getElementById("menuFrame");
+      // ВАЖНО: используем single=true (убираем widget=true). gid=0 — нужный лист.
       const baseUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTSY0MOa39vDI7x9K_u_uQJ4YLLwsUOdjgEG0yel_9bZkqOY5MWJXXOeHUy2l51I_MVa6ghdyNNBChM/pubhtml?gid=0&single=true";
       iframe.src = baseUrl + "&cachebust=" + new Date().getTime();
     }
 
+    // Инициализация
+    function init() {
+      const scale = computeScale();
+      applyScale(scale);
+      updateIframe();
+    }
+
+    // обрабатываем ресайз (чтобы при повороте экрана подгонять масштаб)
+    let resizeTimer;
+    window.addEventListener('resize', () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        const scale = computeScale();
+        applyScale(scale);
+      }, 150);
+    });
+
+    // кнопки и переключатель темы — сохраняем как в оригинале
     document.getElementById('home-button').addEventListener('click', () => {
       window.location.href = 'index-uk.html';
     });
@@ -193,7 +259,58 @@
       icon.classList.toggle('fa-sun');
     });
 
-    window.onload = updateIframe;
+    window.addEventListener('load', init);
+
+    /* ============================
+       Альтернативный метод (чтобы полностью избавиться от "страницы Google"):
+       Если хочешь — можно подгружать опубликованный CSV и отрисовывать таблицу в твоем HTML.
+       Плюс: полный контроль стилей, никакого белого фрейма внутри iframe.
+       Как использовать:
+       1) В Google Sheets: Файл → Опубликовать в интернет → выбери нужный лист → Формат: CSV
+          Получишь URL вида:
+          https://docs.google.com/spreadsheets/d/e/2PACX-1v.../pub?output=csv&gid=0
+       2) Вставь этот URL в переменную CSV_URL ниже и вызови fetchCSVRender(CSV_URL)
+       3) Закомментируй updateIframe() (или удаляй iframe) — таблица отрисуется прямо в DOM.
+    */
+    async function fetchCSVRender(csvUrl) {
+      try {
+        const resp = await fetch(csvUrl);
+        if (!resp.ok) throw new Error('fetch error ' + resp.status);
+        const text = await resp.text();
+        // простая CSV-парсерка (подойдет для простых таблиц)
+        const rows = text.split('\n').map(r => r.replace(/\r$/, ''));
+        const table = document.createElement('table');
+        table.style.width = '100%';
+        table.style.borderCollapse = 'collapse';
+        table.style.fontSize = '18px';
+        table.style.background = 'white';
+        table.style.borderRadius = '8px';
+        // стили для ячеек
+        const cellStyle = 'padding:14px;border:1px solid #ddd;vertical-align:top;';
+
+        rows.forEach((r, i) => {
+          if (!r) return;
+          const cols = r.split(',');
+          const tr = document.createElement('tr');
+          cols.forEach((c, j) => {
+            const td = document.createElement(i === 0 ? 'th' : 'td');
+            td.innerText = c;
+            td.style.cssText = cellStyle + (i === 0 ? 'background:#66c8c9;color:#000;font-weight:700;text-align:left;' : 'text-align:left;');
+            tr.appendChild(td);
+          });
+          table.appendChild(tr);
+        });
+
+        const wrapper = document.getElementById('sheetWrapper');
+        // очищаем содержимое (удаляем iframe) и вставляем таблицу
+        wrapper.innerHTML = '';
+        wrapper.appendChild(table);
+      } catch (e) {
+        console.error('CSV render error', e);
+      }
+    }
+    /* ============================ */
+
   </script>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/js/all.min.js"></script>
