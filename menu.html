@@ -131,28 +131,23 @@
     }
 
     .form-content iframe {
-      width: 2400px; /* увеличил в 2 раза */
-      height: 1200px;
+      width: 100%;         /* теперь iframe растягивается по ширине */
+      height: 1200px;      /* увеличил высоту */
       border: none;
       border-radius: 10px;
-      transform-origin: top left;
     }
 
     /* Масштабирование под планшеты */
     @media (max-width: 768px) {
       .form-content iframe {
-        transform: scale(0.7);
-        width: calc(2400px * 0.7);
-        height: calc(1200px * 0.7);
+        height: 1000px;
       }
     }
 
     /* Масштабирование под телефоны */
     @media (max-width: 480px) {
       .form-content iframe {
-        transform: scale(0.5);
-        width: calc(2400px * 0.5);
-        height: calc(1200px * 0.5);
+        height: 900px;
       }
       header h1 { font-size: 1.3rem; }
       .home-button { font-size: 0.9rem; padding: 0.5rem 1rem; }
@@ -180,9 +175,10 @@
   </div>
 
   <script>
+    // Загружаем Google Sheets без белого обрамления
     function updateIframe() {
       const iframe = document.getElementById("menuFrame");
-      const baseUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTSY0MOa39vDI7x9K_u_uQJ4YLLwsUOdjgEG0yel_9bZkqOY5MWJXXOeHUy2l51I_MVa6ghdyNNBChM/pubhtml?widget=true&headers=false";
+      const baseUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTSY0MOa39vDI7x9K_u_uQJ4YLLwsUOdjgEG0yel_9bZkqOY5MWJXXOeHUy2l51I_MVa6ghdyNNBChM/pubhtml?gid=0&single=true";
       iframe.src = baseUrl + "&cachebust=" + new Date().getTime();
     }
 
