@@ -9,8 +9,19 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
   <style>
     :root {
-      /* sheet-scale будет устанавливаться из JS */
       --sheet-scale: 1;
+      --primary-color: #006d77;
+      --secondary-color: #00bfd1;
+      --text-color: #333;
+      --bg-color: #fff;
+      --header-bg: linear-gradient(45deg, #00bfd1, #006d77);
+      --shadow: 0 2px 10px rgba(0,0,0,0.2);
+    }
+
+    body.dark-theme {
+      --text-color: #fff;
+      --bg-color: #333;
+      --header-bg: linear-gradient(45deg, #003d44, #006d77);
     }
 
     body {
@@ -23,7 +34,7 @@
       background-attachment: fixed;
       min-height: 100vh;
       transition: background 0.5s ease, color 0.5s ease;
-      color: #333;
+      color: var(--text-color);
       font-size: 16px;
       position: relative;
     }
@@ -32,23 +43,18 @@
       background: linear-gradient(135deg, rgba(0,43,51,0.6) 0%, rgba(0,77,87,0.6) 100%), url('https://zastavki.gas-kvas.com/uploads/posts/2024-09/zastavki-gas-kvas-com-35bo-p-zastavki-pro-shkolu-9.jpg');
       background-size: cover;
       background-position: center;
-      color: #fff;
     }
 
     header {
-      background: linear-gradient(45deg, #00bfd1, #006d77);
+      background: var(--header-bg);
       color: white;
       padding: 1.5rem 0;
       display: flex;
       justify-content: center;
       align-items: center;
       gap: 1rem;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+      box-shadow: var(--shadow);
       position: relative;
-    }
-
-    body.dark-theme header {
-      background: linear-gradient(45deg, #003d44, #006d77);
     }
 
     header img {
@@ -79,13 +85,14 @@
       font-size: 1.5rem;
       cursor: pointer;
       padding: 0.5rem;
+      z-index: 10;
     }
 
     .home-button {
       display: inline-flex;
       align-items: center;
       gap: 0.5rem;
-      background: #006d77;
+      background: var(--primary-color);
       border: none;
       border-radius: 8px;
       color: white;
@@ -98,7 +105,7 @@
     }
 
     .home-button:hover {
-      background: #00bfd1;
+      background: var(--secondary-color);
       transform: translateY(-2px);
     }
 
@@ -107,7 +114,7 @@
     }
 
     .container {
-      max-width: 1200px; /* сохраняем твой ограничитель — можно изменить */
+      max-width: 1200px;
       margin: 2rem auto;
       padding: 0 1rem;
       display: flex;
@@ -118,38 +125,77 @@
 
     .form-container {
       padding: 1.5rem;
-      background: white;
+      background: var(--bg-color);
       border-radius: 15px;
       box-shadow: 0 5px 15px rgba(0,0,0,0.08);
-      transition: transform 0.3s ease;
-      min-height: 1200px;
+      transition: transform 0.3s ease, background 0.3s ease;
+      min-height: 600px;
       overflow: hidden;
-    }
-
-    body.dark-theme .form-container {
-      background: #333;
-      color: #fff;
+      position: relative;
     }
 
     .form-content {
       width: 100%;
       overflow: hidden;
+      position: relative;
     }
 
-    /* ---- здесь ключ: iframe зум/масштабирование ----
-       Мы масштабируем содержимое iframe (визуально увеличиваем таблицу) и
-       одновременно уменьшаем базовую ширину iframe (width: calc(100% / scale))
-       чтобы масштабированное содержимое заполнило контейнер без горизонтальной прокрутки.
-    */
+    .loading {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      z-index: 5;
+    }
+
+    .spinner {
+      border: 4px solid rgba(0, 0, 0, 0.1);
+      border-radius: 50%;
+      border-top: 4px solid var(--primary-color);
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 1rem;
+    }
+
     .form-content iframe {
       width: calc(100% / var(--sheet-scale));
-      height: calc(1200px / var(--sheet-scale)); /* базовая высота делится на scale */
+      height: calc(1200px / var(--sheet-scale));
       transform: scale(var(--sheet-scale));
       transform-origin: 0 0;
       border: none;
       border-radius: 10px;
       display: block;
       background: transparent;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    .form-content iframe.loaded {
+      opacity: 1;
+    }
+
+    .error-message {
+      display: none;
+      text-align: center;
+      padding: 2rem;
+      color: #e74c3c;
+    }
+
+    .error-message i {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+    }
+
+    .retry-button {
+      margin-top: 1rem;
+      padding: 0.5rem 1.5rem;
+      background: var(--primary-color);
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
     }
 
     /* планшеты */
@@ -164,13 +210,50 @@
       .form-content iframe {
         height: calc(900px / var(--sheet-scale));
       }
-      header h1 { font-size: 1.3rem; }
-      .home-button { font-size: 0.9rem; padding: 0.5rem 1rem; }
+      header h1 { 
+        font-size: 1.3rem; 
+        text-align: center;
+      }
+      .home-button { 
+        font-size: 0.9rem; 
+        padding: 0.5rem 1rem; 
+      }
+      header {
+        flex-direction: column;
+        text-align: center;
+        padding: 1rem 0;
+      }
+      header img {
+        width: 80px;
+        height: 80px;
+      }
     }
 
-    @keyframes fadeInHeader { from { opacity: 0; } to { opacity: 1; } }
-    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-    @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes fadeInHeader { 
+      from { opacity: 0; } 
+      to { opacity: 1; } 
+    }
+    
+    @keyframes fadeIn { 
+      from { opacity: 0; } 
+      to { opacity: 1; } 
+    }
+    
+    @keyframes fadeInUp { 
+      from { 
+        opacity: 0; 
+        transform: translateY(20px); 
+      } 
+      to { 
+        opacity: 1; 
+        transform: translateY(0); 
+      } 
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
   </style>
 </head>
 <body>
@@ -184,70 +267,147 @@
     <button id="home-button" class="home-button"><i class="fas fa-home"></i> Повернутися на головну</button>
     <div class="form-container">
       <div class="form-content" id="sheetWrapper">
-        <!-- iframe подгружается JS (updateIframe) -->
+        <div class="loading" id="loadingIndicator">
+          <div class="spinner"></div>
+          <p>Завантаження меню...</p>
+        </div>
+        <div class="error-message" id="errorMessage">
+          <i class="fas fa-exclamation-triangle"></i>
+          <h3>Не вдалося завантажити меню</h3>
+          <p>Перевірте підключення до інтернету та спробуйте ще раз</p>
+          <button class="retry-button" id="retryButton">Спробувати знову</button>
+        </div>
         <iframe id="menuFrame" title="Google Sheet" scrolling="no"></iframe>
-
-        <!--
-          Альтернатива: если хочешь рисовать собственную таблицу (без белого обрамления Google),
-          можно включить fetchCSVRender() (ниже в скрипте) и опубликовать лист в CSV.
-          Закомментировано по умолчанию.
-        -->
       </div>
     </div>
   </div>
 
   <script>
-    // ---------- ПАРАМЕТРЫ (можешь подправить) ----------
-    // базовая высота, которую мы считаем "1x" (в пикселях)
-    const BASE_HEIGHT = 1200;
-    // масштаб для разных экранов будет устанавливаться в computeScale()
+    // Конфигурация
+    const CONFIG = {
+      BASE_HEIGHT: 1200,
+      SHEET_URL: "https://docs.google.com/spreadsheets/d/e/2PACX-1vTSY0MOa39vDI7x9K_u_uQJ4YLLwsUOdjgEG0yel_9bZkqOY5MWJXXOeHUy2l51I_MVa6ghdyNNBChM/pubhtml?gid=0&single=true",
+      RETRY_DELAY: 3000,
+      MAX_RETRIES: 3
+    };
+
+    // Глобальные переменные
+    let retryCount = 0;
+    let currentScale = 1;
+
+    // Элементы DOM
+    const menuFrame = document.getElementById('menuFrame');
+    const loadingIndicator = document.getElementById('loadingIndicator');
+    const errorMessage = document.getElementById('errorMessage');
+    const retryButton = document.getElementById('retryButton');
+
+    // Вычисление масштаба для разных устройств
     function computeScale() {
       const w = window.innerWidth;
-      // Подобранные значения — можно подточить:
-      if (w <= 380) return 1.6;   // маленькие телефоны — сильнее увеличиваем
+      const h = window.innerHeight;
+      
+      // Более точное вычисление масштаба с учетом высоты экрана
+      if (w <= 380) return 1.6;
       if (w <= 480) return 1.5;
-      if (w <= 768) return 1.3;   // планшеты/малые экраны
+      if (w <= 600) return 1.4;
+      if (w <= 768) return 1.3;
       if (w <= 1024) return 1.1;
-      return 1.0;                 // десктоп — оригинальный масштаб
+      return 1.0;
     }
 
+    // Применение масштаба
     function applyScale(scale) {
+      currentScale = scale;
       document.documentElement.style.setProperty('--sheet-scale', scale);
-      // Поддержка высоты — установим реальную высоту iframe в зависимости от scale
-      const iframe = document.getElementById('menuFrame');
-      // используем BASE_HEIGHT, делённый на scale — чтобы итоговый видимая высота совпадала
-      iframe.style.height = Math.round(BASE_HEIGHT / scale) + 'px';
-      // для безопасности снимаем горизонтальную прокрутку у wrapper
-      const wrapper = document.getElementById('sheetWrapper');
-      wrapper.style.overflowX = 'hidden';
+      menuFrame.style.height = Math.round(CONFIG.BASE_HEIGHT / scale) + 'px';
     }
 
-    // Загружаем Google Sheets без белого обрамления (single=true)
-    function updateIframe() {
-      const iframe = document.getElementById("menuFrame");
-      // ВАЖНО: используем single=true (убираем widget=true). gid=0 — нужный лист.
-      const baseUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTSY0MOa39vDI7x9K_u_uQJ4YLLwsUOdjgEG0yel_9bZkqOY5MWJXXOeHUy2l51I_MVa6ghdyNNBChM/pubhtml?gid=0&single=true";
-      iframe.src = baseUrl + "&cachebust=" + new Date().getTime();
+    // Загрузка Google Sheets
+    function loadIframe() {
+      showLoading();
+      hideError();
+      
+      // Добавляем параметр для предотвращения кеширования
+      const timestamp = new Date().getTime();
+      menuFrame.src = `${CONFIG.SHEET_URL}&cachebust=${timestamp}`;
+      
+      // Устанавливаем таймаут для обработки ошибок загрузки
+      setTimeout(() => {
+        if (menuFrame.src && !menuFrame.contentDocument || menuFrame.contentDocument && menuFrame.contentDocument.body.innerHTML === '') {
+          handleLoadError();
+        }
+      }, 10000);
+    }
+
+    // Обработка успешной загрузки
+    function handleLoadSuccess() {
+      hideLoading();
+      menuFrame.classList.add('loaded');
+    }
+
+    // Обработка ошибки загрузки
+    function handleLoadError() {
+      hideLoading();
+      showError();
+      retryCount++;
+      
+      if (retryCount < CONFIG.MAX_RETRIES) {
+        setTimeout(loadIframe, CONFIG.RETRY_DELAY);
+      }
+    }
+
+    // Показать индикатор загрузки
+    function showLoading() {
+      loadingIndicator.style.display = 'block';
+    }
+
+    // Скрыть индикатор загрузки
+    function hideLoading() {
+      loadingIndicator.style.display = 'none';
+    }
+
+    // Показать сообщение об ошибке
+    function showError() {
+      errorMessage.style.display = 'block';
+    }
+
+    // Скрыть сообщение об ошибке
+    function hideError() {
+      errorMessage.style.display = 'none';
     }
 
     // Инициализация
     function init() {
       const scale = computeScale();
       applyScale(scale);
-      updateIframe();
+      
+      // Обработчики событий для iframe
+      menuFrame.addEventListener('load', handleLoadSuccess);
+      menuFrame.addEventListener('error', handleLoadError);
+      
+      // Кнопка повторной попытки
+      retryButton.addEventListener('click', () => {
+        retryCount = 0;
+        loadIframe();
+      });
+      
+      // Начальная загрузка
+      loadIframe();
     }
 
-    // обрабатываем ресайз (чтобы при повороте экрана подгонять масштаб)
+    // Обработчик изменения размера окна
     let resizeTimer;
     window.addEventListener('resize', () => {
       clearTimeout(resizeTimer);
       resizeTimer = setTimeout(() => {
-        const scale = computeScale();
-        applyScale(scale);
-      }, 150);
+        const newScale = computeScale();
+        if (newScale !== currentScale) {
+          applyScale(newScale);
+        }
+      }, 250);
     });
 
-    // кнопки и переключатель темы — сохраняем как в оригинале
+    // Навигация и переключение темы
     document.getElementById('home-button').addEventListener('click', () => {
       window.location.href = 'index-uk.html';
     });
@@ -257,62 +417,22 @@
       const icon = document.querySelector('.theme-toggle i');
       icon.classList.toggle('fa-moon');
       icon.classList.toggle('fa-sun');
+      
+      // Сохранение темы в localStorage
+      const isDark = document.body.classList.contains('dark-theme');
+      localStorage.setItem('darkTheme', isDark);
     });
 
-    window.addEventListener('load', init);
-
-    /* ============================
-       Альтернативный метод (чтобы полностью избавиться от "страницы Google"):
-       Если хочешь — можно подгружать опубликованный CSV и отрисовывать таблицу в твоем HTML.
-       Плюс: полный контроль стилей, никакого белого фрейма внутри iframe.
-       Как использовать:
-       1) В Google Sheets: Файл → Опубликовать в интернет → выбери нужный лист → Формат: CSV
-          Получишь URL вида:
-          https://docs.google.com/spreadsheets/d/e/2PACX-1v.../pub?output=csv&gid=0
-       2) Вставь этот URL в переменную CSV_URL ниже и вызови fetchCSVRender(CSV_URL)
-       3) Закомментируй updateIframe() (или удаляй iframe) — таблица отрисуется прямо в DOM.
-    */
-    async function fetchCSVRender(csvUrl) {
-      try {
-        const resp = await fetch(csvUrl);
-        if (!resp.ok) throw new Error('fetch error ' + resp.status);
-        const text = await resp.text();
-        // простая CSV-парсерка (подойдет для простых таблиц)
-        const rows = text.split('\n').map(r => r.replace(/\r$/, ''));
-        const table = document.createElement('table');
-        table.style.width = '100%';
-        table.style.borderCollapse = 'collapse';
-        table.style.fontSize = '18px';
-        table.style.background = 'white';
-        table.style.borderRadius = '8px';
-        // стили для ячеек
-        const cellStyle = 'padding:14px;border:1px solid #ddd;vertical-align:top;';
-
-        rows.forEach((r, i) => {
-          if (!r) return;
-          const cols = r.split(',');
-          const tr = document.createElement('tr');
-          cols.forEach((c, j) => {
-            const td = document.createElement(i === 0 ? 'th' : 'td');
-            td.innerText = c;
-            td.style.cssText = cellStyle + (i === 0 ? 'background:#66c8c9;color:#000;font-weight:700;text-align:left;' : 'text-align:left;');
-            tr.appendChild(td);
-          });
-          table.appendChild(tr);
-        });
-
-        const wrapper = document.getElementById('sheetWrapper');
-        // очищаем содержимое (удаляем iframe) и вставляем таблицу
-        wrapper.innerHTML = '';
-        wrapper.appendChild(table);
-      } catch (e) {
-        console.error('CSV render error', e);
-      }
+    // Проверка сохраненной темы
+    if (localStorage.getItem('darkTheme') === 'true') {
+      document.body.classList.add('dark-theme');
+      const icon = document.querySelector('.theme-toggle i');
+      icon.classList.remove('fa-moon');
+      icon.classList.add('fa-sun');
     }
-    /* ============================ */
 
+    // Инициализация при загрузке страницы
+    window.addEventListener('load', init);
   </script>
-
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/js/all.min.js"></script>
 </body>
 </html>
