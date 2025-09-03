@@ -43,7 +43,7 @@ const schedule = {
     { number: 4, subject: { ua: "Edukacja wczesnoszkolna", pl: "Edukacja wczesnoszkolna" }, time: "11:55 - 12:40" },
     { number: " ", subject: { ua: "Обід 5-6 класи", pl: "Obiad klasy 5-6" }, time: "12:40 - 13:00" },
     { number: 5, subject: { ua: "Українська мова", pl: "Język ukraiński" }, time: "13:00 - 13:45" },
-     { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "13:45 - 13:55" },
+    { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "13:45 - 13:55" },
     { number: 6, subject: { ua: "Technika", pl: "Technika" }, time: "13:55 - 14:40" },
   ],
   Thursday: [
