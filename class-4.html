@@ -460,86 +460,55 @@
     <button class="notify-toggle" aria-label="Увімкнути сповіщення"><i class="fas fa-bell"></i></button>
   </header>
   <div class="container">
-    <div class="links-container">
-      <h3 id="useful-links">🔗 Корисні посилання:</h3>
-      <ul>
-        <li><a href="https://prosvita.net/" target="_blank"><i class="fas fa-link"></i> Prosvita</a></li>
-        <li><a href="https://pushschoolwarsaw.edupage.org/" target="_blank"><i class="fas fa-link"></i> PushSchoolWarsaw</a></li>
-      </ul>
-      <h3 id="textbooks">📖 Підручники:</h3>
-      <ul>
-        <li><a href="https://example.com/math-4" target="_blank"><i class="fas fa-book"></i> Математика 4 клас</a></li>
-        <li><a href="https://example.com/ukr-4" target="_blank"><i class="fas fa-book"></i> Українська мова 4 клас</a></li>
-        <li><a href="https://example.com/reading-4" target="_blank"><i class="fas fa-book"></i> Літературне читання 4 клас</a></li>
-        <li><a href="https://example.com/nature-4" target="_blank"><i class="fas fa-book"></i> Природознавство 4 клас</a></li>
-      </ul>
+  <div class="links-container">
+    <h3 id="useful-links" style="border: 2px solid #1E90FF; border-radius: 8px 8px 0 0; padding: 10px; background-color: #f9f9f9; margin-top: 0;">🔗 Корисні посилання:</h3>
+    <p style="border-left: 2px solid #1E90FF; border-right: 2px solid #1E90FF; border-bottom: 2px solid #1E90FF; border-radius: 0 0 8px 8px; padding: 5px 10px; background-color: #f9f9f9; margin: 0;">
+      <a href="https://prosvita.net/" target="_blank">🌐 Prosvita</a><br>
+      <a href="https://pushschoolwarsaw.edupage.org/" target="_blank">🏫 PushSchoolWarsaw</a>
+    </p><br><br>
 
-<h3 id="payment-info" style="border: 2px solid #FFD700; border-radius: 8px 8px 0 0; padding: 10px; background-color: #f9f9f9; margin-top: 0;">🎨🎭 Гуртки:</h3>
-<p style="border-left: 2px solid #FFD700; border-right: 2px solid #FFD700; border-bottom: 2px solid #FFD700; border-radius: 0 0 8px 8px; padding: 5px 10px; background-color: #f9f9f9; margin: 0;">
- <strong>📅 Понеділок:</strong><br>
- 🤖 Робототехніка: 14:50 - 16:30<br>
- 🎭 Театр: 15:30 - 17:00<br>
- <strong>📅 Вівторок:</strong><br>
- 🥋 Карате: 14:50 - 15:35<br>
- <strong>📅 Середа:</strong><br>
- 🎭 Театр: 15:30 - 17:00<br>
- <strong>📅 Четвер:</strong><br>
- 💬 Speaking Club: 13:55 - 15:35<br>
- <strong>📅 Пʼятниця:</strong><br>
- 💃 Хореографія: 15:45 - 16:30<br>
-</p><br><br>
-      
-      <h3 id="payment-info" style="border: 2px solid #4CAF50; border-radius: 8px; padding: 10px; background-color: #f9f9f9; margin-top: 0;">💳 Реквізити для оплати:</h3>
-<p style="border-left: 2px solid #4CAF50; border-right: 2px solid #4CAF50; padding: 5px 10px; background-color: #f9f9f9; margin: 0;">
-  Шановні батьки учнів 1-9 класів!
-</p>
-<p style="border-left: 2px solid #4CAF50; border-right: 2px solid #4CAF50; padding: 5px 10px; background-color: #f9f9f9; margin: 0;">
-  Просимо до 10 числа кожного місяця оплачувати за навчання в школі на РЕКВІЗИТИ польськоі школи:
-</p>
-<p style="border-left: 2px solid #4CAF50; border-right: 2px solid #4CAF50; padding: 5px 10px; background-color: #f9f9f9; margin: 0;">
-  <strong>Education Center PUSH spółka z o.o.</strong>
-</p>
-<p style="border-left: 2px solid #4CAF50; border-right: 2px solid #4CAF50; border-bottom: 2px solid #4CAF50; border-radius: 0 0 8px 8px; padding: 5px 10px; background-color: #f9f9f9; margin: 0;">
-  <strong>Розрахунковий рахунок:</strong><br>
-  48 1090 1883 0000 0001 5014 8624<br>
-  <strong>Призначення платежу:</strong><br>
-  edukacja w szkole та прізвище ім’я учня на АНГЛ МОВІ (наприклад: <em>edukacja w szkole Voloshko Mykola</em>)
-</p>    </div>
-    <div class="tables-container">
-      <div class="current-lesson" id="current-lesson" role="alert">Зараз немає уроків.</div>
-      <h2 id="schedule-today">Розклад на сьогодні</h2>
-      <div class="day-filter" id="day-filter"></div>
-      <div class="table-wrapper">
-        <table id="daily-schedule" role="grid">
-          <thead>
-            <tr>
-              <th id="th-number">№</th>
-              <th id="th-subject">Урок</th>
-              <th id="th-time">Час</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </div>
-      <h2 id="schedule-week">Розклад на тиждень</h2>
-      <div class="table-wrapper">
-        <table role="grid">
-          <thead>
-            <tr>
-              <th id="th-day">День</th>
-              <th id="th-number-week">№</th>
-              <th id="th-subject-week">Урок</th>
-              <th id="th-time-week">Час</th>
-            </tr>
-          </thead>
-          <tbody id="weekly-schedule"></tbody>
-        </table>
-      </div>
-    </div>
-    <div class="image-container-right">
-      <img class="google-image" src="https://i.postimg.cc/5NQjHJ8L/2025-2026.png" alt="Google Drive Image">
-    </div>
+    <h3 id="textbooks" style="border: 2px solid #8A2BE2; border-radius: 8px 8px 0 0; padding: 10px; background-color: #f9f9f9; margin-top: 0;">📖 Підручники:</h3>
+    <p style="border-left: 2px solid #8A2BE2; border-right: 2px solid #8A2BE2; border-bottom: 2px solid #8A2BE2; border-radius: 0 0 8px 8px; padding: 5px 10px; background-color: #f9f9f9; margin: 0;">
+      <a href="https://example.com/math-4" target="_blank">➗ Математика 4 клас</a><br>
+      <a href="https://example.com/ukr-4" target="_blank">✍ Українська мова 4 клас</a><br>
+      <a href="https://example.com/reading-4" target="_blank">📚 Літературне читання 4 клас</a><br>
+      <a href="https://example.com/nature-4" target="_blank">🌍 Природознавство 4 клас</a>
+    </p><br><br>
+
+    <h3 id="payment-info" style="border: 2px solid #FFD700; border-radius: 8px 8px 0 0; padding: 10px; background-color: #f9f9f9; margin-top: 0;">🎨🎭 Гуртки:</h3>
+    <p style="border-left: 2px solid #FFD700; border-right: 2px solid #FFD700; border-bottom: 2px solid #FFD700; border-radius: 0 0 8px 8px; padding: 5px 10px; background-color: #f9f9f9; margin: 0;">
+      <strong>📅 Понеділок:</strong><br>
+      🤖 Робототехніка: 14:50 - 16:30<br>
+      🎭 Театр: 15:30 - 17:00<br>
+      <strong>📅 Вівторок:</strong><br>
+      🥋 Карате: 14:50 - 15:35<br>
+      <strong>📅 Середа:</strong><br>
+      🎭 Театр: 15:30 - 17:00<br>
+      <strong>📅 Четвер:</strong><br>
+      💬 Speaking Club: 13:55 - 15:35<br>
+      <strong>📅 Пʼятниця:</strong><br>
+      💃 Хореографія: 15:45 - 16:30<br>
+    </p><br><br>
+
+    <h3 id="payment" style="border: 2px solid #4CAF50; border-radius: 8px 8px 0 0; padding: 10px; background-color: #f9f9f9; margin-top: 0;">💳 Реквізити для оплати:</h3>
+    <p style="border-left: 2px solid #4CAF50; border-right: 2px solid #4CAF50; padding: 5px 10px; background-color: #f9f9f9; margin: 0;">
+      Шановні батьки учнів 1-9 класів!
+    </p>
+    <p style="border-left: 2px solid #4CAF50; border-right: 2px solid #4CAF50; padding: 5px 10px; background-color: #f9f9f9; margin: 0;">
+      Просимо до 10 числа кожного місяця оплачувати за навчання в школі на РЕКВІЗИТИ польськоі школи:
+    </p>
+    <p style="border-left: 2px solid #4CAF50; border-right: 2px solid #4CAF50; padding: 5px 10px; background-color: #f9f9f9; margin: 0;">
+      <strong>Education Center PUSH spółka z o.o.</strong>
+    </p>
+    <p style="border-left: 2px solid #4CAF50; border-right: 2px solid #4CAF50; border-bottom: 2px solid #4CAF50; border-radius: 0 0 8px 8px; padding: 5px 10px; background-color: #f9f9f9; margin: 0;">
+      <strong>Розрахунковий рахунок:</strong><br>
+      48 1090 1883 0000 0001 5014 8624<br>
+      <strong>Призначення платежу:</strong><br>
+      edukacja w szkole та прізвище ім’я учня на АНГЛ МОВІ (наприклад: <em>edukacja w szkole Voloshko Mykola</em>)
+    </p>
   </div>
+</div>
+
 
   <script src="schedule-class-4.js"></script>
   <script>
