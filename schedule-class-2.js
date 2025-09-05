@@ -39,7 +39,7 @@ const schedule = {
     
   ],
   Wednesday: [
-    { number: 1, subject: { ua: "Природознавство", pl: "Przyroda" }, time: "9:00 - 9:45" },
+    { number: 1, subject: { ua: "Природа", pl: "Przyroda" }, time: "9:00 - 9:45" },
     { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "9:45 - 9:55" },
     { number: 2, subject: { ua: "Математика", pl: "Matematyka" }, time: "9:55 - 10:40" },
     { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "10:40 - 10:50" },
