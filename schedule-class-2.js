@@ -21,10 +21,7 @@ const schedule = {
     { number: 5, subject: { ua: "Читання", pl: "Czytanie" }, time: "13:00 - 13:45" },
     { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "13:45 - 13:55" },
     { number: 6, subject: { ua: "Муз/Фіз. виховання", pl: "Muz/WF" }, time: "13:55 - 14:40" },
-    { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "14:40 - 14:50" },
-    { number: 7, subject: { ua: "Робототехніка (гурток)", pl: "Robotyka" }, time: "13:55 - 14:40" },
-    { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "14:50 - 15:35" },
-    { number: 8, subject: { ua: "Робототехніка (гурток)", pl: "Robotyka" }, time: "13:55 - 14:40" },
+ 
   ],
   Tuesday: [
     { number: 1, subject: { ua: "Читання", pl: "Czytanie" }, time: "9:00 - 9:45" },
@@ -38,6 +35,8 @@ const schedule = {
     { number: 5, subject: { ua: "Українська мова", pl: "Język ukraiński" }, time: "13:00 - 13:45" },
     { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "13:45 - 13:55" },
     { number: 6, subject: { ua: "Plastyka", pl: "Plastyka" }, time: "13:55 - 14:40" },
+   
+    
   ],
   Wednesday: [
     { number: 1, subject: { ua: "Природознавство", pl: "Przyroda" }, time: "9:00 - 9:45" },
@@ -62,6 +61,8 @@ const schedule = {
     { number: 4, subject: { ua: "Математика", pl: "Matematyka" }, time: "11:55 - 12:40" },
     { number: " ", subject: { ua: "Обід 4-5 класи", pl: "Obiad klasy 5-6" }, time: "12:40 - 13:00" },
     { number: 5, subject: { ua: "Читання", pl: "Czytanie" }, time: "13:00 - 13:45" },
+    { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "13:45 - 13:55" },
+
   ],
   Friday: [
     { number: 1, subject: { ua: "Українська мова", pl: "Język ukraiński" }, time: "9:00 - 9:45" },
