@@ -72,7 +72,7 @@ const schedule = {
     { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "10:40 - 10:50" },
     { number: 3, subject: { ua: "Польська мова", pl: "Język polski" }, time: "10:50 - 11:35" },
     { number: " ", subject: { ua: "Обід 1-4 класи", pl: "Obiad klasy 1-4" }, time: "11:35 - 11:55" },
-    { number: 4, subject: { ua: "Plastyka /Technika", pl: "Plastyka /Technika" }, time: "11:55 - 12:40" },
+    { number: 4, subject: { ua: "Plastyka/Technika", pl: "Plastyka/Technika" }, time: "11:55 - 12:40" },
     { number: " ", subject: { ua: "Обід 5-6 класи", pl: "Obiad klasy 5-6" }, time: "12:40 - 13:00" },
     { number: " ", subject: { ua: "Очікування автобуса", pl: "Oczekiwanie na autobus" }, time: "13:00 - 13:20" },
     { number: " ", subject: { ua: "Шлях зі школи до басейну на автобусі", pl: "Droga ze szkoły na basen autobusem" }, time: "13:20 - 13:45" },
