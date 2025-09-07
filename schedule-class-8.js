@@ -64,7 +64,7 @@ const schedule = {
     { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "9:45 - 9:55" },
     { number: 2, subject: {  ua: "Алгебра", pl: "Algebra"  }, time: "9:55 - 10:40" },
     { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "10:40 - 10:50" },
-    { number: 3, subject: { ua: "Математика", pl: "Matematyka" ua: "Хімія", pl: "Chemia" }, time: "10:50 - 11:35" },
+    { number: 3, subject: { ua: "Математика", pl: "Matematyka" }, time: "10:50 - 11:35" },
     { number: " ", subject: { ua: "Обід", pl: "Obiad" }, time: "11:35 - 11:55" },
     { number: 4, subject: { ua: "Хімія", pl: "Chemia" }, time: "11:55 - 12:40" },
     { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "12:40 - 13:00" },
