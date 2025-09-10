@@ -20,7 +20,7 @@ const schedule = {
     { number: " ", subject: { ua: "Обід 5-6 класи", pl: "Obiad dla klas 5-6" }, time: "12:40 - 13:00" },
     { number: 5, subject: { ua: "Я досліджую світ", pl: "Odkrywam świat" }, time: "13:00 - 13:45" },
     { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "13:45 - 13:55" },
-    { number: 6, subject: { ua: "Музичне мистецтво/Фізичне виховання", pl: "Sztuka muzyczna/Wychowanie fizyczne" }, time: "13:55 - 14:40" }
+    { number: 6, subject: { ua: "Музичне мистецтво - Фізичне виховання", pl: "Sztuka muzyczna - Wychowanie fizyczne" }, time: "13:55 - 14:40" }
   ],
   Tuesday: [
     { number: 1, subject: { ua: "Англійська мова", pl: "Język angielski" }, time: "9:00 - 9:45" },
