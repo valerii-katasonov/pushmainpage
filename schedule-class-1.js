@@ -68,7 +68,7 @@ const schedule = {
     { number: " ", subject: { ua: "Шлях зі школи до басейну на автобусі", pl: "Droga ze szkoły do basenu autobusem" }, time: "12:20 - 12:45" },
     { number: 4, subject: { ua: "Виховання фізичне (басейн)", pl: "Wychowanie fizyczne (basen)" }, time: "13:00 - 14:00" },
     { number: " ", subject: { ua: "Шлях з басейну до школи на автобусі", pl: "Droga z basenu do szkoły autobusem" }, time: "14:30 - 14:55" }
-  ],
+  ]
 };
 
 window.schedule = schedule;
