@@ -76,19 +76,12 @@
         }
         .language-switch {
             margin-top: 10px;
-            display: flex;
-            align-items: center;
-            gap: 5px;
         }
         .language-switch a {
             color: white;
             text-decoration: none;
             margin: 0 5px;
             font-size: 1em;
-            transition: color 0.3s ease;
-        }
-        .language-switch a:hover {
-            color: #e0e0e0;
         }
         .language-switch span {
             color: white;
@@ -154,6 +147,11 @@
             background-color: rgba(255, 255, 255, 0.4);
             transform: translateY(-3px);
         }
+        .install-app {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
         .install-button {
             background-color: #004B52;
             color: white;
@@ -166,7 +164,6 @@
             cursor: pointer;
             transition: all 0.3s ease;
             box-shadow: 0 3px 6px rgba(0, 0, 0, 0.16), 0 3px 6px rgba(0, 0, 0, 0.23);
-            margin-top: 20px;
         }
         .install-button:hover {
             background-color: #00666b;
@@ -271,27 +268,19 @@
             </div>
         </div>
         <div class="section install-app">
-            <button class="install-button" id="installButton">Додати на головний екран</button>
+            <button class="install-button" id="installButton" style="display: none;">Додати на головний екран</button>
         </div>
     </div>
     <script>
-        console.log('Скрипт завантажено. Перевіряємо підтримку PWA...');
         let deferredPrompt;
         const installButton = document.getElementById('installButton');
 
-        if ('BeforeInstallPromptEvent' in window) {
-            console.log('Браузер підтримує beforeinstallprompt');
-        } else {
-            console.log('Браузер НЕ підтримує beforeinstallprompt. Кнопка залишиться видимою для ручного додавання (iOS тощо).');
-        }
-
         window.addEventListener('beforeinstallprompt', (e) => {
-            console.log('Подія beforeinstallprompt спрацювала');
             e.preventDefault();
             deferredPrompt = e;
             installButton.style.display = 'block';
+
             installButton.addEventListener('click', () => {
-                console.log('Користувач натиснув кнопку встановлення');
                 deferredPrompt.prompt();
                 deferredPrompt.userChoice.then((choiceResult) => {
                     if (choiceResult.outcome === 'accepted') {
