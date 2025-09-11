@@ -226,6 +226,20 @@
             font-size: 20px;
         }
         
+        /* Стиль для отладочной информации */
+        .debug-info {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 12px;
+            z-index: 1000;
+            display: none;
+        }
+        
         @media (max-width: 600px) {
             .install-btn {
                 width: 90%;
@@ -287,22 +301,44 @@
         <span class="text">Встановити додаток</span>
     </button>
 
+    <div id="debugInfo" class="debug-info"></div>
+
     <script>
         // Обработчик для кнопки установки PWA
         let deferredPrompt;
         const installBtn = document.getElementById('installBtn');
+        const debugInfo = document.getElementById('debugInfo');
+        
+        // Показываем отладочную информацию
+        debugInfo.style.display = 'block';
+        debugInfo.textContent = 'Очікування події beforeinstallprompt...';
+        
+        // Проверяем, поддерживает ли браузер PWA
+        if ('BeforeInstallPromptEvent' in window) {
+            debugInfo.textContent += ' Браузер підтримує PWA.';
+        } else {
+            debugInfo.textContent += ' Браузер НЕ підтримує PWA.';
+        }
         
         window.addEventListener('beforeinstallprompt', (e) => {
+            debugInfo.textContent = 'Подія beforeinstallprompt отримана!';
+            
             // Предотвращаем автоматическое отображение подсказки
             e.preventDefault();
             // Сохраняем событие для последующего использования
             deferredPrompt = e;
             // Показываем кнопку установки
             installBtn.style.display = 'flex';
+            
+            // Обновляем отладочную информацию
+            debugInfo.textContent += ' Кнопка встановлення показана.';
         });
         
         installBtn.addEventListener('click', async () => {
-            if (!deferredPrompt) return;
+            if (!deferredPrompt) {
+                debugInfo.textContent = 'Помилка: deferredPrompt не визначено';
+                return;
+            }
             
             // Показываем подсказку установки
             deferredPrompt.prompt();
@@ -311,10 +347,10 @@
             const { outcome } = await deferredPrompt.userChoice;
             
             if (outcome === 'accepted') {
-                console.log('Пользователь принял запрос на установку');
+                debugInfo.textContent = 'Користувач погодився на встановлення';
                 installBtn.style.display = 'none';
             } else {
-                console.log('Пользователь отклонил запрос на установку');
+                debugInfo.textContent = 'Користувач відхилив встановлення';
             }
             
             // Очищаем сохраненное событие
@@ -326,7 +362,23 @@
             deferredPrompt = null;
             // Скрываем кнопку установки
             installBtn.style.display = 'none';
-            console.log('PWA было установлено');
+            debugInfo.textContent = 'PWA успішно встановлено!';
+            
+            // Через 5 секунд скрываем отладочную информацию
+            setTimeout(() => {
+                debugInfo.style.display = 'none';
+            }, 5000);
+        });
+        
+        // Проверяем, не установлено ли приложение уже
+        window.addEventListener('load', () => {
+            if (navigator.standalone) {
+                debugInfo.textContent = 'Додаток вже встановлено (iOS)';
+                installBtn.style.display = 'none';
+            } else if (matchMedia('(display-mode: standalone)').matches) {
+                debugInfo.textContent = 'Додаток вже встановлено';
+                installBtn.style.display = 'none';
+            }
         });
     </script>
 </body>
