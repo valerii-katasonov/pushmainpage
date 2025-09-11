@@ -1,10 +1,12 @@
 {
   "name": "Push School Warsaw",
   "short_name": "Push School",
-  "start_url": "/index-uk",
+  "description": "Розклад уроків та шкільна інформація",
+  "start_url": "/index-uk.html",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#004B52",
+  "background_color": "#004b52",
+  "theme_color": "#004b52",
+  "orientation": "portrait",
   "icons": [
     {
       "src": "https://i.postimg.cc/WbY9TdDp/PushIco.png",
