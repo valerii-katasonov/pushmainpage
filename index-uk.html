@@ -80,26 +80,20 @@
             align-items: center;
             gap: 5px;
         }
-        .language-switch a, .install-link {
+        .language-switch a {
             color: white;
             text-decoration: none;
             margin: 0 5px;
             font-size: 1em;
             transition: color 0.3s ease;
         }
-        .language-switch a:hover, .install-link:hover {
+        .language-switch a:hover {
             color: #e0e0e0;
         }
         .language-switch span {
             color: white;
             margin: 0 5px;
             font-weight: bold;
-        }
-        .install-link {
-            cursor: pointer;
-        }
-        .install-app {
-            margin-top: 5px;
         }
         .container {
             background: rgba(0, 0, 0, 0.5);
@@ -160,6 +154,28 @@
             background-color: rgba(255, 255, 255, 0.4);
             transform: translateY(-3px);
         }
+        .install-button {
+            background-color: #004B52;
+            color: white;
+            border: none;
+            border-radius: 15px;
+            padding: 15px 30px;
+            font-size: 1.2em;
+            font-family: 'Montserrat', sans-serif;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 3px 6px rgba(0, 0, 0, 0.16), 0 3px 6px rgba(0, 0, 0, 0.23);
+        }
+        .install-button:hover {
+            background-color: #00666b;
+            transform: translateY(-3px);
+        }
+        .install-app {
+            display: flex;
+            justify-content: center;
+            margin-top: 20px;
+        }
         @media (max-width: 600px) {
             header {
                 padding: 0.5em 0;
@@ -192,8 +208,12 @@
                 font-size: 0.8em;
                 margin-top: 5px;
             }
-            .language-switch a, .language-switch span, .install-link {
+            .language-switch a, .language-switch span {
                 font-size: 0.8em;
+            }
+            .install-button {
+                font-size: 1em;
+                padding: 12px 20px;
             }
         }
         @media (min-width: 1200px) {
@@ -202,6 +222,10 @@
             }
             .schedule-link {
                 font-size: 1.5em;
+            }
+            .install-button {
+                font-size: 1.5em;
+                padding: 20px 40px;
             }
         }
     </style>
@@ -212,9 +236,6 @@
         <h1>Push School Warsaw</h1>
         <div class="language-switch">
             <a href="https://planlekcjipush.netlify.app/index">Polski</a> | <span>Українська</span>
-        </div>
-        <div class="install-app">
-            <span class="install-link" id="installButton">Додати на головний екран</span>
         </div>
     </header>
     <div class="container">
@@ -253,6 +274,9 @@
                 <a class="schedule-link" href="bank-idei.html">💡 Шкільний банк ідей ✨</a>
             </div>
         </div>
+        <div class="section install-app">
+            <button class="install-button" id="installButton">Додати на головний екран</button>
+        </div>
     </div>
     <script>
         console.log('Скрипт завантажено. Перевіряємо підтримку PWA...');
@@ -262,14 +286,14 @@
         if ('BeforeInstallPromptEvent' in window) {
             console.log('Браузер підтримує beforeinstallprompt');
         } else {
-            console.log('Браузер НЕ підтримує beforeinstallprompt. Кнопка залишиться видимою.');
+            console.log('Браузер НЕ підтримує beforeinstallprompt. Кнопка залишиться видимою для ручного додавання (iOS тощо).');
         }
 
         window.addEventListener('beforeinstallprompt', (e) => {
             console.log('Подія beforeinstallprompt спрацювала');
             e.preventDefault();
             deferredPrompt = e;
-            installButton.style.display = 'inline';
+            installButton.style.display = 'block';
             installButton.addEventListener('click', () => {
                 console.log('Користувач натиснув кнопку встановлення');
                 deferredPrompt.prompt();
