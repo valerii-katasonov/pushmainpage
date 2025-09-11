@@ -1,0 +1,20 @@
+{
+  "name": "Push School Warsaw",
+  "short_name": "Push School",
+  "start_url": "/index-uk",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#004B52",
+  "icons": [
+    {
+      "src": "https://i.postimg.cc/WbY9TdDp/PushIco.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://i.postimg.cc/WbY9TdDp/PushIco.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
