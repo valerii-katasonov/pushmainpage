@@ -3,16 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Розклад уроків</title>
-    <!-- Мета-теги для iOS PWA -->
+    <title>Розклад уроків - Push School Warsaw</title>
+    
+    <!-- PWA метатеги -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="Push School">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="apple-touch-icon" href="https://i.postimg.cc/WbY9TdDp/PushIco.png">
-    <!-- Мета-теги для Android PWA -->
-    <link rel="manifest" href="/manifest.json">
-    <meta name="theme-color" content="#004B52">
+    
+    <meta name="theme-color" content="#004b52">
+    <meta name="msapplication-TileColor" content="#004b52">
+    <link rel="manifest" href="manifest.json">
+    
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700&family=Open+Sans:wght@300;400;600;700&display=swap" rel="stylesheet">
+
     <style>
         body {
             font-family: 'Open Sans', sans-serif;
@@ -57,11 +61,7 @@
             font-weight: 700;
             font-size: 2.5em;
             color: white;
-            text-shadow: 
-                -1px -1px 0 black, 
-                1px -1px 0 black, 
-                -1px 1px 0 black, 
-                1px 1px 0 black;
+            text-shadow: -1px -1px 0 black, 1px -1px 0 black, -1px 1px 0 black, 1px 1px 0 black;
             margin: 0;
             opacity: 0;
             transform: translateY(-20px);
@@ -147,24 +147,6 @@
             background-color: rgba(255, 255, 255, 0.4);
             transform: translateY(-3px);
         }
-        .install-button {
-            background-color: #004B52;
-            color: white;
-            border: none;
-            border-radius: 15px;
-            padding: 15px 30px;
-            font-size: 1.2em;
-            font-family: 'Montserrat', sans-serif;
-            font-weight: 700;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            box-shadow: 0 3px 6px rgba(0, 0, 0, 0.16), 0 3px 6px rgba(0, 0, 0, 0.23);
-            margin-top: 20px;
-        }
-        .install-button:hover {
-            background-color: #00666b;
-            transform: translateY(-3px);
-        }
         @media (max-width: 600px) {
             header {
                 padding: 0.5em 0;
@@ -200,10 +182,6 @@
             .language-switch a, .language-switch span {
                 font-size: 0.8em;
             }
-            .install-button {
-                font-size: 1em;
-                padding: 12px 20px;
-            }
         }
         @media (min-width: 1200px) {
             .container {
@@ -212,21 +190,40 @@
             .schedule-link {
                 font-size: 1.5em;
             }
-            .install-button {
-                font-size: 1.5em;
-                padding: 20px 40px;
-            }
+        }
+        
+        /* Стиль для кнопки "Установить приложение" */
+        .install-btn {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background-color: #004b52;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            font-size: 24px;
+            cursor: pointer;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+            display: none;
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
         }
     </style>
 </head>
 <body>
     <header>
-        <a href="index-uk.html"><img src="https://i.postimg.cc/WbY9TdDp/PushIco.png" alt="Logo Push School"></a>
+        <a href="index-uk.html">
+            <img src="https://i.postimg.cc/WbY9TdDp/PushIco.png" alt="Logo Push School">
+        </a>
         <h1>Push School Warsaw</h1>
         <div class="language-switch">
             <a href="index.html">Polski</a> | <span>Українська</span>
         </div>
     </header>
+
     <div class="container">
         <div class="section class-schedules">
             <h2>Розклади уроків</h2>
@@ -244,12 +241,14 @@
                 <a class="schedule-link" href="class-11.html">🏆 11 клас 🎓</a>
             </div>
         </div>
+
         <div class="section menu">
             <h2>Меню</h2>
             <div class="flex-links">
                 <a class="schedule-link" href="menu.html">📋 Меню на тиждень 🍴</a>
             </div>
         </div>
+
         <div class="section cultural-events">
             <h2>Плани культурних заходів</h2>
             <div class="flex-links">
@@ -257,47 +256,48 @@
                 <a class="schedule-link" href="cultural-senior-uk.html">🎭 План культурних заходів (середня школа) 🎓</a>
             </div>
         </div>
+
         <div class="section suggestions">
             <h2>Пропозиції та ідеї</h2>
             <div class="flex-links">
                 <a class="schedule-link" href="bank-idei.html">💡 Шкільний банк ідей ✨</a>
             </div>
         </div>
-        <div class="section install-app">
-            <button class="install-button" id="installButton" style="display: none;">Додати на головний екран</button>
-        </div>
     </div>
-    <script>
-        let deferredPrompt;
-        const installButton = document.getElementById('installButton');
+    
+    <button id="installBtn" class="install-btn">+</button>
 
+    <script>
+        // Обработчик для кнопки установки PWA
+        let deferredPrompt;
+        const installBtn = document.getElementById('installBtn');
+        
         window.addEventListener('beforeinstallprompt', (e) => {
-            // Зберігаємо подію для подальшого використання
             e.preventDefault();
             deferredPrompt = e;
-            // Показуємо кнопку, якщо браузер підтримує встановлення PWA
-            installButton.style.display = 'block';
-
-            installButton.addEventListener('click', () => {
-                // Показуємо діалог встановлення
-                deferredPrompt.prompt();
-                // Чекаємо на вибір користувача
-                deferredPrompt.userChoice.then((choiceResult) => {
-                    if (choiceResult.outcome === 'accepted') {
-                        console.log('Користувач прийняв встановлення PWA');
-                    } else {
-                        console.log('Користувач відхилив встановлення PWA');
-                    }
-                    deferredPrompt = null;
-                    installButton.style.display = 'none';
-                });
-            });
+            installBtn.style.display = 'flex';
         });
-
-        // Повідомлення, коли PWA успішно встановлено
+        
+        installBtn.addEventListener('click', async () => {
+            if (!deferredPrompt) return;
+            
+            deferredPrompt.prompt();
+            const { outcome } = await deferredPrompt.userChoice;
+            
+            if (outcome === 'accepted') {
+                console.log('Пользователь принял запрос на установку');
+            } else {
+                console.log('Пользователь отклонил запрос на установку');
+            }
+            
+            deferredPrompt = null;
+            installBtn.style.display = 'none';
+        });
+        
         window.addEventListener('appinstalled', () => {
-            console.log('PWA успішно встановлено');
-            installButton.style.display = 'none';
+            deferredPrompt = null;
+            installBtn.style.display = 'none';
+            console.log('PWA было установлено');
         });
     </script>
 </body>
