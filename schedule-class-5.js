@@ -22,7 +22,9 @@ const schedule = {
     { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "13:45 - 13:55" },
     { number: 6, subject: { ua: "Історія Польщі", pl: "Historia Polska" }, time: "13:55 - 14:40" },
     { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "14:40 - 14:50" },
-    { number: 7, subject: { ua: "Робототехніка", pl: "Robotyka" }, time: "14:50 - 15:35" }
+    { number: 7, subject: { ua: "Робототехніка", pl: "Robotyka" }, time: "14:50 - 15:35" },
+    { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "15:35 - 15:45" },
+    { number: 8, subject: { ua: "Робототехніка", pl: "Robotyka" }, time: "15:45 - 16:30" }
   ],
   Tuesday: [
     { number: 1, subject: { ua: "Przyroda", pl: "Przyroda" }, time: "9:00 - 9:45" },
