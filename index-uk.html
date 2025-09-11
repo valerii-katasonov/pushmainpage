@@ -147,6 +147,24 @@
             background-color: rgba(255, 255, 255, 0.4);
             transform: translateY(-3px);
         }
+        .install-button {
+            background-color: #004B52;
+            color: white;
+            border: none;
+            border-radius: 15px;
+            padding: 15px 30px;
+            font-size: 1.2em;
+            font-family: 'Montserrat', sans-serif;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 3px 6px rgba(0, 0, 0, 0.16), 0 3px 6px rgba(0, 0, 0, 0.23);
+            margin-top: 20px;
+        }
+        .install-button:hover {
+            background-color: #00666b;
+            transform: translateY(-3px);
+        }
         @media (max-width: 600px) {
             header {
                 padding: 0.5em 0;
@@ -182,6 +200,10 @@
             .language-switch a, .language-switch span {
                 font-size: 0.8em;
             }
+            .install-button {
+                font-size: 1em;
+                padding: 12px 20px;
+            }
         }
         @media (min-width: 1200px) {
             .container {
@@ -190,15 +212,19 @@
             .schedule-link {
                 font-size: 1.5em;
             }
+            .install-button {
+                font-size: 1.5em;
+                padding: 20px 40px;
+            }
         }
     </style>
 </head>
 <body>
     <header>
-        <a href="index-uk.html"><img src="https://i.postimg.cc/WbY9TdDp/PushIco.png" alt="Logo Push School"></a>
+        <a href="https://planlekcjipush.netlify.app/index-uk"><img src="https://i.postimg.cc/WbY9TdDp/PushIco.png" alt="Logo Push School"></a>
         <h1>Push School Warsaw</h1>
         <div class="language-switch">
-            <a href="index.html">Polski</a> | <span>Українська</span>
+            <a href="https://planlekcjipush.netlify.app/index">Polski</a> | <span>Українська</span>
         </div>
     </header>
     <div class="container">
@@ -237,6 +263,37 @@
                 <a class="schedule-link" href="bank-idei.html">💡 Шкільний банк ідей ✨</a>
             </div>
         </div>
+        <div class="section install-app">
+            <button class="install-button" id="installButton" style="display: none;">Додати на головний екран</button>
+        </div>
     </div>
+    <script>
+        let deferredPrompt;
+        const installButton = document.getElementById('installButton');
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            installButton.style.display = 'block';
+
+            installButton.addEventListener('click', () => {
+                deferredPrompt.prompt();
+                deferredPrompt.userChoice.then((choiceResult) => {
+                    if (choiceResult.outcome === 'accepted') {
+                        console.log('Користувач прийняв встановлення PWA');
+                    } else {
+                        console.log('Користувач відхилив встановлення PWA');
+                    }
+                    deferredPrompt = null;
+                    installButton.style.display = 'none';
+                });
+            });
+        });
+
+        window.addEventListener('appinstalled', () => {
+            console.log('PWA успішно встановлено');
+            installButton.style.display = 'none';
+        });
+    </script>
 </body>
 </html>
