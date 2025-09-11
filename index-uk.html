@@ -100,7 +100,7 @@
             text-align: center;
             max-width: 1200px;
             width: 90%;
-            margin: auto;
+            margin: 20px auto;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -163,6 +163,7 @@
             }
             .container {
                 padding: 15px;
+                margin: 10px auto;
             }
             .grid-links {
                 grid-template-columns: 1fr;
@@ -195,12 +196,10 @@
             }
         }
         
-        /* Стиль для кнопки "Установить приложение" */
+        /* Стиль для статической кнопки "Установить приложение" */
         .install-btn {
-            position: fixed;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
+            position: static;
+            margin: 20px auto;
             background-color: #004b52;
             color: white;
             border: none;
@@ -210,16 +209,16 @@
             font-weight: bold;
             cursor: pointer;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-            display: none;
-            z-index: 1000;
+            display: flex;
             align-items: center;
             gap: 8px;
             transition: all 0.3s ease;
+            max-width: 300px;
         }
         
         .install-btn:hover {
             background-color: #00363b;
-            transform: translateX(-50%) translateY(-2px);
+            transform: translateY(-2px);
             box-shadow: 0 6px 14px rgba(0, 0, 0, 0.4);
         }
         
@@ -278,8 +277,6 @@
         @media (max-width: 600px) {
             .install-btn {
                 width: 90%;
-                max-width: 300px;
-                bottom: 15px;
                 font-size: 14px;
             }
             
@@ -333,12 +330,13 @@
                 <a class="schedule-link" href="bank-idei.html">💡 Шкільний банк ідей ✨</a>
             </div>
         </div>
+        
+        <!-- Статическая кнопка установки -->
+        <button id="installBtn" class="install-btn">
+            <span class="icon">+</span> 
+            <span class="text">Додати на початковий екран</span>
+        </button>
     </div>
-    
-    <button id="installBtn" class="install-btn">
-        <span class="icon">+</span> 
-        <span class="text">Встановити додаток</span>
-    </button>
 
     <!-- Модальное окно с инструкциями для iOS -->
     <div id="iosInstructions" class="ios-instructions">
@@ -347,8 +345,8 @@
             <div class="ios-instructions-icon">📱</div>
             <h2>Як додати додаток на домашній екран</h2>
             <ol class="ios-instructions-steps">
-                <li>Натисніть кнопку "Поділитися" внизу браузера Safari або Chrome</li>
-                <li>Прокрутіть меню вниз і виберіть "На Початковий екран"</li>
+                <li>Натисніть кнопку "Поділитися" внизу браузера Safari</li>
+                <li>Прокрутіть меню вниз і виберіть "На екран 'Додому'"</li>
                 <li>Натисніть "Додати" у верхньому правому кутку</li>
                 <li>Готово! Тепер додаток з'явиться на вашому домашньому екрані</li>
             </ol>
@@ -382,20 +380,14 @@
         const iosInstructionsClose = document.getElementById('iosInstructionsClose');
         const iosInstructionsGotIt = document.getElementById('iosInstructionsGotIt');
         
-        // Для iOS всегда показываем кнопку установки
-        if (isIOS()) {
-            installBtn.style.display = 'flex';
-            installBtn.querySelector('.text').textContent = 'Додати на початковий екран';
-        }
-        
         // Для Android используем стандартный подход
         window.addEventListener('beforeinstallprompt', (e) => {
             // Предотвращаем автоматическое отображение подсказки
             e.preventDefault();
             // Сохраняем событие для последующего использования
             deferredPrompt = e;
-            // Показываем кнопку установки
-            installBtn.style.display = 'flex';
+            // Для Android меняем текст кнопки
+            installBtn.querySelector('.text').textContent = 'Встановити додаток';
         });
         
         installBtn.addEventListener('click', async () => {
@@ -406,23 +398,23 @@
             }
             
             // Для Android используем стандартный подход
-            if (!deferredPrompt) return;
-            
-            // Показываем подсказку установки
-            deferredPrompt.prompt();
-            
-            // Ждем, пока пользователь ответит на подсказку
-            const { outcome } = await deferredPrompt.userChoice;
-            
-            if (outcome === 'accepted') {
-                console.log('Пользователь принял запрос на установку');
-                installBtn.style.display = 'none';
-            } else {
-                console.log('Пользователь отклонил запрос на установку');
+            if (deferredPrompt) {
+                // Показываем подсказку установки
+                deferredPrompt.prompt();
+                
+                // Ждем, пока пользователь ответит на подсказку
+                const { outcome } = await deferredPrompt.userChoice;
+                
+                if (outcome === 'accepted') {
+                    console.log('Пользователь принял запрос на установку');
+                    installBtn.style.display = 'none';
+                } else {
+                    console.log('Пользователь отклонил запрос на установку');
+                }
+                
+                // Очищаем сохраненное событие
+                deferredPrompt = null;
             }
-            
-            // Очищаем сохраненное событие
-            deferredPrompt = null;
         });
         
         // Закрытие модального окна с инструкциями
