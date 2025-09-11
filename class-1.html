@@ -529,33 +529,8 @@
     </div>
   </div>
 
+  <script src="schedule-class-1.js"></script>
   <script>
-    // Вбудований приклад розкладу для 1 класу (замініть на реальний з schedule-class-1.js, якщо потрібно)
-    const schedule = {
-      Monday: [
-        { number: 1, subject: { ua: 'Українська мова', pl: 'Język ukraiński' }, time: '08:30 - 09:10' },
-        { number: '', subject: { ua: 'Перерва', pl: 'Przerwa' }, time: '09:10 - 09:20' },
-        { number: 2, subject: { ua: 'Математика', pl: 'Matematyka' }, time: '09:20 - 10:00' },
-        // Додайте більше уроків...
-      ],
-      Tuesday: [
-        { number: 1, subject: { ua: 'Англійська', pl: 'Angielski' }, time: '08:30 - 09:10' },
-        // ...
-      ],
-      // Додайте для інших днів...
-    };
-
-    // Додана відсутня змінна з назвами днів
-    const dayNames = {
-      Monday: { ua: 'Понеділок', pl: 'Poniedziałek' },
-      Tuesday: { ua: 'Вівторок', pl: 'Wtorek' },
-      Wednesday: { ua: 'Середа', pl: 'Środa' },
-      Thursday: { ua: 'Четвер', pl: 'Czwartek' },
-      Friday: { ua: 'Пʼятниця', pl: 'Piątek' },
-      Saturday: { ua: 'Субота', pl: 'Sobota' },
-      Sunday: { ua: 'Неділя', pl: 'Niedziela' }
-    };
-
     const translations = {
       header: {
         ua: 'Розклад уроків<br>1 клас<br>Push School Warsaw',
@@ -580,9 +555,14 @@
     let selectedDay = dayKeys[new Date().getDay()];
     const classId = 'class1'; // Унікальний ідентифікатор для класу
 
+    // Перевірка наявності schedule та dayNames
+    if (!window.schedule || !window.dayNames) {
+      console.error('Помилка: schedule або dayNames не визначено. Перевірте підключення schedule-class-1.js');
+    }
+
     function cacheSchedule() {
       console.log(`Кешування розкладу для ${classId}`);
-      localStorage.setItem(`schedule-${classId}`, JSON.stringify(schedule));
+      localStorage.setItem(`schedule-${classId}`, JSON.stringify(window.schedule));
     }
 
     function loadCachedSchedule() {
@@ -594,12 +574,11 @@
         return parsed;
       }
       console.log(`Кеш відсутній, використовується розклад із schedule-class-1.js`);
-      return schedule;
+      return window.schedule || {};
     }
 
     function clearOldCache() {
       console.log('Очищення старого кешу');
-      // Очищаємо тільки застарілий ключ 'schedule'
       localStorage.removeItem('schedule');
     }
 
@@ -684,7 +663,7 @@
       dailyScheduleTable.innerHTML = '';
 
       daySchedule.forEach(lesson => {
-        const isBreak = lesson.subject.ua === "Перерва" || lesson.subject.ua.includes("Обід");
+        const isBreak = lesson.subject.ua === "Перерва" || lesson.subject.ua.includes("Обід") || lesson.subject.ua.includes("Очікування") || lesson.subject.ua.includes("Шлях");
         const row = `<tr class="${isBreak ? 'highlight' : ''}">
           <td>${lesson.number}</td>
           <td>${lesson.subject[currentLanguage]}</td>
@@ -697,7 +676,7 @@
     function renderWeeklySchedule() {
       console.log('Рендеринг тижневого розкладу');
       const cachedSchedule = loadCachedSchedule();
-      const weeklyScheduleTbody = document.querySelector("#weekly-schedule"); // Виправлено: tbody
+      const weeklyScheduleTbody = document.querySelector("#weekly-schedule");
       weeklyScheduleTbody.innerHTML = '';
       const today = new Date().getDay();
       const todayKey = dayKeys[today];
@@ -714,10 +693,10 @@
         const dayLessons = cachedSchedule[day];
         const dayClass = dayClasses[day] || "";
         const isToday = day === todayKey ? "current-day" : "";
-        const dayName = dayNames[day][currentLanguage];
+        const dayName = window.dayNames[day][currentLanguage];
 
         dayLessons.forEach((lesson, index) => {
-          const isBreak = lesson.subject.ua === "Перерва" || lesson.subject.ua.includes("Обід");
+          const isBreak = lesson.subject.ua === "Перерва" || lesson.subject.ua.includes("Обід") || lesson.subject.ua.includes("Очікування") || lesson.subject.ua.includes("Шлях");
           const rowClass = isBreak ? "highlight" : `${dayClass} ${isToday}`;
           const row = `<tr class="${rowClass}">
             ${index === 0 ? `<td rowspan="${dayLessons.length}">${dayName}</td>` : ''}
@@ -738,7 +717,7 @@
 
       daysOfWeek.forEach((day) => {
         const button = document.createElement("button");
-        button.textContent = dayNames[day][currentLanguage];
+        button.textContent = window.dayNames[day][currentLanguage];
         button.dataset.day = day;
         if (day === selectedDay) button.classList.add("active");
         button.addEventListener("click", () => {
@@ -841,9 +820,9 @@
 
         const image = document.querySelector('.google-image');
         if (currentLanguage === 'pl') {
-          image.src = 'https://i.postimg.cc/5NQjHJ8L/2025-2026-PL.png'; // Виправлено: додана закриваюча лапка; замініть на реальне зображення для PL
+          image.src = 'https://i.postimg.cc/5NQjHJ8L/2025-2026-PL.png'; // Замініть на реальне зображення для PL
         } else {
-          image.src = 'https://i.postimg.cc/5NQjHJ8L/2025-2026.png'; // Виправлено: додана закриваюча лапка
+          image.src = 'https://i.postimg.cc/5NQjHJ8L/2025-2026.png';
         }
       });
     });
@@ -873,7 +852,7 @@
     document.querySelector('.lang-toggle[data-lang="ua"]').classList.add('active');
     const today = new Date().getDay();
     selectedDay = dayKeys[today];
-    if (!schedule[selectedDay]) selectedDay = "Monday"; // Перевірка існування розкладу для дня
+    if (!window.schedule[selectedDay]) selectedDay = "Monday"; // Якщо немає розкладу для дня, вибираємо понеділок
     initialize();
   </script>
 </body>
