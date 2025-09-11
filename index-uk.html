@@ -98,6 +98,9 @@
         .install-link {
             cursor: pointer;
         }
+        .install-app {
+            margin-top: 5px;
+        }
         .container {
             background: rgba(0, 0, 0, 0.5);
             padding: 30px;
@@ -211,7 +214,7 @@
             <a href="https://planlekcjipush.netlify.app/index">Polski</a> | <span>Українська</span>
         </div>
         <div class="install-app">
-            <span class="install-link" id="installButton" style="display: none;">Додати на головний екран</span>
+            <span class="install-link" id="installButton">Додати на головний екран</span>
         </div>
     </header>
     <div class="container">
@@ -252,14 +255,23 @@
         </div>
     </div>
     <script>
+        console.log('Скрипт завантажено. Перевіряємо підтримку PWA...');
         let deferredPrompt;
         const installButton = document.getElementById('installButton');
 
+        if ('BeforeInstallPromptEvent' in window) {
+            console.log('Браузер підтримує beforeinstallprompt');
+        } else {
+            console.log('Браузер НЕ підтримує beforeinstallprompt. Кнопка залишиться видимою.');
+        }
+
         window.addEventListener('beforeinstallprompt', (e) => {
+            console.log('Подія beforeinstallprompt спрацювала');
             e.preventDefault();
             deferredPrompt = e;
             installButton.style.display = 'inline';
             installButton.addEventListener('click', () => {
+                console.log('Користувач натиснув кнопку встановлення');
                 deferredPrompt.prompt();
                 deferredPrompt.userChoice.then((choiceResult) => {
                     if (choiceResult.outcome === 'accepted') {
