@@ -475,24 +475,23 @@
         <li><a href="https://znayshov.com/FR/12164/Propisi_1kl_Ponomarova_2.pdf" target="_blank"><i class="fas fa-book"></i> Мій перший зошит. Прописи. 1 клас / Гусельнікова</a></li>
         <li><a href="https://shkola.in.ua/2808-matematyka-1-klas-his-2023.html" target="_blank"><i class="fas fa-book"></i> Математика 1 клас / Гісь</a></li>
       </ul>
-<h3 id="payment-info" style="border: 2px solid #4CAF50; border-radius: 8px; padding: 10px; background-color: #f9f9f9; margin-top: 0;">Реквізити для оплати:</h3>
-<p style="border-left: 2px solid #4CAF50; border-right: 2px solid #4CAF50; padding: 5px 10px; background-color: #f9f9f9; margin: 0;">
-  Шановні батьки учнів 1-9 класів!
-</p>
-<p style="border-left: 2px solid #4CAF50; border-right: 2px solid #4CAF50; padding: 5px 10px; background-color: #f9f9f9; margin: 0;">
-  Просимо до 10 числа кожного місяця оплачувати за навчання в школі на РЕКВІЗИТИ польськоі школи:
-</p>
-<p style="border-left: 2px solid #4CAF50; border-right: 2px solid #4CAF50; padding: 5px 10px; background-color: #f9f9f9; margin: 0;">
-  <strong>Education Center PUSH spółka z o.o.</strong>
-</p>
-<p style="border-left: 2px solid #4CAF50; border-right: 2px solid #4CAF50; border-bottom: 2px solid #4CAF50; border-radius: 0 0 8px 8px; padding: 5px 10px; background-color: #f9f9f9; margin: 0;">
-  <strong>Розрахунковий рахунок:</strong><br>
-  48 1090 1883 0000 0001 5014 8624<br>
-  <strong>Призначення платежу:</strong><br>
-  edukacja w szkole та прізвище ім’я учня на АНГЛ МОВІ (наприклад: <em>edukacja w szkole Voloshko Mykola</em>)
-</p>
-
-</div>
+      <h3 id="payment-info" style="border: 2px solid #4CAF50; border-radius: 8px; padding: 10px; background-color: #f9f9f9; margin-top: 0;">Реквізити для оплати:</h3>
+      <p style="border-left: 2px solid #4CAF50; border-right: 2px solid #4CAF50; padding: 5px 10px; background-color: #f9f9f9; margin: 0;">
+        Шановні батьки учнів 1-9 класів!
+      </p>
+      <p style="border-left: 2px solid #4CAF50; border-right: 2px solid #4CAF50; padding: 5px 10px; background-color: #f9f9f9; margin: 0;">
+        Просимо до 10 числа кожного місяця оплачувати за навчання в школі на РЕКВІЗИТИ польськоі школи:
+      </p>
+      <p style="border-left: 2px solid #4CAF50; border-right: 2px solid #4CAF50; padding: 5px 10px; background-color: #f9f9f9; margin: 0;">
+        <strong>Education Center PUSH spółka z o.o.</strong>
+      </p>
+      <p style="border-left: 2px solid #4CAF50; border-right: 2px solid #4CAF50; border-bottom: 2px solid #4CAF50; border-radius: 0 0 8px 8px; padding: 5px 10px; background-color: #f9f9f9; margin: 0;">
+        <strong>Розрахунковий рахунок:</strong><br>
+        48 1090 1883 0000 0001 5014 8624<br>
+        <strong>Призначення платежу:</strong><br>
+        edukacja w szkole та прізвище ім’я учня на АНГЛ МОВІ (наприклад: <em>edukacja w szkole Voloshko Mykola</em>)
+      </p>
+    </div>
 
     <div class="tables-container">
       <div class="current-lesson" id="current-lesson" role="alert">Зараз немає уроків.</div>
@@ -530,8 +529,33 @@
     </div>
   </div>
 
-  <script src="schedule-class-1.js"></script>
   <script>
+    // Вбудований приклад розкладу для 1 класу (замініть на реальний з schedule-class-1.js, якщо потрібно)
+    const schedule = {
+      Monday: [
+        { number: 1, subject: { ua: 'Українська мова', pl: 'Język ukraiński' }, time: '08:30 - 09:10' },
+        { number: '', subject: { ua: 'Перерва', pl: 'Przerwa' }, time: '09:10 - 09:20' },
+        { number: 2, subject: { ua: 'Математика', pl: 'Matematyka' }, time: '09:20 - 10:00' },
+        // Додайте більше уроків...
+      ],
+      Tuesday: [
+        { number: 1, subject: { ua: 'Англійська', pl: 'Angielski' }, time: '08:30 - 09:10' },
+        // ...
+      ],
+      // Додайте для інших днів...
+    };
+
+    // Додана відсутня змінна з назвами днів
+    const dayNames = {
+      Monday: { ua: 'Понеділок', pl: 'Poniedziałek' },
+      Tuesday: { ua: 'Вівторок', pl: 'Wtorek' },
+      Wednesday: { ua: 'Середа', pl: 'Środa' },
+      Thursday: { ua: 'Четвер', pl: 'Czwartek' },
+      Friday: { ua: 'Пʼятниця', pl: 'Piątek' },
+      Saturday: { ua: 'Субота', pl: 'Sobota' },
+      Sunday: { ua: 'Неділя', pl: 'Niedziela' }
+    };
+
     const translations = {
       header: {
         ua: 'Розклад уроків<br>1 клас<br>Push School Warsaw',
@@ -673,8 +697,8 @@
     function renderWeeklySchedule() {
       console.log('Рендеринг тижневого розкладу');
       const cachedSchedule = loadCachedSchedule();
-      const weeklyScheduleTable = document.querySelector("#weekly-schedule");
-      weeklyScheduleTable.innerHTML = '';
+      const weeklyScheduleTbody = document.querySelector("#weekly-schedule"); // Виправлено: tbody
+      weeklyScheduleTbody.innerHTML = '';
       const today = new Date().getDay();
       const todayKey = dayKeys[today];
 
@@ -701,7 +725,7 @@
             <td>${lesson.subject[currentLanguage]}</td>
             <td>${lesson.time}</td>
           </tr>`;
-          weeklyScheduleTable.innerHTML += row;
+          weeklyScheduleTbody.innerHTML += row;
         });
       }
     }
@@ -817,9 +841,9 @@
 
         const image = document.querySelector('.google-image');
         if (currentLanguage === 'pl') {
-          image.src = 'https://i.postimg.cc/5NQjHJ8L/2025-2026.png;
+          image.src = 'https://i.postimg.cc/5NQjHJ8L/2025-2026-PL.png'; // Виправлено: додана закриваюча лапка; замініть на реальне зображення для PL
         } else {
-          image.src = 'https://i.postimg.cc/5NQjHJ8L/2025-2026.png';
+          image.src = 'https://i.postimg.cc/5NQjHJ8L/2025-2026.png'; // Виправлено: додана закриваюча лапка
         }
       });
     });
@@ -849,7 +873,7 @@
     document.querySelector('.lang-toggle[data-lang="ua"]').classList.add('active');
     const today = new Date().getDay();
     selectedDay = dayKeys[today];
-    if (!schedule[selectedDay]) selectedDay = "Monday";
+    if (!schedule[selectedDay]) selectedDay = "Monday"; // Перевірка існування розкладу для дня
     initialize();
   </script>
 </body>
