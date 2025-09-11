@@ -298,6 +298,16 @@
             console.log('PWA успішно встановлено');
             installButton.style.display = 'none';
         });
+
+        // ТИМЧАСОВО ДЛЯ ТЕСТУ: Показати кнопку одразу (видаліть цей блок після перевірки)
+        installButton.style.display = 'block';
+        installButton.addEventListener('click', () => {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+            } else {
+                alert('PWA не готове. Перевірте manifest.json і спробуйте в Chrome на Android.');
+            }
+        });
     </script>
 </body>
 </html>
