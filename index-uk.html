@@ -16,7 +16,6 @@
     <link rel="manifest" href="manifest.json">
     
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700&family=Open+Sans:wght@300;400;600;700&display=swap" rel="stylesheet">
-
     <style>
         body {
             font-family: 'Open Sans', sans-serif;
@@ -61,7 +60,11 @@
             font-weight: 700;
             font-size: 2.5em;
             color: white;
-            text-shadow: -1px -1px 0 black, 1px -1px 0 black, -1px 1px 0 black, 1px 1px 0 black;
+            text-shadow: 
+                -1px -1px 0 black, 
+                1px -1px 0 black, 
+                -1px 1px 0 black, 
+                1px 1px 0 black;
             margin: 0;
             opacity: 0;
             transform: translateY(-20px);
@@ -138,8 +141,7 @@
             padding: 15px;
             transition: all 0.3s ease;
             box-shadow: 0 3px 6px rgba(0, 0, 0, 0.16), 0 3px 6px rgba(0, 0, 0, 0.23);
-            font-size: 1.2em;
-            font-family: 'Montserrat', sans-serif;
+            font-size: 1.2em; font-family: 'Montserrat', sans-serif;
             font-weight: 700;
             min-height: 44px;
         }
@@ -192,38 +194,56 @@
             }
         }
         
-        /* Стиль для кнопки "Установить приложение" */
+        /* Стиль для кнопки "Установить приложение" - теперь по центру внизу */
         .install-btn {
             position: fixed;
             bottom: 20px;
-            right: 20px;
+            left: 50%;
+            transform: translateX(-50%);
             background-color: #004b52;
             color: white;
             border: none;
-            border-radius: 50%;
-            width: 60px;
-            height: 60px;
-            font-size: 24px;
+            border-radius: 30px;
+            padding: 12px 24px;
+            font-size: 16px;
+            font-weight: bold;
             cursor: pointer;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
             display: none;
             z-index: 1000;
-            justify-content: center;
             align-items: center;
+            gap: 8px;
+            transition: all 0.3s ease;
+        }
+        
+        .install-btn:hover {
+            background-color: #00363b;
+            transform: translateX(-50%) translateY(-2px);
+            box-shadow: 0 6px 14px rgba(0, 0, 0, 0.4);
+        }
+        
+        .install-btn .icon {
+            font-size: 20px;
+        }
+        
+        @media (max-width: 600px) {
+            .install-btn {
+                width: 90%;
+                max-width: 300px;
+                bottom: 15px;
+                font-size: 14px;
+            }
         }
     </style>
 </head>
 <body>
     <header>
-        <a href="index-uk.html">
-            <img src="https://i.postimg.cc/WbY9TdDp/PushIco.png" alt="Logo Push School">
-        </a>
+        <a href="index-uk.html"><img src="https://i.postimg.cc/WbY9TdDp/PushIco.png" alt="Logo Push School"></a>
         <h1>Push School Warsaw</h1>
         <div class="language-switch">
             <a href="index.html">Polski</a> | <span>Українська</span>
         </div>
     </header>
-
     <div class="container">
         <div class="section class-schedules">
             <h2>Розклади уроків</h2>
@@ -241,14 +261,12 @@
                 <a class="schedule-link" href="class-11.html">🏆 11 клас 🎓</a>
             </div>
         </div>
-
         <div class="section menu">
             <h2>Меню</h2>
             <div class="flex-links">
                 <a class="schedule-link" href="menu.html">📋 Меню на тиждень 🍴</a>
             </div>
         </div>
-
         <div class="section cultural-events">
             <h2>Плани культурних заходів</h2>
             <div class="flex-links">
@@ -256,7 +274,6 @@
                 <a class="schedule-link" href="cultural-senior-uk.html">🎭 План культурних заходів (середня школа) 🎓</a>
             </div>
         </div>
-
         <div class="section suggestions">
             <h2>Пропозиції та ідеї</h2>
             <div class="flex-links">
@@ -265,7 +282,10 @@
         </div>
     </div>
     
-    <button id="installBtn" class="install-btn">+</button>
+    <button id="installBtn" class="install-btn">
+        <span class="icon">+</span> 
+        <span class="text">Встановити додаток</span>
+    </button>
 
     <script>
         // Обработчик для кнопки установки PWA
@@ -273,29 +293,38 @@
         const installBtn = document.getElementById('installBtn');
         
         window.addEventListener('beforeinstallprompt', (e) => {
+            // Предотвращаем автоматическое отображение подсказки
             e.preventDefault();
+            // Сохраняем событие для последующего использования
             deferredPrompt = e;
+            // Показываем кнопку установки
             installBtn.style.display = 'flex';
         });
         
         installBtn.addEventListener('click', async () => {
             if (!deferredPrompt) return;
             
+            // Показываем подсказку установки
             deferredPrompt.prompt();
+            
+            // Ждем, пока пользователь ответит на подсказку
             const { outcome } = await deferredPrompt.userChoice;
             
             if (outcome === 'accepted') {
                 console.log('Пользователь принял запрос на установку');
+                installBtn.style.display = 'none';
             } else {
                 console.log('Пользователь отклонил запрос на установку');
             }
             
+            // Очищаем сохраненное событие
             deferredPrompt = null;
-            installBtn.style.display = 'none';
         });
         
         window.addEventListener('appinstalled', () => {
+            // Очищаем сохраненное событие
             deferredPrompt = null;
+            // Скрываем кнопку установки
             installBtn.style.display = 'none';
             console.log('PWA было установлено');
         });
