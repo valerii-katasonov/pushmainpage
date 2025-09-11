@@ -147,11 +147,6 @@
             background-color: rgba(255, 255, 255, 0.4);
             transform: translateY(-3px);
         }
-        .install-app {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
         .install-button {
             background-color: #004B52;
             color: white;
@@ -164,6 +159,7 @@
             cursor: pointer;
             transition: all 0.3s ease;
             box-shadow: 0 3px 6px rgba(0, 0, 0, 0.16), 0 3px 6px rgba(0, 0, 0, 0.23);
+            margin-top: 20px;
         }
         .install-button:hover {
             background-color: #00666b;
@@ -225,10 +221,10 @@
 </head>
 <body>
     <header>
-        <a href="https://planlekcjipush.netlify.app/index-uk"><img src="https://i.postimg.cc/WbY9TdDp/PushIco.png" alt="Logo Push School"></a>
+        <a href="index-uk.html"><img src="https://i.postimg.cc/WbY9TdDp/PushIco.png" alt="Logo Push School"></a>
         <h1>Push School Warsaw</h1>
         <div class="language-switch">
-            <a href="https://planlekcjipush.netlify.app/index">Polski</a> | <span>Українська</span>
+            <a href="index.html">Polski</a> | <span>Українська</span>
         </div>
     </header>
     <div class="container">
@@ -276,12 +272,16 @@
         const installButton = document.getElementById('installButton');
 
         window.addEventListener('beforeinstallprompt', (e) => {
+            // Зберігаємо подію для подальшого використання
             e.preventDefault();
             deferredPrompt = e;
+            // Показуємо кнопку, якщо браузер підтримує встановлення PWA
             installButton.style.display = 'block';
 
             installButton.addEventListener('click', () => {
+                // Показуємо діалог встановлення
                 deferredPrompt.prompt();
+                // Чекаємо на вибір користувача
                 deferredPrompt.userChoice.then((choiceResult) => {
                     if (choiceResult.outcome === 'accepted') {
                         console.log('Користувач прийняв встановлення PWA');
@@ -294,19 +294,10 @@
             });
         });
 
+        // Повідомлення, коли PWA успішно встановлено
         window.addEventListener('appinstalled', () => {
             console.log('PWA успішно встановлено');
             installButton.style.display = 'none';
-        });
-
-        // ТИМЧАСОВО ДЛЯ ТЕСТУ: Показати кнопку одразу (видаліть цей блок після перевірки)
-        installButton.style.display = 'block';
-        installButton.addEventListener('click', () => {
-            if (deferredPrompt) {
-                deferredPrompt.prompt();
-            } else {
-                alert('PWA не готове. Перевірте manifest.json і спробуйте в Chrome на Android.');
-            }
         });
     </script>
 </body>
