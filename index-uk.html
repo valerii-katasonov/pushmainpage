@@ -196,23 +196,26 @@
             }
         }
         
-        /* Стиль для кнопок загрузки */
+        /* Стиль для кнопок загрузки - УВЕЛИЧЕНЫ В 3 РАЗА */
         .download-buttons {
             display: flex;
             justify-content: center;
-            gap: 20px;
-            margin: 20px 0;
+            gap: 30px;
+            margin: 30px 0;
             flex-wrap: wrap;
         }
         
         .download-btn {
-            height: 60px;
+            height: 180px; /* Увеличен в 3 раза (было 60px) */
             cursor: pointer;
             transition: all 0.3s ease;
+            border-radius: 15px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
         }
         
         .download-btn:hover {
             transform: scale(1.05);
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
         }
         
         /* Стиль для модального окна с инструкциями iOS */
@@ -265,7 +268,11 @@
         
         @media (max-width: 600px) {
             .download-btn {
-                height: 50px;
+                height: 120px; /* Немного меньше на мобильных */
+            }
+            
+            .download-buttons {
+                gap: 20px;
             }
             
             .ios-instructions-content {
