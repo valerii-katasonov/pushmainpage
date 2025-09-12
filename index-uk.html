@@ -259,6 +259,14 @@
         
         .ios-instructions-steps li {
             margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+        }
+        
+        .instruction-icon {
+            height: 1.2em;
+            margin: 0 8px;
+            vertical-align: middle;
         }
         
         .ios-instructions-icon {
@@ -282,6 +290,10 @@
             .download-buttons {
                 flex-direction: column;
                 align-items: center;
+            }
+            
+            .instruction-icon {
+                height: 1em;
             }
         }
     </style>
@@ -345,8 +357,8 @@
             <div class="ios-instructions-icon">📱</div>
             <h2>Як додати додаток на домашній екран</h2>
             <ol class="ios-instructions-steps">
-                <li>Натисніть кнопку "Поділитися" внизу браузера Safari</li>
-                <li>Прокрутіть меню вниз і виберіть "На екран 'Додому'"</li>
+                <li>Натисніть кнопку «Поділитися» <img src="share.png" class="instruction-icon" alt="Кнопка поділитися"></li>
+                <li>Прокрутіть меню вниз і виберіть «На початковий екран» <img src="home.png" class="instruction-icon" alt="На початковий екран"></li>
                 <li>Натисніть "Додати" у верхньому правому кутку</li>
                 <li>Готово! Тепер додаток з'явиться на вашому домашньому екрані</li>
             </ol>
