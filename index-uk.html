@@ -142,13 +142,30 @@
             padding: 15px;
             transition: all 0.3s ease;
             box-shadow: 0 3px 6px rgba(0, 0, 0, 0.16), 0 3px 6px rgba(0, 0, 0, 0.23);
-            font-size: 1.2em; font-family: 'Montserrat', sans-serif;
+            font-size: 1.2em;
+            font-family: 'Montserrat', sans-serif;
             font-weight: 700;
             min-height: 44px;
         }
         .schedule-link:hover {
             background-color: rgba(255, 255, 255, 0.4);
             transform: translateY(-3px);
+        }
+        footer {
+            text-align: center;
+            padding: 1rem 0;
+            font-size: 0.9rem;
+            color: white;
+            background: rgba(0, 75, 82, 0.8);
+            margin-top: 2rem;
+            width: 100%;
+        }
+        footer a {
+            color: #00d1ff;
+            text-decoration: none;
+        }
+        footer a:hover {
+            text-decoration: underline;
         }
         @media (max-width: 600px) {
             header {
@@ -206,7 +223,7 @@
         }
         
         .download-btn {
-            height: 180px; /* Увеличен в 3 раза (было 60px) */
+            height: 180px;
             cursor: pointer;
             transition: all 0.3s ease;
             border-radius: 15px;
@@ -276,7 +293,7 @@
         
         @media (max-width: 600px) {
             .download-btn {
-                height: 120px; /* Немного меньше на мобильных */
+                height: 120px;
             }
             
             .download-buttons {
@@ -299,6 +316,7 @@
     </style>
 </head>
 <body>
+    <!-- Copyright © 2025 @valerii_katasonov (https://t.me/valerii_katasonov) -->
     <header>
         <a href="index-uk.html"><img src="https://i.postimg.cc/WbY9TdDp/PushIco.png" alt="Logo Push School"></a>
         <h1>Push School Warsaw</h1>
@@ -365,6 +383,10 @@
             <button id="iosInstructionsGotIt" style="background-color: #004b52; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer;">Зрозуміло</button>
         </div>
     </div>
+
+    <footer>
+        Copyright © 2025 <a href="https://t.me/valerii_katasonov" target="_blank">@valerii_katasonov</a>
+    </footer>
 
     <script>
         // Определяем, является ли устройство iOS
