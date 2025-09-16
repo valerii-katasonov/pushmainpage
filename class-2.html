@@ -371,6 +371,38 @@
       color: #fff;
     }
 
+    .clubs-today {
+      font-size: 1.1rem;
+      color: #1a1a66;
+      background: white;
+      border-left: 6px solid #FFD700;
+      padding: 1rem;
+      margin: 1.5rem 0;
+      border-radius: 12px;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    body.dark-theme .clubs-today {
+      background: #333;
+      color: #fff;
+    }
+
+    .clubs-today:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 8px 20px rgba(0,0,0,0.12);
+    }
+
+    .clubs-today ul {
+      list-style: none;
+      padding-left: 20px;
+      margin: 0;
+    }
+
+    .clubs-today ul li {
+      margin: 5px 0;
+    }
+
     @keyframes fadeIn {
       from { opacity: 0; }
       to { opacity: 1; }
@@ -555,9 +587,6 @@
 
 <hr style="border:1px dashed #FFD700; margin:15px 0;">
 
-
-
-
   <!-- Індивідуальні -->
 <h4 style="margin-top:0; color:#b8860b;">🎶 Індивідуальні заняття (Музичне мистецтво)</h4>
 
@@ -623,6 +652,10 @@
           <tbody></tbody>
         </table>
       </div>
+      <div class="clubs-today" id="clubs-today">
+        <h3 id="clubs-today-title">Гуртки на сьогодні</h3>
+        <ul id="clubs-today-list"></ul>
+      </div>
       <h2 id="schedule-week">Розклад на тиждень</h2>
       <div class="table-wrapper">
         <table role="grid">
@@ -661,13 +694,47 @@
       thDay: { ua: 'День', pl: 'Dzień' },
       thNumber: { ua: '№', pl: 'Nr' },
       thSubject: { ua: 'Урок', pl: 'Lekcja' },
-      thTime: { ua: 'Час', pl: 'Czas' }
+      thTime: { ua: 'Час', pl: 'Czas' },
+      clubsTodayTitle: { ua: 'Гуртки на сьогодні', pl: 'Zajęcia dodatkowe na dziś' },
+      noClubsToday: { ua: 'Сьогодні немає гуртків.', pl: 'Dzisiaj nie ma zajęć dodatkowych.' }
     };
 
     let currentLanguage = 'ua';
     const dayKeys = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
     let selectedDay = dayKeys[new Date().getDay()];
     const classId = 'class2';
+
+    const clubSchedule = {
+      "Monday": [
+        { name: { ua: "Робототехніка", pl: "Robotyka" }, time: "14:50–16:30", location: { ua: "Wyspianskiego 2 (молодша школа)", pl: "Wyspianskiego 2 (szkoła podstawowa)" } },
+        { name: { ua: "Театр", pl: "Teatr" }, time: "15:30–17:00", location: { ua: "Wyspianskiego 2 (молодша школа)", pl: "Wyspianskiego 2 (szkoła podstawowa)" } }
+      ],
+      "Tuesday": [
+        { name: { ua: "Карате (1 гр.)", pl: "Karate (1 gr.)" }, time: "15:00", location: { ua: "Wyspianskiego 2 (молодша школа)", pl: "Wyspianskiego 2 (szkoła podstawowa)" } },
+        { name: { ua: "Карате (2 гр.)", pl: "Karate (2 gr.)" }, time: "16:15", location: { ua: "Wojskiego 4 (старша школа)", pl: "Wojskiego 4 (szkoła średnia)" } },
+        { name: { ua: "Хореографія (1 гр.)", pl: "Choreografia (1 gr.)" }, time: "16:00–17:30", location: { ua: "Wyspianskiego 2 (молодша школа)", pl: "Wyspianskiego 2 (szkoła podstawowa)" } },
+        { name: { ua: "Гурток «Українська світлиця»", pl: "Klub «Ukraińska świetlica»" }, time: "15:00", location: { ua: "Wyspianskiego 2 (молодша школа)", pl: "Wyspianskiego 2 (szkoła podstawowa)" } }
+      ],
+      "Wednesday": [
+        { name: { ua: "Театр", pl: "Teatr" }, time: "15:30–17:00", location: { ua: "Wojskiego 4 (старша школа)", pl: "Wojskiego 4 (szkoła średnia)" } },
+        { name: { ua: "Хореографія (2 гр.)", pl: "Choreografia (2 gr.)" }, time: "17:00–18:30", location: { ua: "Wojskiego 4 (старша школа)", pl: "Wojskiego 4 (szkoła średnia)" } },
+        { name: { ua: "Теорія музики (1 гр.)", pl: "Teoria muzyki (1 gr.)" }, time: "15:00", location: { ua: "Wyspianskiego 2 (молодша школа)", pl: "Wyspianskiego 2 (szkoła podstawowa)" } },
+        { name: { ua: "Ансамбль «Crescendo»", pl: "Zespół «Crescendo»" }, time: "15:45", location: { ua: "Wyspianskiego 2 (молодша школа)", pl: "Wyspianskiego 2 (szkoła podstawowa)" } },
+        { name: { ua: "Теорія музики (2 гр.)", pl: "Teoria muzyki (2 gr.)" }, time: "16:30", location: { ua: "Wyspianskiego 2 (молодша школа)", pl: "Wyspianskiego 2 (szkoła podstawowa)" } }
+      ],
+      "Thursday": [
+        { name: { ua: "Speaking Club", pl: "Speaking Club" }, time: "13:55–15:35", location: { ua: "Wyspianskiego 2 (молодша школа)", pl: "Wyspianskiego 2 (szkoła podstawowa)" } },
+        { name: { ua: "Карате (1 гр.)", pl: "Karate (1 gr.)" }, time: "15:00", location: { ua: "Wyspianskiego 2 (молодша школа)", pl: "Wyspianskiego 2 (szkoła podstawowa)" } },
+        { name: { ua: "Карате (2 гр.)", pl: "Karate (2 gr.)" }, time: "16:15", location: { ua: "Wojskiego 4 (старша школа)", pl: "Wojskiego 4 (szkoła średnia)" } },
+        { name: { ua: "Хореографія (1 гр.)", pl: "Choreografia (1 gr.)" }, time: "16:00–17:30", location: { ua: "Wyspianskiego 2 (молодша школа)", pl: "Wyspianskiego 2 (szkoła podstawowa)" } },
+        { name: { ua: "Художній клас (живопис акрилом)", pl: "Klasa artystyczna (malarstwo akrylowe)" }, time: "15:30", location: { ua: "Wyspianskiego 2 (молодша школа)", pl: "Wyspianskiego 2 (szkoła podstawowa)" } },
+        { name: { ua: "Теорія музики (3 гр.)", pl: "Teoria muzyki (3 gr.)" }, time: "16:55", location: { ua: "Wyspianskiego 2 (молодша школа)", pl: "Wyspianskiego 2 (szkoła podstawowa)" } }
+      ],
+      "Friday": [
+        { name: { ua: "Хореографія (2 гр.)", pl: "Choreografia (2 gr.)" }, time: "15:00–16:30", location: { ua: "Wojskiego 4 (старша школа)", pl: "Wojskiego 4 (szkoła średnia)" } },
+        { name: { ua: "Художній клас (живопис акрилом)", pl: "Klasa artystyczna (malarstwo akrylowe)" }, time: "15:45", location: { ua: "Wyspianskiego 2 (молодша школа)", pl: "Wyspianskiego 2 (szkoła podstawowa)" } }
+      ]
+    };
 
     function cacheSchedule() {
       console.log(`Кешування розкладу для ${classId}`);
@@ -738,6 +805,7 @@
       document.getElementById('th-subject-week').textContent = translations.thSubject[currentLanguage];
       document.getElementById('th-time').textContent = translations.thTime[currentLanguage];
       document.getElementById('th-time-week').textContent = translations.thTime[currentLanguage];
+      document.getElementById('clubs-today-title').textContent = translations.clubsTodayTitle[currentLanguage];
     }
 
     function renderCurrentLesson() {
@@ -780,6 +848,25 @@
         </tr>`;
         dailyScheduleTable.innerHTML += row;
       });
+
+      renderClubsToday(selectedDay);
+    }
+
+    function renderClubsToday(selectedDay) {
+      console.log(`Рендеринг гуртків на сьогодні для дня: ${selectedDay}`);
+      const clubsList = document.getElementById("clubs-today-list");
+      clubsList.innerHTML = '';
+
+      const dayClubs = clubSchedule[selectedDay] || [];
+      if (dayClubs.length === 0) {
+        clubsList.innerHTML = `<li>${translations.noClubsToday[currentLanguage]}</li>`;
+      } else {
+        dayClubs.forEach(club => {
+          const li = document.createElement("li");
+          li.innerHTML = `${club.name[currentLanguage]} – ${club.time}<br><span style="font-size:0.95em; color:#666;">📍 ${club.location[currentLanguage]}</span>`;
+          clubsList.appendChild(li);
+        });
+      }
     }
 
     function renderWeeklySchedule() {
