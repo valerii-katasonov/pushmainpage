@@ -7,8 +7,6 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <meta name="theme-color" content="#004b52">
-  <link rel="manifest" href="/manifest.json">
   <title>Розклад уроків - 2 клас</title>
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
@@ -37,7 +35,7 @@
     }
 
     header {
-      background: linear-gradient(45deg, #00bfd1, #004b52);
+      background: linear-gradient(45deg, #00bfd1, #006d77);
       color: white;
       padding: 1.5rem 0;
       display: flex;
@@ -49,7 +47,7 @@
     }
 
     body.dark-theme header {
-      background: linear-gradient(45deg, #003d44, #004b52);
+      background: linear-gradient(45deg, #003d44, #006d77);
     }
 
     header img {
@@ -69,18 +67,15 @@
       animation: fadeIn 1s ease-in;
     }
 
-    .theme-toggle, .notify-toggle, .voice-button {
+    .theme-toggle, .notify-toggle {
+      position: absolute;
+      top: 1rem;
       background: none;
       border: none;
       color: white;
       font-size: 1.5rem;
       cursor: pointer;
       padding: 0.5rem;
-      transition: transform 0.2s cubic-bezier(0.68, -0.55, 0.265, 1.55);
-    }
-
-    .theme-toggle:hover, .notify-toggle:hover, .voice-button:hover {
-      transform: scale(1.1);
     }
 
     .theme-toggle { right: 3.5rem; }
@@ -102,17 +97,16 @@
       font-size: 1rem;
       cursor: pointer;
       padding: 0.5rem;
-      transition: background 0.3s ease, transform 0.2s ease;
+      transition: background 0.3s ease;
     }
 
     .lang-toggle:hover {
       background: rgba(255,255,255,0.2);
-      transform: scale(1.05);
     }
 
     .lang-toggle.active {
       background: white;
-      color: #004b52;
+      color: #006d77;
     }
 
     @media screen and (max-width: 480px) {
@@ -165,9 +159,7 @@
     .current-lesson {
       font-size: 1.2rem;
       color: #1a1a66;
-      background: rgba(255, 255, 255, 0.15);
-      backdrop-filter: blur(12px);
-      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: white;
       border-left: 6px solid #4CAF50;
       padding: 1rem;
       margin: 0 0 1.5rem;
@@ -177,35 +169,13 @@
     }
 
     body.dark-theme .current-lesson {
-      background: rgba(0, 0, 0, 0.2);
-      border: 1px solid rgba(255, 255, 255, 0.3);
+      background: #333;
       color: #fff;
     }
 
     .current-lesson:hover {
-      transform: translateY(-8px);
-      box-shadow: 0 10px 20px rgba(0,0,0,0.15);
-    }
-
-    .voice-button {
-      display: block;
-      margin: 1rem auto;
-      padding: 0.8rem 1.5rem;
-      background: #4CAF50;
-      color: white;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      font-size: 1rem;
-      transition: transform 0.2s ease;
-    }
-
-    .voice-button:hover {
-      transform: scale(1.05);
-    }
-
-    body.dark-theme .voice-button {
-      background: #66BB6A;
+      transform: translateY(-5px);
+      box-shadow: 0 8px 20px rgba(0,0,0,0.12);
     }
 
     .day-filter {
@@ -221,22 +191,15 @@
       background: #f8f9fa;
       border-radius: 8px;
       cursor: pointer;
-      transition: transform 0.2s cubic-bezier(0.68, -0.55, 0.265, 1.55), background 0.3s ease;
+      transition: background 0.3s ease;
       min-width: 44px;
       min-height: 44px;
       font-size: 1rem;
     }
 
-    .day-filter button:hover {
-      transform: scale(1.05) rotate(1deg);
-      background: #4CAF50;
-      color: white;
-    }
-
     .day-filter button.active {
       background: #4CAF50;
       color: white;
-      transform: scale(1.1);
     }
 
     body.dark-theme .day-filter button {
@@ -258,17 +221,14 @@
       border-collapse: separate;
       border-spacing: 0;
       margin-bottom: 1.5rem;
-      background: rgba(255, 255, 255, 0.15);
-      backdrop-filter: blur(12px);
-      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: white;
       border-radius: 12px;
       overflow: hidden;
       box-shadow: 0 5px 15px rgba(0,0,0,0.08);
     }
 
     body.dark-theme table {
-      background: rgba(0, 0, 0, 0.2);
-      border: 1px solid rgba(255, 255, 255, 0.3);
+      background: #444;
       color: #fff;
     }
 
@@ -309,46 +269,23 @@
     .friday { background: rgba(255, 192, 203, 0.6); }
     .current-day { background: rgba(76, 175, 80, 0.3); }
 
-    #daily-schedule tbody tr, #weekly-schedule tr {
-      opacity: 0;
-      transform: translateX(-20px);
-      animation: slideIn 0.5s ease forwards;
-      animation-delay: calc(var(--row-index) * 0.1s);
-    }
-
-    @keyframes slideIn {
-      from { opacity: 0; transform: translateX(-20px); }
-      to { opacity: 1; transform: translateX(0); }
-    }
-
     .tables-container {
       padding: 1.5rem;
-      background: rgba(255, 255, 255, 0.15);
-      backdrop-filter: blur(12px);
-      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: white;
       border-radius: 15px;
       box-shadow: 0 5px 15px rgba(0,0,0,0.08);
       margin: 0;
       min-width: 600px;
       flex: 1;
-      transition: transform 0.3s ease, box-shadow 0.3s ease;
     }
 
     body.dark-theme .tables-container {
-      background: rgba(0, 0, 0, 0.2);
-      border: 1px solid rgba(255, 255, 255, 0.3);
-    }
-
-    .tables-container:hover {
-      transform: translateY(-8px);
-      box-shadow: 0 10px 20px rgba(0,0,0,0.15);
+      background: #333;
     }
 
     .links-container {
       padding: 1.5rem;
-      background: rgba(255, 255, 255, 0.15);
-      backdrop-filter: blur(12px);
-      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: white;
       border-radius: 15px;
       box-shadow: 0 5px 15px rgba(0,0,0,0.08);
       max-width: 350px;
@@ -357,13 +294,11 @@
     }
 
     body.dark-theme .links-container {
-      background: rgba(0, 0, 0, 0.2);
-      border: 1px solid rgba(255, 255, 255, 0.3);
+      background: #333;
     }
 
     .links-container:hover {
-      transform: translateY(-8px);
-      box-shadow: 0 10px 20px rgba(0,0,0,0.15);
+      transform: translateY(-5px);
     }
 
     .links-container h3 {
@@ -401,9 +336,7 @@
 
     .image-container-right {
       padding: 1.5rem;
-      background: rgba(255, 255, 255, 0.15);
-      backdrop-filter: blur(12px);
-      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: white;
       border-radius: 15px;
       box-shadow: 0 5px 15px rgba(0,0,0,0.08);
       max-width: 450px;
@@ -412,13 +345,11 @@
     }
 
     body.dark-theme .image-container-right {
-      background: rgba(0, 0, 0, 0.2);
-      border: 1px solid rgba(255, 255, 255, 0.3);
+      background: #333;
     }
 
     .image-container-right:hover {
-      transform: translateY(-8px);
-      box-shadow: 0 10px 20px rgba(0,0,0,0.15);
+      transform: translateY(-5px);
     }
 
     .google-image {
@@ -443,9 +374,7 @@
     .clubs-today {
       font-size: 1.1rem;
       color: #1a1a66;
-      background: rgba(255, 255, 255, 0.15);
-      backdrop-filter: blur(12px);
-      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: white;
       border-left: 6px solid #FFD700;
       padding: 1rem;
       margin: 1.5rem 0;
@@ -455,14 +384,13 @@
     }
 
     body.dark-theme .clubs-today {
-      background: rgba(0, 0, 0, 0.2);
-      border: 1px solid rgba(255, 255, 255, 0.3);
+      background: #333;
       color: #fff;
     }
 
     .clubs-today:hover {
-      transform: translateY(-8px);
-      box-shadow: 0 10px 20px rgba(0,0,0,0.15);
+      transform: translateY(-5px);
+      box-shadow: 0 8px 20px rgba(0,0,0,0.12);
     }
 
     .clubs-today ul {
@@ -565,83 +493,151 @@
   </header>
   <div class="container">
     <div class="links-container">
-      <h3 id="useful-links" style="border: 2px solid #1E90FF; border-radius: 8px 8px 0 0; padding: 10px; background-color: #f9f9f9; margin-top: 0;">🔗 Корисні посилання:</h3>
-      <p style="border-left: 2px solid #1E90FF; border-right: 2px solid #1E90FF; border-bottom: 2px solid #1E90FF; border-radius: 0 0 8px 8px; padding: 5px 10px; background-color: #f9f9f9; margin: 0;">
-        <a href="https://prosvita.net/" target="_blank">💻 Prosvita</a>
-        <a href="https://pushschoolwarsaw.edupage.org/" target="_blank">🏫 PushSchoolWarsaw</a>
-        <a href="https://planlekcjipush.netlify.app/menu" target="_blank">🍴 Меню на тиждень</a>
-      </p><br>
+<h3 id="useful-links" style="border: 2px solid #1E90FF; border-radius: 8px 8px 0 0; padding: 10px; background-color: #f9f9f9; margin-top: 0;">🔗 Корисні посилання:</h3>
+<p style="border-left: 2px solid #1E90FF; border-right: 2px solid #1E90FF; border-bottom: 2px solid #1E90FF; border-radius: 0 0 8px 8px; padding: 5px 10px; background-color: #f9f9f9; margin: 0;">
+  <a href="https://prosvita.net/" target="_blank">💻 Prosvita</a>
+  <a href="https://pushschoolwarsaw.edupage.org/" target="_blank">🏫 PushSchoolWarsaw</a>
+  <a href="https://planlekcjipush.netlify.app/menu" target="_blank">🍴 Меню на тиждень</a>
+</p><br>
 
-      <h3 id="textbooks" style="border: 2px solid #8A2BE2; border-radius: 8px 8px 0 0; padding: 10px; background-color: #f9f9f9; margin-top: 0;">📖 Підручники:</h3>
-      <p style="border-left: 2px solid #8A2BE2; border-right: 2px solid #8A2BE2; border-bottom: 2px solid #8A2BE2; border-radius: 0 0 8px 8px; padding: 5px 10px; background-color: #f9f9f9; margin: 0;">
-        <a href="https://shkola.in.ua/1256-matematyka-2-klas-his-2019.html" target="_blank">🔢 Математика - 2 клас Ольга Гісь, Ірина Філяк</a>
-        <a href="https://shkola.in.ua/1262-matematika-2-klas-skvortsova-2019.html" target="_blank">🔢 Математика - 2 клас Світлана Скворцова, Оксана Онопрієнко</a>
-        <a href="https://shkola.in.ua/1288-ukrainska-mova-2-klas-ponomarova-2019-ch-1.html" target="_blank">✍️ Українська мова та читання (ч.1) - 2 клас Катерина Пономарьова</a>
-        <a href="https://shkola.in.ua/1289-ukrainska-mova-2-klas-savchenko-2019-ch-2.html" target="_blank">✍️ Українська мова та читання (ч.2) - 2 клас Олександра Савченко</a>
-        <a href="https://drive.google.com/file/d/19TKeQBtsNOA2Madlc7TMdCCoi4Gv49DP/view" target="_blank">✍️ Слово до слова - буде розмова - 2 клас</a>
-      </p><br>
+<h3 id="textbooks" style="border: 2px solid #8A2BE2; border-radius: 8px 8px 0 0; padding: 10px; background-color: #f9f9f9; margin-top: 0;">📖 Підручники:</h3>
+<p style="border-left: 2px solid #8A2BE2; border-right: 2px solid #8A2BE2; border-bottom: 2px solid #8A2BE2; border-radius: 0 0 8px 8px; padding: 5px 10px; background-color: #f9f9f9; margin: 0;">
+  <a href="https://shkola.in.ua/1256-matematyka-2-klas-his-2019.html" target="_blank">🔢 Математика - 2 клас Ольга Гісь, Ірина Філяк</a>
+  <a href="https://shkola.in.ua/1262-matematika-2-klas-skvortsova-2019.html" target="_blank">🔢 Математика - 2 клас Світлана Скворцова, Оксана Онопрієнко</a>
+  <a href="https://shkola.in.ua/1288-ukrainska-mova-2-klas-ponomarova-2019-ch-1.html" target="_blank">✍️ Українська мова та читання (ч.1) - 2 клас Катерина Пономарьова</a>
+  <a href="https://shkola.in.ua/1289-ukrainska-mova-2-klas-savchenko-2019-ch-2.html" target="_blank">✍️ Українська мова та читання (ч.2) - 2 клас Олександра Савченко</a>
+  <a href="https://drive.google.com/file/d/19TKeQBtsNOA2Madlc7TMdCCoi4Gv49DP/view" target="_blank">✍️ Слово до слова - буде розмова - 2 клас</a>
+</p><br>
 
-      <h3 style="border: 2px solid #FFD700; border-radius: 8px 8px 0 0; padding: 10px; background-color: #fffbea; margin-top: 0;">📆 Розклад гуртків</h3>
-      <div style="border: 2px solid #FFD700; border-top: none; border-radius: 0 0 8px 8px; padding: 15px; background-color: #f9f9f9;">
-        <h4 style="margin-top:0; color:#b8860b;">👥 Групові заняття</h4>
-        <ul style="padding-left:20px; list-style:none; margin:0;">
-          <li>
-            <strong>📅 Понеділок:</strong>
-            <ul style="list-style:none; padding-left:20px; margin:5px 0;">
-              <li>🤖 Робототехніка – 14:50–16:30<br>
-                  <span style="display:block; font-size:0.95em; color:#666;">📍 Wyspianskiego 2 (молодша школа)</span></li>
-              <li>🎭 Театр – 15:30–17:00<br>
-                  <span style="display:block; font-size:0.95em; color:#666;">📍 Wyspianskiego 2 (молодша школа)</span></li>
-            </ul>
-          </li>
-          <!-- Остальные дни аналогично, для краткости опущены -->
-        </ul>
-        <hr style="border:1px dashed #FFD700; margin:15px 0;">
-        <h4 style="margin-top:0; color:#b8860b;">🎶 Індивідуальні заняття (Музичне мистецтво)</h4>
-        <p>📌 Формат: 2 індивідуальні уроки + 2 групові</p>
-        <p><strong>🎼 Індивідуальні класи:</strong></p>
-        <ul style="margin-top:0; margin-bottom:10px; padding-left:20px;">
-          <li>🎸 Гітара</li>
-          <li>🥁 Ударні інструменти</li>
-          <li>🎻 Скрипка</li>
-          <li>🎤 Вокал</li>
-          <li>🎹 Фортепіано</li>
-          <li>🎶 Бандура</li>
-        </ul>
-        <p><strong>👥 Групові заняття:</strong></p>
-        <ul style="margin-top:0; padding-left:20px;">
-          <li>🎶 Теорія музики</li>
-          <li>🎶 Ансамбль «Crescendo»</li>
-        </ul>
-        <div style="margin-top:20px; text-align:center;">
-          <a href="https://docs.google.com/forms/d/1WS-ZEKD3QtShmhWqIaxGbnuLGXM4OTv0P_h5ywhMPoE/edit" 
-             style="display:inline-block; background:#d2691e; color:#fff; 
-                    padding:15px 30px; margin:10px; font-size:1.2em; 
-                    text-decoration:none; border-radius:12px; font-weight:bold;">
-            🎨 ЗАПИСАТИСЯ 🎶 
-          </a>
-        </div>
-      </div><br>
-      <h3 id="payment-info" style="border: 2px solid #4CAF50; border-radius: 8px; padding: 10px; background-color: #f9f9f9; margin-top: 0;">💳 Реквізити для оплати:</h3>
-      <p style="border-left: 2px solid #4CAF50; border-right: 2px solid #4CAF50; padding: 5px 10px; background-color: #f9f9f9; margin: 0;">
-        Шановні батьки учнів 1-9 класів!
-      </p>
-      <p style="border-left: 2px solid #4CAF50; border-right: 2px solid #4CAF50; padding: 5px 10px; background-color: #f9f9f9; margin: 0;">
-        Просимо до 10 числа кожного місяця оплачувати за навчання в школі на РЕКВІЗИТИ польськоі школи:
-      </p>
-      <p style="border-left: 2px solid #4CAF50; border-right: 2px solid #4CAF50; padding: 5px 10px; background-color: #f9f9f9; margin: 0;">
-        <strong>Education Center PUSH spółka z o.o.</strong>
-      </p>
-      <p style="border-left: 2px solid #4CAF50; border-right: 2px solid #4CAF50; border-bottom: 2px solid #4CAF50; border-radius: 0 0 8px 8px; padding: 5px 10px; background-color: #f9f9f9; margin: 0;">
-        <strong>Розрахунковий рахунок:</strong><br>
-        48 1090 1883 0000 0001 5014 8624<br>
-        <strong>Призначення платежу:</strong><br>
-        edukacja w szkole та прізвище ім’я учня на АНГЛ МОВІ (наприклад: <em>edukacja w szkole Voloshko Mykola</em>)
-      </p>    
-    </div>
+<h3 style="border: 2px solid #FFD700; border-radius: 8px 8px 0 0; padding: 10px; background-color: #fffbea; margin-top: 0;">📆 Розклад гуртків</h3>
+<div style="border: 2px solid #FFD700; border-top: none; border-radius: 0 0 8px 8px; padding: 15px; background-color: #f9f9f9;">
+
+  <!-- Групові -->
+<h4 style="margin-top:0; color:#b8860b;">👥 Групові заняття</h4>
+
+<ul style="padding-left:20px; list-style:none; margin:0;">
+  <li>
+    <strong>📅 Понеділок:</strong>
+    <ul style="list-style:none; padding-left:20px; margin:5px 0;">
+      <li>🤖 Робототехніка – 14:50–16:30<br>
+          <span style="display:block; font-size:0.95em; color:#666;">📍 Wyspianskiego 2 (молодша школа)</span></li>
+      <li>🎭 Театр – 15:30–17:00<br>
+          <span style="display:block; font-size:0.95em; color:#666;">📍 Wyspianskiego 2 (молодша школа)</span></li>
+    </ul>
+  </li>
+
+  <li>
+    <strong>📅 Вівторок:</strong>
+    <ul style="list-style:none; padding-left:20px; margin:5px 0;">
+      <li>🥋 Карате (1 гр.) – 15:00<br>
+          <span style="display:block; font-size:0.95em; color:#666;">📍 Wyspianskiego 2 (молодша школа)</span></li>
+      <li>🥋 Карате (2 гр.) – 16:15<br>
+          <span style="display:block; font-size:0.95em; color:#666;">📍 Wojskiego 4 (старша школа)</span></li>
+      <li>💃 Хореографія (1 гр.) – 16:00–17:30<br>
+          <span style="display:block; font-size:0.95em; color:#666;">📍 Wyspianskiego 2 (молодша школа)</span></li>
+      <li>🇺🇦 Гурток «Українська світлиця» – 15:00<br>
+          <span style="display:block; font-size:0.95em; color:#666;">📍 Wyspianskiego 2 (молодша школа)</span></li>
+    </ul>
+  </li>
+
+  <li>
+    <strong>📅 Середа:</strong>
+    <ul style="list-style:none; padding-left:20px; margin:5px 0;">
+      <li>🎭 Театр – 15:30–17:00<br>
+          <span style="display:block; font-size:0.95em; color:#666;">📍 Wojskiego 4 (старша школа)</span></li>
+      <li>💃 Хореографія (2 гр.) – 17:00–18:30<br>
+          <span style="display:block; font-size:0.95em; color:#666;">📍 Wojskiego 4 (старша школа)</span></li>
+      <li>🎶 Теорія музики (1 гр.) – 15:00<br>
+          <span style="display:block; font-size:0.95em; color:#666;">📍 Wyspianskiego 2 (молодша школа)</span></li>
+      <li>🎶 Ансамбль «Crescendo» – 15:45<br>
+          <span style="display:block; font-size:0.95em; color:#666;">📍 Wyspianskiego 2 (молодша школа)</span></li>
+      <li>🎶 Теорія музики (2 гр.) – 16:30<br>
+          <span style="display:block; font-size:0.95em; color:#666;">📍 Wyspianskiego 2 (молодша школа)</span></li>
+    </ul>
+  </li>
+
+  <li>
+    <strong>📅 Четвер:</strong>
+    <ul style="list-style:none; padding-left:20px; margin:5px 0;">
+      <li>💬 Speaking Club – 13:55 - 15:35<br>
+          <span style="display:block; font-size:0.95em; color:#666;">📍 Wyspianskiego 2 (молодша школа)</span></li>  
+      <li>🥋 Карате (1 гр.) – 15:00<br>
+          <span style="display:block; font-size:0.95em; color:#666;">📍 Wyspianskiego 2 (молодша школа)</span></li>    
+      <li>🥋 Карате (2 гр.) – 16:15<br>
+          <span style="display:block; font-size:0.95em; color:#666;">📍 Wojskiego 4 (старша школа)</span></li>
+      <li>💃 Хореографія (1 гр.) – 16:00–17:30<br>
+          <span style="display:block; font-size:0.95em; color:#666;">📍 Wyspianskiego 2 (молодша школа)</span></li>
+      <li>🎨 Художній клас (живопис акрилом) – 15:30<br>
+          <span style="display:block; font-size:0.95em; color:#666;">📍 Wyspianskiego 2 (молодша школа)</span></li>
+      <li>🎶 Теорія музики (3 гр.) – 16:55<br>
+          <span style="display:block; font-size:0.95em; color:#666;">📍 Wyspianskiego 2 (молодша школа)</span></li>
+    </ul>
+  </li>
+
+  <li>
+    <strong>📅 Пʼятниця:</strong>
+    <ul style="list-style:none; padding-left:20px; margin:5px 0;">
+      <li>💃 Хореографія (2 гр.) – 15:00–16:30<br>
+          <span style="display:block; font-size:0.95em; color:#666;">📍 Wojskiego 4 (старша школа)</span></li>
+      <li>🎨 Художній клас (живопис акрилом) – 15:45<br>
+          <span style="display:block; font-size:0.95em; color:#666;">📍 Wyspianskiego 2 (молодша школа)</span></li>
+    </ul>
+  </li>
+</ul>
+
+<hr style="border:1px dashed #FFD700; margin:15px 0;">
+
+  <!-- Індивідуальні -->
+<h4 style="margin-top:0; color:#b8860b;">🎶 Індивідуальні заняття (Музичне мистецтво)</h4>
+
+<p>📌 Формат: 2 індивідуальні уроки + 2 групові</p>
+
+<p><strong>🎼 Індивідуальні класи:</strong></p>
+<ul style="margin-top:0; margin-bottom:10px; padding-left:20px;">
+  <li>🎸 Гітара</li>
+  <li>🥁 Ударні інструменти</li>
+  <li>🎻 Скрипка</li>
+  <li>🎤 Вокал</li>
+  <li>🎹 Фортепіано</li>
+  <li>🎶 Бандура</li>
+</ul>
+
+<p><strong>👥 Групові заняття:</strong></p>
+<ul style="margin-top:0; padding-left:20px;">
+  <li>🎶 Теорія музики</li>
+  <li>🎶 Ансамбль «Crescendo»</li>
+</ul>
+<div style="margin-top:20px; text-align:center;">
+<a href="https://docs.google.com/forms/d/1WS-ZEKD3QtShmhWqIaxGbnuLGXM4OTv0P_h5ywhMPoE/edit" 
+     style="display:inline-block; background:#d2691e; color:#fff; 
+            padding:15px 30px; margin:10px; font-size:1.2em; 
+            text-decoration:none; border-radius:12px; font-weight:bold;">
+    🎨 ЗАПИСАТИСЯ 🎶 
+  </a>
+</div>
+</div>
+<br>
+
+<h3 id="payment-info" style="border: 2px solid #4CAF50; border-radius: 8px; padding: 10px; background-color: #f9f9f9; margin-top: 0;">💳 Реквізити для оплати:</h3>
+<p style="border-left: 2px solid #4CAF50; border-right: 2px solid #4CAF50; padding: 5px 10px; background-color: #f9f9f9; margin: 0;">
+  Шановні батьки учнів 1-9 класів!
+</p>
+<p style="border-left: 2px solid #4CAF50; border-right: 2px solid #4CAF50; padding: 5px 10px; background-color: #f9f9f9; margin: 0;">
+  Просимо до 10 числа кожного місяця оплачувати за навчання в школі на РЕКВІЗИТИ польськоі школи:
+</p>
+<p style="border-left: 2px solid #4CAF50; border-right: 2px solid #4CAF50; padding: 5px 10px; background-color: #f9f9f9; margin: 0;">
+  <strong>Education Center PUSH spółka z o.o.</strong>
+</p>
+<p style="border-left: 2px solid #4CAF50; border-right: 2px solid #4CAF50; border-bottom: 2px solid #4CAF50; border-radius: 0 0 8px 8px; padding: 5px 10px; background-color: #f9f9f9; margin: 0;">
+  <strong>Розрахунковий рахунок:</strong><br>
+  48 1090 1883 0000 0001 5014 8624<br>
+  <strong>Призначення платежу:</strong><br>
+  edukacja w szkole та прізвище ім’я учня на АНГЛ МОВІ (наприклад: <em>edukacja w szkole Voloshko Mykola</em>)
+</p>    
+
+</div>
     <div class="tables-container">
       <div class="current-lesson" id="current-lesson" role="alert">Зараз немає уроків.</div>
-      <button class="voice-button" aria-label="Прочитати розклад голосом"><i class="fas fa-volume-up"></i> Прочитати</button>
       <h2 id="schedule-today">Розклад на сьогодні</h2>
       <div class="day-filter" id="day-filter"></div>
       <div class="table-wrapper">
@@ -703,15 +699,6 @@
       noClubsToday: { ua: 'Сьогодні немає гуртків.', pl: 'Dzisiaj nie ma zajęć dodatkowych.' }
     };
 
-    const subjectIcons = {
-      'Математика': '🔢',
-      'Українська мова': '✍️',
-      'Польська мова': '🇵🇱',
-      'Англійська мова': '🇬🇧',
-      'Перерва': '☕',
-      'Обід': '🍽️'
-    };
-
     let currentLanguage = 'ua';
     const dayKeys = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
     let selectedDay = dayKeys[new Date().getDay()];
@@ -747,14 +734,6 @@
         { name: { ua: "Хореографія (2 гр.)", pl: "Choreografia (2 gr.)" }, time: "15:00–16:30", location: { ua: "Wojskiego 4 (старша школа)", pl: "Wojskiego 4 (szkoła średnia)" } },
         { name: { ua: "Художній клас (живопис акрилом)", pl: "Klasa artystyczna (malarstwo akrylowe)" }, time: "15:45", location: { ua: "Wyspianskiego 2 (молодша школа)", pl: "Wyspianskiego 2 (szkoła podstawowa)" } }
       ]
-    };
-
-    const dayNames = {
-      Monday: { ua: "Понеділок", pl: "Poniedziałek" },
-      Tuesday: { ua: "Вівторок", pl: "Wtorek" },
-      Wednesday: { ua: "Середа", pl: "Środa" },
-      Thursday: { ua: "Четвер", pl: "Czwartek" },
-      Friday: { ua: "П'ятниця", pl: "Piątek" }
     };
 
     function cacheSchedule() {
@@ -860,12 +839,11 @@
       const dailyScheduleTable = document.querySelector("#daily-schedule tbody");
       dailyScheduleTable.innerHTML = '';
 
-      daySchedule.forEach((lesson, index) => {
+      daySchedule.forEach(lesson => {
         const isBreak = lesson.subject.ua === "Перерва" || lesson.subject.ua.includes("Обід");
-        const icon = subjectIcons[lesson.subject.ua] || '';
-        const row = `<tr class="${isBreak ? 'highlight' : ''}" style="--row-index: ${index};">
+        const row = `<tr class="${isBreak ? 'highlight' : ''}">
           <td>${lesson.number}</td>
-          <td>${icon} ${lesson.subject[currentLanguage]}</td>
+          <td>${lesson.subject[currentLanguage]}</td>
           <td>${lesson.time}</td>
         </tr>`;
         dailyScheduleTable.innerHTML += row;
@@ -907,7 +885,6 @@
         "Friday": "friday",
       };
 
-      let rowIndex = 0;
       for (const day in cachedSchedule) {
         const dayLessons = cachedSchedule[day];
         const dayClass = dayClasses[day] || "";
@@ -916,16 +893,14 @@
 
         dayLessons.forEach((lesson, index) => {
           const isBreak = lesson.subject.ua === "Перерва" || lesson.subject.ua.includes("Обід");
-          const icon = subjectIcons[lesson.subject.ua] || '';
           const rowClass = isBreak ? "highlight" : `${dayClass} ${isToday}`;
-          const row = `<tr class="${rowClass}" style="--row-index: ${rowIndex};">
+          const row = `<tr class="${rowClass}">
             ${index === 0 ? `<td rowspan="${dayLessons.length}">${dayName}</td>` : ''}
             <td>${lesson.number}</td>
-            <td>${icon} ${lesson.subject[currentLanguage]}</td>
+            <td>${lesson.subject[currentLanguage]}</td>
             <td>${lesson.time}</td>
           </tr>`;
           weeklyScheduleTable.innerHTML += row;
-          rowIndex++;
         });
       }
     }
@@ -976,14 +951,6 @@
       }
     }
 
-    function speakSchedule() {
-      const dailySchedule = document.querySelector("#daily-schedule tbody").textContent;
-      const utterance = new SpeechSynthesisUtterance(dailySchedule);
-      utterance.lang = currentLanguage === 'ua' ? 'uk-UA' : 'pl-PL';
-      utterance.rate = 1;
-      speechSynthesis.speak(utterance);
-    }
-
     function handleTouchZoom(img) {
       let scale = 1;
       let startDistance = 0;
@@ -1024,7 +991,7 @@
     }
 
     function initialize() {
-      console.log('Ініціалізація сторінки для 2 класу');
+      console.log('Ініціалізація сторінки для 2А класу');
       clearOldCache();
       cacheSchedule();
       updateStaticTexts();
@@ -1033,16 +1000,6 @@
       renderWeeklySchedule();
       renderCurrentLesson();
       setInterval(renderCurrentLesson, 30000);
-
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js').then(reg => {
-            console.log('Service Worker зарегистрирован:', reg);
-          }).catch(err => {
-            console.error('Ошибка регистрации Service Worker:', err);
-          });
-        });
-      }
     }
 
     document.querySelectorAll('.lang-toggle').forEach(button => {
@@ -1082,11 +1039,6 @@
         notificationsEnabled = false;
         document.querySelector('.notify-toggle i').classList.replace('fa-bell-slash', 'fa-bell');
       }
-    });
-
-    document.querySelector('.voice-button').addEventListener('click', () => {
-      console.log('Чтение расписания голосом');
-      speakSchedule();
     });
 
     const image = document.querySelector('.google-image');
