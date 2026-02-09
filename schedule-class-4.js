@@ -66,10 +66,7 @@ const schedule = {
     { number: " ", subject: { ua: "Обід 1-3 класи", pl: "Obiad klasy 1-3" }, time: "11:35 - 11:55" },
     { number: 4, subject: { ua: "Англійська мова", pl: "Język angielski" }, time: "11:55 - 12:40" },
     { number: " ", subject: { ua: "Обід 4-5 класи", pl: "Obiad klasy 4-5" }, time: "12:40 - 13:00" },
-    { number: " ", subject: { ua: "Очікування автобуса", pl: "Oczekiwanie na autobus" }, time: "13:00 - 13:20" },
-    { number: " ", subject: { ua: "Шлях зі школи до басейну на автобусі", pl: "Droga ze szkoły na basen autobusem" }, time: "13:20 - 13:45" },
     { number: 5, subject: { ua: "Фізичне виховання (басейн)", pl: "Wychowanie fizyczne (basen)" }, time: "14:00 - 15:00" },
-    { number: " ", subject: { ua: "Шлях з басену до школи на автобусі", pl: "Droga z basenu do szkoły autobusem" }, time: "15:30 - 16:00" }
   ]
 };
 
