@@ -513,18 +513,21 @@
 
   <script src="schedule-class-2.js"></script>
   <script>
-    /* --- Вбудований JS для відновлення функціоналу --- */
+    /* --- Вбудований JS --- */
     
-    // Fallback data if file doesn't load
+    // Встановлюємо dayNames ЯВНО, щоб вони були доступні навіть якщо файл завантажиться з помилкою
+    const dayNames = {
+        "Monday": { ua: "Понеділок", pl: "Poniedziałek" },
+        "Tuesday": { ua: "Вівторок", pl: "Wtorek" },
+        "Wednesday": { ua: "Середа", pl: "Środa" },
+        "Thursday": { ua: "Четвер", pl: "Czwartek" },
+        "Friday": { ua: "П'ятниця", pl: "Piątek" }
+    };
+
+    // Перевірка, чи завантажився schedule із зовнішнього файлу
     if (typeof schedule === 'undefined') {
-        var schedule = {}; 
-        var dayNames = {
-            "Monday": { ua: "Понеділок", pl: "Poniedziałek" },
-            "Tuesday": { ua: "Вівторок", pl: "Wtorek" },
-            "Wednesday": { ua: "Середа", pl: "Środa" },
-            "Thursday": { ua: "Четвер", pl: "Czwartek" },
-            "Friday": { ua: "П'ятниця", pl: "Piątek" }
-        };
+        console.error("Файл schedule-class-2.js не завантажено. Розклад може бути порожнім.");
+        var schedule = {}; // Ініціалізуємо порожнім, щоб не було критичної помилки JS
     }
 
     const translations = {
@@ -583,12 +586,19 @@
     };
 
     function cacheSchedule() {
+      // Кешуємо тільки якщо в schedule є дані
       if(Object.keys(schedule).length > 0) localStorage.setItem(`schedule-${classId}`, JSON.stringify(schedule));
     }
 
     function loadCachedSchedule() {
       const cached = localStorage.getItem(`schedule-${classId}`);
-      if (cached) return JSON.parse(cached);
+      if (cached) {
+          try {
+              return JSON.parse(cached);
+          } catch(e) {
+              console.error("Cache parse error", e);
+          }
+      }
       return schedule;
     }
 
@@ -707,29 +717,33 @@
       const todayKey = dayKeys[today];
       
       const dayClasses = { "Monday": "monday", "Tuesday": "tuesday", "Wednesday": "wednesday", "Thursday": "thursday", "Friday": "friday" };
+      const weekDays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
 
-      for (const day in cachedSchedule) {
+      // Проходимо саме по масиву weekDays, щоб гарантувати порядок і наявність даних
+      weekDays.forEach(day => {
         const dayLessons = cachedSchedule[day];
-        const dayClass = dayClasses[day] || "";
-        const isToday = day === todayKey ? "current-day" : "";
-        const dayName = dayNames[day] ? dayNames[day][currentLanguage] : day;
+        // Перевіряємо, чи є уроки в цей день
+        if (dayLessons && dayLessons.length > 0) {
+            const dayClass = dayClasses[day] || "";
+            const isToday = day === todayKey ? "current-day" : "";
+            const dayName = dayNames[day] ? dayNames[day][currentLanguage] : day;
 
-        if(dayLessons.length > 0) {
-             weeklyScheduleTable.innerHTML += `<tr style="height:10px;"><td colspan="4" style="background:transparent; padding:0;"></td></tr>`;
+            // Відступ між днями
+            weeklyScheduleTable.innerHTML += `<tr style="height:10px;"><td colspan="4" style="background:transparent; padding:0; border:none;"></td></tr>`;
+
+            dayLessons.forEach((lesson, index) => {
+              const isBreak = lesson.subject.ua === "Перерва" || lesson.subject.ua.includes("Обід");
+              const rowClass = isBreak ? "highlight" : `${dayClass} ${isToday}`;
+              const row = `<tr class="${rowClass}">
+                ${index === 0 ? `<td rowspan="${dayLessons.length}" style="vertical-align:middle; font-weight:bold;">${dayName}</td>` : ''}
+                <td>${lesson.number}</td>
+                <td>${lesson.subject[currentLanguage]}</td>
+                <td style="white-space:nowrap;">${lesson.time}</td>
+              </tr>`;
+              weeklyScheduleTable.innerHTML += row;
+            });
         }
-
-        dayLessons.forEach((lesson, index) => {
-          const isBreak = lesson.subject.ua === "Перерва" || lesson.subject.ua.includes("Обід");
-          const rowClass = isBreak ? "highlight" : `${dayClass} ${isToday}`;
-          const row = `<tr class="${rowClass}">
-            ${index === 0 ? `<td rowspan="${dayLessons.length}">${dayName}</td>` : ''}
-            <td>${lesson.number}</td>
-            <td>${lesson.subject[currentLanguage]}</td>
-            <td style="white-space:nowrap;">${lesson.time}</td>
-          </tr>`;
-          weeklyScheduleTable.innerHTML += row;
-        });
-      }
+      });
     }
 
     function renderDayFilter() {
@@ -842,8 +856,10 @@
     if(image) handleTouchZoom(image);
 
     document.querySelector('.lang-toggle[data-lang="ua"]').classList.add('active');
-    if (!dayNames[selectedDay] && selectedDay !== "Monday") selectedDay = "Monday";
-    if (!dayNames[selectedDay]) selectedDay = "Monday";
+    
+    // Перевірка дня тижня
+    if (typeof dayNames[selectedDay] === 'undefined' && selectedDay !== "Monday") selectedDay = "Monday";
+    if (typeof dayNames[selectedDay] === 'undefined') selectedDay = "Monday";
     
     initialize();
   </script>
