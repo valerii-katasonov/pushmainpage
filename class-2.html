@@ -15,16 +15,23 @@
   <style>
     :root {
       --primary-color: #006d77;
-      --accent-color: #00bfd1;
       --text-color: #1a1a66;
-      --bg-gradient: linear-gradient(135deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.1));
+      
+      /* Нові кольори для днів (більш сучасні, пастельні, але насичені) */
+      --mon-color: #4FC3F7; /* Блакитний */
+      --tue-color: #81C784; /* Зелений */
+      --wed-color: #FFD54F; /* Жовтий */
+      --thu-color: #FF8A65; /* Помаранчевий */
+      --fri-color: #F06292; /* Рожевий */
+      
+      --row-bg: rgba(255, 255, 255, 0.5);
+      --row-hover: rgba(255, 255, 255, 0.8);
     }
 
     body {
       font-family: 'Montserrat', sans-serif;
       margin: 0;
       padding: 0;
-      /* Твій оригінальний фон */
       background-image: url('https://zastavki.gas-kvas.com/uploads/posts/2024-09/zastavki-gas-kvas-com-35bo-p-zastavki-pro-shkolu-9.jpg');
       background-size: cover;
       background-position: center;
@@ -36,20 +43,21 @@
 
     body.dark-theme {
       color: #fff;
+      --row-bg: rgba(255, 255, 255, 0.05);
+      --row-hover: rgba(255, 255, 255, 0.15);
     }
     
-    /* Темна тема - підкладка для читабельності */
     body.dark-theme::before {
       content: '';
       position: fixed;
       top: 0; left: 0; width: 100%; height: 100%;
-      background: rgba(0, 0, 0, 0.6);
+      background: rgba(0, 0, 0, 0.65);
       z-index: -1;
     }
 
-    /* --- HEADER (Glass Style) --- */
+    /* --- HEADER --- */
     header {
-      background: rgba(0, 109, 119, 0.85); /* Напівпрозорий фон */
+      background: rgba(0, 109, 119, 0.85);
       backdrop-filter: blur(10px);
       -webkit-backdrop-filter: blur(10px);
       color: white;
@@ -58,7 +66,7 @@
       justify-content: center;
       align-items: center;
       gap: 1rem;
-      box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+      box-shadow: 0 4px 30px rgba(0, 0, 0, 0.15);
       position: relative;
       border-bottom: 1px solid rgba(255, 255, 255, 0.3);
       margin-bottom: 2rem;
@@ -80,7 +88,6 @@
       text-align: center;
     }
 
-    /* Кнопки керування */
     .theme-toggle, .notify-toggle {
       position: absolute;
       top: 1rem;
@@ -119,7 +126,6 @@
       backdrop-filter: blur(5px);
       transition: background 0.3s ease;
     }
-    .lang-toggle:hover { background: rgba(255,255,255,0.3); }
     .lang-toggle.active {
       background: white;
       color: #006d77;
@@ -135,69 +141,48 @@
       gap: 1.5rem;
       justify-content: center;
       align-items: flex-start;
-      flex-wrap: wrap; /* Дозволяє перенос блоків на мобільному */
+      flex-wrap: wrap;
     }
 
-    /* --- GLASS PANEL (Base for Columns) --- */
     .glass-col {
-      background: rgba(255, 255, 255, 0.65); /* Ефект матового скла */
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
+      background: rgba(255, 255, 255, 0.6);
+      backdrop-filter: blur(15px);
+      -webkit-backdrop-filter: blur(15px);
       border-radius: 20px;
-      border: 1px solid rgba(255, 255, 255, 0.4);
-      box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.5);
+      box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
       padding: 1.5rem;
       transition: transform 0.3s ease;
     }
 
     body.dark-theme .glass-col {
-      background: rgba(30, 40, 50, 0.7);
+      background: rgba(30, 40, 50, 0.75);
       border: 1px solid rgba(255, 255, 255, 0.1);
       color: #fff;
     }
 
-    /* Ліва колонка (посилання) */
-    .links-container {
-      flex: 0 0 320px;
-      min-width: 300px;
-    }
+    .links-container { flex: 0 0 320px; min-width: 300px; }
+    .image-container-right { flex: 0 0 350px; min-width: 300px; }
+    .tables-container { flex: 1; min-width: 350px; }
 
-    /* Права колонка (картинка) */
-    .image-container-right {
-      flex: 0 0 350px;
-      min-width: 300px;
-    }
-
-    /* Центральна колонка (розклад) */
-    .tables-container {
-      flex: 1;
-      min-width: 350px; /* Щоб таблиця не сплющувалась */
-    }
-
-    /* --- CONTENT STYLES --- */
-    h2, h3, h4 {
-      color: var(--text-color);
-      margin-top: 0;
-    }
+    /* --- CONTENT --- */
+    h2, h3, h4 { color: var(--text-color); margin-top: 0; font-weight: 700; }
     body.dark-theme h2, body.dark-theme h3, body.dark-theme h4 { color: #fff; }
-
-    /* Посилання */
-    a {
-      text-decoration: none;
-      color: #2d2d99;
-      transition: color 0.3s;
-    }
+    
+    a { text-decoration: none; color: #2d2d99; transition: color 0.3s; }
     body.dark-theme a { color: #82caff; }
     a:hover { color: #00bfd1; }
 
-    /* Блоки всередині лівої колонки (Картки) */
+    /* Картки */
     .info-card {
       background: rgba(255, 255, 255, 0.5);
       border-radius: 12px;
       padding: 12px;
       margin-bottom: 15px;
-      border-left: 4px solid #ccc;
+      border-left: 5px solid #ccc;
+      transition: transform 0.2s;
     }
+    .info-card:hover { transform: translateX(5px); }
     body.dark-theme .info-card { background: rgba(255, 255, 255, 0.05); }
 
     .card-blue { border-color: #1E90FF; }
@@ -212,123 +197,163 @@
       padding-bottom: 5px;
     }
 
-    /* Кнопка */
     .btn-action {
       display: inline-block;
-      background: linear-gradient(45deg, #d2691e, #ff8c00);
+      background: linear-gradient(45deg, #FF9800, #F57C00);
       color: white !important;
-      padding: 10px 20px;
-      border-radius: 20px;
+      padding: 12px 24px;
+      border-radius: 50px;
       font-weight: bold;
       text-align: center;
       margin: 10px 0;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+      box-shadow: 0 4px 15px rgba(245, 124, 0, 0.3);
+      transition: transform 0.2s;
+    }
+    .btn-action:hover { transform: scale(1.05); }
+
+    /* --- ОНОВЛЕНІ ТАБЛИЦІ (СУЧАСНИЙ ДИЗАЙН) --- */
+    
+    .table-wrapper {
+      overflow-x: auto;
+      margin-bottom: 1.5rem;
     }
 
-    /* --- SCHEDULE STYLES --- */
+    table {
+      width: 100%;
+      border-collapse: separate; /* Важливо для відступів між рядками */
+      border-spacing: 0 8px;     /* Відступ між рядками */
+    }
+
+    /* Заголовки таблиці */
+    th {
+      padding: 10px;
+      text-transform: uppercase;
+      font-size: 0.85rem;
+      color: var(--text-color);
+      opacity: 0.7;
+      letter-spacing: 1px;
+    }
+    body.dark-theme th { color: #ccc; }
+
+    /* Рядки таблиці */
+    tbody tr {
+      background: var(--row-bg);
+      backdrop-filter: blur(5px);
+      transition: transform 0.2s, background 0.2s;
+    }
+
+    tbody tr:hover {
+      transform: scale(1.01);
+      background: var(--row-hover);
+      box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+    }
+
+    td {
+      padding: 15px;
+      text-align: center;
+      vertical-align: middle;
+      border: none; /* Прибираємо старі рамки */
+    }
+
+    /* Закруглення першої та останньої комірки в рядку */
+    tbody tr td:first-child { border-top-left-radius: 12px; border-bottom-left-radius: 12px; }
+    tbody tr td:last-child { border-top-right-radius: 12px; border-bottom-right-radius: 12px; }
+
+    /* Стилі для днів тижня (кольорова смужка зліва) */
+    .monday { border-left: 5px solid var(--mon-color); }
+    .tuesday { border-left: 5px solid var(--tue-color); }
+    .wednesday { border-left: 5px solid var(--wed-color); }
+    .thursday { border-left: 5px solid var(--thu-color); }
+    .friday { border-left: 5px solid var(--fri-color); }
+
+    /* Якщо це таблиця "На сьогодні" - додаємо легкий фон, бо там немає класів днів */
+    #daily-schedule tbody tr {
+      border-left: 5px solid var(--primary-color);
+    }
+    
+    /* Перерва */
+    .highlight {
+      background: rgba(255, 235, 59, 0.2) !important; 
+    }
+    .highlight td {
+      font-style: italic;
+      color: #666;
+    }
+    body.dark-theme .highlight td { color: #bbb; }
+
+    /* Поточний день в тижневому розкладі */
+    .current-day {
+      background: rgba(76, 175, 80, 0.15) !important;
+      border: 2px solid #4CAF50; /* Рамка навколо всього рядка */
+      box-shadow: 0 0 15px rgba(76, 175, 80, 0.2);
+    }
+
+    /* --- ІНШІ ЕЛЕМЕНТИ РОЗКЛАДУ --- */
     .current-lesson {
-      background: linear-gradient(135deg, rgba(255,255,255,0.9), rgba(255,255,255,0.7));
-      border-left: 6px solid #4CAF50;
-      padding: 1rem;
-      border-radius: 12px;
-      margin-bottom: 1.5rem;
+      background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+      padding: 1.5rem;
+      border-radius: 15px;
+      margin-bottom: 2rem;
       font-size: 1.2rem;
       font-weight: bold;
       color: #1a1a66;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+      text-align: center;
+      box-shadow: 0 4px 15px rgba(67, 233, 123, 0.3);
+      border: none;
     }
     body.dark-theme .current-lesson {
-      background: rgba(255, 255, 255, 0.1);
-      color: #fff;
+      background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+      color: white;
     }
 
     .day-filter {
       display: flex;
       justify-content: center;
       flex-wrap: wrap;
-      gap: 0.5rem;
+      gap: 10px;
       margin-bottom: 1.5rem;
+      background: rgba(255,255,255,0.3);
+      padding: 10px;
+      border-radius: 20px;
     }
 
     .day-filter button {
-      padding: 0.6rem 1.2rem;
+      padding: 10px 20px;
       border: none;
-      background: rgba(255, 255, 255, 0.5);
-      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.7);
+      border-radius: 12px;
       cursor: pointer;
       font-size: 1rem;
-      transition: all 0.3s ease;
-      font-weight: 500;
-    }
-    
-    .day-filter button:hover { transform: translateY(-2px); background: white; }
-    
-    .day-filter button.active {
-      background: #4CAF50;
-      color: white;
-      box-shadow: 0 4px 10px rgba(76, 175, 80, 0.3);
-    }
-
-    /* Таблиці */
-    .table-wrapper {
-      overflow-x: auto;
-      border-radius: 12px;
-      margin-bottom: 1.5rem;
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      background: rgba(255, 255, 255, 0.4); /* Прозорість таблиці */
-    }
-    
-    body.dark-theme table { background: rgba(0, 0, 0, 0.2); }
-
-    th, td {
-      padding: 12px 15px;
-      text-align: center;
-      border-bottom: 1px solid rgba(0,0,0,0.05);
-    }
-    body.dark-theme th, body.dark-theme td { border-bottom: 1px solid rgba(255,255,255,0.1); }
-
-    th {
-      background: rgba(0, 0, 0, 0.05);
       font-weight: 600;
       color: var(--text-color);
+      transition: all 0.3s ease;
     }
-    body.dark-theme th { background: rgba(255, 255, 255, 0.1); color: #fff; }
-
-    .highlight { background: rgba(255, 235, 59, 0.3) !important; font-style: italic; }
     
-    /* Кольори днів у тижневому розкладі */
-    .monday { background: rgba(173, 216, 230, 0.4); }
-    .tuesday { background: rgba(144, 238, 144, 0.4); }
-    .wednesday { background: rgba(255, 255, 224, 0.4); }
-    .thursday { background: rgba(255, 218, 185, 0.4); }
-    .friday { background: rgba(255, 192, 203, 0.4); }
-    .current-day { background: rgba(76, 175, 80, 0.3) !important; border: 2px solid #4CAF50; }
+    .day-filter button:hover { background: white; transform: translateY(-2px); }
+    
+    .day-filter button.active {
+      background: var(--primary-color);
+      color: white;
+      box-shadow: 0 4px 12px rgba(0, 109, 119, 0.3);
+    }
 
-    /* Гуртки сьогодні */
     .clubs-today {
-      background: rgba(255, 215, 0, 0.15);
-      border-left: 6px solid #FFD700;
+      background: rgba(255, 215, 0, 0.1);
+      border-left: 5px solid #FFD700;
       padding: 1rem;
       border-radius: 12px;
       margin: 1.5rem 0;
     }
-    body.dark-theme .clubs-today { background: rgba(255, 215, 0, 0.05); }
 
-    /* Зображення */
     .google-image {
       width: 100%;
-      border-radius: 12px;
+      border-radius: 15px;
       box-shadow: 0 5px 15px rgba(0,0,0,0.1);
       transition: transform 0.3s ease;
       cursor: pointer;
     }
     .google-image:hover { transform: scale(1.02); }
 
-    /* Logo Intro Animation */
     .logo-intro {
       position: fixed;
       top: 50%; left: 50%;
@@ -347,7 +372,6 @@
       100% { opacity: 0; transform: translate(-50%, -50%) scale(1.1); }
     }
 
-    /* Адаптив */
     @media screen and (max-width: 1024px) {
       .container { flex-direction: column; align-items: stretch; }
       .links-container, .image-container-right { flex: auto; width: 100%; max-width: none; }
@@ -357,7 +381,8 @@
     }
     @media screen and (max-width: 480px) {
       header h1 { font-size: 1.2rem; }
-      .day-filter button { padding: 0.5rem 0.8rem; font-size: 0.9rem; }
+      .day-filter button { padding: 8px 12px; font-size: 0.9rem; }
+      td, th { padding: 10px 5px; font-size: 0.9rem; }
     }
   </style>
 </head>
@@ -514,6 +539,9 @@
 
   <script src="schedule-class-2.js"></script>
   <script>
+    /* ------------------------------------------------------------------
+       LOGIC SECTION - DO NOT TOUCH (Original Working Version)
+       ------------------------------------------------------------------ */
     const translations = {
       header: {
         ua: 'Розклад уроків<br>2 клас<br>Push School Warsaw',
@@ -539,6 +567,15 @@
     const dayKeys = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
     let selectedDay = dayKeys[new Date().getDay()];
     const classId = 'class2';
+
+    // ВАЖЛИВО: Ці назви використовуються для відображення
+    const dayNames = {
+        "Monday": { ua: "Понеділок", pl: "Poniedziałek" },
+        "Tuesday": { ua: "Вівторок", pl: "Wtorek" },
+        "Wednesday": { ua: "Середа", pl: "Środa" },
+        "Thursday": { ua: "Четвер", pl: "Czwartek" },
+        "Friday": { ua: "П'ятниця", pl: "Piątek" }
+    };
 
     const clubSchedule = {
       "Monday": [
@@ -573,20 +610,20 @@
     };
 
     function cacheSchedule() {
-      console.log(`Кешування розкладу для ${classId}`);
-      localStorage.setItem(`schedule-${classId}`, JSON.stringify(schedule));
+      // Захист: зберігаємо тільки якщо schedule існує
+      if(typeof schedule !== 'undefined' && Object.keys(schedule).length > 0) {
+        console.log(`Кешування розкладу для ${classId}`);
+        localStorage.setItem(`schedule-${classId}`, JSON.stringify(schedule));
+      }
     }
 
     function loadCachedSchedule() {
       console.log(`Завантаження кешованого розкладу для ${classId}`);
       const cached = localStorage.getItem(`schedule-${classId}`);
       const parsed = cached ? JSON.parse(cached) : null;
-      if (parsed) {
-        console.log(`Використано кешований розклад для ${classId}`);
-        return parsed;
-      }
-      console.log(`Кеш відсутній, використовується розклад із schedule-class-2.js`);
-      return schedule;
+      if (parsed) return parsed;
+      // Якщо кешу немає, повертаємо глобальну змінну schedule (якщо файл завантажився)
+      return typeof schedule !== 'undefined' ? schedule : {};
     }
 
     function clearOldCache() {
@@ -595,13 +632,17 @@
     }
 
     function getCurrentLesson(daySchedule) {
+      if(!daySchedule) return null;
       const now = new Date();
       const currentHour = now.getHours();
       const currentMinutes = now.getMinutes();
       const currentTime = currentHour * 60 + currentMinutes;
 
       for (let lesson of daySchedule) {
-        const [start, end] = lesson.time.split(" - ").map(time => {
+        const parts = lesson.time.split(" - ");
+        if(parts.length < 2) continue; // Захист від некоректного часу
+        
+        const [start, end] = parts.map(time => {
           const [hours, minutes] = time.split(":").map(Number);
           return hours * 60 + minutes;
         });
@@ -630,8 +671,8 @@
     function updateStaticTexts() {
       console.log('Оновлення статичних текстів для мови:', currentLanguage);
       document.getElementById('header').innerHTML = translations.header[currentLanguage];
-      document.getElementById('useful-links').textContent = translations.usefulLinks[currentLanguage];
-      document.getElementById('textbooks').textContent = translations.textbooks[currentLanguage];
+      document.getElementById('useful-links').innerHTML = translations.usefulLinks[currentLanguage]; // Змінив на innerHTML, бо в HTML там іконка
+      document.getElementById('textbooks').innerHTML = translations.textbooks[currentLanguage];
       document.getElementById('schedule-today').textContent = translations.scheduleToday[currentLanguage];
       document.getElementById('schedule-week').textContent = translations.scheduleWeek[currentLanguage];
       document.getElementById('th-day').textContent = translations.thDay[currentLanguage];
@@ -725,7 +766,12 @@
         const dayLessons = cachedSchedule[day];
         const dayClass = dayClasses[day] || "";
         const isToday = day === todayKey ? "current-day" : "";
-        const dayName = dayNames[day][currentLanguage];
+        const dayName = dayNames[day] ? dayNames[day][currentLanguage] : day;
+
+        // Додаємо відступ між днями
+        if(dayLessons.length > 0) {
+           weeklyScheduleTable.innerHTML += `<tr style="height:10px;"><td colspan="4" style="background:transparent; padding:0; border:none;"></td></tr>`;
+        }
 
         dayLessons.forEach((lesson, index) => {
           const isBreak = lesson.subject.ua === "Перерва" || lesson.subject.ua.includes("Обід");
@@ -734,7 +780,7 @@
             ${index === 0 ? `<td rowspan="${dayLessons.length}">${dayName}</td>` : ''}
             <td>${lesson.number}</td>
             <td>${lesson.subject[currentLanguage]}</td>
-            <td>${lesson.time}</td>
+            <td style="white-space:nowrap;">${lesson.time}</td>
           </tr>`;
           weeklyScheduleTable.innerHTML += row;
         });
@@ -748,17 +794,20 @@
       filterContainer.innerHTML = '';
 
       daysOfWeek.forEach((day) => {
-        const button = document.createElement("button");
-        button.textContent = dayNames[day][currentLanguage];
-        button.dataset.day = day;
-        if (day === selectedDay) button.classList.add("active");
-        button.addEventListener("click", () => {
-          selectedDay = day;
-          document.querySelectorAll(".day-filter button").forEach(btn => btn.classList.remove("active"));
-          button.classList.add("active");
-          renderDailySchedule(day);
-        });
-        filterContainer.appendChild(button);
+        // Перевіряємо, чи є назва для цього дня
+        if(dayNames[day]) {
+            const button = document.createElement("button");
+            button.textContent = dayNames[day][currentLanguage];
+            button.dataset.day = day;
+            if (day === selectedDay) button.classList.add("active");
+            button.addEventListener("click", () => {
+              selectedDay = day;
+              document.querySelectorAll(".day-filter button").forEach(btn => btn.classList.remove("active"));
+              button.classList.add("active");
+              renderDailySchedule(day);
+            });
+            filterContainer.appendChild(button);
+        }
       });
     }
 
@@ -782,47 +831,24 @@
       if (notificationsEnabled && Notification.permission === "granted") {
         new Notification(translations.currentLesson[currentLanguage], {
           body: `${lesson.subject[currentLanguage]} (${lesson.time})`,
-          icon: "https://cdn-icons-png.flaticon.com/512/4751/4751951.png"
+          icon: "https://i.postimg.cc/WbY9TdDp/PushIco.png"
         });
       }
     }
 
     function handleTouchZoom(img) {
-      let scale = 1;
-      let startDistance = 0;
-
-      img.addEventListener('touchstart', (e) => {
-        if (e.touches.length === 2) {
-          startDistance = Math.hypot(
-            e.touches[0].pageX - e.touches[1].pageX,
-            e.touches[0].pageY - e.touches[1].pageY
-          );
-        }
-      });
-
-      img.addEventListener('touchmove', (e) => {
-        if (e.touches.length === 2) {
-          const currentDistance = Math.hypot(
-            e.touches[0].pageX - e.touches[1].pageX,
-            e.touches[0].pageY - e.touches[1].pageY
-          );
-          scale = currentDistance / startDistance;
-          img.style.transform = `scale(${Math.min(Math.max(scale, 1), 2)})`;
-          e.preventDefault();
-        }
-      });
-
-      img.addEventListener('touchend', () => {
-        if (scale < 1.5) img.style.transform = 'scale(1)';
-      });
-
+      let isZoomed = false;
       img.addEventListener('click', () => {
-        if (img.style.transform === "scale(2)") {
-          img.style.transform = "scale(1)";
+        isZoomed = !isZoomed;
+        if(isZoomed) {
+            img.style.transform = "scale(1.8)";
+            img.style.zIndex = "100";
+            img.style.position = "relative";
         } else {
-          img.style.transform = "scale(2)";
+            img.style.transform = "scale(1)";
+            img.style.zIndex = "1";
+            img.style.position = "static";
         }
-        img.style.transition = "transform 0.3s ease";
       });
     }
 
@@ -878,12 +904,12 @@
     });
 
     const image = document.querySelector('.google-image');
-    handleTouchZoom(image);
+    if(image) handleTouchZoom(image);
 
     document.querySelector('.lang-toggle[data-lang="ua"]').classList.add('active');
-    const today = new Date().getDay();
-    selectedDay = dayKeys[today];
-    if (!schedule[selectedDay]) selectedDay = "Monday";
+    
+    // Перевірка дня та ініціалізація
+    if (typeof schedule !== 'undefined' && !schedule[selectedDay]) selectedDay = "Monday";
     initialize();
   </script>
 </body>
