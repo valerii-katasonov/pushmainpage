@@ -19,6 +19,8 @@ const schedule = {
     { number: 5, subject: { ua: "Хімія", pl: "Chemia" }, time: "13:00 - 13:45" },
     { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "13:45 - 13:55" },
     { number: 6, subject: { ua: "Англійська мова", pl: "Język angielski" }, time: "13:55 - 14:40" },
+    { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "14:40 - 14:50" },
+    { number: 7, subject: { ua: "Speaking Club", pl: "Speaking Club" }, time: "14:50 - 15:35" }
   ],
   "Tuesday": [
     { number: 1, subject: { ua: "Математика", pl: "Matematyka" }, time: "9:00 - 9:45" },
@@ -46,7 +48,8 @@ const schedule = {
     { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "12:40 - 13:00" },
     { number: 5, subject: { ua: "Англійська мова", pl: "Język angielski" }, time: "13:00 - 13:45" },
     { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "13:45 - 13:55" },
-    { number: 6, subject: { ua: "Польська мова", pl: "Język polski" }, time: "13:55 - 14:40" },
+    { number: 6, subject: { ua: "-", pl: "-" }, time: "13:55 - 14:40" },
+    
   ],
   "Thursday": [
     { number: 1, subject: { ua: "Географія", pl: "Geografia" }, time: "9:00 - 9:45" },
