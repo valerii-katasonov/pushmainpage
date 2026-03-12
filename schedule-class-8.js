@@ -59,7 +59,9 @@ const schedule = {
     { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "13:45 - 13:55" },
     { number: 6, subject: { ua: "Matematyka", pl: "Matematyka" }, time: "13:55 - 14:40" },
     { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "14:40 - 14:50" },
-    { number: 7, subject: { ua: "Українська мова", pl: "Język ukraiński" }, time: "14:50 - 15:35" }
+    { number: 7, subject: { ua: "Українська мова", pl: "Język ukraiński" }, time: "14:50 - 15:35" },
+    { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "15:35 - 15:45" },
+    { number: 8, subject: { ua: "Факультатив: Język polski poziom podstawowy Yulianna Borys", pl: "Fakultet: Język polski poziom podstawowy Yulianna Borys" }, time: "15:45 - 16:30" }
   ],
   "Friday": [
     { number: 1, subject: {  ua: "Англійська мова", pl: "Język angielski" }, time: "9:00 - 9:45" },
