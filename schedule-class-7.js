@@ -40,7 +40,9 @@ const schedule = {
     { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "13:45 - 13:55" },
     { number: 6, subject: { ua: "Інформатика", pl: "Informatyka" }, time: "13:55 - 14:40" },
     { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "14:40 - 14:50" },
-    { number: 7, subject: { ua: "Fizyka", pl: "Fizyka" }, time: "14:50 - 15:35" }
+    { number: 7, subject: { ua: "Fizyka", pl: "Fizyka" }, time: "14:50 - 15:35" },
+    { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "15:35 - 15:45" },
+    { number: 8, subject: { ua: "Факультатив: Арт-терапія", pl: "Fakultet: Arteterapia" }, time: "15:45 - 16:30" }
   ],
   "Thursday": [
     { number: 1, subject: { ua: "Historia Polska", pl: "Historia Polska" }, time: "9:00 - 9:45" },
@@ -55,7 +57,9 @@ const schedule = {
     { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "13:45 - 13:55" },
     { number: 6, subject: { ua: "Українська література", pl: "Literatura ukraińska" }, time: "13:55 - 14:40" },
     { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "14:40 - 14:50" },
-    { number: 7, subject: { ua: "Польська мова", pl: "Język polski" }, time: "14:50 - 15:35" }
+    { number: 7, subject: { ua: "Польська мова", pl: "Język polski" }, time: "14:50 - 15:35" },
+    { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "15:35 - 15:45" },
+    { number: 8, subject: { ua: "Факультатив: Język polski poziom podstawowy Yulianna Borys", pl: "Fakultet: Język polski poziom podstawowy Yulianna Borys" }, time: "15:45 - 16:30" }
   ],
   "Friday": [
     { number: 1, subject: { ua: "Plastyka", pl: "Plastyka" }, time: "9:00 - 9:45" },
