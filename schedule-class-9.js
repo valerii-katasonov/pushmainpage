@@ -46,7 +46,12 @@ const schedule = {
     { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "13:45 - 13:55" },
     { number: 6, subject: { ua: "Wychowanie fizyczne", pl: "Wychowanie fizyczne" }, time: "13:55 - 14:40" },
     { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "14:40 - 14:50" },
-    { number: 7, subject: { ua: "Інформатика", pl: "Informatyka" }, time: "14:50 - 15:35" }
+    { number: 7, subject: { ua: "Інформатика", pl: "Informatyka" }, time: "14:50 - 15:35" },
+    { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "15:35 - 15:45" },
+    { number: 8, subject: { ua: "Факультатив: Język polski poziom podstawowy Yulianna Borys", pl: "Fakultet: Język polski poziom podstawowy Yulianna Borys" }, time: "15:45 - 16:30" },
+    { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "16:30 - 16:40" },
+    { number: 9, subject: { ua: "Факультатив: Język polski poziom podstawowy Tomasz Sajnog", pl: "Fakultet: Język polski poziom podstawowy Tomasz Sajnog" }, time: "16:40 - 17:25" },,
+    
   ],
   "Thursday": [
     { number: 1, subject: { ua: "Chemia", pl: "Chemia" }, time: "9:00 - 9:45" },
@@ -62,6 +67,8 @@ const schedule = {
     { number: 6, subject: { ua: "Historia Polski", pl: "Historia Polski" }, time: "13:55 - 14:40" },
     { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "14:40 - 14:50" },
     { number: 7, subject: { ua: "Факультатив з математики", pl: "Dodatkowe zajęcia z matematyki" }, time: "14:50 - 15:35" },
+    { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "15:35 - 15:45" },
+    { number: 8, subject: { ua: "Факультатив: Język polski poziom podstawowy Yulianna Borys", pl: "Fakultet: Język polski poziom podstawowy Yulianna Borys" }, time: "15:45 - 16:30" },
   ],
   "Friday": [
     { number: 1, subject: {  ua: "Математика", pl: "Matematyka" }, time: "9:00 - 9:45" },
