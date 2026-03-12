@@ -44,7 +44,13 @@ const schedule = {
     { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "12:40 - 13:00" },
     { number: 5, subject: { ua: "Англійська мова", pl: "Język angielski" }, time: "13:00 - 13:45" },
     { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "13:45 - 13:55" },
-    { number: 6, subject: { ua: "Геометрія", pl: "Geometria" }, time: "13:55 - 14:40" }
+    { number: 6, subject: { ua: "Геометрія", pl: "Geometria" }, time: "13:55 - 14:40" },
+    { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "14:40 - 14:50" },
+    { number: 7, subject: { ua: "-", pl: "-" }, time: "14:50 - 15:35" },
+    { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "15:35 - 15:45" },
+    { number: 8, subject: { ua: "Факультатив: Język polski poziom podstawowy Yulianna Borys", pl: "Fakultet: Język polski poziom podstawowy Yulianna Borys" }, time: "15:45 - 16:30" },
+    { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "16:30 - 16:40" },
+    { number: 9, subject: { ua: "Факультатив: Język polski poziom podstawowy Tomasz Sajnog", pl: "Fakultet: Język polski poziom podstawowy Tomasz Sajnog" }, time: "16:40 - 17:25" },
   ],
   "Thursday": [
     { number: 1, subject: { ua: "Польська мова", pl: "Język polski" }, time: "9:00 - 9:45" },
