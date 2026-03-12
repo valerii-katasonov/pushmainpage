@@ -39,7 +39,15 @@ const schedule = {
     { number: " ", subject: { ua: "Обід", pl: "Obiad" }, time: "11:35 - 11:55" },
     { number: 4, subject: { ua: "Фізика", pl: "Fizyka" }, time: "11:55 - 12:40" },
     { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "12:40 - 13:00" },
-    { number: 5, subject: { ua: "Фізика", pl: "Fizyka" }, time: "13:00 - 13:45" }
+    { number: 5, subject: { ua: "Фізика", pl: "Fizyka" }, time: "13:00 - 13:45" },
+    { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "13:45 - 13:55" },
+    { number: 6, subject: { ua: "-", pl: "-" }, time: "13:55 - 14:40" },
+    { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "14:40 - 14:50" },
+    { number: 7, subject: { ua: "-", pl: "-" }, time: "14:50 - 15:35" },
+    { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "15:45 - 14:55" },
+    { number: 8, subject: { ua: "Факультатив: Język polski poziom podstawowy Yulianna Borys", pl: "Fakultet: Język polski poziom podstawowy Yulianna Borys" }, time: "15:45 - 16:30" },
+    { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "16:30 - 16:40" },
+    { number: 9, subject: { ua: "Факультатив: Język polski poziom podstawowy Tomasz Sajnog", pl: "Fakultet: Język polski poziom podstawowy Tomasz Sajnog" }, time: "16:40 - 17:25" },,
   ],
   "Thursday": [
     { number: 1, subject: { ua: "Українська мова", pl: "Język ukraiński" }, time: "9:00 - 9:45" },
@@ -51,6 +59,12 @@ const schedule = {
     { number: 4, subject: { ua: "Біологія", pl: "Biologia" }, time: "11:55 - 12:40" },
     { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "12:40 - 13:00" },
     { number: 5, subject: { ua: "Математика", pl: "Matematyka" }, time: "13:00 - 13:45" },
+    { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "13:45 - 13:55" },
+    { number: 6, subject: { ua: "-", pl: "-" }, time: "13:55 - 14:40" },
+    { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "14:40 - 14:50" },
+    { number: 7, subject: { ua: "-", pl: "-" }, time: "14:50 - 15:35" },
+    { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "15:45 - 14:55" },
+    { number: 8, subject: { ua: "Факультатив: Język polski poziom podstawowy Yulianna Borys", pl: "Fakultet: Język polski poziom podstawowy Yulianna Borys" }, time: "15:45 - 16:30" }
   ],
   "Friday": [
     { number: 1, subject: { ua: "Уроку немає", pl: "Lekcji nie ma" }, time: "9:00 - 9:45" },
