@@ -11,6 +11,8 @@ const schedule = {
     { number: 5, subject: { ua: "Польська мова", pl: "Język polski" }, time: "13:00 - 13:45" },
     { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "13:45 - 13:55" },
     { number: 6, subject: { ua: "Польська мова", pl: "Język polski" }, time: "13:55 - 14:40" },
+    { number: " ", subject: { ua: "Перерва", pl: "Przerwa" }, time: "14:40 - 14:50" },
+    { number: 7, subject: { ua: "Speaking Club", pl: "Speaking Club" }, time: "14:50 - 15:35" }
     
   ],
   "Tuesday": [
