@@ -15,9 +15,6 @@
   <style>
     :root {
       --primary: #006d77;
-      --secondary: #833ab4;
-      --accent: #fd1d1d;
-      --hype: #fcb045;
       --text: #1a1a66;
       --text-body: #333;
       
@@ -202,7 +199,7 @@
       box-shadow: 0 15px 40px rgba(0,0,0,0.15);
     }
 
-    /* --- ТАЙМЕР ТА ПРОГРЕС (ХАЙПОВИЙ БЛОК) --- */
+    /* --- ТАЙМЕР ТА ПРОГРЕС --- */
     .current-lesson-wrapper {
       background: linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(240,250,255,0.8) 100%);
       border-radius: 24px;
@@ -234,7 +231,6 @@
       margin-bottom: 10px;
     }
 
-    /* Таймер */
     .countdown-display {
       font-family: 'Space Mono', monospace;
       font-size: 2.5rem;
@@ -251,7 +247,6 @@
       filter: drop-shadow(0px 0px 8px rgba(0,242,254,0.5));
     }
 
-    /* Прогресс-бар */
     .progress-container {
       width: 100%;
       height: 10px;
@@ -273,7 +268,6 @@
     }
     body.dark-theme .progress-bar { background: linear-gradient(90deg, #00f2fe, #4facfe); }
     
-    /* Відблиск на прогрес барі */
     .progress-bar::after {
       content: '';
       position: absolute;
@@ -320,6 +314,9 @@
       border-bottom-color: #ff007a;
     }
     body.dark-theme .links-container a:hover { color: #00f2fe; border-bottom-color: #00f2fe; }
+    
+    .links-container ul { padding-left: 20px; margin: 0; }
+    .links-container li { margin-bottom: 5px; }
 
     /* Фільтр днів */
     .day-filter {
@@ -398,7 +395,6 @@
     }
     body.dark-theme tbody tr:hover { background: rgba(255,255,255,0.15); box-shadow: 0 12px 30px rgba(0,0,0,0.4); }
 
-    /* Підсвітка активного уроку в таблиці */
     tr.active-lesson {
       background: rgba(255, 255, 255, 1) !important;
       transform: scale(1.03);
@@ -534,54 +530,102 @@
   <div class="container">
     
     <div class="links-container">
-      <h3 id="useful-links" style="border-left: 4px solid #00f2fe; padding-left: 10px;">🔗 Корисні посилання:</h3>
-      <div class="box-link" style="margin:0;">
-        <a href="https://prosvita.net/" target="_blank">💻 Prosvita</a>
-        <a href="https://pushschoolwarsaw.edupage.org/" target="_blank">🏫 PushSchoolWarsaw</a>
-        <a href="https://planlekcjipush.netlify.app/menu" target="_blank">🍴 Меню на тиждень</a>
-      </div>
+      <h3 id="useful-links" style="border-left: 4px solid #1E90FF; padding-left: 10px;">🔗 Корисні посилання:</h3>
+      <p style="margin:0; padding:0; background:none;">
+        <div class="box-link" style="margin:0;">
+          <a href="https://prosvita.net/" target="_blank">💻 Prosvita</a>
+          <a href="https://pushschoolwarsaw.edupage.org/" target="_blank">🏫 PushSchoolWarsaw</a>
+          <a href="https://planlekcjipush.netlify.app/menu" target="_blank">🍴 Меню на тиждень</a>
+        </div>
+      </p>
       <br>
       <h3 id="textbooks" style="border-left: 4px solid #8A2BE2; padding-left: 10px;">📖 Підручники:</h3>
-      <div class="box-link" style="margin:0;">
-        <a href="https://shkola.in.ua/1256-matematyka-2-klas-his-2019.html" target="_blank">🔢 Математика (Гісь, Філяк)</a>
-        <a href="https://shkola.in.ua/1262-matematika-2-klas-skvortsova-2019.html" target="_blank">🔢 Математика (Скворцова)</a>
-        <a href="https://shkola.in.ua/1288-ukrainska-mova-2-klas-ponomarova-2019-ch-1.html" target="_blank">✍️ Укр. мова (ч.1 Пономарьова)</a>
-        <a href="https://shkola.in.ua/1289-ukrainska-mova-2-klas-savchenko-2019-ch-2.html" target="_blank">✍️ Укр. мова (ч.2 Савченко)</a>
-        <a href="https://drive.google.com/file/d/19TKeQBtsNOA2Madlc7TMdCCoi4Gv49DP/view" target="_blank">✍️ Слово до слова</a>
-      </div>
+      <p style="margin:0; padding:0; background:none;">
+        <div class="box-link" style="margin:0;">
+          <a href="https://shkola.in.ua/1256-matematyka-2-klas-his-2019.html" target="_blank">🔢 Математика - 2 клас Ольга Гісь, Ірина Філяк</a>
+          <a href="https://shkola.in.ua/1262-matematika-2-klas-skvortsova-2019.html" target="_blank">🔢 Математика - 2 клас Світлана Скворцова, Оксана Онопрієнко</a>
+          <a href="https://shkola.in.ua/1288-ukrainska-mova-2-klas-ponomarova-2019-ch-1.html" target="_blank">✍️ Українська мова та читання (ч.1) - 2 клас Катерина Пономарьова</a>
+          <a href="https://shkola.in.ua/1289-ukrainska-mova-2-klas-savchenko-2019-ch-2.html" target="_blank">✍️ Українська мова та читання (ч.2) - 2 клас Олександра Савченко</a>
+          <a href="https://drive.google.com/file/d/19TKeQBtsNOA2Madlc7TMdCCoi4Gv49DP/view" target="_blank">✍️ Слово до слова - буде розмова - 2 клас</a>
+        </div>
+      </p>
       <br>
-      <h3 style="border-left: 4px solid #fcb045; padding-left: 10px;">📆 Розклад гуртків</h3>
-      <div style="background: rgba(255,255,255,0.4); border-radius:16px; padding:20px; border: 1px solid rgba(255,255,255,0.3);">
+      <h3 style="border-left: 4px solid #FFD700; padding-left: 10px;">📆 Розклад гуртків</h3>
+      <div style="background: rgba(255,255,255,0.4); border-radius:12px; padding:15px; border: 1px solid rgba(255,255,255,0.3);">
         <h4 style="margin-top:0; color:#b8860b;">👥 Групові заняття</h4>
-        <ul style="padding-left:20px; list-style:none; margin:0; font-size: 0.95rem;">
+        <ul style="padding-left:20px; list-style:none; margin:0;">
           <li><strong>📅 Понеділок:</strong>
-            <ul style="list-style:none; padding-left:15px; margin:5px 0;">
-              <li>🤖 Робототехніка – 14:50–16:30</li>
-              <li>🎭 Театр – 15:30–17:00</li>
+            <ul style="list-style:none; padding-left:20px; margin:5px 0;">
+              <li>🤖 Робототехніка – 14:50–16:30<br><span style="display:block; font-size:0.95em; opacity:0.7;">📍 Wyspianskiego 2 (молодша школа)</span></li>
+              <li>🎭 Театр – 15:30–17:00<br><span style="display:block; font-size:0.95em; opacity:0.7;">📍 Wyspianskiego 2 (молодша школа)</span></li>
             </ul>
           </li>
-          <li style="margin-top: 10px;"><strong>📅 Вівторок:</strong>
-            <ul style="list-style:none; padding-left:15px; margin:5px 0;">
-              <li>🥋 Карате (1/2 гр.) – 15:00 / 16:15</li>
-              <li>💃 Хореографія (1 гр.) – 16:00</li>
-              <li>🇺🇦 Укр. світлиця – 15:00</li>
+          <li><strong>📅 Вівторок:</strong>
+            <ul style="list-style:none; padding-left:20px; margin:5px 0;">
+              <li>🥋 Карате (1 гр.) – 15:00<br><span style="display:block; font-size:0.95em; opacity:0.7;">📍 Wyspianskiego 2 (молодша школа)</span></li>
+              <li>🥋 Карате (2 гр.) – 16:15<br><span style="display:block; font-size:0.95em; opacity:0.7;">📍 Wojskiego 4 (старша школа)</span></li>
+              <li>💃 Хореографія (1 гр.) – 16:00–17:30<br><span style="display:block; font-size:0.95em; opacity:0.7;">📍 Wyspianskiego 2 (молодша школа)</span></li>
+              <li>🇺🇦 Гурток «Українська світлиця» – 15:00<br><span style="display:block; font-size:0.95em; opacity:0.7;">📍 Wyspianskiego 2 (молодша школа)</span></li>
             </ul>
           </li>
-          </ul>
+          <li><strong>📅 Середа:</strong>
+            <ul style="list-style:none; padding-left:20px; margin:5px 0;">
+              <li>🎭 Театр – 15:30–17:00<br><span style="display:block; font-size:0.95em; opacity:0.7;">📍 Wojskiego 4 (старша школа)</span></li>
+              <li>💃 Хореографія (2 гр.) – 17:00–18:30<br><span style="display:block; font-size:0.95em; opacity:0.7;">📍 Wojskiego 4 (старша школа)</span></li>
+              <li>🎶 Теорія музики (1 гр.) – 15:00<br><span style="display:block; font-size:0.95em; opacity:0.7;">📍 Wyspianskiego 2 (молодша школа)</span></li>
+              <li>🎶 Ансамбль «Crescendo» – 15:45<br><span style="display:block; font-size:0.95em; opacity:0.7;">📍 Wyspianskiego 2 (молодша школа)</span></li>
+              <li>🎶 Теорія музики (2 гр.) – 16:30<br><span style="display:block; font-size:0.95em; opacity:0.7;">📍 Wyspianskiego 2 (молодша школа)</span></li>
+            </ul>
+          </li>
+          <li><strong>📅 Четвер:</strong>
+            <ul style="list-style:none; padding-left:20px; margin:5px 0;">
+              <li>💬 Speaking Club – 13:55 - 15:35<br><span style="display:block; font-size:0.95em; opacity:0.7;">📍 Wyspianskiego 2 (молодша школа)</span></li>  
+              <li>🥋 Карате (1 гр.) – 15:00<br><span style="display:block; font-size:0.95em; opacity:0.7;">📍 Wyspianskiego 2 (молодша школа)</span></li>   
+              <li>🥋 Карате (2 гр.) – 16:15<br><span style="display:block; font-size:0.95em; opacity:0.7;">📍 Wojskiego 4 (старша школа)</span></li>
+              <li>💃 Хореографія (1 гр.) – 16:00–17:30<br><span style="display:block; font-size:0.95em; opacity:0.7;">📍 Wyspianskiego 2 (молодша школа)</span></li>
+              <li>🎨 Художній клас (живопис акрилом) – 15:30<br><span style="display:block; font-size:0.95em; opacity:0.7;">📍 Wyspianskiego 2 (молодша школа)</span></li>
+              <li>🎶 Теорія музики (3 гр.) – 16:55<br><span style="display:block; font-size:0.95em; opacity:0.7;">📍 Wyspianskiego 2 (молодша школа)</span></li>
+            </ul>
+          </li>
+          <li><strong>📅 Пʼятниця:</strong>
+            <ul style="list-style:none; padding-left:20px; margin:5px 0;">
+              <li>💃 Хореографія (2 гр.) – 15:00–16:30<br><span style="display:block; font-size:0.95em; opacity:0.7;">📍 Wojskiego 4 (старша школа)</span></li>
+              <li>🎨 Художній клас (живопис акрилом) – 15:45<br><span style="display:block; font-size:0.95em; opacity:0.7;">📍 Wyspianskiego 2 (молодша школа)</span></li>
+            </ul>
+          </li>
+        </ul>
+        <hr style="border:1px dashed #FFD700; margin:15px 0;">
+        <h4 style="margin-top:0; color:#b8860b;">🎶 Індивідуальні заняття</h4>
+        <p style="margin:5px 0;">📌 Формат: 2 індивідуальні уроки + 2 групові</p>
+        <p><strong>🎼 Індивідуальні класи:</strong></p>
+        <ul style="margin:0; padding-left:20px;">
+          <li>🎸 Гітара, 🥁 Ударні, 🎻 Скрипка</li>
+          <li>🎤 Вокал, 🎹 Фортепіано, 🎶 Бандура</li>
+        </ul>
+        <p><strong>👥 Групові заняття:</strong></p>
+        <ul style="margin:0; padding-left:20px;">
+          <li>🎶 Теорія музики</li>
+          <li>🎶 Ансамбль «Crescendo»</li>
+        </ul>
         <div style="margin-top:20px; text-align:center;">
           <a href="https://docs.google.com/forms/d/1WS-ZEKD3QtShmhWqIaxGbnuLGXM4OTv0P_h5ywhMPoE/edit" 
              style="display:inline-block; background: linear-gradient(45deg, #fd1d1d, #fcb045); color:#fff; padding:12px 25px; margin:10px; font-size:1.1em; text-decoration:none; border-radius:50px; font-weight:800; box-shadow:0 8px 20px rgba(252, 176, 69, 0.4); text-transform: uppercase; letter-spacing: 1px;">
-            🎨 Записатися 🎶 
+            🎨 ЗАПИСАТИСЯ 🎶 
           </a>
         </div>
       </div>
       <br>
-      <h3 id="payment-info" style="border-left: 4px solid #4CAF50; padding-left: 10px;">💳 Оплата:</h3>
-      <div class="box-link" style="margin:0; font-size: 0.9rem;">
-        <strong>Education Center PUSH sp. z o.o.</strong><br>
-        <span style="font-family:'Space Mono', monospace; background:rgba(0,0,0,0.05); padding:8px; border-radius:8px; font-weight:bold; display:block; margin:10px 0; text-align: center; color: #006d77;">48 1090 1883 0000 0001 5014 8624</span>
-        <strong>Призначення:</strong> edukacja w szkole Прізвище Ім'я (ENG)
-      </div>
+      <h3 id="payment-info" style="border-left: 4px solid #4CAF50; padding-left: 10px;">💳 Реквізити для оплати:</h3>
+      <p style="margin:0; padding:0; background:none;">
+        <div class="box-link" style="margin:0;">
+          Шановні батьки учнів 1-9 класів! Просимо до 10 числа кожного місяця оплачувати за навчання в школі на РЕКВІЗИТИ польськоі школи:
+          <br><br>
+          <strong>Education Center PUSH spółka z o.o.</strong>
+          <br>
+          <span style="font-family:'Space Mono', monospace; background:rgba(0,0,0,0.05); padding:8px; border-radius:8px; font-weight:bold; display:block; margin:10px 0; text-align: center; color: #006d77;">48 1090 1883 0000 0001 5014 8624</span>
+          <strong>Призначення платежу:</strong> edukacja w szkole та прізвище ім’я учня на АНГЛ МОВІ (наприклад: <em>edukacja w szkole Voloshko Mykola</em>)
+        </div>
+      </p>
     </div>
 
     <div class="tables-container">
@@ -660,7 +704,8 @@
       thSubject: { ua: 'Урок', pl: 'Lekcja' },
       thTime: { ua: 'Час', pl: 'Czas' },
       clubsTodayTitle: { ua: 'Гуртки на сьогодні', pl: 'Zajęcia dodatkowe na dziś' },
-      noClubsToday: { ua: 'Сьогодні немає гуртків.', pl: 'Dzisiaj nie ma zajęć dodatkowych.' }
+      noClubsToday: { ua: 'Сьогодні немає гуртків.', pl: 'Dzisiaj nie ma zajęć dodatkowych.' },
+      currentLesson: { ua: 'Зараз урок: ', pl: 'Obecnie lekcja: ' } // залишив для повідомлень
     };
 
     let currentLanguage = 'ua';
@@ -668,47 +713,56 @@
     let selectedDay = dayKeys[new Date().getDay()];
     const classId = 'class2';
     let timerInterval;
+    let lastNotifiedLessonTime = null; // Змінна, щоб не спамити сповіщеннями
 
-    // Гуртки залишаємо як є
     const clubSchedule = {
       "Monday": [
-        { name: { ua: "Робототехніка", pl: "Robotyka" }, time: "14:50–16:30", location: { ua: "Wyspianskiego 2", pl: "Wyspianskiego 2" } },
-        { name: { ua: "Театр", pl: "Teatr" }, time: "15:30–17:00", location: { ua: "Wyspianskiego 2", pl: "Wyspianskiego 2" } }
+        { name: { ua: "Робототехніка", pl: "Robotyka" }, time: "14:50–16:30", location: { ua: "Wyspianskiego 2 (молодша школа)", pl: "Wyspianskiego 2 (szkoła podstawowa)" } },
+        { name: { ua: "Театр", pl: "Teatr" }, time: "15:30–17:00", location: { ua: "Wyspianskiego 2 (молодша школа)", pl: "Wyspianskiego 2 (szkoła podstawowa)" } }
       ],
       "Tuesday": [
-        { name: { ua: "Карате (1 гр.)", pl: "Karate (1 gr.)" }, time: "15:00", location: { ua: "Wyspianskiego 2", pl: "Wyspianskiego 2" } },
-        { name: { ua: "Карате (2 гр.)", pl: "Karate (2 gr.)" }, time: "16:15", location: { ua: "Wojskiego 4", pl: "Wojskiego 4" } },
-        { name: { ua: "Хореографія (1 гр.)", pl: "Choreografia (1 gr.)" }, time: "16:00–17:30", location: { ua: "Wyspianskiego 2", pl: "Wyspianskiego 2" } },
-        { name: { ua: "Укр. світлиця", pl: "Ukraińska świetlica" }, time: "15:00", location: { ua: "Wyspianskiego 2", pl: "Wyspianskiego 2" } }
+        { name: { ua: "Карате (1 гр.)", pl: "Karate (1 gr.)" }, time: "15:00", location: { ua: "Wyspianskiego 2 (молодша школа)", pl: "Wyspianskiego 2 (szkoła podstawowa)" } },
+        { name: { ua: "Карате (2 гр.)", pl: "Karate (2 gr.)" }, time: "16:15", location: { ua: "Wojskiego 4 (старша школа)", pl: "Wojskiego 4 (szkoła średnia)" } },
+        { name: { ua: "Хореографія (1 гр.)", pl: "Choreografia (1 gr.)" }, time: "16:00–17:30", location: { ua: "Wyspianskiego 2 (молодша школа)", pl: "Wyspianskiego 2 (szkoła podstawowa)" } },
+        { name: { ua: "Гурток «Українська світлиця»", pl: "Klub «Ukraińska świetlica»" }, time: "15:00", location: { ua: "Wyspianskiego 2 (молодша школа)", pl: "Wyspianskiego 2 (szkoła podstawowa)" } }
       ],
       "Wednesday": [
-        { name: { ua: "Театр", pl: "Teatr" }, time: "15:30–17:00", location: { ua: "Wojskiego 4", pl: "Wojskiego 4" } },
-        { name: { ua: "Хореографія (2 гр.)", pl: "Choreografia (2 gr.)" }, time: "17:00–18:30", location: { ua: "Wojskiego 4", pl: "Wojskiego 4" } },
-        { name: { ua: "Теорія музики (1 гр.)", pl: "Teoria muzyki (1 gr.)" }, time: "15:00", location: { ua: "Wyspianskiego 2", pl: "Wyspianskiego 2" } },
-        { name: { ua: "Ансамбль «Crescendo»", pl: "Zespół «Crescendo»" }, time: "15:45", location: { ua: "Wyspianskiego 2", pl: "Wyspianskiego 2" } },
-        { name: { ua: "Теорія музики (2 гр.)", pl: "Teoria muzyki (2 gr.)" }, time: "16:30", location: { ua: "Wyspianskiego 2", pl: "Wyspianskiego 2" } }
+        { name: { ua: "Театр", pl: "Teatr" }, time: "15:30–17:00", location: { ua: "Wojskiego 4 (старша школа)", pl: "Wojskiego 4 (szkoła średnia)" } },
+        { name: { ua: "Хореографія (2 гр.)", pl: "Choreografia (2 gr.)" }, time: "17:00–18:30", location: { ua: "Wojskiego 4 (старша школа)", pl: "Wojskiego 4 (szkoła średnia)" } },
+        { name: { ua: "Теорія музики (1 гр.)", pl: "Teoria muzyki (1 gr.)" }, time: "15:00", location: { ua: "Wyspianskiego 2 (молодша школа)", pl: "Wyspianskiego 2 (szkoła podstawowa)" } },
+        { name: { ua: "Ансамбль «Crescendo»", pl: "Zespół «Crescendo»" }, time: "15:45", location: { ua: "Wyspianskiego 2 (молодша школа)", pl: "Wyspianskiego 2 (szkoła podstawowa)" } },
+        { name: { ua: "Теорія музики (2 гр.)", pl: "Teoria muzyki (2 gr.)" }, time: "16:30", location: { ua: "Wyspianskiego 2 (молодша школа)", pl: "Wyspianskiego 2 (szkoła podstawowa)" } }
       ],
       "Thursday": [
-        { name: { ua: "Speaking Club", pl: "Speaking Club" }, time: "13:55–15:35", location: { ua: "Wyspianskiego 2", pl: "Wyspianskiego 2" } },
-        { name: { ua: "Карате (1 гр.)", pl: "Karate (1 gr.)" }, time: "15:00", location: { ua: "Wyspianskiego 2", pl: "Wyspianskiego 2" } },
-        { name: { ua: "Карате (2 гр.)", pl: "Karate (2 gr.)" }, time: "16:15", location: { ua: "Wojskiego 4", pl: "Wojskiego 4" } },
-        { name: { ua: "Хореографія (1 гр.)", pl: "Choreografia (1 gr.)" }, time: "16:00–17:30", location: { ua: "Wyspianskiego 2", pl: "Wyspianskiego 2" } },
-        { name: { ua: "Живопис", pl: "Malarstwo" }, time: "15:30", location: { ua: "Wyspianskiego 2", pl: "Wyspianskiego 2" } },
-        { name: { ua: "Теорія музики (3 гр.)", pl: "Teoria muzyki (3 gr.)" }, time: "16:55", location: { ua: "Wyspianskiego 2", pl: "Wyspianskiego 2" } }
+        { name: { ua: "Speaking Club", pl: "Speaking Club" }, time: "13:55–15:35", location: { ua: "Wyspianskiego 2 (молодша школа)", pl: "Wyspianskiego 2 (szkoła podstawowa)" } },
+        { name: { ua: "Карате (1 гр.)", pl: "Karate (1 gr.)" }, time: "15:00", location: { ua: "Wyspianskiego 2 (молодша школа)", pl: "Wyspianskiego 2 (szkoła podstawowa)" } },
+        { name: { ua: "Карате (2 гр.)", pl: "Karate (2 gr.)" }, time: "16:15", location: { ua: "Wojskiego 4 (старша школа)", pl: "Wojskiego 4 (szkoła średnia)" } },
+        { name: { ua: "Хореографія (1 гр.)", pl: "Choreografia (1 gr.)" }, time: "16:00–17:30", location: { ua: "Wyspianskiego 2 (молодша школа)", pl: "Wyspianskiego 2 (szkoła podstawowa)" } },
+        { name: { ua: "Художній клас (живопис акрилом)", pl: "Klasa artystyczna (malarstwo akrylowe)" }, time: "15:30", location: { ua: "Wyspianskiego 2 (молодша школа)", pl: "Wyspianskiego 2 (szkoła podstawowa)" } },
+        { name: { ua: "Теорія музики (3 гр.)", pl: "Teoria muzyki (3 gr.)" }, time: "16:55", location: { ua: "Wyspianskiego 2 (молодша школа)", pl: "Wyspianskiego 2 (szkoła podstawowa)" } }
       ],
       "Friday": [
-        { name: { ua: "Хореографія (2 гр.)", pl: "Choreografia (2 gr.)" }, time: "15:00–16:30", location: { ua: "Wojskiego 4", pl: "Wojskiego 4" } },
-        { name: { ua: "Живопис", pl: "Malarstwo" }, time: "15:45", location: { ua: "Wyspianskiego 2", pl: "Wyspianskiego 2" } }
+        { name: { ua: "Хореографія (2 гр.)", pl: "Choreografia (2 gr.)" }, time: "15:00–16:30", location: { ua: "Wojskiego 4 (старша школа)", pl: "Wojskiego 4 (szkoła średnia)" } },
+        { name: { ua: "Художній клас (живопис акрилом)", pl: "Klasa artystyczna (malarstwo akrylowe)" }, time: "15:45", location: { ua: "Wyspianskiego 2 (молодша школа)", pl: "Wyspianskiego 2 (szkoła podstawowa)" } }
       ]
     };
 
     function cacheSchedule() {
+      console.log(`Кешування розкладу для ${classId}`);
       localStorage.setItem(`schedule-${classId}`, JSON.stringify(schedule));
     }
 
     function loadCachedSchedule() {
+      console.log(`Завантаження кешованого розкладу для ${classId}`);
       const cached = localStorage.getItem(`schedule-${classId}`);
-      return cached ? JSON.parse(cached) : schedule;
+      const parsed = cached ? JSON.parse(cached) : null;
+      if (parsed) return parsed;
+      return schedule;
+    }
+
+    function clearOldCache() {
+      console.log('Очищення старого кешу');
+      localStorage.removeItem('schedule');
     }
 
     function updateStaticTexts() {
@@ -725,6 +779,20 @@
       document.getElementById('th-time').textContent = translations.thTime[currentLanguage];
       document.getElementById('th-time-week').textContent = translations.thTime[currentLanguage];
       document.getElementById('clubs-today-title').textContent = translations.clubsTodayTitle[currentLanguage];
+    }
+
+    // ВІДНОВЛЕНА ФУНКЦІЯ УВЕДОМЛЕНЬ
+    function notifyLesson(lesson) {
+      if (notificationsEnabled && Notification.permission === "granted") {
+        // Захист від спаму: показуємо пуш тільки якщо цей урок ще не показували
+        if (lastNotifiedLessonTime !== lesson.time) {
+          new Notification(translations.currentLesson[currentLanguage], {
+            body: `${lesson.subject[currentLanguage]} (${lesson.time})`,
+            icon: "https://i.postimg.cc/WbY9TdDp/PushIco.png"
+          });
+          lastNotifiedLessonTime = lesson.time; // Запам'ятовуємо час поточного уроку
+        }
+      }
     }
 
     // ЛОГІКА ТАЙМЕРА ТА ПРОГРЕС-БАРУ
@@ -766,6 +834,11 @@
           const isBreak = lesson.subject.ua === "Перерва" || lesson.subject.ua.includes("Обід");
           titleEl.textContent = isBreak ? translations.currentBreakStatus[currentLanguage] : translations.currentLessonStatus[currentLanguage];
           nameEl.textContent = `${lesson.subject[currentLanguage]} (${lesson.time})`;
+
+          // Відправка уведомлення, якщо це повноцінний урок і ми його ще не сповіщали
+          if (!isBreak) {
+              notifyLesson(lesson);
+          }
 
           // Розрахунок часу
           const diffMs = endObj - now;
@@ -959,7 +1032,7 @@
     }
 
     function initialize() {
-      localStorage.removeItem('schedule'); // clear old cache
+      clearOldCache();
       cacheSchedule();
       updateStaticTexts();
       renderDayFilter();
