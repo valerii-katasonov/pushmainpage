@@ -18,3 +18,11 @@ self.addEventListener('fetch', (event) => {
         })
     );
 });
+// Базовий Service Worker для активації PWA
+self.addEventListener('install', (e) => {
+  console.log('[Service Worker] Install');
+});
+
+self.addEventListener('fetch', (e) => {
+  // Поки що нічого не кешуємо, просто пропускаємо всі запити
+});
