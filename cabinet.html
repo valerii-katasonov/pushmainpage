@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Push School - Кабінет</title>
   
-  <link rel="manifest" href="manifest.json">
+  <link rel="manifest" href="manifest-cabinet.json">
   <meta name="theme-color" content="#006d77">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -89,7 +89,7 @@
       <p style="font-size: 0.9rem; color: #555; font-weight: 600; margin-bottom: 15px;">📱 Встановити як додаток:</p>
       <div style="display: flex; gap: 10px; justify-content: center;">
         <button id="btn-install-android" style="background: #a4c639; color: white; padding: 12px; margin-top: 0; width: auto; flex: 1; border-radius: 10px;">🤖 Android</button>
-        <button id="btn-install-ios" style="background: #1c1c1e; color: white; padding: 12px; margin-top: 0; width: auto; flex: 1; border-radius: 10px;" onclick="showIosInstruction()">🍎 iOS</button>
+        <button id="btn-install-ios" style="background: #1c1c1e; color: white; padding: 12px; margin-top: 0; width: auto; flex: 1; border-radius: 10px;" onclick="showIosInstruction()">🍎 iOS / iPad</button>
       </div>
     </div>
   </div>
@@ -276,10 +276,10 @@
   const dayKeys = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
   const STICKER_GOAL = 30; 
 
-  // --- ЛОГІКА PWA (ОНОВЛЕНА ДЛЯ ANDROID) ---
+  // --- ЛОГІКА PWA ВСТАНОВЛЕННЯ ---
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('sw.js').catch(() => console.log('SW Registration failed (normal if local)'));
+      navigator.serviceWorker.register('sw-cabinet.js').catch(() => console.log('SW Registration failed (normal if local)'));
     });
   }
 
@@ -293,18 +293,16 @@
 
   btnInstallAndroid.addEventListener('click', async () => {
     if (deferredPrompt !== null) {
-      // Якщо браузер готовий (HTTPS + маніфест)
       deferredPrompt.prompt();
       const { outcome } = await deferredPrompt.userChoice;
       deferredPrompt = null;
     } else {
-      // Якщо браузер не готовий (відкрито локально або вже встановлено)
-      alert('🤖 Щоб встановити додаток на Android:\n\n1. Натисніть на три крапки (меню браузера) у правому верхньому куті.\n2. Знайдіть пункт "Додати на головний екран" або "Встановити додаток".\n3. Підтвердіть встановлення.');
+      alert('🤖 Щоб встановити додаток на Android:\n\n1. Відкрийте цей сайт у Google Chrome.\n2. Натисніть на три крапки (меню) у правому верхньому куті.\n3. Знайдіть пункт "Додати на головний екран" або "Встановити додаток".\n4. Підтвердіть встановлення.');
     }
   });
 
   window.showIosInstruction = function() {
-    alert('🍏 Щоб встановити Push School на iPhone або iPad:\n\n1. Натисніть кнопку "Поділитися" (квадратик зі стрілочкою внизу екрана).\n2. Прокрутіть меню вниз і знайдіть пункт "На початковий екран" (Add to Home Screen).\n3. Натисніть "Додати" у верхньому правому куті.');
+    alert('🍏 Щоб встановити Push School на iPhone або iPad:\n\n1. Відкрийте цей сайт у браузері Safari.\n2. Натисніть кнопку "Поділитися" (квадратик зі стрілочкою внизу екрана).\n3. Прокрутіть меню вниз і знайдіть пункт "На початковий екран" (Add to Home Screen).\n4. Натисніть "Додати" у верхньому правому куті.');
   };
   // ---------------------------------
 
