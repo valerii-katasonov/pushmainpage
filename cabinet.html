@@ -44,6 +44,16 @@
     .hw-image-thumb { width: 100px; height: 100px; object-fit: cover; border-radius: 8px; border: 1px solid #ddd; cursor: zoom-in; box-shadow: 0 2px 5px rgba(0,0,0,0.1); transition: 0.2s; }
     .hw-image-thumb:hover { transform: scale(1.05); }
     
+    /* СТИЛІ ДЛЯ РЕАКЦІЙ */
+    .reaction-box { display: flex; gap: 10px; margin-top: 10px; padding-top: 8px; border-top: 1px dashed #eee; align-items: center;}
+    .reaction-label { font-size: 0.8rem; color: #888; margin-right: 5px; }
+    .reaction-btn { background: none; border: none; font-size: 1.4rem; cursor: pointer; transition: 0.2s; filter: grayscale(100%); opacity: 0.5; padding: 5px; width: auto; margin: 0; }
+    .reaction-btn:hover { transform: scale(1.2); opacity: 1; filter: grayscale(0%); }
+    .reaction-btn.active { filter: grayscale(0%); opacity: 1; transform: scale(1.1); background: #f0f8ff; border-radius: 50%; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+    .teacher-reaction-badge { font-size: 1.2rem; margin-left: 5px; animation: popIn 0.3s ease; }
+    
+    @keyframes popIn { 0% { transform: scale(0); } 100% { transform: scale(1); } }
+
     .empty-msg { color: #999; font-style: italic; margin: 5px 0; }
     #status-msg { text-align: center; color: #2ed573; font-weight: bold; display: none; margin-top: 10px; }
     #existing-image-info { font-size: 0.8rem; color: #e67e22; margin-top: 5px; font-weight: bold; display: none; }
@@ -270,7 +280,7 @@
     document.getElementById('t-hw').value = '';
     document.getElementById('t-comment').value = '';
     document.getElementById('t-image').value = ''; 
-    document.getElementById('t-sticker').checked = false; // Скидаємо чекбокс наклейки
+    document.getElementById('t-sticker').checked = false; 
     document.getElementById('existing-image-info').style.display = 'none';
     currentHwImages = []; 
 
@@ -297,14 +307,20 @@
       }
     });
 
-    // Підтягуємо історію коментарів для обраного предмету
+    // Підтягуємо історію коментарів ТА РЕАКЦІЇ для вчителя
     const historyList = document.getElementById('t-history-comments');
-    get(child(ref(db), `comments/class_2/${date}/${subject}`)).then(snap => {
+    Promise.all([
+      get(child(ref(db), `comments/class_2/${date}/${subject}`)),
+      get(child(ref(db), `reactions/class_2/${date}/${subject}`))
+    ]).then(([commentSnap, reactionSnap]) => {
       historyList.innerHTML = '';
-      if(snap.exists()) {
-        const commentsData = snap.val();
+      if(commentSnap.exists()) {
+        const commentsData = commentSnap.val();
+        const reactionsData = reactionSnap.exists() ? reactionSnap.val() : {};
+        
         for(let stName in commentsData) {
-          historyList.innerHTML += `<li><b>${stName}:</b> ${commentsData[stName]}</li>`;
+          const reactionEmoji = reactionsData[stName] ? `<span class="teacher-reaction-badge" title="Батьки відреагували">${reactionsData[stName]}</span>` : '';
+          historyList.innerHTML += `<li><b>${stName}:</b> ${commentsData[stName]} ${reactionEmoji}</li>`;
           if (stName === student) {
             document.getElementById('t-comment').value = commentsData[stName];
           }
@@ -314,7 +330,7 @@
       }
     });
 
-    // Підтягуємо статус наклейки для конкретного учня
+    // Підтягуємо статус наклейки
     if (student) {
       get(child(ref(db), `stickers/class_2/${student}/${date}_${subject}`)).then(snap => {
         document.getElementById('t-sticker').checked = (snap.exists() && snap.val() === true);
@@ -326,7 +342,7 @@
     if (!currentUserData) return;
     const date = document.getElementById('global-date').value;
     
-    // Завантаження стрічки наклейок (ЗА ВЕСЬ ЧАС)
+    // Стрічка наклейок
     const ribbonEl = document.getElementById('p-ribbon');
     const ribbonCountEl = document.getElementById('p-ribbon-count');
     get(child(ref(db), `stickers/class_2/${currentUserData.studentName}`)).then(snap => {
@@ -340,13 +356,8 @@
       }
     });
 
-    // Завантаження ДЗ
+    // ДЗ
     const hwList = document.getElementById('p-daily-hw-list');
-    const commentsList = document.getElementById('p-daily-comments-list');
-    
-    hwList.innerHTML = '<li class="empty-msg">Завантаження...</li>';
-    commentsList.innerHTML = '<li class="empty-msg">Завантаження...</li>';
-
     get(child(ref(db), `homeworks/class_2/${date}`)).then(snap => {
       hwList.innerHTML = '';
       if(snap.exists()) {
@@ -359,16 +370,39 @@
       }
     });
 
-    // Завантаження Коментарів
-    get(child(ref(db), `comments/class_2/${date}`)).then(snap => {
+    // Коментарі ТА БЛОК РЕАКЦІЙ
+    const commentsList = document.getElementById('p-daily-comments-list');
+    commentsList.innerHTML = '<li class="empty-msg">Завантаження...</li>';
+    
+    Promise.all([
+      get(child(ref(db), `comments/class_2/${date}`)),
+      get(child(ref(db), `reactions/class_2/${date}`))
+    ]).then(([commentsSnap, reactionsSnap]) => {
       commentsList.innerHTML = '';
       let hasComments = false;
-      if(snap.exists()) {
-        const allSubjects = snap.val(); 
+      const allReactions = reactionsSnap.exists() ? reactionsSnap.val() : {};
+
+      if(commentsSnap.exists()) {
+        const allSubjects = commentsSnap.val(); 
         for(let subj in allSubjects) {
           if (allSubjects[subj][currentUserData.studentName]) {
             hasComments = true;
-            commentsList.innerHTML += `<li><b>${subj}:</b> ${allSubjects[subj][currentUserData.studentName]}</li>`;
+            
+            // Визначаємо, чи батько вже ставив реакцію на цей предмет сьогодні
+            const currentReaction = allReactions[subj]?.[currentUserData.studentName] || null;
+            
+            // HTML для кнопок реакцій
+            const reactionHtml = `
+              <div class="reaction-box">
+                <span class="reaction-label">Відреагувати:</span>
+                <button class="reaction-btn ${currentReaction === '👍' ? 'active' : ''}" onclick="sendReaction('${date}', '${subj}', '👍')">👍</button>
+                <button class="reaction-btn ${currentReaction === '❤️' ? 'active' : ''}" onclick="sendReaction('${date}', '${subj}', '❤️')">❤️</button>
+                <button class="reaction-btn ${currentReaction === '🔥' ? 'active' : ''}" onclick="sendReaction('${date}', '${subj}', '🔥')">🔥</button>
+                <button class="reaction-btn ${currentReaction === '🙏' ? 'active' : ''}" onclick="sendReaction('${date}', '${subj}', '🙏')">🙏</button>
+              </div>
+            `;
+            
+            commentsList.innerHTML += `<li><b>${subj}:</b> ${allSubjects[subj][currentUserData.studentName]} ${reactionHtml}</li>`;
           }
         }
       }
@@ -376,6 +410,16 @@
         commentsList.innerHTML = '<li class="empty-msg">Немає коментарів на цей день.</li>';
       }
     });
+  };
+
+  // --- ФУНКЦІЯ ВІДПРАВКИ РЕАКЦІЇ (ДЛЯ БАТЬКІВ) ---
+  window.sendReaction = function(date, subject, emoji) {
+    if (!currentUserData) return;
+    set(ref(db, `reactions/class_2/${date}/${subject}/${currentUserData.studentName}`), emoji)
+      .then(() => {
+        // Оновлюємо дашборд батька, щоб кнопка підсвітилася
+        loadParentDashboard();
+      });
   };
 
   window.saveData = async function() {
@@ -395,7 +439,6 @@
 
     let finalImageUrls = [...currentHwImages]; 
 
-    // Завантаження фото
     if (fileInput.files.length > 0) {
       statusMsg.style.display = 'block';
       statusMsg.innerText = `⏳ Завантаження фото (0/${fileInput.files.length})...`;
@@ -422,13 +465,11 @@
       }
     }
 
-    // Збереження ДЗ
     if (hwText || finalImageUrls.length > 0) {
       const hwData = { text: hwText, images: finalImageUrls }; 
       await set(ref(db, `homeworks/class_2/${date}/${subject}`), hwData);
     }
     
-    // Збереження Коментаря та Наклейки
     if (student) {
       if (comment) {
         await set(ref(db, `comments/class_2/${date}/${subject}/${student}`), comment);
@@ -437,7 +478,7 @@
       if (stickerChecked) {
         await set(ref(db, `stickers/class_2/${student}/${date}_${subject}`), true);
       } else {
-        await set(ref(db, `stickers/class_2/${student}/${date}_${subject}`), null); // Видаляє наклейку, якщо галочку знято
+        await set(ref(db, `stickers/class_2/${student}/${date}_${subject}`), null);
       }
     }
 
