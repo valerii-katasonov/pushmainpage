@@ -54,10 +54,17 @@
   <div id="teacher-screen" class="panel">
     <h2>👨‍🏫 Журнал: 2 класс</h2>
 
-    <div class="data-card" style="border-left-color: #f39c12; margin-bottom: 25px; background: #fffdf8;">
-      <h4 style="margin-top:0; color: #d35400;">➕ Управление классом</h4>
-      <input type="text" id="new-student-name" placeholder="Фамилия и Имя нового ученика">
-      <button style="background: linear-gradient(135deg, #f6d365 0%, #fda085 100%); color: #333; padding: 10px; margin-top: 10px;" onclick="addStudent()">Добавить ученика</button>
+    <div class="data-card" style="border-left-color: #f39c12; margin-bottom: 15px; background: #fffdf8;">
+      <h4 style="margin-top:0; color: #d35400;">➕ Добавить ученика</h4>
+      <input type="text" id="new-student-name" placeholder="Фамилия и Имя ученика">
+      <button style="background: linear-gradient(135deg, #f6d365 0%, #fda085 100%); color: #333; padding: 10px; margin-top: 10px;" onclick="addStudent()">Добавить в класс</button>
+    </div>
+
+    <div class="data-card" style="border-left-color: #9b59b6; margin-bottom: 25px; background: #faf8fd;">
+      <h4 style="margin-top:0; color: #8e44ad;">🔗 Привязать родителя</h4>
+      <p style="font-size: 0.8rem; color: #666; margin-top: -10px;">Введите Email родителя, выберите ученика ниже и нажмите "Связать".</p>
+      <input type="email" id="parent-email" placeholder="Email родителя (mama@test.com)">
+      <button style="background: linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%); color: #fff; padding: 10px; margin-top: 10px;" onclick="linkParent()">Связать Email с учеником</button>
     </div>
     <hr style="border: 0; height: 1px; background: #eee; margin-bottom: 20px;">
     
@@ -68,7 +75,7 @@
       <option value="Чтение">Чтение</option>
     </select>
 
-    <label>Ученик (выберите кому пишем):</label>
+    <label>Ученик (для привязки или комментария):</label>
     <select id="t-student">
       <option value="">Загрузка списка...</option>
     </select>
@@ -115,7 +122,6 @@
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
   import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
-  // ОБРАТИ ВНИМАНИЕ: мы добавили функцию push сюда
   import { getDatabase, ref, set, get, child, push } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 
   const firebaseConfig = {
@@ -160,36 +166,49 @@
     signOut(auth);
   };
 
-  // --- ОТСЛЕЖИВАНИЕ СТАТУСА ---
+  // --- ОТСЛЕЖИВАНИЕ СТАТУСА И МАГИЯ ПРИВЯЗКИ ---
   onAuthStateChanged(auth, (user) => {
     document.querySelectorAll('.panel').forEach(p => p.style.display = 'none');
 
     if (user) {
       get(child(ref(db), `users/${user.uid}`)).then((snapshot) => {
         if (snapshot.exists()) {
+          // Пользователь уже есть в базе
           currentUserData = snapshot.val();
           if (currentUserData.role === 'teacher') {
             document.getElementById('teacher-screen').style.display = 'block';
-            loadStudentsList(); // Учитель зашел -> грузим список учеников
+            loadStudentsList();
           } else {
             document.getElementById('parent-screen').style.display = 'block';
             document.getElementById('parent-welcome').innerText = `👪 Кабинет: ${currentUserData.studentName}`;
-            loadParentData(); // Родитель зашел -> грузим его данные
+            loadParentData();
           }
         } else {
-          // Если юзера еще нет в БД, пускаем для теста как родителя
-          currentUserData = { role: "parent", studentName: "Иванов Иван", class: "class_2" };
-          document.getElementById('parent-screen').style.display = 'block';
-          loadParentData();
+          // Новый пользователь. Ищем его Email в списке привязок от учителя.
+          const safeEmail = user.email.replace(/\./g, '_');
+          
+          get(child(ref(db), `parent_links/${safeEmail}`)).then((linkSnap) => {
+            if (linkSnap.exists()) {
+              // Учитель привязал этот Email! Создаем профиль родителя.
+              const studentName = linkSnap.val();
+              const newUserData = { role: "parent", studentName: studentName, class: "class_2" };
+              
+              set(ref(db, `users/${user.uid}`), newUserData).then(() => {
+                currentUserData = newUserData;
+                document.getElementById('parent-screen').style.display = 'block';
+                document.getElementById('parent-welcome').innerText = `👪 Кабинет: ${studentName}`;
+                loadParentData();
+              });
+            } else {
+              // Учитель еще не привязал этот Email
+              alert("Ваш Email еще не привязан к ученику! Попросите учителя добавить ваш Email в его кабинете.");
+              signOut(auth);
+            }
+          });
         }
       }).catch((error) => {
-        document.getElementById('parent-screen').style.display = 'block';
-        document.getElementById('parent-welcome').innerText = "⚠️ Ошибка БД";
-        document.getElementById('parent-content').innerHTML = `
-          <div style="background: #ffeaa7; padding: 15px; border-radius: 8px; margin-top: 15px;">
-            <small style="color:red;">Тех. ошибка: ${error.message}</small>
-          </div>
-        `;
+        console.error("Database Error:", error);
+        alert("Ошибка БД. Проверьте консоль.");
       });
     } else {
       document.getElementById('login-screen').style.display = 'block';
@@ -204,15 +223,34 @@
       return;
     }
     
-    // Сохраняем ученика в БД
     const studentsRef = ref(db, `students_list/class_2`);
     push(studentsRef, newName)
       .then(() => {
         alert(`Ученик "${newName}" успешно добавлен!`);
         document.getElementById('new-student-name').value = ''; 
-        loadStudentsList(); // Обновляем выпадающий список
+        loadStudentsList();
       })
       .catch(e => alert("Ошибка: " + e.message));
+  };
+
+  // --- ПРИВЯЗКА EMAIL РОДИТЕЛЯ К УЧЕНИКУ (УЧИТЕЛЬ) ---
+  window.linkParent = function() {
+    const email = document.getElementById('parent-email').value.trim().toLowerCase();
+    const student = document.getElementById('t-student').value;
+
+    if (!email || !student) {
+      alert("Введите Email родителя и выберите ученика из выпадающего списка!");
+      return;
+    }
+
+    const safeEmail = email.replace(/\./g, '_'); 
+
+    set(ref(db, `parent_links/${safeEmail}`), student)
+      .then(() => {
+        alert(`Email ${email} успешно привязан к ученику: ${student}! Теперь родитель может войти на портал.`);
+        document.getElementById('parent-email').value = '';
+      })
+      .catch(e => alert("Ошибка привязки: " + e.message));
   };
 
   // --- ЗАГРУЗКА СПИСКА УЧЕНИКОВ ---
@@ -247,7 +285,7 @@
     const today = new Date().toISOString().split('T')[0];
 
     if (!student && commentText) {
-      alert("Сначала выберите или добавьте ученика, чтобы оставить личный комментарий!");
+      alert("Выберите ученика из списка, чтобы оставить личный комментарий!");
       return;
     }
 
@@ -280,12 +318,10 @@
     hwEl.innerText = "Загрузка...";
     commentEl.innerText = "Загрузка...";
 
-    // Читаем ДЗ
     get(child(ref(db), `homeworks/${currentUserData.class}/${today}/${subject}`)).then((snapshot) => {
       hwEl.innerText = snapshot.exists() ? snapshot.val() : "ДЗ пока не добавлено.";
     }).catch(e => hwEl.innerText = "Ошибка чтения: " + e.message);
 
-    // Читаем личный комментарий
     get(child(ref(db), `comments/${currentUserData.class}/${today}/${subject}/${currentUserData.studentName}`)).then((snapshot) => {
       commentEl.innerText = snapshot.exists() ? snapshot.val() : "Комментариев нет.";
     }).catch(e => commentEl.innerText = "Ошибка чтения: " + e.message);
