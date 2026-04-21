@@ -20,3 +20,21 @@
     }
   ]
 }
+
+
+{
+  "name": "Push School Portal",
+  "short_name": "Push School",
+  "description": "Портал для вчителів та батьків",
+  "start_url": "./cabinet.html",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#006d77",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/330/330996.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
