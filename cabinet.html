@@ -56,7 +56,6 @@
     .progress-bar-container { width: 100%; background-color: #ffeaa7; border-radius: 10px; overflow: hidden; margin-top: 15px; height: 18px; box-shadow: inset 0 1px 3px rgba(0,0,0,0.1); }
     .progress-bar { height: 100%; background: linear-gradient(90deg, #f39c12, #e74c3c); width: 0%; transition: width 0.8s ease-out; }
 
-    /* СТИЛІ ДЛЯ МОДАЛЬНОГО ВІКНА ВЧИТЕЛЯ */
     .modal-overlay { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:1000; justify-content:center; align-items:center; backdrop-filter: blur(5px); }
     .modal-content { background: #fff; padding: 30px; border-radius: 20px; text-align: center; max-width: 400px; width: 90%; box-shadow: 0 15px 30px rgba(0,0,0,0.3); animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
     
@@ -89,9 +88,9 @@
 
     <div style="display: flex; gap: 10px; margin-bottom: 25px;">
       <div style="flex: 1; background: #ffeaa7; padding: 15px; border-radius: 12px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
-        <h4 style="margin:0; color: #d35400; font-size: 0.9rem;">❤️ Індекс вдячності</h4>
+        <h4 style="margin:0; color: #d35400; font-size: 0.9rem;">❤️ Ваш індекс</h4>
         <p id="t-karma-counter" style="font-size: 1.8rem; font-weight: 800; color: #e67e22; margin: 5px 0;">0</p>
-        <span style="font-size: 0.7rem; color: #888;">реакцій від батьків</span>
+        <span style="font-size: 0.7rem; color: #888;">реакцій за ваші уроки</span>
       </div>
       
       <div style="flex: 1; background: linear-gradient(135deg, #a8ff78, #78ffd6); padding: 15px; border-radius: 12px; text-align: center; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.05); transition: 0.3s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'" onclick="showWeeklyWrapped()">
@@ -104,7 +103,7 @@
     <div id="wrapped-modal" class="modal-overlay">
       <div class="modal-content">
         <h2 style="color: #27ae60; margin-top:0;">🎉 Ваші підсумки!</h2>
-        <p style="color: #555;">Ви — справжній супер-герой для своїх учнів. Ось ваша статистика роботи на порталі:</p>
+        <p style="color: #555;">Ось статистика роботи саме за вашими предметами:</p>
         <ul style="list-style:none; padding:0; font-size:1.1rem; line-height:2.2; text-align: left; background: #f8f9fa; padding: 15px; border-radius: 12px;">
           <li>📚 Завдань задано: <b id="w-hw" style="float: right; color: #2980b9; font-size: 1.3rem;">0</b></li>
           <li>📝 Коментарів написано: <b id="w-com" style="float: right; color: #8e44ad; font-size: 1.3rem;">0</b></li>
@@ -116,7 +115,7 @@
     </div>
 
     <div class="data-card" style="border-left-color: #9b59b6; background: #faf8fd;">
-      <h4 style="margin-top:0; color: #8e44ad;">🔔 Реакції батьків (за обраний день):</h4>
+      <h4 style="margin-top:0; color: #8e44ad;">🔔 Реакції батьків (ваші предмети):</h4>
       <ul id="t-daily-reactions-list" class="list-dash" style="list-style-type: none; padding-left: 0;">
         <li class="empty-msg">Завантаження...</li>
       </ul>
@@ -130,7 +129,7 @@
     </div>
 
     <div class="data-card" style="border-left-color: #3498db; background: #f4f9fd;">
-      <h4 style="margin-top:0; color: #2980b9;">📋 Зведення ДЗ:</h4>
+      <h4 style="margin-top:0; color: #2980b9;">📋 Зведення всіх ДЗ класу на день:</h4>
       <ul id="t-daily-hw-list" class="list-dash">
         <li class="empty-msg">Завантаження...</li>
       </ul>
@@ -312,15 +311,22 @@
   // --- ДАШБОРД ВЧИТЕЛЯ ---
   window.loadTeacherDashboard = function() {
     const date = document.getElementById('global-date').value;
+    const myUid = auth.currentUser.uid;
     
-    // Індекс вдячності (РАХУЄМО ВСІ РЕАКЦІЇ)
-    get(child(ref(db), `reactions/class_2`)).then(snap => {
+    // Індекс вдячності (РАХУЄМО ТІЛЬКИ СВОЇ РЕАКЦІЇ)
+    Promise.all([
+      get(child(ref(db), `reactions/class_2`)),
+      get(child(ref(db), `authors/class_2`))
+    ]).then(([reactSnap, authSnap]) => {
       let count = 0;
-      if(snap.exists()) {
-        const data = snap.val(); 
-        for(let d in data) {
-          for(let subj in data[d]) {
-            count += Object.keys(data[d][subj]).length;
+      if(reactSnap.exists() && authSnap.exists()) {
+        const reactions = reactSnap.val();
+        const authors = authSnap.val();
+        for(let d in reactions) {
+          for(let subj in reactions[d]) {
+            if(authors[d] && authors[d][subj] === myUid) {
+              count += Object.keys(reactions[d][subj]).length;
+            }
           }
         }
       }
@@ -337,47 +343,85 @@
       } else hwList.innerHTML = '<li class="empty-msg">ДЗ ще не задано.</li>';
     });
 
-    // Реакції за обраний день
+    // Реакції за день (ТІЛЬКИ ДЛЯ СВОЇХ ПРЕДМЕТІВ)
     const reactionsList = document.getElementById('t-daily-reactions-list');
-    get(child(ref(db), `reactions/class_2/${date}`)).then(snap => {
+    Promise.all([
+      get(child(ref(db), `reactions/class_2/${date}`)),
+      get(child(ref(db), `authors/class_2/${date}`))
+    ]).then(([reactSnap, authSnap]) => {
       reactionsList.innerHTML = '';
-      if(snap.exists()) {
-        const data = snap.val();
+      if(reactSnap.exists()) {
+        const data = reactSnap.val();
+        const authors = authSnap.exists() ? authSnap.val() : {};
         let hasReactions = false;
+        
         for (let subj in data) {
-          for (let student in data[subj]) {
-            reactionsList.innerHTML += `<li style="margin-bottom:8px; border-bottom: 1px solid #eee; padding-bottom: 5px;">
-              <span style="font-size: 1.2rem; margin-right: 5px;">${data[subj][student]}</span> 
-              <b>${student}</b> відреагував(ла) на <i>${subj}</i>
-            </li>`;
-            hasReactions = true;
+          if (authors[subj] === myUid) { // Фільтр авторства
+            for (let student in data[subj]) {
+              reactionsList.innerHTML += `<li style="margin-bottom:8px; border-bottom: 1px solid #eee; padding-bottom: 5px;">
+                <span style="font-size: 1.2rem; margin-right: 5px;">${data[subj][student]}</span> 
+                <b>${student}</b> відреагував(ла) на <i>${subj}</i>
+              </li>`;
+              hasReactions = true;
+            }
           }
         }
-        if(!hasReactions) reactionsList.innerHTML = '<li class="empty-msg">Реакцій за цей день немає.</li>';
+        if(!hasReactions) reactionsList.innerHTML = '<li class="empty-msg">Для ваших предметів реакцій за цей день немає.</li>';
       } else reactionsList.innerHTML = '<li class="empty-msg">Реакцій за цей день немає.</li>';
     });
 
     loadLeaderboard();
   };
 
-  // --- ФУНКЦІЯ ВИКЛИКУ "ПІДСУМКІВ ТИЖНЯ" ---
+  // --- "ПІДСУМКИ ТИЖНЯ" (ТІЛЬКИ СВОЯ СТАТИСТИКА) ---
   window.showWeeklyWrapped = function() {
     confetti({ particleCount: 200, spread: 90, origin: { y: 0.6 }, zIndex: 2000 });
     document.getElementById('wrapped-modal').style.display = 'flex';
+    const myUid = auth.currentUser.uid;
 
-    get(child(ref(db), `homeworks/class_2`)).then(snap => {
-      let c = 0; if(snap.exists()) { const d = snap.val(); for(let x in d) c += Object.keys(d[x]).length; }
-      document.getElementById('w-hw').innerText = c;
-    });
+    Promise.all([
+      get(child(ref(db), `homeworks/class_2`)),
+      get(child(ref(db), `comments/class_2`)),
+      get(child(ref(db), `stickers/class_2`)),
+      get(child(ref(db), `authors/class_2`))
+    ]).then(([hwSnap, comSnap, stSnap, authSnap]) => {
+      const authors = authSnap.exists() ? authSnap.val() : {};
 
-    get(child(ref(db), `comments/class_2`)).then(snap => {
-      let c = 0; if(snap.exists()) { const d = snap.val(); for(let x in d) for(let s in d[x]) c += Object.keys(d[x][s]).length; }
-      document.getElementById('w-com').innerText = c;
-    });
+      let hwCount = 0;
+      if (hwSnap.exists()) {
+        const hw = hwSnap.val();
+        for(let d in hw) {
+          for(let subj in hw[d]) {
+            if (authors[d] && authors[d][subj] === myUid) hwCount++;
+          }
+        }
+      }
+      document.getElementById('w-hw').innerText = hwCount;
 
-    get(child(ref(db), `stickers/class_2`)).then(snap => {
-      let c = 0; if(snap.exists()) { const d = snap.val(); for(let s in d) c += Object.keys(d[s]).length; }
-      document.getElementById('w-st').innerText = c;
+      let comCount = 0;
+      if (comSnap.exists()) {
+        const com = comSnap.val();
+        for(let d in com) {
+          for(let subj in com[d]) {
+            if (authors[d] && authors[d][subj] === myUid) {
+              comCount += Object.keys(com[d][subj]).length;
+            }
+          }
+        }
+      }
+      document.getElementById('w-com').innerText = comCount;
+
+      let stCount = 0;
+      if (stSnap.exists()) {
+        const st = stSnap.val();
+        for (let student in st) {
+          for (let key in st[student]) {
+            const [d, subj] = key.split('_');
+            if (authors[d] && authors[d][subj] === myUid) stCount++;
+          }
+        }
+      }
+      document.getElementById('w-st').innerText = stCount;
     });
   };
 
@@ -568,9 +612,13 @@
     
     const btnSave = document.getElementById('btn-save-data');
     const statusMsg = document.getElementById('status-msg');
+    const myUid = auth.currentUser.uid;
 
     btnSave.disabled = true;
     btnSave.innerText = "⏳ Збереження...";
+
+    // ЗБЕРЕЖЕННЯ ТЕГУ АВТОРА
+    await set(ref(db, `authors/class_2/${date}/${subject}`), myUid);
 
     let finalImageUrls = [...currentHwImages]; 
 
