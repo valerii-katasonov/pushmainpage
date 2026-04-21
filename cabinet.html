@@ -92,6 +92,11 @@
       <option value="">Оберіть учня...</option>
     </select>
 
+    <div style="margin-top: 15px; display: flex; align-items: center; background: #fffcf0; padding: 12px; border-radius: 8px; border: 1px solid #fde3a7;">
+      <input type="checkbox" id="t-sticker" style="width: 24px; height: 24px; margin: 0 10px 0 0; cursor: pointer;">
+      <label for="t-sticker" style="margin: 0; color: #d35400; cursor: pointer; font-weight: bold;">🌟 Видати наклейку за цей урок</label>
+    </div>
+
     <label>Особистий коментар (побачить тільки обраний учень):</label>
     <textarea id="t-comment" rows="2" placeholder="Наприклад: Гарно працював на уроці!"></textarea>
 
@@ -128,8 +133,14 @@
   </div>
 
   <div id="parent-screen" class="panel">
-    <h2 id="parent-welcome">👪 Кабінет батьків</h2>
+    <h2 id="parent-welcome">🎓 Кабінет батьків</h2>
     
+    <div class="data-card" style="border-left-color: #f1c40f; background: #fffcf0; text-align: center;">
+      <h4 style="margin-top:0; color: #f39c12; font-size: 1.1rem;">🌟 Стрічка досягнень</h4>
+      <p id="p-ribbon" style="font-size: 1.8rem; margin: 10px 0; line-height: 1.4; word-break: break-all;">Завантаження...</p>
+      <small style="color: #d35400; font-weight: 600;" id="p-ribbon-count"></small>
+    </div>
+
     <div class="data-card" style="border-left-color: #00b894; background: #f0fff4;">
       <h4 style="margin-top:0; color: #00b894;">📚 Задано на цей день:</h4>
       <ul id="p-daily-hw-list" class="list-dash">
@@ -183,7 +194,7 @@
   const db = getDatabase(app);
 
   let currentUserData = null;
-  let currentHwImages = []; // Тепер це МАСИВ картинок
+  let currentHwImages = []; 
   const dayKeys = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
   document.getElementById('global-date').valueAsDate = new Date();
@@ -216,20 +227,14 @@
     }
   }
 
-  // Функція для рендерингу ДЗ з БАГАТЬОМА картинками
   function renderHwItem(subject, data) {
     let text = typeof data === 'string' ? data : data.text;
     let imgHtml = '';
-    
     if (typeof data === 'object') {
       imgHtml += '<div class="gallery">';
-      
-      // Старий формат (одна картинка рядочком)
       if (data.image && typeof data.image === 'string') {
         imgHtml += `<a href="${data.image}" target="_blank"><img src="${data.image}" class="hw-image-thumb" alt="Фото"></a>`;
       }
-      
-      // Новий формат (масив картинок)
       if (data.images && Array.isArray(data.images)) {
         data.images.forEach(img => {
           imgHtml += `<a href="${img}" target="_blank"><img src="${img}" class="hw-image-thumb" alt="Фото"></a>`;
@@ -265,11 +270,13 @@
     document.getElementById('t-hw').value = '';
     document.getElementById('t-comment').value = '';
     document.getElementById('t-image').value = ''; 
+    document.getElementById('t-sticker').checked = false; // Скидаємо чекбокс наклейки
     document.getElementById('existing-image-info').style.display = 'none';
-    currentHwImages = []; // Очищуємо масив картинок
+    currentHwImages = []; 
 
     if (!subject) return;
 
+    // Підтягуємо ДЗ та Фото
     get(child(ref(db), `homeworks/class_2/${date}/${subject}`)).then(snap => {
       if(snap.exists()) {
         const val = snap.val();
@@ -277,14 +284,11 @@
           document.getElementById('t-hw').value = val;
         } else {
           document.getElementById('t-hw').value = val.text || '';
-          
-          // Підвантажуємо існуючі картинки в пам'ять
           if (val.images && Array.isArray(val.images)) {
             currentHwImages = val.images;
           } else if (val.image) {
-            currentHwImages = [val.image]; // Конвертуємо старий формат
+            currentHwImages = [val.image]; 
           }
-
           if(currentHwImages.length > 0) {
             document.getElementById('existing-image-info').innerText = `📎 Вже прикріплено фото: ${currentHwImages.length} шт. Завантажте нові, щоб повністю їх замінити.`;
             document.getElementById('existing-image-info').style.display = 'block';
@@ -293,6 +297,7 @@
       }
     });
 
+    // Підтягуємо історію коментарів для обраного предмету
     const historyList = document.getElementById('t-history-comments');
     get(child(ref(db), `comments/class_2/${date}/${subject}`)).then(snap => {
       historyList.innerHTML = '';
@@ -308,12 +313,34 @@
         historyList.innerHTML = '<li class="empty-msg">Ще немає коментарів.</li>';
       }
     });
+
+    // Підтягуємо статус наклейки для конкретного учня
+    if (student) {
+      get(child(ref(db), `stickers/class_2/${student}/${date}_${subject}`)).then(snap => {
+        document.getElementById('t-sticker').checked = (snap.exists() && snap.val() === true);
+      });
+    }
   };
 
   window.loadParentDashboard = function() {
     if (!currentUserData) return;
     const date = document.getElementById('global-date').value;
     
+    // Завантаження стрічки наклейок (ЗА ВЕСЬ ЧАС)
+    const ribbonEl = document.getElementById('p-ribbon');
+    const ribbonCountEl = document.getElementById('p-ribbon-count');
+    get(child(ref(db), `stickers/class_2/${currentUserData.studentName}`)).then(snap => {
+      if (snap.exists()) {
+        const count = Object.keys(snap.val()).length;
+        ribbonEl.innerText = count > 0 ? '⭐'.repeat(count) : 'Стрічка порожня';
+        ribbonCountEl.innerText = count > 0 ? `Зібрано наклейок: ${count}` : 'Чекаємо на першу наклейку!';
+      } else {
+        ribbonEl.innerText = 'Стрічка порожня';
+        ribbonCountEl.innerText = 'Чекаємо на першу наклейку!';
+      }
+    });
+
+    // Завантаження ДЗ
     const hwList = document.getElementById('p-daily-hw-list');
     const commentsList = document.getElementById('p-daily-comments-list');
     
@@ -332,6 +359,7 @@
       }
     });
 
+    // Завантаження Коментарів
     get(child(ref(db), `comments/class_2/${date}`)).then(snap => {
       commentsList.innerHTML = '';
       let hasComments = false;
@@ -350,13 +378,13 @@
     });
   };
 
-  // --- ЗБЕРЕЖЕННЯ ДАНИХ (ПІДТРИМКА БАГАТЬОХ ФАЙЛІВ) ---
   window.saveData = async function() {
     const date = document.getElementById('global-date').value;
     const subject = document.getElementById('t-subject').value;
     const student = document.getElementById('t-student').value;
     const hwText = document.getElementById('t-hw').value.trim();
     const comment = document.getElementById('t-comment').value.trim();
+    const stickerChecked = document.getElementById('t-sticker').checked;
     const fileInput = document.getElementById('t-image');
     
     const btnSave = document.getElementById('btn-save-data');
@@ -365,17 +393,16 @@
     btnSave.disabled = true;
     btnSave.innerText = "⏳ Збереження...";
 
-    let finalImageUrls = [...currentHwImages]; // Беремо існуючі картинки
+    let finalImageUrls = [...currentHwImages]; 
 
-    // Якщо вчитель обрав нові файли - завантажуємо їх усі
+    // Завантаження фото
     if (fileInput.files.length > 0) {
       statusMsg.style.display = 'block';
       statusMsg.innerText = `⏳ Завантаження фото (0/${fileInput.files.length})...`;
       statusMsg.style.color = "#f39c12";
 
-      finalImageUrls = []; // Нові файли ПЕРЕЗАПИСУЮТЬ старі
+      finalImageUrls = []; 
 
-      // Запускаємо паралельне завантаження всіх картинок
       const uploadPromises = Array.from(fileInput.files).map(async (file) => {
         const formData = new FormData();
         formData.append('file', file);
@@ -395,14 +422,23 @@
       }
     }
 
+    // Збереження ДЗ
     if (hwText || finalImageUrls.length > 0) {
-      // Зберігаємо масив картинок у поле images
       const hwData = { text: hwText, images: finalImageUrls }; 
       await set(ref(db, `homeworks/class_2/${date}/${subject}`), hwData);
     }
     
-    if (comment && student) {
-      await set(ref(db, `comments/class_2/${date}/${subject}/${student}`), comment);
+    // Збереження Коментаря та Наклейки
+    if (student) {
+      if (comment) {
+        await set(ref(db, `comments/class_2/${date}/${subject}/${student}`), comment);
+      }
+      
+      if (stickerChecked) {
+        await set(ref(db, `stickers/class_2/${student}/${date}_${subject}`), true);
+      } else {
+        await set(ref(db, `stickers/class_2/${student}/${date}_${subject}`), null); // Видаляє наклейку, якщо галочку знято
+      }
     }
 
     statusMsg.style.color = "#2ed573";
@@ -475,7 +511,7 @@
       loadStudentsList();
     } else {
       document.getElementById('parent-screen').style.display = 'block';
-      document.getElementById('parent-welcome').innerText = `👪 Кабінет: ${currentUserData.studentName}`;
+      document.getElementById('parent-welcome').innerText = `🎓 Кабінет: ${currentUserData.studentName}`;
     }
     handleDateChange(); 
   }
