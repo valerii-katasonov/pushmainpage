@@ -37,9 +37,12 @@
     .data-card { background: #fff; padding: 15px; border-left: 4px solid #006d77; border-radius: 8px; margin-top: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
     
     .list-dash { margin: 0; padding-left: 20px; color: #444; line-height: 1.6; }
-    .list-dash li { margin-bottom: 12px; }
+    .list-dash li { margin-bottom: 15px; }
     .list-dash b { color: #006d77; }
-    .hw-image-thumb { max-width: 120px; max-height: 120px; border-radius: 8px; border: 1px solid #ddd; display: block; margin-top: 5px; cursor: zoom-in; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+    
+    .gallery { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+    .hw-image-thumb { width: 100px; height: 100px; object-fit: cover; border-radius: 8px; border: 1px solid #ddd; cursor: zoom-in; box-shadow: 0 2px 5px rgba(0,0,0,0.1); transition: 0.2s; }
+    .hw-image-thumb:hover { transform: scale(1.05); }
     
     .empty-msg { color: #999; font-style: italic; margin: 5px 0; }
     #status-msg { text-align: center; color: #2ed573; font-weight: bold; display: none; margin-top: 10px; }
@@ -80,9 +83,9 @@
     <label>Домашнє завдання (для всього класу):</label>
     <textarea id="t-hw" rows="2" placeholder="Введіть ДЗ..."></textarea>
     
-    <label>📸 Фото з підручника/зошита (необов'язково):</label>
-    <input type="file" id="t-image" accept="image/*">
-    <div id="existing-image-info">📎 Вже прикріплено фото. Завантажте нове, щоб замінити.</div>
+    <label>📸 Фото з підручника/зошита (можна обрати декілька):</label>
+    <input type="file" id="t-image" accept="image/*" multiple>
+    <div id="existing-image-info">📎 Вже прикріплено фото. Завантажте нові, щоб повністю їх замінити.</div>
 
     <label style="margin-top:20px; border-top: 1px dashed #ccc; padding-top: 15px;">Учень (кому пишемо коментар):</label>
     <select id="t-student" onchange="loadCurrentData()">
@@ -158,7 +161,6 @@
 
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-  // ДОБАВЛЕНА ФУНКЦИЯ updatePassword В ИМПОРТ
   import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut, updatePassword } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
   import { getDatabase, ref, set, get, child, push } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 
@@ -181,7 +183,7 @@
   const db = getDatabase(app);
 
   let currentUserData = null;
-  let currentHwImage = null; 
+  let currentHwImages = []; // Тепер це МАСИВ картинок
   const dayKeys = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
   document.getElementById('global-date').valueAsDate = new Date();
@@ -214,11 +216,27 @@
     }
   }
 
+  // Функція для рендерингу ДЗ з БАГАТЬОМА картинками
   function renderHwItem(subject, data) {
     let text = typeof data === 'string' ? data : data.text;
-    let imgHtml = (typeof data === 'object' && data.image) 
-      ? `<br><a href="${data.image}" target="_blank"><img src="${data.image}" class="hw-image-thumb" alt="Фото ДЗ"></a>` 
-      : '';
+    let imgHtml = '';
+    
+    if (typeof data === 'object') {
+      imgHtml += '<div class="gallery">';
+      
+      // Старий формат (одна картинка рядочком)
+      if (data.image && typeof data.image === 'string') {
+        imgHtml += `<a href="${data.image}" target="_blank"><img src="${data.image}" class="hw-image-thumb" alt="Фото"></a>`;
+      }
+      
+      // Новий формат (масив картинок)
+      if (data.images && Array.isArray(data.images)) {
+        data.images.forEach(img => {
+          imgHtml += `<a href="${img}" target="_blank"><img src="${img}" class="hw-image-thumb" alt="Фото"></a>`;
+        });
+      }
+      imgHtml += '</div>';
+    }
     return `<li><b>${subject}:</b> ${text} ${imgHtml}</li>`;
   }
 
@@ -248,7 +266,7 @@
     document.getElementById('t-comment').value = '';
     document.getElementById('t-image').value = ''; 
     document.getElementById('existing-image-info').style.display = 'none';
-    currentHwImage = null; 
+    currentHwImages = []; // Очищуємо масив картинок
 
     if (!subject) return;
 
@@ -258,9 +276,17 @@
         if(typeof val === 'string') {
           document.getElementById('t-hw').value = val;
         } else {
-          document.getElementById('t-hw').value = val.text;
-          if(val.image) {
-            currentHwImage = val.image;
+          document.getElementById('t-hw').value = val.text || '';
+          
+          // Підвантажуємо існуючі картинки в пам'ять
+          if (val.images && Array.isArray(val.images)) {
+            currentHwImages = val.images;
+          } else if (val.image) {
+            currentHwImages = [val.image]; // Конвертуємо старий формат
+          }
+
+          if(currentHwImages.length > 0) {
+            document.getElementById('existing-image-info').innerText = `📎 Вже прикріплено фото: ${currentHwImages.length} шт. Завантажте нові, щоб повністю їх замінити.`;
             document.getElementById('existing-image-info').style.display = 'block';
           }
         }
@@ -324,6 +350,7 @@
     });
   };
 
+  // --- ЗБЕРЕЖЕННЯ ДАНИХ (ПІДТРИМКА БАГАТЬОХ ФАЙЛІВ) ---
   window.saveData = async function() {
     const date = document.getElementById('global-date').value;
     const subject = document.getElementById('t-subject').value;
@@ -331,28 +358,35 @@
     const hwText = document.getElementById('t-hw').value.trim();
     const comment = document.getElementById('t-comment').value.trim();
     const fileInput = document.getElementById('t-image');
-    const file = fileInput.files[0];
+    
     const btnSave = document.getElementById('btn-save-data');
     const statusMsg = document.getElementById('status-msg');
 
     btnSave.disabled = true;
     btnSave.innerText = "⏳ Збереження...";
 
-    let finalImageUrl = currentHwImage; 
+    let finalImageUrls = [...currentHwImages]; // Беремо існуючі картинки
 
-    if (file) {
+    // Якщо вчитель обрав нові файли - завантажуємо їх усі
+    if (fileInput.files.length > 0) {
       statusMsg.style.display = 'block';
-      statusMsg.innerText = "⏳ Завантаження фото на сервер...";
+      statusMsg.innerText = `⏳ Завантаження фото (0/${fileInput.files.length})...`;
       statusMsg.style.color = "#f39c12";
 
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('upload_preset', UPLOAD_PRESET);
+      finalImageUrls = []; // Нові файли ПЕРЕЗАПИСУЮТЬ старі
 
-      try {
+      // Запускаємо паралельне завантаження всіх картинок
+      const uploadPromises = Array.from(fileInput.files).map(async (file) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('upload_preset', UPLOAD_PRESET);
         const res = await fetch(CLOUDINARY_URL, { method: 'POST', body: formData });
         const data = await res.json();
-        finalImageUrl = data.secure_url; 
+        return data.secure_url;
+      });
+
+      try {
+        finalImageUrls = await Promise.all(uploadPromises);
       } catch (e) {
         alert("Помилка завантаження фото! " + e.message);
         btnSave.disabled = false;
@@ -361,8 +395,9 @@
       }
     }
 
-    if (hwText || finalImageUrl) {
-      const hwData = { text: hwText, image: finalImageUrl || "" };
+    if (hwText || finalImageUrls.length > 0) {
+      // Зберігаємо масив картинок у поле images
+      const hwData = { text: hwText, images: finalImageUrls }; 
       await set(ref(db, `homeworks/class_2/${date}/${subject}`), hwData);
     }
     
@@ -383,19 +418,12 @@
     }, 2000);
   };
 
-  // --- ФУНКЦИЯ СМЕНЫ ПАРОЛЯ ---
   window.changePassword = function(inputId) {
     const user = auth.currentUser;
     const newPass = document.getElementById(inputId).value.trim();
 
-    if (!user) {
-      alert("Помилка: користувач не авторизований.");
-      return;
-    }
-    if (newPass.length < 6) {
-      alert("Пароль має містити мінімум 6 символів!");
-      return;
-    }
+    if (!user) return alert("Помилка: користувач не авторизований.");
+    if (newPass.length < 6) return alert("Пароль має містити мінімум 6 символів!");
 
     updatePassword(user, newPass)
       .then(() => {
@@ -404,10 +432,8 @@
       })
       .catch((error) => {
         if (error.code === 'auth/requires-recent-login') {
-          alert("🔒 З міркувань безпеки, щоб змінити пароль, вам потрібно вийти з системи, зайти знову за старим паролем, а потім повторити спробу.");
-        } else {
-          alert("Помилка зміни пароля: " + error.message);
-        }
+          alert("🔒 З міркувань безпеки вам потрібно вийти з системи, зайти знову за старим паролем, а потім повторити спробу.");
+        } else alert("Помилка: " + error.message);
       });
   };
 
