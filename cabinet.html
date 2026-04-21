@@ -56,7 +56,7 @@
   </div>
 
   <div id="calendar-block" style="display: none;" class="date-picker-box">
-    <label style="margin-top:0; color: #006d77; font-size: 1rem;">📅 Оберіть дату (Сводка дня):</label>
+    <label style="margin-top:0; color: #006d77; font-size: 1rem;">📅 Оберіть дату (Зведення дня):</label>
     <input type="date" id="global-date" onchange="handleDateChange()" style="border: 2px solid #006d77; color: #006d77; font-weight: bold; text-align: center;">
   </div>
 
@@ -75,13 +75,13 @@
     <select id="t-subject" onchange="loadCurrentData()">
       </select>
 
+    <label>Домашнє завдання (збережеться для всього класу):</label>
+    <textarea id="t-hw" rows="2" placeholder="Введіть ДЗ..."></textarea>
+
     <label>Учень (кому пишемо коментар):</label>
     <select id="t-student" onchange="loadCurrentData()">
       <option value="">Оберіть учня...</option>
     </select>
-
-    <label>Домашнє завдання (збережеться для всього класу):</label>
-    <textarea id="t-hw" rows="2" placeholder="Введіть ДЗ..."></textarea>
 
     <label>Особистий коментар (побачить тільки обраний учень):</label>
     <textarea id="t-comment" rows="2" placeholder="Наприклад: Гарно працював на уроці!"></textarea>
@@ -324,7 +324,7 @@
           currentUserData = snapshot.val();
           initUserSession();
         } else {
-          // Логіка прив'язки нових батьків (як в попередньому коді)
+          // Логіка прив'язки нових батьків
           const safeEmail = user.email.replace(/\./g, '_');
           get(child(ref(db), `parent_links/${safeEmail}`)).then((linkSnap) => {
             if (linkSnap.exists()) {
@@ -363,7 +363,7 @@
     const email = document.getElementById('email').value.trim();
     const pass = document.getElementById('pass').value.trim();
     signInWithEmailAndPassword(auth, email, pass).catch(e => {
-      document.getElementById('login-error').innerText = "Помилка входу";
+      document.getElementById('login-error').innerText = "Помилка входу. Перевірте логін та пароль.";
       document.getElementById('login-error').style.display = 'block';
     });
   };
@@ -387,7 +387,7 @@
   window.addStudent = function() {
     const name = document.getElementById('new-student-name').value.trim();
     if (name) push(ref(db, `students_list/class_2`), name).then(() => {
-      alert("Додано!"); loadStudentsList(); document.getElementById('new-student-name').value = '';
+      alert("Учня додано!"); loadStudentsList(); document.getElementById('new-student-name').value = '';
     });
   };
 
@@ -396,7 +396,7 @@
     const student = document.getElementById('t-student').value;
     if (email && student) {
       set(ref(db, `parent_links/${email}`), student).then(() => {
-        alert("Email прив'язано!"); document.getElementById('parent-email').value = '';
+        alert("Email успішно прив'язано до учня!"); document.getElementById('parent-email').value = '';
       });
     } else {
       alert("Оберіть учня зі списку вище та введіть Email");
