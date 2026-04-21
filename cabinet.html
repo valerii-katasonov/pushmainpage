@@ -95,12 +95,22 @@
   </div>
 
   <div id="calendar-block" style="display: none;" class="date-picker-box">
+    <div id="teacher-class-selector-box" style="display: none; margin-bottom: 15px; border-bottom: 1px dashed #006d77; padding-bottom: 15px;">
+      <label style="margin-top:0; color: #d35400; font-size: 1rem;">🏫 Оберіть клас:</label>
+      <select id="t-class-selector" onchange="handleClassChange()" style="border: 2px solid #e67e22; color: #d35400; font-weight: bold; text-align: center;">
+        <option value="class_1">1 Клас</option>
+        <option value="class_2" selected>2 Клас</option>
+        <option value="class_3">3 Клас</option>
+        <option value="class_4">4 Клас</option>
+      </select>
+    </div>
+
     <label style="margin-top:0; color: #006d77; font-size: 1rem;">📅 Оберіть дату (Зведення дня):</label>
     <input type="date" id="global-date" onchange="handleDateChange()" style="border: 2px solid #006d77; color: #006d77; font-weight: bold; text-align: center;">
   </div>
 
   <div id="teacher-screen" class="panel">
-    <h2>👨‍🏫 Журнал: 2 клас</h2>
+    <h2 id="teacher-dashboard-title">👨‍🏫 Журнал</h2>
 
     <div style="display: flex; gap: 10px; margin-bottom: 25px;">
       <div style="flex: 1; background: #ffeaa7; padding: 15px; border-radius: 12px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
@@ -138,7 +148,7 @@
     </div>
     
     <h3>✏️ Заповнення журналу</h3>
-    <label>Предмет (згідно з розкладом):</label>
+    <label>Предмет:</label>
     <select id="t-subject" onchange="loadCurrentData()"></select>
 
     <label>Домашнє завдання (для всього класу):</label>
@@ -172,10 +182,10 @@
     </div>
 
     <details style="margin-top: 30px; background: #fff; padding: 15px; border-radius: 12px; border: 1px solid #ddd;">
-      <summary style="font-weight: bold; cursor: pointer; color: #7f8c8d;">⚙️ Управління класом</summary>
+      <summary style="font-weight: bold; cursor: pointer; color: #7f8c8d;">⚙️ Управління поточним класом</summary>
       <div style="margin-top: 15px;">
         <input type="text" id="new-student-name" placeholder="Прізвище та Ім'я учня">
-        <button style="background: #f1c40f; padding: 8px; margin-top: 5px; margin-bottom: 15px;" onclick="addStudent()">Додати учня</button>
+        <button style="background: #f1c40f; padding: 8px; margin-top: 5px; margin-bottom: 15px;" onclick="addStudent()">Додати учня в цей клас</button>
         <hr>
         <input type="email" id="parent-email" placeholder="Email батьків" style="margin-top: 15px;">
         <button style="background: #9b59b6; padding: 8px; margin-top: 5px; color: white;" onclick="linkParent()">Прив'язати Email до обраного вище учня</button>
@@ -273,6 +283,9 @@
   let currentHwImages = []; 
   const dayKeys = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
   const STICKER_GOAL = 30; 
+  
+  // УНІВЕРСАЛЬНИЙ СПИСОК ПРЕДМЕТІВ (якщо немає розкладу для обраного класу)
+  const defaultSubjects = ["Українська мова", "Читання", "Математика", "Англійська мова", "Я досліджую світ", "Інформатика", "Мистецтво", "Фізична культура"];
 
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
@@ -284,15 +297,12 @@
   const btnInstallAndroid = document.getElementById('btn-install-android');
 
   window.addEventListener('beforeinstallprompt', (e) => {
-    e.preventDefault();
-    deferredPrompt = e;
+    e.preventDefault(); deferredPrompt = e;
   });
 
   btnInstallAndroid.addEventListener('click', async () => {
     if (deferredPrompt !== null) {
-      deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
-      deferredPrompt = null;
+      deferredPrompt.prompt(); const { outcome } = await deferredPrompt.userChoice; deferredPrompt = null;
     } else {
       alert('🤖 Щоб встановити додаток на Android:\n\n1. Відкрийте цей сайт у Google Chrome.\n2. Натисніть на три крапки (меню) у правому верхньому куті.\n3. Знайдіть пункт "Додати на головний екран" або "Встановити додаток".\n4. Підтвердіть встановлення.');
     }
@@ -303,6 +313,23 @@
   };
 
   document.getElementById('global-date').valueAsDate = new Date();
+
+  // ФУНКЦІЯ ОТРИМАННЯ АКТИВНОГО КЛАСУ
+  function getActiveClass() {
+    if (currentUserData.role === 'teacher') {
+      return document.getElementById('t-class-selector').value;
+    }
+    return currentUserData.class; // Для батьків беремо з профілю
+  }
+
+  window.handleClassChange = function() {
+    const activeClass = getActiveClass();
+    const classLabel = document.getElementById('t-class-selector').options[document.getElementById('t-class-selector').selectedIndex].text;
+    document.getElementById('teacher-dashboard-title').innerText = `👨‍🏫 Журнал: ${classLabel}`;
+    
+    loadStudentsList();
+    handleDateChange();
+  };
 
   window.handleDateChange = function() {
     updateSubjectList();
@@ -317,16 +344,22 @@
   function updateSubjectList() {
     const dateVal = new Date(document.getElementById('global-date').value);
     const dayName = dayKeys[dateVal.getDay()];
-    const subjects = window.schedule[dayName] || [];
-    const cleanSubjects = subjects.filter(s => s.number !== " " && s.subject.ua !== "Перерва");
+    const activeClass = getActiveClass();
+    
+    // Якщо є розклад ТІЛЬКИ для class_2 (зі старого файлу schedule-class-2.js)
+    let subjects = [];
+    if (activeClass === 'class_2' && window.schedule && window.schedule[dayName]) {
+        subjects = window.schedule[dayName].filter(s => s.number !== " " && s.subject.ua !== "Перерва").map(s => s.subject.ua);
+    } else {
+        subjects = defaultSubjects; // Використовуємо універсальний список для інших класів
+    }
 
     if (currentUserData.role === 'teacher') {
       const select = document.getElementById('t-subject');
       select.innerHTML = '';
-      cleanSubjects.forEach(s => {
+      subjects.forEach(subj => {
         const opt = document.createElement('option');
-        opt.value = s.subject.ua;
-        opt.innerText = s.subject.ua;
+        opt.value = subj; opt.innerText = subj;
         select.appendChild(opt);
       });
     }
@@ -337,14 +370,8 @@
     let imgHtml = '';
     if (typeof data === 'object') {
       imgHtml += '<div class="gallery">';
-      if (data.image && typeof data.image === 'string') {
-        imgHtml += `<a href="${data.image}" target="_blank"><img src="${data.image}" class="hw-image-thumb" alt="Фото"></a>`;
-      }
-      if (data.images && Array.isArray(data.images)) {
-        data.images.forEach(img => {
-          imgHtml += `<a href="${img}" target="_blank"><img src="${img}" class="hw-image-thumb" alt="Фото"></a>`;
-        });
-      }
+      if (data.image && typeof data.image === 'string') imgHtml += `<a href="${data.image}" target="_blank"><img src="${data.image}" class="hw-image-thumb" alt="Фото"></a>`;
+      if (data.images && Array.isArray(data.images)) data.images.forEach(img => imgHtml += `<a href="${img}" target="_blank"><img src="${img}" class="hw-image-thumb" alt="Фото"></a>`);
       imgHtml += '</div>';
     }
     return `<li><b>${subject}:</b> ${text} ${imgHtml}</li>`;
@@ -352,11 +379,12 @@
 
   window.loadTeacherDashboard = function() {
     const date = document.getElementById('global-date').value;
+    const activeClass = getActiveClass();
     const myUid = auth.currentUser.uid;
     
     Promise.all([
-      get(child(ref(db), `reactions/class_2`)),
-      get(child(ref(db), `authors/class_2`))
+      get(child(ref(db), `reactions/${activeClass}`)),
+      get(child(ref(db), `authors/${activeClass}`))
     ]).then(([reactSnap, authSnap]) => {
       let count = 0;
       if(reactSnap.exists() && authSnap.exists()) {
@@ -374,7 +402,7 @@
     });
 
     const hwList = document.getElementById('t-daily-hw-list');
-    get(child(ref(db), `homeworks/class_2/${date}`)).then(snap => {
+    get(child(ref(db), `homeworks/${activeClass}/${date}`)).then(snap => {
       hwList.innerHTML = '';
       if(snap.exists()) {
         const data = snap.val();
@@ -384,8 +412,8 @@
 
     const reactionsList = document.getElementById('t-daily-reactions-list');
     Promise.all([
-      get(child(ref(db), `reactions/class_2/${date}`)),
-      get(child(ref(db), `authors/class_2/${date}`))
+      get(child(ref(db), `reactions/${activeClass}/${date}`)),
+      get(child(ref(db), `authors/${activeClass}/${date}`))
     ]).then(([reactSnap, authSnap]) => {
       reactionsList.innerHTML = '';
       if(reactSnap.exists()) {
@@ -411,19 +439,19 @@
     loadLeaderboard();
   };
 
-  // ОНОВЛЕНА ФУНКЦІЯ: ТЕПЕР ЗАБОРОНЯЄМО СКРОЛ ПРИ ВІДКРИТТІ
   window.showWeeklyWrapped = function() {
     confetti({ particleCount: 200, spread: 90, origin: { y: 0.6 }, zIndex: 2000 });
     document.getElementById('wrapped-modal').style.display = 'flex';
-    document.body.style.overflow = 'hidden'; // Блокуємо прокрутку фону!
+    document.body.style.overflow = 'hidden'; 
 
     const myUid = auth.currentUser.uid;
+    const activeClass = getActiveClass();
 
     Promise.all([
-      get(child(ref(db), `homeworks/class_2`)),
-      get(child(ref(db), `comments/class_2`)),
-      get(child(ref(db), `stickers/class_2`)),
-      get(child(ref(db), `authors/class_2`))
+      get(child(ref(db), `homeworks/${activeClass}`)),
+      get(child(ref(db), `comments/${activeClass}`)),
+      get(child(ref(db), `stickers/${activeClass}`)),
+      get(child(ref(db), `authors/${activeClass}`))
     ]).then(([hwSnap, comSnap, stSnap, authSnap]) => {
       const authors = authSnap.exists() ? authSnap.val() : {};
 
@@ -465,7 +493,6 @@
     });
   };
 
-  // НОВА ФУНКЦІЯ: ЗАКРИТТЯ ВІКНА ТА ПОВЕРНЕННЯ СКРОЛУ
   window.closeModal = function() {
     document.getElementById('wrapped-modal').style.display = 'none';
     document.body.style.overflow = ''; 
@@ -473,7 +500,9 @@
 
   window.loadLeaderboard = function() {
     const list = document.getElementById('t-leaderboard-list');
-    get(child(ref(db), `stickers/class_2`)).then(snap => {
+    const activeClass = getActiveClass();
+    
+    get(child(ref(db), `stickers/${activeClass}`)).then(snap => {
       list.innerHTML = '';
       if (snap.exists()) {
         const data = snap.val();
@@ -504,8 +533,9 @@
   };
 
   window.resetStickers = function(studentName) {
+    const activeClass = getActiveClass();
     if(confirm(`Видати приз учню ${studentName} та скинути лічильник наліпок до нуля?`)) {
-      set(ref(db, `stickers/class_2/${studentName}`), null).then(() => {
+      set(ref(db, `stickers/${activeClass}/${studentName}`), null).then(() => {
         alert('Приз видано, лічильник скинуто!');
         loadLeaderboard(); 
       });
@@ -516,6 +546,7 @@
     const date = document.getElementById('global-date').value;
     const subject = document.getElementById('t-subject').value;
     const student = document.getElementById('t-student').value;
+    const activeClass = getActiveClass();
     
     document.getElementById('t-hw').value = '';
     document.getElementById('t-comment').value = '';
@@ -526,18 +557,16 @@
 
     if (!subject) return;
 
-    get(child(ref(db), `homeworks/class_2/${date}/${subject}`)).then(snap => {
+    get(child(ref(db), `homeworks/${activeClass}/${date}/${subject}`)).then(snap => {
       if(snap.exists()) {
         const val = snap.val();
         if(typeof val === 'string') {
           document.getElementById('t-hw').value = val;
         } else {
           document.getElementById('t-hw').value = val.text || '';
-          if (val.images && Array.isArray(val.images)) {
-            currentHwImages = val.images;
-          } else if (val.image) {
-            currentHwImages = [val.image]; 
-          }
+          if (val.images && Array.isArray(val.images)) currentHwImages = val.images;
+          else if (val.image) currentHwImages = [val.image]; 
+          
           if(currentHwImages.length > 0) {
             document.getElementById('existing-image-info').innerText = `📎 Вже прикріплено фото: ${currentHwImages.length} шт. Завантажте нові, щоб повністю їх замінити.`;
             document.getElementById('existing-image-info').style.display = 'block';
@@ -548,8 +577,8 @@
 
     const historyList = document.getElementById('t-history-comments');
     Promise.all([
-      get(child(ref(db), `comments/class_2/${date}/${subject}`)),
-      get(child(ref(db), `reactions/class_2/${date}/${subject}`))
+      get(child(ref(db), `comments/${activeClass}/${date}/${subject}`)),
+      get(child(ref(db), `reactions/${activeClass}/${date}/${subject}`))
     ]).then(([commentSnap, reactionSnap]) => {
       historyList.innerHTML = '';
       if(commentSnap.exists()) {
@@ -567,7 +596,7 @@
     });
 
     if (student) {
-      get(child(ref(db), `stickers/class_2/${student}/${date}_${subject}`)).then(snap => {
+      get(child(ref(db), `stickers/${activeClass}/${student}/${date}_${subject}`)).then(snap => {
         document.getElementById('t-sticker').checked = (snap.exists() && snap.val() === true);
       });
     }
@@ -576,12 +605,13 @@
   window.loadParentDashboard = function() {
     if (!currentUserData) return;
     const date = document.getElementById('global-date').value;
+    const activeClass = getActiveClass();
     
     const progressEl = document.getElementById('p-ribbon-progress');
     const countEl = document.getElementById('p-ribbon-count');
     const msgEl = document.getElementById('p-ribbon-msg');
     
-    get(child(ref(db), `stickers/class_2/${currentUserData.studentName}`)).then(snap => {
+    get(child(ref(db), `stickers/${activeClass}/${currentUserData.studentName}`)).then(snap => {
       const count = snap.exists() ? Object.keys(snap.val()).length : 0;
       const percent = Math.min((count / STICKER_GOAL) * 100, 100);
       
@@ -597,7 +627,7 @@
     });
 
     const hwList = document.getElementById('p-daily-hw-list');
-    get(child(ref(db), `homeworks/class_2/${date}`)).then(snap => {
+    get(child(ref(db), `homeworks/${activeClass}/${date}`)).then(snap => {
       hwList.innerHTML = '';
       if(snap.exists()) {
         const data = snap.val();
@@ -609,8 +639,8 @@
     commentsList.innerHTML = '<li class="empty-msg">Завантаження...</li>';
     
     Promise.all([
-      get(child(ref(db), `comments/class_2/${date}`)),
-      get(child(ref(db), `reactions/class_2/${date}`))
+      get(child(ref(db), `comments/${activeClass}/${date}`)),
+      get(child(ref(db), `reactions/${activeClass}/${date}`))
     ]).then(([commentsSnap, reactionsSnap]) => {
       commentsList.innerHTML = '';
       let hasComments = false;
@@ -642,7 +672,8 @@
 
   window.sendReaction = function(date, subject, emoji) {
     if (!currentUserData) return;
-    set(ref(db, `reactions/class_2/${date}/${subject}/${currentUserData.studentName}`), emoji)
+    const activeClass = getActiveClass();
+    set(ref(db, `reactions/${activeClass}/${date}/${subject}/${currentUserData.studentName}`), emoji)
       .then(() => loadParentDashboard());
   };
 
@@ -655,6 +686,7 @@
     const stickerChecked = document.getElementById('t-sticker').checked;
     const fileInput = document.getElementById('t-image');
     
+    const activeClass = getActiveClass();
     const btnSave = document.getElementById('btn-save-data');
     const statusMsg = document.getElementById('status-msg');
     const myUid = auth.currentUser.uid;
@@ -662,7 +694,7 @@
     btnSave.disabled = true;
     btnSave.innerText = "⏳ Збереження...";
 
-    await set(ref(db, `authors/class_2/${date}/${subject}`), myUid);
+    await set(ref(db, `authors/${activeClass}/${date}/${subject}`), myUid);
 
     let finalImageUrls = [...currentHwImages]; 
 
@@ -672,7 +704,6 @@
       statusMsg.style.color = "#f39c12";
 
       finalImageUrls = []; 
-
       const uploadPromises = Array.from(fileInput.files).map(async (file) => {
         const formData = new FormData();
         formData.append('file', file);
@@ -686,24 +717,22 @@
         finalImageUrls = await Promise.all(uploadPromises);
       } catch (e) {
         alert("Помилка завантаження фото! " + e.message);
-        btnSave.disabled = false;
-        btnSave.innerText = "💾 Зберегти дані";
-        return;
+        btnSave.disabled = false; btnSave.innerText = "💾 Зберегти дані"; return;
       }
     }
 
     if (hwText || finalImageUrls.length > 0) {
       const hwData = { text: hwText, images: finalImageUrls }; 
-      await set(ref(db, `homeworks/class_2/${date}/${subject}`), hwData);
+      await set(ref(db, `homeworks/${activeClass}/${date}/${subject}`), hwData);
     }
     
     if (student) {
-      if (comment) await set(ref(db, `comments/class_2/${date}/${subject}/${student}`), comment);
+      if (comment) await set(ref(db, `comments/${activeClass}/${date}/${subject}/${student}`), comment);
       
       if (stickerChecked) {
-        await set(ref(db, `stickers/class_2/${student}/${date}_${subject}`), true);
+        await set(ref(db, `stickers/${activeClass}/${student}/${date}_${subject}`), true);
       } else {
-        await set(ref(db, `stickers/class_2/${student}/${date}_${subject}`), null);
+        await set(ref(db, `stickers/${activeClass}/${student}/${date}_${subject}`), null);
       }
     }
 
@@ -728,14 +757,10 @@
     if (newPass.length < 6) return alert("Пароль має містити мінімум 6 символів!");
 
     updatePassword(user, newPass)
-      .then(() => {
-        alert("✅ Пароль успішно змінено!");
-        document.getElementById(inputId).value = '';
-      })
+      .then(() => { alert("✅ Пароль успішно змінено!"); document.getElementById(inputId).value = ''; })
       .catch((error) => {
-        if (error.code === 'auth/requires-recent-login') {
-          alert("🔒 З міркувань безпеки вам потрібно вийти з системи, зайти знову за старим паролем, а потім повторити спробу.");
-        } else alert("Помилка: " + error.message);
+        if (error.code === 'auth/requires-recent-login') alert("🔒 З міркувань безпеки вам потрібно вийти з системи, зайти знову за старим паролем, а потім повторити спробу.");
+        else alert("Помилка: " + error.message);
       });
   };
 
@@ -753,14 +778,13 @@
           get(child(ref(db), `parent_links/${safeEmail}`)).then((linkSnap) => {
             if (linkSnap.exists()) {
               const studentName = linkSnap.val();
-              const newUserData = { role: "parent", studentName: studentName, class: "class_2" };
+              const newUserData = { role: "parent", studentName: studentName, class: "class_2" }; // Дефолтний клас при реєстрації батьків
               set(ref(db, `users/${user.uid}`), newUserData).then(() => {
                 currentUserData = newUserData;
                 initUserSession();
               });
             } else {
-              alert("Ваш Email ще не прив'язано до учня.");
-              signOut(auth);
+              alert("Ваш Email ще не прив'язано до учня."); signOut(auth);
             }
           });
         }
@@ -774,12 +798,13 @@
     document.getElementById('calendar-block').style.display = 'block';
     if (currentUserData.role === 'teacher') {
       document.getElementById('teacher-screen').style.display = 'block';
-      loadStudentsList();
+      document.getElementById('teacher-class-selector-box').style.display = 'block';
+      window.handleClassChange(); // Ініціалізуємо дашборд для обраного класу
     } else {
       document.getElementById('parent-screen').style.display = 'block';
       document.getElementById('parent-welcome').innerText = `🎓 Кабінет: ${currentUserData.studentName}`;
+      handleDateChange(); 
     }
-    handleDateChange(); 
   }
 
   window.loginUser = function() {
@@ -794,7 +819,8 @@
   window.logoutUser = function() { signOut(auth); };
 
   window.loadStudentsList = function() {
-    get(child(ref(db), `students_list/class_2`)).then((snapshot) => {
+    const activeClass = getActiveClass();
+    get(child(ref(db), `students_list/${activeClass}`)).then((snapshot) => {
       const select = document.getElementById('t-student');
       select.innerHTML = '<option value="">Оберіть учня...</option>';
       if (snapshot.exists()) {
@@ -808,9 +834,12 @@
   };
 
   window.addStudent = function() {
+    const activeClass = getActiveClass();
     const name = document.getElementById('new-student-name').value.trim();
-    if (name) push(ref(db, `students_list/class_2`), name).then(() => {
-      alert("Учня додано!"); loadStudentsList(); document.getElementById('new-student-name').value = '';
+    if (name) push(ref(db, `students_list/${activeClass}`), name).then(() => {
+      alert("Учня додано у " + document.getElementById('t-class-selector').options[document.getElementById('t-class-selector').selectedIndex].text + "!"); 
+      loadStudentsList(); 
+      document.getElementById('new-student-name').value = '';
     });
   };
 
