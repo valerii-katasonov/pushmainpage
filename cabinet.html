@@ -113,6 +113,14 @@
       </div>
     </details>
 
+    <details style="margin-top: 15px; background: #fff; padding: 15px; border-radius: 12px; border: 1px solid #ddd;">
+      <summary style="font-weight: bold; cursor: pointer; color: #7f8c8d;">🔐 Змінити пароль</summary>
+      <div style="margin-top: 15px;">
+        <input type="password" id="t-new-pass" placeholder="Новий пароль (мінімум 6 символів)">
+        <button style="background: #34495e; padding: 8px; margin-top: 10px; color: white;" onclick="changePassword('t-new-pass')">Зберегти новий пароль</button>
+      </div>
+    </details>
+
     <button class="btn-logout" onclick="logoutUser()">Вийти</button>
   </div>
 
@@ -133,6 +141,14 @@
       </ul>
     </div>
 
+    <details style="margin-top: 25px; background: #fff; padding: 15px; border-radius: 12px; border: 1px solid #ddd;">
+      <summary style="font-weight: bold; cursor: pointer; color: #7f8c8d;">🔐 Налаштування (Змінити пароль)</summary>
+      <div style="margin-top: 15px;">
+        <input type="password" id="p-new-pass" placeholder="Новий пароль (мінімум 6 символів)">
+        <button style="background: #34495e; padding: 8px; margin-top: 10px; color: white;" onclick="changePassword('p-new-pass')">Зберегти новий пароль</button>
+      </div>
+    </details>
+
     <button class="btn-logout" onclick="logoutUser()">Вийти</button>
   </div>
 
@@ -142,15 +158,14 @@
 
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-  import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+  // ДОБАВЛЕНА ФУНКЦИЯ updatePassword В ИМПОРТ
+  import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut, updatePassword } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
   import { getDatabase, ref, set, get, child, push } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 
-  // === НАСТРОЙКИ CLOUDINARY (ТВОИ КЛЮЧИ) ===
   const CLOUD_NAME = 'duy1qwsqv'; 
   const UPLOAD_PRESET = 'ml_default'; 
   const CLOUDINARY_URL = `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`;
 
-  // === НАСТРОЙКИ FIREBASE ===
   const firebaseConfig = {
     apiKey: "AIzaSyA3OA9pcR1zscUtEPWD8LEKTKonAN5Y90c",
     authDomain: "test-4eb3e.firebaseapp.com",
@@ -309,7 +324,6 @@
     });
   };
 
-  // --- ЗБЕРЕЖЕННЯ ДАНИХ З ФОТО ---
   window.saveData = async function() {
     const date = document.getElementById('global-date').value;
     const subject = document.getElementById('t-subject').value;
@@ -361,7 +375,6 @@
     btnSave.disabled = false;
     btnSave.innerText = "💾 Зберегти дані";
     
-    // Очищаємо поле файлу після успішного збереження
     fileInput.value = '';
     
     setTimeout(() => {
@@ -370,7 +383,34 @@
     }, 2000);
   };
 
-  // --- АВТОРИЗАЦІЯ ---
+  // --- ФУНКЦИЯ СМЕНЫ ПАРОЛЯ ---
+  window.changePassword = function(inputId) {
+    const user = auth.currentUser;
+    const newPass = document.getElementById(inputId).value.trim();
+
+    if (!user) {
+      alert("Помилка: користувач не авторизований.");
+      return;
+    }
+    if (newPass.length < 6) {
+      alert("Пароль має містити мінімум 6 символів!");
+      return;
+    }
+
+    updatePassword(user, newPass)
+      .then(() => {
+        alert("✅ Пароль успішно змінено!");
+        document.getElementById(inputId).value = '';
+      })
+      .catch((error) => {
+        if (error.code === 'auth/requires-recent-login') {
+          alert("🔒 З міркувань безпеки, щоб змінити пароль, вам потрібно вийти з системи, зайти знову за старим паролем, а потім повторити спробу.");
+        } else {
+          alert("Помилка зміни пароля: " + error.message);
+        }
+      });
+  };
+
   onAuthStateChanged(auth, (user) => {
     document.querySelectorAll('.panel').forEach(p => p.style.display = 'none');
     document.getElementById('calendar-block').style.display = 'none';
