@@ -120,7 +120,7 @@
     </div>
     
     <div style="background: #fff3e0; padding: 15px; border-radius: 12px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 20px;">
-        <h4 style="margin:0; color: #e65100; font-size: 0.9rem;">🗓️ Статистика тижня (Опізнення / Відсутність)</h4>
+        <h4 style="margin:0; color: #e65100; font-size: 0.9rem;">🗓️ Статистика тижня (Запізнення / Відсутність)</h4>
         <div style="display: flex; justify-content: space-around; margin-top: 10px;">
             <div><p id="d-week-late" style="font-size: 1.5rem; font-weight: 800; color: #f39c12; margin: 0;">0</p><span style="font-size:0.7rem; color:#888;">запізнень</span></div>
             <div><p id="d-week-absent" style="font-size: 1.5rem; font-weight: 800; color: #c0392b; margin: 0;">0</p><span style="font-size:0.7rem; color:#888;">відсутніх</span></div>
@@ -129,7 +129,7 @@
 
     <div class="data-card" style="border-left-color: #3498db; background: #f4f9fd;">
       <h4 style="margin-top:0; color: #2980b9;">📋 Деталізація ДЗ на сьогодні</h4>
-      <select id="d-detail-hw-class" onchange="renderDirectorDetails()" style="margin-bottom: 10px; border: 1px solid #bdc3c7;">
+      <select id="d-detail-hw-class" onchange="renderDirectorHWDetails()" style="margin-bottom: 10px; border: 1px solid #bdc3c7;">
         <option value="">Оберіть клас...</option>
         <option value="class_1">1 Клас</option><option value="class_2">2 Клас</option><option value="class_3">3 Клас</option>
         <option value="class_4">4 Клас</option><option value="class_5">5 Клас</option><option value="class_6">6 Клас</option>
@@ -143,7 +143,7 @@
     
     <div class="data-card" style="border-left-color: #e74c3c; background: #fdfbfb;">
       <h4 style="margin-top:0; color: #c0392b;">🚨 Відсутні та Запізнення (Сьогодні)</h4>
-      <select id="d-detail-att-class" onchange="renderDirectorDetails()" style="margin-bottom: 10px; border: 1px solid #f5b7b1;">
+      <select id="d-detail-att-class" onchange="renderDirectorAttDetails()" style="margin-bottom: 10px; border: 1px solid #f5b7b1;">
         <option value="">Оберіть клас...</option>
         <option value="class_1">1 Клас</option><option value="class_2">2 Клас</option><option value="class_3">3 Клас</option>
         <option value="class_4">4 Клас</option><option value="class_5">5 Клас</option><option value="class_6">6 Клас</option>
@@ -157,7 +157,9 @@
 
     <div class="data-card" style="border-left-color: #f39c12; background: #fffcf0;">
       <h4 style="margin-top:0; color: #d35400;">🏆 Топ класів за вдячністю (За весь час):</h4>
-      <ul id="d-karma-leaderboard" class="list-dash" style="list-style-type: none; padding-left: 0;"></ul>
+      <ul id="d-karma-leaderboard" class="list-dash" style="list-style-type: none; padding-left: 0;">
+        <li class="empty-msg">Завантаження...</li>
+      </ul>
     </div>
 
     <details style="margin-top: 30px; background: #fff; padding: 15px; border-radius: 12px; border: 1px solid #ddd;">
@@ -286,7 +288,7 @@
     </div>
 
     <details style="margin-top: 25px; background: #fff; padding: 15px; border-radius: 12px; border: 1px solid #ddd;">
-      <summary style="font-weight: bold; cursor: pointer; color: #7f8c8d;">🔐 Налаштування</summary>
+      <summary style="font-weight: bold; cursor: pointer; color: #7f8c8d;">🔐 Налаштування (Змінити пароль)</summary>
       <div style="margin-top: 15px;"><input type="password" id="p-new-pass" placeholder="Новий пароль"><button style="background: #34495e; padding: 8px; margin-top: 10px; color: white;" onclick="changePassword('p-new-pass')">Зберегти</button></div>
     </details>
     <button class="btn-logout" onclick="logoutUser()">Вийти</button>
@@ -302,7 +304,7 @@
   const firebaseConfig = { apiKey: "AIzaSyA3OA9pcR1zscUtEPWD8LEKTKonAN5Y90c", authDomain: "test-4eb3e.firebaseapp.com", databaseURL: "https://test-4eb3e-default-rtdb.europe-west1.firebasedatabase.app", projectId: "test-4eb3e", storageBucket: "test-4eb3e.firebasestorage.app", messagingSenderId: "933339787450", appId: "1:933339787450:web:cc87b850ed3b4903f41283" };
   const app = initializeApp(firebaseConfig); const auth = getAuth(app); const db = getDatabase(app);
 
-  let currentUserData = null; let currentHwImages = []; let teacherAttendanceListener = null;
+  let currentUserData = null; let currentHwImages = []; let teacherAttendanceListener = null; let pushNotificationListener = null; let previousAttData = null;
   const dayKeys = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
   const STICKER_GOAL = 30; 
   const defaultSubjects = ["Українська мова", "Математика", "Читання", "Англійська мова", "Я досліджую світ", "Інформатика", "Мистецтво", "Фізична культура", "Історія", "Біологія", "Географія"];
@@ -328,13 +330,49 @@
     return currentUserData ? currentUserData.class : 'class_2'; 
   }
 
-  // --- ТОАСТ-НОТИФІКАЦІЇ ---
+  // --- TOAST НОТИФІКАЦІЇ ---
   function showToast(message) {
     const container = document.getElementById('toast-container');
     const toast = document.createElement('div'); toast.className = 'toast';
     toast.innerHTML = `<span>🔔 ${message}</span>`;
     container.appendChild(toast);
     setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 4000);
+  }
+
+  // --- PUSH-НОТИФІКАЦІЇ ВЧИТЕЛЯ (ДЛЯ КЛАСУ ЗА ЗАМОВЧУВАННЯМ) ---
+  function setupPushNotifications() {
+      if(!currentUserData || currentUserData.role !== 'teacher' || !currentUserData.defaultClass) return;
+      
+      // Запит дозволу на повідомлення в браузері
+      if ("Notification" in window && Notification.permission !== "granted" && Notification.permission !== "denied") {
+          Notification.requestPermission();
+      }
+
+      const defClass = currentUserData.defaultClass;
+      const dateStr = document.getElementById('global-date').value; // Слухаємо події тільки для обраної дати (сьогодні)
+      
+      if(pushNotificationListener) pushNotificationListener(); // Відписуємось від старого
+      
+      pushNotificationListener = onValue(ref(db, `attendance/${defClass}/${dateStr}`), (snap) => {
+          const currentData = snap.exists() ? snap.val() : {};
+          
+          if (previousAttData !== null) { // Ігноруємо перше завантаження
+              for (let student in currentData) {
+                  // Якщо запису не було, або він змінився
+                  if (!previousAttData[student] || previousAttData[student].status !== currentData[student].status || previousAttData[student].reason !== currentData[student].reason) {
+                      const rec = currentData[student];
+                      const msg = `${student}: ${rec.status === 'late' ? 'Запізнюється' : 'Відсутній'} (${rec.reason})`;
+                      showToast(msg);
+                      
+                      // Відправляємо системний Push, якщо браузер дозволив
+                      if ("Notification" in window && Notification.permission === "granted") {
+                          new Notification(`🏫 ${defClass.replace('class_','')} Клас (Відвідуваність)`, { body: msg, icon: "https://cdn-icons-png.flaticon.com/512/330/330996.png" });
+                      }
+                  }
+              }
+          }
+          previousAttData = currentData;
+      });
   }
 
   // --- БАТЬКИ: ЛОГІКА ВІДСУТНОСТІ ---
@@ -358,7 +396,12 @@
   // --- ВЧИТЕЛЬ: КЛАС ЗА ЗАМОВЧУВАННЯМ ---
   window.setDefaultClass = function() {
     const cls = document.getElementById('t-class-selector').value;
-    set(ref(db, `users/${auth.currentUser.uid}/defaultClass`), cls).then(() => { alert("✅ Цей клас тепер відкриватиметься за замовчуванням!"); currentUserData.defaultClass = cls; });
+    set(ref(db, `users/${auth.currentUser.uid}/defaultClass`), cls).then(() => { 
+        alert("✅ Цей клас тепер відкриватиметься за замовчуванням і ви отримуватимете по ньому сповіщення!"); 
+        currentUserData.defaultClass = cls; 
+        previousAttData = null; // Скидаємо кеш повідомлень
+        setupPushNotifications(); // Оновлюємо слухач
+    });
   };
 
   window.handleClassChange = function() {
@@ -368,8 +411,8 @@
   };
 
   window.handleDateChange = function() {
-    if (currentUserData.role === 'teacher') { updateSubjectList(); loadTeacherDashboard(); loadCurrentData(); listenTeacherAttendance(); } 
-    else if (currentUserData.role === 'director') { loadDirectorDashboard(); renderDirectorDetails(); } 
+    if (currentUserData.role === 'teacher') { updateSubjectList(); loadTeacherDashboard(); loadCurrentData(); listenTeacherAttendance(); setupPushNotifications(); } 
+    else if (currentUserData.role === 'director') { loadDirectorDashboard(); renderDirectorHWDetails(); renderDirectorAttDetails(); } 
     else { loadParentDashboard(); }
   };
 
@@ -388,9 +431,12 @@
   // --- ДИРЕКТОР: ЛОГІКА ---
   function getWeekDates(currentDateStr) {
       let d = new Date(currentDateStr); let day = d.getDay() || 7; 
-      d.setDate(d.getDate() - day + 1); // Monday
+      d.setDate(d.getDate() - day + 1); // Понеділок
       let dates = [];
-      for(let i=0; i<7; i++) { dates.push(d.toISOString().split('T')[0]); d.setDate(d.getDate() + 1); }
+      for(let i=0; i<7; i++) { 
+          const yyyy = d.getFullYear(); const mm = String(d.getMonth() + 1).padStart(2, '0'); const dd = String(d.getDate()).padStart(2, '0');
+          dates.push(`${yyyy}-${mm}-${dd}`); d.setDate(d.getDate() + 1); 
+      }
       return dates;
   }
 
@@ -445,13 +491,12 @@
     if (karmaList.innerHTML === '') karmaList.innerHTML = '<li class="empty-msg">Реакцій ще немає.</li>';
   };
 
-  window.renderDirectorDetails = async function() {
+  // Роздвоєна логіка для Директора: ДЗ та Відвідуваність окремо
+  window.renderDirectorHWDetails = async function() {
       const date = document.getElementById('global-date').value;
       const hwCls = document.getElementById('d-detail-hw-class').value;
-      const attCls = document.getElementById('d-detail-att-class').value;
-      
-      // Рендер деталей ДЗ
       const hwList = document.getElementById('d-detail-hw-list');
+      
       if(hwCls) {
           const hwSnap = await get(child(ref(db), `homeworks/${hwCls}/${date}`));
           hwList.innerHTML = '';
@@ -463,9 +508,13 @@
               });
           } else hwList.innerHTML = '<li class="empty-msg">ДЗ взагалі не задано для цього класу на обраний день.</li>';
       }
+  };
 
-      // Рендер деталей Відвідуваності
+  window.renderDirectorAttDetails = async function() {
+      const date = document.getElementById('global-date').value;
+      const attCls = document.getElementById('d-detail-att-class').value;
       const attList = document.getElementById('d-detail-att-list');
+
       if(attCls) {
           const attSnap = await get(child(ref(db), `attendance/${attCls}/${date}`));
           attList.innerHTML = '';
@@ -478,7 +527,7 @@
               }
           } else attList.innerHTML = '<li class="empty-msg">Усі присутні! Жодних повідомлень.</li>';
       }
-  };
+  }
 
   window.grantStaffRole = function() {
     const email = document.getElementById('new-staff-email').value.trim().replace(/\./g, '_'); const role = document.getElementById('new-staff-role').value;
@@ -486,25 +535,21 @@
     set(ref(db, `pre_approved_roles/${email}`), role).then(() => { alert(`✅ Доступ надано!`); document.getElementById('new-staff-email').value = ''; });
   };
 
-  // --- ВЧИТЕЛЬ: ЛОГІКА ---
+  // --- ВЧИТЕЛЬ: ЛОГІКА ДАШБОРДУ ТА СПИСКУ ВІДСУТНІХ ---
   function listenTeacherAttendance() {
       const activeClass = getActiveClass(); const date = document.getElementById('global-date').value;
       if(teacherAttendanceListener) teacherAttendanceListener(); // відписка від старого
       
-      let initialLoad = true;
       teacherAttendanceListener = onValue(ref(db, `attendance/${activeClass}/${date}`), (snap) => {
           const list = document.getElementById('t-attendance-list'); list.innerHTML = '';
           if(snap.exists()) {
-              const data = snap.val(); let count = 0;
+              const data = snap.val();
               for(let st in data) {
-                  count++;
                   const badgeClass = data[st].status === 'late' ? 'badge-late' : 'badge-absent';
                   const label = data[st].status === 'late' ? 'Запізнення' : 'Відсутність';
                   list.innerHTML += `<li style="margin-bottom:8px; border-bottom:1px dashed #eee; padding-bottom:5px;"><b>${st}</b> <span class="badge ${badgeClass}">${label}</span> <i style="font-size:0.8rem; color:#666;">(${data[st].reason})</i></li>`;
               }
-              if(!initialLoad) showToast(`Оновлено список відсутніх (${count} учнів)`);
           } else { list.innerHTML = '<li class="empty-msg">Усі на місці. Повідомлень немає.</li>'; }
-          initialLoad = false;
       });
   }
 
@@ -575,11 +620,10 @@
     statusMsg.style.color = "#2ed573"; statusMsg.innerText = "✅ Дані успішно збережено!"; btnSave.disabled = false; btnSave.innerText = "💾 Зберегти дані"; fileInput.value = ''; setTimeout(() => { statusMsg.style.display = 'none'; handleDateChange(); }, 2000);
   };
 
-  // --- ІНШЕ (Лідерборди, батьки) ---
   window.loadParentDashboard = function() {
     if (!currentUserData) return; const date = document.getElementById('global-date').value; const activeClass = getActiveClass();
     
-    // Перевірка чи вже повідомляли сьогодні
+    // Перевірка відвідуваності
     get(child(ref(db), `attendance/${activeClass}/${date}/${currentUserData.studentName}`)).then(snap => {
         const statusEl = document.getElementById('p-att-status');
         if(snap.exists()) {
@@ -611,18 +655,6 @@
 
   window.sendReaction = function(date, subject, emoji) { if (!currentUserData) return; set(ref(db, `reactions/${getActiveClass()}/${date}/${subject}/${currentUserData.studentName}`), emoji).then(() => loadParentDashboard()); };
   
-  window.showWeeklyWrapped = function() {
-    confetti({ particleCount: 200, spread: 90, origin: { y: 0.6 }, zIndex: 2000 }); document.getElementById('wrapped-modal').style.display = 'flex'; document.body.style.overflow = 'hidden'; 
-    const myUid = auth.currentUser.uid; const activeClass = getActiveClass();
-    Promise.all([ get(child(ref(db), `homeworks/${activeClass}`)), get(child(ref(db), `comments/${activeClass}`)), get(child(ref(db), `stickers/${activeClass}`)), get(child(ref(db), `authors/${activeClass}`)) ]).then(([hwSnap, comSnap, stSnap, authSnap]) => {
-      const authors = authSnap.exists() ? authSnap.val() : {};
-      let hwCount = 0; if (hwSnap.exists()) { const hw = hwSnap.val(); for(let d in hw) for(let subj in hw[d]) if (authors[d] && authors[d][subj] === myUid) hwCount++; } document.getElementById('w-hw').innerText = hwCount;
-      let comCount = 0; if (comSnap.exists()) { const com = comSnap.val(); for(let d in com) for(let subj in com[d]) if (authors[d] && authors[d][subj] === myUid) comCount += Object.keys(com[d][subj]).length; } document.getElementById('w-com').innerText = comCount;
-      let stCount = 0; if (stSnap.exists()) { const st = stSnap.val(); for (let student in st) for (let key in st[student]) { const [d, subj] = key.split('_'); if (authors[d] && authors[d][subj] === myUid) stCount++; } } document.getElementById('w-st').innerText = stCount;
-    });
-  };
-  window.closeModal = function() { document.getElementById('wrapped-modal').style.display = 'none'; document.body.style.overflow = ''; };
-
   window.loadLeaderboard = function() {
     get(child(ref(db), `stickers/${getActiveClass()}`)).then(snap => {
       const list = document.getElementById('t-leaderboard-list'); list.innerHTML = '';
@@ -694,7 +726,7 @@
   }
 
   window.loginUser = function() { signInWithEmailAndPassword(auth, document.getElementById('email').value.trim(), document.getElementById('pass').value.trim()).catch(e => { document.getElementById('login-error').innerText = "Помилка входу."; document.getElementById('login-error').style.display = 'block'; }); };
-  window.logoutUser = function() { if(teacherAttendanceListener) teacherAttendanceListener(); signOut(auth); };
+  window.logoutUser = function() { if(teacherAttendanceListener) teacherAttendanceListener(); if(pushNotificationListener) pushNotificationListener(); signOut(auth); };
 
   window.loadStudentsList = function() {
     get(child(ref(db), `students_list/${getActiveClass()}`)).then((snapshot) => {
