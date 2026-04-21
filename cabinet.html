@@ -88,8 +88,8 @@
     <div id="install-container" style="margin-top: 25px; text-align: center; border-top: 1px dashed #ccc; padding-top: 20px;">
       <p style="font-size: 0.9rem; color: #555; font-weight: 600; margin-bottom: 15px;">📱 Встановити як додаток:</p>
       <div style="display: flex; gap: 10px; justify-content: center;">
-        <button id="btn-install-android" style="background: #a4c639; color: white; padding: 12px; margin-top: 0; width: auto; flex: 1; display: none; border-radius: 10px;">🤖 Android</button>
-        <button id="btn-install-ios" style="background: #1c1c1e; color: white; padding: 12px; margin-top: 0; width: auto; flex: 1; border-radius: 10px;" onclick="showIosInstruction()">🍎 iOS / iPhone</button>
+        <button id="btn-install-android" style="background: #a4c639; color: white; padding: 12px; margin-top: 0; width: auto; flex: 1; border-radius: 10px;">🤖 Android</button>
+        <button id="btn-install-ios" style="background: #1c1c1e; color: white; padding: 12px; margin-top: 0; width: auto; flex: 1; border-radius: 10px;" onclick="showIosInstruction()">🍎 iOS</button>
       </div>
     </div>
   </div>
@@ -276,30 +276,30 @@
   const dayKeys = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
   const STICKER_GOAL = 30; 
 
-  // --- ЛОГІКА PWA ВСТАНОВЛЕННЯ ---
+  // --- ЛОГІКА PWA (ОНОВЛЕНА ДЛЯ ANDROID) ---
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('sw.js').catch(() => console.log('SW Registration failed (normal if local)'));
     });
   }
 
-  let deferredPrompt;
+  let deferredPrompt = null;
   const btnInstallAndroid = document.getElementById('btn-install-android');
 
   window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
     deferredPrompt = e;
-    btnInstallAndroid.style.display = 'block'; 
   });
 
   btnInstallAndroid.addEventListener('click', async () => {
     if (deferredPrompt !== null) {
+      // Якщо браузер готовий (HTTPS + маніфест)
       deferredPrompt.prompt();
       const { outcome } = await deferredPrompt.userChoice;
-      if (outcome === 'accepted') {
-        btnInstallAndroid.style.display = 'none';
-      }
       deferredPrompt = null;
+    } else {
+      // Якщо браузер не готовий (відкрито локально або вже встановлено)
+      alert('🤖 Щоб встановити додаток на Android:\n\n1. Натисніть на три крапки (меню браузера) у правому верхньому куті.\n2. Знайдіть пункт "Додати на головний екран" або "Встановити додаток".\n3. Підтвердіть встановлення.');
     }
   });
 
@@ -356,12 +356,10 @@
     return `<li><b>${subject}:</b> ${text} ${imgHtml}</li>`;
   }
 
-  // --- ДАШБОРД ВЧИТЕЛЯ ---
   window.loadTeacherDashboard = function() {
     const date = document.getElementById('global-date').value;
     const myUid = auth.currentUser.uid;
     
-    // Індекс вдячності (РАХУЄМО ТІЛЬКИ СВОЇ РЕАКЦІЇ)
     Promise.all([
       get(child(ref(db), `reactions/class_2`)),
       get(child(ref(db), `authors/class_2`))
@@ -381,7 +379,6 @@
       document.getElementById('t-karma-counter').innerText = count;
     });
 
-    // ДЗ
     const hwList = document.getElementById('t-daily-hw-list');
     get(child(ref(db), `homeworks/class_2/${date}`)).then(snap => {
       hwList.innerHTML = '';
@@ -391,7 +388,6 @@
       } else hwList.innerHTML = '<li class="empty-msg">ДЗ ще не задано.</li>';
     });
 
-    // Реакції за день (ТІЛЬКИ ДЛЯ СВОЇХ ПРЕДМЕТІВ)
     const reactionsList = document.getElementById('t-daily-reactions-list');
     Promise.all([
       get(child(ref(db), `reactions/class_2/${date}`)),
@@ -574,7 +570,6 @@
     }
   };
 
-  // --- ДАШБОРД БАТЬКІВ ---
   window.loadParentDashboard = function() {
     if (!currentUserData) return;
     const date = document.getElementById('global-date').value;
@@ -664,7 +659,6 @@
     btnSave.disabled = true;
     btnSave.innerText = "⏳ Збереження...";
 
-    // ЗБЕРЕЖЕННЯ ТЕГУ АВТОРА
     await set(ref(db, `authors/class_2/${date}/${subject}`), myUid);
 
     let finalImageUrls = [...currentHwImages]; 
