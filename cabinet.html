@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Push School - Кабінет з Дашбордом</title>
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+  
   <style>
     body { 
       font-family: 'Montserrat', sans-serif; 
@@ -37,14 +39,13 @@
     .data-card { background: #fff; padding: 15px; border-left: 4px solid #006d77; border-radius: 8px; margin-top: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
     
     .list-dash { margin: 0; padding-left: 20px; color: #444; line-height: 1.6; }
-    .list-dash li { margin-bottom: 15px; }
+    .list-dash li { margin-bottom: 12px; }
     .list-dash b { color: #006d77; }
     
     .gallery { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
     .hw-image-thumb { width: 100px; height: 100px; object-fit: cover; border-radius: 8px; border: 1px solid #ddd; cursor: zoom-in; box-shadow: 0 2px 5px rgba(0,0,0,0.1); transition: 0.2s; }
     .hw-image-thumb:hover { transform: scale(1.05); }
     
-    /* СТИЛІ ДЛЯ РЕАКЦІЙ */
     .reaction-box { display: flex; gap: 10px; margin-top: 10px; padding-top: 8px; border-top: 1px dashed #eee; align-items: center;}
     .reaction-label { font-size: 0.8rem; color: #888; margin-right: 5px; }
     .reaction-btn { background: none; border: none; font-size: 1.4rem; cursor: pointer; transition: 0.2s; filter: grayscale(100%); opacity: 0.5; padding: 5px; width: auto; margin: 0; }
@@ -52,6 +53,10 @@
     .reaction-btn.active { filter: grayscale(0%); opacity: 1; transform: scale(1.1); background: #f0f8ff; border-radius: 50%; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
     .teacher-reaction-badge { font-size: 1.2rem; margin-left: 5px; animation: popIn 0.3s ease; }
     
+    /* СТИЛІ ШКАЛИ ПРОГРЕСУ */
+    .progress-bar-container { width: 100%; background-color: #ffeaa7; border-radius: 10px; overflow: hidden; margin-top: 15px; height: 18px; box-shadow: inset 0 1px 3px rgba(0,0,0,0.1); }
+    .progress-bar { height: 100%; background: linear-gradient(90deg, #f39c12, #e74c3c); width: 0%; transition: width 0.8s ease-out; }
+
     @keyframes popIn { 0% { transform: scale(0); } 100% { transform: scale(1); } }
 
     .empty-msg { color: #999; font-style: italic; margin: 5px 0; }
@@ -79,8 +84,22 @@
   <div id="teacher-screen" class="panel">
     <h2>👨‍🏫 Журнал: 2 клас</h2>
 
+    <div class="data-card" style="border-left-color: #9b59b6; background: #faf8fd;">
+      <h4 style="margin-top:0; color: #8e44ad;">🔔 Реакції батьків (за обраний день):</h4>
+      <ul id="t-daily-reactions-list" class="list-dash" style="list-style-type: none; padding-left: 0;">
+        <li class="empty-msg">Завантаження...</li>
+      </ul>
+    </div>
+
+    <div class="data-card" style="border-left-color: #f1c40f; background: #fffcf0;">
+      <h4 style="margin-top:0; color: #f39c12;">🏆 Рейтинг класу (Наклейки):</h4>
+      <ul id="t-leaderboard-list" class="list-dash" style="list-style-type: none; padding-left: 0;">
+        <li class="empty-msg">Завантаження...</li>
+      </ul>
+    </div>
+
     <div class="data-card" style="border-left-color: #3498db; background: #f4f9fd;">
-      <h4 style="margin-top:0; color: #2980b9;">📋 Зведення ДЗ на цей день:</h4>
+      <h4 style="margin-top:0; color: #2980b9;">📋 Зведення ДЗ:</h4>
       <ul id="t-daily-hw-list" class="list-dash">
         <li class="empty-msg">Завантаження...</li>
       </ul>
@@ -146,9 +165,12 @@
     <h2 id="parent-welcome">🎓 Кабінет батьків</h2>
     
     <div class="data-card" style="border-left-color: #f1c40f; background: #fffcf0; text-align: center;">
-      <h4 style="margin-top:0; color: #f39c12; font-size: 1.1rem;">🌟 Стрічка досягнень</h4>
-      <p id="p-ribbon" style="font-size: 1.8rem; margin: 10px 0; line-height: 1.4; word-break: break-all;">Завантаження...</p>
-      <small style="color: #d35400; font-weight: 600;" id="p-ribbon-count"></small>
+      <h4 style="margin-top:0; color: #f39c12; font-size: 1.1rem;">🌟 Прогрес наклейок</h4>
+      <div class="progress-bar-container">
+        <div id="p-ribbon-progress" class="progress-bar"></div>
+      </div>
+      <p id="p-ribbon-count" style="font-size: 1.2rem; font-weight: bold; color: #d35400; margin: 15px 0 5px 0;">Завантаження...</p>
+      <p id="p-ribbon-msg" style="color: #27ae60; font-weight: 800; margin: 0; font-size: 1rem;"></p>
     </div>
 
     <div class="data-card" style="border-left-color: #00b894; background: #f0fff4;">
@@ -206,6 +228,7 @@
   let currentUserData = null;
   let currentHwImages = []; 
   const dayKeys = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  const STICKER_GOAL = 30; // Ціль для отримання призу
 
   document.getElementById('global-date').valueAsDate = new Date();
 
@@ -255,21 +278,84 @@
     return `<li><b>${subject}:</b> ${text} ${imgHtml}</li>`;
   }
 
+  // --- ДАШБОРД ВЧИТЕЛЯ (РОЗШИРЕНИЙ) ---
   window.loadTeacherDashboard = function() {
     const date = document.getElementById('global-date').value;
-    const hwList = document.getElementById('t-daily-hw-list');
     
+    // 1. Завантаження ДЗ
+    const hwList = document.getElementById('t-daily-hw-list');
     get(child(ref(db), `homeworks/class_2/${date}`)).then(snap => {
       hwList.innerHTML = '';
       if(snap.exists()) {
         const data = snap.val();
-        for(let subj in data) {
-          hwList.innerHTML += renderHwItem(subj, data[subj]);
+        for(let subj in data) hwList.innerHTML += renderHwItem(subj, data[subj]);
+      } else hwList.innerHTML = '<li class="empty-msg">ДЗ ще не задано.</li>';
+    });
+
+    // 2. Завантаження Реакцій
+    const reactionsList = document.getElementById('t-daily-reactions-list');
+    get(child(ref(db), `reactions/class_2/${date}`)).then(snap => {
+      reactionsList.innerHTML = '';
+      if(snap.exists()) {
+        const data = snap.val();
+        let hasReactions = false;
+        for (let subj in data) {
+          for (let student in data[subj]) {
+            reactionsList.innerHTML += `<li style="margin-bottom:8px; border-bottom: 1px solid #eee; padding-bottom: 5px;">
+              <span style="font-size: 1.2rem; margin-right: 5px;">${data[subj][student]}</span> 
+              <b>${student}</b> відреагував(ла) на <i>${subj}</i>
+            </li>`;
+            hasReactions = true;
+          }
         }
+        if(!hasReactions) reactionsList.innerHTML = '<li class="empty-msg">Реакцій за цей день немає.</li>';
+      } else reactionsList.innerHTML = '<li class="empty-msg">Реакцій за цей день немає.</li>';
+    });
+
+    // 3. Завантаження Рейтингу (Лідерборд)
+    loadLeaderboard();
+  };
+
+  window.loadLeaderboard = function() {
+    const list = document.getElementById('t-leaderboard-list');
+    get(child(ref(db), `stickers/class_2`)).then(snap => {
+      list.innerHTML = '';
+      if (snap.exists()) {
+        const data = snap.val();
+        let studentsArray = [];
+        for (let student in data) {
+          studentsArray.push({ name: student, count: Object.keys(data[student]).length });
+        }
+        
+        studentsArray.sort((a, b) => b.count - a.count); // Сортування від найбільшого
+
+        studentsArray.forEach((st, index) => {
+          let btnHtml = '';
+          let medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '⭐';
+          
+          if (st.count >= STICKER_GOAL) {
+            btnHtml = `<button style="padding: 6px 12px; font-size: 0.8rem; background: #27ae60; color: white; width: auto; margin-left: 10px; border-radius: 8px; border: none; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.1);" onclick="resetStickers('${st.name}')">🎁 Видати приз (Скинути)</button>`;
+          }
+          
+          list.innerHTML += `<li style="margin-bottom:10px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px dashed #eccc68; padding-bottom: 5px;">
+            <span>${medal} <b>${st.name}</b></span>
+            <span><b style="color: #d35400;">${st.count}</b> / ${STICKER_GOAL} ${btnHtml}</span>
+          </li>`;
+        });
       } else {
-        hwList.innerHTML = '<li class="empty-msg">ДЗ ще не задано.</li>';
+        list.innerHTML = '<li class="empty-msg">Наклейок ще нікому не видано.</li>';
       }
     });
+  };
+
+  // ФУНКЦІЯ СКИДАННЯ НАКЛЕЙОК ВЧИТЕЛЕМ
+  window.resetStickers = function(studentName) {
+    if(confirm(`Ви впевнені, що хочете видати приз учню ${studentName} та скинути його лічильник наклейок до нуля?`)) {
+      set(ref(db, `stickers/class_2/${studentName}`), null).then(() => {
+        alert('Приз видано, лічильник скинуто!');
+        loadLeaderboard(); // Оновлюємо лідерборд
+      });
+    }
   };
 
   window.loadCurrentData = function() {
@@ -286,7 +372,6 @@
 
     if (!subject) return;
 
-    // Підтягуємо ДЗ та Фото
     get(child(ref(db), `homeworks/class_2/${date}/${subject}`)).then(snap => {
       if(snap.exists()) {
         const val = snap.val();
@@ -307,7 +392,6 @@
       }
     });
 
-    // Підтягуємо історію коментарів ТА РЕАКЦІЇ для вчителя
     const historyList = document.getElementById('t-history-comments');
     Promise.all([
       get(child(ref(db), `comments/class_2/${date}/${subject}`)),
@@ -321,16 +405,13 @@
         for(let stName in commentsData) {
           const reactionEmoji = reactionsData[stName] ? `<span class="teacher-reaction-badge" title="Батьки відреагували">${reactionsData[stName]}</span>` : '';
           historyList.innerHTML += `<li><b>${stName}:</b> ${commentsData[stName]} ${reactionEmoji}</li>`;
-          if (stName === student) {
-            document.getElementById('t-comment').value = commentsData[stName];
-          }
+          if (stName === student) document.getElementById('t-comment').value = commentsData[stName];
         }
       } else {
         historyList.innerHTML = '<li class="empty-msg">Ще немає коментарів.</li>';
       }
     });
 
-    // Підтягуємо статус наклейки
     if (student) {
       get(child(ref(db), `stickers/class_2/${student}/${date}_${subject}`)).then(snap => {
         document.getElementById('t-sticker').checked = (snap.exists() && snap.val() === true);
@@ -338,21 +419,34 @@
     }
   };
 
+  // --- ДАШБОРД БАТЬКІВ ---
   window.loadParentDashboard = function() {
     if (!currentUserData) return;
     const date = document.getElementById('global-date').value;
     
-    // Стрічка наклейок
-    const ribbonEl = document.getElementById('p-ribbon');
-    const ribbonCountEl = document.getElementById('p-ribbon-count');
+    // СТРУКТУРА ШКАЛИ ПРОГРЕСУ ТА КОНФЕТТІ
+    const progressEl = document.getElementById('p-ribbon-progress');
+    const countEl = document.getElementById('p-ribbon-count');
+    const msgEl = document.getElementById('p-ribbon-msg');
+    
     get(child(ref(db), `stickers/class_2/${currentUserData.studentName}`)).then(snap => {
-      if (snap.exists()) {
-        const count = Object.keys(snap.val()).length;
-        ribbonEl.innerText = count > 0 ? '⭐'.repeat(count) : 'Стрічка порожня';
-        ribbonCountEl.innerText = count > 0 ? `Зібрано наклейок: ${count}` : 'Чекаємо на першу наклейку!';
+      const count = snap.exists() ? Object.keys(snap.val()).length : 0;
+      const percent = Math.min((count / STICKER_GOAL) * 100, 100);
+      
+      progressEl.style.width = percent + '%';
+      countEl.innerText = `${count} / ${STICKER_GOAL} наклейок до призу`;
+      
+      if (count >= STICKER_GOAL) {
+        msgEl.innerText = "🎉 Ура! Ти досяг мети! Час отримувати приз!";
+        // ЗАПУСК КОНФЕТТІ!
+        confetti({
+          particleCount: 150,
+          spread: 80,
+          origin: { y: 0.5 },
+          colors: ['#f1c40f', '#e74c3c', '#3498db', '#2ecc71']
+        });
       } else {
-        ribbonEl.innerText = 'Стрічка порожня';
-        ribbonCountEl.innerText = 'Чекаємо на першу наклейку!';
+        msgEl.innerText = "";
       }
     });
 
@@ -362,12 +456,8 @@
       hwList.innerHTML = '';
       if(snap.exists()) {
         const data = snap.val();
-        for(let subj in data) {
-          hwList.innerHTML += renderHwItem(subj, data[subj]);
-        }
-      } else {
-        hwList.innerHTML = '<li class="empty-msg">На цей день ДЗ не задано.</li>';
-      }
+        for(let subj in data) hwList.innerHTML += renderHwItem(subj, data[subj]);
+      } else hwList.innerHTML = '<li class="empty-msg">На цей день ДЗ не задано.</li>';
     });
 
     // Коментарі ТА БЛОК РЕАКЦІЙ
@@ -387,11 +477,8 @@
         for(let subj in allSubjects) {
           if (allSubjects[subj][currentUserData.studentName]) {
             hasComments = true;
-            
-            // Визначаємо, чи батько вже ставив реакцію на цей предмет сьогодні
             const currentReaction = allReactions[subj]?.[currentUserData.studentName] || null;
             
-            // HTML для кнопок реакцій
             const reactionHtml = `
               <div class="reaction-box">
                 <span class="reaction-label">Відреагувати:</span>
@@ -401,25 +488,18 @@
                 <button class="reaction-btn ${currentReaction === '🙏' ? 'active' : ''}" onclick="sendReaction('${date}', '${subj}', '🙏')">🙏</button>
               </div>
             `;
-            
             commentsList.innerHTML += `<li><b>${subj}:</b> ${allSubjects[subj][currentUserData.studentName]} ${reactionHtml}</li>`;
           }
         }
       }
-      if(!hasComments) {
-        commentsList.innerHTML = '<li class="empty-msg">Немає коментарів на цей день.</li>';
-      }
+      if(!hasComments) commentsList.innerHTML = '<li class="empty-msg">Немає коментарів на цей день.</li>';
     });
   };
 
-  // --- ФУНКЦІЯ ВІДПРАВКИ РЕАКЦІЇ (ДЛЯ БАТЬКІВ) ---
   window.sendReaction = function(date, subject, emoji) {
     if (!currentUserData) return;
     set(ref(db, `reactions/class_2/${date}/${subject}/${currentUserData.studentName}`), emoji)
-      .then(() => {
-        // Оновлюємо дашборд батька, щоб кнопка підсвітилася
-        loadParentDashboard();
-      });
+      .then(() => loadParentDashboard());
   };
 
   window.saveData = async function() {
@@ -471,9 +551,7 @@
     }
     
     if (student) {
-      if (comment) {
-        await set(ref(db, `comments/class_2/${date}/${subject}/${student}`), comment);
-      }
+      if (comment) await set(ref(db, `comments/class_2/${date}/${subject}/${student}`), comment);
       
       if (stickerChecked) {
         await set(ref(db, `stickers/class_2/${student}/${date}_${subject}`), true);
