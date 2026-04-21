@@ -3,7 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Push School - Кабінет з Дашбордом</title>
+  <title>Push School - Кабінет</title>
+  
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#006d77">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Push School">
+  <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/330/330996.png">
+
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;800&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
   
@@ -76,6 +84,14 @@
     <input type="password" id="pass" placeholder="Пароль">
     <button class="btn-login" onclick="loginUser()">Увійти</button>
     <p id="login-error" style="color:red; text-align:center; display:none;"></p>
+    
+    <div id="install-container" style="margin-top: 25px; text-align: center; border-top: 1px dashed #ccc; padding-top: 20px;">
+      <p style="font-size: 0.9rem; color: #555; font-weight: 600; margin-bottom: 15px;">📱 Встановити як додаток:</p>
+      <div style="display: flex; gap: 10px; justify-content: center;">
+        <button id="btn-install-android" style="background: #a4c639; color: white; padding: 12px; margin-top: 0; width: auto; flex: 1; display: none; border-radius: 10px;">🤖 Android</button>
+        <button id="btn-install-ios" style="background: #1c1c1e; color: white; padding: 12px; margin-top: 0; width: auto; flex: 1; border-radius: 10px;" onclick="showIosInstruction()">🍎 iOS / iPhone</button>
+      </div>
+    </div>
   </div>
 
   <div id="calendar-block" style="display: none;" class="date-picker-box">
@@ -90,7 +106,7 @@
       <div style="flex: 1; background: #ffeaa7; padding: 15px; border-radius: 12px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
         <h4 style="margin:0; color: #d35400; font-size: 0.85rem;">❤️ Індекс вдячності</h4>
         <p id="t-karma-counter" style="font-size: 1.8rem; font-weight: 800; color: #e67e22; margin: 5px 0;">0</p>
-        <span style="font-size: 0.7rem; color: #888;">реакцій за ваші уроки</span>
+        <span style="font-size: 0.7rem; color: #888;">реакцій на ваші коментарі</span>
       </div>
       
       <div style="flex: 1; background: linear-gradient(135deg, #a8ff78, #78ffd6); padding: 15px; border-radius: 12px; text-align: center; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.05); transition: 0.3s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'" onclick="showWeeklyWrapped()">
@@ -260,6 +276,38 @@
   const dayKeys = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
   const STICKER_GOAL = 30; 
 
+  // --- ЛОГІКА PWA ВСТАНОВЛЕННЯ ---
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').catch(() => console.log('SW Registration failed (normal if local)'));
+    });
+  }
+
+  let deferredPrompt;
+  const btnInstallAndroid = document.getElementById('btn-install-android');
+
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    btnInstallAndroid.style.display = 'block'; 
+  });
+
+  btnInstallAndroid.addEventListener('click', async () => {
+    if (deferredPrompt !== null) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') {
+        btnInstallAndroid.style.display = 'none';
+      }
+      deferredPrompt = null;
+    }
+  });
+
+  window.showIosInstruction = function() {
+    alert('🍏 Щоб встановити Push School на iPhone або iPad:\n\n1. Натисніть кнопку "Поділитися" (квадратик зі стрілочкою внизу екрана).\n2. Прокрутіть меню вниз і знайдіть пункт "На початковий екран" (Add to Home Screen).\n3. Натисніть "Додати" у верхньому правому куті.');
+  };
+  // ---------------------------------
+
   document.getElementById('global-date').valueAsDate = new Date();
 
   window.handleDateChange = function() {
@@ -373,7 +421,6 @@
     loadLeaderboard();
   };
 
-  // --- "ПІДСУМКИ ТИЖНЯ" (ТІЛЬКИ СВОЯ СТАТИСТИКА) ---
   window.showWeeklyWrapped = function() {
     confetti({ particleCount: 200, spread: 90, origin: { y: 0.6 }, zIndex: 2000 });
     document.getElementById('wrapped-modal').style.display = 'flex';
