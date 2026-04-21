@@ -115,7 +115,7 @@
   const firebaseConfig = {
     apiKey: "AIzaSyA3OA9pcR1zscUtEPWD8LEKTKonAN5Y90c",
     authDomain: "test-4eb3e.firebaseapp.com",
-    databaseURL: "https://test-4eb3e-default-rtdb.firebaseio.com", 
+    databaseURL: "https://test-4eb3e-default-rtdb.europe-west1.firebasedatabase.app", 
     projectId: "test-4eb3e",
     storageBucket: "test-4eb3e.firebasestorage.app",
     messagingSenderId: "933339787450",
@@ -155,7 +155,7 @@
     signOut(auth);
   };
 
-  // --- ОТСЛЕЖИВАНИЕ СТАТУСА И ЗАЩИТА ОТ БЕЛОГО ЭКРАНА ---
+  // --- ОТСЛЕЖИВАНИЕ СТАТУСА ---
   onAuthStateChanged(auth, (user) => {
     document.querySelectorAll('.panel').forEach(p => p.style.display = 'none');
 
@@ -178,16 +178,12 @@
           loadParentData();
         }
       }).catch((error) => {
-        // ЕСЛИ БАЗА ДАННЫХ ВЫДАЕТ ОШИБКУ (ПРЕДОХРАНИТЕЛЬ)
         console.error("Database Error:", error);
         document.getElementById('parent-screen').style.display = 'block';
         document.getElementById('parent-welcome').innerText = "⚠️ Ошибка БД";
         document.getElementById('parent-content').innerHTML = `
           <div style="background: #ffeaa7; padding: 15px; border-radius: 8px; margin-top: 15px;">
-            <strong>База данных заблокирована!</strong><br><br>
-            Зайди в Firebase Console -> Realtime Database -> вкладка Rules.<br>
-            Установи <code>".read": true</code> и <code>".write": true</code> и нажми Publish.
-            <br><br><small style="color:red;">Тех. ошибка: ${error.message}</small>
+            <small style="color:red;">Тех. ошибка: ${error.message}</small>
           </div>
         `;
       });
@@ -239,7 +235,7 @@
       hwEl.innerText = snapshot.exists() ? snapshot.val() : "ДЗ пока не добавлено.";
     }).catch(e => hwEl.innerText = "Ошибка чтения: " + e.message);
 
-    // Читаем Комментарий (ищем только по имени своего ребенка)
+    // Читаем Комментарий
     get(child(ref(db), `comments/${currentUserData.class}/${today}/${subject}/${currentUserData.studentName}`)).then((snapshot) => {
       commentEl.innerText = snapshot.exists() ? snapshot.val() : "Комментариев нет.";
     }).catch(e => commentEl.innerText = "Ошибка чтения: " + e.message);
