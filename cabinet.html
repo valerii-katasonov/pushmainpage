@@ -53,11 +53,14 @@
     .reaction-btn.active { filter: grayscale(0%); opacity: 1; transform: scale(1.1); background: #f0f8ff; border-radius: 50%; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
     .teacher-reaction-badge { font-size: 1.2rem; margin-left: 5px; animation: popIn 0.3s ease; }
     
-    /* СТИЛІ ШКАЛИ ПРОГРЕСУ */
     .progress-bar-container { width: 100%; background-color: #ffeaa7; border-radius: 10px; overflow: hidden; margin-top: 15px; height: 18px; box-shadow: inset 0 1px 3px rgba(0,0,0,0.1); }
     .progress-bar { height: 100%; background: linear-gradient(90deg, #f39c12, #e74c3c); width: 0%; transition: width 0.8s ease-out; }
 
-    @keyframes popIn { 0% { transform: scale(0); } 100% { transform: scale(1); } }
+    /* СТИЛІ ДЛЯ МОДАЛЬНОГО ВІКНА ВЧИТЕЛЯ */
+    .modal-overlay { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:1000; justify-content:center; align-items:center; backdrop-filter: blur(5px); }
+    .modal-content { background: #fff; padding: 30px; border-radius: 20px; text-align: center; max-width: 400px; width: 90%; box-shadow: 0 15px 30px rgba(0,0,0,0.3); animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+    
+    @keyframes popIn { 0% { transform: scale(0.5); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
 
     .empty-msg { color: #999; font-style: italic; margin: 5px 0; }
     #status-msg { text-align: center; color: #2ed573; font-weight: bold; display: none; margin-top: 10px; }
@@ -83,6 +86,34 @@
 
   <div id="teacher-screen" class="panel">
     <h2>👨‍🏫 Журнал: 2 клас</h2>
+
+    <div style="display: flex; gap: 10px; margin-bottom: 25px;">
+      <div style="flex: 1; background: #ffeaa7; padding: 15px; border-radius: 12px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+        <h4 style="margin:0; color: #d35400; font-size: 0.9rem;">❤️ Індекс вдячності</h4>
+        <p id="t-karma-counter" style="font-size: 1.8rem; font-weight: 800; color: #e67e22; margin: 5px 0;">0</p>
+        <span style="font-size: 0.7rem; color: #888;">реакцій від батьків</span>
+      </div>
+      
+      <div style="flex: 1; background: linear-gradient(135deg, #a8ff78, #78ffd6); padding: 15px; border-radius: 12px; text-align: center; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.05); transition: 0.3s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'" onclick="showWeeklyWrapped()">
+        <h4 style="margin:0; color: #006d77; font-size: 0.9rem;">📊 Підсумки</h4>
+        <p style="font-size: 1.8rem; margin: 5px 0;">🎁</p>
+        <span style="font-size: 0.7rem; color: #006d77; font-weight: bold;">Відкрити статистику</span>
+      </div>
+    </div>
+
+    <div id="wrapped-modal" class="modal-overlay">
+      <div class="modal-content">
+        <h2 style="color: #27ae60; margin-top:0;">🎉 Ваші підсумки!</h2>
+        <p style="color: #555;">Ви — справжній супер-герой для своїх учнів. Ось ваша статистика роботи на порталі:</p>
+        <ul style="list-style:none; padding:0; font-size:1.1rem; line-height:2.2; text-align: left; background: #f8f9fa; padding: 15px; border-radius: 12px;">
+          <li>📚 Завдань задано: <b id="w-hw" style="float: right; color: #2980b9; font-size: 1.3rem;">0</b></li>
+          <li>📝 Коментарів написано: <b id="w-com" style="float: right; color: #8e44ad; font-size: 1.3rem;">0</b></li>
+          <li>🌟 Наклейок видано: <b id="w-st" style="float: right; color: #f39c12; font-size: 1.3rem;">0</b></li>
+        </ul>
+        <p style="font-weight: bold; color: #d35400; margin-top: 20px;">Ви робите неймовірну роботу! ❤️</p>
+        <button onclick="document.getElementById('wrapped-modal').style.display='none'" style="background: linear-gradient(135deg, #27ae60, #2ecc71); color:white; width: 100%; margin-top: 10px;">Дякую, я молодець!</button>
+      </div>
+    </div>
 
     <div class="data-card" style="border-left-color: #9b59b6; background: #faf8fd;">
       <h4 style="margin-top:0; color: #8e44ad;">🔔 Реакції батьків (за обраний день):</h4>
@@ -228,7 +259,7 @@
   let currentUserData = null;
   let currentHwImages = []; 
   const dayKeys = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-  const STICKER_GOAL = 30; // Ціль для отримання призу
+  const STICKER_GOAL = 30; 
 
   document.getElementById('global-date').valueAsDate = new Date();
 
@@ -278,11 +309,25 @@
     return `<li><b>${subject}:</b> ${text} ${imgHtml}</li>`;
   }
 
-  // --- ДАШБОРД ВЧИТЕЛЯ (РОЗШИРЕНИЙ) ---
+  // --- ДАШБОРД ВЧИТЕЛЯ ---
   window.loadTeacherDashboard = function() {
     const date = document.getElementById('global-date').value;
     
-    // 1. Завантаження ДЗ
+    // Індекс вдячності (РАХУЄМО ВСІ РЕАКЦІЇ)
+    get(child(ref(db), `reactions/class_2`)).then(snap => {
+      let count = 0;
+      if(snap.exists()) {
+        const data = snap.val(); 
+        for(let d in data) {
+          for(let subj in data[d]) {
+            count += Object.keys(data[d][subj]).length;
+          }
+        }
+      }
+      document.getElementById('t-karma-counter').innerText = count;
+    });
+
+    // ДЗ
     const hwList = document.getElementById('t-daily-hw-list');
     get(child(ref(db), `homeworks/class_2/${date}`)).then(snap => {
       hwList.innerHTML = '';
@@ -292,7 +337,7 @@
       } else hwList.innerHTML = '<li class="empty-msg">ДЗ ще не задано.</li>';
     });
 
-    // 2. Завантаження Реакцій
+    // Реакції за обраний день
     const reactionsList = document.getElementById('t-daily-reactions-list');
     get(child(ref(db), `reactions/class_2/${date}`)).then(snap => {
       reactionsList.innerHTML = '';
@@ -312,8 +357,28 @@
       } else reactionsList.innerHTML = '<li class="empty-msg">Реакцій за цей день немає.</li>';
     });
 
-    // 3. Завантаження Рейтингу (Лідерборд)
     loadLeaderboard();
+  };
+
+  // --- ФУНКЦІЯ ВИКЛИКУ "ПІДСУМКІВ ТИЖНЯ" ---
+  window.showWeeklyWrapped = function() {
+    confetti({ particleCount: 200, spread: 90, origin: { y: 0.6 }, zIndex: 2000 });
+    document.getElementById('wrapped-modal').style.display = 'flex';
+
+    get(child(ref(db), `homeworks/class_2`)).then(snap => {
+      let c = 0; if(snap.exists()) { const d = snap.val(); for(let x in d) c += Object.keys(d[x]).length; }
+      document.getElementById('w-hw').innerText = c;
+    });
+
+    get(child(ref(db), `comments/class_2`)).then(snap => {
+      let c = 0; if(snap.exists()) { const d = snap.val(); for(let x in d) for(let s in d[x]) c += Object.keys(d[x][s]).length; }
+      document.getElementById('w-com').innerText = c;
+    });
+
+    get(child(ref(db), `stickers/class_2`)).then(snap => {
+      let c = 0; if(snap.exists()) { const d = snap.val(); for(let s in d) c += Object.keys(d[s]).length; }
+      document.getElementById('w-st').innerText = c;
+    });
   };
 
   window.loadLeaderboard = function() {
@@ -327,14 +392,14 @@
           studentsArray.push({ name: student, count: Object.keys(data[student]).length });
         }
         
-        studentsArray.sort((a, b) => b.count - a.count); // Сортування від найбільшого
+        studentsArray.sort((a, b) => b.count - a.count); 
 
         studentsArray.forEach((st, index) => {
           let btnHtml = '';
           let medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '⭐';
           
           if (st.count >= STICKER_GOAL) {
-            btnHtml = `<button style="padding: 6px 12px; font-size: 0.8rem; background: #27ae60; color: white; width: auto; margin-left: 10px; border-radius: 8px; border: none; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.1);" onclick="resetStickers('${st.name}')">🎁 Видати приз (Скинути)</button>`;
+            btnHtml = `<button style="padding: 6px 12px; font-size: 0.8rem; background: #27ae60; color: white; width: auto; margin-left: 10px; border-radius: 8px; border: none; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.1);" onclick="resetStickers('${st.name}')">🎁 Видати приз</button>`;
           }
           
           list.innerHTML += `<li style="margin-bottom:10px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px dashed #eccc68; padding-bottom: 5px;">
@@ -348,12 +413,11 @@
     });
   };
 
-  // ФУНКЦІЯ СКИДАННЯ НАКЛЕЙОК ВЧИТЕЛЕМ
   window.resetStickers = function(studentName) {
-    if(confirm(`Ви впевнені, що хочете видати приз учню ${studentName} та скинути його лічильник наклейок до нуля?`)) {
+    if(confirm(`Видати приз учню ${studentName} та скинути лічильник наклейок до нуля?`)) {
       set(ref(db, `stickers/class_2/${studentName}`), null).then(() => {
         alert('Приз видано, лічильник скинуто!');
-        loadLeaderboard(); // Оновлюємо лідерборд
+        loadLeaderboard(); 
       });
     }
   };
@@ -424,7 +488,6 @@
     if (!currentUserData) return;
     const date = document.getElementById('global-date').value;
     
-    // СТРУКТУРА ШКАЛИ ПРОГРЕСУ ТА КОНФЕТТІ
     const progressEl = document.getElementById('p-ribbon-progress');
     const countEl = document.getElementById('p-ribbon-count');
     const msgEl = document.getElementById('p-ribbon-msg');
@@ -438,19 +501,12 @@
       
       if (count >= STICKER_GOAL) {
         msgEl.innerText = "🎉 Ура! Ти досяг мети! Час отримувати приз!";
-        // ЗАПУСК КОНФЕТТІ!
-        confetti({
-          particleCount: 150,
-          spread: 80,
-          origin: { y: 0.5 },
-          colors: ['#f1c40f', '#e74c3c', '#3498db', '#2ecc71']
-        });
+        confetti({ particleCount: 150, spread: 80, origin: { y: 0.5 }, colors: ['#f1c40f', '#e74c3c', '#3498db', '#2ecc71'] });
       } else {
         msgEl.innerText = "";
       }
     });
 
-    // ДЗ
     const hwList = document.getElementById('p-daily-hw-list');
     get(child(ref(db), `homeworks/class_2/${date}`)).then(snap => {
       hwList.innerHTML = '';
@@ -460,7 +516,6 @@
       } else hwList.innerHTML = '<li class="empty-msg">На цей день ДЗ не задано.</li>';
     });
 
-    // Коментарі ТА БЛОК РЕАКЦІЙ
     const commentsList = document.getElementById('p-daily-comments-list');
     commentsList.innerHTML = '<li class="empty-msg">Завантаження...</li>';
     
