@@ -20,10 +20,11 @@
     h3 { color: #333; border-bottom: 2px solid #eee; padding-bottom: 10px; margin-top: 25px; }
     .date-picker-box { background: #e0f2f1; padding: 15px; border-radius: 12px; margin-bottom: 20px; text-align: center; box-shadow: 0 4px 10px rgba(0,109,119,0.1); }
     label { display: block; margin-top: 15px; font-weight: 600; color: #555; font-size: 0.9rem; }
-    input, select, textarea { 
+    input[type="email"], input[type="password"], input[type="text"], input[type="date"], select, textarea { 
       width: 100%; padding: 12px; margin-top: 5px; border: 1px solid #ccc; 
       border-radius: 12px; box-sizing: border-box; font-family: inherit; font-size: 1rem;
     }
+    input[type="file"] { margin-top: 5px; font-size: 0.9rem; border: 1px dashed #006d77; padding: 10px; border-radius: 12px; width: 100%; box-sizing: border-box; background: #fafafa; cursor: pointer; }
     button { 
       width: 100%; padding: 15px; border: none; border-radius: 12px; cursor: pointer; 
       font-weight: bold; font-size: 1rem; transition: 0.3s; margin-top: 20px;
@@ -36,11 +37,13 @@
     .data-card { background: #fff; padding: 15px; border-left: 4px solid #006d77; border-radius: 8px; margin-top: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
     
     .list-dash { margin: 0; padding-left: 20px; color: #444; line-height: 1.6; }
-    .list-dash li { margin-bottom: 8px; }
+    .list-dash li { margin-bottom: 12px; }
     .list-dash b { color: #006d77; }
+    .hw-image-thumb { max-width: 120px; max-height: 120px; border-radius: 8px; border: 1px solid #ddd; display: block; margin-top: 5px; cursor: zoom-in; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
     
     .empty-msg { color: #999; font-style: italic; margin: 5px 0; }
     #status-msg { text-align: center; color: #2ed573; font-weight: bold; display: none; margin-top: 10px; }
+    #existing-image-info { font-size: 0.8rem; color: #e67e22; margin-top: 5px; font-weight: bold; display: none; }
   </style>
 </head>
 <body>
@@ -72,13 +75,16 @@
     
     <h3>✏️ Заповнення журналу</h3>
     <label>Предмет (згідно з розкладом):</label>
-    <select id="t-subject" onchange="loadCurrentData()">
-      </select>
+    <select id="t-subject" onchange="loadCurrentData()"></select>
 
-    <label>Домашнє завдання (збережеться для всього класу):</label>
+    <label>Домашнє завдання (для всього класу):</label>
     <textarea id="t-hw" rows="2" placeholder="Введіть ДЗ..."></textarea>
+    
+    <label>📸 Фото з підручника/зошита (необов'язково):</label>
+    <input type="file" id="t-image" accept="image/*">
+    <div id="existing-image-info">📎 Вже прикріплено фото. Завантажте нове, щоб замінити.</div>
 
-    <label>Учень (кому пишемо коментар):</label>
+    <label style="margin-top:20px; border-top: 1px dashed #ccc; padding-top: 15px;">Учень (кому пишемо коментар):</label>
     <select id="t-student" onchange="loadCurrentData()">
       <option value="">Оберіть учня...</option>
     </select>
@@ -86,7 +92,7 @@
     <label>Особистий коментар (побачить тільки обраний учень):</label>
     <textarea id="t-comment" rows="2" placeholder="Наприклад: Гарно працював на уроці!"></textarea>
 
-    <button class="btn-save" onclick="saveData()">💾 Зберегти дані</button>
+    <button class="btn-save" id="btn-save-data" onclick="saveData()">💾 Зберегти дані</button>
     <div id="status-msg">Збережено!</div>
 
     <div class="data-card" style="border-left-color: #e67e22; margin-top: 25px;">
@@ -97,7 +103,7 @@
     </div>
 
     <details style="margin-top: 30px; background: #fff; padding: 15px; border-radius: 12px; border: 1px solid #ddd;">
-      <summary style="font-weight: bold; cursor: pointer; color: #7f8c8d;">⚙️ Управління класом (Додати учня / Прив'язати батьків)</summary>
+      <summary style="font-weight: bold; cursor: pointer; color: #7f8c8d;">⚙️ Управління класом</summary>
       <div style="margin-top: 15px;">
         <input type="text" id="new-student-name" placeholder="Прізвище та Ім'я учня">
         <button style="background: #f1c40f; padding: 8px; margin-top: 5px; margin-bottom: 15px;" onclick="addStudent()">Додати учня</button>
@@ -139,6 +145,12 @@
   import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
   import { getDatabase, ref, set, get, child, push } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 
+  // === НАСТРОЙКИ CLOUDINARY (ТВОИ КЛЮЧИ) ===
+  const CLOUD_NAME = 'duy1qwsqv'; 
+  const UPLOAD_PRESET = 'ml_default'; 
+  const CLOUDINARY_URL = `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`;
+
+  // === НАСТРОЙКИ FIREBASE ===
   const firebaseConfig = {
     apiKey: "AIzaSyA3OA9pcR1zscUtEPWD8LEKTKonAN5Y90c",
     authDomain: "test-4eb3e.firebaseapp.com",
@@ -154,12 +166,11 @@
   const db = getDatabase(app);
 
   let currentUserData = null;
+  let currentHwImage = null; 
   const dayKeys = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
-  // Встановлюємо сьогодні
   document.getElementById('global-date').valueAsDate = new Date();
 
-  // --- ГОЛОВНА ЛОГІКА ОНОВЛЕННЯ ---
   window.handleDateChange = function() {
     updateSubjectList();
     if (currentUserData.role === 'teacher') {
@@ -170,15 +181,12 @@
     }
   };
 
-  // Фільтр предметів
   function updateSubjectList() {
     const dateVal = new Date(document.getElementById('global-date').value);
     const dayName = dayKeys[dateVal.getDay()];
     const subjects = window.schedule[dayName] || [];
-    
     const cleanSubjects = subjects.filter(s => s.number !== " " && s.subject.ua !== "Перерва");
 
-    // Заповнюємо список тільки для вчителя (у батьків ми його забрали)
     if (currentUserData.role === 'teacher') {
       const select = document.getElementById('t-subject');
       select.innerHTML = '';
@@ -191,18 +199,24 @@
     }
   }
 
-  // --- ДАШБОРД ВЧИТЕЛЯ ---
+  function renderHwItem(subject, data) {
+    let text = typeof data === 'string' ? data : data.text;
+    let imgHtml = (typeof data === 'object' && data.image) 
+      ? `<br><a href="${data.image}" target="_blank"><img src="${data.image}" class="hw-image-thumb" alt="Фото ДЗ"></a>` 
+      : '';
+    return `<li><b>${subject}:</b> ${text} ${imgHtml}</li>`;
+  }
+
   window.loadTeacherDashboard = function() {
     const date = document.getElementById('global-date').value;
     const hwList = document.getElementById('t-daily-hw-list');
     
-    // Завантажуємо всі ДЗ за день
     get(child(ref(db), `homeworks/class_2/${date}`)).then(snap => {
       hwList.innerHTML = '';
       if(snap.exists()) {
         const data = snap.val();
         for(let subj in data) {
-          hwList.innerHTML += `<li><b>${subj}:</b> ${data[subj]}</li>`;
+          hwList.innerHTML += renderHwItem(subj, data[subj]);
         }
       } else {
         hwList.innerHTML = '<li class="empty-msg">ДЗ ще не задано.</li>';
@@ -210,7 +224,6 @@
     });
   };
 
-  // --- ЗАВАНТАЖЕННЯ ДАНИХ ДЛЯ РЕДАГУВАННЯ ВЧИТЕЛЕМ ---
   window.loadCurrentData = function() {
     const date = document.getElementById('global-date').value;
     const subject = document.getElementById('t-subject').value;
@@ -218,15 +231,27 @@
     
     document.getElementById('t-hw').value = '';
     document.getElementById('t-comment').value = '';
+    document.getElementById('t-image').value = ''; 
+    document.getElementById('existing-image-info').style.display = 'none';
+    currentHwImage = null; 
 
     if (!subject) return;
 
-    // Підтягуємо ДЗ
     get(child(ref(db), `homeworks/class_2/${date}/${subject}`)).then(snap => {
-      if(snap.exists()) document.getElementById('t-hw').value = snap.val();
+      if(snap.exists()) {
+        const val = snap.val();
+        if(typeof val === 'string') {
+          document.getElementById('t-hw').value = val;
+        } else {
+          document.getElementById('t-hw').value = val.text;
+          if(val.image) {
+            currentHwImage = val.image;
+            document.getElementById('existing-image-info').style.display = 'block';
+          }
+        }
+      }
     });
 
-    // Підтягуємо історію ВСІХ коментарів з предмету для вчителя
     const historyList = document.getElementById('t-history-comments');
     get(child(ref(db), `comments/class_2/${date}/${subject}`)).then(snap => {
       historyList.innerHTML = '';
@@ -234,7 +259,6 @@
         const commentsData = snap.val();
         for(let stName in commentsData) {
           historyList.innerHTML += `<li><b>${stName}:</b> ${commentsData[stName]}</li>`;
-          // Якщо це обраний зараз учень - підтягуємо в текстове поле для редагування
           if (stName === student) {
             document.getElementById('t-comment').value = commentsData[stName];
           }
@@ -245,7 +269,6 @@
     });
   };
 
-  // --- ДАШБОРД БАТЬКІВ ---
   window.loadParentDashboard = function() {
     if (!currentUserData) return;
     const date = document.getElementById('global-date').value;
@@ -256,64 +279,98 @@
     hwList.innerHTML = '<li class="empty-msg">Завантаження...</li>';
     commentsList.innerHTML = '<li class="empty-msg">Завантаження...</li>';
 
-    // Завантажуємо ВСІ ДЗ за день
     get(child(ref(db), `homeworks/class_2/${date}`)).then(snap => {
       hwList.innerHTML = '';
       if(snap.exists()) {
         const data = snap.val();
         for(let subj in data) {
-          hwList.innerHTML += `<li><b>${subj}:</b> ${data[subj]}</li>`;
+          hwList.innerHTML += renderHwItem(subj, data[subj]);
         }
       } else {
         hwList.innerHTML = '<li class="empty-msg">На цей день ДЗ не задано.</li>';
       }
     });
 
-    // Завантажуємо коментарі (Шукаємо по всіх предметах за цей день)
     get(child(ref(db), `comments/class_2/${date}`)).then(snap => {
       commentsList.innerHTML = '';
       let hasComments = false;
-
       if(snap.exists()) {
-        const allSubjects = snap.val(); // Об'єкт { "Математика": {"Іван": "Ок"}, "Читання": {...} }
+        const allSubjects = snap.val(); 
         for(let subj in allSubjects) {
-          // Якщо в цьому предметі є коментар саме для нашого учня
           if (allSubjects[subj][currentUserData.studentName]) {
             hasComments = true;
             commentsList.innerHTML += `<li><b>${subj}:</b> ${allSubjects[subj][currentUserData.studentName]}</li>`;
           }
         }
       }
-      
       if(!hasComments) {
         commentsList.innerHTML = '<li class="empty-msg">Немає коментарів на цей день.</li>';
       }
     });
   };
 
-  // --- ЗБЕРЕЖЕННЯ ---
-  window.saveData = function() {
+  // --- ЗБЕРЕЖЕННЯ ДАНИХ З ФОТО ---
+  window.saveData = async function() {
     const date = document.getElementById('global-date').value;
     const subject = document.getElementById('t-subject').value;
     const student = document.getElementById('t-student').value;
-    const hw = document.getElementById('t-hw').value.trim();
+    const hwText = document.getElementById('t-hw').value.trim();
     const comment = document.getElementById('t-comment').value.trim();
+    const fileInput = document.getElementById('t-image');
+    const file = fileInput.files[0];
+    const btnSave = document.getElementById('btn-save-data');
+    const statusMsg = document.getElementById('status-msg');
 
-    // Якщо є ДЗ, зберігаємо
-    if (hw) set(ref(db, `homeworks/class_2/${date}/${subject}`), hw);
+    btnSave.disabled = true;
+    btnSave.innerText = "⏳ Збереження...";
+
+    let finalImageUrl = currentHwImage; 
+
+    if (file) {
+      statusMsg.style.display = 'block';
+      statusMsg.innerText = "⏳ Завантаження фото на сервер...";
+      statusMsg.style.color = "#f39c12";
+
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('upload_preset', UPLOAD_PRESET);
+
+      try {
+        const res = await fetch(CLOUDINARY_URL, { method: 'POST', body: formData });
+        const data = await res.json();
+        finalImageUrl = data.secure_url; 
+      } catch (e) {
+        alert("Помилка завантаження фото! " + e.message);
+        btnSave.disabled = false;
+        btnSave.innerText = "💾 Зберегти дані";
+        return;
+      }
+    }
+
+    if (hwText || finalImageUrl) {
+      const hwData = { text: hwText, image: finalImageUrl || "" };
+      await set(ref(db, `homeworks/class_2/${date}/${subject}`), hwData);
+    }
     
-    // Якщо є коментар і обрано учня, зберігаємо
-    if (comment && student) set(ref(db, `comments/class_2/${date}/${subject}/${student}`), comment);
+    if (comment && student) {
+      await set(ref(db, `comments/class_2/${date}/${subject}/${student}`), comment);
+    }
 
-    document.getElementById('status-msg').style.display = 'block';
+    statusMsg.style.color = "#2ed573";
+    statusMsg.innerText = "✅ Дані успішно збережено!";
+    btnSave.disabled = false;
+    btnSave.innerText = "💾 Зберегти дані";
+    
+    // Очищаємо поле файлу після успішного збереження
+    fileInput.value = '';
+    
     setTimeout(() => {
-      document.getElementById('status-msg').style.display = 'none';
-      // Оновлюємо дашборди вчителя щоб одразу побачити нові дані
+      statusMsg.style.display = 'none';
       handleDateChange(); 
-    }, 1500);
+    }, 2000);
   };
 
-  // --- АВТОРИЗАЦІЯ ТА МАРШРУТИЗАЦІЯ ---
+  // --- АВТОРИЗАЦІЯ ---
   onAuthStateChanged(auth, (user) => {
     document.querySelectorAll('.panel').forEach(p => p.style.display = 'none');
     document.getElementById('calendar-block').style.display = 'none';
@@ -324,7 +381,6 @@
           currentUserData = snapshot.val();
           initUserSession();
         } else {
-          // Логіка прив'язки нових батьків
           const safeEmail = user.email.replace(/\./g, '_');
           get(child(ref(db), `parent_links/${safeEmail}`)).then((linkSnap) => {
             if (linkSnap.exists()) {
@@ -355,10 +411,9 @@
       document.getElementById('parent-screen').style.display = 'block';
       document.getElementById('parent-welcome').innerText = `👪 Кабінет: ${currentUserData.studentName}`;
     }
-    handleDateChange(); // Завантажуємо дані одразу після входу
+    handleDateChange(); 
   }
 
-  // СТАНДАРТНІ ФУНКЦІЇ (Логін, додавання учнів)
   window.loginUser = function() {
     const email = document.getElementById('email').value.trim();
     const pass = document.getElementById('pass').value.trim();
