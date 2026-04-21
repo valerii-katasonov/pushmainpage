@@ -110,11 +110,11 @@
 
     <div style="display: flex; gap: 10px; margin-bottom: 20px;">
       <div style="flex: 1; background: #e0f7fa; padding: 15px; border-radius: 12px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
-        <h4 style="margin:0; color: #00838f; font-size: 0.85rem;">📚 ДЗ задано (сьогодні)</h4>
+        <h4 style="margin:0; color: #00838f; font-size: 0.85rem;">📚 ДЗ задано (на дату)</h4>
         <p id="d-hw-counter" style="font-size: 1.8rem; font-weight: 800; color: #00acc1; margin: 5px 0;">0</p>
       </div>
       <div style="flex: 1; background: #fce4ec; padding: 15px; border-radius: 12px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
-        <h4 style="margin:0; color: #ad1457; font-size: 0.85rem;">💬 Коментарів (сьогодні)</h4>
+        <h4 style="margin:0; color: #ad1457; font-size: 0.85rem;">💬 Коментарів (на дату)</h4>
         <p id="d-com-counter" style="font-size: 1.8rem; font-weight: 800; color: #d81b60; margin: 5px 0;">0</p>
       </div>
     </div>
@@ -128,14 +128,14 @@
     </div>
 
     <div class="data-card" style="border-left-color: #e74c3c; background: #fdfbfb;">
-      <h4 style="margin-top:0; color: #c0392b;">🚨 Відсутні та Запізнення (Сьогодні, вся школа)</h4>
+      <h4 id="d-att-header" style="margin-top:0; color: #c0392b;">🚨 Відсутні та Запізнення (Вся школа)</h4>
       <ul id="d-unified-att-list" class="list-dash" style="padding-left:0; list-style:none;">
           <li class="empty-msg">Усі присутні! Жодних повідомлень.</li>
       </ul>
     </div>
 
     <div class="data-card" style="border-left-color: #3498db; background: #f4f9fd;">
-      <h4 style="margin-top:0; color: #2980b9;">📋 Деталізація ДЗ на сьогодні</h4>
+      <h4 style="margin-top:0; color: #2980b9;">📋 Деталізація ДЗ по предметах</h4>
       <select id="d-detail-hw-class" onchange="loadDirectorHWScheduleAndRender()" style="margin-bottom: 10px; border: 1px solid #bdc3c7;">
         <option value="">Оберіть клас...</option>
         <option value="class_1">1 Клас</option><option value="class_2">2 Клас</option><option value="class_3">3 Клас</option>
@@ -171,6 +171,11 @@
   <div id="teacher-screen" class="panel">
     <h2 id="teacher-dashboard-title">👨‍🏫 Журнал</h2>
     
+    <div id="t-push-setup" style="background: #e0f7fa; padding: 12px; border-radius: 8px; margin-bottom: 20px; text-align: center; border: 1px dashed #00acc1; display: none;">
+        <p style="margin: 0 0 10px 0; font-size: 0.85rem; color: #006d77; font-weight: bold;">Увімкніть сповіщення, щоб не пропускати повідомлення від батьків про запізнення!</p>
+        <button onclick="requestPushPermissions()" style="background: #00acc1; padding: 10px; margin: 0; color: white; width: 100%; font-size: 0.9rem;">🔔 Надати дозвіл на сповіщення</button>
+    </div>
+
     <div class="data-card" style="border-left-color: #e74c3c; background: #fdfbfb; margin-top: 0; margin-bottom: 20px;">
       <h4 style="margin-top:0; color: #c0392b;">🚨 Відвідуваність на сьогодні:</h4>
       <ul id="t-attendance-list" class="list-dash" style="list-style-type: none; padding-left: 0;">
@@ -182,12 +187,10 @@
       <div style="flex: 1; background: #ffeaa7; padding: 15px; border-radius: 12px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
         <h4 style="margin:0; color: #d35400; font-size: 0.85rem;">❤️ Індекс вдячності</h4>
         <p id="t-karma-counter" style="font-size: 1.8rem; font-weight: 800; color: #e67e22; margin: 5px 0;">0</p>
-        <span style="font-size: 0.7rem; color: #888;">реакцій на коментарі</span>
       </div>
-      <div style="flex: 1; background: linear-gradient(135deg, #a8ff78, #78ffd6); padding: 15px; border-radius: 12px; text-align: center; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.05); transition: 0.3s;" onclick="showWeeklyWrapped()">
+      <div style="flex: 1; background: linear-gradient(135deg, #a8ff78, #78ffd6); padding: 15px; border-radius: 12px; text-align: center; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.05);" onclick="showWeeklyWrapped()">
         <h4 style="margin:0; color: #006d77; font-size: 0.85rem;">📊 Підсумки</h4>
         <p style="font-size: 1.8rem; margin: 5px 0;">🎁</p>
-        <span style="font-size: 0.7rem; color: #006d77; font-weight: bold;">Відкрити</span>
       </div>
     </div>
 
@@ -197,7 +200,7 @@
     </div>
     
     <div class="data-card" style="border-left-color: #3498db; background: #f4f9fd;">
-      <h4 style="margin-top:0; color: #2980b9;">📋 Зведення всіх ДЗ класу на день:</h4>
+      <h4 style="margin-top:0; color: #2980b9;">📋 Зведення всіх ДЗ класу:</h4>
       <ul id="t-daily-hw-list" class="list-dash"></ul>
     </div>
     
@@ -223,22 +226,15 @@
     </div>
 
     <details style="margin-top: 30px; background: #fff; padding: 15px; border-radius: 12px; border: 1px solid #ddd;">
-      <summary style="font-weight: bold; cursor: pointer; color: #7f8c8d;">⚙️ Управління поточним класом</summary>
+      <summary style="font-weight: bold; cursor: pointer; color: #7f8c8d;">⚙️ Управління класом</summary>
       <div style="margin-top: 15px;">
         <input type="text" id="new-student-name" placeholder="Прізвище та Ім'я учня">
         <button style="background: #f1c40f; padding: 8px; margin-top: 5px; margin-bottom: 15px;" onclick="addStudent()">Додати учня в цей клас</button><hr>
         <input type="email" id="parent-email" placeholder="Email батьків" style="margin-top: 15px;">
-        <button style="background: #9b59b6; padding: 8px; margin-top: 5px; color: white;" onclick="linkParent()">Прив'язати Email до обраного вище учня</button>
+        <button style="background: #9b59b6; padding: 8px; margin-top: 5px; color: white;" onclick="linkParent()">Прив'язати Email</button>
       </div>
     </details>
 
-    <details style="margin-top: 15px; background: #fff; padding: 15px; border-radius: 12px; border: 1px solid #ddd;">
-      <summary style="font-weight: bold; cursor: pointer; color: #7f8c8d;">🔐 Налаштування</summary>
-      <div style="margin-top: 15px;">
-        <input type="password" id="t-new-pass" placeholder="Новий пароль">
-        <button style="background: #34495e; padding: 8px; margin-top: 10px; color: white;" onclick="changePassword('t-new-pass')">Зберегти пароль</button>
-      </div>
-    </details>
     <button class="btn-logout" onclick="logoutUser()">Вийти</button>
   </div>
 
@@ -260,30 +256,25 @@
          </select>
       </div>
       <button onclick="submitAttendance()" style="background: #c0392b; padding:12px; color:white; margin-top: 15px;">Відправити сповіщення</button>
-      <p id="p-att-status" style="font-size: 0.85rem; color: #27ae60; font-weight: bold; margin-top: 10px; display: none;">✅ Сповіщення надіслано вчителю!</p>
+      <p id="p-att-status" style="font-size: 0.85rem; color: #27ae60; font-weight: bold; margin-top: 10px; display: none;">✅ Сповіщення надіслано!</p>
     </div>
 
     <div class="data-card" style="border-left-color: #f1c40f; background: #fffcf0; text-align: center;">
       <h4 style="margin-top:0; color: #f39c12; font-size: 1.1rem;">🌟 Прогрес наліпок</h4>
       <div class="progress-bar-container"><div id="p-ribbon-progress" class="progress-bar"></div></div>
       <p id="p-ribbon-count" style="font-size: 1.2rem; font-weight: bold; color: #d35400; margin: 15px 0 5px 0;">Завантаження...</p>
-      <p id="p-ribbon-msg" style="color: #27ae60; font-weight: 800; margin: 0; font-size: 1rem;"></p>
     </div>
 
     <div class="data-card" style="border-left-color: #00b894; background: #f0fff4;">
-      <h4 style="margin-top:0; color: #00b894;">📚 Задано на цей день:</h4>
+      <h4 style="margin-top:0; color: #00b894;">📚 Задано:</h4>
       <ul id="p-daily-hw-list" class="list-dash"></ul>
     </div>
     
     <div class="data-card" style="border-left-color: #ff4757; background: #fff0f1;">
-      <h4 style="margin-top:0; color: #ff4757;">📝 Коментарі вчителів для вас:</h4>
+      <h4 style="margin-top:0; color: #ff4757;">📝 Коментарі для вас:</h4>
       <ul id="p-daily-comments-list" class="list-dash"></ul>
     </div>
 
-    <details style="margin-top: 25px; background: #fff; padding: 15px; border-radius: 12px; border: 1px solid #ddd;">
-      <summary style="font-weight: bold; cursor: pointer; color: #7f8c8d;">🔐 Налаштування (Змінити пароль)</summary>
-      <div style="margin-top: 15px;"><input type="password" id="p-new-pass" placeholder="Новий пароль"><button style="background: #34495e; padding: 8px; margin-top: 10px; color: white;" onclick="changePassword('p-new-pass')">Зберегти</button></div>
-    </details>
     <button class="btn-logout" onclick="logoutUser()">Вийти</button>
   </div>
 </div>
@@ -291,13 +282,11 @@
 <div id="wrapped-modal" class="modal-overlay">
   <div class="modal-content">
     <h2 style="color: #27ae60; margin-top:0;">🎉 Ваші підсумки!</h2>
-    <p style="color: #555;">Ось статистика роботи саме за вашими предметами у поточному класі:</p>
     <ul style="list-style:none; padding:0; font-size:1.1rem; line-height:2.2; text-align: left; background: #f8f9fa; padding: 15px; border-radius: 12px;">
-      <li>📚 Завдань задано: <b id="w-hw" style="float: right; color: #2980b9; font-size: 1.3rem;">0</b></li>
-      <li>📝 Коментарів написано: <b id="w-com" style="float: right; color: #8e44ad; font-size: 1.3rem;">0</b></li>
-      <li>🌟 Наліпок видано: <b id="w-st" style="float: right; color: #f39c12; font-size: 1.3rem;">0</b></li>
+      <li>📚 Завдань задано: <b id="w-hw" style="float: right; color: #2980b9;">0</b></li>
+      <li>📝 Коментарів: <b id="w-com" style="float: right; color: #8e44ad;">0</b></li>
+      <li>🌟 Наліпок видано: <b id="w-st" style="float: right; color: #f39c12;">0</b></li>
     </ul>
-    <p style="font-weight: bold; color: #d35400; margin-top: 20px;">Ви робите неймовірну роботу! ❤️</p>
     <button onclick="closeModal()" style="background: linear-gradient(135deg, #27ae60, #2ecc71); color:white; width: 100%; margin-top: 10px;">Дякую, я молодець!</button>
   </div>
 </div>
@@ -323,9 +312,10 @@
   btnInstallAndroid.addEventListener('click', async () => { if (deferredPrompt !== null) { deferredPrompt.prompt(); const { outcome } = await deferredPrompt.userChoice; deferredPrompt = null; } else { alert('Відкрийте меню браузера і виберіть "Додати на головний екран"'); } });
   window.showIosInstruction = function() { alert('🍏 Натисніть "Поділитися" -> "На початковий екран" (Add to Home Screen)'); };
 
-  // --- ФІКС: ПРАВИЛЬНА ЛОКАЛЬНА ДАТА ---
+  // --- ФІКС: ПРАВИЛЬНА ЛОКАЛЬНА ДАТА ДЛЯ КАЛЕНДАРЯ ---
   const today = new Date();
-  document.getElementById('global-date').value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const localDateString = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+  document.getElementById('global-date').value = localDateString;
 
   function loadScheduleScript(classId, callback) {
     const scriptId = 'dynamic-schedule-script'; let oldScript = document.getElementById(scriptId); if (oldScript) oldScript.remove();
@@ -339,33 +329,38 @@
     return currentUserData ? currentUserData.class : 'class_2'; 
   }
 
-  // --- TOAST НОТИФІКАЦІЇ ---
   function showToast(message) {
     const container = document.getElementById('toast-container');
-    const toast = document.createElement('div'); toast.className = 'toast';
-    toast.innerHTML = `<span>🔔 ${message}</span>`;
-    container.appendChild(toast);
-    setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 4000);
+    const toast = document.createElement('div'); toast.className = 'toast'; toast.innerHTML = `<span>🔔 ${message}</span>`;
+    container.appendChild(toast); setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 4000);
   }
 
-  // --- PUSH-НОТИФІКАЦІЇ ВЧИТЕЛЯ ---
+  // --- PUSH-НОТИФІКАЦІЇ ---
+  window.requestPushPermissions = function() {
+      if ("Notification" in window) {
+          Notification.requestPermission().then(perm => {
+              if (perm === "granted") { document.getElementById('t-push-setup').style.display = 'none'; setupPushNotifications(); alert("✅ Сповіщення увімкнено!"); }
+              else { alert("❌ Ви відхилили дозвіл на сповіщення."); }
+          });
+      } else { alert("Ваш браузер не підтримує Web Push сповіщення."); }
+  };
+
   function setupPushNotifications() {
       if(!currentUserData || currentUserData.role !== 'teacher' || !currentUserData.defaultClass) return;
-      if ("Notification" in window && Notification.permission !== "granted" && Notification.permission !== "denied") { Notification.requestPermission(); }
-      const defClass = currentUserData.defaultClass; const dateStr = document.getElementById('global-date').value; 
+      if ("Notification" in window && Notification.permission !== "granted") { document.getElementById('t-push-setup').style.display = 'block'; }
       
-      if(pushNotificationListener) pushNotificationListener(); // Відписуємось від старого
+      const defClass = currentUserData.defaultClass; const dateStr = document.getElementById('global-date').value; 
+      if(pushNotificationListener) pushNotificationListener();
+      
       pushNotificationListener = onValue(ref(db, `attendance/${defClass}/${dateStr}`), (snap) => {
           const currentData = snap.exists() ? snap.val() : {};
           if (previousAttData !== null) { 
               for (let student in currentData) {
-                  if (!previousAttData[student] || previousAttData[student].status !== currentData[student].status || previousAttData[student].reason !== currentData[student].reason) {
-                      const rec = currentData[student];
+                  const rec = currentData[student];
+                  if (!previousAttData[student] || previousAttData[student].status !== rec.status || previousAttData[student].reason !== rec.reason) {
                       const msg = `${student}: ${rec.status === 'late' ? 'Запізнюється' : 'Відсутній'} (${rec.reason})`;
                       showToast(msg);
-                      if ("Notification" in window && Notification.permission === "granted") {
-                          new Notification(`🏫 ${defClass.replace('class_','')} Клас`, { body: msg, icon: "https://cdn-icons-png.flaticon.com/512/330/330996.png" });
-                      }
+                      if ("Notification" in window && Notification.permission === "granted") new Notification(`🏫 ${defClass.replace('class_','')} Клас`, { body: msg, icon: "https://cdn-icons-png.flaticon.com/512/330/330996.png" });
                   }
               }
           }
@@ -373,7 +368,6 @@
       });
   }
 
-  // --- БАТЬКИ: ЛОГІКА ВІДСУТНОСТІ ---
   window.updateAttOptions = function() {
     const type = document.getElementById('p-att-type').value; const reason = document.getElementById('p-att-reason'); reason.innerHTML = '';
     if(type === 'late') { reason.innerHTML = '<option value="на 10 хвилин">на 10 хвилин</option><option value="на 15 хвилин">на 15 хвилин</option><option value="до 2-го уроку">до 2-го уроку</option><option value="до 3-го уроку">до 3-го уроку</option>'; } 
@@ -388,11 +382,10 @@
     });
   };
 
-  // --- ВЧИТЕЛЬ: КЛАС ЗА ЗАМОВЧУВАННЯМ ---
   window.setDefaultClass = function() {
     const cls = document.getElementById('t-class-selector').value;
     set(ref(db, `users/${auth.currentUser.uid}/defaultClass`), cls).then(() => { 
-        alert("✅ Цей клас тепер відкриватиметься за замовчуванням і ви отримуватимете по ньому push-сповіщення!"); 
+        alert("✅ Цей клас тепер відкриватиметься за замовчуванням!"); 
         currentUserData.defaultClass = cls; previousAttData = null; setupPushNotifications();
     });
   };
@@ -405,7 +398,11 @@
 
   window.handleDateChange = function() {
     if (currentUserData.role === 'teacher') { updateSubjectList(); loadTeacherDashboard(); loadCurrentData(); listenTeacherAttendance(); setupPushNotifications(); } 
-    else if (currentUserData.role === 'director') { loadDirectorDashboard(); document.getElementById('d-detail-hw-class').value = ''; document.getElementById('d-detail-hw-list').innerHTML = '<li class="empty-msg">Оберіть клас зі списку вище.</li>'; } 
+    else if (currentUserData.role === 'director') { 
+        loadDirectorDashboard(); 
+        document.getElementById('d-detail-hw-class').value = ''; 
+        document.getElementById('d-detail-hw-list').innerHTML = '<li class="empty-msg">Оберіть клас зі списку вище.</li>'; 
+    } 
     else { loadParentDashboard(); }
   };
 
@@ -422,10 +419,11 @@
     return `<li><b>${subject}:</b> ${text} ${imgHtml}</li>`;
   }
 
-  // --- ДИРЕКТОР: ФІКСОВАНА ЛОГІКА ДАТ І СПИСКІВ ---
+  // --- ДИРЕКТОР: БЕЗПЕЧНИЙ ПАРСИНГ ---
   function getWeekDates(currentDateStr) {
+      if(!currentDateStr) return [];
       let [y, m, d] = currentDateStr.split('-'); let dateObj = new Date(y, m - 1, d); let day = dateObj.getDay() || 7; 
-      dateObj.setDate(dateObj.getDate() - day + 1); // Понеділок
+      dateObj.setDate(dateObj.getDate() - day + 1);
       let dates = [];
       for(let i=0; i<7; i++) { 
           const yyyy = dateObj.getFullYear(); const mm = String(dateObj.getMonth() + 1).padStart(2, '0'); const dd = String(dateObj.getDate()).padStart(2, '0');
@@ -435,55 +433,78 @@
   }
 
   window.loadDirectorDashboard = async function() {
-    const date = document.getElementById('global-date').value; const weekDates = getWeekDates(date);
-    
-    let totalHwToday = 0; let totalComToday = 0; let karmaByClass = {}; let radarHtml = ''; let weekLate = 0; let weekAbsent = 0; let unifiedAttHtml = '';
+    try {
+        const date = document.getElementById('global-date').value; 
+        const dateParts = date.split('-');
+        document.getElementById('d-att-header').innerText = `🚨 Відсутні та Запізнення (На ${dateParts[2]}.${dateParts[1]}, вся школа)`;
 
-    const [hwSnap, comSnap, reactSnap, attSnap] = await Promise.all([ get(child(ref(db), `homeworks`)), get(child(ref(db), `comments`)), get(child(ref(db), `reactions`)), get(child(ref(db), `attendance`)) ]);
-    const hwData = hwSnap.exists() ? hwSnap.val() : {}; const comData = comSnap.exists() ? comSnap.val() : {}; const reactData = reactSnap.exists() ? reactSnap.val() : {}; const attData = attSnap.exists() ? attSnap.val() : {};
+        const weekDates = getWeekDates(date);
+        let totalHwToday = 0; let totalComToday = 0; let karmaByClass = {}; let radarHtml = ''; let weekLate = 0; let weekAbsent = 0; let unifiedAttHtml = '';
 
-    for (let i = 1; i <= 11; i++) {
-      let clsId = `class_${i}`; let clsLabel = `${i} Клас`;
-      
-      if (hwData[clsId] && hwData[clsId][date]) { radarHtml += `<tr><td><b>${clsLabel}</b></td><td style="color:#27ae60;">✅ Задано</td></tr>`; totalHwToday += Object.keys(hwData[clsId][date]).length; } 
-      else { radarHtml += `<tr><td><b>${clsLabel}</b></td><td style="color:#e74c3c;">❌ Порожньо</td></tr>`; }
+        const [hwSnap, comSnap, reactSnap, attSnap] = await Promise.all([ get(child(ref(db), `homeworks`)), get(child(ref(db), `comments`)), get(child(ref(db), `reactions`)), get(child(ref(db), `attendance`)) ]);
+        const hwData = hwSnap.exists() ? hwSnap.val() : {}; const comData = comSnap.exists() ? comSnap.val() : {}; const reactData = reactSnap.exists() ? reactSnap.val() : {}; const attData = attSnap.exists() ? attSnap.val() : {};
 
-      if (comData[clsId] && comData[clsId][date]) { for (let subj in comData[clsId][date]) totalComToday += Object.keys(comData[clsId][date][subj]).length; }
+        for (let i = 1; i <= 11; i++) {
+          let clsId = `class_${i}`; let clsLabel = `${i} Клас`;
+          
+          if (hwData[clsId] && hwData[clsId][date]) { radarHtml += `<tr><td><b>${clsLabel}</b></td><td style="color:#27ae60;">✅ Задано</td></tr>`; totalHwToday += Object.keys(hwData[clsId][date]).length; } 
+          else { radarHtml += `<tr><td><b>${clsLabel}</b></td><td style="color:#e74c3c;">❌ Порожньо</td></tr>`; }
 
-      karmaByClass[clsLabel] = 0;
-      if (reactData[clsId]) { for (let d in reactData[clsId]) for (let subj in reactData[clsId][d]) karmaByClass[clsLabel] += Object.keys(reactData[clsId][d][subj]).length; }
-      
-      // Єдиний список відвідуваності на СЬОГОДНІ
-      if (attData[clsId] && attData[clsId][date]) {
-          for(let student in attData[clsId][date]) {
-              const rec = attData[clsId][date][student];
-              const badgeClass = rec.status === 'late' ? 'badge-late' : 'badge-absent';
-              const label = rec.status === 'late' ? 'Запізнення' : 'Відсутність';
-              unifiedAttHtml += `<li style="margin-bottom:10px; border-bottom:1px solid #eee; padding-bottom:5px;"><span style="font-size:0.75rem; background:#006d77; color:white; padding:2px 6px; border-radius:4px; margin-right:5px;">${clsLabel}</span> <b>${student}</b> <span class="badge ${badgeClass}">${label}</span> <br><i style="font-size:0.8rem; color:#666;">Причина: ${rec.reason}</i></li>`;
+          if (comData[clsId] && comData[clsId][date]) { 
+              for (let subj in comData[clsId][date]) {
+                  if (typeof comData[clsId][date][subj] === 'object') totalComToday += Object.keys(comData[clsId][date][subj]).length; 
+              }
           }
-      }
 
-      // Тижнева статистика
-      if (attData[clsId]) {
-          weekDates.forEach(wd => {
-              if (attData[clsId][wd]) Object.values(attData[clsId][wd]).forEach(record => { if(record.status === 'late') weekLate++; else if(record.status === 'absent') weekAbsent++; });
-          });
-      }
+          karmaByClass[clsLabel] = 0;
+          if (reactData[clsId]) { 
+              for (let d in reactData[clsId]) {
+                  for (let subj in reactData[clsId][d]) {
+                      if (typeof reactData[clsId][d][subj] === 'object') karmaByClass[clsLabel] += Object.keys(reactData[clsId][d][subj]).length; 
+                  }
+              }
+          }
+          
+          // Єдиний список відвідуваності на ОБРАНУ ДАТУ
+          if (attData[clsId] && attData[clsId][date]) {
+              for(let student in attData[clsId][date]) {
+                  const rec = attData[clsId][date][student];
+                  if(rec && rec.status) {
+                      const badgeClass = rec.status === 'late' ? 'badge-late' : 'badge-absent';
+                      const label = rec.status === 'late' ? 'Запізнення' : 'Відсутність';
+                      unifiedAttHtml += `<li style="margin-bottom:10px; border-bottom:1px solid #eee; padding-bottom:5px;"><span style="font-size:0.75rem; background:#006d77; color:white; padding:2px 6px; border-radius:4px; margin-right:5px;">${clsLabel}</span> <b>${student}</b> <span class="badge ${badgeClass}">${label}</span> <br><i style="font-size:0.8rem; color:#666;">Причина: ${rec.reason}</i></li>`;
+                  }
+              }
+          }
+
+          // Тижнева статистика
+          if (attData[clsId]) {
+              weekDates.forEach(wd => {
+                  if (attData[clsId][wd] && typeof attData[clsId][wd] === 'object') {
+                      Object.values(attData[clsId][wd]).forEach(record => { 
+                          if(record && record.status === 'late') weekLate++; else if(record && record.status === 'absent') weekAbsent++; 
+                      });
+                  }
+              });
+          }
+        }
+
+        document.getElementById('d-hw-counter').innerText = totalHwToday; document.getElementById('d-com-counter').innerText = totalComToday;
+        document.getElementById('d-hw-radar').innerHTML = radarHtml; document.getElementById('d-week-late').innerText = weekLate; document.getElementById('d-week-absent').innerText = weekAbsent;
+        document.getElementById('d-unified-att-list').innerHTML = unifiedAttHtml || '<li class="empty-msg">Усі присутні! Жодних повідомлень.</li>';
+
+        let karmaArray = Object.keys(karmaByClass).map(key => ({ name: key, score: karmaByClass[key] })); karmaArray.sort((a, b) => b.score - a.score);
+        const karmaList = document.getElementById('d-karma-leaderboard'); karmaList.innerHTML = '';
+        karmaArray.slice(0, 5).forEach((item, index) => {
+          if (item.score > 0) {
+            let medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '⭐';
+            karmaList.innerHTML += `<li style="margin-bottom:8px; border-bottom: 1px dashed #eee; padding-bottom: 5px;"><span>${medal} <b>${item.name}</b></span><span style="float:right;"><b style="color: #e67e22;">${item.score}</b> реакцій</span></li>`;
+          }
+        });
+        if (karmaList.innerHTML === '') karmaList.innerHTML = '<li class="empty-msg">Реакцій ще немає.</li>';
+    } catch(err) {
+        console.error("Dashboard Render Error:", err);
     }
-
-    document.getElementById('d-hw-counter').innerText = totalHwToday; document.getElementById('d-com-counter').innerText = totalComToday;
-    document.getElementById('d-hw-radar').innerHTML = radarHtml; document.getElementById('d-week-late').innerText = weekLate; document.getElementById('d-week-absent').innerText = weekAbsent;
-    document.getElementById('d-unified-att-list').innerHTML = unifiedAttHtml || '<li class="empty-msg">Усі присутні! Жодних повідомлень.</li>';
-
-    let karmaArray = Object.keys(karmaByClass).map(key => ({ name: key, score: karmaByClass[key] })); karmaArray.sort((a, b) => b.score - a.score);
-    const karmaList = document.getElementById('d-karma-leaderboard'); karmaList.innerHTML = '';
-    karmaArray.slice(0, 5).forEach((item, index) => {
-      if (item.score > 0) {
-        let medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '⭐';
-        karmaList.innerHTML += `<li style="margin-bottom:8px; border-bottom: 1px dashed #eee; padding-bottom: 5px;"><span>${medal} <b>${item.name}</b></span><span style="float:right;"><b style="color: #e67e22;">${item.score}</b> реакцій</span></li>`;
-      }
-    });
-    if (karmaList.innerHTML === '') karmaList.innerHTML = '<li class="empty-msg">Реакцій ще немає.</li>';
   };
 
   window.loadDirectorHWScheduleAndRender = function() {
@@ -497,17 +518,22 @@
       if(hwCls) {
           const hwSnap = await get(child(ref(db), `homeworks/${hwCls}/${date}`)); hwList.innerHTML = '';
           const [y, m, d] = date.split('-'); const dateVal = new Date(y, m-1, d); const dayName = dayKeys[dateVal.getDay()];
-          let subjects = [];
-          if (window.schedule && window.schedule[dayName]) { subjects = window.schedule[dayName].filter(s => s.number !== " " && s.subject.ua !== "Перерва").map(s => s.subject.ua); } 
-          else { subjects = defaultSubjects; }
-
+          
+          let scheduleSubjects = [];
+          if (window.schedule && window.schedule[dayName]) { scheduleSubjects = window.schedule[dayName].filter(s => s.number !== " " && s.subject.ua !== "Перерва").map(s => s.subject.ua); } 
+          
           if(hwSnap.exists()) {
               const data = hwSnap.val();
-              [...new Set(subjects)].forEach(subj => {
+              const actualSubjects = Object.keys(data);
+              const allSubjectsToDisplay = [...new Set([...scheduleSubjects, ...actualSubjects])];
+              
+              allSubjectsToDisplay.forEach(subj => {
                   if(data[subj]) hwList.innerHTML += `<li style="margin-bottom:5px;"><span style="color:#27ae60;">✅</span> <b>${subj}</b>: задано</li>`;
                   else hwList.innerHTML += `<li style="margin-bottom:5px;"><span style="color:#e74c3c;">❌</span> <span style="color:#888;">${subj}</span>: немає</li>`;
               });
-          } else hwList.innerHTML = '<li class="empty-msg">ДЗ взагалі не задано для цього класу на обраний день.</li>';
+          } else {
+              hwList.innerHTML = '<li class="empty-msg">ДЗ взагалі не задано для цього класу на обраний день.</li>';
+          }
       }
   };
 
@@ -517,18 +543,15 @@
     set(ref(db, `pre_approved_roles/${email}`), role).then(() => { alert(`✅ Доступ надано!`); document.getElementById('new-staff-email').value = ''; });
   };
 
-  // --- ВЧИТЕЛЬ: ЛОГІКА ДАШБОРДУ ТА СПИСКУ ВІДСУТНІХ ---
   function listenTeacherAttendance() {
       const activeClass = getActiveClass(); const date = document.getElementById('global-date').value;
-      if(teacherAttendanceListener) teacherAttendanceListener(); // відписка від старого
-      
+      if(teacherAttendanceListener) teacherAttendanceListener(); 
       teacherAttendanceListener = onValue(ref(db, `attendance/${activeClass}/${date}`), (snap) => {
           const list = document.getElementById('t-attendance-list'); list.innerHTML = '';
           if(snap.exists()) {
               const data = snap.val();
               for(let st in data) {
-                  const badgeClass = data[st].status === 'late' ? 'badge-late' : 'badge-absent';
-                  const label = data[st].status === 'late' ? 'Запізнення' : 'Відсутність';
+                  const badgeClass = data[st].status === 'late' ? 'badge-late' : 'badge-absent'; const label = data[st].status === 'late' ? 'Запізнення' : 'Відсутність';
                   list.innerHTML += `<li style="margin-bottom:8px; border-bottom:1px dashed #eee; padding-bottom:5px;"><b>${st}</b> <span class="badge ${badgeClass}">${label}</span> <i style="font-size:0.8rem; color:#666;">(${data[st].reason})</i></li>`;
               }
           } else { list.innerHTML = '<li class="empty-msg">Усі на місці. Повідомлень немає.</li>'; }
@@ -607,15 +630,12 @@
     
     get(child(ref(db), `attendance/${activeClass}/${date}/${currentUserData.studentName}`)).then(snap => {
         const statusEl = document.getElementById('p-att-status');
-        if(snap.exists()) {
-            const data = snap.val(); statusEl.innerText = `✅ Ви повідомили: ${data.status === 'late'?'Запізнення':'Відсутність'} (${data.reason})`; statusEl.style.display = 'block';
-        } else statusEl.style.display = 'none';
+        if(snap.exists()) { const data = snap.val(); statusEl.innerText = `✅ Ви повідомили: ${data.status === 'late'?'Запізнення':'Відсутність'} (${data.reason})`; statusEl.style.display = 'block'; } else statusEl.style.display = 'none';
     });
 
     get(child(ref(db), `stickers/${activeClass}/${currentUserData.studentName}`)).then(snap => {
       const count = snap.exists() ? Object.keys(snap.val()).length : 0; const percent = Math.min((count / STICKER_GOAL) * 100, 100);
-      document.getElementById('p-ribbon-progress').style.width = percent + '%'; document.getElementById('p-ribbon-count').innerText = `${count} / ${STICKER_GOAL} наліпок до призу`;
-      if (count >= STICKER_GOAL) { document.getElementById('p-ribbon-msg').innerText = "🎉 Ура! Ти досяг мети!"; confetti({ particleCount: 150, spread: 80, origin: { y: 0.5 } }); } else document.getElementById('p-ribbon-msg').innerText = "";
+      document.getElementById('p-ribbon-progress').style.width = percent + '%'; document.getElementById('p-ribbon-count').innerText = `${count} / ${STICKER_GOAL} наліпок`;
     });
     get(child(ref(db), `homeworks/${activeClass}/${date}`)).then(snap => { document.getElementById('p-daily-hw-list').innerHTML = ''; if(snap.exists()) { const data = snap.val(); for(let subj in data) document.getElementById('p-daily-hw-list').innerHTML += renderHwItem(subj, data[subj]); } else document.getElementById('p-daily-hw-list').innerHTML = '<li class="empty-msg">На цей день ДЗ не задано.</li>'; });
     Promise.all([ get(child(ref(db), `comments/${activeClass}/${date}`)), get(child(ref(db), `reactions/${activeClass}/${date}`)) ]).then(([commentsSnap, reactionsSnap]) => {
@@ -634,6 +654,18 @@
 
   window.sendReaction = function(date, subject, emoji) { if (!currentUserData) return; set(ref(db, `reactions/${getActiveClass()}/${date}/${subject}/${currentUserData.studentName}`), emoji).then(() => loadParentDashboard()); };
   
+  window.showWeeklyWrapped = function() {
+    confetti({ particleCount: 200, spread: 90, origin: { y: 0.6 }, zIndex: 2000 }); document.getElementById('wrapped-modal').style.display = 'flex'; document.body.style.overflow = 'hidden'; 
+    const myUid = auth.currentUser.uid; const activeClass = getActiveClass();
+    Promise.all([ get(child(ref(db), `homeworks/${activeClass}`)), get(child(ref(db), `comments/${activeClass}`)), get(child(ref(db), `stickers/${activeClass}`)), get(child(ref(db), `authors/${activeClass}`)) ]).then(([hwSnap, comSnap, stSnap, authSnap]) => {
+      const authors = authSnap.exists() ? authSnap.val() : {};
+      let hwCount = 0; if (hwSnap.exists()) { const hw = hwSnap.val(); for(let d in hw) for(let subj in hw[d]) if (authors[d] && authors[d][subj] === myUid) hwCount++; } document.getElementById('w-hw').innerText = hwCount;
+      let comCount = 0; if (comSnap.exists()) { const com = comSnap.val(); for(let d in com) for(let subj in com[d]) if (authors[d] && authors[d][subj] === myUid) comCount += Object.keys(com[d][subj]).length; } document.getElementById('w-com').innerText = comCount;
+      let stCount = 0; if (stSnap.exists()) { const st = stSnap.val(); for (let student in st) for (let key in st[student]) { const [d, subj] = key.split('_'); if (authors[d] && authors[d][subj] === myUid) stCount++; } } document.getElementById('w-st').innerText = stCount;
+    });
+  };
+  window.closeModal = function() { document.getElementById('wrapped-modal').style.display = 'none'; document.body.style.overflow = ''; };
+
   window.loadLeaderboard = function() {
     get(child(ref(db), `stickers/${getActiveClass()}`)).then(snap => {
       const list = document.getElementById('t-leaderboard-list'); list.innerHTML = '';
@@ -650,7 +682,6 @@
 
   window.resetStickers = function(studentName) { if(confirm(`Видати приз учню ${studentName}?`)) { set(ref(db, `stickers/${getActiveClass()}/${studentName}`), null).then(() => { loadLeaderboard(); }); } };
 
-  // --- АВТОРИЗАЦІЯ ---
   window.changePassword = function(inputId) {
     const user = auth.currentUser; const newPass = document.getElementById(inputId).value.trim();
     if (!user) return alert("Помилка."); if (newPass.length < 6) return alert("Пароль має містити мінімум 6 символів!");
