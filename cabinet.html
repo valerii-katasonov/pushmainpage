@@ -102,6 +102,17 @@
     <input type="date" id="global-date" onchange="handleDateChange()" style="border: 2px solid #006d77; color: #006d77; font-weight: bold; text-align: center;">
   </div>
 
+  <div id="admin-screen" class="panel">
+    <h2 style="color: #2c3e50;">🛡️ Панель Адміністратора</h2>
+    <div class="data-card" style="border-left-color: #e74c3c; background: #fdfbfb;">
+      <h4 id="a-att-header" style="margin-top:0; color: #c0392b;">🚨 Відсутні та Запізнення (Вся школа)</h4>
+      <ul id="a-unified-att-list" class="list-dash" style="padding-left:0; list-style:none;">
+          <li class="empty-msg">Завантаження...</li>
+      </ul>
+    </div>
+    <button class="btn-logout" onclick="logoutUser()">Вийти з акаунту</button>
+  </div>
+
   <div id="director-screen" class="panel">
     <h2 style="color: #2c3e50;">👔 Пульт Директора</h2>
 
@@ -155,9 +166,13 @@
     <details style="margin-top: 30px; background: #fff; padding: 15px; border-radius: 12px; border: 1px solid #ddd;">
       <summary style="font-weight: bold; cursor: pointer; color: #c0392b;">⚙️ Управління персоналом</summary>
       <div style="margin-top: 15px;">
-        <p style="font-size: 0.85rem; color: #7f8c8d;">Введіть Email співробітника, щоб система розпізнала його як вчителя або директора.</p>
+        <p style="font-size: 0.85rem; color: #7f8c8d;">Введіть Email співробітника, щоб надати йому права.</p>
         <input type="email" id="new-staff-email" placeholder="Email співробітника">
-        <select id="new-staff-role" style="margin-top: 10px;"><option value="teacher">Роль: Вчитель</option><option value="director">Роль: Директор</option></select>
+        <select id="new-staff-role" style="margin-top: 10px;">
+            <option value="teacher">Роль: Вчитель</option>
+            <option value="director">Роль: Директор</option>
+            <option value="administrator">Роль: Адміністратор</option>
+        </select>
         <button style="background: #c0392b; padding: 8px; margin-top: 10px; color: white;" onclick="grantStaffRole()">Надати доступ</button>
       </div>
     </details>
@@ -178,6 +193,12 @@
       <ul id="t-attendance-list" class="list-dash" style="list-style-type: none; padding-left: 0;">
         <li class="empty-msg">Завантаження...</li>
       </ul>
+      <div style="margin-top: 15px; display: flex; gap: 10px; border-top: 1px dashed #f5b7b1; padding-top: 15px;">
+        <select id="t-mark-absent-student" style="flex:1; margin-top:0; border: 1px solid #f5b7b1;">
+            <option value="">Оберіть учня...</option>
+        </select>
+        <button onclick="teacherMarkAbsent()" style="margin-top:0; background:#e74c3c; color:white; width:auto; padding: 10px 15px; font-size:0.9rem;">Відсутній</button>
+      </div>
     </div>
 
     <div style="display: flex; gap: 10px; margin-bottom: 25px;">
@@ -238,6 +259,14 @@
   <div id="parent-screen" class="panel">
     <h2 id="parent-welcome">🎓 Кабінет батьків</h2>
     
+    <div class="data-card" style="border-left-color: #3498db; background: #f0f8ff; text-align: center;">
+        <h4 style="margin-top:0; color: #2980b9; font-size: 0.9rem;">⏳ Поточний урок</h4>
+        <p id="p-current-lesson" style="font-size: 1.3rem; font-weight: 800; color: #2c3e50; margin: 10px 0;">Завантаження...</p>
+        <div class="progress-bar-container" style="background-color: #d0e8f2; height: 12px; margin-top: 10px;"><div id="p-lesson-progress" class="progress-bar" style="background: linear-gradient(90deg, #3498db, #2980b9); width: 0%;"></div></div>
+        <p id="p-lesson-countdown" style="font-size: 0.85rem; color: #555; margin-top: 8px; font-weight: bold;"></p>
+        <a id="p-schedule-link" href="#" target="_blank" style="display: block; background: #2980b9; color: white; padding: 12px; border-radius: 12px; text-decoration: none; font-weight: bold; margin-top: 15px; transition: 0.3s; box-shadow: 0 4px 10px rgba(41,128,185,0.2);">📅 Відкрити повний розклад</a>
+    </div>
+
     <div class="data-card" style="border-left-color: #e74c3c; background: #fdfbfb;">
       <h4 style="margin-top:0; color: #c0392b;">🕒 Повідомити про відсутність</h4>
       <div style="display:flex; flex-direction: column; gap:10px; margin-top:10px;">
@@ -299,7 +328,7 @@
   const firebaseConfig = { apiKey: "AIzaSyA3OA9pcR1zscUtEPWD8LEKTKonAN5Y90c", authDomain: "test-4eb3e.firebaseapp.com", databaseURL: "https://test-4eb3e-default-rtdb.europe-west1.firebasedatabase.app", projectId: "test-4eb3e", storageBucket: "test-4eb3e.firebasestorage.app", messagingSenderId: "933339787450", appId: "1:933339787450:web:cc87b850ed3b4903f41283" };
   const app = initializeApp(firebaseConfig); const auth = getAuth(app); const db = getDatabase(app);
 
-  let currentUserData = null; let currentHwImages = []; let teacherAttendanceListener = null; let pushNotificationListener = null; let previousAttData = null;
+  let currentUserData = null; let currentHwImages = []; let teacherAttendanceListener = null; let pushNotificationListener = null; let previousAttData = null; let parentLessonInterval = null;
   const dayKeys = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
   const STICKER_GOAL = 30; 
   const defaultSubjects = ["Українська мова", "Математика", "Читання", "Англійська мова", "Я досліджую світ", "Інформатика", "Мистецтво", "Фізична культура", "Історія", "Біологія", "Географія"];
@@ -397,11 +426,8 @@
 
   window.handleDateChange = function() {
     if (currentUserData.role === 'teacher') { updateSubjectList(); loadTeacherDashboard(); loadCurrentData(); listenTeacherAttendance(); setupPushNotifications(); } 
-    else if (currentUserData.role === 'director') { 
-        loadDirectorDashboard(); 
-        document.getElementById('d-detail-hw-class').value = ''; 
-        document.getElementById('d-detail-hw-list').innerHTML = '<li class="empty-msg">Оберіть клас зі списку вище.</li>'; 
-    } 
+    else if (currentUserData.role === 'director') { loadDirectorDashboard(); document.getElementById('d-detail-hw-class').value = ''; document.getElementById('d-detail-hw-list').innerHTML = '<li class="empty-msg">Оберіть клас зі списку вище.</li>'; } 
+    else if (currentUserData.role === 'administrator') { loadAdminDashboard(); }
     else { loadParentDashboard(); }
   };
 
@@ -418,7 +444,6 @@
     return `<li><b>${subject}:</b> ${text} ${imgHtml}</li>`;
   }
 
-  // --- ДИРЕКТОР: БЕЗПЕЧНИЙ ПАРСИНГ ---
   function getWeekDates(currentDateStr) {
       if(!currentDateStr) return [];
       let [y, m, d] = currentDateStr.split('-'); let dateObj = new Date(y, m - 1, d); let day = dateObj.getDay() || 7; 
@@ -431,6 +456,37 @@
       return dates;
   }
 
+  // --- АДМІНІСТРАТОР ---
+  window.loadAdminDashboard = async function() {
+      try {
+          const date = document.getElementById('global-date').value;
+          const dateParts = date.split('-');
+          document.getElementById('a-att-header').innerText = `🚨 Відсутні та Запізнення (На ${dateParts[2]}.${dateParts[1]}, вся школа)`;
+          
+          const attSnap = await get(child(ref(db), `attendance`));
+          let unifiedAttHtml = '';
+          
+          if (attSnap.exists()) {
+              const attData = attSnap.val();
+              for (let i = 1; i <= 11; i++) {
+                  let clsId = `class_${i}`;
+                  if (attData[clsId] && attData[clsId][date]) {
+                      for(let student in attData[clsId][date]) {
+                          const rec = attData[clsId][date][student];
+                          if(rec && rec.status) {
+                              const badgeClass = rec.status === 'late' ? 'badge-late' : 'badge-absent';
+                              const label = rec.status === 'late' ? 'Запізнення' : 'Відсутність';
+                              unifiedAttHtml += `<li style="margin-bottom:10px; border-bottom:1px solid #eee; padding-bottom:5px;"><span style="font-size:0.75rem; background:#006d77; color:white; padding:2px 6px; border-radius:4px; margin-right:5px;">${i} Клас</span> <b>${student}</b> <span class="badge ${badgeClass}">${label}</span> <br><i style="font-size:0.8rem; color:#666;">Причина: ${rec.reason}</i></li>`;
+                          }
+                      }
+                  }
+              }
+          }
+          document.getElementById('a-unified-att-list').innerHTML = unifiedAttHtml || '<li class="empty-msg">На обрану дату відсутніх немає.</li>';
+      } catch (e) { console.error(e); }
+  };
+
+  // --- ДИРЕКТОР ---
   window.loadDirectorDashboard = async function() {
     try {
         const date = document.getElementById('global-date').value; 
@@ -467,19 +523,16 @@
               }
           }
           
-          // Єдиний список відвідуваності на ОБРАНУ ДАТУ
           if (attData[clsId] && attData[clsId][date]) {
               for(let student in attData[clsId][date]) {
                   const rec = attData[clsId][date][student];
                   if(rec && rec.status) {
-                      const badgeClass = rec.status === 'late' ? 'badge-late' : 'badge-absent';
-                      const label = rec.status === 'late' ? 'Запізнення' : 'Відсутність';
+                      const badgeClass = rec.status === 'late' ? 'badge-late' : 'badge-absent'; const label = rec.status === 'late' ? 'Запізнення' : 'Відсутність';
                       unifiedAttHtml += `<li style="margin-bottom:10px; border-bottom:1px solid #eee; padding-bottom:5px;"><span style="font-size:0.75rem; background:#006d77; color:white; padding:2px 6px; border-radius:4px; margin-right:5px;">${clsLabel}</span> <b>${student}</b> <span class="badge ${badgeClass}">${label}</span> <br><i style="font-size:0.8rem; color:#666;">Причина: ${rec.reason}</i></li>`;
                   }
               }
           }
 
-          // Тижнева статистика
           if (attData[clsId]) {
               weekDates.forEach(wd => {
                   if (attData[clsId][wd] && typeof attData[clsId][wd] === 'object') {
@@ -504,9 +557,7 @@
           }
         });
         if (karmaList.innerHTML === '') karmaList.innerHTML = '<li class="empty-msg">Реакцій ще немає.</li>';
-    } catch(err) {
-        console.error("Dashboard Render Error:", err);
-    }
+    } catch(err) { console.error("Dashboard Render Error:", err); }
   };
 
   window.loadDirectorHWScheduleAndRender = function() {
@@ -525,17 +576,12 @@
           if (window.schedule && window.schedule[dayName]) { scheduleSubjects = window.schedule[dayName].filter(s => s.number !== " " && s.subject.ua !== "Перерва").map(s => s.subject.ua); } 
           
           if(hwSnap.exists()) {
-              const data = hwSnap.val();
-              const actualSubjects = Object.keys(data);
-              const allSubjectsToDisplay = [...new Set([...scheduleSubjects, ...actualSubjects])];
-              
+              const data = hwSnap.val(); const actualSubjects = Object.keys(data); const allSubjectsToDisplay = [...new Set([...scheduleSubjects, ...actualSubjects])];
               allSubjectsToDisplay.forEach(subj => {
                   if(data[subj]) hwList.innerHTML += `<li style="margin-bottom:5px;"><span style="color:#27ae60;">✅</span> <b>${subj}</b>: задано</li>`;
                   else hwList.innerHTML += `<li style="margin-bottom:5px;"><span style="color:#e74c3c;">❌</span> <span style="color:#888;">${subj}</span>: немає</li>`;
               });
-          } else {
-              hwList.innerHTML = '<li class="empty-msg">ДЗ взагалі не задано для цього класу на обраний день.</li>';
-          }
+          } else { hwList.innerHTML = '<li class="empty-msg">ДЗ взагалі не задано для цього класу на обраний день.</li>'; }
       }
   };
 
@@ -545,6 +591,7 @@
     set(ref(db, `pre_approved_roles/${email}`), role).then(() => { alert(`✅ Доступ надано!`); document.getElementById('new-staff-email').value = ''; });
   };
 
+  // --- ВЧИТЕЛЬ ---
   function listenTeacherAttendance() {
       const activeClass = getActiveClass(); const date = document.getElementById('global-date').value;
       if(teacherAttendanceListener) teacherAttendanceListener(); 
@@ -559,6 +606,12 @@
           } else { list.innerHTML = '<li class="empty-msg">Усі на місці. Повідомлень немає.</li>'; }
       });
   }
+
+  window.teacherMarkAbsent = function() {
+      const student = document.getElementById('t-mark-absent-student').value; const date = document.getElementById('global-date').value;
+      if(!student) return alert('Оберіть учня зі списку!');
+      set(ref(db, `attendance/${getActiveClass()}/${date}/${student}`), { status: 'absent', reason: 'Відмічено вчителем' }).then(() => { showToast(`✅ ${student} відмічений як відсутній.`); document.getElementById('t-mark-absent-student').value = ''; });
+  };
 
   window.loadTeacherDashboard = function() {
     const date = document.getElementById('global-date').value; const activeClass = getActiveClass(); const myUid = auth.currentUser.uid;
@@ -627,8 +680,74 @@
     statusMsg.style.color = "#2ed573"; statusMsg.innerText = "✅ Дані успішно збережено!"; btnSave.disabled = false; btnSave.innerText = "💾 Зберегти дані"; fileInput.value = ''; setTimeout(() => { statusMsg.style.display = 'none'; handleDateChange(); }, 2000);
   };
 
+  // --- БАТЬКИ: LIVE СТАТУС УРОКІВ ---
+  window.startParentLessonTimer = function() {
+      if(parentLessonInterval) clearInterval(parentLessonInterval);
+      
+      const classNum = currentUserData.class.split('_')[1];
+      document.getElementById('p-schedule-link').href = `https://planlekcjipush.netlify.app/class-${classNum}`;
+
+      function updateTimer() {
+          const now = new Date(); const dayName = dayKeys[now.getDay()]; const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+          if (!window.schedule || !window.schedule[dayName] || window.schedule[dayName].length === 0) {
+              document.getElementById('p-current-lesson').innerText = "Сьогодні немає уроків 🛌";
+              document.getElementById('p-lesson-countdown').innerText = "";
+              document.getElementById('p-lesson-progress').style.width = '0%';
+              return;
+          }
+
+          let currentEvent = null; let nextEvent = null;
+          const todaySchedule = window.schedule[dayName];
+          
+          for (let i = 0; i < todaySchedule.length; i++) {
+              const item = todaySchedule[i];
+              if(!item.time) continue;
+              const [startStr, endStr] = item.time.split('-');
+              const startMin = parseInt(startStr.split(':')[0]) * 60 + parseInt(startStr.split(':')[1]);
+              const endMin = parseInt(endStr.split(':')[0]) * 60 + parseInt(endStr.split(':')[1]);
+
+              if (currentMinutes >= startMin && currentMinutes < endMin) { currentEvent = { ...item, startMin, endMin }; break; } 
+              else if (currentMinutes < startMin && !nextEvent) { nextEvent = { ...item, startMin }; }
+          }
+
+          if (currentEvent) {
+              const totalDuration = currentEvent.endMin - currentEvent.startMin; const elapsed = currentMinutes - currentEvent.startMin;
+              const percent = (elapsed / totalDuration) * 100; const leftMinutes = currentEvent.endMin - currentMinutes;
+              let title = currentEvent.subject.ua; if (title === "Перерва") title = "☕ Перерва"; else title = `📚 ${title}`;
+              
+              document.getElementById('p-current-lesson').innerText = title;
+              document.getElementById('p-lesson-progress').style.width = `${percent}%`;
+              document.getElementById('p-lesson-countdown').innerText = `Залишилось: ${leftMinutes} хв.`;
+          } else if (nextEvent) {
+              const startsIn = nextEvent.startMin - currentMinutes;
+              document.getElementById('p-current-lesson').innerText = "Очікуємо початок ⏳";
+              document.getElementById('p-lesson-progress').style.width = `0%`;
+              document.getElementById('p-lesson-countdown').innerText = `Наступний урок через: ${startsIn} хв.`;
+          } else {
+              document.getElementById('p-current-lesson').innerText = "Уроки завершились 🎒";
+              document.getElementById('p-lesson-progress').style.width = `100%`;
+              document.getElementById('p-lesson-countdown').innerText = "До завтра!";
+          }
+      }
+      
+      updateTimer();
+      parentLessonInterval = setInterval(updateTimer, 60000); // Оновлення раз на хвилину
+  };
+
   window.loadParentDashboard = function() {
     if (!currentUserData) return; const date = document.getElementById('global-date').value; const activeClass = getActiveClass();
+    
+    // Перевірка, чи не вихідний
+    const dateObj = new Date(date);
+    if(dateObj.toDateString() === new Date().toDateString() && window.schedule) {
+        startParentLessonTimer();
+    } else {
+        if(parentLessonInterval) clearInterval(parentLessonInterval);
+        document.getElementById('p-current-lesson').innerText = "Режим історії";
+        document.getElementById('p-lesson-countdown').innerText = "Перегляд обраної дати";
+        document.getElementById('p-lesson-progress').style.width = '0%';
+    }
     
     get(child(ref(db), `attendance/${activeClass}/${date}/${currentUserData.studentName}`)).then(snap => {
         const statusEl = document.getElementById('p-att-status');
@@ -721,12 +840,11 @@
   function initUserSession() {
     document.getElementById('calendar-block').style.display = 'block';
     if (currentUserData.role === 'director') {
-      document.getElementById('director-screen').style.display = 'block';
-      document.getElementById('teacher-class-selector-box').style.display = 'none';
-      loadDirectorDashboard();
+      document.getElementById('director-screen').style.display = 'block'; document.getElementById('teacher-class-selector-box').style.display = 'none'; loadDirectorDashboard();
+    } else if (currentUserData.role === 'administrator') {
+      document.getElementById('admin-screen').style.display = 'block'; document.getElementById('teacher-class-selector-box').style.display = 'none'; loadAdminDashboard();
     } else if (currentUserData.role === 'teacher') {
-      document.getElementById('teacher-screen').style.display = 'block';
-      document.getElementById('teacher-class-selector-box').style.display = 'block';
+      document.getElementById('teacher-screen').style.display = 'block'; document.getElementById('teacher-class-selector-box').style.display = 'block';
       if(currentUserData.defaultClass) document.getElementById('t-class-selector').value = currentUserData.defaultClass;
       window.handleClassChange(); 
     } else {
@@ -738,12 +856,16 @@
   }
 
   window.loginUser = function() { signInWithEmailAndPassword(auth, document.getElementById('email').value.trim(), document.getElementById('pass').value.trim()).catch(e => { document.getElementById('login-error').innerText = "Помилка входу."; document.getElementById('login-error').style.display = 'block'; }); };
-  window.logoutUser = function() { if(teacherAttendanceListener) teacherAttendanceListener(); if(pushNotificationListener) pushNotificationListener(); signOut(auth); };
+  window.logoutUser = function() { if(teacherAttendanceListener) teacherAttendanceListener(); if(pushNotificationListener) pushNotificationListener(); if(parentLessonInterval) clearInterval(parentLessonInterval); signOut(auth); };
 
   window.loadStudentsList = function() {
     get(child(ref(db), `students_list/${getActiveClass()}`)).then((snapshot) => {
-      const select = document.getElementById('t-student'); select.innerHTML = '<option value="">Оберіть учня...</option>';
-      if (snapshot.exists()) Object.values(snapshot.val()).forEach(name => { const opt = document.createElement('option'); opt.value = name; opt.innerText = name; select.appendChild(opt); });
+      const selectStudent = document.getElementById('t-student'); const selectAbsent = document.getElementById('t-mark-absent-student');
+      selectStudent.innerHTML = '<option value="">Оберіть учня...</option>'; selectAbsent.innerHTML = '<option value="">Оберіть учня...</option>';
+      if (snapshot.exists()) Object.values(snapshot.val()).forEach(name => { 
+          const opt1 = document.createElement('option'); opt1.value = name; opt1.innerText = name; selectStudent.appendChild(opt1); 
+          const opt2 = document.createElement('option'); opt2.value = name; opt2.innerText = name; selectAbsent.appendChild(opt2); 
+      });
     });
   };
   window.addStudent = function() { const name = document.getElementById('new-student-name').value.trim(); if (name) push(ref(db, `students_list/${getActiveClass()}`), name).then(() => { alert("Учня додано!"); loadStudentsList(); document.getElementById('new-student-name').value = ''; }); };
