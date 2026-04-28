@@ -185,6 +185,7 @@
       <div style="margin-top: 15px;">
         <input type="email" id="new-staff-email" placeholder="Email співробітника">
         <select id="new-staff-role" style="margin-top: 10px;">
+            <option value="teacher">Роль: Вчитель</option>
             <option value="director">Роль: Директор</option>
             <option value="administrator">Роль: Адміністратор</option>
         </select>
@@ -350,12 +351,31 @@
     return currentUserData ? currentUserData.class : 'class_2'; 
   }
 
+  // ОНОВЛЕНА ФУНКЦІЯ: Анти-кеш для коректного завантаження
   function loadScheduleScript(classId, callback) {
-    const scriptId = 'dynamic-schedule-script'; let oldScript = document.getElementById(scriptId); if (oldScript) oldScript.remove();
+    const scriptId = 'dynamic-schedule-script'; 
+    let oldScript = document.getElementById(scriptId); 
+    if (oldScript) oldScript.remove();
+    
     if(!classId) return;
-    const classNum = classId.split('_')[1]; window.schedule = null; 
-    const script = document.createElement('script'); script.id = scriptId; script.src = `schedule-class-${classNum}.js`; 
-    script.onload = () => { callback(); }; script.onerror = () => { callback(); }; document.head.appendChild(script);
+    
+    const classNum = classId.split('_')[1]; 
+    window.schedule = null; 
+    
+    const script = document.createElement('script'); 
+    script.id = scriptId; 
+    script.src = `schedule-class-${classNum}.js?t=${new Date().getTime()}`; 
+    
+    script.onload = () => { 
+        callback(); 
+    }; 
+    
+    script.onerror = () => { 
+        console.warn(`Файл schedule-class-${classNum}.js не знайдено.`);
+        callback(); 
+    }; 
+    
+    document.head.appendChild(script);
   }
 
   window.handleDateChange = function() {
@@ -375,7 +395,6 @@
     loadScheduleScript(activeClass, () => { handleDateChange(); });
   };
 
-  // ДИНАМІЧНЕ ЗАВАНТАЖЕННЯ ДЛЯ ДИРЕКТОРА
   window.loadDirectorMatrixSubjects = function() {
       const cls = document.getElementById('d-acc-class').value;
       const selectSubj = document.getElementById('d-acc-subjects');
@@ -437,7 +456,6 @@
     set(ref(db, `pre_approved_roles/${email}`), role).then(() => { alert(`✅ Доступ надано!`); document.getElementById('new-staff-email').value = ''; });
   };
 
-  // КАЛЕНДАР КОНТРОЛЬНИХ
   window.openExamsCalendar = function() {
       document.getElementById('exams-modal').style.display = 'flex';
       document.getElementById('exam-class-label').innerText = document.getElementById('t-class-selector').options[document.getElementById('t-class-selector').selectedIndex].text;
@@ -489,7 +507,6 @@
          let html = `<h4 style="margin-top:0; color:#d35400;">Контрольні на ${dStr.split('-').reverse().join('.')}</h4>`;
          html += `<ul style="padding-left:20px;">${listHtml || '<li>Жодної контрольної не заплановано</li>'}</ul>`;
          
-         // ДИНАМІЧНИЙ ЗБІР ВСІХ ПРЕДМЕТІВ КЛАСУ ДЛЯ КОНТРОЛЬНОЇ
          let allClassSubjects = new Set();
          if (window.schedule) {
             dayKeys.forEach(day => {
@@ -539,7 +556,6 @@
       });
   };
 
-  // ФІЛЬТРАЦІЯ ПРЕДМЕТІВ ЖУРНАЛУ (ТІЛЬКИ ЗА РОЗКЛАДОМ ДНЯ)
   function updateSubjectList() {
     const activeClass = getActiveClass();
     const allowed = teacherAccessMatrix[activeClass] || [];
@@ -559,7 +575,6 @@
     if(isAllAllowed) { finalSubjects = scheduleSubjects; } 
     else { finalSubjects = scheduleSubjects.filter(s => allowed.includes(s)); } 
 
-    // Додаємо предмети до випадаючого списку (тільки унікальні)
     [...new Set(finalSubjects)].forEach(subj => { 
         const opt = document.createElement('option'); opt.value = subj; opt.innerText = subj; select.appendChild(opt); 
     });
