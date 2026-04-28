@@ -379,7 +379,7 @@
     return currentUserData ? currentUserData.class : 'class_2'; 
   }
 
-  // ОНОВЛЕНА ФУНКЦІЯ: Анти-кеш для коректного завантаження
+  // ОНОВЛЕНА ФУНКЦІЯ: Анти-кеш БЕЗ type="module", щоб не ламати область видимості (scope)
   function loadScheduleScript(classId, callback) {
     if(!classId) return;
     
@@ -392,7 +392,6 @@
 
     const script = document.createElement('script');
     script.id = scriptId;
-    script.type = 'module'; // Ключове виправлення для уникнення помилки const
     script.src = `schedule-class-${classNum}.js?t=${new Date().getTime()}`;
     
     script.onload = () => { if(callback) callback(); };
@@ -894,6 +893,32 @@
       } else reactionsList.innerHTML = '<li class="empty-msg">Реакцій немає.</li>';
     });
   };
+
+  function updateCurrentLesson() {
+      if(!window.schedule) {
+          const display = document.getElementById('p-current-lesson');
+          if (display) display.innerText = "Уроків немає (розклад не знайдено)";
+          const progress = document.getElementById('p-lesson-progress');
+          if (progress) progress.style.width = '0%';
+          const count = document.getElementById('p-lesson-countdown');
+          if (count) count.innerText = "";
+          return;
+      }
+      const now = new Date(); const dayName = dayKeys[now.getDay()]; const currentTime = now.getHours() * 60 + now.getMinutes();
+      const lessons = window.schedule[dayName] || [];
+      let current = lessons.find(l => currentTime >= l.start && currentTime < l.end);
+      const display = document.getElementById('p-current-lesson');
+      const progress = document.getElementById('p-lesson-progress');
+      const count = document.getElementById('p-lesson-countdown');
+      if(current) {
+          display.innerText = current.subject.ua;
+          let perc = ((currentTime - current.start) / (current.end - current.start)) * 100;
+          progress.style.width = perc + '%';
+          count.innerText = `Залишилось: ${current.end - currentTime} хв`;
+      } else {
+          display.innerText = "Уроків немає"; progress.style.width = '0%'; count.innerText = "";
+      }
+  }
 
   window.loadParentDashboard = function() {
     if (!currentUserData) return; const date = document.getElementById('global-date').value; const activeClass = getActiveClass();
