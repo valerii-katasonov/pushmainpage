@@ -163,7 +163,7 @@
         <p style="font-size: 0.85rem; color: #555;">Призначте, які класи та предмети бачитиме вчитель.</p>
         <input type="email" id="d-acc-email" placeholder="Email вчителя">
         
-        <select id="d-acc-class" style="margin-top: 10px;">
+        <select id="d-acc-class" style="margin-top: 10px;" onchange="loadDirectorMatrixSubjects()">
             <option value="">-- Оберіть клас для призначення --</option>
             <option value="class_1">1 Клас</option><option value="class_2">2 Клас</option><option value="class_3">3 Клас</option>
             <option value="class_4">4 Клас</option><option value="class_5">5 Клас</option><option value="class_6">6 Клас</option>
@@ -173,14 +173,7 @@
         
         <label style="margin-top:15px;">Дозволені предмети (затисніть Ctrl/Cmd для вибору декількох):</label>
         <select id="d-acc-subjects" multiple style="height: 150px; margin-top: 5px;">
-            <option value="Всі предмети" style="font-weight:bold; color:#d35400;">🌟 Дозволити всі предмети</option>
-            <option value="Українська мова">Українська мова</option><option value="Математика">Математика</option>
-            <option value="Читання">Читання</option><option value="Англійська мова">Англійська мова</option>
-            <option value="Я досліджую світ">Я досліджую світ</option><option value="Інформатика">Інформатика</option>
-            <option value="Мистецтво">Мистецтво</option><option value="Фізична культура">Фізична культура</option>
-            <option value="Історія">Історія</option><option value="Біологія">Біологія</option>
-            <option value="Географія">Географія</option><option value="Фізика">Фізика</option>
-            <option value="Хімія">Хімія</option><option value="Зарубіжна література">Зарубіжна література</option>
+            <option value="" disabled>Спочатку оберіть клас...</option>
         </select>
         
         <button style="background: #00838f; padding: 12px; margin-top: 15px; color: white;" onclick="grantTeacherAccess()">💾 Зберегти права доступу</button>
@@ -341,7 +334,7 @@
   let currentUserData = null; let currentHwImages = []; let teacherAttendanceListener = null; let parentLessonInterval = null;
   const dayKeys = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
   const defaultSubjects = ["Українська мова", "Математика", "Читання", "Англійська мова", "Я досліджую світ", "Інформатика", "Мистецтво", "Фізична культура", "Історія", "Біологія", "Географія", "Фізика", "Хімія"];
-  let teacherAccessMatrix = {}; // Права учителя на классы и предметы
+  let teacherAccessMatrix = {}; 
 
   const today = new Date();
   const localDateString = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
@@ -383,7 +376,48 @@
     loadScheduleScript(activeClass, () => { handleDateChange(); });
   };
 
-  // --- МАТРИЦА ДОСТУПА УЧИТЕЛЯ (Директор) ---
+  // ФИКС: Динамическая загрузка предметов для Директора при назначении матрицы доступов
+  window.loadDirectorMatrixSubjects = function() {
+      const cls = document.getElementById('d-acc-class').value;
+      const selectSubj = document.getElementById('d-acc-subjects');
+      
+      if(!cls) {
+          selectSubj.innerHTML = '<option value="" disabled>Спочатку оберіть клас...</option>';
+          return;
+      }
+      
+      selectSubj.innerHTML = '<option value="" disabled>Завантаження предметів...</option>';
+
+      loadScheduleScript(cls, () => {
+          let uniqueSubjects = new Set();
+          
+          if (window.schedule) {
+              dayKeys.forEach(day => {
+                  if(window.schedule[day]) {
+                      window.schedule[day].forEach(item => {
+                          if(item.subject && item.subject.ua && item.subject.ua !== "Перерва" && item.number !== " ") {
+                              uniqueSubjects.add(item.subject.ua);
+                          }
+                      });
+                  }
+              });
+          }
+          
+          selectSubj.innerHTML = '<option value="Всі предмети" style="font-weight:bold; color:#d35400;">🌟 Дозволити всі предмети</option>';
+          
+          if(uniqueSubjects.size > 0) {
+              [...uniqueSubjects].sort().forEach(subj => {
+                  selectSubj.innerHTML += `<option value="${subj}">${subj}</option>`;
+              });
+          } else {
+              // Если файл пустой или не найден, используем стандартный список как fallback
+              defaultSubjects.forEach(subj => { 
+                  selectSubj.innerHTML += `<option value="${subj}">${subj}</option>`; 
+              });
+          }
+      });
+  };
+
   window.grantTeacherAccess = function() {
       const email = document.getElementById('d-acc-email').value.trim().replace(/\./g, '_');
       const cls = document.getElementById('d-acc-class').value;
@@ -397,6 +431,7 @@
           alert('✅ Доступ збережено!');
           document.getElementById('d-acc-email').value = '';
           document.getElementById('d-acc-class').value = '';
+          document.getElementById('d-acc-subjects').innerHTML = '<option value="" disabled>Спочатку оберіть клас...</option>';
       });
   };
 
@@ -406,7 +441,6 @@
     set(ref(db, `pre_approved_roles/${email}`), role).then(() => { alert(`✅ Доступ надано!`); document.getElementById('new-staff-email').value = ''; });
   };
 
-  // --- КАЛЕНДАРЬ КОНТРОЛЬНЫХ (Учитель) ---
   window.openExamsCalendar = function() {
       document.getElementById('exams-modal').style.display = 'flex';
       document.getElementById('exam-class-label').innerText = document.getElementById('t-class-selector').options[document.getElementById('t-class-selector').selectedIndex].text;
@@ -429,7 +463,7 @@
           let firstDay = new Date(y, parseInt(m)-1, 1).getDay();
           if(firstDay === 0) firstDay = 7; 
           
-          for(let i=1; i<firstDay; i++) html += `<div></div>`; // пустые ячейки
+          for(let i=1; i<firstDay; i++) html += `<div></div>`; 
 
           for(let i=1; i<=daysInMonth; i++) {
               const checkDate = `${y}-${m}-${String(i).padStart(2,'0')}`;
@@ -458,7 +492,6 @@
          let html = `<h4 style="margin-top:0; color:#d35400;">Контрольні на ${dStr.split('-').reverse().join('.')}</h4>`;
          html += `<ul style="padding-left:20px;">${listHtml || '<li>Жодної контрольної не заплановано</li>'}</ul>`;
          
-         // Выбор только разрешенных предметов
          let subjOpts = Array.from(document.getElementById('t-subject').options).map(o => `<option value="${o.value}">${o.text}</option>`).join('');
          html += `<div style="margin-top:15px; display:flex; gap:10px;"><select id="exam-add-subj" style="flex:1;">${subjOpts}</select><button style="background:#27ae60; color:white; width:auto; padding:10px;" onclick="addExam('${dStr}')">Додати</button></div>`;
          
@@ -486,7 +519,6 @@
       });
   };
 
-  // --- УЧИТЕЛЬ: Дозволені предмети ---
   function updateSubjectList() {
     const activeClass = getActiveClass();
     const allowed = teacherAccessMatrix[activeClass] || [];
@@ -503,20 +535,18 @@
     let finalSubjects = [];
 
     if(isAllAllowed) { finalSubjects = scheduleSubjects; } 
-    else { finalSubjects = scheduleSubjects.filter(s => allowed.includes(s)); } // Перетин розкладу та дозволених
+    else { finalSubjects = scheduleSubjects.filter(s => allowed.includes(s)); } 
 
-    // Якщо за розкладом нічого немає, але вчитель хоче поставити, даємо йому його предмети
     if(finalSubjects.length === 0 && !isAllAllowed) finalSubjects = allowed; 
     
     [...new Set(finalSubjects)].forEach(subj => { const opt = document.createElement('option'); opt.value = subj; opt.innerText = subj; select.appendChild(opt); });
   }
 
-  // --- УЧИТЕЛЬ: Привязка нескольких родителей ---
   window.linkParent = function() { 
       const email = document.getElementById('parent-email').value.trim().replace(/\./g, '_'); 
       const student = document.getElementById('t-student').value; 
       const activeClass = getActiveClass(); 
-      const role = document.getElementById('t-parent-role').value; // НОВОЕ
+      const role = document.getElementById('t-parent-role').value; 
 
       if (email && student) { 
           set(ref(db, `parent_links/${email}`), { studentName: student, class: activeClass, role: role }).then(() => { 
@@ -526,8 +556,6 @@
       } else alert("Оберіть учня та введіть Email"); 
   };
 
-
-  // --- ІНІЦІАЛІЗАЦІЯ СЕСІЇ ТА АВТОРИЗАЦІЯ ---
   onAuthStateChanged(auth, (user) => {
     document.querySelectorAll('.panel').forEach(p => p.style.display = 'none'); document.getElementById('calendar-block').style.display = 'none';
     if (user) {
@@ -565,7 +593,6 @@
       if(snap.exists()) {
           teacherAccessMatrix = snap.val();
       } else {
-          // Fallback если директор не назначил матрицу
           teacherAccessMatrix = { "class_1":["Всі предмети"],"class_2":["Всі предмети"] }; 
       }
   }
@@ -580,7 +607,6 @@
     } else if (currentUserData.role === 'teacher') {
       document.getElementById('teacher-screen').style.display = 'block'; document.getElementById('teacher-class-selector-box').style.display = 'block';
       
-      // Заповнюємо випадаючий список класів тільки ТИМИ, що є в матриці доступу
       const classSelect = document.getElementById('t-class-selector');
       classSelect.innerHTML = '';
       Object.keys(teacherAccessMatrix).forEach(cls => {
@@ -597,7 +623,6 @@
       document.getElementById('parent-screen').style.display = 'block';
       const classNum = currentUserData.class.replace('class_', '');
       
-      // НОВОЕ: Динамический заголовок роли
       let roleDisplay = "батьків";
       if(currentUserData.parentRole === 'mother') roleDisplay = "матері";
       if(currentUserData.parentRole === 'father') roleDisplay = "батька";
@@ -608,7 +633,6 @@
     }
   }
 
-  // --- БАЗОВЫЕ ФУНКЦИИ (Сохранены из предыдущей версии) ---
   window.loginUser = function() { signInWithEmailAndPassword(auth, document.getElementById('email').value.trim(), document.getElementById('pass').value.trim()).catch(e => { document.getElementById('login-error').innerText = "Помилка входу."; document.getElementById('login-error').style.display = 'block'; }); };
   window.logoutUser = function() { if(teacherAttendanceListener) teacherAttendanceListener(); if(parentLessonInterval) clearInterval(parentLessonInterval); signOut(auth); };
 
@@ -624,14 +648,12 @@
   };
   window.addStudent = function() { const name = document.getElementById('new-student-name').value.trim(); if (name) push(ref(db, `students_list/${getActiveClass()}`), name).then(() => { alert("Учня додано!"); loadStudentsList(); document.getElementById('new-student-name').value = ''; }); };
 
-  // Учитель: Отметить отсутствующим
   window.teacherMarkAbsent = function() {
       const student = document.getElementById('t-mark-absent-student').value; const date = document.getElementById('global-date').value;
       if(!student) return alert('Оберіть учня зі списку!');
       set(ref(db, `attendance/${getActiveClass()}/${date}/${student}`), { status: 'absent', reason: 'Відмічено вчителем' }).then(() => { showToast(`✅ ${student} відмічений як відсутній.`); document.getElementById('t-mark-absent-student').value = ''; });
   };
 
-  // Учитель: Слушатель посещаемости
   function listenTeacherAttendance() {
       const activeClass = getActiveClass(); const date = document.getElementById('global-date').value;
       if(teacherAttendanceListener) teacherAttendanceListener(); 
@@ -647,14 +669,12 @@
       });
   }
 
-  // Отрисовка ДЗ
   function renderHwItem(subject, data) {
     let text = typeof data === 'string' ? data : data.text; let imgHtml = '';
     if (typeof data === 'object') { imgHtml += '<div class="gallery">'; if (data.image && typeof data.image === 'string') imgHtml += `<a href="${data.image}" target="_blank"><img src="${data.image}" class="hw-image-thumb"></a>`; if (data.images && Array.isArray(data.images)) data.images.forEach(img => imgHtml += `<a href="${img}" target="_blank"><img src="${img}" class="hw-image-thumb"></a>`); imgHtml += '</div>'; }
     return `<li><b>${subject}:</b> ${text} ${imgHtml}</li>`;
   }
 
-  // Сохранение ДЗ
   window.saveData = async function() {
     const date = document.getElementById('global-date').value; const subject = document.getElementById('t-subject').value; const student = document.getElementById('t-student').value;
     const hwText = document.getElementById('t-hw').value.trim(); const comment = document.getElementById('t-comment').value.trim(); const stickerChecked = document.getElementById('t-sticker').checked;
@@ -692,7 +712,6 @@
     if (student) get(child(ref(db), `stickers/${activeClass}/${student}/${date}_${subject}`)).then(snap => { document.getElementById('t-sticker').checked = (snap.exists() && snap.val() === true); });
   };
 
-  // Отрисовка Дашбордов Директора и Родителя (Базовая)
   window.loadAdminDashboard = async function() {
       try {
           const date = document.getElementById('global-date').value; const dateParts = date.split('-');
