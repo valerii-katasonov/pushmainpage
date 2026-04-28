@@ -1,9 +1,3 @@
-    <div class="data-card" style="border-left-color: #f1c40f; background: #fffcf0; text-align: center;">
-      <h4 style="margin-top:0; color: #f39c12; font-size: 1.1rem;">🌟 Прогрес наліпок</h4>
-      <div class="progress-bar-container"><div id="p-ribbon-progress" class="progress-bar"></div></div>
-      <p id="p-ribbon-count" style="font-size: 1.2rem; font-weight: bold; color: #d35400; margin: 15px 0 5px 0;">Завантаження...</p>
-    </div>
-
 <!DOCTYPE html>
 <html lang="uk">
 <head>
@@ -216,7 +210,13 @@
         <select id="t-mark-absent-student" style="flex:1; margin-top:0; border: 1px solid #f5b7b1;">
             <option value="">Оберіть учня...</option>
         </select>
-        <button onclick="teacherMarkAbsent()" style="margin-top:0; background:#e74c3c; color:white; width:auto; padding: 10px 15px; font-size:0.9rem;">Відсутній</button>
+        <select id="t-mark-absent-reason" style="flex:1; margin-top:0; border: 1px solid #f5b7b1;">
+            <option value="Відмічено вчителем">Без поважної причини</option>
+            <option value="через хворобу">Через хворобу</option>
+            <option value="за сімейними обставинами">За сімейними обставинами</option>
+            <option value="запізнення">Запізнення</option>
+        </select>
+        <button onclick="teacherMarkAbsent()" style="margin-top:0; background:#e74c3c; color:white; width:auto; padding: 10px 15px; font-size:0.9rem;">Відмітити</button>
       </div>
     </div>
 
@@ -299,6 +299,12 @@
       </div>
       <button onclick="submitAttendance()" style="background: #c0392b; padding:12px; color:white; margin-top: 15px;">Відправити сповіщення</button>
       <p id="p-att-status" style="font-size: 0.85rem; color: #27ae60; font-weight: bold; margin-top: 10px; display: none;">✅ Сповіщення надіслано!</p>
+    </div>
+
+    <div class="data-card" style="border-left-color: #f1c40f; background: #fffcf0; text-align: center;">
+      <h4 style="margin-top:0; color: #f39c12; font-size: 1.1rem;">🌟 Прогрес наліпок</h4>
+      <div class="progress-bar-container"><div id="p-ribbon-progress" class="progress-bar"></div></div>
+      <p id="p-ribbon-count" style="font-size: 1.2rem; font-weight: bold; color: #d35400; margin: 15px 0 5px 0;">Завантаження...</p>
     </div>
 
     <div class="data-card" style="border-left-color: #00b894; background: #f0fff4;">
