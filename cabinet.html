@@ -210,7 +210,19 @@
         <select id="t-mark-absent-student" style="flex:1; margin-top:0; border: 1px solid #f5b7b1;">
             <option value="">Оберіть учня...</option>
         </select>
-        <button onclick="teacherMarkAbsent()" style="margin-top:0; background:#e74c3c; color:white; width:auto; padding: 10px 15px; font-size:0.9rem;">Відсутній</button>
+    <select id="t-mark-absent-reason" style="flex:1; margin-top:0; border: 1px solid #f5b7b1;">
+        <option value="Відмічено вчителем">Без поважної причини</option>
+        <option value="через хворобу">Через хворобу</option>
+        <option value="за сімейними обставинами">За сімейними обставинами</option>
+        <option value="запізнення">Запізнення</option>
+    </select>
+    <select id="t-mark-absent-reason" style="flex:1; margin-top:0; border: 1px solid #f5b7b1;">
+        <option value="Відмічено вчителем">Без поважної причини</option>
+        <option value="через хворобу">Через хворобу</option>
+        <option value="за сімейними обставинами">За сімейними обставинами</option>
+        <option value="запізнення">Запізнення</option>
+    </select>
+    <button onclick="teacherMarkAbsent()" style="margin-top:0; background:#e74c3c; color:white; width:auto; padding: 10px 15px; font-size:0.9rem;">Відмітити</button>
       </div>
     </div>
 
@@ -353,29 +365,24 @@
 
   // ОНОВЛЕНА ФУНКЦІЯ: Анти-кеш для коректного завантаження
   function loadScheduleScript(classId, callback) {
-    const scriptId = 'dynamic-schedule-script'; 
-    let oldScript = document.getElementById(scriptId); 
-    if (oldScript) oldScript.remove();
-    
     if(!classId) return;
     
     const classNum = classId.split('_')[1]; 
     window.schedule = null; 
     
-    const script = document.createElement('script'); 
-    script.id = scriptId; 
-    script.src = `schedule-class-${classNum}.js?t=${new Date().getTime()}`; 
-    
-    script.onload = () => { 
-        callback(); 
-    }; 
-    
-    script.onerror = () => { 
-        console.warn(`Файл schedule-class-${classNum}.js не знайдено.`);
-        callback(); 
-    }; 
-    
-    document.head.appendChild(script);
+    fetch(`schedule-class-${classNum}.js?t=${new Date().getTime()}`)
+      .then(res => { if(!res.ok) throw new Error(); return res.text(); })
+      .then(code => {
+          const script = document.createElement('script');
+          script.textContent = `(() => { ${code} })();`;
+          document.head.appendChild(script);
+          script.remove();
+          callback();
+      })
+      .catch(e => {
+          console.warn(`Файл schedule-class-${classNum}.js не знайдено.`);
+          callback();
+      });
   }
 
   window.handleDateChange = function() {
@@ -664,6 +671,8 @@
     } else {
       document.getElementById('parent-screen').style.display = 'block';
       const classNum = currentUserData.class.replace('class_', '');
+      document.getElementById('p-schedule-link').href = `https://planlekcjipush.netlify.app/class-${classNum}`;
+      document.getElementById('p-schedule-link').href = `https://planlekcjipush.netlify.app/class-${classNum}`;
       
       let roleDisplay = "батьків";
       if(currentUserData.parentRole === 'mother') roleDisplay = "матері";
@@ -691,9 +700,12 @@
   window.addStudent = function() { const name = document.getElementById('new-student-name').value.trim(); if (name) push(ref(db, `students_list/${getActiveClass()}`), name).then(() => { alert("Учня додано!"); loadStudentsList(); document.getElementById('new-student-name').value = ''; }); };
 
   window.teacherMarkAbsent = function() {
-      const student = document.getElementById('t-mark-absent-student').value; const date = document.getElementById('global-date').value;
+      const student = document.getElementById('t-mark-absent-student').value; 
+      const reason = document.getElementById('t-mark-absent-reason').value;
+      const date = document.getElementById('global-date').value;
       if(!student) return alert('Оберіть учня зі списку!');
-      set(ref(db, `attendance/${getActiveClass()}/${date}/${student}`), { status: 'absent', reason: 'Відмічено вчителем' }).then(() => { showToast(`✅ ${student} відмічений як відсутній.`); document.getElementById('t-mark-absent-student').value = ''; });
+      const status = reason === 'запізнення' ? 'late' : 'absent';
+      set(ref(db, `attendance/${getActiveClass()}/${date}/${student}`), { status: status, reason: reason }).then(() => { showToast(`✅ ${student} відмічений.`); document.getElementById('t-mark-absent-student').value = ''; });
   };
 
   function listenTeacherAttendance() {
@@ -868,9 +880,131 @@
     });
   };
 
+  function updateCurrentLesson() {
+      if(!window.schedule) return;
+      const dateStr = document.getElementById('global-date').value;
+      const [y, m, d] = dateStr.split('-');
+      const dateVal = new Date(y, m-1, d);
+      const todayName = dayKeys[dateVal.getDay()];
+
+      const lessonEl = document.getElementById('p-current-lesson');
+      const progressEl = document.getElementById('p-lesson-progress');
+      const countdownEl = document.getElementById('p-lesson-countdown');
+
+      const realToday = new Date();
+      const isToday = (realToday.getFullYear() == y && realToday.getMonth() == m-1 && realToday.getDate() == d);
+
+      if(!isToday) { lessonEl.innerText = "Розклад на інший день"; progressEl.style.width = '0%'; countdownEl.innerText = ""; return; }
+
+      const daySchedule = window.schedule[todayName];
+      if(!daySchedule) { lessonEl.innerText = "Уроків немає"; progressEl.style.width = '0%'; countdownEl.innerText = ""; return; }
+
+      const now = new Date();
+      const currentMins = now.getHours() * 60 + now.getMinutes();
+      let currentItem = null; let nextItem = null;
+
+      for(let i=0; i<daySchedule.length; i++) {
+          const item = daySchedule[i];
+          if(!item.time) continue;
+          const [startStr, endStr] = item.time.split(' - ');
+          const startMins = parseInt(startStr.split(':')[0])*60 + parseInt(startStr.split(':')[1]);
+          const endMins = parseInt(endStr.split(':')[0])*60 + parseInt(endStr.split(':')[1]);
+
+          if(currentMins >= startMins && currentMins < endMins) { currentItem = { ...item, startMins, endMins }; break; }
+          if(currentMins < startMins && !nextItem) { nextItem = { ...item, startMins, endMins }; }
+      }
+
+      if(currentItem) {
+          const totalDur = currentItem.endMins - currentItem.startMins;
+          const passed = currentMins - currentItem.startMins;
+          const pct = Math.round((passed / totalDur) * 100);
+          lessonEl.innerText = currentItem.subject.ua || currentItem.subject;
+          progressEl.style.width = `${pct}%`;
+          countdownEl.innerText = `Залишилось: ${currentItem.endMins - currentMins} хв`;
+      } else if(nextItem) {
+          lessonEl.innerText = `Наступний: ${nextItem.subject.ua || nextItem.subject}`;
+          progressEl.style.width = '0%';
+          countdownEl.innerText = `Почнеться через: ${nextItem.startMins - currentMins} хв`;
+      } else {
+          lessonEl.innerText = "Уроки завершились";
+          progressEl.style.width = '100%';
+          countdownEl.innerText = "";
+      }
+  }
+
+  function updateCurrentLesson() {
+      if(!window.schedule) return;
+      const dateStr = document.getElementById('global-date').value;
+      const [y, m, d] = dateStr.split('-');
+      const dateVal = new Date(y, m-1, d);
+      const todayName = dayKeys[dateVal.getDay()];
+
+      const lessonEl = document.getElementById('p-current-lesson');
+      const progressEl = document.getElementById('p-lesson-progress');
+      const countdownEl = document.getElementById('p-lesson-countdown');
+
+      const realToday = new Date();
+      const isToday = (realToday.getFullYear() == y && realToday.getMonth() == m-1 && realToday.getDate() == d);
+
+      if(!isToday) { lessonEl.innerText = "Розклад на інший день"; progressEl.style.width = '0%'; countdownEl.innerText = ""; return; }
+
+      const daySchedule = window.schedule[todayName];
+      if(!daySchedule) { lessonEl.innerText = "Уроків немає"; progressEl.style.width = '0%'; countdownEl.innerText = ""; return; }
+
+      const now = new Date();
+      const currentMins = now.getHours() * 60 + now.getMinutes();
+      let currentItem = null; let nextItem = null;
+
+      for(let i=0; i<daySchedule.length; i++) {
+          const item = daySchedule[i];
+          if(!item.time) continue;
+          const [startStr, endStr] = item.time.split(' - ');
+          const startMins = parseInt(startStr.split(':')[0])*60 + parseInt(startStr.split(':')[1]);
+          const endMins = parseInt(endStr.split(':')[0])*60 + parseInt(endStr.split(':')[1]);
+
+          if(currentMins >= startMins && currentMins < endMins) { currentItem = { ...item, startMins, endMins }; break; }
+          if(currentMins < startMins && !nextItem) { nextItem = { ...item, startMins, endMins }; }
+      }
+
+      if(currentItem) {
+          const totalDur = currentItem.endMins - currentItem.startMins;
+          const passed = currentMins - currentItem.startMins;
+          const pct = Math.round((passed / totalDur) * 100);
+          lessonEl.innerText = currentItem.subject.ua || currentItem.subject;
+          progressEl.style.width = `${pct}%`;
+          countdownEl.innerText = `Залишилось: ${currentItem.endMins - currentMins} хв`;
+      } else if(nextItem) {
+          lessonEl.innerText = `Наступний: ${nextItem.subject.ua || nextItem.subject}`;
+          progressEl.style.width = '0%';
+          countdownEl.innerText = `Почнеться через: ${nextItem.startMins - currentMins} хв`;
+      } else {
+          lessonEl.innerText = "Уроки завершились";
+          progressEl.style.width = '100%';
+          countdownEl.innerText = "";
+      }
+  }
+
   window.loadParentDashboard = function() {
     if (!currentUserData) return; const date = document.getElementById('global-date').value; const activeClass = getActiveClass();
     
+    if(parentLessonInterval) clearInterval(parentLessonInterval);
+    updateCurrentLesson();
+    parentLessonInterval = setInterval(updateCurrentLesson, 60000);
+
+    get(child(ref(db), `stickers/${activeClass}/${currentUserData.studentName}`)).then(snap => {
+        let stickersCount = snap.exists() ? Object.keys(snap.val()).length : 0;
+        let stickersEl = document.getElementById('p-stickers-count');
+        if(!stickersEl) {
+            const container = document.getElementById('parent-welcome').nextElementSibling;
+            const stDiv = document.createElement('div');
+            stDiv.style = "background: #fff3cd; padding: 10px; border-radius: 12px; margin-bottom: 15px; text-align: center; border: 1px dashed #f39c12;";
+            stDiv.innerHTML = `<h4 style="margin:0; color: #d35400;">🌟 Зібрано наліпок: <span id="p-stickers-count" style="font-size:1.5rem; font-weight:800;">${stickersCount}</span></h4>`;
+            container.parentNode.insertBefore(stDiv, container);
+        } else {
+            stickersEl.innerText = stickersCount;
+        }
+    });
+
     get(child(ref(db), `attendance/${activeClass}/${date}/${currentUserData.studentName}`)).then(snap => {
         const statusEl = document.getElementById('p-att-status');
         if(snap.exists()) { const data = snap.val(); statusEl.innerText = `✅ Ви повідомили: ${data.status === 'late'?'Запізнення':'Відсутність'} (${data.reason})`; statusEl.style.display = 'block'; } else statusEl.style.display = 'none';
