@@ -379,7 +379,6 @@
     return currentUserData ? currentUserData.class : 'class_2'; 
   }
 
-  // ОНОВЛЕНА ФУНКЦІЯ: Анти-кеш БЕЗ type="module", щоб не ламати область видимості (scope)
   function loadScheduleScript(classId, callback) {
     if(!classId) return;
     
@@ -513,8 +512,10 @@
       });
   };
 
+  // ОНОВЛЕНА ФУНКЦІЯ: Рівні хрестики та предмети тільки на обраний день
   window.manageDayExams = function(dStr) {
-      const cls = getActiveClass(); const detailsDiv = document.getElementById('exams-day-details');
+      const cls = getActiveClass(); 
+      const detailsDiv = document.getElementById('exams-day-details');
       detailsDiv.style.display = 'block';
       
       get(child(ref(db), `exams/${cls}/${dStr.substring(0,7)}/${dStr}`)).then(snap => {
@@ -522,37 +523,44 @@
          let listHtml = '';
          for(let subj in exams) {
              const isMe = exams[subj] === auth.currentUser.uid;
-             const delBtn = isMe ? `<button onclick="deleteExam('${dStr}', '${subj}')" style="background:none; border:none; color:red; cursor:pointer; font-weight:bold;">✖</button>` : '';
-             listHtml += `<li style="margin-bottom:5px;"><b>${subj}</b> ${delBtn}</li>`;
+             // Використовуємо display: flex; щоб хрестик був чітко справа на тому ж рівні
+             const delBtn = isMe ? `<button onclick="deleteExam('${dStr}', '${subj}')" style="background:none; border:none; color:#e74c3c; cursor:pointer; font-weight:bold; padding:0 5px; width:auto; margin:0; font-size:1.2rem; line-height:1;" title="Видалити">✖</button>` : '';
+             listHtml += `<li style="margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; background:#fff; padding:8px 12px; border-radius:8px; border:1px solid #eee; box-shadow: 0 2px 4px rgba(0,0,0,0.02);"><span><b>${subj}</b></span> ${delBtn}</li>`;
          }
          
-         let html = `<h4 style="margin-top:0; color:#d35400;">Контрольні на ${dStr.split('-').reverse().join('.')}</h4>`;
-         html += `<ul style="padding-left:20px;">${listHtml || '<li>Жодної контрольної не заплановано</li>'}</ul>`;
+         let html = `<h4 style="margin-top:0; color:#d35400; border-bottom:1px dashed #f39c12; padding-bottom:10px;">Контрольні на ${dStr.split('-').reverse().join('.')}</h4>`;
+         html += `<ul style="padding-left:0; list-style:none; margin-bottom:15px;">${listHtml || '<li class="empty-msg">Жодної контрольної не заплановано</li>'}</ul>`;
          
-         let allClassSubjects = new Set();
-         if (window.schedule) {
-            dayKeys.forEach(day => {
-                if(window.schedule[day]) {
-                    window.schedule[day].forEach(item => {
-                        if(item.subject && item.subject.ua && item.subject.ua !== "Перерва" && item.number !== " ") {
-                            allClassSubjects.add(item.subject.ua);
-                        }
-                    });
-                }
-            });
+         // Визначаємо день тижня з обраної дати (dStr = YYYY-MM-DD)
+         const [y, m, d] = dStr.split('-');
+         const dateObj = new Date(y, m - 1, d);
+         const dayName = dayKeys[dateObj.getDay()];
+
+         let daySubjects = new Set();
+         // Фільтруємо предмети виключно з розкладу на ЦЕЙ день
+         if (window.schedule && window.schedule[dayName]) {
+             window.schedule[dayName].forEach(item => {
+                 if(item.subject && item.subject.ua && item.subject.ua !== "Перерва" && item.number !== " ") {
+                     daySubjects.add(item.subject.ua);
+                 }
+             });
          }
 
          const allowed = teacherAccessMatrix[cls] || [];
          const isAllAllowed = allowed.includes("Всі предмети");
 
          let finalExamSubjects = [];
-         if (isAllAllowed) { finalExamSubjects = [...allClassSubjects].sort(); } 
-         else { finalExamSubjects = allowed.sort(); }
+         if (isAllAllowed) { finalExamSubjects = [...daySubjects].sort(); } 
+         else { finalExamSubjects = [...daySubjects].filter(s => allowed.includes(s)).sort(); }
 
          let subjOpts = finalExamSubjects.map(s => `<option value="${s}">${s}</option>`).join('');
-         if(!subjOpts) subjOpts = '<option value="" disabled>Немає доступних предметів у розкладі</option>';
+         let btnDisabled = '';
+         if(!subjOpts) {
+             subjOpts = '<option value="" disabled>Немає предметів у розкладі на цей день</option>';
+             btnDisabled = 'disabled';
+         }
 
-         html += `<div style="margin-top:15px; display:flex; gap:10px;"><select id="exam-add-subj" style="flex:1;">${subjOpts}</select><button style="background:#27ae60; color:white; width:auto; padding:10px;" onclick="addExam('${dStr}')">Додати</button></div>`;
+         html += `<div style="display:flex; gap:10px;"><select id="exam-add-subj" style="flex:1; margin:0;">${subjOpts}</select><button style="background:#27ae60; color:white; width:auto; padding:10px 15px; margin:0;" onclick="addExam('${dStr}')" ${btnDisabled}>Додати</button></div>`;
          
          detailsDiv.innerHTML = html;
       });
