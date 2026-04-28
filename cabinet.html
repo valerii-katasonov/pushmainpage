@@ -358,19 +358,24 @@
     const classNum = classId.split('_')[1]; 
     window.schedule = null; 
     
-    fetch(`schedule-class-${classNum}.js?t=${new Date().getTime()}`)
-      .then(res => { if(!res.ok) throw new Error(); return res.text(); })
-      .then(code => {
-          const script = document.createElement('script');
-          script.textContent = `(() => { ${code} })();`;
-          document.head.appendChild(script);
-          script.remove();
-          callback();
-      })
-      .catch(e => {
-          console.warn(`Файл schedule-class-${classNum}.js не знайдено.`);
-          callback();
-      });
+    const iframeId = 'schedule-iframe';
+    let oldIframe = document.getElementById(iframeId);
+    if (oldIframe) oldIframe.remove();
+
+    const iframe = document.createElement('iframe');
+    iframe.id = iframeId;
+    iframe.style.display = 'none';
+    document.body.appendChild(iframe);
+
+    const script = iframe.contentDocument.createElement('script');
+    script.src = `schedule-class-${classNum}.js?t=${new Date().getTime()}`;
+    script.onload = () => {
+        window.schedule = iframe.contentWindow.schedule;
+        window.dayNames = iframe.contentWindow.dayNames;
+        callback();
+    };
+    script.onerror = () => { console.warn(`Файл schedule-class-${classNum}.js не знайдено.`); callback(); };
+    iframe.contentDocument.head.appendChild(script);
   }
 
   window.handleDateChange = function() {
@@ -659,6 +664,7 @@
     } else {
       document.getElementById('parent-screen').style.display = 'block';
       const classNum = currentUserData.class.replace('class_', '');
+      document.getElementById('p-schedule-link').href = `https://planlekcjipush.netlify.app/class-${classNum}`;
       
       let roleDisplay = "батьків";
       if(currentUserData.parentRole === 'mother') roleDisplay = "матері";
