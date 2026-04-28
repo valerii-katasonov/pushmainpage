@@ -210,19 +210,7 @@
         <select id="t-mark-absent-student" style="flex:1; margin-top:0; border: 1px solid #f5b7b1;">
             <option value="">Оберіть учня...</option>
         </select>
-    <select id="t-mark-absent-reason" style="flex:1; margin-top:0; border: 1px solid #f5b7b1;">
-        <option value="Відмічено вчителем">Без поважної причини</option>
-        <option value="через хворобу">Через хворобу</option>
-        <option value="за сімейними обставинами">За сімейними обставинами</option>
-        <option value="запізнення">Запізнення</option>
-    </select>
-    <select id="t-mark-absent-reason" style="flex:1; margin-top:0; border: 1px solid #f5b7b1;">
-        <option value="Відмічено вчителем">Без поважної причини</option>
-        <option value="через хворобу">Через хворобу</option>
-        <option value="за сімейними обставинами">За сімейними обставинами</option>
-        <option value="запізнення">Запізнення</option>
-    </select>
-    <button onclick="teacherMarkAbsent()" style="margin-top:0; background:#e74c3c; color:white; width:auto; padding: 10px 15px; font-size:0.9rem;">Відмітити</button>
+        <button onclick="teacherMarkAbsent()" style="margin-top:0; background:#e74c3c; color:white; width:auto; padding: 10px 15px; font-size:0.9rem;">Відсутній</button>
       </div>
     </div>
 
@@ -671,8 +659,6 @@
     } else {
       document.getElementById('parent-screen').style.display = 'block';
       const classNum = currentUserData.class.replace('class_', '');
-      document.getElementById('p-schedule-link').href = `https://planlekcjipush.netlify.app/class-${classNum}`;
-      document.getElementById('p-schedule-link').href = `https://planlekcjipush.netlify.app/class-${classNum}`;
       
       let roleDisplay = "батьків";
       if(currentUserData.parentRole === 'mother') roleDisplay = "матері";
@@ -879,110 +865,6 @@
       } else reactionsList.innerHTML = '<li class="empty-msg">Реакцій немає.</li>';
     });
   };
-
-  function updateCurrentLesson() {
-      if(!window.schedule) return;
-      const dateStr = document.getElementById('global-date').value;
-      const [y, m, d] = dateStr.split('-');
-      const dateVal = new Date(y, m-1, d);
-      const todayName = dayKeys[dateVal.getDay()];
-
-      const lessonEl = document.getElementById('p-current-lesson');
-      const progressEl = document.getElementById('p-lesson-progress');
-      const countdownEl = document.getElementById('p-lesson-countdown');
-
-      const realToday = new Date();
-      const isToday = (realToday.getFullYear() == y && realToday.getMonth() == m-1 && realToday.getDate() == d);
-
-      if(!isToday) { lessonEl.innerText = "Розклад на інший день"; progressEl.style.width = '0%'; countdownEl.innerText = ""; return; }
-
-      const daySchedule = window.schedule[todayName];
-      if(!daySchedule) { lessonEl.innerText = "Уроків немає"; progressEl.style.width = '0%'; countdownEl.innerText = ""; return; }
-
-      const now = new Date();
-      const currentMins = now.getHours() * 60 + now.getMinutes();
-      let currentItem = null; let nextItem = null;
-
-      for(let i=0; i<daySchedule.length; i++) {
-          const item = daySchedule[i];
-          if(!item.time) continue;
-          const [startStr, endStr] = item.time.split(' - ');
-          const startMins = parseInt(startStr.split(':')[0])*60 + parseInt(startStr.split(':')[1]);
-          const endMins = parseInt(endStr.split(':')[0])*60 + parseInt(endStr.split(':')[1]);
-
-          if(currentMins >= startMins && currentMins < endMins) { currentItem = { ...item, startMins, endMins }; break; }
-          if(currentMins < startMins && !nextItem) { nextItem = { ...item, startMins, endMins }; }
-      }
-
-      if(currentItem) {
-          const totalDur = currentItem.endMins - currentItem.startMins;
-          const passed = currentMins - currentItem.startMins;
-          const pct = Math.round((passed / totalDur) * 100);
-          lessonEl.innerText = currentItem.subject.ua || currentItem.subject;
-          progressEl.style.width = `${pct}%`;
-          countdownEl.innerText = `Залишилось: ${currentItem.endMins - currentMins} хв`;
-      } else if(nextItem) {
-          lessonEl.innerText = `Наступний: ${nextItem.subject.ua || nextItem.subject}`;
-          progressEl.style.width = '0%';
-          countdownEl.innerText = `Почнеться через: ${nextItem.startMins - currentMins} хв`;
-      } else {
-          lessonEl.innerText = "Уроки завершились";
-          progressEl.style.width = '100%';
-          countdownEl.innerText = "";
-      }
-  }
-
-  function updateCurrentLesson() {
-      if(!window.schedule) return;
-      const dateStr = document.getElementById('global-date').value;
-      const [y, m, d] = dateStr.split('-');
-      const dateVal = new Date(y, m-1, d);
-      const todayName = dayKeys[dateVal.getDay()];
-
-      const lessonEl = document.getElementById('p-current-lesson');
-      const progressEl = document.getElementById('p-lesson-progress');
-      const countdownEl = document.getElementById('p-lesson-countdown');
-
-      const realToday = new Date();
-      const isToday = (realToday.getFullYear() == y && realToday.getMonth() == m-1 && realToday.getDate() == d);
-
-      if(!isToday) { lessonEl.innerText = "Розклад на інший день"; progressEl.style.width = '0%'; countdownEl.innerText = ""; return; }
-
-      const daySchedule = window.schedule[todayName];
-      if(!daySchedule) { lessonEl.innerText = "Уроків немає"; progressEl.style.width = '0%'; countdownEl.innerText = ""; return; }
-
-      const now = new Date();
-      const currentMins = now.getHours() * 60 + now.getMinutes();
-      let currentItem = null; let nextItem = null;
-
-      for(let i=0; i<daySchedule.length; i++) {
-          const item = daySchedule[i];
-          if(!item.time) continue;
-          const [startStr, endStr] = item.time.split(' - ');
-          const startMins = parseInt(startStr.split(':')[0])*60 + parseInt(startStr.split(':')[1]);
-          const endMins = parseInt(endStr.split(':')[0])*60 + parseInt(endStr.split(':')[1]);
-
-          if(currentMins >= startMins && currentMins < endMins) { currentItem = { ...item, startMins, endMins }; break; }
-          if(currentMins < startMins && !nextItem) { nextItem = { ...item, startMins, endMins }; }
-      }
-
-      if(currentItem) {
-          const totalDur = currentItem.endMins - currentItem.startMins;
-          const passed = currentMins - currentItem.startMins;
-          const pct = Math.round((passed / totalDur) * 100);
-          lessonEl.innerText = currentItem.subject.ua || currentItem.subject;
-          progressEl.style.width = `${pct}%`;
-          countdownEl.innerText = `Залишилось: ${currentItem.endMins - currentMins} хв`;
-      } else if(nextItem) {
-          lessonEl.innerText = `Наступний: ${nextItem.subject.ua || nextItem.subject}`;
-          progressEl.style.width = '0%';
-          countdownEl.innerText = `Почнеться через: ${nextItem.startMins - currentMins} хв`;
-      } else {
-          lessonEl.innerText = "Уроки завершились";
-          progressEl.style.width = '100%';
-          countdownEl.innerText = "";
-      }
-  }
 
   window.loadParentDashboard = function() {
     if (!currentUserData) return; const date = document.getElementById('global-date').value; const activeClass = getActiveClass();
