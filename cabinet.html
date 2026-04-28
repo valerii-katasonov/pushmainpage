@@ -335,6 +335,20 @@
   </div>
 </div>
 
+<div id="wrapped-modal" class="modal-overlay">
+  <div class="modal-content">
+    <h2 style="color: #27ae60; margin-top:0;">🎉 Ваші підсумки!</h2>
+    <p style="color: #555;">Ось статистика роботи саме за вашими предметами у поточному класі:</p>
+    <ul style="list-style:none; padding:0; font-size:1.1rem; line-height:2.2; text-align: left; background: #f8f9fa; padding: 15px; border-radius: 12px;">
+      <li>📚 Завдань задано: <b id="w-hw" style="float: right; color: #2980b9;">0</b></li>
+      <li>📝 Коментарів: <b id="w-com" style="float: right; color: #8e44ad;">0</b></li>
+      <li>🌟 Наліпок видано: <b id="w-st" style="float: right; color: #f39c12;">0</b></li>
+    </ul>
+    <p style="font-weight: bold; color: #d35400; margin-top: 20px;">Ви робите неймовірну роботу! ❤️</p>
+    <button onclick="closeModal()" style="background: linear-gradient(135deg, #27ae60, #2ecc71); color:white; width: 100%; margin-top: 10px;">Дякую, я молодець!</button>
+  </div>
+</div>
+
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
   import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut, updatePassword } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
@@ -371,24 +385,19 @@
     const classNum = classId.split('_')[1]; 
     window.schedule = null; 
     
-    const iframeId = 'schedule-iframe';
-    let oldIframe = document.getElementById(iframeId);
-    if (oldIframe) oldIframe.remove();
-
-    const iframe = document.createElement('iframe');
-    iframe.id = iframeId;
-    iframe.style.display = 'none';
-    document.body.appendChild(iframe);
-
-    const script = iframe.contentDocument.createElement('script');
-    script.src = `schedule-class-${classNum}.js?t=${new Date().getTime()}`;
-    script.onload = () => {
-        window.schedule = iframe.contentWindow.schedule;
-        window.dayNames = iframe.contentWindow.dayNames;
-        callback();
-    };
-    script.onerror = () => { console.warn(`Файл schedule-class-${classNum}.js не знайдено.`); callback(); };
-    iframe.contentDocument.head.appendChild(script);
+    fetch(`schedule-class-${classNum}.js?t=${new Date().getTime()}`)
+      .then(res => { if(!res.ok) throw new Error(); return res.text(); })
+      .then(code => {
+          const script = document.createElement('script');
+          script.textContent = `(() => { ${code} })();`;
+          document.head.appendChild(script);
+          script.remove();
+          callback();
+      })
+      .catch(e => {
+          console.warn(`Файл schedule-class-${classNum}.js не знайдено.`);
+          callback();
+      });
   }
 
   window.handleDateChange = function() {
@@ -934,6 +943,20 @@
   };
 
   window.sendReaction = function(date, subject, emoji) { if (!currentUserData) return; set(ref(db, `reactions/${getActiveClass()}/${date}/${subject}/${currentUserData.studentName}`), emoji).then(() => loadParentDashboard()); };
+
+  window.showWeeklyWrapped = function() {
+    confetti({ particleCount: 200, spread: 90, origin: { y: 0.6 }, zIndex: 2000 }); 
+    document.getElementById('wrapped-modal').style.display = 'flex'; 
+    document.body.style.overflow = 'hidden'; 
+    const myUid = auth.currentUser.uid; const activeClass = getActiveClass();
+    Promise.all([ get(child(ref(db), `homeworks/${activeClass}`)), get(child(ref(db), `comments/${activeClass}`)), get(child(ref(db), `stickers/${activeClass}`)), get(child(ref(db), `authors/${activeClass}`)) ]).then(([hwSnap, comSnap, stSnap, authSnap]) => {
+      const authors = authSnap.exists() ? authSnap.val() : {};
+      let hwCount = 0; if (hwSnap.exists()) { const hw = hwSnap.val(); for(let d in hw) for(let subj in hw[d]) if (authors[d] && authors[d][subj] === myUid) hwCount++; } document.getElementById('w-hw').innerText = hwCount;
+      let comCount = 0; if (comSnap.exists()) { const com = comSnap.val(); for(let d in com) for(let subj in com[d]) if (authors[d] && authors[d][subj] === myUid) comCount += Object.keys(com[d][subj]).length; } document.getElementById('w-com').innerText = comCount;
+      let stCount = 0; if (stSnap.exists()) { const st = stSnap.val(); for (let student in st) for (let key in st[student]) { const [d, subj] = key.split('_'); if (authors[d] && authors[d][subj] === myUid) stCount++; } } document.getElementById('w-st').innerText = stCount;
+    });
+  };
+  window.closeModal = function() { document.getElementById('wrapped-modal').style.display = 'none'; document.body.style.overflow = ''; };
 </script>
 
 </body>
