@@ -385,19 +385,34 @@
     const classNum = classId.split('_')[1]; 
     window.schedule = null; 
     
-    fetch(`schedule-class-${classNum}.js?t=${new Date().getTime()}`)
-      .then(res => { if(!res.ok) throw new Error(); return res.text(); })
-      .then(code => {
-          const script = document.createElement('script');
-          script.textContent = `(() => { ${code} })();`;
-          document.head.appendChild(script);
-          script.remove();
-          callback();
-      })
-      .catch(e => {
-          console.warn(`Файл schedule-class-${classNum}.js не знайдено.`);
-          callback();
-      });
+    const iframeId = 'schedule-iframe';
+    let oldIframe = document.getElementById(iframeId);
+    if (oldIframe) oldIframe.remove();
+
+    const iframe = document.createElement('iframe');
+    iframe.id = iframeId;
+    iframe.style.display = 'none';
+    document.body.appendChild(iframe);
+
+    window.scheduleLoadedCallback = function() {
+        if(callback) callback();
+    };
+
+    const doc = iframe.contentWindow.document;
+    doc.open();
+    doc.write(`
+        <script>
+            function notifyParent() {
+                if(window.schedule) {
+                    window.parent.schedule = window.schedule;
+                    window.parent.dayNames = window.dayNames;
+                }
+                window.parent.scheduleLoadedCallback();
+            }
+        <\/script>
+        <script src="schedule-class-${classNum}.js?t=${new Date().getTime()}" onload="notifyParent()" onerror="notifyParent()"><\/script>
+    `);
+    doc.close();
   }
 
   window.handleDateChange = function() {
@@ -907,6 +922,8 @@
       document.getElementById('p-ribbon-progress').style.width = percent + '%'; 
       document.getElementById('p-ribbon-count').innerText = `${count} / ${STICKER_GOAL} наліпок`;
       if (percent === 100) confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 } });
+    }).catch(e => {
+      document.getElementById('p-ribbon-count').innerText = "Помилка завантаження";
     });
 
     get(child(ref(db), `attendance/${activeClass}/${date}/${currentUserData.studentName}`)).then(snap => {
