@@ -391,6 +391,7 @@
 
     const script = document.createElement('script');
     script.id = scriptId;
+    script.type = 'module';
     script.src = `schedule-class-${classNum}.js?t=${new Date().getTime()}`;
     
     script.onload = () => { if(callback) callback(); };
@@ -434,8 +435,9 @@
               dayKeys.forEach(day => {
                   if(window.schedule[day]) {
                       window.schedule[day].forEach(item => {
-                          if(item.subject && item.subject.ua && item.subject.ua !== "Перерва" && item.number !== " ") {
-                              uniqueSubjects.add(item.subject.ua);
+                          const subjName = item.subject && item.subject.ua ? item.subject.ua : item.subject;
+                          if(subjName && subjName !== "Перерва" && item.number !== " ") {
+                              uniqueSubjects.add(subjName);
                           }
                       });
                   }
@@ -540,8 +542,9 @@
          // Фільтруємо предмети виключно з розкладу на ЦЕЙ день
          if (window.schedule && window.schedule[dayName]) {
              window.schedule[dayName].forEach(item => {
-                 if(item.subject && item.subject.ua && item.subject.ua !== "Перерва" && item.number !== " ") {
-                     daySubjects.add(item.subject.ua);
+                 const subjName = item.subject && item.subject.ua ? item.subject.ua : item.subject;
+                 if(subjName && subjName !== "Перерва" && item.number !== " ") {
+                     daySubjects.add(subjName);
                  }
              });
          }
@@ -596,7 +599,7 @@
     
     let scheduleSubjects = [];
     if (window.schedule && window.schedule[dayName]) { 
-        scheduleSubjects = window.schedule[dayName].filter(s => s.number !== " " && s.subject.ua !== "Перерва").map(s => s.subject.ua); 
+        scheduleSubjects = window.schedule[dayName].filter(s => s.number !== " " && (s.subject.ua || s.subject) !== "Перерва").map(s => s.subject.ua || s.subject); 
     } 
 
     const select = document.getElementById('t-subject'); select.innerHTML = ''; 
@@ -868,7 +871,7 @@
           const hwSnap = await get(child(ref(db), `homeworks/${hwCls}/${date}`)); hwList.innerHTML = '';
           const [y, m, d] = date.split('-'); const dateVal = new Date(y, m-1, d); const dayName = dayKeys[dateVal.getDay()];
           let scheduleSubjects = [];
-          if (window.schedule && window.schedule[dayName]) { scheduleSubjects = window.schedule[dayName].filter(s => s.number !== " " && s.subject.ua !== "Перерва").map(s => s.subject.ua); } 
+          if (window.schedule && window.schedule[dayName]) { scheduleSubjects = window.schedule[dayName].filter(s => s.number !== " " && (s.subject.ua || s.subject) !== "Перерва").map(s => s.subject.ua || s.subject); } 
           
           if(hwSnap.exists()) {
               const data = hwSnap.val(); const actualSubjects = Object.keys(data); const allSubjectsToDisplay = [...new Set([...scheduleSubjects, ...actualSubjects])];
