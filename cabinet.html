@@ -95,7 +95,7 @@
       <label style="margin-top:0; color: #d35400; font-size: 1rem;">🏫 Оберіть свій клас:</label>
       <div style="display: flex; gap: 10px; align-items: center; margin-top: 5px;">
         <select id="t-class-selector" onchange="handleClassChange()" style="flex: 1; border: 2px solid #e67e22; color: #d35400; font-weight: bold; text-align: center; margin-top: 0;">
-          </select>
+        </select>
       </div>
     </div>
 
@@ -181,7 +181,7 @@
     </details>
 
     <details style="margin-top: 15px; background: #fff; padding: 15px; border-radius: 12px; border: 1px solid #ddd;">
-      <summary style="font-weight: bold; cursor: pointer; color: #c0392b;">⚙️ Управління персоналом (Директори/Адміни)</summary>
+      <summary style="font-weight: bold; cursor: pointer; color: #c0392b;">⚙️ Управління персоналом</summary>
       <div style="margin-top: 15px;">
         <input type="email" id="new-staff-email" placeholder="Email співробітника">
         <select id="new-staff-role" style="margin-top: 10px;">
@@ -230,7 +230,7 @@
     </div>
     
     <h3>✏️ Заповнення журналу</h3>
-    <label>Предмет (Дозволені вам):</label> <select id="t-subject" onchange="loadCurrentData()"></select>
+    <label>Предмет (Дозволені вам на цей день):</label> <select id="t-subject" onchange="loadCurrentData()"></select>
     <label>Домашнє завдання (для всього класу):</label> <textarea id="t-hw" rows="2" placeholder="Введіть ДЗ..."></textarea>
     <label>📸 Фото з підручника/зошита:</label> <input type="file" id="t-image" accept="image/*" multiple>
     <div id="existing-image-info">📎 Вже прикріплено фото.</div>
@@ -316,7 +316,7 @@
     <div id="exams-cal-container"></div>
     
     <div id="exams-day-details" style="margin-top: 20px; text-align: left; background: #fffcf0; padding: 15px; border-radius: 12px; border: 1px dashed #f39c12; display: none;">
-        </div>
+    </div>
 
     <button onclick="closeExamsModal()" style="background: #333; color:white; width: 100%; margin-top: 20px;">Закрити</button>
   </div>
@@ -333,7 +333,6 @@
 
   let currentUserData = null; let currentHwImages = []; let teacherAttendanceListener = null; let parentLessonInterval = null;
   const dayKeys = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-  const defaultSubjects = ["Українська мова", "Математика", "Читання", "Англійська мова", "Я досліджую світ", "Інформатика", "Мистецтво", "Фізична культура", "Історія", "Біологія", "Географія", "Фізика", "Хімія"];
   let teacherAccessMatrix = {}; 
 
   const today = new Date();
@@ -376,7 +375,7 @@
     loadScheduleScript(activeClass, () => { handleDateChange(); });
   };
 
-  // ФИКС: Динамическая загрузка предметов для Директора при назначении матрицы доступов
+  // ДИНАМІЧНЕ ЗАВАНТАЖЕННЯ ДЛЯ ДИРЕКТОРА
   window.loadDirectorMatrixSubjects = function() {
       const cls = document.getElementById('d-acc-class').value;
       const selectSubj = document.getElementById('d-acc-subjects');
@@ -410,10 +409,7 @@
                   selectSubj.innerHTML += `<option value="${subj}">${subj}</option>`;
               });
           } else {
-              // Если файл пустой или не найден, используем стандартный список как fallback
-              defaultSubjects.forEach(subj => { 
-                  selectSubj.innerHTML += `<option value="${subj}">${subj}</option>`; 
-              });
+              selectSubj.innerHTML = '<option value="" disabled>⚠️ Розклад для цього класу не знайдено</option>';
           }
       });
   };
@@ -441,6 +437,7 @@
     set(ref(db, `pre_approved_roles/${email}`), role).then(() => { alert(`✅ Доступ надано!`); document.getElementById('new-staff-email').value = ''; });
   };
 
+  // КАЛЕНДАР КОНТРОЛЬНИХ
   window.openExamsCalendar = function() {
       document.getElementById('exams-modal').style.display = 'flex';
       document.getElementById('exam-class-label').innerText = document.getElementById('t-class-selector').options[document.getElementById('t-class-selector').selectedIndex].text;
@@ -492,7 +489,30 @@
          let html = `<h4 style="margin-top:0; color:#d35400;">Контрольні на ${dStr.split('-').reverse().join('.')}</h4>`;
          html += `<ul style="padding-left:20px;">${listHtml || '<li>Жодної контрольної не заплановано</li>'}</ul>`;
          
-         let subjOpts = Array.from(document.getElementById('t-subject').options).map(o => `<option value="${o.value}">${o.text}</option>`).join('');
+         // ДИНАМІЧНИЙ ЗБІР ВСІХ ПРЕДМЕТІВ КЛАСУ ДЛЯ КОНТРОЛЬНОЇ
+         let allClassSubjects = new Set();
+         if (window.schedule) {
+            dayKeys.forEach(day => {
+                if(window.schedule[day]) {
+                    window.schedule[day].forEach(item => {
+                        if(item.subject && item.subject.ua && item.subject.ua !== "Перерва" && item.number !== " ") {
+                            allClassSubjects.add(item.subject.ua);
+                        }
+                    });
+                }
+            });
+         }
+
+         const allowed = teacherAccessMatrix[cls] || [];
+         const isAllAllowed = allowed.includes("Всі предмети");
+
+         let finalExamSubjects = [];
+         if (isAllAllowed) { finalExamSubjects = [...allClassSubjects].sort(); } 
+         else { finalExamSubjects = allowed.sort(); }
+
+         let subjOpts = finalExamSubjects.map(s => `<option value="${s}">${s}</option>`).join('');
+         if(!subjOpts) subjOpts = '<option value="" disabled>Немає доступних предметів у розкладі</option>';
+
          html += `<div style="margin-top:15px; display:flex; gap:10px;"><select id="exam-add-subj" style="flex:1;">${subjOpts}</select><button style="background:#27ae60; color:white; width:auto; padding:10px;" onclick="addExam('${dStr}')">Додати</button></div>`;
          
          detailsDiv.innerHTML = html;
@@ -505,7 +525,7 @@
       
       get(child(ref(db), `exams/${cls}/${yMonth}/${dStr}`)).then(snap => {
           let count = snap.exists() ? Object.keys(snap.val()).length : 0;
-          if(count >= 2) return alert('❌ Ліміт вичерпано! Більше 2 контрольних на день ставити небезпечно для здоров\'я дітей.');
+          if(count >= 2) return alert('❌ Ліміт вичерпано! Більше 2 контрольних на день ставити заборонено нормами.');
           set(ref(db, `exams/${cls}/${yMonth}/${dStr}/${subj}`), auth.currentUser.uid).then(() => {
               renderExamsCalendar(); manageDayExams(dStr);
           });
@@ -519,6 +539,7 @@
       });
   };
 
+  // ФІЛЬТРАЦІЯ ПРЕДМЕТІВ ЖУРНАЛУ (ТІЛЬКИ ЗА РОЗКЛАДОМ ДНЯ)
   function updateSubjectList() {
     const activeClass = getActiveClass();
     const allowed = teacherAccessMatrix[activeClass] || [];
@@ -528,8 +549,9 @@
     const dayName = dayKeys[dateVal.getDay()]; 
     
     let scheduleSubjects = [];
-    if (window.schedule && window.schedule[dayName]) { scheduleSubjects = window.schedule[dayName].filter(s => s.number !== " " && s.subject.ua !== "Перерва").map(s => s.subject.ua); } 
-    else { scheduleSubjects = defaultSubjects; }
+    if (window.schedule && window.schedule[dayName]) { 
+        scheduleSubjects = window.schedule[dayName].filter(s => s.number !== " " && s.subject.ua !== "Перерва").map(s => s.subject.ua); 
+    } 
 
     const select = document.getElementById('t-subject'); select.innerHTML = ''; 
     let finalSubjects = [];
@@ -537,9 +559,14 @@
     if(isAllAllowed) { finalSubjects = scheduleSubjects; } 
     else { finalSubjects = scheduleSubjects.filter(s => allowed.includes(s)); } 
 
-    if(finalSubjects.length === 0 && !isAllAllowed) finalSubjects = allowed; 
-    
-    [...new Set(finalSubjects)].forEach(subj => { const opt = document.createElement('option'); opt.value = subj; opt.innerText = subj; select.appendChild(opt); });
+    // Додаємо предмети до випадаючого списку (тільки унікальні)
+    [...new Set(finalSubjects)].forEach(subj => { 
+        const opt = document.createElement('option'); opt.value = subj; opt.innerText = subj; select.appendChild(opt); 
+    });
+
+    if(finalSubjects.length === 0) {
+        select.innerHTML = '<option value="" disabled>На цей день немає ваших предметів</option>';
+    }
   }
 
   window.linkParent = function() { 
