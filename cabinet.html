@@ -305,6 +305,7 @@
       <h4 style="margin-top:0; color: #f39c12; font-size: 1.1rem;">🌟 Прогрес наліпок</h4>
       <div class="progress-bar-container"><div id="p-ribbon-progress" class="progress-bar"></div></div>
       <p id="p-ribbon-count" style="font-size: 1.2rem; font-weight: bold; color: #d35400; margin: 15px 0 5px 0;">Завантаження...</p>
+      <p id="p-ribbon-msg" style="color: #27ae60; font-weight: 800; margin: 0; font-size: 1rem;"></p>
     </div>
 
     <div class="data-card" style="border-left-color: #00b894; background: #f0fff4;">
@@ -385,34 +386,19 @@
     const classNum = classId.split('_')[1]; 
     window.schedule = null; 
     
-    const iframeId = 'schedule-iframe';
-    let oldIframe = document.getElementById(iframeId);
-    if (oldIframe) oldIframe.remove();
+    const scriptId = 'dynamic-schedule-script';
+    let oldScript = document.getElementById(scriptId);
+    if (oldScript) oldScript.remove();
 
-    const iframe = document.createElement('iframe');
-    iframe.id = iframeId;
-    iframe.style.display = 'none';
-    document.body.appendChild(iframe);
-
-    window.scheduleLoadedCallback = function() {
-        if(callback) callback();
-    };
-
-    const doc = iframe.contentWindow.document;
-    doc.open();
-    doc.write(`
-        <script>
-            function notifyParent() {
-                if(window.schedule) {
-                    window.parent.schedule = window.schedule;
-                    window.parent.dayNames = window.dayNames;
-                }
-                window.parent.scheduleLoadedCallback();
-            }
-        <\/script>
-        <script src="schedule-class-${classNum}.js?t=${new Date().getTime()}" onload="notifyParent()" onerror="notifyParent()"><\/script>
-    `);
-    doc.close();
+    const script = document.createElement('script');
+    script.id = scriptId;
+    script.type = 'module'; // Ключове виправлення для уникнення помилки const
+    script.src = `schedule-class-${classNum}.js?t=${new Date().getTime()}`;
+    
+    script.onload = () => { if(callback) callback(); };
+    script.onerror = () => { console.warn(`Файл schedule-class-${classNum}.js не знайдено.`); if(callback) callback(); };
+    
+    document.head.appendChild(script);
   }
 
   window.handleDateChange = function() {
@@ -920,8 +906,12 @@
       const count = snap.exists() ? Object.keys(snap.val()).length : 0; 
       const percent = Math.min((count / STICKER_GOAL) * 100, 100);
       document.getElementById('p-ribbon-progress').style.width = percent + '%'; 
-      document.getElementById('p-ribbon-count').innerText = `${count} / ${STICKER_GOAL} наліпок`;
-      if (percent === 100) confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 } });
+      document.getElementById('p-ribbon-count').innerText = `${count} / ${STICKER_GOAL} наліпок до призу`;
+      const msgEl = document.getElementById('p-ribbon-msg');
+      if(msgEl) {
+          if (count >= STICKER_GOAL) { msgEl.innerText = "🎉 Ура! Ти досяг мети! Час отримувати приз!"; confetti({ particleCount: 150, spread: 80, origin: { y: 0.5 }, colors: ['#f1c40f', '#e74c3c', '#3498db', '#2ecc71'] }); } 
+          else { msgEl.innerText = ""; }
+      }
     }).catch(e => {
       document.getElementById('p-ribbon-count').innerText = "Помилка завантаження";
     });
