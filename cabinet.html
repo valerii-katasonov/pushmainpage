@@ -1,3 +1,9 @@
+    <div class="data-card" style="border-left-color: #f1c40f; background: #fffcf0; text-align: center;">
+      <h4 style="margin-top:0; color: #f39c12; font-size: 1.1rem;">🌟 Прогрес наліпок</h4>
+      <div class="progress-bar-container"><div id="p-ribbon-progress" class="progress-bar"></div></div>
+      <p id="p-ribbon-count" style="font-size: 1.2rem; font-weight: bold; color: #d35400; margin: 15px 0 5px 0;">Завантаження...</p>
+    </div>
+
 <!DOCTYPE html>
 <html lang="uk">
 <head>
@@ -334,6 +340,7 @@
 
   let currentUserData = null; let currentHwImages = []; let teacherAttendanceListener = null; let parentLessonInterval = null;
   const dayKeys = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  const STICKER_GOAL = 30;
   let teacherAccessMatrix = {}; 
 
   const today = new Date();
@@ -880,17 +887,11 @@
     parentLessonInterval = setInterval(updateCurrentLesson, 60000);
 
     get(child(ref(db), `stickers/${activeClass}/${currentUserData.studentName}`)).then(snap => {
-        let stickersCount = snap.exists() ? Object.keys(snap.val()).length : 0;
-        let stickersEl = document.getElementById('p-stickers-count');
-        if(!stickersEl) {
-            const container = document.getElementById('parent-welcome').nextElementSibling;
-            const stDiv = document.createElement('div');
-            stDiv.style = "background: #fff3cd; padding: 10px; border-radius: 12px; margin-bottom: 15px; text-align: center; border: 1px dashed #f39c12;";
-            stDiv.innerHTML = `<h4 style="margin:0; color: #d35400;">🌟 Зібрано наліпок: <span id="p-stickers-count" style="font-size:1.5rem; font-weight:800;">${stickersCount}</span></h4>`;
-            container.parentNode.insertBefore(stDiv, container);
-        } else {
-            stickersEl.innerText = stickersCount;
-        }
+      const count = snap.exists() ? Object.keys(snap.val()).length : 0; 
+      const percent = Math.min((count / STICKER_GOAL) * 100, 100);
+      document.getElementById('p-ribbon-progress').style.width = percent + '%'; 
+      document.getElementById('p-ribbon-count').innerText = `${count} / ${STICKER_GOAL} наліпок`;
+      if (percent === 100) confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 } });
     });
 
     get(child(ref(db), `attendance/${activeClass}/${date}/${currentUserData.studentName}`)).then(snap => {
