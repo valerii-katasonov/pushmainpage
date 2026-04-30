@@ -60,13 +60,14 @@
     .toast { background: rgba(0, 0, 0, 0.85); color: white; padding: 15px 20px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: space-between; font-size: 0.95rem; animation: slideUp 0.3s ease-out; backdrop-filter: blur(5px); }
     @keyframes slideUp { from { transform: translateY(100px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 
-    /* Matrix Styles */
+    /* Matrix Styles - ВИПРАВЛЕНО */
     .matrix-wrapper { overflow-x: auto; overflow-y: auto; max-height: 65vh; background: #fff; border-radius: 12px; border: 1px solid #eee; margin-top: 15px; box-shadow: inset 0 0 10px rgba(0,0,0,0.02);}
-    .matrix-table { width: 100%; border-collapse: separate; border-spacing: 4px; min-width: 1400px; }
-    .matrix-table th { background: #f8f9fa; position: sticky; top: 0; padding: 12px 10px; z-index: 2; border-bottom: 2px solid #ddd; color: #2c3e50; font-size: 0.95rem; text-align: center; font-weight: 800;}
-    .matrix-table td { vertical-align: top; width: 160px; }
+    .matrix-table { width: 100%; border-collapse: collapse; min-width: 1400px; }
+    .matrix-table th { background: #f8f9fa; position: sticky; top: 0; padding: 12px 10px; z-index: 2; border-bottom: 2px solid #ddd; border-right: 1px solid #eee; color: #2c3e50; font-size: 0.95rem; text-align: center; font-weight: 800;}
+    .matrix-table td { vertical-align: top; width: 160px; padding: 6px; border-right: 1px solid #eee; border-bottom: 1px solid #eee; }
     .time-col { position: sticky; left: 0; background: #f8f9fa; z-index: 1; border-right: 2px solid #ddd; text-align: center; vertical-align: middle !important; font-weight: bold; color: #555; width: 80px; }
-    .matrix-cell { border-radius: 8px; padding: 10px; cursor: pointer; transition: 0.2s; min-height: 75px; display: flex; flex-direction: column; position: relative; background: #fff; border: 1px dashed #ccc; }
+    
+    .matrix-cell { border-radius: 8px; padding: 10px; cursor: pointer; transition: 0.2s; min-height: 85px; display: flex; flex-direction: column; position: relative; background: #fff; border: 1px dashed #ccc; box-sizing: border-box; height: 100%; }
     .matrix-cell:hover { transform: translateY(-2px); box-shadow: 0 4px 10px rgba(0,0,0,0.1); border-style: solid; border-color: #006d77; z-index: 10;}
     
     .cell-lesson { background-color: #fff3e0; border: 1px solid #ffe0b2; border-left: 4px solid #ff9800; }
@@ -103,7 +104,6 @@
     <p id="login-error" style="color:red; text-align:center; display:none;"></p>
   </div>
 
-  <!-- Плашка профілю -->
   <div id="profile-bar" style="display:none; align-items:center; gap:15px; margin-bottom:20px; background:#fff; padding:15px; border-radius:12px; box-shadow:0 4px 10px rgba(0,0,0,0.05); border: 1px solid #eee;">
     <img id="pb-avatar" src="https://cdn-icons-png.flaticon.com/512/149/149071.png" style="width:50px; height:50px; border-radius:50%; object-fit:cover; border: 2px solid #006d77;">
     <div style="flex:1;">
@@ -245,14 +245,12 @@
     <button class="btn-logout" onclick="logoutUser()">Вийти з акаунту</button>
   </div>
 
-  <!-- Панелі вчителя та батьків ... (залишаються без змін) -->
   <div id="teacher-screen" class="panel">
     <h2 id="teacher-dashboard-title">👨‍🏫 Журнал</h2>
     <div style="display: flex; gap: 10px; margin-bottom: 20px;">
         <button onclick="openExamsCalendar()" style="flex:1; background: linear-gradient(135deg, #f39c12, #d35400); color: white; margin-top: 0; font-size: 0.95rem; padding: 12px; box-shadow: 0 4px 10px rgba(211,84,0,0.3);">📅 Контрольні</button>
         <button onclick="openJournalModal('teacher')" style="flex:1; background: linear-gradient(135deg, #8e44ad, #9b59b6); color: white; margin-top: 0; font-size: 0.95rem; padding: 12px; box-shadow: 0 4px 10px rgba(142,68,173,0.3);">📖 Класний журнал</button>
     </div>
-    <!-- Блок відвідуваності -->
     <div class="data-card" style="border-left-color: #e74c3c; background: #fdfbfb; margin-top: 0; margin-bottom: 20px;">
       <h4 style="margin-top:0; color: #c0392b;">🚨 Відвідуваність на сьогодні:</h4>
       <ul id="t-attendance-list" class="list-dash" style="list-style-type: none; padding-left: 0;"><li class="empty-msg">Завантаження...</li></ul>
@@ -264,7 +262,6 @@
         <button onclick="teacherMarkAbsent()" style="margin-top:0; background:#e74c3c; color:white; width:auto; padding: 10px 15px; font-size:0.9rem;">Відмітити</button>
       </div>
     </div>
-    <!-- Статистика -->
     <div style="display: flex; gap: 10px; margin-bottom: 25px;">
       <div style="flex: 1; background: #ffeaa7; padding: 15px; border-radius: 12px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05);"><h4 style="margin:0; color: #d35400; font-size: 0.85rem;">❤️ Індекс вдячності</h4><p id="t-karma-counter" style="font-size: 1.8rem; font-weight: 800; color: #e67e22; margin: 5px 0;">0</p></div>
       <div style="flex: 1; background: linear-gradient(135deg, #a8ff78, #78ffd6); padding: 15px; border-radius: 12px; text-align: center; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.05);" onclick="showWeeklyWrapped()"><h4 style="margin:0; color: #006d77; font-size: 0.85rem;">📊 Підсумки</h4><p style="font-size: 1.8rem; margin: 5px 0;">🎁</p></div>
@@ -310,8 +307,6 @@
 </div>
 
 <!-- Модальні вікна -->
-
-<!-- Модальне вікно профілю -->
 <div id="profile-modal" class="modal-overlay">
   <div class="modal-content">
     <h2 style="color: #006d77; margin-top:0;">⚙️ Налаштування профілю</h2>
@@ -324,7 +319,6 @@
   </div>
 </div>
 
-<!-- Модальне вікно МАТРИЦІ РОЗКЛАДУ -->
 <div id="visual-matrix-modal" class="modal-overlay" style="align-items: flex-start; padding-top: 40px;">
   <div class="modal-content" style="max-width: 95%; width: 100%; padding: 20px; background: #f4f6f8;">
     <h2 style="color: #1abc9c; margin-top:0; margin-bottom: 10px;">🗓️ Матриця розкладу</h2>
@@ -346,7 +340,6 @@
   </div>
 </div>
 
-<!-- Модальне вікно редагування конкретної клітинки матриці -->
 <div id="edit-cell-modal" class="modal-overlay" style="z-index: 1001;">
   <div class="modal-content" style="max-width: 400px;">
     <h3 style="color: #2c3e50; margin-top:0; border-bottom: none; padding-bottom:0;" id="edit-cell-title">Редагування уроку</h3>
@@ -383,7 +376,6 @@
   </div>
 </div>
 
-<!-- Інші модалки (Журнал, Контрольні, Підсумки) -->
 <div id="journal-modal" class="modal-overlay">
   <div class="modal-content" style="max-width: 900px; width: 100%; padding: 20px;">
     <h2 style="color: #2980b9; margin-top:0;">📖 Класний журнал</h2>
@@ -439,7 +431,6 @@
   const STICKER_GOAL = 30;
   let teacherAccessMatrix = {}; 
 
-  // Глобальні змінні для матриці директора
   let globalAllSchedules = {};
   let globalTeachersList = [];
 
@@ -455,35 +446,20 @@
   };
 
   window.isSubjectAllowed = function(cls, subjectName) {
-      if (!subjectName) return false;
-      let raw = teacherAccessMatrix[cls] || [];
-      let allowed = Array.isArray(raw) ? raw : Object.values(raw);
-      let normAllowed = allowed.map(s => typeof s === 'string' ? s.trim() : '');
-      let normTarget = subjectName.trim();
-      if (normAllowed.includes("Всі предмети")) return true;
-      return normAllowed.includes(normTarget);
+      if (!subjectName) return false; let raw = teacherAccessMatrix[cls] || []; let allowed = Array.isArray(raw) ? raw : Object.values(raw); let normAllowed = allowed.map(s => typeof s === 'string' ? s.trim() : ''); let normTarget = subjectName.trim(); if (normAllowed.includes("Всі предмети")) return true; return normAllowed.includes(normTarget);
   };
 
   function showToast(message) {
-    const container = document.getElementById('toast-container');
-    const toast = document.createElement('div'); toast.className = 'toast'; toast.innerHTML = `<span>🔔 ${message}</span>`;
-    container.appendChild(toast); setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 4000);
+    const container = document.getElementById('toast-container'); const toast = document.createElement('div'); toast.className = 'toast'; toast.innerHTML = `<span>🔔 ${message}</span>`; container.appendChild(toast); setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 4000);
   }
 
   function getActiveClass() {
-    if (currentUserData && currentUserData.role === 'teacher') return document.getElementById('t-class-selector').value;
-    return currentUserData ? currentUserData.class : 'class_2'; 
+    if (currentUserData && currentUserData.role === 'teacher') return document.getElementById('t-class-selector').value; return currentUserData ? currentUserData.class : 'class_2'; 
   }
 
   window.loadScheduleScript = function(classId, callback) {
       if(!classId) return;
-      get(child(ref(db), `schedules/${classId}`)).then(snap => {
-          if(snap.exists()) { window.schedule = snap.val().lessons || {}; window.clubSchedule = snap.val().clubs || {}; } 
-          else { window.schedule = {}; window.clubSchedule = {}; }
-          if(callback) callback();
-      }).catch(e => {
-          console.error("Помилка завантаження розкладу:", e); window.schedule = {}; window.clubSchedule = {}; if(callback) callback();
-      });
+      get(child(ref(db), `schedules/${classId}`)).then(snap => { if(snap.exists()) { window.schedule = snap.val().lessons || {}; window.clubSchedule = snap.val().clubs || {}; } else { window.schedule = {}; window.clubSchedule = {}; } if(callback) callback(); }).catch(e => { console.error("Помилка завантаження розкладу:", e); window.schedule = {}; window.clubSchedule = {}; if(callback) callback(); });
   };
 
   window.handleDateChange = function() {
@@ -496,83 +472,36 @@
 
   window.handleClassChange = function() {
     const activeClass = getActiveClass(); if(!activeClass) return;
-    const selectEl = document.getElementById('t-class-selector'); const classLabel = selectEl.options[selectEl.selectedIndex].text;
-    document.getElementById('teacher-dashboard-title').innerText = `👨‍🏫 Журнал: ${classLabel}`;
-    const clsNum = parseInt(activeClass.replace('class_', ''));
-    const gradeInput = document.getElementById('t-grade');
-    if(gradeInput) { gradeInput.setAttribute('list', clsNum <= 4 ? 'grades-letters' : 'grades-numbers'); gradeInput.placeholder = clsNum <= 4 ? 'В, Д, С, П' : '1 - 12'; }
-    loadStudentsList(); 
-    loadScheduleScript(activeClass, () => { handleDateChange(); });
+    const selectEl = document.getElementById('t-class-selector'); const classLabel = selectEl.options[selectEl.selectedIndex].text; document.getElementById('teacher-dashboard-title').innerText = `👨‍🏫 Журнал: ${classLabel}`;
+    const clsNum = parseInt(activeClass.replace('class_', '')); const gradeInput = document.getElementById('t-grade'); if(gradeInput) { gradeInput.setAttribute('list', clsNum <= 4 ? 'grades-letters' : 'grades-numbers'); gradeInput.placeholder = clsNum <= 4 ? 'В, Д, С, П' : '1 - 12'; }
+    loadStudentsList(); loadScheduleScript(activeClass, () => { handleDateChange(); });
   };
 
-  // --- ПРОФІЛЬ ---
   function updateProfileBar() {
-      if(!currentUserData) return;
-      document.getElementById('profile-bar').style.display = 'flex';
-      const avatarSrc = currentUserData.photoURL || "https://cdn-icons-png.flaticon.com/512/149/149071.png";
-      document.getElementById('pb-avatar').src = avatarSrc; document.getElementById('modal-avatar-preview').src = avatarSrc;
-      
-      let displayName = "Користувач";
-      if(currentUserData.firstName || currentUserData.lastName) displayName = `${currentUserData.firstName || ''} ${currentUserData.lastName || ''}`.trim();
-      else if(currentUserData.studentName) displayName = `Батьки (${currentUserData.studentName})`;
-      else if(currentUserData.email) displayName = currentUserData.email;
-
-      let roleName = "Користувач";
-      if(currentUserData.role === 'teacher') roleName = "Вчитель";
-      if(currentUserData.role === 'director') roleName = "Директор";
-      if(currentUserData.role === 'administrator') roleName = "Адміністратор";
-      if(currentUserData.role === 'parent') {
-          if(currentUserData.parentRole === 'mother') roleName = "Мати"; else if(currentUserData.parentRole === 'father') roleName = "Батько"; else roleName = "Опекун";
-      }
-
+      if(!currentUserData) return; document.getElementById('profile-bar').style.display = 'flex';
+      const avatarSrc = currentUserData.photoURL || "https://cdn-icons-png.flaticon.com/512/149/149071.png"; document.getElementById('pb-avatar').src = avatarSrc; document.getElementById('modal-avatar-preview').src = avatarSrc;
+      let displayName = "Користувач"; if(currentUserData.firstName || currentUserData.lastName) displayName = `${currentUserData.firstName || ''} ${currentUserData.lastName || ''}`.trim(); else if(currentUserData.studentName) displayName = `Батьки (${currentUserData.studentName})`; else if(currentUserData.email) displayName = currentUserData.email;
+      let roleName = "Користувач"; if(currentUserData.role === 'teacher') roleName = "Вчитель"; if(currentUserData.role === 'director') roleName = "Директор"; if(currentUserData.role === 'administrator') roleName = "Адміністратор"; if(currentUserData.role === 'parent') { if(currentUserData.parentRole === 'mother') roleName = "Мати"; else if(currentUserData.parentRole === 'father') roleName = "Батько"; else roleName = "Опекун"; }
       document.getElementById('pb-name').innerText = displayName; document.getElementById('pb-role').innerText = roleName;
   }
 
-  window.openProfileModal = function() {
-      document.getElementById('profile-modal').style.display = 'flex';
-      document.getElementById('profile-first-name').value = currentUserData.firstName || ''; document.getElementById('profile-last-name').value = currentUserData.lastName || ''; document.getElementById('profile-photo').value = ''; 
-  };
+  window.openProfileModal = function() { document.getElementById('profile-modal').style.display = 'flex'; document.getElementById('profile-first-name').value = currentUserData.firstName || ''; document.getElementById('profile-last-name').value = currentUserData.lastName || ''; document.getElementById('profile-photo').value = ''; };
   window.closeProfileModal = function() { document.getElementById('profile-modal').style.display = 'none'; };
-
-  document.getElementById('profile-photo').addEventListener('change', function(e) {
-      if(e.target.files && e.target.files[0]) {
-          const reader = new FileReader(); reader.onload = function(e) { document.getElementById('modal-avatar-preview').src = e.target.result; }; reader.readAsDataURL(e.target.files[0]);
-      }
-  });
+  document.getElementById('profile-photo').addEventListener('change', function(e) { if(e.target.files && e.target.files[0]) { const reader = new FileReader(); reader.onload = function(e) { document.getElementById('modal-avatar-preview').src = e.target.result; }; reader.readAsDataURL(e.target.files[0]); } });
 
   window.saveProfile = async function() {
-      const fName = document.getElementById('profile-first-name').value.trim(); const lName = document.getElementById('profile-last-name').value.trim();
-      const fileInput = document.getElementById('profile-photo'); const btn = document.getElementById('btn-save-profile');
-      btn.disabled = true; btn.innerText = "⏳ Збереження...";
+      const fName = document.getElementById('profile-first-name').value.trim(); const lName = document.getElementById('profile-last-name').value.trim(); const fileInput = document.getElementById('profile-photo'); const btn = document.getElementById('btn-save-profile'); btn.disabled = true; btn.innerText = "⏳ Збереження...";
       let photoURL = currentUserData.photoURL || "https://cdn-icons-png.flaticon.com/512/149/149071.png";
-
-      if (fileInput.files.length > 0) {
-          const formData = new FormData(); formData.append('file', fileInput.files[0]); formData.append('upload_preset', UPLOAD_PRESET);
-          try { const res = await fetch(CLOUDINARY_URL, { method: 'POST', body: formData }); const data = await res.json(); photoURL = data.secure_url; } 
-          catch(e) { alert("Помилка завантаження фото!"); btn.disabled = false; btn.innerText = "💾 Зберегти зміни"; return; }
-      }
-
-      try {
-          await update(ref(db, `users/${auth.currentUser.uid}`), { firstName: fName, lastName: lName, photoURL: photoURL });
-          currentUserData.firstName = fName; currentUserData.lastName = lName; currentUserData.photoURL = photoURL;
-          updateProfileBar(); closeProfileModal(); showToast("✅ Профіль успішно оновлено!");
-      } catch(e) { alert("Помилка збереження: " + e.message); }
-      btn.disabled = false; btn.innerText = "💾 Зберегти зміни";
+      if (fileInput.files.length > 0) { const formData = new FormData(); formData.append('file', fileInput.files[0]); formData.append('upload_preset', UPLOAD_PRESET); try { const res = await fetch(CLOUDINARY_URL, { method: 'POST', body: formData }); const data = await res.json(); photoURL = data.secure_url; } catch(e) { alert("Помилка завантаження фото!"); btn.disabled = false; btn.innerText = "💾 Зберегти зміни"; return; } }
+      try { await update(ref(db, `users/${auth.currentUser.uid}`), { firstName: fName, lastName: lName, photoURL: photoURL }); currentUserData.firstName = fName; currentUserData.lastName = lName; currentUserData.photoURL = photoURL; updateProfileBar(); closeProfileModal(); showToast("✅ Профіль успішно оновлено!"); } catch(e) { alert("Помилка збереження: " + e.message); } btn.disabled = false; btn.innerText = "💾 Зберегти зміни";
   };
-  // --- КІНЕЦЬ БЛОКУ ПРОФІЛЮ ---
 
-  // --- ВІЗУАЛЬНА МАТРИЦЯ РОЗКЛАДУ (ДЛЯ ДИРЕКТОРА) ---
+  // --- ВІЗУАЛЬНА МАТРИЦЯ РОЗКЛАДУ (ВИПРАВЛЕНА ЛОГІКА РЕНДЕРУ) ---
   window.openVisualMatrixModal = async function() {
-      document.getElementById('visual-matrix-modal').style.display = 'flex';
-      showToast("⏳ Завантаження розкладів усіх класів...");
-      const snap = await get(ref(db, 'schedules'));
-      globalAllSchedules = snap.exists() ? snap.val() : {};
-      renderMatrixGrid();
+      document.getElementById('visual-matrix-modal').style.display = 'flex'; showToast("⏳ Завантаження розкладів усіх класів...");
+      const snap = await get(ref(db, 'schedules')); globalAllSchedules = snap.exists() ? snap.val() : {}; renderMatrixGrid();
   };
-
-  window.closeVisualMatrixModal = function() {
-      document.getElementById('visual-matrix-modal').style.display = 'none';
-  };
+  window.closeVisualMatrixModal = function() { document.getElementById('visual-matrix-modal').style.display = 'none'; };
 
   window.renderMatrixGrid = function() {
       const day = document.getElementById('matrix-day-select').value;
@@ -581,7 +510,6 @@
       
       thead.innerHTML = '<th class="time-col">№ / Час</th>';
       for(let i=1; i<=11; i++) { thead.innerHTML += `<th>${i} Клас</th>`; }
-
       tbody.innerHTML = '';
       
       let maxRows = 8; 
@@ -591,6 +519,8 @@
               maxRows = Math.max(maxRows, globalAllSchedules[cls].lessons[day].length);
           }
       }
+      
+      maxRows += 1; // Завжди залишаємо 1 порожній ряд знизу для можливості додати урок
 
       for (let row = 0; row < maxRows; row++) {
           let tr = document.createElement('tr');
@@ -602,29 +532,32 @@
               const lesson = lessonsArray[row];
               
               let td = document.createElement('td');
+              let innerHTML = '';
               
               if (lesson && lesson.subject) {
                   const subjName = typeof lesson.subject === 'string' ? lesson.subject : (lesson.subject.ua || '');
                   const tEmail = lesson.teacherEmail || '';
                   const tName = lesson.teacherName || '';
                   const timeStr = lesson.time || '';
-                  
                   const isBreak = subjName.toLowerCase().includes('перерва') || subjName.toLowerCase().includes('обід');
                   
                   if (isBreak) {
-                      td.className = 'matrix-cell cell-break';
-                      td.innerHTML = `<div class="cell-subj">${subjName}</div><div class="cell-time">${timeStr}</div>`;
+                      innerHTML = `<div class="matrix-cell cell-break">
+                                      <div class="cell-subj">${subjName}</div>
+                                      <div class="cell-time">${timeStr}</div>
+                                   </div>`;
                   } else {
-                      td.className = 'matrix-cell cell-lesson';
-                      td.innerHTML = `<div class="cell-subj">${subjName}</div>
+                      innerHTML = `<div class="matrix-cell cell-lesson">
+                                      <div class="cell-subj">${subjName}</div>
                                       ${tName ? `<div class="cell-teacher">👨‍🏫 ${tName}</div>` : `<div class="cell-teacher" style="color:#aaa;">Без вчителя</div>`}
-                                      <div class="cell-time">🕘 ${timeStr}</div>`;
+                                      <div class="cell-time">🕘 ${timeStr}</div>
+                                   </div>`;
                   }
               } else {
-                  td.className = 'matrix-cell cell-empty';
-                  td.innerHTML = '+ Додати';
+                  innerHTML = `<div class="matrix-cell cell-empty">+ Додати</div>`;
               }
               
+              td.innerHTML = innerHTML;
               td.onclick = () => openCellEditor(clsId, row, lesson);
               tr.appendChild(td);
           }
@@ -634,196 +567,66 @@
 
   window.openCellEditor = function(clsId, rowIdx, lessonObj) {
       document.getElementById('edit-cell-modal').style.display = 'flex';
-      const day = document.getElementById('matrix-day-select').value;
-      const clsNum = clsId.replace('class_', '');
-      
+      const day = document.getElementById('matrix-day-select').value; const clsNum = clsId.replace('class_', '');
       document.getElementById('edit-cell-subtitle').innerText = `${clsNum} Клас | ${dayNamesUA[day]} | Урок № ${rowIdx + 1}`;
-      document.getElementById('cell-edit-class').value = clsId;
-      document.getElementById('cell-edit-row').value = rowIdx;
-
-      // Очистка
-      document.getElementById('cell-subj-ua').value = '';
-      document.getElementById('cell-number').value = '';
-      document.getElementById('cell-time').value = '';
+      document.getElementById('cell-edit-class').value = clsId; document.getElementById('cell-edit-row').value = rowIdx;
+      document.getElementById('cell-subj-ua').value = ''; document.getElementById('cell-number').value = ''; document.getElementById('cell-time').value = '';
       
       const teacherSelect = document.getElementById('cell-teacher-select');
       teacherSelect.innerHTML = '<option value="">-- Не призначено (або Перерва) --</option>';
-      globalTeachersList.forEach(t => {
-          teacherSelect.innerHTML += `<option value="${t.email}">${t.name} (${t.email})</option>`;
-      });
+      globalTeachersList.forEach(t => { teacherSelect.innerHTML += `<option value="${t.email}">${t.name} (${t.email})</option>`; });
       teacherSelect.value = '';
 
       if (lessonObj) {
           document.getElementById('cell-subj-ua').value = typeof lessonObj.subject === 'string' ? lessonObj.subject : (lessonObj.subject.ua || '');
-          document.getElementById('cell-number').value = lessonObj.number || '';
-          document.getElementById('cell-time').value = lessonObj.time || '';
-          if (lessonObj.teacherEmail) {
-              const optExists = Array.from(teacherSelect.options).some(o => o.value === lessonObj.teacherEmail);
-              if(optExists) teacherSelect.value = lessonObj.teacherEmail;
-          }
+          document.getElementById('cell-number').value = lessonObj.number || ''; document.getElementById('cell-time').value = lessonObj.time || '';
+          if (lessonObj.teacherEmail) { const optExists = Array.from(teacherSelect.options).some(o => o.value === lessonObj.teacherEmail); if(optExists) teacherSelect.value = lessonObj.teacherEmail; }
       }
   };
 
   window.closeEditCellModal = function() { document.getElementById('edit-cell-modal').style.display = 'none'; };
 
   window.saveMatrixCell = async function() {
-      const clsId = document.getElementById('cell-edit-class').value;
-      const rowIdx = parseInt(document.getElementById('cell-edit-row').value);
-      const day = document.getElementById('matrix-day-select').value;
-      
-      const subjUA = document.getElementById('cell-subj-ua').value.trim();
-      const num = document.getElementById('cell-number').value.trim();
-      const timeStr = document.getElementById('cell-time').value.trim();
-      
-      const tSelect = document.getElementById('cell-teacher-select');
-      const tEmail = tSelect.value;
-      const tName = tEmail ? tSelect.options[tSelect.selectedIndex].text.split(' (')[0] : '';
+      const clsId = document.getElementById('cell-edit-class').value; const rowIdx = parseInt(document.getElementById('cell-edit-row').value); const day = document.getElementById('matrix-day-select').value;
+      const subjUA = document.getElementById('cell-subj-ua').value.trim(); const num = document.getElementById('cell-number').value.trim(); const timeStr = document.getElementById('cell-time').value.trim();
+      const tSelect = document.getElementById('cell-teacher-select'); const tEmail = tSelect.value; const tName = tEmail ? tSelect.options[tSelect.selectedIndex].text.split(' (')[0] : '';
 
-      if (!globalAllSchedules[clsId]) globalAllSchedules[clsId] = {};
-      if (!globalAllSchedules[clsId].lessons) globalAllSchedules[clsId].lessons = {};
-      if (!globalAllSchedules[clsId].lessons[day]) globalAllSchedules[clsId].lessons[day] = [];
-      
+      if (!globalAllSchedules[clsId]) globalAllSchedules[clsId] = {}; if (!globalAllSchedules[clsId].lessons) globalAllSchedules[clsId].lessons = {}; if (!globalAllSchedules[clsId].lessons[day]) globalAllSchedules[clsId].lessons[day] = [];
       let dayArray = globalAllSchedules[clsId].lessons[day];
+      while(dayArray.length <= rowIdx) { dayArray.push({ number: "", time: "", subject: { ua: "", pl: "" } }); }
       
-      // Падінг масиву пустими об'єктами, якщо ми додаємо урок далеко
-      while(dayArray.length <= rowIdx) {
-          dayArray.push({ number: "", time: "", subject: { ua: "", pl: "" } });
-      }
-      
-      // Оновлюємо
-      dayArray[rowIdx] = {
-          number: num,
-          time: timeStr,
-          subject: { ua: subjUA, pl: subjUA }, // Спрощено: пишемо одне й те саме
-          teacherEmail: tEmail,
-          teacherName: tName
-      };
+      dayArray[rowIdx] = { number: num, time: timeStr, subject: { ua: subjUA, pl: subjUA }, teacherEmail: tEmail, teacherName: tName };
 
       try {
-          // Зберігаємо розклад
           await set(ref(db, `schedules/${clsId}/lessons/${day}`), dayArray);
-          
-          // АВТОМАТИЧНА ВИДАЧА ПРАВ
           if (tEmail && subjUA && !subjUA.toLowerCase().includes('перерва')) {
               const safeEmail = tEmail.replace(/\./g, '_');
-              // Отримуємо поточні права
               const accessSnap = await get(child(ref(db), `teacher_access/${safeEmail}/${clsId}`));
-              let currentAccess = accessSnap.exists() ? accessSnap.val() : [];
-              if (!Array.isArray(currentAccess)) currentAccess = Object.values(currentAccess);
-              
-              if (!currentAccess.includes("Всі предмети") && !currentAccess.includes(subjUA)) {
-                  currentAccess.push(subjUA);
-                  await set(ref(db, `teacher_access/${safeEmail}/${clsId}`), currentAccess);
-                  console.log(`Права доступу для ${tName} на ${subjUA} в ${clsId} автоматично додано!`);
-              }
+              let currentAccess = accessSnap.exists() ? accessSnap.val() : []; if (!Array.isArray(currentAccess)) currentAccess = Object.values(currentAccess);
+              if (!currentAccess.includes("Всі предмети") && !currentAccess.includes(subjUA)) { currentAccess.push(subjUA); await set(ref(db, `teacher_access/${safeEmail}/${clsId}`), currentAccess); console.log(`Права доступу для ${tName} на ${subjUA} в ${clsId} автоматично додано!`); }
           }
-
-          closeEditCellModal();
-          renderMatrixGrid();
-          showToast("✅ Урок збережено!");
-      } catch(e) {
-          alert("Помилка: " + e.message);
-      }
+          closeEditCellModal(); renderMatrixGrid(); showToast("✅ Урок збережено!");
+      } catch(e) { alert("Помилка: " + e.message); }
   };
 
   window.deleteMatrixCell = async function() {
-      const clsId = document.getElementById('cell-edit-class').value;
-      const rowIdx = parseInt(document.getElementById('cell-edit-row').value);
-      const day = document.getElementById('matrix-day-select').value;
-      
+      const clsId = document.getElementById('cell-edit-class').value; const rowIdx = parseInt(document.getElementById('cell-edit-row').value); const day = document.getElementById('matrix-day-select').value;
       if(globalAllSchedules[clsId] && globalAllSchedules[clsId].lessons && globalAllSchedules[clsId].lessons[day]) {
-          let dayArray = globalAllSchedules[clsId].lessons[day];
-          // Щоб не зсувати інші уроки (що зламає сітку), ми просто очищуємо об'єкт
-          dayArray[rowIdx] = { number: "", time: "", subject: { ua: "", pl: "" } };
-          
-          await set(ref(db, `schedules/${clsId}/lessons/${day}`), dayArray);
-          closeEditCellModal();
-          renderMatrixGrid();
+          let dayArray = globalAllSchedules[clsId].lessons[day]; dayArray[rowIdx] = { number: "", time: "", subject: { ua: "", pl: "" } };
+          await set(ref(db, `schedules/${clsId}/lessons/${day}`), dayArray); closeEditCellModal(); renderMatrixGrid();
       }
   };
 
-  // --- Директор: Завантаження списку вчителів (ОНОВЛЕНО для профілів) ---
   window.loadTeachersListForDirector = async function() {
-      const select = document.getElementById('d-acc-email-select');
-      select.innerHTML = '<option value="">-- Оберіть вчителя зі списку --</option>';
-      const snap = await get(ref(db, 'users'));
-      globalTeachersList = []; // Очищуємо глобальний список
-      
-      if(snap.exists()) {
-          const users = snap.val();
-          for(let uid in users) {
-              const u = users[uid];
-              if(u.role === 'teacher' && u.email) {
-                  const name = (u.firstName || u.lastName) ? `${u.firstName || ''} ${u.lastName || ''}`.trim() : "Ім'я не вказано";
-                  const safeEmail = u.email.replace(/\./g, '_');
-                  
-                  // Додаємо до списку для видачі прав
-                  select.innerHTML += `<option value="${safeEmail}">${name} (${u.email})</option>`;
-                  // Зберігаємо для матриці
-                  globalTeachersList.push({ email: u.email, name: name, safeEmail: safeEmail });
-              }
-          }
-      }
+      const select = document.getElementById('d-acc-email-select'); select.innerHTML = '<option value="">-- Оберіть вчителя зі списку --</option>';
+      const snap = await get(ref(db, 'users')); globalTeachersList = []; 
+      if(snap.exists()) { const users = snap.val(); for(let uid in users) { const u = users[uid]; if(u.role === 'teacher' && u.email) { const name = (u.firstName || u.lastName) ? `${u.firstName || ''} ${u.lastName || ''}`.trim() : "Ім'я не вказано"; const safeEmail = u.email.replace(/\./g, '_'); select.innerHTML += `<option value="${safeEmail}">${name} (${u.email})</option>`; globalTeachersList.push({ email: u.email, name: name, safeEmail: safeEmail }); } } }
   };
-  // -------------------------------------------------------------
-
-  // --- СТАРИЙ ІМПОРТ ---
-  window.handleImportFiles = async function() {
-      const jsFile = document.getElementById('import-js-file').files[0]; const htmlFile = document.getElementById('import-html-file').files[0]; const cls = document.getElementById('import-class').value;
-      if(!cls) return alert("Оберіть клас для імпорту!"); if(!jsFile) return alert("Оберіть хоча б JS-файл з уроками!");
-      let finalLessons = null; let finalClubs = null;
-      try { const jsText = await jsFile.text(); const match = jsText.match(/const schedule\s*=\s*(\{[\s\S]+?\n\});/); if (match) { finalLessons = new Function("return " + match[1])(); } else { alert("Не вдалося знайти змінну 'schedule' у JS файлі."); return; } } catch(e) { alert("Помилка парсингу JS: " + e.message); return; }
-      if (htmlFile) { try { const htmlText = await htmlFile.text(); const match = htmlText.match(/const clubSchedule\s*=\s*(\{[\s\S]+?\n\s*\});/); if (match) { finalClubs = new Function("return " + match[1])(); } } catch(e) {} }
-      if(finalLessons) { const updates = {}; updates[`schedules/${cls}/lessons`] = finalLessons; updates[`schedules/${cls}/clubs`] = finalClubs ? finalClubs : null; try { await update(ref(db), updates); alert("✅ Розклад розпарсено та завантажено в БД!"); document.getElementById('import-js-file').value = ''; document.getElementById('import-html-file').value = ''; } catch(e) { alert("Помилка збереження: " + e.message); } }
-  };
-
-  // --- ЖУРНАЛ (Директор / Вчитель) ---
-  window.openJournalModal = function(role) {
-      document.getElementById('journal-modal').style.display = 'flex';
-      const monthInput = document.getElementById('j-month-select'); const dateParts = document.getElementById('global-date').value.split('-'); monthInput.value = `${dateParts[0]}-${dateParts[1]}`; 
-      const classSelect = document.getElementById('j-class-select');
-      if(role === 'director') { classSelect.style.display = 'block'; classSelect.innerHTML = '<option value="">Оберіть клас...</option>'; for(let i=1; i<=11; i++) classSelect.innerHTML += `<option value="class_${i}">${i} Клас</option>`; document.getElementById('j-subj-select').innerHTML = '<option value="">Спочатку оберіть клас</option>'; document.getElementById('journal-table-el').innerHTML = ''; } 
-      else { classSelect.style.display = 'none'; classSelect.innerHTML = `<option value="${getActiveClass()}">${getActiveClass()}</option>`; updateJournalSubjects(); }
-  };
-  window.closeJournalModal = function() { document.getElementById('journal-modal').style.display = 'none'; };
-  window.updateJournalSubjects = function() {
-      const cls = document.getElementById('j-class-select').value; const subjSelect = document.getElementById('j-subj-select'); if(!cls) { subjSelect.innerHTML = '<option value="">Спочатку оберіть клас</option>'; return; }
-      subjSelect.innerHTML = '<option value="">Завантаження...</option>';
-      loadScheduleScript(cls, () => {
-          let uniqueSubjects = new Set(); if(window.schedule) { dayKeys.forEach(d => { if(window.schedule[d]) { window.schedule[d].forEach(i => { let sName = window.getValidSubjectName(i); if(sName) uniqueSubjects.add(sName); }); } }); }
-          if(uniqueSubjects.size === 0) { get(child(ref(db), `grades/${cls}`)).then(snap => { if(snap.exists()) { const monthsData = snap.val(); for(let m in monthsData) { for(let s in monthsData[m]) uniqueSubjects.add(s); } } finishJournalSubjectsRender(uniqueSubjects, cls, subjSelect); }); return; }
-          finishJournalSubjectsRender(uniqueSubjects, cls, subjSelect);
-      });
-  };
-  function finishJournalSubjectsRender(uniqueSubjects, cls, subjSelect) {
-      if(currentUserData.role === 'teacher') { uniqueSubjects = new Set([...uniqueSubjects].filter(s => window.isSubjectAllowed(cls, s))); }
-      subjSelect.innerHTML = '<option value="">-- Оберіть предмет --</option>';
-      if(uniqueSubjects.size > 0) { [...uniqueSubjects].sort().forEach(s => subjSelect.innerHTML += `<option value="${s}">${s}</option>`); } else { subjSelect.innerHTML = '<option value="" disabled>Предмети відсутні (або немає доступу)</option>'; }
-      if (currentUserData.role === 'teacher' && document.getElementById('t-subject').value) { const currentSubj = document.getElementById('t-subject').value; if(uniqueSubjects.has(currentSubj)) subjSelect.value = currentSubj; } renderJournalTable();
-  }
-  window.renderJournalTable = async function() {
-      const cls = document.getElementById('j-class-select').value; const subj = document.getElementById('j-subj-select').value; const yMonth = document.getElementById('j-month-select').value; const table = document.getElementById('journal-table-el');
-      if(!cls || !subj || !yMonth) { table.innerHTML = ''; return; } table.innerHTML = '<tr><td style="padding: 20px;">⏳ Завантаження даних журналу...</td></tr>';
-      const [y, m] = yMonth.split('-'); const daysInMonth = new Date(y, m, 0).getDate();
-      try {
-          const [studentsSnap, gradesSnap, attSnap] = await Promise.all([ get(child(ref(db), `students_list/${cls}`)), get(child(ref(db), `grades/${cls}/${yMonth}/${subj}`)), get(child(ref(db), `attendance/${cls}`)) ]);
-          let students = []; if (studentsSnap.exists()) students = Object.values(studentsSnap.val()).sort(); if (students.length === 0) { table.innerHTML = '<tr><td style="padding: 20px;">У списку немає учнів.</td></tr>'; return; }
-          const gradesData = gradesSnap.exists() ? gradesSnap.val() : {}; const attDataAll = attSnap.exists() ? attSnap.val() : {}; const attData = {}; for(let d in attDataAll) { if(d.startsWith(yMonth)) attData[d] = attDataAll[d]; }
-          let thead = '<thead><tr><th class="student-name">Учень</th>'; for(let i=1; i<=daysInMonth; i++) thead += `<th>${i}</th>`; thead += '</tr></thead>'; let tbody = '<tbody>';
-          students.forEach(st => { tbody += `<tr><td class="student-name">${st}</td>`; for(let i=1; i<=daysInMonth; i++) { const dateStr = `${yMonth}-${String(i).padStart(2,'0')}`; const statusInfo = (attData[dateStr] && attData[dateStr][st]) ? attData[dateStr][st].status : null; const grade = (gradesData[dateStr] && gradesData[dateStr][st]) ? gradesData[dateStr][st] : ''; let cellContent = ''; if (grade) cellContent = `<span class="cell-grade">${grade}</span>`; if (statusInfo === 'absent') { cellContent += (cellContent ? `<br>` : '') + `<span class="cell-absent" title="Відсутній">н</span>`; } else if (statusInfo === 'late') { cellContent += (cellContent ? `<br>` : '') + `<span class="cell-absent" style="color:#f39c12;" title="Запізнення">з</span>`; } tbody += `<td>${cellContent}</td>`; } tbody += '</tr>'; });
-          tbody += '</tbody>'; table.innerHTML = thead + tbody;
-      } catch(e) { console.error(e); table.innerHTML = '<tr><td style="padding: 20px; color: red;">Помилка завантаження журналу.</td></tr>'; }
-  };
-
-  window.loadDirectorMatrixSubjects = function() {
-      const cls = document.getElementById('d-acc-class').value; const selectSubj = document.getElementById('d-acc-subjects'); if(!cls) { selectSubj.innerHTML = '<option value="" disabled>Спочатку оберіть клас...</option>'; return; } selectSubj.innerHTML = '<option value="" disabled>Завантаження предметів...</option>';
-      loadScheduleScript(cls, () => { let uniqueSubjects = new Set(); if (window.schedule) { dayKeys.forEach(day => { if(window.schedule[day]) { window.schedule[day].forEach(item => { let sName = window.getValidSubjectName(item); if(sName) uniqueSubjects.add(sName); }); } }); } selectSubj.innerHTML = '<option value="Всі предмети" style="font-weight:bold; color:#d35400;">🌟 Дозволити всі предмети</option>'; if(uniqueSubjects.size > 0) { [...uniqueSubjects].sort().forEach(subj => { selectSubj.innerHTML += `<option value="${subj}">${subj}</option>`; }); } else { selectSubj.innerHTML = '<option value="" disabled>⚠️ Розклад для цього класу не знайдено</option>'; } });
-  };
-  window.grantTeacherAccess = function() {
-      const safeEmail = document.getElementById('d-acc-email-select').value; const cls = document.getElementById('d-acc-class').value; const opts = document.getElementById('d-acc-subjects').selectedOptions; const subjects = Array.from(opts).map(o => o.value);
-      if(!safeEmail || !cls || subjects.length === 0) return alert('Оберіть вчителя зі списку, оберіть клас та хоча б 1 предмет!');
-      set(ref(db, `pre_approved_roles/${safeEmail}`), 'teacher'); set(ref(db, `teacher_access/${safeEmail}/${cls}`), subjects).then(() => { alert('✅ Доступ збережено!'); document.getElementById('d-acc-email-select').value = ''; document.getElementById('d-acc-class').value = ''; document.getElementById('d-acc-subjects').innerHTML = '<option value="" disabled>Спочатку оберіть клас...</option>'; });
-  };
+  
+  // --- ІНШИЙ ФУНКЦІОНАЛ ДИРЕКТОРА (Імпорт, доступи) ---
+  window.handleImportFiles = async function() { const jsFile = document.getElementById('import-js-file').files[0]; const htmlFile = document.getElementById('import-html-file').files[0]; const cls = document.getElementById('import-class').value; if(!cls) return alert("Оберіть клас для імпорту!"); if(!jsFile) return alert("Оберіть хоча б JS-файл з уроками!"); let finalLessons = null; let finalClubs = null; try { const jsText = await jsFile.text(); const match = jsText.match(/const schedule\s*=\s*(\{[\s\S]+?\n\});/); if (match) { finalLessons = new Function("return " + match[1])(); } else { alert("Не вдалося знайти змінну 'schedule' у JS файлі."); return; } } catch(e) { alert("Помилка парсингу JS: " + e.message); return; } if (htmlFile) { try { const htmlText = await htmlFile.text(); const match = htmlText.match(/const clubSchedule\s*=\s*(\{[\s\S]+?\n\s*\});/); if (match) { finalClubs = new Function("return " + match[1])(); } } catch(e) {} } if(finalLessons) { const updates = {}; updates[`schedules/${cls}/lessons`] = finalLessons; updates[`schedules/${cls}/clubs`] = finalClubs ? finalClubs : null; try { await update(ref(db), updates); alert("✅ Розклад розпарсено та завантажено в БД!"); document.getElementById('import-js-file').value = ''; document.getElementById('import-html-file').value = ''; } catch(e) { alert("Помилка збереження: " + e.message); } } };
+  window.loadDirectorMatrixSubjects = function() { const cls = document.getElementById('d-acc-class').value; const selectSubj = document.getElementById('d-acc-subjects'); if(!cls) { selectSubj.innerHTML = '<option value="" disabled>Спочатку оберіть клас...</option>'; return; } selectSubj.innerHTML = '<option value="" disabled>Завантаження предметів...</option>'; loadScheduleScript(cls, () => { let uniqueSubjects = new Set(); if (window.schedule) { dayKeys.forEach(day => { if(window.schedule[day]) { window.schedule[day].forEach(item => { let sName = window.getValidSubjectName(item); if(sName) uniqueSubjects.add(sName); }); } }); } selectSubj.innerHTML = '<option value="Всі предмети" style="font-weight:bold; color:#d35400;">🌟 Дозволити всі предмети</option>'; if(uniqueSubjects.size > 0) { [...uniqueSubjects].sort().forEach(subj => { selectSubj.innerHTML += `<option value="${subj}">${subj}</option>`; }); } else { selectSubj.innerHTML = '<option value="" disabled>⚠️ Розклад для цього класу не знайдено</option>'; } }); };
+  window.grantTeacherAccess = function() { const safeEmail = document.getElementById('d-acc-email-select').value; const cls = document.getElementById('d-acc-class').value; const opts = document.getElementById('d-acc-subjects').selectedOptions; const subjects = Array.from(opts).map(o => o.value); if(!safeEmail || !cls || subjects.length === 0) return alert('Оберіть вчителя зі списку, оберіть клас та хоча б 1 предмет!'); set(ref(db, `pre_approved_roles/${safeEmail}`), 'teacher'); set(ref(db, `teacher_access/${safeEmail}/${cls}`), subjects).then(() => { alert('✅ Доступ збережено!'); document.getElementById('d-acc-email-select').value = ''; document.getElementById('d-acc-class').value = ''; document.getElementById('d-acc-subjects').innerHTML = '<option value="" disabled>Спочатку оберіть клас...</option>'; }); };
   window.grantStaffRole = function() { const email = document.getElementById('new-staff-email').value.trim().replace(/\./g, '_'); const role = document.getElementById('new-staff-role').value; if (!email) return alert("Введіть Email!"); set(ref(db, `pre_approved_roles/${email}`), role).then(() => { alert(`✅ Доступ надано!`); document.getElementById('new-staff-email').value = ''; }); };
 
   // --- Ініціалізація та Сесія ---
@@ -833,54 +636,37 @@
       const safeEmail = user.email.replace(/\./g, '_');
       get(child(ref(db), `users/${user.uid}`)).then(async (snapshot) => {
         if (snapshot.exists()) { 
-            currentUserData = snapshot.val();
-            if(!currentUserData.email) { currentUserData.email = user.email; update(ref(db, `users/${user.uid}`), { email: user.email }); }
-            if(currentUserData.role === 'teacher') await fetchTeacherAccess(safeEmail);
-            initUserSession(); 
+            currentUserData = snapshot.val(); if(!currentUserData.email) { currentUserData.email = user.email; update(ref(db, `users/${user.uid}`), { email: user.email }); }
+            if(currentUserData.role === 'teacher') await fetchTeacherAccess(safeEmail); initUserSession(); 
         } else {
           get(child(ref(db), `pre_approved_roles/${safeEmail}`)).then(async roleSnap => {
-            if (roleSnap.exists()) {
-              const assignedRole = roleSnap.val(); const newUserData = { role: assignedRole, email: user.email };
-              if(assignedRole === 'teacher') await fetchTeacherAccess(safeEmail);
-              set(ref(db, `users/${user.uid}`), newUserData).then(() => { currentUserData = newUserData; initUserSession(); });
-            } else {
-              get(child(ref(db), `parent_links/${safeEmail}`)).then((linkSnap) => {
-                if (linkSnap.exists()) {
-                  const linkData = linkSnap.val(); let stName, stClass, pRole = 'guardian'; if (typeof linkData === 'string') { stName = linkData; stClass = "class_2"; } else { stName = linkData.studentName; stClass = linkData.class; pRole = linkData.role || 'guardian'; }
-                  const newUserData = { role: "parent", studentName: stName, class: stClass, parentRole: pRole, email: user.email }; set(ref(db, `users/${user.uid}`), newUserData).then(() => { currentUserData = newUserData; initUserSession(); });
-                } else { alert("Ваш Email ще не зареєстровано в системі."); signOut(auth); }
-              });
-            }
+            if (roleSnap.exists()) { const assignedRole = roleSnap.val(); const newUserData = { role: assignedRole, email: user.email }; if(assignedRole === 'teacher') await fetchTeacherAccess(safeEmail); set(ref(db, `users/${user.uid}`), newUserData).then(() => { currentUserData = newUserData; initUserSession(); }); } 
+            else { get(child(ref(db), `parent_links/${safeEmail}`)).then((linkSnap) => { if (linkSnap.exists()) { const linkData = linkSnap.val(); let stName, stClass, pRole = 'guardian'; if (typeof linkData === 'string') { stName = linkData; stClass = "class_2"; } else { stName = linkData.studentName; stClass = linkData.class; pRole = linkData.role || 'guardian'; } const newUserData = { role: "parent", studentName: stName, class: stClass, parentRole: pRole, email: user.email }; set(ref(db, `users/${user.uid}`), newUserData).then(() => { currentUserData = newUserData; initUserSession(); }); } else { alert("Ваш Email ще не зареєстровано в системі."); signOut(auth); } }); }
           });
         }
       });
     } else document.getElementById('login-screen').style.display = 'block';
   });
 
-  async function fetchTeacherAccess(safeEmail) {
-      const snap = await get(child(ref(db), `teacher_access/${safeEmail}`));
-      if(snap.exists()) { teacherAccessMatrix = snap.val(); } else { teacherAccessMatrix = { "class_1":["Всі предмети"],"class_2":["Всі предмети"] }; }
-  }
+  async function fetchTeacherAccess(safeEmail) { const snap = await get(child(ref(db), `teacher_access/${safeEmail}`)); if(snap.exists()) { teacherAccessMatrix = snap.val(); } else { teacherAccessMatrix = { "class_1":["Всі предмети"],"class_2":["Всі предмети"] }; } }
 
   function initUserSession() {
     document.getElementById('calendar-block').style.display = 'block'; updateProfileBar();
-    if (currentUserData.role === 'director') {
-      document.getElementById('director-screen').style.display = 'block'; document.getElementById('teacher-class-selector-box').style.display = 'none'; 
-      loadTeachersListForDirector(); handleDateChange();
-    } else if (currentUserData.role === 'administrator') {
-      document.getElementById('admin-screen').style.display = 'block'; document.getElementById('teacher-class-selector-box').style.display = 'none'; handleDateChange();
-    } else if (currentUserData.role === 'teacher') {
-      document.getElementById('teacher-screen').style.display = 'block'; document.getElementById('teacher-class-selector-box').style.display = 'block';
-      const classSelect = document.getElementById('t-class-selector'); classSelect.innerHTML = '';
-      Object.keys(teacherAccessMatrix).forEach(cls => { classSelect.innerHTML += `<option value="${cls}">${cls.replace('class_','')} Клас</option>`; });
-      if(classSelect.options.length === 0) { alert("Вам ще не призначено класи."); return; } window.handleClassChange(); 
-    } else {
-      document.getElementById('parent-screen').style.display = 'block'; const classNum = currentUserData.class.replace('class_', ''); document.getElementById('p-schedule-link').href = `https://planlekcjipush.netlify.app/class-${classNum}`; loadScheduleScript(currentUserData.class, () => { handleDateChange(); });
-    }
+    if (currentUserData.role === 'director') { document.getElementById('director-screen').style.display = 'block'; document.getElementById('teacher-class-selector-box').style.display = 'none'; loadTeachersListForDirector(); handleDateChange(); } 
+    else if (currentUserData.role === 'administrator') { document.getElementById('admin-screen').style.display = 'block'; document.getElementById('teacher-class-selector-box').style.display = 'none'; handleDateChange(); } 
+    else if (currentUserData.role === 'teacher') { document.getElementById('teacher-screen').style.display = 'block'; document.getElementById('teacher-class-selector-box').style.display = 'block'; const classSelect = document.getElementById('t-class-selector'); classSelect.innerHTML = ''; Object.keys(teacherAccessMatrix).forEach(cls => { classSelect.innerHTML += `<option value="${cls}">${cls.replace('class_','')} Клас</option>`; }); if(classSelect.options.length === 0) { alert("Вам ще не призначено класи."); return; } window.handleClassChange(); } 
+    else { document.getElementById('parent-screen').style.display = 'block'; const classNum = currentUserData.class.replace('class_', ''); document.getElementById('p-schedule-link').href = `https://planlekcjipush.netlify.app/class-${classNum}`; loadScheduleScript(currentUserData.class, () => { handleDateChange(); }); }
   }
 
   window.loginUser = function() { signInWithEmailAndPassword(auth, document.getElementById('email').value.trim(), document.getElementById('pass').value.trim()).catch(e => { document.getElementById('login-error').innerText = "Помилка входу."; document.getElementById('login-error').style.display = 'block'; }); };
   window.logoutUser = function() { if(teacherAttendanceListener) teacherAttendanceListener(); if(parentLessonInterval) clearInterval(parentLessonInterval); document.getElementById('profile-bar').style.display = 'none'; signOut(auth); };
+
+  // --- ЖУРНАЛ (Директор / Вчитель) ---
+  window.openJournalModal = function(role) { document.getElementById('journal-modal').style.display = 'flex'; const monthInput = document.getElementById('j-month-select'); const dateParts = document.getElementById('global-date').value.split('-'); monthInput.value = `${dateParts[0]}-${dateParts[1]}`; const classSelect = document.getElementById('j-class-select'); if(role === 'director') { classSelect.style.display = 'block'; classSelect.innerHTML = '<option value="">Оберіть клас...</option>'; for(let i=1; i<=11; i++) classSelect.innerHTML += `<option value="class_${i}">${i} Клас</option>`; document.getElementById('j-subj-select').innerHTML = '<option value="">Спочатку оберіть клас</option>'; document.getElementById('journal-table-el').innerHTML = ''; } else { classSelect.style.display = 'none'; classSelect.innerHTML = `<option value="${getActiveClass()}">${getActiveClass()}</option>`; updateJournalSubjects(); } };
+  window.closeJournalModal = function() { document.getElementById('journal-modal').style.display = 'none'; };
+  window.updateJournalSubjects = function() { const cls = document.getElementById('j-class-select').value; const subjSelect = document.getElementById('j-subj-select'); if(!cls) { subjSelect.innerHTML = '<option value="">Спочатку оберіть клас</option>'; return; } subjSelect.innerHTML = '<option value="">Завантаження...</option>'; loadScheduleScript(cls, () => { let uniqueSubjects = new Set(); if(window.schedule) { dayKeys.forEach(d => { if(window.schedule[d]) { window.schedule[d].forEach(i => { let sName = window.getValidSubjectName(i); if(sName) uniqueSubjects.add(sName); }); } }); } if(uniqueSubjects.size === 0) { get(child(ref(db), `grades/${cls}`)).then(snap => { if(snap.exists()) { const monthsData = snap.val(); for(let m in monthsData) { for(let s in monthsData[m]) uniqueSubjects.add(s); } } finishJournalSubjectsRender(uniqueSubjects, cls, subjSelect); }); return; } finishJournalSubjectsRender(uniqueSubjects, cls, subjSelect); }); };
+  function finishJournalSubjectsRender(uniqueSubjects, cls, subjSelect) { if(currentUserData.role === 'teacher') { uniqueSubjects = new Set([...uniqueSubjects].filter(s => window.isSubjectAllowed(cls, s))); } subjSelect.innerHTML = '<option value="">-- Оберіть предмет --</option>'; if(uniqueSubjects.size > 0) { [...uniqueSubjects].sort().forEach(s => subjSelect.innerHTML += `<option value="${s}">${s}</option>`); } else { subjSelect.innerHTML = '<option value="" disabled>Предмети відсутні (або немає доступу)</option>'; } if (currentUserData.role === 'teacher' && document.getElementById('t-subject').value) { const currentSubj = document.getElementById('t-subject').value; if(uniqueSubjects.has(currentSubj)) subjSelect.value = currentSubj; } renderJournalTable(); }
+  window.renderJournalTable = async function() { const cls = document.getElementById('j-class-select').value; const subj = document.getElementById('j-subj-select').value; const yMonth = document.getElementById('j-month-select').value; const table = document.getElementById('journal-table-el'); if(!cls || !subj || !yMonth) { table.innerHTML = ''; return; } table.innerHTML = '<tr><td style="padding: 20px;">⏳ Завантаження даних журналу...</td></tr>'; const [y, m] = yMonth.split('-'); const daysInMonth = new Date(y, m, 0).getDate(); try { const [studentsSnap, gradesSnap, attSnap] = await Promise.all([ get(child(ref(db), `students_list/${cls}`)), get(child(ref(db), `grades/${cls}/${yMonth}/${subj}`)), get(child(ref(db), `attendance/${cls}`)) ]); let students = []; if (studentsSnap.exists()) students = Object.values(studentsSnap.val()).sort(); if (students.length === 0) { table.innerHTML = '<tr><td style="padding: 20px;">У списку немає учнів.</td></tr>'; return; } const gradesData = gradesSnap.exists() ? gradesSnap.val() : {}; const attDataAll = attSnap.exists() ? attSnap.val() : {}; const attData = {}; for(let d in attDataAll) { if(d.startsWith(yMonth)) attData[d] = attDataAll[d]; } let thead = '<thead><tr><th class="student-name">Учень</th>'; for(let i=1; i<=daysInMonth; i++) thead += `<th>${i}</th>`; thead += '</tr></thead>'; let tbody = '<tbody>'; students.forEach(st => { tbody += `<tr><td class="student-name">${st}</td>`; for(let i=1; i<=daysInMonth; i++) { const dateStr = `${yMonth}-${String(i).padStart(2,'0')}`; const statusInfo = (attData[dateStr] && attData[dateStr][st]) ? attData[dateStr][st].status : null; const grade = (gradesData[dateStr] && gradesData[dateStr][st]) ? gradesData[dateStr][st] : ''; let cellContent = ''; if (grade) cellContent = `<span class="cell-grade">${grade}</span>`; if (statusInfo === 'absent') { cellContent += (cellContent ? `<br>` : '') + `<span class="cell-absent" title="Відсутній">н</span>`; } else if (statusInfo === 'late') { cellContent += (cellContent ? `<br>` : '') + `<span class="cell-absent" style="color:#f39c12;" title="Запізнення">з</span>`; } tbody += `<td>${cellContent}</td>`; } tbody += '</tr>'; }); tbody += '</tbody>'; table.innerHTML = thead + tbody; } catch(e) { console.error(e); table.innerHTML = '<tr><td style="padding: 20px; color: red;">Помилка завантаження журналу.</td></tr>'; } };
 
   // --- КОНТРОЛЬНІ, ВІДВІДУВАНІСТЬ ТА ДЗ (Залишається без змін) ---
   window.openExamsCalendar = function() { document.getElementById('exams-modal').style.display = 'flex'; document.getElementById('exam-class-label').innerText = document.getElementById('t-class-selector').options[document.getElementById('t-class-selector').selectedIndex].text; document.getElementById('exams-day-details').style.display = 'none'; const monthInput = document.getElementById('exam-month-select'); const dateParts = document.getElementById('global-date').value.split('-'); monthInput.value = `${dateParts[0]}-${dateParts[1]}`; renderExamsCalendar(); };
@@ -905,7 +691,7 @@
   window.renderDirectorHWDetails = async function() { const date = document.getElementById('global-date').value; const hwCls = document.getElementById('d-detail-hw-class').value; const hwList = document.getElementById('d-detail-hw-list'); if(hwCls) { const hwSnap = await get(child(ref(db), `homeworks/${hwCls}/${date}`)); hwList.innerHTML = ''; const [y, m, d] = date.split('-'); const dateVal = new Date(y, m-1, d); const dayName = dayKeys[dateVal.getDay()]; let scheduleSubjects = []; if (window.schedule && window.schedule[dayName]) { scheduleSubjects = window.schedule[dayName].map(window.getValidSubjectName).filter(Boolean); } if(hwSnap.exists()) { const data = hwSnap.val(); const actualSubjects = Object.keys(data); const allSubjectsToDisplay = [...new Set([...scheduleSubjects, ...actualSubjects])]; allSubjectsToDisplay.forEach(subj => { if(data[subj]) hwList.innerHTML += `<li style="margin-bottom:5px;"><span style="color:#27ae60;">✅</span> <b>${subj}</b>: задано</li>`; else hwList.innerHTML += `<li style="margin-bottom:5px;"><span style="color:#e74c3c;">❌</span> <span style="color:#888;">${subj}</span>: немає</li>`; }); } else { hwList.innerHTML = '<li class="empty-msg">ДЗ взагалі не задано для цього класу на обраний день.</li>'; } } };
   window.loadTeacherDashboard = function() { const date = document.getElementById('global-date').value; const activeClass = getActiveClass(); const myUid = auth.currentUser.uid; Promise.all([ get(child(ref(db), `reactions/${activeClass}`)), get(child(ref(db), `authors/${activeClass}`)) ]).then(([reactSnap, authSnap]) => { let count = 0; if(reactSnap.exists() && authSnap.exists()) { const reactions = reactSnap.val(); const authors = authSnap.val(); for(let d in reactions) for(let subj in reactions[d]) if(authors[d] && authors[d][subj] === myUid) count += Object.keys(reactions[d][subj]).length; } document.getElementById('t-karma-counter').innerText = count; }); get(child(ref(db), `homeworks/${activeClass}/${date}`)).then(snap => { const hwList = document.getElementById('t-daily-hw-list'); hwList.innerHTML = ''; if(snap.exists()) { const data = snap.val(); for(let subj in data) hwList.innerHTML += renderHwItem(subj, data[subj]); } else hwList.innerHTML = '<li class="empty-msg">ДЗ ще не задано.</li>'; }); };
   function updateCurrentLesson() { if(!window.schedule) { const display = document.getElementById('p-current-lesson'); if (display) display.innerText = "Уроків немає (розклад не знайдено)"; const progress = document.getElementById('p-lesson-progress'); if (progress) progress.style.width = '0%'; const count = document.getElementById('p-lesson-countdown'); if (count) count.innerText = ""; return; } const now = new Date(); const dayName = dayKeys[now.getDay()]; const currentTime = now.getHours() * 60 + now.getMinutes(); const lessons = window.schedule[dayName] || []; let current = lessons.find(l => { if(!l.time) return false; const [startStr, endStr] = l.time.split(" - "); if(!startStr || !endStr) return false; const [sh, sm] = startStr.split(":"); const startMins = parseInt(sh)*60 + parseInt(sm); const [eh, em] = endStr.split(":"); const endMins = parseInt(eh)*60 + parseInt(em); return currentTime >= startMins && currentTime < endMins; }); const display = document.getElementById('p-current-lesson'); const progress = document.getElementById('p-lesson-progress'); const count = document.getElementById('p-lesson-countdown'); if(current) { display.innerText = current.subject.ua; const [sh, sm] = current.time.split(" - ")[0].split(":"); const startMins = parseInt(sh)*60 + parseInt(sm); const [eh, em] = current.time.split(" - ")[1].split(":"); const endMins = parseInt(eh)*60 + parseInt(em); let perc = ((currentTime - startMins) / (endMins - startMins)) * 100; progress.style.width = perc + '%'; count.innerText = `Залишилось: ${endMins - currentTime} хв`; } else { display.innerText = "Уроків немає"; progress.style.width = '0%'; count.innerText = ""; } }
-  window.loadParentDashboard = function() { if (!currentUserData) return; const date = document.getElementById('global-date').value; const activeClass = getActiveClass(); if(parentLessonInterval) clearInterval(parentLessonInterval); updateCurrentLesson(); parentLessonInterval = setInterval(updateCurrentLesson, 60000); get(child(ref(db), `stickers/${activeClass}/${currentUserData.studentName}`)).then(snap => { const count = snap.exists() ? Object.keys(snap.val()).length : 0; const percent = Math.min((count / STICKER_GOAL) * 100, 100); document.getElementById('p-ribbon-progress').style.width = percent + '%'; document.getElementById('p-ribbon-count').innerText = `${count} / ${STICKER_GOAL} наліпок до призу`; const msgEl = document.getElementById('p-ribbon-msg'); if(msgEl) { if (count >= STICKER_GOAL) { msgEl.innerText = "🎉 Ура! Ти досяг мети! Час отримувати приз!"; confetti({ particleCount: 150, spread: 80, origin: { y: 0.5 }, colors: ['#f1c40f', '#e74c3c', '#3498db', '#2ecc71'] }); } else { msgEl.innerText = ""; } } }).catch(e => { document.getElementById('p-ribbon-count').innerText = "Помилка завантаження"; }); get(child(ref(db), `attendance/${activeClass}/${date}/${currentUserData.studentName}`)).then(snap => { const statusEl = document.getElementById('p-att-status'); if(snap.exists()) { const data = snap.val(); statusEl.innerText = `✅ Ви повідомили: ${data.status === 'late'?'Запізнення':'Відсутність'} (${data.reason})`; statusEl.style.display = 'block'; } else statusEl.style.display = 'none'; }); get(child(ref(db), `homeworks/${activeClass}/${date}`)).then(snap => { document.getElementById('p-daily-hw-list').innerHTML = ''; if(snap.exists()) { const data = snap.val(); for(let subj in data) document.getElementById('p-daily-hw-list').innerHTML += renderHwItem(subj, data[subj]); } else document.getElementById('p-daily-hw-list').innerHTML = '<li class="empty-msg">На цей день ДЗ не задано.</li>'; }); const yMonth = date.substring(0, 7); Promise.all([ get(child(ref(db), `comments/${activeClass}/${date}`)), get(child(ref(db), `reactions/${activeClass}/${date}`)), get(child(ref(db), `grades/${activeClass}/${yMonth}`)) ]).then(([commentsSnap, reactionsSnap, gradesSnap]) => { const list = document.getElementById('p-daily-comments-list'); list.innerHTML = ''; let hasItems = false; const allReactions = reactionsSnap.exists() ? reactionsSnap.val() : {}; const allGrades = gradesSnap.exists() ? gradesSnap.val() : {}; const subjectsWithInfo = new Set(); if(commentsSnap.exists()) Object.keys(commentsSnap.val()).forEach(s => subjectsWithInfo.add(s)); if(gradesSnap.exists()) Object.keys(allGrades).forEach(s => { if(allGrades[s][date] && allGrades[s][date][currentUserData.studentName]) subjectsWithInfo.add(s); }); subjectsWithInfo.forEach(subj => { const comment = (commentsSnap.exists() && commentsSnap.val()[subj] && commentsSnap.val()[subj][currentUserData.studentName]) ? commentsSnap.val()[subj][currentUserData.studentName] : ''; const grade = (allGrades[subj] && allGrades[subj][date] && allGrades[subj][date][currentUserData.studentName]) ? allGrades[subj][date][currentUserData.studentName] : ''; if (comment || grade) { hasItems = true; const currentReaction = allReactions[subj]?.[currentUserData.studentName] || null; const reactionHtml = `<div class="reaction-box"><span class="reaction-label">Відреагувати:</span><button class="reaction-btn ${currentReaction === '👍' ? 'active' : ''}" onclick="sendReaction('${date}', '${subj}', '👍')">👍</button><button class="reaction-btn ${currentReaction === '❤️' ? 'active' : ''}" onclick="sendReaction('${date}', '${subj}', '❤️')">❤️</button><button class="reaction-btn ${currentReaction === '🔥' ? 'active' : ''}" onclick="sendReaction('${date}', '${subj}', '🔥')">🔥</button><button class="reaction-btn ${currentReaction === '🙏' ? 'active' : ''}" onclick="sendReaction('${date}', '${subj}', '🙏')">🙏</button></div>`; let displayHtml = `<li><b>${subj}:</b><br>`; if (grade) displayHtml += `<span class="badge badge-grade">Оцінка: ${grade}</span><br>`; if (comment) displayHtml += `${comment}`; displayHtml += `${reactionHtml}</li>`; list.innerHTML += displayHtml; } }); if(!hasItems) list.innerHTML = '<li class="empty-msg">Немає оцінок або коментарів на цей день.</li>'; }); };
+  window.loadParentDashboard = function() { if (!currentUserData) return; const date = document.getElementById('global-date').value; const activeClass = getActiveClass(); if(parentLessonInterval) clearInterval(parentLessonInterval); updateCurrentLesson(); parentLessonInterval = setInterval(updateCurrentLesson, 60000); get(child(ref(db), `stickers/${activeClass}/${currentUserData.studentName}`)).then(snap => { const count = snap.exists() ? Object.keys(snap.val()).length : 0; const percent = Math.min((count / STICKER_GOAL) * 100, 100); document.getElementById('p-ribbon-progress').style.width = percent + '%'; document.getElementById('p-ribbon-count').innerText = `${count} / ${STICKER_GOAL} наліпок до призу`; const msgEl = document.getElementById('p-ribbon-msg'); if(msgEl) { if (count >= STICKER_GOAL) { msgEl.innerText = "🎉 Ура! Ти досяг мети! Час отримувати приз!"; confetti({ particleCount: 150, spread: 80, origin: { y: 0.5 }, colors: ['#f1c40f', '#e74c3c', '#3498db', '#2ecc71'] }); } else { msgEl.innerText = ""; } } }).catch(e => { document.getElementById('p-ribbon-count').innerText = "Помилка завантаження"; }); get(child(ref(db), `attendance/${activeClass}/${date}/${currentUserData.studentName}`)).then(snap => { const statusEl = document.getElementById('p-att-status'); if(snap.exists()) { const data = snap.val(); statusEl.innerText = `✅ Ви повідомили: ${data.status === 'late'?'Запізнення':'Відсутність'} (${data.reason})`; statusEl.style.display = 'block'; } else statusEl.style.display = 'none'; }); get(child(ref(db), `homeworks/${activeClass}/${date}`)).then(snap => { document.getElementById('p-daily-hw-list').innerHTML = ''; if(snap.exists()) { const data = val(); for(let subj in data) document.getElementById('p-daily-hw-list').innerHTML += renderHwItem(subj, data[subj]); } else document.getElementById('p-daily-hw-list').innerHTML = '<li class="empty-msg">На цей день ДЗ не задано.</li>'; }); const yMonth = date.substring(0, 7); Promise.all([ get(child(ref(db), `comments/${activeClass}/${date}`)), get(child(ref(db), `reactions/${activeClass}/${date}`)), get(child(ref(db), `grades/${activeClass}/${yMonth}`)) ]).then(([commentsSnap, reactionsSnap, gradesSnap]) => { const list = document.getElementById('p-daily-comments-list'); list.innerHTML = ''; let hasItems = false; const allReactions = reactionsSnap.exists() ? reactionsSnap.val() : {}; const allGrades = gradesSnap.exists() ? gradesSnap.val() : {}; const subjectsWithInfo = new Set(); if(commentsSnap.exists()) Object.keys(commentsSnap.val()).forEach(s => subjectsWithInfo.add(s)); if(gradesSnap.exists()) Object.keys(allGrades).forEach(s => { if(allGrades[s][date] && allGrades[s][date][currentUserData.studentName]) subjectsWithInfo.add(s); }); subjectsWithInfo.forEach(subj => { const comment = (commentsSnap.exists() && commentsSnap.val()[subj] && commentsSnap.val()[subj][currentUserData.studentName]) ? commentsSnap.val()[subj][currentUserData.studentName] : ''; const grade = (allGrades[subj] && allGrades[subj][date] && allGrades[subj][date][currentUserData.studentName]) ? allGrades[subj][date][currentUserData.studentName] : ''; if (comment || grade) { hasItems = true; const currentReaction = allReactions[subj]?.[currentUserData.studentName] || null; const reactionHtml = `<div class="reaction-box"><span class="reaction-label">Відреагувати:</span><button class="reaction-btn ${currentReaction === '👍' ? 'active' : ''}" onclick="sendReaction('${date}', '${subj}', '👍')">👍</button><button class="reaction-btn ${currentReaction === '❤️' ? 'active' : ''}" onclick="sendReaction('${date}', '${subj}', '❤️')">❤️</button><button class="reaction-btn ${currentReaction === '🔥' ? 'active' : ''}" onclick="sendReaction('${date}', '${subj}', '🔥')">🔥</button><button class="reaction-btn ${currentReaction === '🙏' ? 'active' : ''}" onclick="sendReaction('${date}', '${subj}', '🙏')">🙏</button></div>`; let displayHtml = `<li><b>${subj}:</b><br>`; if (grade) displayHtml += `<span class="badge badge-grade">Оцінка: ${grade}</span><br>`; if (comment) displayHtml += `${comment}`; displayHtml += `${reactionHtml}</li>`; list.innerHTML += displayHtml; } }); if(!hasItems) list.innerHTML = '<li class="empty-msg">Немає оцінок або коментарів на цей день.</li>'; }); };
   window.updateAttOptions = function() { const type = document.getElementById('p-att-type').value; const reason = document.getElementById('p-att-reason'); reason.innerHTML = ''; if(type === 'late') { reason.innerHTML = '<option value="на 10 хвилин">на 10 хвилин</option><option value="на 15 хвилин">на 15 хвилин</option><option value="до 2-го уроку">до 2-го уроку</option><option value="до 3-го уроку">до 3-го уроку</option>'; } else { reason.innerHTML = '<option value="за сімейними обставинами">за сімейними обставинами</option><option value="через хворобу">через хворобу</option>'; } };
   window.submitAttendance = function() { const date = document.getElementById('global-date').value; const type = document.getElementById('p-att-type').value; const reason = document.getElementById('p-att-reason').value; set(ref(db, `attendance/${getActiveClass()}/${date}/${currentUserData.studentName}`), { status: type, reason: reason }).then(() => { document.getElementById('p-att-status').innerText = `✅ Ви повідомили: ${type === 'late'?'Запізнення':'Відсутність'} (${reason})`; document.getElementById('p-att-status').style.display = 'block'; }); };
   window.sendReaction = function(date, subject, emoji) { if (!currentUserData) return; set(ref(db, `reactions/${getActiveClass()}/${date}/${subject}/${currentUserData.studentName}`), emoji).then(() => loadParentDashboard()); };
