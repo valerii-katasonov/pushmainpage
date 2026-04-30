@@ -82,6 +82,7 @@
 
 <div id="toast-container"></div>
 
+<!-- ДАТАЛИСТЫ ДЛЯ ОЦЕНОК -->
 <datalist id="grades-letters">
     <option value="В"></option>
     <option value="Д"></option>
@@ -351,6 +352,7 @@
   </div>
 </div>
 
+<!-- МОДАЛКА ЖУРНАЛА -->
 <div id="journal-modal" class="modal-overlay">
   <div class="modal-content" style="max-width: 900px; width: 100%; padding: 20px;">
     <h2 style="color: #2980b9; margin-top:0;">📖 Класний журнал</h2>
@@ -363,13 +365,15 @@
 
     <div style="overflow-x:auto; background: #fff; border-radius: 8px; border: 1px solid #ddd; max-height: 50vh;">
         <table class="journal-table" id="journal-table-el">
-            </table>
+            <!-- JS fills this -->
+        </table>
     </div>
 
     <button onclick="closeJournalModal()" style="background: #333; color:white; width: 100%; margin-top: 20px;">Закрити</button>
   </div>
 </div>
 
+<!-- МОДАЛКА КОНТРОЛЬНЫХ -->
 <div id="exams-modal" class="modal-overlay">
   <div class="modal-content">
     <h2 style="color: #d35400; margin-top:0;">📅 Контрольні роботи</h2>
@@ -418,13 +422,29 @@
   const localDateString = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
   document.getElementById('global-date').value = localDateString;
 
-  // Глобальная функция для надежного извлечения имени предмета (учитывая разные форматы в schedule-файлах)
+  // --- РОЗУМНІ ФІЛЬТРИ ДЛЯ ПРЕДМЕТІВ (ВИПРАВЛЕНО БАГ ДОСТУПУ) ---
   window.extractSubject = function(item) {
-      if (!item || !item.subject || item.number === " ") return null;
+      if (!item || !item.subject) return null;
       let sName = typeof item.subject === 'string' ? item.subject : item.subject.ua;
-      if (sName && sName !== "Перерва") return sName;
+      if (sName && sName.trim() !== "Перерва") return sName.trim();
       return null;
   };
+
+  window.getAllowedSubjects = function(cls) {
+      let raw = teacherAccessMatrix[cls];
+      if (!raw) return []; 
+      // Запобігаємо багу Firebase, де масив перетворюється на об'єкт
+      let arr = Array.isArray(raw) ? raw : Object.values(raw);
+      return arr.map(s => typeof s === 'string' ? s.trim() : s);
+  };
+
+  window.isSubjectAllowed = function(cls, subjectName) {
+      if (!subjectName) return false;
+      let allowed = window.getAllowedSubjects(cls);
+      if (allowed.includes("Всі предмети")) return true;
+      return allowed.includes(subjectName.trim());
+  };
+  // -----------------------------------------------------------------
 
   function showToast(message) {
     const container = document.getElementById('toast-container');
@@ -526,7 +546,6 @@
               });
           }
           
-          // Безопасный резервный вариант, если расписание не загрузилось или пустое
           if(uniqueSubjects.size === 0) {
               get(child(ref(db), `grades/${cls}`)).then(snap => {
                  if(snap.exists()) {
@@ -545,12 +564,8 @@
   };
 
   function finishJournalSubjectsRender(uniqueSubjects, cls, subjSelect) {
-      let allowed = [];
       if(currentUserData.role === 'teacher') {
-          allowed = teacherAccessMatrix[cls] || [];
-          if(!allowed.includes("Всі предмети")) {
-              uniqueSubjects = new Set([...uniqueSubjects].filter(s => allowed.includes(s)));
-          }
+          uniqueSubjects = new Set([...uniqueSubjects].filter(s => isSubjectAllowed(cls, s)));
       }
       
       subjSelect.innerHTML = '<option value="">-- Оберіть предмет --</option>';
@@ -684,7 +699,7 @@
       
       set(ref(db, `pre_approved_roles/${email}`), 'teacher');
       set(ref(db, `teacher_access/${email}/${cls}`), subjects).then(() => {
-          alert('✅ Доступ збережено!');
+          alert('✅ Доступ збережено! (Вчителю потрібно оновити сторінку)');
           document.getElementById('d-acc-email').value = '';
           document.getElementById('d-acc-class').value = '';
           document.getElementById('d-acc-subjects').innerHTML = '<option value="" disabled>Спочатку оберіть клас...</option>';
@@ -763,14 +778,12 @@
          let allClassSubjects = new Set(); 
 
          if (window.schedule) {
-             // Предметы ИМЕННО на выбранный день
              if (window.schedule[dayName]) {
                  window.schedule[dayName].forEach(item => {
                      let sName = extractSubject(item);
                      if(sName) daySubjects.add(sName);
                  });
              }
-             // Резервный список: ВСЕ предметы класса (если выбрали выходной)
              dayKeys.forEach(day => {
                  if(window.schedule[day]) {
                      window.schedule[day].forEach(item => {
@@ -781,17 +794,16 @@
              });
          }
 
-         // Если на выбранный день нет предметов, показываем предметы со всей недели
          if (daySubjects.size === 0) {
              daySubjects = allClassSubjects;
          }
 
-         const allowed = teacherAccessMatrix[cls] || [];
-         const isAllAllowed = allowed.includes("Всі предмети");
-
          let finalExamSubjects = [];
-         if (isAllAllowed) { finalExamSubjects = [...daySubjects].sort(); } 
-         else { finalExamSubjects = [...daySubjects].filter(s => allowed.includes(s)).sort(); }
+         if (currentUserData.role === 'teacher') {
+             finalExamSubjects = [...daySubjects].filter(s => isSubjectAllowed(cls, s)).sort();
+         } else {
+             finalExamSubjects = [...daySubjects].sort();
+         }
 
          let subjOpts = finalExamSubjects.map(s => `<option value="${s}">${s}</option>`).join('');
          let btnDisabled = '';
@@ -828,9 +840,6 @@
 
   function updateSubjectList() {
     const activeClass = getActiveClass();
-    const allowed = teacherAccessMatrix[activeClass] || [];
-    const isAllAllowed = allowed.includes("Всі предмети");
-
     const dateStr = document.getElementById('global-date').value; const [y, m, d] = dateStr.split('-'); const dateVal = new Date(y, m-1, d);
     const dayName = dayKeys[dateVal.getDay()]; 
     
@@ -840,10 +849,7 @@
     } 
 
     const select = document.getElementById('t-subject'); select.innerHTML = ''; 
-    let finalSubjects = [];
-
-    if(isAllAllowed) { finalSubjects = scheduleSubjects; } 
-    else { finalSubjects = scheduleSubjects.filter(s => allowed.includes(s)); } 
+    let finalSubjects = scheduleSubjects.filter(subj => isSubjectAllowed(activeClass, subj));
 
     [...new Set(finalSubjects)].forEach(subj => { 
         const opt = document.createElement('option'); opt.value = subj; opt.innerText = subj; select.appendChild(opt); 
@@ -905,7 +911,9 @@
       if(snap.exists()) {
           teacherAccessMatrix = snap.val();
       } else {
-          teacherAccessMatrix = { "class_1":["Всі предмети"],"class_2":["Всі предмети"] }; 
+          // Якщо директор ще не задав матрицю доступу - даємо повний доступ, щоб не блокувати роботу
+          teacherAccessMatrix = {};
+          for(let i=1; i<=11; i++) teacherAccessMatrix[`class_${i}`] = ["Всі предмети"];
       }
   }
 
