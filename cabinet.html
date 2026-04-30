@@ -253,7 +253,7 @@
     </div>
 
     <div class="data-card" style="border-left-color: #3498db; background: #f4f9fd;">
-      <h4 style="margin-top:0; color: #2980b9;">📋 Зведення всіх ДЗ класу:</h4>
+      <h4 style="margin-top:0; color: #2980b9;">📋 Зведення всіх ДЗ класса:</h4>
       <ul id="t-daily-hw-list" class="list-dash"></ul>
     </div>
     
@@ -422,28 +422,26 @@
   const localDateString = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
   document.getElementById('global-date').value = localDateString;
 
-  // --- БРОНЕБІЙНА ЛОГІКА ПЕРЕВІРКИ ПРЕДМЕТІВ ---
-  window.extractSubject = function(item) {
-      if (!item || !item.subject) return null;
-      let sName = typeof item.subject === 'string' ? item.subject : item.subject.ua;
-      if (sName && sName.trim() !== "Перерва") return sName.trim();
+  // --- ВІДНОВЛЕНА РОБОЧА ЛОГІКА З ТВОГО КОДУ ---
+  window.getValidSubjectName = function(item) {
+      if (!item) return null;
+      let sName = item.subject && item.subject.ua ? item.subject.ua : item.subject;
+      if (sName && typeof sName === 'string' && sName.trim() !== "Перерва" && item.number !== " ") {
+          return sName.trim();
+      }
       return null;
   };
 
   window.isSubjectAllowed = function(cls, subjectName) {
       if (!subjectName) return false;
-      let raw = teacherAccessMatrix[cls];
-      if (!raw) return false;
-      
-      // Незалежно від того, що повернув Firebase (масив чи об'єкт), робимо масив
+      let raw = teacherAccessMatrix[cls] || [];
+      // Захист на випадок, якщо Firebase зберіг масив як об'єкт
       let allowed = Array.isArray(raw) ? raw : Object.values(raw);
-      
-      // Приводимо всі дозволені предмети до нижнього регістру і без пробілів по краях
-      let normAllowed = allowed.map(s => typeof s === 'string' ? s.trim().toLowerCase() : '');
-      // Те саме робимо з предметом, який перевіряємо
-      let normTarget = subjectName.trim().toLowerCase();
 
-      if (normAllowed.includes("всі предмети")) return true;
+      let normAllowed = allowed.map(s => typeof s === 'string' ? s.trim() : '');
+      let normTarget = subjectName.trim();
+
+      if (normAllowed.includes("Всі предмети")) return true;
       return normAllowed.includes(normTarget);
   };
   // ------------------------------------------------
@@ -541,7 +539,7 @@
               dayKeys.forEach(d => {
                   if(window.schedule[d]) {
                       window.schedule[d].forEach(i => {
-                          let sName = extractSubject(i);
+                          let sName = window.getValidSubjectName(i);
                           if(sName) uniqueSubjects.add(sName);
                       });
                   }
@@ -567,7 +565,7 @@
 
   function finishJournalSubjectsRender(uniqueSubjects, cls, subjSelect) {
       if(currentUserData.role === 'teacher') {
-          uniqueSubjects = new Set([...uniqueSubjects].filter(s => isSubjectAllowed(cls, s)));
+          uniqueSubjects = new Set([...uniqueSubjects].filter(s => window.isSubjectAllowed(cls, s)));
       }
       
       subjSelect.innerHTML = '<option value="">-- Оберіть предмет --</option>';
@@ -672,7 +670,7 @@
               dayKeys.forEach(day => {
                   if(window.schedule[day]) {
                       window.schedule[day].forEach(item => {
-                          let sName = extractSubject(item);
+                          let sName = window.getValidSubjectName(item);
                           if(sName) uniqueSubjects.add(sName);
                       });
                   }
@@ -777,32 +775,17 @@
          const dayName = dayKeys[dateObj.getDay()];
 
          let daySubjects = new Set();
-         let allClassSubjects = new Set(); 
-
-         if (window.schedule) {
-             if (window.schedule[dayName]) {
-                 window.schedule[dayName].forEach(item => {
-                     let sName = extractSubject(item);
-                     if(sName) daySubjects.add(sName);
-                 });
-             }
-             dayKeys.forEach(day => {
-                 if(window.schedule[day]) {
-                     window.schedule[day].forEach(item => {
-                         let sName = extractSubject(item);
-                         if(sName) allClassSubjects.add(sName);
-                     });
-                 }
+         
+         if (window.schedule && window.schedule[dayName]) {
+             window.schedule[dayName].forEach(item => {
+                 let sName = window.getValidSubjectName(item);
+                 if(sName) daySubjects.add(sName);
              });
-         }
-
-         if (daySubjects.size === 0) {
-             daySubjects = allClassSubjects;
          }
 
          let finalExamSubjects = [];
          if (currentUserData.role === 'teacher') {
-             finalExamSubjects = [...daySubjects].filter(s => isSubjectAllowed(cls, s)).sort();
+             finalExamSubjects = [...daySubjects].filter(s => window.isSubjectAllowed(cls, s)).sort();
          } else {
              finalExamSubjects = [...daySubjects].sort();
          }
@@ -847,11 +830,11 @@
     
     let scheduleSubjects = [];
     if (window.schedule && window.schedule[dayName]) { 
-        scheduleSubjects = window.schedule[dayName].map(extractSubject).filter(Boolean); 
+        scheduleSubjects = window.schedule[dayName].map(window.getValidSubjectName).filter(Boolean); 
     } 
 
     const select = document.getElementById('t-subject'); select.innerHTML = ''; 
-    let finalSubjects = scheduleSubjects.filter(subj => isSubjectAllowed(activeClass, subj));
+    let finalSubjects = scheduleSubjects.filter(subj => window.isSubjectAllowed(activeClass, subj));
 
     [...new Set(finalSubjects)].forEach(subj => { 
         const opt = document.createElement('option'); opt.value = subj; opt.innerText = subj; select.appendChild(opt); 
@@ -913,9 +896,8 @@
       if(snap.exists()) {
           teacherAccessMatrix = snap.val();
       } else {
-          // Якщо директор ще не задав матрицю доступу - даємо повний доступ, щоб не блокувати роботу
-          teacherAccessMatrix = {};
-          for(let i=1; i<=11; i++) teacherAccessMatrix[`class_${i}`] = ["Всі предмети"];
+          // Fallback to avoid complete block if nothing assigned
+          teacherAccessMatrix = { "class_1":["Всі предмети"],"class_2":["Всі предмети"] }; 
       }
   }
 
@@ -1125,7 +1107,7 @@
           const hwSnap = await get(child(ref(db), `homeworks/${hwCls}/${date}`)); hwList.innerHTML = '';
           const [y, m, d] = date.split('-'); const dateVal = new Date(y, m-1, d); const dayName = dayKeys[dateVal.getDay()];
           let scheduleSubjects = [];
-          if (window.schedule && window.schedule[dayName]) { scheduleSubjects = window.schedule[dayName].map(extractSubject).filter(Boolean); } 
+          if (window.schedule && window.schedule[dayName]) { scheduleSubjects = window.schedule[dayName].map(window.getValidSubjectName).filter(Boolean); } 
           
           if(hwSnap.exists()) {
               const data = hwSnap.val(); const actualSubjects = Object.keys(data); const allSubjectsToDisplay = [...new Set([...scheduleSubjects, ...actualSubjects])];
