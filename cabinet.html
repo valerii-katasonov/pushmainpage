@@ -79,6 +79,15 @@
     .cell-subj { font-weight: bold; font-size: 0.85rem; color: #333; margin-bottom: 4px; line-height: 1.2;}
     .cell-teacher { font-size: 0.75rem; color: #e67e22; display: flex; align-items: center; gap: 4px; font-weight: 600; margin-bottom: 4px;}
     .cell-time { font-size: 0.7rem; color: #999; margin-top: auto; text-align: right; background: rgba(255,255,255,0.7); padding: 2px 4px; border-radius: 4px; display: inline-block; align-self: flex-end;}
+
+    /* === Стили для Классного журнала === */
+    .journal-table { width: 100%; border-collapse: collapse; min-width: 800px; text-align: center; font-size: 0.9rem; }
+    .journal-table th, .journal-table td { border: 1px solid #ddd; padding: 8px 4px; vertical-align: middle; }
+    .journal-table th { background: #d0e8f2; color: #2980b9; font-weight: 800; position: sticky; top: 0; z-index: 2; }
+    .journal-table td.student-name { text-align: left; font-weight: 800; background: #fffcf0; position: sticky; left: 0; z-index: 1; border-right: 2px solid #ccc; padding-left: 15px; min-width: 150px; }
+    .journal-table th.student-name { background: #d0e8f2; z-index: 3; border-right: 2px solid #ccc; left: 0; }
+    .cell-grade { font-weight: bold; color: #27ae60; font-size: 0.95rem; }
+    .cell-absent { font-weight: bold; color: #c0392b; font-size: 0.85rem; }
   </style>
 </head>
 <body>
