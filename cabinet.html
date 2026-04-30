@@ -82,7 +82,6 @@
 
 <div id="toast-container"></div>
 
-<!-- ДАТАЛИСТЫ ДЛЯ ОЦЕНОК -->
 <datalist id="grades-letters">
     <option value="В"></option>
     <option value="Д"></option>
@@ -352,7 +351,6 @@
   </div>
 </div>
 
-<!-- МОДАЛКА ЖУРНАЛА -->
 <div id="journal-modal" class="modal-overlay">
   <div class="modal-content" style="max-width: 900px; width: 100%; padding: 20px;">
     <h2 style="color: #2980b9; margin-top:0;">📖 Класний журнал</h2>
@@ -365,19 +363,19 @@
 
     <div style="overflow-x:auto; background: #fff; border-radius: 8px; border: 1px solid #ddd; max-height: 50vh;">
         <table class="journal-table" id="journal-table-el">
-            <!-- JS fills this -->
-        </table>
+            </table>
     </div>
 
     <button onclick="closeJournalModal()" style="background: #333; color:white; width: 100%; margin-top: 20px;">Закрити</button>
   </div>
 </div>
 
-<!-- МОДАЛКА КОНТРОЛЬНЫХ -->
 <div id="exams-modal" class="modal-overlay">
   <div class="modal-content">
     <h2 style="color: #d35400; margin-top:0;">📅 Контрольні роботи</h2>
     <p style="font-size:0.85rem; color:#666; margin-bottom:15px;">Клас: <b id="exam-class-label"></b></p>
+    
+    <input type="month" id="exam-month-select" onchange="renderExamsCalendar()" style="margin-bottom: 15px; border: 2px solid #d35400; color: #d35400; font-weight: bold; text-align: center;">
     
     <div id="exams-cal-container"></div>
     
@@ -419,6 +417,14 @@
   const today = new Date();
   const localDateString = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
   document.getElementById('global-date').value = localDateString;
+
+  // Глобальная функция для надежного извлечения имени предмета (учитывая разные форматы в schedule-файлах)
+  window.extractSubject = function(item) {
+      if (!item || !item.subject || item.number === " ") return null;
+      let sName = typeof item.subject === 'string' ? item.subject : item.subject.ua;
+      if (sName && sName !== "Перерва") return sName;
+      return null;
+  };
 
   function showToast(message) {
     const container = document.getElementById('toast-container');
@@ -513,30 +519,53 @@
               dayKeys.forEach(d => {
                   if(window.schedule[d]) {
                       window.schedule[d].forEach(i => {
-                          if(i.subject && i.subject.ua !== "Перерва") uniqueSubjects.add(i.subject.ua);
+                          let sName = extractSubject(i);
+                          if(sName) uniqueSubjects.add(sName);
                       });
                   }
               });
           }
           
-          let allowed = [];
-          if(currentUserData.role === 'teacher') {
-              allowed = teacherAccessMatrix[cls] || [];
-              if(!allowed.includes("Всі предмети")) {
-                  uniqueSubjects = new Set([...uniqueSubjects].filter(s => allowed.includes(s)));
-              }
+          // Безопасный резервный вариант, если расписание не загрузилось или пустое
+          if(uniqueSubjects.size === 0) {
+              get(child(ref(db), `grades/${cls}`)).then(snap => {
+                 if(snap.exists()) {
+                     const monthsData = snap.val();
+                     for(let m in monthsData) {
+                         for(let s in monthsData[m]) uniqueSubjects.add(s);
+                     }
+                 }
+                 finishJournalSubjectsRender(uniqueSubjects, cls, subjSelect);
+              });
+              return;
           }
           
-          subjSelect.innerHTML = '<option value="">-- Оберіть предмет --</option>';
-          [...uniqueSubjects].sort().forEach(s => subjSelect.innerHTML += `<option value="${s}">${s}</option>`);
-          
-          if (currentUserData.role === 'teacher' && document.getElementById('t-subject').value) {
-               const currentSubj = document.getElementById('t-subject').value;
-               if(uniqueSubjects.has(currentSubj)) subjSelect.value = currentSubj;
-          }
-          renderJournalTable();
+          finishJournalSubjectsRender(uniqueSubjects, cls, subjSelect);
       });
   };
+
+  function finishJournalSubjectsRender(uniqueSubjects, cls, subjSelect) {
+      let allowed = [];
+      if(currentUserData.role === 'teacher') {
+          allowed = teacherAccessMatrix[cls] || [];
+          if(!allowed.includes("Всі предмети")) {
+              uniqueSubjects = new Set([...uniqueSubjects].filter(s => allowed.includes(s)));
+          }
+      }
+      
+      subjSelect.innerHTML = '<option value="">-- Оберіть предмет --</option>';
+      if(uniqueSubjects.size > 0) {
+          [...uniqueSubjects].sort().forEach(s => subjSelect.innerHTML += `<option value="${s}">${s}</option>`);
+      } else {
+          subjSelect.innerHTML = '<option value="" disabled>Предмети відсутні (або немає доступу)</option>';
+      }
+      
+      if (currentUserData.role === 'teacher' && document.getElementById('t-subject').value) {
+           const currentSubj = document.getElementById('t-subject').value;
+           if(uniqueSubjects.has(currentSubj)) subjSelect.value = currentSubj;
+      }
+      renderJournalTable();
+  }
 
   window.renderJournalTable = async function() {
       const cls = document.getElementById('j-class-select').value;
@@ -626,9 +655,8 @@
               dayKeys.forEach(day => {
                   if(window.schedule[day]) {
                       window.schedule[day].forEach(item => {
-                          if(item.subject && item.subject.ua && item.subject.ua !== "Перерва" && item.number !== " ") {
-                              uniqueSubjects.add(item.subject.ua);
-                          }
+                          let sName = extractSubject(item);
+                          if(sName) uniqueSubjects.add(sName);
                       });
                   }
               });
@@ -673,14 +701,20 @@
       document.getElementById('exams-modal').style.display = 'flex';
       document.getElementById('exam-class-label').innerText = document.getElementById('t-class-selector').options[document.getElementById('t-class-selector').selectedIndex].text;
       document.getElementById('exams-day-details').style.display = 'none';
+      
+      const monthInput = document.getElementById('exam-month-select');
+      const dateParts = document.getElementById('global-date').value.split('-');
+      monthInput.value = `${dateParts[0]}-${dateParts[1]}`;
+      
       renderExamsCalendar();
   };
   window.closeExamsModal = function() { document.getElementById('exams-modal').style.display = 'none'; };
 
   window.renderExamsCalendar = function() {
       const cls = getActiveClass();
-      const dateStr = document.getElementById('global-date').value;
-      const [y, m, d] = dateStr.split('-');
+      const yMonth = document.getElementById('exam-month-select').value;
+      if(!yMonth) return;
+      const [y, m] = yMonth.split('-');
       
       get(child(ref(db), `exams/${cls}/${y}-${m}`)).then(snap => {
           const data = snap.exists() ? snap.val() : {};
@@ -726,12 +760,30 @@
          const dayName = dayKeys[dateObj.getDay()];
 
          let daySubjects = new Set();
-         if (window.schedule && window.schedule[dayName]) {
-             window.schedule[dayName].forEach(item => {
-                 if(item.subject && item.subject.ua && item.subject.ua !== "Перерва" && item.number !== " ") {
-                     daySubjects.add(item.subject.ua);
+         let allClassSubjects = new Set(); 
+
+         if (window.schedule) {
+             // Предметы ИМЕННО на выбранный день
+             if (window.schedule[dayName]) {
+                 window.schedule[dayName].forEach(item => {
+                     let sName = extractSubject(item);
+                     if(sName) daySubjects.add(sName);
+                 });
+             }
+             // Резервный список: ВСЕ предметы класса (если выбрали выходной)
+             dayKeys.forEach(day => {
+                 if(window.schedule[day]) {
+                     window.schedule[day].forEach(item => {
+                         let sName = extractSubject(item);
+                         if(sName) allClassSubjects.add(sName);
+                     });
                  }
              });
+         }
+
+         // Если на выбранный день нет предметов, показываем предметы со всей недели
+         if (daySubjects.size === 0) {
+             daySubjects = allClassSubjects;
          }
 
          const allowed = teacherAccessMatrix[cls] || [];
@@ -744,7 +796,7 @@
          let subjOpts = finalExamSubjects.map(s => `<option value="${s}">${s}</option>`).join('');
          let btnDisabled = '';
          if(!subjOpts) {
-             subjOpts = '<option value="" disabled>Немає предметів у розкладі на цей день</option>';
+             subjOpts = '<option value="" disabled>Немає доступних предметів</option>';
              btnDisabled = 'disabled';
          }
 
@@ -784,7 +836,7 @@
     
     let scheduleSubjects = [];
     if (window.schedule && window.schedule[dayName]) { 
-        scheduleSubjects = window.schedule[dayName].filter(s => s.number !== " " && s.subject.ua !== "Перерва").map(s => s.subject.ua); 
+        scheduleSubjects = window.schedule[dayName].map(extractSubject).filter(Boolean); 
     } 
 
     const select = document.getElementById('t-subject'); select.innerHTML = ''; 
@@ -1063,7 +1115,7 @@
           const hwSnap = await get(child(ref(db), `homeworks/${hwCls}/${date}`)); hwList.innerHTML = '';
           const [y, m, d] = date.split('-'); const dateVal = new Date(y, m-1, d); const dayName = dayKeys[dateVal.getDay()];
           let scheduleSubjects = [];
-          if (window.schedule && window.schedule[dayName]) { scheduleSubjects = window.schedule[dayName].filter(s => s.number !== " " && s.subject.ua !== "Перерва").map(s => s.subject.ua); } 
+          if (window.schedule && window.schedule[dayName]) { scheduleSubjects = window.schedule[dayName].map(extractSubject).filter(Boolean); } 
           
           if(hwSnap.exists()) {
               const data = hwSnap.val(); const actualSubjects = Object.keys(data); const allSubjectsToDisplay = [...new Set([...scheduleSubjects, ...actualSubjects])];
@@ -1151,7 +1203,6 @@
       const allReactions = reactionsSnap.exists() ? reactionsSnap.val() : {};
       const allGrades = gradesSnap.exists() ? gradesSnap.val() : {};
 
-      // Збираємо всі предмети, за якими є коментар або оцінка на цю дату
       const subjectsWithInfo = new Set();
       if(commentsSnap.exists()) Object.keys(commentsSnap.val()).forEach(s => subjectsWithInfo.add(s));
       if(gradesSnap.exists()) Object.keys(allGrades).forEach(s => { if(allGrades[s][date] && allGrades[s][date][currentUserData.studentName]) subjectsWithInfo.add(s); });
