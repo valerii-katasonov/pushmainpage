@@ -88,6 +88,14 @@
     .journal-table th.student-name { background: #d0e8f2; z-index: 3; border-right: 2px solid #ccc; left: 0; }
     .cell-grade { font-weight: bold; color: #27ae60; font-size: 0.95rem; }
     .cell-absent { font-weight: bold; color: #c0392b; font-size: 0.85rem; }
+
+    /* === Стили для Календаря контрольных === */
+    .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; margin-top: 15px; }
+    .cal-header { font-weight: bold; color: #555; text-align: center; padding-bottom: 5px; border-bottom: 2px solid #ddd; font-size: 0.9rem; }
+    .cal-day { background: #fdfbfb; border: 1px solid #eee; border-radius: 8px; padding: 10px 5px; text-align: center; cursor: pointer; transition: 0.2s; min-height: 50px; display: flex; flex-direction: column; justify-content: center; font-size: 1rem;}
+    .cal-day:hover { background: #e0f2f1; border-color: #006d77; transform: scale(1.05); }
+    .cal-day.has-1 { background-color: #fff3cd; border-color: #ffeeba; color: #d35400; font-weight: bold; }
+    .cal-day.has-2 { background-color: #f8d7da; border-color: #f5c6cb; color: #c0392b; font-weight: bold; }
   </style>
 </head>
 <body>
