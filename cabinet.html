@@ -22,7 +22,7 @@
     h3 { color: #333; border-bottom: 2px solid #eee; padding-bottom: 10px; margin-top: 25px; }
     .date-picker-box { background: #e0f2f1; padding: 15px; border-radius: 12px; margin-bottom: 20px; text-align: center; box-shadow: 0 4px 10px rgba(0,109,119,0.1); }
     label { display: block; margin-top: 15px; font-weight: 600; color: #555; font-size: 0.9rem; }
-    input[type="email"], input[type="password"], input[type="text"], input[type="date"], select, textarea { width: 100%; padding: 12px; margin-top: 5px; border: 1px solid #ccc; border-radius: 12px; box-sizing: border-box; font-family: inherit; font-size: 1rem; }
+    input[type="email"], input[type="password"], input[type="text"], input[type="date"], input[type="month"], select, textarea { width: 100%; padding: 12px; margin-top: 5px; border: 1px solid #ccc; border-radius: 12px; box-sizing: border-box; font-family: inherit; font-size: 1rem; }
     input[type="file"] { margin-top: 5px; font-size: 0.9rem; border: 1px dashed #006d77; padding: 10px; border-radius: 12px; width: 100%; box-sizing: border-box; background: #fafafa; cursor: pointer; }
     button { width: 100%; padding: 15px; border: none; border-radius: 12px; cursor: pointer; font-weight: bold; font-size: 1rem; transition: 0.3s; margin-top: 20px; }
     .btn-login { background: linear-gradient(135deg, #00f2fe, #4facfe); color: white; }
@@ -46,14 +46,15 @@
     .progress-bar-container { width: 100%; background-color: #ffeaa7; border-radius: 10px; overflow: hidden; margin-top: 15px; height: 18px; box-shadow: inset 0 1px 3px rgba(0,0,0,0.1); }
     .progress-bar { height: 100%; background: linear-gradient(90deg, #f39c12, #e74c3c); width: 0%; transition: width 0.8s ease-out; }
 
-    .modal-overlay { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:1000; justify-content:center; align-items:center; backdrop-filter: blur(5px); }
-    .modal-content { background: #fff; padding: 30px; border-radius: 20px; text-align: center; max-width: 450px; width: 90%; box-shadow: 0 15px 30px rgba(0,0,0,0.3); animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); max-height: 90vh; overflow-y: auto;}
+    .modal-overlay { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:1000; justify-content:center; align-items:center; backdrop-filter: blur(5px); padding: 10px; box-sizing: border-box;}
+    .modal-content { background: #fff; padding: 30px; border-radius: 20px; text-align: center; max-width: 450px; width: 100%; box-shadow: 0 15px 30px rgba(0,0,0,0.3); animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); max-height: 90vh; overflow-y: auto;}
     @keyframes popIn { 0% { transform: scale(0.5); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
 
     .empty-msg { color: #999; font-style: italic; margin: 5px 0; }
     .badge { display: inline-block; padding: 4px 8px; border-radius: 8px; font-size: 0.8rem; font-weight: bold; margin-left: 5px; }
     .badge-late { background: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
     .badge-absent { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+    .badge-grade { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; font-size: 0.9rem;}
 
     #toast-container { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 9999; display: flex; flex-direction: column; gap: 10px; width: 90%; max-width: 400px; pointer-events: none; }
     .toast { background: rgba(0, 0, 0, 0.85); color: white; padding: 15px 20px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: space-between; font-size: 0.95rem; animation: slideUp 0.3s ease-out; backdrop-filter: blur(5px); }
@@ -66,11 +67,34 @@
     .cal-day.has-1 { background-color: #e0f7fa; color: #00838f; border-color: #26c6da; }
     .cal-day.has-2 { background-color: #ffebee; color: #c62828; border-color: #ef5350; }
     .cal-header { font-size: 0.8rem; color: #888; font-weight: 600; text-transform: uppercase; }
+
+    /* Таблица журнала */
+    .journal-table { width: 100%; border-collapse: collapse; min-width: 700px; font-size: 0.85rem; margin-top: 15px; }
+    .journal-table th, .journal-table td { border: 1px solid #ddd; padding: 8px 4px; text-align: center; vertical-align: middle; }
+    .journal-table th { background: #f0f8ff; color: #2980b9; position: sticky; top: 0; z-index: 1;}
+    .journal-table td.student-name { text-align: left; font-weight: bold; background: #fffcf0; position: sticky; left: 0; z-index: 2; min-width: 140px; box-shadow: 2px 0 5px rgba(0,0,0,0.05);}
+    .journal-table th.student-name { position: sticky; left: 0; z-index: 3; background: #d0e8f2; }
+    .cell-grade { font-weight: 800; color: #27ae60; font-size: 1rem; }
+    .cell-absent { color: #c0392b; font-size: 0.8rem; font-weight: bold; display: block; }
   </style>
 </head>
 <body>
 
 <div id="toast-container"></div>
+
+<!-- ДАТАЛИСТЫ ДЛЯ ОЦЕНОК -->
+<datalist id="grades-letters">
+    <option value="В"></option>
+    <option value="Д"></option>
+    <option value="С"></option>
+    <option value="П"></option>
+</datalist>
+<datalist id="grades-numbers">
+    <option value="12"></option><option value="11"></option><option value="10"></option>
+    <option value="9"></option><option value="8"></option><option value="7"></option>
+    <option value="6"></option><option value="5"></option><option value="4"></option>
+    <option value="3"></option><option value="2"></option><option value="1"></option>
+</datalist>
 
 <div class="container">
   
@@ -80,14 +104,6 @@
     <input type="password" id="pass" placeholder="Пароль">
     <button class="btn-login" onclick="loginUser()">Увійти</button>
     <p id="login-error" style="color:red; text-align:center; display:none;"></p>
-    
-    <div id="install-container" style="margin-top: 25px; text-align: center; border-top: 1px dashed #ccc; padding-top: 20px;">
-      <p style="font-size: 0.9rem; color: #555; font-weight: 600; margin-bottom: 15px;">📱 Встановити як додаток:</p>
-      <div style="display: flex; gap: 10px; justify-content: center;">
-        <button id="btn-install-android" style="background: #a4c639; color: white; padding: 12px; margin-top: 0; width: auto; flex: 1; border-radius: 10px;">🤖 Android</button>
-        <button id="btn-install-ios" style="background: #1c1c1e; color: white; padding: 12px; margin-top: 0; width: auto; flex: 1; border-radius: 10px;" onclick="showIosInstruction()">🍎 iOS / iPad</button>
-      </div>
-    </div>
   </div>
 
   <div id="calendar-block" style="display: none;" class="date-picker-box">
@@ -116,6 +132,8 @@
 
   <div id="director-screen" class="panel">
     <h2 style="color: #2c3e50;">👔 Пульт Директора</h2>
+
+    <button onclick="openJournalModal('director')" style="background: linear-gradient(135deg, #8e44ad, #9b59b6); color: white; margin-bottom: 20px; font-size: 1.1rem; padding: 12px; box-shadow: 0 4px 10px rgba(142,68,173,0.3);">📖 Електронний журнал успішності</button>
 
     <div style="display: flex; gap: 10px; margin-bottom: 20px;">
       <div style="flex: 1; background: #e0f7fa; padding: 15px; border-radius: 12px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
@@ -199,7 +217,10 @@
   <div id="teacher-screen" class="panel">
     <h2 id="teacher-dashboard-title">👨‍🏫 Журнал</h2>
     
-    <button onclick="openExamsCalendar()" style="background: linear-gradient(135deg, #f39c12, #d35400); color: white; margin-bottom: 20px; font-size: 1.1rem; padding: 12px; box-shadow: 0 4px 10px rgba(211,84,0,0.3);">📅 Календар контрольних робіт</button>
+    <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+        <button onclick="openExamsCalendar()" style="flex:1; background: linear-gradient(135deg, #f39c12, #d35400); color: white; margin-top: 0; font-size: 0.95rem; padding: 12px; box-shadow: 0 4px 10px rgba(211,84,0,0.3);">📅 Контрольні</button>
+        <button onclick="openJournalModal('teacher')" style="flex:1; background: linear-gradient(135deg, #8e44ad, #9b59b6); color: white; margin-top: 0; font-size: 0.95rem; padding: 12px; box-shadow: 0 4px 10px rgba(142,68,173,0.3);">📖 Класний журнал</button>
+    </div>
 
     <div class="data-card" style="border-left-color: #e74c3c; background: #fdfbfb; margin-top: 0; margin-bottom: 20px;">
       <h4 style="margin-top:0; color: #c0392b;">🚨 Відвідуваність на сьогодні:</h4>
@@ -242,13 +263,22 @@
     <label>📸 Фото з підручника/зошита:</label> <input type="file" id="t-image" accept="image/*" multiple>
     <div id="existing-image-info">📎 Вже прикріплено фото.</div>
 
-    <label style="margin-top:20px; border-top: 1px dashed #ccc; padding-top: 15px;">Учень (кому пишемо коментар):</label>
+    <label style="margin-top:20px; border-top: 1px dashed #ccc; padding-top: 15px;">Учень (робота з учнем):</label>
     <select id="t-student" onchange="loadCurrentData()"><option value="">Оберіть учня...</option></select>
-    <div style="margin-top: 15px; display: flex; align-items: center; background: #fffcf0; padding: 12px; border-radius: 8px; border: 1px solid #fde3a7;">
-      <input type="checkbox" id="t-sticker" style="width: 24px; height: 24px; margin: 0 10px 0 0; cursor: pointer;">
-      <label for="t-sticker" style="margin: 0; color: #d35400; cursor: pointer; font-weight: bold;">🌟 Видати наліпку за цей урок</label>
+    
+    <div style="display: flex; gap: 10px; margin-top: 10px; align-items: center;">
+        <div style="flex: 1;">
+            <label style="margin-top:0;">Оцінка за урок:</label>
+            <input type="text" id="t-grade" style="font-weight:bold; color:#27ae60; border: 2px solid #2ecc71;">
+        </div>
+        <div style="flex: 2; display: flex; align-items: center; background: #fffcf0; padding: 12px; border-radius: 8px; border: 1px solid #fde3a7; height: 100%; margin-top: 22px; box-sizing: border-box;">
+          <input type="checkbox" id="t-sticker" style="width: 24px; height: 24px; margin: 0 10px 0 0; cursor: pointer;">
+          <label for="t-sticker" style="margin: 0; color: #d35400; cursor: pointer; font-weight: bold; line-height:1.2;">🌟 Наліпка</label>
+        </div>
     </div>
-    <label>Особистий коментар:</label> <textarea id="t-comment" rows="2"></textarea>
+
+    <label style="margin-top: 10px;">Особистий коментар:</label> <textarea id="t-comment" rows="2"></textarea>
+    
     <button class="btn-save" id="btn-save-data" onclick="saveData()">💾 Зберегти дані</button>
     <div id="status-msg">Збережено!</div>
 
@@ -314,7 +344,7 @@
     </div>
     
     <div class="data-card" style="border-left-color: #ff4757; background: #fff0f1;">
-      <h4 style="margin-top:0; color: #ff4757;">📝 Коментарі для вас:</h4>
+      <h4 style="margin-top:0; color: #ff4757;">📝 Журнал та коментарі:</h4>
       <ul id="p-daily-comments-list" class="list-dash"></ul>
     </div>
 
@@ -322,6 +352,28 @@
   </div>
 </div>
 
+<!-- МОДАЛКА ЖУРНАЛА -->
+<div id="journal-modal" class="modal-overlay">
+  <div class="modal-content" style="max-width: 900px; width: 100%; padding: 20px;">
+    <h2 style="color: #2980b9; margin-top:0;">📖 Класний журнал</h2>
+    
+    <div style="display:flex; gap:10px; margin-bottom:15px; flex-wrap:wrap;">
+      <select id="j-class-select" style="flex:1; min-width:120px;" onchange="updateJournalSubjects()"></select>
+      <select id="j-subj-select" style="flex:1; min-width:120px;" onchange="renderJournalTable()"></select>
+      <input type="month" id="j-month-select" style="flex:1; min-width:120px;" onchange="renderJournalTable()">
+    </div>
+
+    <div style="overflow-x:auto; background: #fff; border-radius: 8px; border: 1px solid #ddd; max-height: 50vh;">
+        <table class="journal-table" id="journal-table-el">
+            <!-- JS fills this -->
+        </table>
+    </div>
+
+    <button onclick="closeJournalModal()" style="background: #333; color:white; width: 100%; margin-top: 20px;">Закрити</button>
+  </div>
+</div>
+
+<!-- МОДАЛКА КОНТРОЛЬНЫХ -->
 <div id="exams-modal" class="modal-overlay">
   <div class="modal-content">
     <h2 style="color: #d35400; margin-top:0;">📅 Контрольні роботи</h2>
@@ -391,7 +443,6 @@
 
     const script = document.createElement('script');
     script.id = scriptId;
-    script.type = 'module';
     script.src = `schedule-class-${classNum}.js?t=${new Date().getTime()}`;
     
     script.onload = () => { if(callback) callback(); };
@@ -413,9 +464,149 @@
     if(!activeClass) return;
     const selectEl = document.getElementById('t-class-selector'); const classLabel = selectEl.options[selectEl.selectedIndex].text;
     document.getElementById('teacher-dashboard-title').innerText = `👨‍🏫 Журнал: ${classLabel}`;
+    
+    const clsNum = parseInt(activeClass.replace('class_', ''));
+    const gradeInput = document.getElementById('t-grade');
+    if(gradeInput) {
+        gradeInput.setAttribute('list', clsNum <= 4 ? 'grades-letters' : 'grades-numbers');
+        gradeInput.placeholder = clsNum <= 4 ? 'В, Д, С, П' : '1 - 12';
+    }
+
     loadStudentsList(); 
     loadScheduleScript(activeClass, () => { handleDateChange(); });
   };
+
+  // ================== ЕЛЕКТРОННИЙ ЖУРНАЛ ==================
+  window.openJournalModal = function(role) {
+      document.getElementById('journal-modal').style.display = 'flex';
+      
+      const monthInput = document.getElementById('j-month-select');
+      const dateParts = document.getElementById('global-date').value.split('-');
+      monthInput.value = `${dateParts[0]}-${dateParts[1]}`; 
+      
+      const classSelect = document.getElementById('j-class-select');
+      if(role === 'director') {
+          classSelect.style.display = 'block';
+          classSelect.innerHTML = '<option value="">Оберіть клас...</option>';
+          for(let i=1; i<=11; i++) classSelect.innerHTML += `<option value="class_${i}">${i} Клас</option>`;
+          document.getElementById('j-subj-select').innerHTML = '<option value="">Спочатку оберіть клас</option>';
+          document.getElementById('journal-table-el').innerHTML = '';
+      } else {
+          classSelect.style.display = 'none';
+          classSelect.innerHTML = `<option value="${getActiveClass()}">${getActiveClass()}</option>`;
+          updateJournalSubjects();
+      }
+  };
+
+  window.closeJournalModal = function() { document.getElementById('journal-modal').style.display = 'none'; };
+
+  window.updateJournalSubjects = function() {
+      const cls = document.getElementById('j-class-select').value;
+      const subjSelect = document.getElementById('j-subj-select');
+      if(!cls) { subjSelect.innerHTML = '<option value="">Спочатку оберіть клас</option>'; return; }
+      
+      subjSelect.innerHTML = '<option value="">Завантаження...</option>';
+      
+      loadScheduleScript(cls, () => {
+          let uniqueSubjects = new Set();
+          if(window.schedule) {
+              dayKeys.forEach(d => {
+                  if(window.schedule[d]) {
+                      window.schedule[d].forEach(i => {
+                          if(i.subject && i.subject.ua !== "Перерва") uniqueSubjects.add(i.subject.ua);
+                      });
+                  }
+              });
+          }
+          
+          let allowed = [];
+          if(currentUserData.role === 'teacher') {
+              allowed = teacherAccessMatrix[cls] || [];
+              if(!allowed.includes("Всі предмети")) {
+                  uniqueSubjects = new Set([...uniqueSubjects].filter(s => allowed.includes(s)));
+              }
+          }
+          
+          subjSelect.innerHTML = '<option value="">-- Оберіть предмет --</option>';
+          [...uniqueSubjects].sort().forEach(s => subjSelect.innerHTML += `<option value="${s}">${s}</option>`);
+          
+          if (currentUserData.role === 'teacher' && document.getElementById('t-subject').value) {
+               const currentSubj = document.getElementById('t-subject').value;
+               if(uniqueSubjects.has(currentSubj)) subjSelect.value = currentSubj;
+          }
+          renderJournalTable();
+      });
+  };
+
+  window.renderJournalTable = async function() {
+      const cls = document.getElementById('j-class-select').value;
+      const subj = document.getElementById('j-subj-select').value;
+      const yMonth = document.getElementById('j-month-select').value;
+      const table = document.getElementById('journal-table-el');
+      
+      if(!cls || !subj || !yMonth) { table.innerHTML = ''; return; }
+      
+      table.innerHTML = '<tr><td style="padding: 20px;">⏳ Завантаження даних журналу...</td></tr>';
+      
+      const [y, m] = yMonth.split('-');
+      const daysInMonth = new Date(y, m, 0).getDate();
+      
+      try {
+          const [studentsSnap, gradesSnap, attSnap] = await Promise.all([
+              get(child(ref(db), `students_list/${cls}`)),
+              get(child(ref(db), `grades/${cls}/${yMonth}/${subj}`)),
+              get(child(ref(db), `attendance/${cls}`))
+          ]);
+          
+          let students = [];
+          if (studentsSnap.exists()) students = Object.values(studentsSnap.val()).sort();
+          
+          if (students.length === 0) { table.innerHTML = '<tr><td style="padding: 20px;">У списку немає учнів.</td></tr>'; return; }
+          
+          const gradesData = gradesSnap.exists() ? gradesSnap.val() : {};
+          const attDataAll = attSnap.exists() ? attSnap.val() : {};
+          
+          const attData = {};
+          for(let d in attDataAll) {
+              if(d.startsWith(yMonth)) attData[d] = attDataAll[d];
+          }
+          
+          let thead = '<thead><tr><th class="student-name">Учень</th>';
+          for(let i=1; i<=daysInMonth; i++) thead += `<th>${i}</th>`;
+          thead += '</tr></thead>';
+          
+          let tbody = '<tbody>';
+          students.forEach(st => {
+              tbody += `<tr><td class="student-name">${st}</td>`;
+              for(let i=1; i<=daysInMonth; i++) {
+                  const dateStr = `${yMonth}-${String(i).padStart(2,'0')}`;
+                  
+                  const statusInfo = (attData[dateStr] && attData[dateStr][st]) ? attData[dateStr][st].status : null;
+                  const grade = (gradesData[dateStr] && gradesData[dateStr][st]) ? gradesData[dateStr][st] : '';
+                  
+                  let cellContent = '';
+                  if (grade) cellContent = `<span class="cell-grade">${grade}</span>`;
+                  
+                  if (statusInfo === 'absent') {
+                      cellContent += (cellContent ? `<br>` : '') + `<span class="cell-absent" title="Відсутній">н</span>`;
+                  } else if (statusInfo === 'late') {
+                      cellContent += (cellContent ? `<br>` : '') + `<span class="cell-absent" style="color:#f39c12;" title="Запізнення">з</span>`;
+                  }
+                  
+                  tbody += `<td>${cellContent}</td>`;
+              }
+              tbody += '</tr>';
+          });
+          tbody += '</tbody>';
+          
+          table.innerHTML = thead + tbody;
+          
+      } catch(e) {
+          console.error(e);
+          table.innerHTML = '<tr><td style="padding: 20px; color: red;">Помилка завантаження журналу.</td></tr>';
+      }
+  };
+  // ========================================================
 
   window.loadDirectorMatrixSubjects = function() {
       const cls = document.getElementById('d-acc-class').value;
@@ -435,9 +626,8 @@
               dayKeys.forEach(day => {
                   if(window.schedule[day]) {
                       window.schedule[day].forEach(item => {
-                          const subjName = item.subject && item.subject.ua ? item.subject.ua : item.subject;
-                          if(subjName && subjName !== "Перерва" && item.number !== " ") {
-                              uniqueSubjects.add(subjName);
+                          if(item.subject && item.subject.ua && item.subject.ua !== "Перерва" && item.number !== " ") {
+                              uniqueSubjects.add(item.subject.ua);
                           }
                       });
                   }
@@ -514,7 +704,6 @@
       });
   };
 
-  // ОНОВЛЕНА ФУНКЦІЯ: Рівні хрестики та предмети тільки на обраний день
   window.manageDayExams = function(dStr) {
       const cls = getActiveClass(); 
       const detailsDiv = document.getElementById('exams-day-details');
@@ -525,7 +714,6 @@
          let listHtml = '';
          for(let subj in exams) {
              const isMe = exams[subj] === auth.currentUser.uid;
-             // Використовуємо display: flex; щоб хрестик був чітко справа на тому ж рівні
              const delBtn = isMe ? `<button onclick="deleteExam('${dStr}', '${subj}')" style="background:none; border:none; color:#e74c3c; cursor:pointer; font-weight:bold; padding:0 5px; width:auto; margin:0; font-size:1.2rem; line-height:1;" title="Видалити">✖</button>` : '';
              listHtml += `<li style="margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; background:#fff; padding:8px 12px; border-radius:8px; border:1px solid #eee; box-shadow: 0 2px 4px rgba(0,0,0,0.02);"><span><b>${subj}</b></span> ${delBtn}</li>`;
          }
@@ -533,18 +721,15 @@
          let html = `<h4 style="margin-top:0; color:#d35400; border-bottom:1px dashed #f39c12; padding-bottom:10px;">Контрольні на ${dStr.split('-').reverse().join('.')}</h4>`;
          html += `<ul style="padding-left:0; list-style:none; margin-bottom:15px;">${listHtml || '<li class="empty-msg">Жодної контрольної не заплановано</li>'}</ul>`;
          
-         // Визначаємо день тижня з обраної дати (dStr = YYYY-MM-DD)
          const [y, m, d] = dStr.split('-');
          const dateObj = new Date(y, m - 1, d);
          const dayName = dayKeys[dateObj.getDay()];
 
          let daySubjects = new Set();
-         // Фільтруємо предмети виключно з розкладу на ЦЕЙ день
          if (window.schedule && window.schedule[dayName]) {
              window.schedule[dayName].forEach(item => {
-                 const subjName = item.subject && item.subject.ua ? item.subject.ua : item.subject;
-                 if(subjName && subjName !== "Перерва" && item.number !== " ") {
-                     daySubjects.add(subjName);
+                 if(item.subject && item.subject.ua && item.subject.ua !== "Перерва" && item.number !== " ") {
+                     daySubjects.add(item.subject.ua);
                  }
              });
          }
@@ -599,7 +784,7 @@
     
     let scheduleSubjects = [];
     if (window.schedule && window.schedule[dayName]) { 
-        scheduleSubjects = window.schedule[dayName].filter(s => s.number !== " " && (s.subject.ua || s.subject) !== "Перерва").map(s => s.subject.ua || s.subject); 
+        scheduleSubjects = window.schedule[dayName].filter(s => s.number !== " " && s.subject.ua !== "Перерва").map(s => s.subject.ua); 
     } 
 
     const select = document.getElementById('t-subject'); select.innerHTML = ''; 
@@ -757,7 +942,9 @@
   window.saveData = async function() {
     const date = document.getElementById('global-date').value; const subject = document.getElementById('t-subject').value; const student = document.getElementById('t-student').value;
     const hwText = document.getElementById('t-hw').value.trim(); const comment = document.getElementById('t-comment').value.trim(); const stickerChecked = document.getElementById('t-sticker').checked;
+    const grade = document.getElementById('t-grade').value.trim();
     const fileInput = document.getElementById('t-image'); const activeClass = getActiveClass(); const btnSave = document.getElementById('btn-save-data'); const statusMsg = document.getElementById('status-msg'); const myUid = auth.currentUser.uid;
+    const yMonth = date.substring(0, 7);
 
     btnSave.disabled = true; btnSave.innerText = "⏳ Збереження..."; await set(ref(db, `authors/${activeClass}/${date}/${subject}`), myUid); let finalImageUrls = [...currentHwImages]; 
     if (fileInput.files.length > 0) {
@@ -769,13 +956,14 @@
     if (student) {
       if (comment) await set(ref(db, `comments/${activeClass}/${date}/${subject}/${student}`), comment);
       if (stickerChecked) await set(ref(db, `stickers/${activeClass}/${student}/${date}_${subject}`), true); else await set(ref(db, `stickers/${activeClass}/${student}/${date}_${subject}`), null);
+      if (grade) await set(ref(db, `grades/${activeClass}/${yMonth}/${subject}/${date}/${student}`), grade); else await set(ref(db, `grades/${activeClass}/${yMonth}/${subject}/${date}/${student}`), null);
     }
     statusMsg.style.color = "#2ed573"; statusMsg.innerText = "✅ Дані успішно збережено!"; btnSave.disabled = false; btnSave.innerText = "💾 Зберегти дані"; fileInput.value = ''; setTimeout(() => { statusMsg.style.display = 'none'; handleDateChange(); }, 2000);
   };
 
   window.loadCurrentData = function() {
     const date = document.getElementById('global-date').value; const subject = document.getElementById('t-subject').value; const student = document.getElementById('t-student').value; const activeClass = getActiveClass();
-    document.getElementById('t-hw').value = ''; document.getElementById('t-comment').value = ''; document.getElementById('t-image').value = ''; document.getElementById('t-sticker').checked = false; document.getElementById('existing-image-info').style.display = 'none'; currentHwImages = []; 
+    document.getElementById('t-hw').value = ''; document.getElementById('t-comment').value = ''; document.getElementById('t-image').value = ''; document.getElementById('t-sticker').checked = false; document.getElementById('t-grade').value = ''; document.getElementById('existing-image-info').style.display = 'none'; currentHwImages = []; 
     if (!subject) return;
 
     get(child(ref(db), `homeworks/${activeClass}/${date}/${subject}`)).then(snap => {
@@ -788,7 +976,11 @@
       }
     });
 
-    if (student) get(child(ref(db), `stickers/${activeClass}/${student}/${date}_${subject}`)).then(snap => { document.getElementById('t-sticker').checked = (snap.exists() && snap.val() === true); });
+    if (student) {
+        get(child(ref(db), `stickers/${activeClass}/${student}/${date}_${subject}`)).then(snap => { document.getElementById('t-sticker').checked = (snap.exists() && snap.val() === true); });
+        const yMonth = date.substring(0, 7);
+        get(child(ref(db), `grades/${activeClass}/${yMonth}/${subject}/${date}/${student}`)).then(snap => { if(snap.exists()) document.getElementById('t-grade').value = snap.val(); });
+    }
   };
 
   window.loadAdminDashboard = async function() {
@@ -871,7 +1063,7 @@
           const hwSnap = await get(child(ref(db), `homeworks/${hwCls}/${date}`)); hwList.innerHTML = '';
           const [y, m, d] = date.split('-'); const dateVal = new Date(y, m-1, d); const dayName = dayKeys[dateVal.getDay()];
           let scheduleSubjects = [];
-          if (window.schedule && window.schedule[dayName]) { scheduleSubjects = window.schedule[dayName].filter(s => s.number !== " " && (s.subject.ua || s.subject) !== "Перерва").map(s => s.subject.ua || s.subject); } 
+          if (window.schedule && window.schedule[dayName]) { scheduleSubjects = window.schedule[dayName].filter(s => s.number !== " " && s.subject.ua !== "Перерва").map(s => s.subject.ua); } 
           
           if(hwSnap.exists()) {
               const data = hwSnap.val(); const actualSubjects = Object.keys(data); const allSubjectsToDisplay = [...new Set([...scheduleSubjects, ...actualSubjects])];
@@ -893,15 +1085,6 @@
     get(child(ref(db), `homeworks/${activeClass}/${date}`)).then(snap => {
       const hwList = document.getElementById('t-daily-hw-list'); hwList.innerHTML = '';
       if(snap.exists()) { const data = snap.val(); for(let subj in data) hwList.innerHTML += renderHwItem(subj, data[subj]); } else hwList.innerHTML = '<li class="empty-msg">ДЗ ще не задано.</li>';
-    });
-
-    Promise.all([ get(child(ref(db), `reactions/${activeClass}/${date}`)), get(child(ref(db), `authors/${activeClass}/${date}`)) ]).then(([reactSnap, authSnap]) => {
-      const reactionsList = document.getElementById('t-daily-reactions-list'); reactionsList.innerHTML = '';
-      if(reactSnap.exists()) {
-        const data = reactSnap.val(); const authors = authSnap.exists() ? authSnap.val() : {}; let hasReactions = false;
-        for (let subj in data) if (authors[subj] === myUid) for (let student in data[subj]) { reactionsList.innerHTML += `<li style="margin-bottom:8px; border-bottom: 1px solid #eee; padding-bottom: 5px;"><span style="font-size: 1.2rem; margin-right: 5px;">${data[subj][student]}</span> <b>${student}</b> відреагував(ла) на <i>${subj}</i></li>`; hasReactions = true; }
-        if(!hasReactions) reactionsList.innerHTML = '<li class="empty-msg">Реакцій немає.</li>';
-      } else reactionsList.innerHTML = '<li class="empty-msg">Реакцій немає.</li>';
     });
   };
 
@@ -957,17 +1140,40 @@
         if(snap.exists()) { const data = snap.val(); statusEl.innerText = `✅ Ви повідомили: ${data.status === 'late'?'Запізнення':'Відсутність'} (${data.reason})`; statusEl.style.display = 'block'; } else statusEl.style.display = 'none';
     });
     get(child(ref(db), `homeworks/${activeClass}/${date}`)).then(snap => { document.getElementById('p-daily-hw-list').innerHTML = ''; if(snap.exists()) { const data = snap.val(); for(let subj in data) document.getElementById('p-daily-hw-list').innerHTML += renderHwItem(subj, data[subj]); } else document.getElementById('p-daily-hw-list').innerHTML = '<li class="empty-msg">На цей день ДЗ не задано.</li>'; });
-    Promise.all([ get(child(ref(db), `comments/${activeClass}/${date}`)), get(child(ref(db), `reactions/${activeClass}/${date}`)) ]).then(([commentsSnap, reactionsSnap]) => {
-      const list = document.getElementById('p-daily-comments-list'); list.innerHTML = ''; let hasComments = false; const allReactions = reactionsSnap.exists() ? reactionsSnap.val() : {};
-      if(commentsSnap.exists()) {
-        const allSubjects = commentsSnap.val(); 
-        for(let subj in allSubjects) if (allSubjects[subj][currentUserData.studentName]) {
-          hasComments = true; const currentReaction = allReactions[subj]?.[currentUserData.studentName] || null;
-          const reactionHtml = `<div class="reaction-box"><span class="reaction-label">Відреагувати:</span><button class="reaction-btn ${currentReaction === '👍' ? 'active' : ''}" onclick="sendReaction('${date}', '${subj}', '👍')">👍</button><button class="reaction-btn ${currentReaction === '❤️' ? 'active' : ''}" onclick="sendReaction('${date}', '${subj}', '❤️')">❤️</button><button class="reaction-btn ${currentReaction === '🔥' ? 'active' : ''}" onclick="sendReaction('${date}', '${subj}', '🔥')">🔥</button><button class="reaction-btn ${currentReaction === '🙏' ? 'active' : ''}" onclick="sendReaction('${date}', '${subj}', '🙏')">🙏</button></div>`;
-          list.innerHTML += `<li><b>${subj}:</b> ${allSubjects[subj][currentUserData.studentName]} ${reactionHtml}</li>`;
-        }
-      }
-      if(!hasComments) list.innerHTML = '<li class="empty-msg">Немає коментарів на цей день.</li>';
+    
+    const yMonth = date.substring(0, 7);
+    Promise.all([ 
+        get(child(ref(db), `comments/${activeClass}/${date}`)), 
+        get(child(ref(db), `reactions/${activeClass}/${date}`)),
+        get(child(ref(db), `grades/${activeClass}/${yMonth}`))
+    ]).then(([commentsSnap, reactionsSnap, gradesSnap]) => {
+      const list = document.getElementById('p-daily-comments-list'); list.innerHTML = ''; let hasItems = false; 
+      const allReactions = reactionsSnap.exists() ? reactionsSnap.val() : {};
+      const allGrades = gradesSnap.exists() ? gradesSnap.val() : {};
+
+      // Збираємо всі предмети, за якими є коментар або оцінка на цю дату
+      const subjectsWithInfo = new Set();
+      if(commentsSnap.exists()) Object.keys(commentsSnap.val()).forEach(s => subjectsWithInfo.add(s));
+      if(gradesSnap.exists()) Object.keys(allGrades).forEach(s => { if(allGrades[s][date] && allGrades[s][date][currentUserData.studentName]) subjectsWithInfo.add(s); });
+
+      subjectsWithInfo.forEach(subj => {
+          const comment = (commentsSnap.exists() && commentsSnap.val()[subj] && commentsSnap.val()[subj][currentUserData.studentName]) ? commentsSnap.val()[subj][currentUserData.studentName] : '';
+          const grade = (allGrades[subj] && allGrades[subj][date] && allGrades[subj][date][currentUserData.studentName]) ? allGrades[subj][date][currentUserData.studentName] : '';
+          
+          if (comment || grade) {
+              hasItems = true;
+              const currentReaction = allReactions[subj]?.[currentUserData.studentName] || null;
+              const reactionHtml = `<div class="reaction-box"><span class="reaction-label">Відреагувати:</span><button class="reaction-btn ${currentReaction === '👍' ? 'active' : ''}" onclick="sendReaction('${date}', '${subj}', '👍')">👍</button><button class="reaction-btn ${currentReaction === '❤️' ? 'active' : ''}" onclick="sendReaction('${date}', '${subj}', '❤️')">❤️</button><button class="reaction-btn ${currentReaction === '🔥' ? 'active' : ''}" onclick="sendReaction('${date}', '${subj}', '🔥')">🔥</button><button class="reaction-btn ${currentReaction === '🙏' ? 'active' : ''}" onclick="sendReaction('${date}', '${subj}', '🙏')">🙏</button></div>`;
+              
+              let displayHtml = `<li><b>${subj}:</b><br>`;
+              if (grade) displayHtml += `<span class="badge badge-grade">Оцінка: ${grade}</span><br>`;
+              if (comment) displayHtml += `${comment}`;
+              displayHtml += `${reactionHtml}</li>`;
+              list.innerHTML += displayHtml;
+          }
+      });
+
+      if(!hasItems) list.innerHTML = '<li class="empty-msg">Немає оцінок або коментарів на цей день.</li>';
     });
   };
 
