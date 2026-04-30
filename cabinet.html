@@ -422,7 +422,7 @@
   const localDateString = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
   document.getElementById('global-date').value = localDateString;
 
-  // --- РОЗУМНІ ФІЛЬТРИ ДЛЯ ПРЕДМЕТІВ (ВИПРАВЛЕНО БАГ ДОСТУПУ) ---
+  // --- БРОНЕБІЙНА ЛОГІКА ПЕРЕВІРКИ ПРЕДМЕТІВ ---
   window.extractSubject = function(item) {
       if (!item || !item.subject) return null;
       let sName = typeof item.subject === 'string' ? item.subject : item.subject.ua;
@@ -430,21 +430,23 @@
       return null;
   };
 
-  window.getAllowedSubjects = function(cls) {
-      let raw = teacherAccessMatrix[cls];
-      if (!raw) return []; 
-      // Запобігаємо багу Firebase, де масив перетворюється на об'єкт
-      let arr = Array.isArray(raw) ? raw : Object.values(raw);
-      return arr.map(s => typeof s === 'string' ? s.trim() : s);
-  };
-
   window.isSubjectAllowed = function(cls, subjectName) {
       if (!subjectName) return false;
-      let allowed = window.getAllowedSubjects(cls);
-      if (allowed.includes("Всі предмети")) return true;
-      return allowed.includes(subjectName.trim());
+      let raw = teacherAccessMatrix[cls];
+      if (!raw) return false;
+      
+      // Незалежно від того, що повернув Firebase (масив чи об'єкт), робимо масив
+      let allowed = Array.isArray(raw) ? raw : Object.values(raw);
+      
+      // Приводимо всі дозволені предмети до нижнього регістру і без пробілів по краях
+      let normAllowed = allowed.map(s => typeof s === 'string' ? s.trim().toLowerCase() : '');
+      // Те саме робимо з предметом, який перевіряємо
+      let normTarget = subjectName.trim().toLowerCase();
+
+      if (normAllowed.includes("всі предмети")) return true;
+      return normAllowed.includes(normTarget);
   };
-  // -----------------------------------------------------------------
+  // ------------------------------------------------
 
   function showToast(message) {
     const container = document.getElementById('toast-container');
