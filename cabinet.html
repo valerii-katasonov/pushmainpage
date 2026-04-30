@@ -131,12 +131,13 @@
 
     <button onclick="openJournalModal('director')" style="background: linear-gradient(135deg, #8e44ad, #9b59b6); color: white; margin-bottom: 20px; font-size: 1.1rem; padding: 12px; box-shadow: 0 4px 10px rgba(142,68,173,0.3);">📖 Електронний журнал успішності</button>
 
+    <!-- ПАНЕЛЬ УПРАВЛЕНИЯ РАСПИСАНИЕМ -->
     <details style="margin-top: 15px; margin-bottom: 25px; background: #fdfbfb; padding: 15px; border-radius: 12px; border: 1px solid #ddd;">
       <summary style="font-weight: bold; cursor: pointer; color: #8e44ad; font-size: 1.1rem;">📅 Управління розкладом (База Даних)</summary>
       
       <div style="margin-top: 15px; background: #e8eaed; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
          <h4 style="margin-top:0; color: #2c3e50;">📥 Імпорт зі старих файлів</h4>
-         <p style="font-size:0.8rem; color:#555;">Завантажте ваші старі файли, щоб перенести розклад у Базу Даних.</p>
+         <p style="font-size:0.8rem; color:#555;">Завантажте ваші старі файли (schedule-class-X.js та class-X.html), щоб перенести розклад у БД.</p>
          <select id="import-class" style="margin-bottom:10px;">
             <option value="">Оберіть клас для імпорту...</option>
             <option value="class_1">1 Клас</option><option value="class_2">2 Клас</option><option value="class_3">3 Клас</option>
@@ -167,14 +168,10 @@
              </select>
          </div>
 
-         <div id="editor-lessons-container" style="margin-top:15px;">
-            <!-- Lessons rendered here -->
-         </div>
+         <div id="editor-lessons-container" style="margin-top:15px;"></div>
          <button onclick="addEditorLesson()" style="background:#27ae60; padding:8px; width:auto; font-size: 0.9rem; margin-top: 10px;">+ Додати урок</button>
 
-         <div id="editor-clubs-container" style="margin-top:25px; border-top:1px dashed #00838f; padding-top:15px;">
-             <!-- Clubs rendered here -->
-         </div>
+         <div id="editor-clubs-container" style="margin-top:25px; border-top:1px dashed #00838f; padding-top:15px;"></div>
          <button onclick="addEditorClub()" style="background:#f39c12; padding:8px; width:auto; font-size: 0.9rem; margin-top: 10px;">+ Додати гурток</button>
 
          <button onclick="saveEditedSchedule()" style="background:#c0392b; margin-top:20px; color:white;">💾 Зберегти розклад дня</button>
@@ -494,7 +491,7 @@
     return currentUserData ? currentUserData.class : 'class_2'; 
   }
 
-  // ОНОВЛЕНА ФУНКЦІЯ: ТЕПЕР ЧИТАЄ З БАЗИ ДАНИХ FIREBASE!
+  // --- ЗАГРУЗКА РАСПИСАНИЯ ИЗ БАЗЫ ДАННЫХ ---
   window.loadScheduleScript = function(classId, callback) {
       if(!classId) return;
       get(child(ref(db), `schedules/${classId}`)).then(snap => {
@@ -538,8 +535,7 @@
     loadScheduleScript(activeClass, () => { handleDateChange(); });
   };
 
-  // --- ЛОГІКА РЕДАКТОРА ТА ІМПОРТУ РОЗКЛАДУ (ПАНЕЛЬ ДИРЕКТОРА) ---
-  
+  // --- ЛОГІКА ІМПОРТУ ТА РЕДАКТОРА РОЗКЛАДУ ---
   let currentEditingSchedule = { lessons: [], clubs: [] };
 
   window.handleImportFiles = async function() {
@@ -556,7 +552,8 @@
       if (jsFile) {
           try {
               const jsText = await jsFile.text();
-              const match = jsText.match(/const schedule\s*=\s*(\{[\s\S]+?\});/);
+              // Парсер, который ищет именно "const schedule = { ... };"
+              const match = jsText.match(/const schedule\s*=\s*(\{[\s\S]*?\});/);
               if (match) {
                   finalLessons = new Function("return " + match[1])();
               } else alert("Не вдалося знайти 'const schedule =' у JS файлі.");
@@ -566,7 +563,7 @@
       if (htmlFile) {
           try {
               const htmlText = await htmlFile.text();
-              const match = htmlText.match(/const clubSchedule\s*=\s*(\{[\s\S]+?\});/);
+              const match = htmlText.match(/const clubSchedule\s*=\s*(\{[\s\S]*?\n\s*\});/);
               if (match) {
                   finalClubs = new Function("return " + match[1])();
               } else alert("Не вдалося знайти 'const clubSchedule =' у HTML файлі.");
@@ -580,7 +577,7 @@
 
           try {
               await update(ref(db), updates);
-              alert("✅ Розклад успішно завантажено в БД!");
+              alert("✅ Розклад успішно розпарсено та завантажено в БД!");
               document.getElementById('import-js-file').value = '';
               document.getElementById('import-html-file').value = '';
               if(document.getElementById('edit-schedule-class').value === cls) loadScheduleForEdit();
@@ -687,7 +684,7 @@
           alert(`✅ Розклад на ${day} збережено!`);
       } catch(e) { alert("Помилка збереження: " + e.message); }
   };
-  // ----------------------------------------------------------------------
+  // -----------------------------------------------------------
 
   window.openJournalModal = function(role) {
       document.getElementById('journal-modal').style.display = 'flex';
