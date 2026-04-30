@@ -60,7 +60,6 @@
     .toast { background: rgba(0, 0, 0, 0.85); color: white; padding: 15px 20px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: space-between; font-size: 0.95rem; animation: slideUp 0.3s ease-out; backdrop-filter: blur(5px); }
     @keyframes slideUp { from { transform: translateY(100px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 
-    /* Календарь контрольных */
     .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; margin-top: 15px; }
     .cal-day { padding: 12px 5px; border-radius: 10px; border: 2px solid #eee; text-align: center; cursor: pointer; background: #fafafa; transition: 0.2s; display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: bold;}
     .cal-day:hover { transform: scale(1.05); }
@@ -68,7 +67,6 @@
     .cal-day.has-2 { background-color: #ffebee; color: #c62828; border-color: #ef5350; }
     .cal-header { font-size: 0.8rem; color: #888; font-weight: 600; text-transform: uppercase; }
 
-    /* Таблица журнала */
     .journal-table { width: 100%; border-collapse: collapse; min-width: 700px; font-size: 0.85rem; margin-top: 15px; }
     .journal-table th, .journal-table td { border: 1px solid #ddd; padding: 8px 4px; text-align: center; vertical-align: middle; }
     .journal-table th { background: #f0f8ff; color: #2980b9; position: sticky; top: 0; z-index: 1;}
@@ -76,24 +74,23 @@
     .journal-table th.student-name { position: sticky; left: 0; z-index: 3; background: #d0e8f2; }
     .cell-grade { font-weight: 800; color: #27ae60; font-size: 1rem; }
     .cell-absent { color: #c0392b; font-size: 0.8rem; font-weight: bold; display: block; }
+    
+    .editor-row { background: #fff; padding: 10px; border-radius: 8px; border: 1px solid #ddd; margin-bottom: 10px; display: flex; flex-direction: column; gap: 5px; }
+    .editor-row input { padding: 8px; border: 1px solid #ccc; border-radius: 6px; font-size: 0.9rem; margin: 0;}
+    .editor-row .row-header { display: flex; justify-content: space-between; align-items: center; font-weight: bold; color: #555; font-size: 0.9rem; margin-bottom: 5px;}
   </style>
 </head>
 <body>
 
 <div id="toast-container"></div>
 
-<!-- ДАТАЛИСТЫ ДЛЯ ОЦЕНОК -->
 <datalist id="grades-letters">
-    <option value="В"></option>
-    <option value="Д"></option>
-    <option value="С"></option>
-    <option value="П"></option>
+    <option value="В"></option><option value="Д"></option><option value="С"></option><option value="П"></option>
 </datalist>
 <datalist id="grades-numbers">
-    <option value="12"></option><option value="11"></option><option value="10"></option>
-    <option value="9"></option><option value="8"></option><option value="7"></option>
-    <option value="6"></option><option value="5"></option><option value="4"></option>
-    <option value="3"></option><option value="2"></option><option value="1"></option>
+    <option value="12"></option><option value="11"></option><option value="10"></option><option value="9"></option>
+    <option value="8"></option><option value="7"></option><option value="6"></option><option value="5"></option>
+    <option value="4"></option><option value="3"></option><option value="2"></option><option value="1"></option>
 </datalist>
 
 <div class="container">
@@ -114,7 +111,6 @@
         </select>
       </div>
     </div>
-
     <label style="margin-top:0; color: #006d77; font-size: 1rem;">📅 Оберіть дату (Зведення дня):</label>
     <input type="date" id="global-date" onchange="handleDateChange()" style="border: 2px solid #006d77; color: #006d77; font-weight: bold; text-align: center;">
   </div>
@@ -122,7 +118,7 @@
   <div id="admin-screen" class="panel">
     <h2 style="color: #2c3e50;">🛡️ Панель Адміністратора</h2>
     <div class="data-card" style="border-left-color: #e74c3c; background: #fdfbfb;">
-      <h4 id="a-att-header" style="margin-top:0; color: #c0392b;">🚨 Відсутні та Запізнення (Вся школа)</h4>
+      <h4 id="a-att-header" style="margin-top:0; color: #c0392b;">🚨 Відсутні та Запізнення</h4>
       <ul id="a-unified-att-list" class="list-dash" style="padding-left:0; list-style:none;">
           <li class="empty-msg">Завантаження...</li>
       </ul>
@@ -134,6 +130,56 @@
     <h2 style="color: #2c3e50;">👔 Пульт Директора</h2>
 
     <button onclick="openJournalModal('director')" style="background: linear-gradient(135deg, #8e44ad, #9b59b6); color: white; margin-bottom: 20px; font-size: 1.1rem; padding: 12px; box-shadow: 0 4px 10px rgba(142,68,173,0.3);">📖 Електронний журнал успішності</button>
+
+    <details style="margin-top: 15px; margin-bottom: 25px; background: #fdfbfb; padding: 15px; border-radius: 12px; border: 1px solid #ddd;">
+      <summary style="font-weight: bold; cursor: pointer; color: #8e44ad; font-size: 1.1rem;">📅 Управління розкладом (База Даних)</summary>
+      
+      <div style="margin-top: 15px; background: #e8eaed; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+         <h4 style="margin-top:0; color: #2c3e50;">📥 Імпорт зі старих файлів</h4>
+         <p style="font-size:0.8rem; color:#555;">Завантажте ваші старі файли, щоб перенести розклад у Базу Даних.</p>
+         <select id="import-class" style="margin-bottom:10px;">
+            <option value="">Оберіть клас для імпорту...</option>
+            <option value="class_1">1 Клас</option><option value="class_2">2 Клас</option><option value="class_3">3 Клас</option>
+            <option value="class_4">4 Клас</option><option value="class_5">5 Клас</option><option value="class_6">6 Клас</option>
+            <option value="class_7">7 Клас</option><option value="class_8">8 Клас</option><option value="class_9">9 Клас</option>
+            <option value="class_10">10 Клас</option><option value="class_11">11 Клас</option>
+         </select>
+         <label style="margin-top:5px;">Файл schedule-class-X.js (Уроки):</label>
+         <input type="file" id="import-js-file" accept=".js">
+         <label style="margin-top:10px;">Файл class-X.html (Гуртки):</label>
+         <input type="file" id="import-html-file" accept=".html">
+         <button onclick="handleImportFiles()" style="background:#2980b9; margin-top: 15px;">📥 Розпарсити та Завантажити в БД</button>
+      </div>
+
+      <div style="background: #e0f7fa; padding: 15px; border-radius: 8px;">
+         <h4 style="margin-top:0; color: #00838f;">✏️ Редактор розкладу</h4>
+         <div style="display: flex; gap:10px;">
+             <select id="edit-schedule-class" style="flex:1;" onchange="loadScheduleForEdit()">
+                <option value="">Оберіть клас...</option>
+                <option value="class_1">1 Клас</option><option value="class_2">2 Клас</option><option value="class_3">3 Клас</option>
+                <option value="class_4">4 Клас</option><option value="class_5">5 Клас</option><option value="class_6">6 Клас</option>
+                <option value="class_7">7 Клас</option><option value="class_8">8 Клас</option><option value="class_9">9 Клас</option>
+                <option value="class_10">10 Клас</option><option value="class_11">11 Клас</option>
+             </select>
+             <select id="edit-schedule-day" style="flex:1;" onchange="renderScheduleEditor()">
+                <option value="Monday">Понеділок</option><option value="Tuesday">Вівторок</option>
+                <option value="Wednesday">Середа</option><option value="Thursday">Четвер</option><option value="Friday">П'ятниця</option>
+             </select>
+         </div>
+
+         <div id="editor-lessons-container" style="margin-top:15px;">
+            <!-- Lessons rendered here -->
+         </div>
+         <button onclick="addEditorLesson()" style="background:#27ae60; padding:8px; width:auto; font-size: 0.9rem; margin-top: 10px;">+ Додати урок</button>
+
+         <div id="editor-clubs-container" style="margin-top:25px; border-top:1px dashed #00838f; padding-top:15px;">
+             <!-- Clubs rendered here -->
+         </div>
+         <button onclick="addEditorClub()" style="background:#f39c12; padding:8px; width:auto; font-size: 0.9rem; margin-top: 10px;">+ Додати гурток</button>
+
+         <button onclick="saveEditedSchedule()" style="background:#c0392b; margin-top:20px; color:white;">💾 Зберегти розклад дня</button>
+      </div>
+    </details>
 
     <div style="display: flex; gap: 10px; margin-bottom: 20px;">
       <div style="flex: 1; background: #e0f7fa; padding: 15px; border-radius: 12px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
@@ -155,7 +201,7 @@
     </div>
 
     <div class="data-card" style="border-left-color: #e74c3c; background: #fdfbfb;">
-      <h4 id="d-att-header" style="margin-top:0; color: #c0392b;">🚨 Відсутні та Запізнення (Вся школа)</h4>
+      <h4 id="d-att-header" style="margin-top:0; color: #c0392b;">🚨 Відсутні та Запізнення</h4>
       <ul id="d-unified-att-list" class="list-dash" style="padding-left:0; list-style:none;">
           <li class="empty-msg">Завантаження...</li>
       </ul>
@@ -352,7 +398,6 @@
   </div>
 </div>
 
-<!-- МОДАЛКА ЖУРНАЛА -->
 <div id="journal-modal" class="modal-overlay">
   <div class="modal-content" style="max-width: 900px; width: 100%; padding: 20px;">
     <h2 style="color: #2980b9; margin-top:0;">📖 Класний журнал</h2>
@@ -364,16 +409,13 @@
     </div>
 
     <div style="overflow-x:auto; background: #fff; border-radius: 8px; border: 1px solid #ddd; max-height: 50vh;">
-        <table class="journal-table" id="journal-table-el">
-            <!-- JS fills this -->
-        </table>
+        <table class="journal-table" id="journal-table-el"></table>
     </div>
 
     <button onclick="closeJournalModal()" style="background: #333; color:white; width: 100%; margin-top: 20px;">Закрити</button>
   </div>
 </div>
 
-<!-- МОДАЛКА КОНТРОЛЬНЫХ -->
 <div id="exams-modal" class="modal-overlay">
   <div class="modal-content">
     <h2 style="color: #d35400; margin-top:0;">📅 Контрольні роботи</h2>
@@ -406,8 +448,8 @@
 
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-  import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut, updatePassword } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
-  import { getDatabase, ref, set, get, child, push, onValue, remove } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+  import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+  import { getDatabase, ref, set, get, child, push, onValue, remove, update } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 
   const CLOUD_NAME = 'duy1qwsqv'; const UPLOAD_PRESET = 'ml_default'; const CLOUDINARY_URL = `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`;
   const firebaseConfig = { apiKey: "AIzaSyA3OA9pcR1zscUtEPWD8LEKTKonAN5Y90c", authDomain: "test-4eb3e.firebaseapp.com", databaseURL: "https://test-4eb3e-default-rtdb.europe-west1.firebasedatabase.app", projectId: "test-4eb3e", storageBucket: "test-4eb3e.firebasestorage.app", messagingSenderId: "933339787450", appId: "1:933339787450:web:cc87b850ed3b4903f41283" };
@@ -422,7 +464,6 @@
   const localDateString = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
   document.getElementById('global-date').value = localDateString;
 
-  // --- ВІДНОВЛЕНА РОБОЧА ЛОГІКА З ТВОГО КОДУ ---
   window.getValidSubjectName = function(item) {
       if (!item) return null;
       let sName = item.subject && item.subject.ua ? item.subject.ua : item.subject;
@@ -435,16 +476,12 @@
   window.isSubjectAllowed = function(cls, subjectName) {
       if (!subjectName) return false;
       let raw = teacherAccessMatrix[cls] || [];
-      // Захист на випадок, якщо Firebase зберіг масив як об'єкт
       let allowed = Array.isArray(raw) ? raw : Object.values(raw);
-
       let normAllowed = allowed.map(s => typeof s === 'string' ? s.trim() : '');
       let normTarget = subjectName.trim();
-
       if (normAllowed.includes("Всі предмети")) return true;
       return normAllowed.includes(normTarget);
   };
-  // ------------------------------------------------
 
   function showToast(message) {
     const container = document.getElementById('toast-container');
@@ -457,25 +494,24 @@
     return currentUserData ? currentUserData.class : 'class_2'; 
   }
 
-  function loadScheduleScript(classId, callback) {
-    if(!classId) return;
-    
-    const classNum = classId.split('_')[1]; 
-    window.schedule = null; 
-    
-    const scriptId = 'dynamic-schedule-script';
-    let oldScript = document.getElementById(scriptId);
-    if (oldScript) oldScript.remove();
-
-    const script = document.createElement('script');
-    script.id = scriptId;
-    script.src = `schedule-class-${classNum}.js?t=${new Date().getTime()}`;
-    
-    script.onload = () => { if(callback) callback(); };
-    script.onerror = () => { console.warn(`Файл schedule-class-${classNum}.js не знайдено.`); if(callback) callback(); };
-    
-    document.head.appendChild(script);
-  }
+  // ОНОВЛЕНА ФУНКЦІЯ: ТЕПЕР ЧИТАЄ З БАЗИ ДАНИХ FIREBASE!
+  window.loadScheduleScript = function(classId, callback) {
+      if(!classId) return;
+      get(child(ref(db), `schedules/${classId}`)).then(snap => {
+          if(snap.exists()) {
+              window.schedule = snap.val().lessons || {};
+              window.clubSchedule = snap.val().clubs || {};
+          } else {
+              window.schedule = {};
+              window.clubSchedule = {};
+          }
+          if(callback) callback();
+      }).catch(e => {
+          console.error("Помилка завантаження розкладу з БД:", e);
+          window.schedule = {}; window.clubSchedule = {};
+          if(callback) callback();
+      });
+  };
 
   window.handleDateChange = function() {
     if(!currentUserData) return;
@@ -502,10 +538,159 @@
     loadScheduleScript(activeClass, () => { handleDateChange(); });
   };
 
-  // ================== ЕЛЕКТРОННИЙ ЖУРНАЛ ==================
+  // --- ЛОГІКА РЕДАКТОРА ТА ІМПОРТУ РОЗКЛАДУ (ПАНЕЛЬ ДИРЕКТОРА) ---
+  
+  let currentEditingSchedule = { lessons: [], clubs: [] };
+
+  window.handleImportFiles = async function() {
+      const jsFile = document.getElementById('import-js-file').files[0];
+      const htmlFile = document.getElementById('import-html-file').files[0];
+      const cls = document.getElementById('import-class').value;
+      
+      if(!cls) return alert("Оберіть клас для імпорту!");
+      if(!jsFile && !htmlFile) return alert("Оберіть хоча б один файл (JS або HTML)!");
+
+      let finalLessons = null;
+      let finalClubs = null;
+
+      if (jsFile) {
+          try {
+              const jsText = await jsFile.text();
+              const match = jsText.match(/const schedule\s*=\s*(\{[\s\S]+?\});/);
+              if (match) {
+                  finalLessons = new Function("return " + match[1])();
+              } else alert("Не вдалося знайти 'const schedule =' у JS файлі.");
+          } catch(e) { alert("Помилка парсингу JS: " + e.message); }
+      }
+
+      if (htmlFile) {
+          try {
+              const htmlText = await htmlFile.text();
+              const match = htmlText.match(/const clubSchedule\s*=\s*(\{[\s\S]+?\});/);
+              if (match) {
+                  finalClubs = new Function("return " + match[1])();
+              } else alert("Не вдалося знайти 'const clubSchedule =' у HTML файлі.");
+          } catch(e) { alert("Помилка парсингу HTML: " + e.message); }
+      }
+
+      if(finalLessons || finalClubs) {
+          const updates = {};
+          if(finalLessons) updates[`schedules/${cls}/lessons`] = finalLessons;
+          if(finalClubs) updates[`schedules/${cls}/clubs`] = finalClubs;
+
+          try {
+              await update(ref(db), updates);
+              alert("✅ Розклад успішно завантажено в БД!");
+              document.getElementById('import-js-file').value = '';
+              document.getElementById('import-html-file').value = '';
+              if(document.getElementById('edit-schedule-class').value === cls) loadScheduleForEdit();
+          } catch(e) { alert("Помилка збереження в БД: " + e.message); }
+      }
+  };
+
+  window.loadScheduleForEdit = async function() {
+      const cls = document.getElementById('edit-schedule-class').value;
+      const day = document.getElementById('edit-schedule-day').value;
+      if(!cls) return;
+
+      const snap = await get(child(ref(db), `schedules/${cls}`));
+      if(snap.exists()) {
+          window.editorData = snap.val();
+      } else {
+          window.editorData = { lessons: {}, clubs: {} };
+      }
+      renderScheduleEditor();
+  };
+
+  window.renderScheduleEditor = function() {
+      const day = document.getElementById('edit-schedule-day').value;
+      const cls = document.getElementById('edit-schedule-class').value;
+      if(!cls || !window.editorData) return;
+
+      const lessons = window.editorData.lessons ? (window.editorData.lessons[day] || []) : [];
+      const clubs = window.editorData.clubs ? (window.editorData.clubs[day] || []) : [];
+
+      currentEditingSchedule.lessons = JSON.parse(JSON.stringify(lessons));
+      currentEditingSchedule.clubs = JSON.parse(JSON.stringify(clubs));
+
+      renderEditorLists();
+  };
+
+  function renderEditorLists() {
+      const lessonsContainer = document.getElementById('editor-lessons-container');
+      lessonsContainer.innerHTML = '';
+      currentEditingSchedule.lessons.forEach((lesson, index) => {
+          lessonsContainer.innerHTML += `
+            <div class="editor-row">
+              <div class="row-header"><span>Урок № ${index + 1}</span> <button onclick="removeEditorLesson(${index})" style="background:none; border:none; color:red; cursor:pointer; width:auto; padding:0; margin:0; font-size:1.2rem;">✖</button></div>
+              <input type="text" placeholder="Номер (напр. 1, або пробіл для перерви)" value="${lesson.number}" onchange="updateLesson(${index}, 'number', this.value)">
+              <input type="text" placeholder="Час (напр. 08:00 - 08:45)" value="${lesson.time}" onchange="updateLesson(${index}, 'time', this.value)">
+              <input type="text" placeholder="Назва UA" value="${lesson.subject?.ua || lesson.subject || ''}" onchange="updateLesson(${index}, 'ua', this.value)">
+              <input type="text" placeholder="Назва PL" value="${lesson.subject?.pl || ''}" onchange="updateLesson(${index}, 'pl', this.value)">
+            </div>`;
+      });
+
+      const clubsContainer = document.getElementById('editor-clubs-container');
+      clubsContainer.innerHTML = '';
+      currentEditingSchedule.clubs.forEach((club, index) => {
+          clubsContainer.innerHTML += `
+            <div class="editor-row" style="border-color:#f39c12;">
+              <div class="row-header"><span style="color:#f39c12;">Гурток № ${index + 1}</span> <button onclick="removeEditorClub(${index})" style="background:none; border:none; color:red; cursor:pointer; width:auto; padding:0; margin:0; font-size:1.2rem;">✖</button></div>
+              <input type="text" placeholder="Назва UA" value="${club.name?.ua || club.name || ''}" onchange="updateClub(${index}, 'name_ua', this.value)">
+              <input type="text" placeholder="Назва PL" value="${club.name?.pl || ''}" onchange="updateClub(${index}, 'name_pl', this.value)">
+              <input type="text" placeholder="Час" value="${club.time}" onchange="updateClub(${index}, 'time', this.value)">
+              <input type="text" placeholder="Локація UA" value="${club.location?.ua || club.location || ''}" onchange="updateClub(${index}, 'loc_ua', this.value)">
+              <input type="text" placeholder="Локація PL" value="${club.location?.pl || ''}" onchange="updateClub(${index}, 'loc_pl', this.value)">
+            </div>`;
+      });
+  }
+
+  window.addEditorLesson = function() {
+      currentEditingSchedule.lessons.push({ number: "", time: "", subject: { ua: "", pl: "" } });
+      renderEditorLists();
+  };
+  window.removeEditorLesson = function(i) { currentEditingSchedule.lessons.splice(i, 1); renderEditorLists(); };
+  window.updateLesson = function(i, field, val) {
+      if(field === 'number' || field === 'time') currentEditingSchedule.lessons[i][field] = val;
+      else {
+          if(typeof currentEditingSchedule.lessons[i].subject !== 'object') currentEditingSchedule.lessons[i].subject = { ua: currentEditingSchedule.lessons[i].subject, pl: "" };
+          currentEditingSchedule.lessons[i].subject[field] = val;
+      }
+  };
+
+  window.addEditorClub = function() {
+      currentEditingSchedule.clubs.push({ name: { ua: "", pl: "" }, time: "", location: { ua: "", pl: "" } });
+      renderEditorLists();
+  };
+  window.removeEditorClub = function(i) { currentEditingSchedule.clubs.splice(i, 1); renderEditorLists(); };
+  window.updateClub = function(i, field, val) {
+      if(field === 'time') currentEditingSchedule.clubs[i][field] = val;
+      if(field === 'name_ua') { if(typeof currentEditingSchedule.clubs[i].name !== 'object') currentEditingSchedule.clubs[i].name={ua:"",pl:""}; currentEditingSchedule.clubs[i].name.ua = val; }
+      if(field === 'name_pl') { if(typeof currentEditingSchedule.clubs[i].name !== 'object') currentEditingSchedule.clubs[i].name={ua:"",pl:""}; currentEditingSchedule.clubs[i].name.pl = val; }
+      if(field === 'loc_ua') { if(typeof currentEditingSchedule.clubs[i].location !== 'object') currentEditingSchedule.clubs[i].location={ua:"",pl:""}; currentEditingSchedule.clubs[i].location.ua = val; }
+      if(field === 'loc_pl') { if(typeof currentEditingSchedule.clubs[i].location !== 'object') currentEditingSchedule.clubs[i].location={ua:"",pl:""}; currentEditingSchedule.clubs[i].location.pl = val; }
+  };
+
+  window.saveEditedSchedule = async function() {
+      const cls = document.getElementById('edit-schedule-class').value;
+      const day = document.getElementById('edit-schedule-day').value;
+      if(!cls) return alert("Оберіть клас!");
+
+      if(!window.editorData.lessons) window.editorData.lessons = {};
+      if(!window.editorData.clubs) window.editorData.clubs = {};
+
+      window.editorData.lessons[day] = currentEditingSchedule.lessons;
+      window.editorData.clubs[day] = currentEditingSchedule.clubs;
+
+      try {
+          await set(ref(db, `schedules/${cls}`), window.editorData);
+          alert(`✅ Розклад на ${day} збережено!`);
+      } catch(e) { alert("Помилка збереження: " + e.message); }
+  };
+  // ----------------------------------------------------------------------
+
   window.openJournalModal = function(role) {
       document.getElementById('journal-modal').style.display = 'flex';
-      
       const monthInput = document.getElementById('j-month-select');
       const dateParts = document.getElementById('global-date').value.split('-');
       monthInput.value = `${dateParts[0]}-${dateParts[1]}`; 
@@ -650,7 +835,6 @@
           table.innerHTML = '<tr><td style="padding: 20px; color: red;">Помилка завантаження журналу.</td></tr>';
       }
   };
-  // ========================================================
 
   window.loadDirectorMatrixSubjects = function() {
       const cls = document.getElementById('d-acc-class').value;
@@ -896,7 +1080,6 @@
       if(snap.exists()) {
           teacherAccessMatrix = snap.val();
       } else {
-          // Fallback to avoid complete block if nothing assigned
           teacherAccessMatrix = { "class_1":["Всі предмети"],"class_2":["Всі предмети"] }; 
       }
   }
@@ -1144,15 +1327,24 @@
       }
       const now = new Date(); const dayName = dayKeys[now.getDay()]; const currentTime = now.getHours() * 60 + now.getMinutes();
       const lessons = window.schedule[dayName] || [];
-      let current = lessons.find(l => currentTime >= l.start && currentTime < l.end);
+      let current = lessons.find(l => {
+          if(!l.time) return false;
+          const [startStr, endStr] = l.time.split(" - ");
+          if(!startStr || !endStr) return false;
+          const [sh, sm] = startStr.split(":"); const startMins = parseInt(sh)*60 + parseInt(sm);
+          const [eh, em] = endStr.split(":"); const endMins = parseInt(eh)*60 + parseInt(em);
+          return currentTime >= startMins && currentTime < endMins;
+      });
       const display = document.getElementById('p-current-lesson');
       const progress = document.getElementById('p-lesson-progress');
       const count = document.getElementById('p-lesson-countdown');
       if(current) {
           display.innerText = current.subject.ua;
-          let perc = ((currentTime - current.start) / (current.end - current.start)) * 100;
+          const [sh, sm] = current.time.split(" - ")[0].split(":"); const startMins = parseInt(sh)*60 + parseInt(sm);
+          const [eh, em] = current.time.split(" - ")[1].split(":"); const endMins = parseInt(eh)*60 + parseInt(em);
+          let perc = ((currentTime - startMins) / (endMins - startMins)) * 100;
           progress.style.width = perc + '%';
-          count.innerText = `Залишилось: ${current.end - currentTime} хв`;
+          count.innerText = `Залишилось: ${endMins - currentTime} хв`;
       } else {
           display.innerText = "Уроків немає"; progress.style.width = '0%'; count.innerText = "";
       }
