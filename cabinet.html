@@ -131,13 +131,12 @@
 
     <button onclick="openJournalModal('director')" style="background: linear-gradient(135deg, #8e44ad, #9b59b6); color: white; margin-bottom: 20px; font-size: 1.1rem; padding: 12px; box-shadow: 0 4px 10px rgba(142,68,173,0.3);">📖 Електронний журнал успішності</button>
 
-    <!-- ПАНЕЛЬ УПРАВЛЕНИЯ РАСПИСАНИЕМ -->
     <details style="margin-top: 15px; margin-bottom: 25px; background: #fdfbfb; padding: 15px; border-radius: 12px; border: 1px solid #ddd;">
       <summary style="font-weight: bold; cursor: pointer; color: #8e44ad; font-size: 1.1rem;">📅 Управління розкладом (База Даних)</summary>
       
       <div style="margin-top: 15px; background: #e8eaed; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
          <h4 style="margin-top:0; color: #2c3e50;">📥 Імпорт зі старих файлів</h4>
-         <p style="font-size:0.8rem; color:#555;">Завантажте ваші старі файли (schedule-class-X.js та class-X.html), щоб перенести розклад у БД.</p>
+         <p style="font-size:0.8rem; color:#555;">Завантажте ваші старі файли (schedule-class-X.js та class-X.html). Якщо гуртків немає, HTML файл можна не завантажувати.</p>
          <select id="import-class" style="margin-bottom:10px;">
             <option value="">Оберіть клас для імпорту...</option>
             <option value="class_1">1 Клас</option><option value="class_2">2 Клас</option><option value="class_3">3 Клас</option>
@@ -147,7 +146,7 @@
          </select>
          <label style="margin-top:5px;">Файл schedule-class-X.js (Уроки):</label>
          <input type="file" id="import-js-file" accept=".js">
-         <label style="margin-top:10px;">Файл class-X.html (Гуртки):</label>
+         <label style="margin-top:10px;">Файл class-X.html (Гуртки, якщо є):</label>
          <input type="file" id="import-html-file" accept=".html">
          <button onclick="handleImportFiles()" style="background:#2980b9; margin-top: 15px;">📥 Розпарсити та Завантажити в БД</button>
       </div>
@@ -535,7 +534,7 @@
     loadScheduleScript(activeClass, () => { handleDateChange(); });
   };
 
-  // --- ЛОГІКА ІМПОРТУ ТА РЕДАКТОРА РОЗКЛАДУ ---
+  // --- ОНОВЛЕНА ЛОГІКА ІМПОРТУ (РОЗУМНИЙ ПАРСЕР) ---
   let currentEditingSchedule = { lessons: [], clubs: [] };
 
   window.handleImportFiles = async function() {
@@ -544,36 +543,51 @@
       const cls = document.getElementById('import-class').value;
       
       if(!cls) return alert("Оберіть клас для імпорту!");
-      if(!jsFile && !htmlFile) return alert("Оберіть хоча б один файл (JS або HTML)!");
+      if(!jsFile) return alert("Оберіть хоча б JS-файл з уроками!");
 
       let finalLessons = null;
       let finalClubs = null;
 
-      if (jsFile) {
-          try {
-              const jsText = await jsFile.text();
-              // Парсер, который ищет именно "const schedule = { ... };"
-              const match = jsText.match(/const schedule\s*=\s*(\{[\s\S]*?\});/);
-              if (match) {
-                  finalLessons = new Function("return " + match[1])();
-              } else alert("Не вдалося знайти 'const schedule =' у JS файлі.");
-          } catch(e) { alert("Помилка парсингу JS: " + e.message); }
+      // Парсим JS файл
+      try {
+          const jsText = await jsFile.text();
+          // Ця регулярка шукає 'const schedule = {' і забирає все до '};'
+          const match = jsText.match(/const schedule\s*=\s*(\{[\s\S]+?\n\});/);
+          if (match) {
+              finalLessons = new Function("return " + match[1])();
+          } else {
+              alert("Не вдалося знайти змінну 'schedule' у JS файлі.");
+              return;
+          }
+      } catch(e) { 
+          alert("Помилка парсингу JS: " + e.message); 
+          return;
       }
 
+      // Парсим HTML файл, ТІЛЬКИ якщо він завантажений
       if (htmlFile) {
           try {
               const htmlText = await htmlFile.text();
-              const match = htmlText.match(/const clubSchedule\s*=\s*(\{[\s\S]*?\n\s*\});/);
+              const match = htmlText.match(/const clubSchedule\s*=\s*(\{[\s\S]+?\n\s*\});/);
               if (match) {
                   finalClubs = new Function("return " + match[1])();
-              } else alert("Не вдалося знайти 'const clubSchedule =' у HTML файлі.");
-          } catch(e) { alert("Помилка парсингу HTML: " + e.message); }
+              } else {
+                  console.log("Кружків (clubSchedule) в HTML не знайдено. Пропускаємо.");
+              }
+          } catch(e) { 
+              alert("Помилка парсингу HTML: " + e.message); 
+          }
       }
 
-      if(finalLessons || finalClubs) {
+      if(finalLessons) {
           const updates = {};
-          if(finalLessons) updates[`schedules/${cls}/lessons`] = finalLessons;
-          if(finalClubs) updates[`schedules/${cls}/clubs`] = finalClubs;
+          updates[`schedules/${cls}/lessons`] = finalLessons;
+          if(finalClubs) {
+              updates[`schedules/${cls}/clubs`] = finalClubs;
+          } else {
+              // Якщо кружків немає, очищуємо їх для цього класу
+              updates[`schedules/${cls}/clubs`] = null;
+          }
 
           try {
               await update(ref(db), updates);
