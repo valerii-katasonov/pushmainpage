@@ -123,7 +123,8 @@
     <input type="email" id="email" placeholder="Email">
     <input type="password" id="pass" placeholder="Пароль">
     <button class="btn-login" onclick="loginUser()">Увійти</button>
-    <p id="login-error" style="color:red; text-align:center; display:none;"></p>
+    <button style="background: #f0f8ff; color: #006d77; border: 2px solid #00f2fe; margin-top: 10px;" onclick="registerUser()">Перший вхід (Встановити пароль)</button>
+    <p id="login-error" style="color:red; text-align:center; display:none; margin-top: 10px;"></p>
   </div>
 
   <div id="profile-bar" style="display:none; align-items:center; gap:15px; margin-bottom:20px; background:#fff; padding:15px; border-radius:12px; box-shadow:0 4px 10px rgba(0,0,0,0.05); border: 1px solid #eee;">
@@ -257,7 +258,7 @@
         <input type="email" id="new-staff-email" placeholder="Email співробітника">
         <select id="new-staff-role" style="margin-top: 10px;">
             <option value="teacher">Роль: Вчитель</option>
-            <option value="music_teacher">Роль: Вчитель музики</option>
+            <option value="art_school_teacher">Роль: Вчитель школи мистецтв</option>
             <option value="director">Роль: Директор</option>
             <option value="administrator">Роль: Адміністратор</option>
         </select>
@@ -336,7 +337,13 @@
     <div style="display:flex; justify-content:center; margin-bottom:15px;"><img id="modal-avatar-preview" src="https://cdn-icons-png.flaticon.com/512/149/149071.png" style="width:80px; height:80px; border-radius:50%; object-fit:cover; border: 3px solid #006d77;"></div>
     <label>Фото профілю:</label><input type="file" id="profile-photo" accept="image/*" style="margin-bottom:15px;">
     <label>Ім'я:</label><input type="text" id="profile-first-name" placeholder="Введіть ваше ім'я" style="margin-bottom:10px;">
-    <label>Прізвище:</label><input type="text" id="profile-last-name" placeholder="Введіть ваше прізвище" style="margin-bottom:20px;">
+    <label>Прізвище:</label><input type="text" id="profile-last-name" placeholder="Введіть ваше прізвище" style="margin-bottom:10px;">
+    
+    <div style="margin-top: 15px; padding-top: 10px; border-top: 1px dashed #ccc; text-align: left;">
+      <label style="color:#e74c3c; margin-top:0;">Зміна пароля (необов'язково):</label>
+      <input type="password" id="profile-new-pass" placeholder="Новий пароль (від 6 символів)" style="margin-bottom:20px; border-color:#e74c3c;">
+    </div>
+
     <button onclick="saveProfile()" id="btn-save-profile" style="background:#27ae60; color:white;">💾 Зберегти зміни</button>
     <button onclick="closeProfileModal()" style="background:#f5f6fa; color:#333; margin-top:10px; border: 1px solid #dcdde1;">Скасувати</button>
   </div>
@@ -378,7 +385,6 @@
     <label id="cell-subj-label">Назва предмету (UA):</label>
     <input type="text" id="cell-subj-ua" placeholder="Напр. Математика" style="margin-bottom:10px; border-color: #3498db;" oninput="handleSubjInput()">
     
-    <!-- Новий блок для Додаткових занять -->
     <div id="cell-extra-wrapper" style="display:none; margin-bottom:10px; background:#f0f8ff; padding:15px; border-radius:12px; border: 1px solid #3498db; text-align: left;">
         <label style="color:#2980b9; margin-top:0;">Формат заняття:</label>
         <select id="cell-extra-format" style="border-color: #3498db; margin-bottom: 10px;" onchange="toggleExtraFormat()">
@@ -386,13 +392,11 @@
             <option value="individual">👤 Індивідуальне</option>
         </select>
 
-        <!-- Індивідуальне -->
         <div id="extra-individual-wrap" style="display:none;">
             <label style="color:#2980b9; margin-top:5px;">Оберіть учня (зі всієї школи):</label>
             <select id="extra-ind-student" style="border-color: #3498db;"></select>
         </div>
 
-        <!-- Групове -->
         <div id="extra-group-wrap" style="display:none;">
             <label style="color:#2980b9; margin-top:5px;">Склад групи:</label>
             <select id="extra-group-type" style="border-color: #3498db; margin-bottom:10px;" onchange="toggleExtraGroupType()">
@@ -434,7 +438,6 @@
 
     <input type="hidden" id="cell-edit-class">
     <input type="hidden" id="cell-edit-row">
-    <!-- Зберігаємо індекс для паралельних уроків -->
     <input type="hidden" id="cell-edit-subindex">
 
     <div style="display:flex; gap:10px; margin-top:25px;">
@@ -487,7 +490,7 @@
 
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-  import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+  import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, updatePassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
   import { getDatabase, ref, set, get, child, push, onValue, remove, update } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 
   const CLOUD_NAME = 'duy1qwsqv'; const UPLOAD_PRESET = 'ml_default'; const CLOUDINARY_URL = `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`;
@@ -509,7 +512,6 @@
   const localDateString = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
   document.getElementById('global-date').value = localDateString;
 
-  // --- ХЕЛПЕР ДЛЯ ПЛОСКОГО СПИСКУ УРОКІВ (ВАЖЛИВО ДЛЯ ПАРАЛЕЛЬНИХ УРОКІВ) ---
   window.getTodayLessonsFlattened = function(dayName) {
       if (!window.schedule || !window.schedule[dayName]) return [];
       let flat = [];
@@ -541,7 +543,7 @@
           teacherWrap.style.display = 'block';
           extraWrap.style.display = 'block';
           subjLabel.innerText = 'Назва гуртка / заняття:';
-          if(subjInput.value.toLowerCase().includes('перерва')) subjInput.value = 'Музика';
+          if(subjInput.value.toLowerCase().includes('перерва')) subjInput.value = 'Мистецтво';
           numInput.disabled = false;
           toggleExtraFormat();
       } else {
@@ -613,7 +615,7 @@
   }
 
   function getActiveClass() {
-    if (currentUserData && (currentUserData.role === 'teacher' || currentUserData.role === 'music_teacher')) return document.getElementById('t-class-selector').value; return currentUserData ? currentUserData.class : 'class_2'; 
+    if (currentUserData && (currentUserData.role === 'teacher' || currentUserData.role === 'art_school_teacher' || currentUserData.role === 'music_teacher')) return document.getElementById('t-class-selector').value; return currentUserData ? currentUserData.class : 'class_2'; 
   }
 
   window.loadScheduleScript = function(classId, callback) {
@@ -623,7 +625,7 @@
 
   window.handleDateChange = function() {
     if(!currentUserData) return;
-    if (currentUserData.role === 'teacher' || currentUserData.role === 'music_teacher') { updateSubjectList(); loadTeacherDashboard(); loadCurrentData(); listenTeacherAttendance(); } 
+    if (currentUserData.role === 'teacher' || currentUserData.role === 'art_school_teacher' || currentUserData.role === 'music_teacher') { updateSubjectList(); loadTeacherDashboard(); loadCurrentData(); listenTeacherAttendance(); } 
     else if (currentUserData.role === 'director') { loadDirectorDashboard(); document.getElementById('d-detail-hw-class').value = ''; document.getElementById('d-detail-hw-list').innerHTML = '<li class="empty-msg">Оберіть клас зі списку вище.</li>'; } 
     else if (currentUserData.role === 'administrator') { loadAdminDashboard(); }
     else { loadParentDashboard(); }
@@ -640,16 +642,42 @@
       if(!currentUserData) return; document.getElementById('profile-bar').style.display = 'flex';
       const avatarSrc = currentUserData.photoURL || "https://cdn-icons-png.flaticon.com/512/149/149071.png"; document.getElementById('pb-avatar').src = avatarSrc; document.getElementById('modal-avatar-preview').src = avatarSrc;
       let displayName = "Користувач"; if(currentUserData.firstName || currentUserData.lastName) displayName = `${currentUserData.firstName || ''} ${currentUserData.lastName || ''}`.trim(); else if(currentUserData.studentName) displayName = `Батьки (${currentUserData.studentName})`; else if(currentUserData.email) displayName = currentUserData.email;
-      let roleName = "Користувач"; if(currentUserData.role === 'teacher') roleName = "Вчитель"; if(currentUserData.role === 'music_teacher') roleName = "Вчитель музики"; if(currentUserData.role === 'director') roleName = "Директор"; if(currentUserData.role === 'administrator') roleName = "Адміністратор"; if(currentUserData.role === 'parent') { if(currentUserData.parentRole === 'mother') roleName = "Мати"; else if(currentUserData.parentRole === 'father') roleName = "Батько"; else roleName = "Опекун"; }
+      let roleName = "Користувач"; 
+      if(currentUserData.role === 'teacher') roleName = "Вчитель"; 
+      if(currentUserData.role === 'art_school_teacher' || currentUserData.role === 'music_teacher') roleName = "Вчитель школи мистецтв"; 
+      if(currentUserData.role === 'director') roleName = "Директор"; 
+      if(currentUserData.role === 'administrator') roleName = "Адміністратор"; 
+      if(currentUserData.role === 'parent') { if(currentUserData.parentRole === 'mother') roleName = "Мати"; else if(currentUserData.parentRole === 'father') roleName = "Батько"; else roleName = "Опекун"; }
       document.getElementById('pb-name').innerText = displayName; document.getElementById('pb-role').innerText = roleName;
   }
 
-  window.openProfileModal = function() { document.getElementById('profile-modal').style.display = 'flex'; document.getElementById('profile-first-name').value = currentUserData.firstName || ''; document.getElementById('profile-last-name').value = currentUserData.lastName || ''; document.getElementById('profile-photo').value = ''; };
+  window.openProfileModal = function() { document.getElementById('profile-modal').style.display = 'flex'; document.getElementById('profile-first-name').value = currentUserData.firstName || ''; document.getElementById('profile-last-name').value = currentUserData.lastName || ''; document.getElementById('profile-photo').value = ''; document.getElementById('profile-new-pass').value = ''; };
   window.closeProfileModal = function() { document.getElementById('profile-modal').style.display = 'none'; };
   document.getElementById('profile-photo').addEventListener('change', function(e) { if(e.target.files && e.target.files[0]) { const reader = new FileReader(); reader.onload = function(e) { document.getElementById('modal-avatar-preview').src = e.target.result; }; reader.readAsDataURL(e.target.files[0]); } });
 
   window.saveProfile = async function() {
-      const fName = document.getElementById('profile-first-name').value.trim(); const lName = document.getElementById('profile-last-name').value.trim(); const fileInput = document.getElementById('profile-photo'); const btn = document.getElementById('btn-save-profile'); btn.disabled = true; btn.innerText = "⏳ Збереження...";
+      const fName = document.getElementById('profile-first-name').value.trim(); const lName = document.getElementById('profile-last-name').value.trim(); const fileInput = document.getElementById('profile-photo'); const newPass = document.getElementById('profile-new-pass').value.trim(); const btn = document.getElementById('btn-save-profile'); btn.disabled = true; btn.innerText = "⏳ Збереження...";
+      
+      if (newPass) {
+          if (newPass.length < 6) {
+              alert("Пароль має містити мінімум 6 символів!");
+              btn.disabled = false; btn.innerText = "💾 Зберегти зміни";
+              return;
+          }
+          try {
+              await updatePassword(auth.currentUser, newPass);
+              document.getElementById('profile-new-pass').value = '';
+          } catch(e) {
+              if (e.code === 'auth/requires-recent-login') {
+                  alert("З метою безпеки, для зміни пароля потрібно вийти з акаунту та зайти знову, після чого повторити зміну.");
+              } else {
+                  alert("Помилка зміни пароля: " + e.message);
+              }
+              btn.disabled = false; btn.innerText = "💾 Зберегти зміни";
+              return;
+          }
+      }
+
       let photoURL = currentUserData.photoURL || "https://cdn-icons-png.flaticon.com/512/149/149071.png";
       if (fileInput.files.length > 0) { const formData = new FormData(); formData.append('file', fileInput.files[0]); formData.append('upload_preset', UPLOAD_PRESET); try { const res = await fetch(CLOUDINARY_URL, { method: 'POST', body: formData }); const data = await res.json(); photoURL = data.secure_url; } catch(e) { alert("Помилка завантаження фото!"); btn.disabled = false; btn.innerText = "💾 Зберегти зміни"; return; } }
       try { await update(ref(db, `users/${auth.currentUser.uid}`), { firstName: fName, lastName: lName, photoURL: photoURL }); currentUserData.firstName = fName; currentUserData.lastName = lName; currentUserData.photoURL = photoURL; updateProfileBar(); closeProfileModal(); showToast("✅ Профіль успішно оновлено!"); } catch(e) { alert("Помилка збереження: " + e.message); } btn.disabled = false; btn.innerText = "💾 Зберегти зміни";
@@ -741,7 +769,6 @@
           let breakCount = 0;
           let lessonCount = 0;
           
-          // Аналіз для лівої колонки часу
           for(let c=1; c<=11; c++) {
               const clsId = `class_${c}`;
               const lessonsArray = (globalAllSchedules[clsId] && globalAllSchedules[clsId].lessons && globalAllSchedules[clsId].lessons[day]) ? globalAllSchedules[clsId].lessons[day] : [];
@@ -798,7 +825,6 @@
                       }
                       innerHTML += renderSingleMatrixCellContent(lesson, displayTName, isOverride, clsId, row, subIdx);
                   });
-                  // Кнопка додавання паралельного уроку
                   innerHTML += `<div class="add-parallel-btn" onclick="event.stopPropagation(); openCellEditor('${clsId}', ${row}, null, null)">+ Додати паралельний</div>`;
                   innerHTML += `</div>`;
               } else {
@@ -844,7 +870,6 @@
       document.getElementById('cell-edit-row').value = rowIdx;
       document.getElementById('cell-edit-subindex').value = subIdx !== null ? subIdx : '';
       
-      // Заповнення селектів
       const indStudentSel = document.getElementById('extra-ind-student');
       const grpClassesSel = document.getElementById('extra-group-classes');
       const grpStudentsSel = document.getElementById('extra-group-students');
@@ -976,7 +1001,6 @@
               let dayArray = globalAllSchedules[tCls].lessons[day];
               while(dayArray.length <= rowIdx) { dayArray.push({}); }
               
-              // Логіка масиву для слота
               let existingSlot = dayArray[rowIdx];
               let slotItems = [];
               if (Array.isArray(existingSlot)) slotItems = [...existingSlot];
@@ -1033,7 +1057,7 @@
   window.loadTeachersListForDirector = async function() {
       const select = document.getElementById('d-acc-email-select'); select.innerHTML = '<option value="">-- Оберіть вчителя зі списку --</option>';
       const snap = await get(ref(db, 'users')); globalTeachersList = []; 
-      if(snap.exists()) { const users = snap.val(); for(let uid in users) { const u = users[uid]; if((u.role === 'teacher' || u.role === 'music_teacher') && u.email) { const name = (u.firstName || u.lastName) ? `${u.firstName || ''} ${u.lastName || ''}`.trim() : "Ім'я не вказано"; const safeEmail = u.email.replace(/\./g, '_'); select.innerHTML += `<option value="${safeEmail}">${name} (${u.email})</option>`; globalTeachersList.push({ email: u.email, name: name, safeEmail: safeEmail }); } } }
+      if(snap.exists()) { const users = snap.val(); for(let uid in users) { const u = users[uid]; if((u.role === 'teacher' || u.role === 'art_school_teacher' || u.role === 'music_teacher') && u.email) { const name = (u.firstName || u.lastName) ? `${u.firstName || ''} ${u.lastName || ''}`.trim() : "Ім'я не вказано"; const safeEmail = u.email.replace(/\./g, '_'); select.innerHTML += `<option value="${safeEmail}">${name} (${u.email})</option>`; globalTeachersList.push({ email: u.email, name: name, safeEmail: safeEmail }); } } }
   };
   
   // --- ІНШИЙ ФУНКЦІОНАЛ ДИРЕКТОРА (Імпорт, доступи) ---
@@ -1048,7 +1072,6 @@
           let uniqueSubjects = new Set(); 
           if (window.schedule) { 
               dayKeys.forEach(day => { 
-                  // Використовуємо наш плоский список, щоб знайти всі паралельні предмети
                   const flatLessons = window.getTodayLessonsFlattened(day);
                   flatLessons.forEach(item => { 
                       let sName = window.getValidSubjectName(item); 
@@ -1073,10 +1096,10 @@
       get(child(ref(db), `users/${user.uid}`)).then(async (snapshot) => {
         if (snapshot.exists()) { 
             currentUserData = snapshot.val(); if(!currentUserData.email) { currentUserData.email = user.email; update(ref(db, `users/${user.uid}`), { email: user.email }); }
-            if(currentUserData.role === 'teacher' || currentUserData.role === 'music_teacher') await fetchTeacherAccess(safeEmail); initUserSession(); 
+            if(currentUserData.role === 'teacher' || currentUserData.role === 'art_school_teacher' || currentUserData.role === 'music_teacher') await fetchTeacherAccess(safeEmail); initUserSession(); 
         } else {
           get(child(ref(db), `pre_approved_roles/${safeEmail}`)).then(async roleSnap => {
-            if (roleSnap.exists()) { const assignedRole = roleSnap.val(); const newUserData = { role: assignedRole, email: user.email }; if(assignedRole === 'teacher' || assignedRole === 'music_teacher') await fetchTeacherAccess(safeEmail); set(ref(db, `users/${user.uid}`), newUserData).then(() => { currentUserData = newUserData; initUserSession(); }); } 
+            if (roleSnap.exists()) { const assignedRole = roleSnap.val(); const newUserData = { role: assignedRole, email: user.email }; if(assignedRole === 'teacher' || assignedRole === 'art_school_teacher' || assignedRole === 'music_teacher') await fetchTeacherAccess(safeEmail); set(ref(db, `users/${user.uid}`), newUserData).then(() => { currentUserData = newUserData; initUserSession(); }); } 
             else { get(child(ref(db), `parent_links/${safeEmail}`)).then((linkSnap) => { if (linkSnap.exists()) { const linkData = linkSnap.val(); let stName, stClass, pRole = 'guardian'; if (typeof linkData === 'string') { stName = linkData; stClass = "class_2"; } else { stName = linkData.studentName; stClass = linkData.class; pRole = linkData.role || 'guardian'; } const newUserData = { role: "parent", studentName: stName, class: stClass, parentRole: pRole, email: user.email }; set(ref(db, `users/${user.uid}`), newUserData).then(() => { currentUserData = newUserData; initUserSession(); }); } else { alert("Ваш Email ще не зареєстровано в системі."); signOut(auth); } }); }
           });
         }
@@ -1090,11 +1113,43 @@
     document.getElementById('calendar-block').style.display = 'block'; updateProfileBar();
     if (currentUserData.role === 'director') { document.getElementById('director-screen').style.display = 'block'; document.getElementById('teacher-class-selector-box').style.display = 'none'; loadTeachersListForDirector(); handleDateChange(); } 
     else if (currentUserData.role === 'administrator') { document.getElementById('admin-screen').style.display = 'block'; document.getElementById('teacher-class-selector-box').style.display = 'none'; handleDateChange(); } 
-    else if (currentUserData.role === 'teacher' || currentUserData.role === 'music_teacher') { document.getElementById('teacher-screen').style.display = 'block'; document.getElementById('teacher-class-selector-box').style.display = 'block'; const classSelect = document.getElementById('t-class-selector'); classSelect.innerHTML = ''; Object.keys(teacherAccessMatrix).forEach(cls => { classSelect.innerHTML += `<option value="${cls}">${cls.replace('class_','')} Клас</option>`; }); if(classSelect.options.length === 0) { alert("Вам ще не призначено класи."); return; } window.handleClassChange(); } 
+    else if (currentUserData.role === 'teacher' || currentUserData.role === 'art_school_teacher' || currentUserData.role === 'music_teacher') { document.getElementById('teacher-screen').style.display = 'block'; document.getElementById('teacher-class-selector-box').style.display = 'block'; const classSelect = document.getElementById('t-class-selector'); classSelect.innerHTML = ''; Object.keys(teacherAccessMatrix).forEach(cls => { classSelect.innerHTML += `<option value="${cls}">${cls.replace('class_','')} Клас</option>`; }); if(classSelect.options.length === 0) { alert("Вам ще не призначено класи."); return; } window.handleClassChange(); } 
     else { document.getElementById('parent-screen').style.display = 'block'; const classNum = currentUserData.class.replace('class_', ''); document.getElementById('p-schedule-link').href = `https://planlekcjipush.netlify.app/class-${classNum}`; loadScheduleScript(currentUserData.class, () => { handleDateChange(); }); }
   }
 
+  // Звичайний вхід
   window.loginUser = function() { signInWithEmailAndPassword(auth, document.getElementById('email').value.trim(), document.getElementById('pass').value.trim()).catch(e => { document.getElementById('login-error').innerText = "Помилка входу."; document.getElementById('login-error').style.display = 'block'; }); };
+  
+  // Реєстрація / Перший вхід
+  window.registerUser = async function() {
+      const email = document.getElementById('email').value.trim();
+      const pass = document.getElementById('pass').value.trim();
+      
+      if (!email || !pass) return alert("Введіть Email та придумайте пароль для створення акаунту!");
+      if (pass.length < 6) return alert("Пароль має містити мінімум 6 символів.");
+
+      const safeEmail = email.replace(/\./g, '_');
+      try {
+          // Спочатку перевіряємо, чи дозволив директор цей Email
+          const roleSnap = await get(child(ref(db), `pre_approved_roles/${safeEmail}`));
+          const parentSnap = await get(child(ref(db), `parent_links/${safeEmail}`));
+
+          if (!roleSnap.exists() && !parentSnap.exists()) {
+              return alert("Ваш Email ще не додано директором. Доступ заборонено.");
+          }
+
+          // Якщо дозволив, створюємо користувача в Firebase Auth
+          await createUserWithEmailAndPassword(auth, email, pass);
+          // Далі onAuthStateChanged автоматично підхопить вхід і створить профіль в БД
+      } catch (e) {
+          if (e.code === 'auth/email-already-in-use') {
+              alert("Цей акаунт вже встановлював пароль! Будь ласка, натисніть 'Увійти'.");
+          } else {
+              alert("Помилка: " + e.message);
+          }
+      }
+  };
+
   window.logoutUser = function() { if(teacherAttendanceListener) teacherAttendanceListener(); if(parentLessonInterval) clearInterval(parentLessonInterval); document.getElementById('profile-bar').style.display = 'none'; signOut(auth); };
 
   // --- ЖУРНАЛ (Директор / Вчитель) ---
@@ -1128,7 +1183,7 @@
       }); 
   };
   
-  function finishJournalSubjectsRender(uniqueSubjects, cls, subjSelect) { if(currentUserData.role === 'teacher' || currentUserData.role === 'music_teacher') { uniqueSubjects = new Set([...uniqueSubjects].filter(s => window.isSubjectAllowed(cls, s))); } subjSelect.innerHTML = '<option value="">-- Оберіть предмет --</option>'; if(uniqueSubjects.size > 0) { [...uniqueSubjects].sort().forEach(s => subjSelect.innerHTML += `<option value="${s}">${s}</option>`); } else { subjSelect.innerHTML = '<option value="" disabled>Предмети відсутні (або немає доступу)</option>'; } if ((currentUserData.role === 'teacher' || currentUserData.role === 'music_teacher') && document.getElementById('t-subject').value) { const currentSubj = document.getElementById('t-subject').value; if(uniqueSubjects.has(currentSubj)) subjSelect.value = currentSubj; } renderJournalTable(); }
+  function finishJournalSubjectsRender(uniqueSubjects, cls, subjSelect) { if(currentUserData.role === 'teacher' || currentUserData.role === 'art_school_teacher' || currentUserData.role === 'music_teacher') { uniqueSubjects = new Set([...uniqueSubjects].filter(s => window.isSubjectAllowed(cls, s))); } subjSelect.innerHTML = '<option value="">-- Оберіть предмет --</option>'; if(uniqueSubjects.size > 0) { [...uniqueSubjects].sort().forEach(s => subjSelect.innerHTML += `<option value="${s}">${s}</option>`); } else { subjSelect.innerHTML = '<option value="" disabled>Предмети відсутні (або немає доступу)</option>'; } if ((currentUserData.role === 'teacher' || currentUserData.role === 'art_school_teacher' || currentUserData.role === 'music_teacher') && document.getElementById('t-subject').value) { const currentSubj = document.getElementById('t-subject').value; if(uniqueSubjects.has(currentSubj)) subjSelect.value = currentSubj; } renderJournalTable(); }
   window.renderJournalTable = async function() { const cls = document.getElementById('j-class-select').value; const subj = document.getElementById('j-subj-select').value; const yMonth = document.getElementById('j-month-select').value; const table = document.getElementById('journal-table-el'); if(!cls || !subj || !yMonth) { table.innerHTML = ''; return; } table.innerHTML = '<tr><td style="padding: 20px;">⏳ Завантаження даних журналу...</td></tr>'; const [y, m] = yMonth.split('-'); const daysInMonth = new Date(y, m, 0).getDate(); try { const [studentsSnap, gradesSnap, attSnap] = await Promise.all([ get(child(ref(db), `students_list/${cls}`)), get(child(ref(db), `grades/${cls}/${yMonth}/${subj}`)), get(child(ref(db), `attendance/${cls}`)) ]); let students = []; if (studentsSnap.exists()) students = Object.values(studentsSnap.val()).sort(); if (students.length === 0) { table.innerHTML = '<tr><td style="padding: 20px;">У списку немає учнів.</td></tr>'; return; } const gradesData = gradesSnap.exists() ? gradesSnap.val() : {}; const attDataAll = attSnap.exists() ? attSnap.val() : {}; const attData = {}; for(let d in attDataAll) { if(d.startsWith(yMonth)) attData[d] = attDataAll[d]; } let thead = '<thead><tr><th class="student-name">Учень</th>'; for(let i=1; i<=daysInMonth; i++) thead += `<th>${i}</th>`; thead += '</tr></thead>'; let tbody = '<tbody>'; students.forEach(st => { tbody += `<tr><td class="student-name">${st}</td>`; for(let i=1; i<=daysInMonth; i++) { const dateStr = `${yMonth}-${String(i).padStart(2,'0')}`; const statusInfo = (attData[dateStr] && attData[dateStr][st]) ? attData[dateStr][st].status : null; const grade = (gradesData[dateStr] && gradesData[dateStr][st]) ? gradesData[dateStr][st] : ''; let cellContent = ''; if (grade) cellContent = `<span class="cell-grade">${grade}</span>`; if (statusInfo === 'absent') { cellContent += (cellContent ? `<br>` : '') + `<span class="cell-absent" title="Відсутній">н</span>`; } else if (statusInfo === 'late') { cellContent += (cellContent ? `<br>` : '') + `<span class="cell-absent" style="color:#f39c12;" title="Запізнення">з</span>`; } tbody += `<td>${cellContent}</td>`; } tbody += '</tr>'; }); tbody += '</tbody>'; table.innerHTML = thead + tbody; } catch(e) { console.error(e); table.innerHTML = '<tr><td style="padding: 20px; color: red;">Помилка завантаження журналу.</td></tr>'; } };
 
   // --- КОНТРОЛЬНІ, ВІДВІДУВАНІСТЬ ТА ДЗ ---
@@ -1158,7 +1213,7 @@
           }); 
 
           let finalExamSubjects = []; 
-          if (currentUserData.role === 'teacher' || currentUserData.role === 'music_teacher') { 
+          if (currentUserData.role === 'teacher' || currentUserData.role === 'art_school_teacher' || currentUserData.role === 'music_teacher') { 
               finalExamSubjects = [...daySubjects].filter(s => window.isSubjectAllowed(cls, s)).sort(); 
           } else { 
               finalExamSubjects = [...daySubjects].sort(); 
@@ -1253,11 +1308,10 @@
       const count = document.getElementById('p-lesson-countdown'); 
       
       if(currents.length > 0) { 
-          // Якщо кілька паралельних уроків
           let subjNames = currents.map(c => typeof c.subject === 'string' ? c.subject : (c.subject.ua || '')).join(" / ");
           display.innerText = subjNames; 
           
-          const current = currents[0]; // Беремо час по першому
+          const current = currents[0]; 
           const [sh, sm] = current.time.split(" - ")[0].split(":"); const startMins = parseInt(sh)*60 + parseInt(sm); 
           const [eh, em] = current.time.split(" - ")[1].split(":"); const endMins = parseInt(eh)*60 + parseInt(em); 
           let perc = ((currentTime - startMins) / (endMins - startMins)) * 100; 
