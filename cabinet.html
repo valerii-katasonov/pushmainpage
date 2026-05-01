@@ -293,12 +293,20 @@
       </div>
     </div>
     
-    <div id="t-stats-hw-wrapper">
-        <div style="display: flex; gap: 10px; margin-bottom: 25px;">
-          <div style="flex: 1; background: #ffeaa7; padding: 15px; border-radius: 12px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05);"><h4 style="margin:0; color: #d35400; font-size: 0.85rem;">❤️ Індекс реакцій</h4><p id="t-karma-counter" style="font-size: 1.8rem; font-weight: 800; color: #e67e22; margin: 5px 0;">0</p></div>
-          <div style="flex: 1; background: linear-gradient(135deg, #a8ff78, #78ffd6); padding: 15px; border-radius: 12px; text-align: center; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.05);" onclick="showWeeklyWrapped()"><h4 style="margin:0; color: #006d77; font-size: 0.85rem;">📊 Підсумки</h4><p style="font-size: 1.8rem; margin: 5px 0;">🎁</p></div>
-        </div>
-        <div class="data-card" style="border-left-color: #3498db; background: #f4f9fd;"><h4 style="margin-top:0; color: #2980b9;">📋 Зведення всіх ДЗ класса:</h4><ul id="t-daily-hw-list" class="list-dash"></ul></div>
+    <div style="display: flex; gap: 10px; margin-bottom: 25px;">
+      <div style="flex: 1; background: #ffeaa7; padding: 15px; border-radius: 12px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05); cursor: pointer;" onclick="showReactionsDetails()">
+        <h4 style="margin:0; color: #d35400; font-size: 0.85rem;">❤️ Індекс реакцій</h4>
+        <p id="t-karma-counter" style="font-size: 1.8rem; font-weight: 800; color: #e67e22; margin: 5px 0;">0</p>
+      </div>
+      <div id="t-wrapped-btn" style="flex: 1; background: linear-gradient(135deg, #a8ff78, #78ffd6); padding: 15px; border-radius: 12px; text-align: center; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.05);" onclick="showWeeklyWrapped()">
+        <h4 style="margin:0; color: #006d77; font-size: 0.85rem;">📊 Підсумки</h4>
+        <p style="font-size: 1.8rem; margin: 5px 0;">🎁</p>
+      </div>
+    </div>
+    
+    <div id="t-hw-list-wrapper" class="data-card" style="border-left-color: #3498db; background: #f4f9fd;">
+        <h4 style="margin-top:0; color: #2980b9;">📋 Зведення всіх ДЗ класса:</h4>
+        <ul id="t-daily-hw-list" class="list-dash"></ul>
     </div>
     
     <h3>✏️ Заповнення журналу</h3>
@@ -504,6 +512,15 @@
   </div>
 </div>
 
+<div id="reactions-modal" class="modal-overlay">
+  <div class="modal-content" style="max-width: 500px; max-height: 80vh; display: flex; flex-direction: column;">
+    <h2 style="color: #d35400; margin-top:0;">❤️ Деталі реакцій</h2>
+    <div id="reactions-list" style="overflow-y: auto; text-align: left; padding: 10px 0;">
+    </div>
+    <button onclick="closeReactionsModal()" style="background: #333; color:white; width: 100%; margin-top: 15px;">Закрити</button>
+  </div>
+</div>
+
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
   import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, updatePassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
@@ -523,6 +540,7 @@
   let globalTeachersList = [];
   let globalTeacherAccess = {};
   let globalAllStudents = {}; 
+  window.myDetailedReactions = [];
 
   const today = new Date();
   const localDateString = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
@@ -887,7 +905,6 @@
       globalTeachersList.forEach(t => { teacherSelect.innerHTML += `<option value="${t.email}">${t.name} (${t.email})</option>`; });
       
       if (isArt) {
-          // Если это учитель искусств, жестко фиксируем его как учителя
           teacherSelect.value = currentUserData.email;
           teacherSelect.disabled = true;
       } else {
@@ -904,7 +921,6 @@
   window.openCellEditor = async function(clsId, rowIdx, subIdx, lessonObj) {
       const isArt = currentUserData.role === 'art_school_teacher';
 
-      // Блокируем доступ, если учитель искусств пытается открыть чужой или обычный урок
       if (isArt && lessonObj) {
           const sName = typeof lessonObj.subject === 'string' ? lessonObj.subject : (lessonObj.subject.ua || '');
           const isBreak = sName.toLowerCase().includes('перерва') || sName.toLowerCase().includes('обід');
@@ -989,7 +1005,6 @@
           typeSelect.value = isArt ? 'extra' : 'lesson';
       }
 
-      // Блокируем смену типа для учителя искусств
       if (isArt) {
           typeSelect.value = 'extra';
           Array.from(typeSelect.options).forEach(opt => {
@@ -1190,16 +1205,17 @@
         if (currentUserData.role === 'art_school_teacher') {
             document.getElementById('t-matrix-btn-wrapper').style.display = 'block';
             document.getElementById('t-mark-absent-block').style.display = 'none';
-            // Прячем всё ненужное для учителя искусств
             document.getElementById('t-exams-journal-btns').style.display = 'none';
-            document.getElementById('t-stats-hw-wrapper').style.display = 'none';
+            document.getElementById('t-wrapped-btn').style.display = 'none';
+            document.getElementById('t-hw-list-wrapper').style.display = 'none';
             document.getElementById('t-hw-input-wrapper').style.display = 'none';
             document.getElementById('t-grade-sticker-wrapper').style.display = 'none';
         } else {
             document.getElementById('t-matrix-btn-wrapper').style.display = 'none';
             document.getElementById('t-mark-absent-block').style.display = 'flex';
             document.getElementById('t-exams-journal-btns').style.display = 'flex';
-            document.getElementById('t-stats-hw-wrapper').style.display = 'block';
+            document.getElementById('t-wrapped-btn').style.display = 'block';
+            document.getElementById('t-hw-list-wrapper').style.display = 'block';
             document.getElementById('t-hw-input-wrapper').style.display = 'block';
             document.getElementById('t-grade-sticker-wrapper').style.display = 'flex';
         }
@@ -1497,8 +1513,92 @@
       } 
   };
   
-  window.loadTeacherDashboard = function() { const date = document.getElementById('global-date').value; const activeClass = getActiveClass(); const myUid = auth.currentUser.uid; Promise.all([ get(child(ref(db), `reactions/${activeClass}`)), get(child(ref(db), `authors/${activeClass}`)) ]).then(([reactSnap, authSnap]) => { let count = 0; if(reactSnap.exists() && authSnap.exists()) { const reactions = reactSnap.val(); const authors = authSnap.val(); for(let d in reactions) for(let subj in reactions[d]) if(authors[d] && authors[d][subj] === myUid) count += Object.keys(reactions[d][subj]).length; } document.getElementById('t-karma-counter').innerText = count; }); get(child(ref(db), `homeworks/${activeClass}/${date}`)).then(snap => { const hwList = document.getElementById('t-daily-hw-list'); hwList.innerHTML = ''; if(snap.exists()) { const data = snap.val(); for(let subj in data) hwList.innerHTML += renderHwItem(subj, data[subj]); } else hwList.innerHTML = '<li class="empty-msg">ДЗ ще не задано.</li>'; }); };
+  window.loadTeacherDashboard = function() { 
+      const date = document.getElementById('global-date').value; 
+      const activeClass = getActiveClass(); 
+      const myUid = auth.currentUser.uid; 
+      
+      Promise.all([ 
+          get(child(ref(db), `reactions/${activeClass}`)), 
+          get(child(ref(db), `authors/${activeClass}`)),
+          get(child(ref(db), `comments/${activeClass}`))
+      ]).then(([reactSnap, authSnap, comSnap]) => { 
+          let count = 0; 
+          window.myDetailedReactions = [];
+          
+          if(reactSnap.exists() && authSnap.exists()) { 
+              const reactions = reactSnap.val(); 
+              const authors = authSnap.val(); 
+              const comments = comSnap.exists() ? comSnap.val() : {};
+              
+              for(let d in reactions) {
+                  for(let subj in reactions[d]) {
+                      if(authors[d] && authors[d][subj] === myUid) {
+                          for(let student in reactions[d][subj]) {
+                              count++;
+                              let emoji = reactions[d][subj][student];
+                              let commentText = (comments[d] && comments[d][subj] && comments[d][subj][student]) ? comments[d][subj][student] : 'Без коментаря...';
+                              
+                              window.myDetailedReactions.push({
+                                  date: d,
+                                  subject: subj,
+                                  student: student,
+                                  emoji: emoji,
+                                  comment: commentText
+                              });
+                          }
+                      }
+                  }
+              }
+              window.myDetailedReactions.sort((a,b) => new Date(b.date) - new Date(a.date));
+          } 
+          document.getElementById('t-karma-counter').innerText = count; 
+      }); 
+      
+      if (currentUserData.role !== 'art_school_teacher') {
+          get(child(ref(db), `homeworks/${activeClass}/${date}`)).then(snap => { 
+              const hwList = document.getElementById('t-daily-hw-list'); 
+              hwList.innerHTML = ''; 
+              if(snap.exists()) { 
+                  const data = snap.val(); 
+                  for(let subj in data) hwList.innerHTML += renderHwItem(subj, data[subj]); 
+              } else hwList.innerHTML = '<li class="empty-msg">ДЗ ще не задано.</li>'; 
+          }); 
+      }
+  };
   
+  window.showReactionsDetails = function() {
+      document.getElementById('reactions-modal').style.display = 'flex';
+      const list = document.getElementById('reactions-list');
+      list.innerHTML = '';
+      
+      if (!window.myDetailedReactions || window.myDetailedReactions.length === 0) {
+          list.innerHTML = '<p class="empty-msg" style="text-align:center;">Поки що немає реакцій.</p>';
+          return;
+      }
+      
+      let html = '<ul style="list-style:none; padding:0; margin:0;">';
+      window.myDetailedReactions.forEach(r => {
+          const [y, m, d] = r.date.split('-');
+          const formattedDate = `${d}.${m}.${y}`;
+          html += `
+          <li style="background:#fdfbfb; border:1px solid #eee; border-radius:8px; padding:12px; margin-bottom:10px; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
+              <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px dashed #ddd; padding-bottom:5px; margin-bottom:8px;">
+                  <span style="font-weight:bold; color:#006d77;">${r.student}</span>
+                  <span style="font-size:1.5rem;">${r.emoji}</span>
+              </div>
+              <div style="font-size:0.8rem; color:#888; margin-bottom:5px;">📅 ${formattedDate} | 📚 ${r.subject}</div>
+              <div style="font-size:0.9rem; color:#444; background:#f0f8ff; padding:8px; border-radius:6px; font-style:italic;">"${r.comment}"</div>
+          </li>`;
+      });
+      html += '</ul>';
+      list.innerHTML = html;
+  };
+  
+  window.closeReactionsModal = function() {
+      document.getElementById('reactions-modal').style.display = 'none';
+  };
+
   function updateCurrentLesson() { 
       if(!window.schedule) { 
           const display = document.getElementById('p-current-lesson'); if (display) display.innerText = "Уроків немає (розклад не знайдено)"; 
