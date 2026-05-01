@@ -167,10 +167,11 @@
         <button onclick="openJournalModal('director')" style="flex:1; min-width: 200px; background: linear-gradient(135deg, #8e44ad, #9b59b6); color: white; margin-top: 0; font-size: 1rem; padding: 12px; box-shadow: 0 4px 10px rgba(142,68,173,0.3);">📖 Журнал успішності</button>
     </div>
 
+    <!-- ... rest of director UI ... -->
     <details style="margin-bottom: 25px; background: #fdfbfb; padding: 15px; border-radius: 12px; border: 1px solid #ddd;">
       <summary style="font-weight: bold; cursor: pointer; color: #8e44ad; font-size: 1.1rem;">📥 Імпорт старого розкладу з файлів</summary>
       <div style="margin-top: 15px; background: #e8eaed; padding: 15px; border-radius: 8px;">
-         <p style="font-size:0.8rem; color:#555; margin-top:0;">Використовуйте цей блок лише для первинного імпорту старих .js/.html файлів. Для редагування використовуйте «Матрицю розкладу».</p>
+         <p style="font-size:0.8rem; color:#555; margin-top:0;">Використовуйте цей блок лише для первинного імпорту старих .js/.html файлів.</p>
          <select id="import-class" style="margin-bottom:10px;">
             <option value="">Оберіть клас для імпорту...</option>
             <option value="class_1">1 Клас</option><option value="class_2">2 Клас</option><option value="class_3">3 Клас</option>
@@ -275,10 +276,15 @@
         <button onclick="openExamsCalendar()" style="flex:1; background: linear-gradient(135deg, #f39c12, #d35400); color: white; margin-top: 0; font-size: 0.95rem; padding: 12px; box-shadow: 0 4px 10px rgba(211,84,0,0.3);">📅 Контрольні</button>
         <button onclick="openJournalModal('teacher')" style="flex:1; background: linear-gradient(135deg, #8e44ad, #9b59b6); color: white; margin-top: 0; font-size: 0.95rem; padding: 12px; box-shadow: 0 4px 10px rgba(142,68,173,0.3);">📖 Класний журнал</button>
     </div>
+    
+    <div id="t-matrix-btn-wrapper" style="display:none; margin-bottom: 20px;">
+        <button onclick="openVisualMatrixModal()" style="width: 100%; background: linear-gradient(135deg, #1abc9c, #16a085); color: white; margin-top: 0; font-size: 1rem; padding: 12px; box-shadow: 0 4px 10px rgba(26,188,156,0.3);">🗓️ Матриця розкладу (Вся школа)</button>
+    </div>
+
     <div class="data-card" style="border-left-color: #e74c3c; background: #fdfbfb; margin-top: 0; margin-bottom: 20px;">
-      <h4 style="margin-top:0; color: #c0392b;">🚨 Відвідуваність на сьогодні:</h4>
+      <h4 id="t-att-header" style="margin-top:0; color: #c0392b;">🚨 Відвідуваність на сьогодні:</h4>
       <ul id="t-attendance-list" class="list-dash" style="list-style-type: none; padding-left: 0;"><li class="empty-msg">Завантаження...</li></ul>
-      <div style="margin-top: 15px; display: flex; gap: 10px; border-top: 1px dashed #f5b7b1; padding-top: 15px;">
+      <div id="t-mark-absent-block" style="margin-top: 15px; display: flex; gap: 10px; border-top: 1px dashed #f5b7b1; padding-top: 15px;">
         <select id="t-mark-absent-student" style="flex:1; margin-top:0; border: 1px solid #f5b7b1;"><option value="">Оберіть учня...</option></select>
         <select id="t-mark-absent-reason" style="flex:1; margin-top:0; border: 1px solid #f5b7b1;">
             <option value="Відмічено вчителем">Без поважної причини</option><option value="через хворобу">Через хворобу</option><option value="за сімейними обставинами">За сімейними обставинами</option><option value="запізнення">Запізнення</option>
@@ -287,7 +293,7 @@
       </div>
     </div>
     <div style="display: flex; gap: 10px; margin-bottom: 25px;">
-      <div style="flex: 1; background: #ffeaa7; padding: 15px; border-radius: 12px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05);"><h4 style="margin:0; color: #d35400; font-size: 0.85rem;">❤️ Індекс вдячності</h4><p id="t-karma-counter" style="font-size: 1.8rem; font-weight: 800; color: #e67e22; margin: 5px 0;">0</p></div>
+      <div style="flex: 1; background: #ffeaa7; padding: 15px; border-radius: 12px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05);"><h4 style="margin:0; color: #d35400; font-size: 0.85rem;">❤️ Індекс реакцій</h4><p id="t-karma-counter" style="font-size: 1.8rem; font-weight: 800; color: #e67e22; margin: 5px 0;">0</p></div>
       <div style="flex: 1; background: linear-gradient(135deg, #a8ff78, #78ffd6); padding: 15px; border-radius: 12px; text-align: center; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.05);" onclick="showWeeklyWrapped()"><h4 style="margin:0; color: #006d77; font-size: 0.85rem;">📊 Підсумки</h4><p style="font-size: 1.8rem; margin: 5px 0;">🎁</p></div>
     </div>
     <div class="data-card" style="border-left-color: #3498db; background: #f4f9fd;"><h4 style="margin-top:0; color: #2980b9;">📋 Зведення всіх ДЗ класса:</h4><ul id="t-daily-hw-list" class="list-dash"></ul></div>
@@ -332,6 +338,7 @@
 
 <!-- Модальні вікна -->
 <div id="profile-modal" class="modal-overlay">
+  <!-- content remains same -->
   <div class="modal-content">
     <h2 style="color: #006d77; margin-top:0;">⚙️ Налаштування профілю</h2>
     <div style="display:flex; justify-content:center; margin-bottom:15px;"><img id="modal-avatar-preview" src="https://cdn-icons-png.flaticon.com/512/149/149071.png" style="width:80px; height:80px; border-radius:50%; object-fit:cover; border: 3px solid #006d77;"></div>
@@ -694,6 +701,21 @@
       globalAllSchedules = snap.exists() ? snap.val() : {};
       globalTeacherAccess = accessSnap.exists() ? accessSnap.val() : {};
       globalAllStudents = stSnap.exists() ? stSnap.val() : {};
+      
+      // Load teachers array so we can select ourselves
+      const usersSnap = await get(ref(db, 'users'));
+      globalTeachersList = [];
+      if(usersSnap.exists()) { 
+          const users = usersSnap.val(); 
+          for(let uid in users) { 
+              const u = users[uid]; 
+              if((u.role === 'teacher' || u.role === 'art_school_teacher' || u.role === 'music_teacher') && u.email) { 
+                  const name = (u.firstName || u.lastName) ? `${u.firstName || ''} ${u.lastName || ''}`.trim() : "Ім'я не вказано"; 
+                  const safeEmail = u.email.replace(/\./g, '_'); 
+                  globalTeachersList.push({ email: u.email, name: name, safeEmail: safeEmail }); 
+              } 
+          } 
+      }
       renderMatrixGrid();
   };
   window.closeVisualMatrixModal = function() { document.getElementById('visual-matrix-modal').style.display = 'none'; };
@@ -1107,46 +1129,60 @@
     } else document.getElementById('login-screen').style.display = 'block';
   });
 
-  async function fetchTeacherAccess(safeEmail) { const snap = await get(child(ref(db), `teacher_access/${safeEmail}`)); if(snap.exists()) { teacherAccessMatrix = snap.val(); } else { teacherAccessMatrix = { "class_1":["Всі предмети"],"class_2":["Всі предмети"] }; } }
+  async function fetchTeacherAccess(safeEmail) { 
+      const snap = await get(child(ref(db), `teacher_access/${safeEmail}`)); 
+      if(snap.exists()) { teacherAccessMatrix = snap.val(); } 
+      else { teacherAccessMatrix = {}; } 
+  }
 
   function initUserSession() {
     document.getElementById('calendar-block').style.display = 'block'; updateProfileBar();
     if (currentUserData.role === 'director') { document.getElementById('director-screen').style.display = 'block'; document.getElementById('teacher-class-selector-box').style.display = 'none'; loadTeachersListForDirector(); handleDateChange(); } 
     else if (currentUserData.role === 'administrator') { document.getElementById('admin-screen').style.display = 'block'; document.getElementById('teacher-class-selector-box').style.display = 'none'; handleDateChange(); } 
-    else if (currentUserData.role === 'teacher' || currentUserData.role === 'art_school_teacher' || currentUserData.role === 'music_teacher') { document.getElementById('teacher-screen').style.display = 'block'; document.getElementById('teacher-class-selector-box').style.display = 'block'; const classSelect = document.getElementById('t-class-selector'); classSelect.innerHTML = ''; Object.keys(teacherAccessMatrix).forEach(cls => { classSelect.innerHTML += `<option value="${cls}">${cls.replace('class_','')} Клас</option>`; }); if(classSelect.options.length === 0) { alert("Вам ще не призначено класи."); return; } window.handleClassChange(); } 
+    else if (currentUserData.role === 'teacher' || currentUserData.role === 'art_school_teacher' || currentUserData.role === 'music_teacher') { 
+        document.getElementById('teacher-screen').style.display = 'block'; 
+        document.getElementById('teacher-class-selector-box').style.display = 'block'; 
+        
+        if (currentUserData.role === 'art_school_teacher') {
+            document.getElementById('t-matrix-btn-wrapper').style.display = 'block';
+            document.getElementById('t-mark-absent-block').style.display = 'none'; // Им не нужно отмечать свой класс, у них обзор
+        } else {
+            document.getElementById('t-matrix-btn-wrapper').style.display = 'none';
+        }
+
+        const classSelect = document.getElementById('t-class-selector'); classSelect.innerHTML = ''; 
+        Object.keys(teacherAccessMatrix).forEach(cls => { classSelect.innerHTML += `<option value="${cls}">${cls.replace('class_','')} Клас</option>`; }); 
+        
+        if(classSelect.options.length === 0) { 
+            if (currentUserData.role === 'art_school_teacher') {
+                classSelect.innerHTML = `<option value="class_1">1 Клас (Тимчасово)</option>`;
+                showToast("Створіть свій урок у 'Матриці розкладу', щоб отримати постійний доступ.");
+            } else {
+                alert("Вам ще не призначено класи. Зверніться до директора."); 
+                return;
+            }
+        } 
+        window.handleClassChange(); 
+    } 
     else { document.getElementById('parent-screen').style.display = 'block'; const classNum = currentUserData.class.replace('class_', ''); document.getElementById('p-schedule-link').href = `https://planlekcjipush.netlify.app/class-${classNum}`; loadScheduleScript(currentUserData.class, () => { handleDateChange(); }); }
   }
 
-  // Звичайний вхід
   window.loginUser = function() { signInWithEmailAndPassword(auth, document.getElementById('email').value.trim(), document.getElementById('pass').value.trim()).catch(e => { document.getElementById('login-error').innerText = "Помилка входу."; document.getElementById('login-error').style.display = 'block'; }); };
   
-  // Реєстрація / Перший вхід
   window.registerUser = async function() {
       const email = document.getElementById('email').value.trim();
       const pass = document.getElementById('pass').value.trim();
-      
       if (!email || !pass) return alert("Введіть Email та придумайте пароль для створення акаунту!");
       if (pass.length < 6) return alert("Пароль має містити мінімум 6 символів.");
-
       const safeEmail = email.replace(/\./g, '_');
       try {
-          // Спочатку перевіряємо, чи дозволив директор цей Email
           const roleSnap = await get(child(ref(db), `pre_approved_roles/${safeEmail}`));
           const parentSnap = await get(child(ref(db), `parent_links/${safeEmail}`));
-
-          if (!roleSnap.exists() && !parentSnap.exists()) {
-              return alert("Ваш Email ще не додано директором. Доступ заборонено.");
-          }
-
-          // Якщо дозволив, створюємо користувача в Firebase Auth
+          if (!roleSnap.exists() && !parentSnap.exists()) return alert("Ваш Email ще не додано директором. Доступ заборонено.");
           await createUserWithEmailAndPassword(auth, email, pass);
-          // Далі onAuthStateChanged автоматично підхопить вхід і створить профіль в БД
       } catch (e) {
-          if (e.code === 'auth/email-already-in-use') {
-              alert("Цей акаунт вже встановлював пароль! Будь ласка, натисніть 'Увійти'.");
-          } else {
-              alert("Помилка: " + e.message);
-          }
+          if (e.code === 'auth/email-already-in-use') alert("Цей акаунт вже встановлював пароль! Будь ласка, натисніть 'Увійти'.");
+          else alert("Помилка: " + e.message);
       }
   };
 
@@ -1251,12 +1287,60 @@
   window.loadStudentsList = function() { get(child(ref(db), `students_list/${getActiveClass()}`)).then((snapshot) => { const selectStudent = document.getElementById('t-student'); const selectAbsent = document.getElementById('t-mark-absent-student'); selectStudent.innerHTML = '<option value="">Оберіть учня...</option>'; selectAbsent.innerHTML = '<option value="">Оберіть учня...</option>'; if (snapshot.exists()) Object.values(snapshot.val()).forEach(name => { const opt1 = document.createElement('option'); opt1.value = name; opt1.innerText = name; selectStudent.appendChild(opt1); const opt2 = document.createElement('option'); opt2.value = name; opt2.innerText = name; selectAbsent.appendChild(opt2); }); }); };
   window.addStudent = function() { const name = document.getElementById('new-student-name').value.trim(); if (name) push(ref(db, `students_list/${getActiveClass()}`), name).then(() => { alert("Учня додано!"); loadStudentsList(); document.getElementById('new-student-name').value = ''; }); };
   window.teacherMarkAbsent = function() { const student = document.getElementById('t-mark-absent-student').value; const reason = document.getElementById('t-mark-absent-reason').value; const date = document.getElementById('global-date').value; if(!student) return alert('Оберіть учня зі списку!'); const status = reason === 'запізнення' ? 'late' : 'absent'; set(ref(db, `attendance/${getActiveClass()}/${date}/${student}`), { status: status, reason: reason }).then(() => { showToast(`✅ ${student} відмічений.`); document.getElementById('t-mark-absent-student').value = ''; }); };
-  function listenTeacherAttendance() { const activeClass = getActiveClass(); const date = document.getElementById('global-date').value; if(teacherAttendanceListener) teacherAttendanceListener(); teacherAttendanceListener = onValue(ref(db, `attendance/${activeClass}/${date}`), (snap) => { const list = document.getElementById('t-attendance-list'); list.innerHTML = ''; if(snap.exists()) { const data = snap.val(); for(let st in data) { const badgeClass = data[st].status === 'late' ? 'badge-late' : 'badge-absent'; const label = data[st].status === 'late' ? 'Запізнення' : 'Відсутність'; list.innerHTML += `<li style="margin-bottom:8px; border-bottom:1px dashed #eee; padding-bottom:5px;"><b>${st}</b> <span class="badge ${badgeClass}">${label}</span> <i style="font-size:0.8rem; color:#666;">(${data[st].reason})</i></li>`; } } else { list.innerHTML = '<li class="empty-msg">Усі на місці. Повідомлень немає.</li>'; } }); }
+  
+  function listenTeacherAttendance() { 
+      const date = document.getElementById('global-date').value; 
+      const list = document.getElementById('t-attendance-list');
+      if(teacherAttendanceListener) teacherAttendanceListener(); 
+      
+      if (currentUserData.role === 'art_school_teacher') {
+          document.getElementById('t-att-header').innerText = "🚨 Відсутні та Запізнення (Вся школа):";
+          teacherAttendanceListener = onValue(ref(db, `attendance`), (snap) => {
+              list.innerHTML = '';
+              if(snap.exists()) {
+                  const data = snap.val();
+                  let html = '';
+                  for (let i = 1; i <= 11; i++) {
+                      let clsId = `class_${i}`;
+                      if (data[clsId] && data[clsId][date]) {
+                          for(let st in data[clsId][date]) {
+                              const rec = data[clsId][date][st];
+                              const badgeClass = rec.status === 'late' ? 'badge-late' : 'badge-absent';
+                              const label = rec.status === 'late' ? 'Запізнення' : 'Відсутність';
+                              html += `<li style="margin-bottom:8px; border-bottom:1px dashed #eee; padding-bottom:5px;"><span style="font-size:0.75rem; background:#006d77; color:white; padding:2px 6px; border-radius:4px; margin-right:5px;">${i} Клас</span> <b>${st}</b> <span class="badge ${badgeClass}">${label}</span> <i style="font-size:0.8rem; color:#666;">(${rec.reason})</i></li>`;
+                          }
+                      }
+                  }
+                  list.innerHTML = html || '<li class="empty-msg">Усі на місці. Повідомлень немає.</li>';
+              } else {
+                  list.innerHTML = '<li class="empty-msg">Усі на місці. Повідомлень немає.</li>';
+              }
+          });
+      } else {
+          const activeClass = getActiveClass(); 
+          document.getElementById('t-att-header').innerText = "🚨 Відвідуваність на сьогодні:";
+          teacherAttendanceListener = onValue(ref(db, `attendance/${activeClass}/${date}`), (snap) => { 
+              list.innerHTML = ''; 
+              if(snap.exists()) { 
+                  const data = snap.val(); 
+                  for(let st in data) { 
+                      const badgeClass = data[st].status === 'late' ? 'badge-late' : 'badge-absent'; const label = data[st].status === 'late' ? 'Запізнення' : 'Відсутність'; list.innerHTML += `<li style="margin-bottom:8px; border-bottom:1px dashed #eee; padding-bottom:5px;"><b>${st}</b> <span class="badge ${badgeClass}">${label}</span> <i style="font-size:0.8rem; color:#666;">(${data[st].reason})</i></li>`; 
+                  } 
+              } else { list.innerHTML = '<li class="empty-msg">Усі на місці. Повідомлень немає.</li>'; } 
+          }); 
+      }
+  }
+
   function renderHwItem(subject, data) { let text = typeof data === 'string' ? data : data.text; let imgHtml = ''; if (typeof data === 'object') { imgHtml += '<div class="gallery">'; if (data.image && typeof data.image === 'string') imgHtml += `<a href="${data.image}" target="_blank"><img src="${data.image}" class="hw-image-thumb"></a>`; if (data.images && Array.isArray(data.images)) data.images.forEach(img => imgHtml += `<a href="${img}" target="_blank"><img src="${img}" class="hw-image-thumb"></a>`); imgHtml += '</div>'; } return `<li><b>${subject}:</b> ${text} ${imgHtml}</li>`; }
+  
   window.saveData = async function() { const date = document.getElementById('global-date').value; const subject = document.getElementById('t-subject').value; const student = document.getElementById('t-student').value; const hwText = document.getElementById('t-hw').value.trim(); const comment = document.getElementById('t-comment').value.trim(); const stickerChecked = document.getElementById('t-sticker').checked; const grade = document.getElementById('t-grade').value.trim(); const fileInput = document.getElementById('t-image'); const activeClass = getActiveClass(); const btnSave = document.getElementById('btn-save-data'); const statusMsg = document.getElementById('status-msg'); const myUid = auth.currentUser.uid; const yMonth = date.substring(0, 7); btnSave.disabled = true; btnSave.innerText = "⏳ Збереження..."; await set(ref(db, `authors/${activeClass}/${date}/${subject}`), myUid); let finalImageUrls = [...currentHwImages]; if (fileInput.files.length > 0) { statusMsg.style.display = 'block'; statusMsg.innerText = `⏳ Завантаження фото...`; statusMsg.style.color = "#f39c12"; finalImageUrls = []; const uploadPromises = Array.from(fileInput.files).map(async (file) => { const formData = new FormData(); formData.append('file', file); formData.append('upload_preset', UPLOAD_PRESET); const res = await fetch(CLOUDINARY_URL, { method: 'POST', body: formData }); const data = await res.json(); return data.secure_url; }); try { finalImageUrls = await Promise.all(uploadPromises); } catch (e) { alert("Помилка завантаження фото! " + e.message); btnSave.disabled = false; btnSave.innerText = "💾 Зберегти дані"; return; } } if (hwText || finalImageUrls.length > 0) await set(ref(db, `homeworks/${activeClass}/${date}/${subject}`), { text: hwText, images: finalImageUrls }); if (student) { if (comment) await set(ref(db, `comments/${activeClass}/${date}/${subject}/${student}`), comment); if (stickerChecked) await set(ref(db, `stickers/${activeClass}/${student}/${date}_${subject}`), true); else await set(ref(db, `stickers/${activeClass}/${student}/${date}_${subject}`), null); if (grade) await set(ref(db, `grades/${activeClass}/${yMonth}/${subject}/${date}/${student}`), grade); else await set(ref(db, `grades/${activeClass}/${yMonth}/${subject}/${date}/${student}`), null); } statusMsg.style.color = "#2ed573"; statusMsg.innerText = "✅ Дані успішно збережено!"; btnSave.disabled = false; btnSave.innerText = "💾 Зберегти дані"; fileInput.value = ''; setTimeout(() => { statusMsg.style.display = 'none'; handleDateChange(); }, 2000); };
+  
   window.loadCurrentData = function() { const date = document.getElementById('global-date').value; const subject = document.getElementById('t-subject').value; const student = document.getElementById('t-student').value; const activeClass = getActiveClass(); document.getElementById('t-hw').value = ''; document.getElementById('t-comment').value = ''; document.getElementById('t-image').value = ''; document.getElementById('t-sticker').checked = false; document.getElementById('t-grade').value = ''; document.getElementById('existing-image-info').style.display = 'none'; currentHwImages = []; if (!subject) return; get(child(ref(db), `homeworks/${activeClass}/${date}/${subject}`)).then(snap => { if(snap.exists()) { const val = snap.val(); if(typeof val === 'string') document.getElementById('t-hw').value = val; else { document.getElementById('t-hw').value = val.text || ''; if (val.images && Array.isArray(val.images)) currentHwImages = val.images; else if (val.image) currentHwImages = [val.image]; if(currentHwImages.length > 0) { document.getElementById('existing-image-info').innerText = `📎 Вже прикріплено фото: ${currentHwImages.length} шт. Завантажте нові, щоб повністю їх замінити.`; document.getElementById('existing-image-info').style.display = 'block'; } } } }); if (student) { get(child(ref(db), `stickers/${activeClass}/${student}/${date}_${subject}`)).then(snap => { document.getElementById('t-sticker').checked = (snap.exists() && snap.val() === true); }); const yMonth = date.substring(0, 7); get(child(ref(db), `grades/${activeClass}/${yMonth}/${subject}/${date}/${student}`)).then(snap => { if(snap.exists()) document.getElementById('t-grade').value = snap.val(); }); } };
+  
   window.loadAdminDashboard = async function() { try { const date = document.getElementById('global-date').value; const dateParts = date.split('-'); document.getElementById('a-att-header').innerText = `🚨 Відсутні та Запізнення (На ${dateParts[2]}.${dateParts[1]}, вся школа)`; const attSnap = await get(child(ref(db), `attendance`)); let unifiedAttHtml = ''; if (attSnap.exists()) { const attData = attSnap.val(); for (let i = 1; i <= 11; i++) { let clsId = `class_${i}`; if (attData[clsId] && attData[clsId][date]) { for(let student in attData[clsId][date]) { const rec = attData[clsId][date][student]; if(rec && rec.status) { const badgeClass = rec.status === 'late' ? 'badge-late' : 'badge-absent'; const label = rec.status === 'late' ? 'Запізнення' : 'Відсутність'; unifiedAttHtml += `<li style="margin-bottom:10px; border-bottom:1px solid #eee; padding-bottom:5px;"><span style="font-size:0.75rem; background:#006d77; color:white; padding:2px 6px; border-radius:4px; margin-right:5px;">${i} Клас</span> <b>${student}</b> <span class="badge ${badgeClass}">${label}</span> <br><i style="font-size:0.8rem; color:#666;">Причина: ${rec.reason}</i></li>`; } } } } } document.getElementById('a-unified-att-list').innerHTML = unifiedAttHtml || '<li class="empty-msg">На обрану дату відсутніх немає.</li>'; } catch (e) { console.error(e); } };
+  
   function getWeekDates(currentDateStr) { if(!currentDateStr) return []; let [y, m, d] = currentDateStr.split('-'); let dateObj = new Date(y, m - 1, d); let day = dateObj.getDay() || 7; dateObj.setDate(dateObj.getDate() - day + 1); let dates = []; for(let i=0; i<7; i++) { const yyyy = dateObj.getFullYear(); const mm = String(dateObj.getMonth() + 1).padStart(2, '0'); const dd = String(dateObj.getDate()).padStart(2, '0'); dates.push(`${yyyy}-${mm}-${dd}`); dateObj.setDate(dateObj.getDate() + 1);  } return dates; }
+  
   window.loadDirectorDashboard = async function() { try { const date = document.getElementById('global-date').value; const dateParts = date.split('-'); document.getElementById('d-att-header').innerText = `🚨 Відсутні та Запізнення (На ${dateParts[2]}.${dateParts[1]}, вся школа)`; const weekDates = getWeekDates(date); let totalHwToday = 0; let totalComToday = 0; let weekLate = 0; let weekAbsent = 0; let unifiedAttHtml = ''; const [hwSnap, comSnap, attSnap] = await Promise.all([ get(child(ref(db), `homeworks`)), get(child(ref(db), `comments`)), get(child(ref(db), `attendance`)) ]); const hwData = hwSnap.exists() ? hwSnap.val() : {}; const comData = comSnap.exists() ? comSnap.val() : {}; const attData = attSnap.exists() ? attSnap.val() : {}; for (let i = 1; i <= 11; i++) { let clsId = `class_${i}`; let clsLabel = `${i} Клас`; if (hwData[clsId] && hwData[clsId][date]) { totalHwToday += Object.keys(hwData[clsId][date]).length; } if (comData[clsId] && comData[clsId][date]) { for (let subj in comData[clsId][date]) { if (comData[clsId][date][subj] && typeof comData[clsId][date][subj] === 'object') { totalComToday += Object.keys(comData[clsId][date][subj]).length; } } } if (attData[clsId] && attData[clsId][date]) { for(let student in attData[clsId][date]) { const rec = attData[clsId][date][student]; if(rec && rec.status) { const badgeClass = rec.status === 'late' ? 'badge-late' : 'badge-absent'; const label = rec.status === 'late' ? 'Запізнення' : 'Відсутність'; unifiedAttHtml += `<li style="margin-bottom:10px; border-bottom:1px solid #eee; padding-bottom:5px;"><span style="font-size:0.75rem; background:#006d77; color:white; padding:2px 6px; border-radius:4px; margin-right:5px;">${clsLabel}</span> <b>${student}</b> <span class="badge ${badgeClass}">${label}</span> <br><i style="font-size:0.8rem; color:#666;">Причина: ${rec.reason}</i></li>`; } } } if (attData[clsId]) { weekDates.forEach(wd => { if (attData[clsId][wd] && typeof attData[clsId][wd] === 'object') { Object.values(attData[clsId][wd]).forEach(record => { if(record && record.status === 'late') weekLate++; else if(record && record.status === 'absent') weekAbsent++; }); } }); } } document.getElementById('d-hw-counter').innerText = totalHwToday; document.getElementById('d-com-counter').innerText = totalComToday; document.getElementById('d-week-late').innerText = weekLate; document.getElementById('d-week-absent').innerText = weekAbsent; document.getElementById('d-unified-att-list').innerHTML = unifiedAttHtml || '<li class="empty-msg">Усі присутні! Жодних повідомлень.</li>'; } catch(err) { console.error(err); } };
   
   window.loadDirectorHWScheduleAndRender = function() { const hwCls = document.getElementById('d-detail-hw-class').value; if(!hwCls) { document.getElementById('d-detail-hw-list').innerHTML = '<li class="empty-msg">Оберіть клас зі списку вище.</li>'; return; } loadScheduleScript(hwCls, () => { renderDirectorHWDetails(); }); };
