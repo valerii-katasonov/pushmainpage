@@ -9,7 +9,6 @@
   <meta name="theme-color" content="#006d77">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Push School">
   <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/330/330996.png">
 
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;800&display=swap" rel="stylesheet">
@@ -84,6 +83,11 @@
     .cell-student-linked { font-size: 0.7rem; color: #8e44ad; background: #f3e5f5; padding: 2px 6px; border-radius: 4px; font-weight: 800; margin-top: 4px; border: 1px solid #d1c4e9; line-height: 1.2; word-break: break-word;}
     .add-parallel-btn { font-size: 0.75rem; color: #2980b9; text-align: center; cursor: pointer; padding: 4px; border: 1px dashed #3498db; border-radius: 6px; background: #f0f8ff; transition: 0.2s; margin-top: auto; }
     .add-parallel-btn:hover { background: #3498db; color: white; }
+
+    /* Constructor specific styles */
+    .draft-item { display: flex; justify-content: space-between; align-items: center; background: #f4f9fd; padding: 15px; border-radius: 8px; border: 1px solid #3498db; margin-bottom: 10px; }
+    .cell-warning-travel { border: 2px solid #e67e22 !important; box-shadow: inset 0 0 10px rgba(230, 126, 34, 0.3); }
+    .cell-warning-conflict { border: 2px solid #e74c3c !important; box-shadow: inset 0 0 10px rgba(231, 76, 60, 0.3); background-color: #fdedec !important;}
 
     /* === Стили для Классного журнала === */
     .journal-table { width: 100%; border-collapse: collapse; min-width: 800px; text-align: center; font-size: 0.9rem; }
@@ -163,28 +167,27 @@
     <h2 style="color: #2c3e50;">👔 Пульт Директора</h2>
 
     <div style="display: flex; gap:10px; margin-bottom:20px; flex-wrap: wrap;">
-        <button onclick="openVisualMatrixModal()" style="flex:1; min-width: 200px; background: linear-gradient(135deg, #1abc9c, #16a085); color: white; margin-top: 0; font-size: 1rem; padding: 12px; box-shadow: 0 4px 10px rgba(26,188,156,0.3);">🗓️ Матриця розкладу</button>
+        <button onclick="openVisualMatrixModal('live')" style="flex:1; min-width: 200px; background: linear-gradient(135deg, #1abc9c, #16a085); color: white; margin-top: 0; font-size: 1rem; padding: 12px; box-shadow: 0 4px 10px rgba(26,188,156,0.3);">🗓️ Поточний розклад</button>
         <button onclick="openJournalModal('director')" style="flex:1; min-width: 200px; background: linear-gradient(135deg, #8e44ad, #9b59b6); color: white; margin-top: 0; font-size: 1rem; padding: 12px; box-shadow: 0 4px 10px rgba(142,68,173,0.3);">📖 Журнал успішності</button>
     </div>
 
-    <details style="margin-bottom: 25px; background: #fdfbfb; padding: 15px; border-radius: 12px; border: 1px solid #ddd;">
-      <summary style="font-weight: bold; cursor: pointer; color: #8e44ad; font-size: 1.1rem;">📥 Імпорт старого розкладу з файлів</summary>
-      <div style="margin-top: 15px; background: #e8eaed; padding: 15px; border-radius: 8px;">
-         <p style="font-size:0.8rem; color:#555; margin-top:0;">Використовуйте цей блок лише для первинного імпорту старих .js/.html файлів.</p>
-         <select id="import-class" style="margin-bottom:10px;">
-            <option value="">Оберіть клас для імпорту...</option>
-            <option value="class_1">1 Клас</option><option value="class_2">2 Клас</option><option value="class_3">3 Клас</option>
-            <option value="class_4">4 Клас</option><option value="class_5">5 Клас</option><option value="class_6">6 Клас</option>
-            <option value="class_7">7 Клас</option><option value="class_8">8 Клас</option><option value="class_9">9 Клас</option>
-            <option value="class_10">10 Клас</option><option value="class_11">11 Клас</option>
-         </select>
-         <label style="margin-top:5px;">Файл schedule-class-X.js (Уроки):</label>
-         <input type="file" id="import-js-file" accept=".js">
-         <label style="margin-top:10px;">Файл class-X.html (Гуртки, якщо є):</label>
-         <input type="file" id="import-html-file" accept=".html">
-         <button onclick="handleImportFiles()" style="background:#2980b9; margin-top: 15px;">📥 Розпарсити та Завантажити в БД</button>
+    <!-- NEW DRAFTS BLOCK -->
+    <details style="margin-bottom: 25px; background: #e0f2f1; padding: 15px; border-radius: 12px; border: 1px solid #1abc9c;" open>
+      <summary style="font-weight: bold; cursor: pointer; color: #006d77; font-size: 1.1rem;">🛠️ Розумний Конструктор (Чернетки)</summary>
+      <div style="margin-top: 15px;">
+         <p style="font-size:0.85rem; color:#555;">Тут ви можете створювати розклад на майбутній рік, не зачіпаючи поточний. Система автоматично перевіряє накладки та час на переїзд між корпусами (1-5 класи та 6-11 класи).</p>
+         
+         <div id="drafts-list-container" style="margin-top: 15px; margin-bottom: 15px;">
+            <p class="empty-msg">Завантаження чернеток...</p>
+         </div>
+
+         <div style="display: flex; gap: 10px;">
+             <input type="text" id="new-draft-name" placeholder="Назва (напр. 2026-2027)" style="flex: 2; margin-top: 0;">
+             <button onclick="createNewDraft()" style="flex: 1; margin-top: 0; background: #006d77; color: white;">+ Створити</button>
+         </div>
       </div>
     </details>
+    <!-- END NEW DRAFTS BLOCK -->
 
     <div style="display: flex; gap: 10px; margin-bottom: 20px;">
       <div style="flex: 1; background: #e0f7fa; padding: 15px; border-radius: 12px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
@@ -278,7 +281,7 @@
     </div>
     
     <div id="t-matrix-btn-wrapper" style="display:none; margin-bottom: 20px;">
-        <button onclick="openVisualMatrixModal()" style="width: 100%; background: linear-gradient(135deg, #1abc9c, #16a085); color: white; margin-top: 0; font-size: 1rem; padding: 12px; box-shadow: 0 4px 10px rgba(26,188,156,0.3);">🗓️ Матриця розкладу (Вся школа)</button>
+        <button onclick="openVisualMatrixModal('live')" style="width: 100%; background: linear-gradient(135deg, #1abc9c, #16a085); color: white; margin-top: 0; font-size: 1rem; padding: 12px; box-shadow: 0 4px 10px rgba(26,188,156,0.3);">🗓️ Матриця розкладу (Вся школа)</button>
     </div>
 
     <div class="data-card" style="border-left-color: #e74c3c; background: #fdfbfb; margin-top: 0; margin-bottom: 20px;">
@@ -375,12 +378,16 @@
 
 <div id="visual-matrix-modal" class="modal-overlay" style="align-items: flex-start; padding-top: 40px;">
   <div class="modal-content" style="max-width: 95%; width: 100%; padding: 20px; background: #f4f6f8;">
-    <h2 style="color: #1abc9c; margin-top:0; margin-bottom: 10px;">🗓️ Матриця розкладу</h2>
+    <h2 id="matrix-modal-title" style="color: #1abc9c; margin-top:0; margin-bottom: 10px;">🗓️ Матриця розкладу</h2>
     
     <div style="display:flex; justify-content:center; gap:10px; margin-bottom:15px; flex-wrap:wrap;">
         <select id="matrix-day-select" onchange="renderMatrixGrid()" style="max-width: 300px; border: 2px solid #1abc9c; color: #16a085; font-weight: bold;">
             <option value="Monday">Понеділок</option><option value="Tuesday">Вівторок</option><option value="Wednesday">Середа</option><option value="Thursday">Четвер</option><option value="Friday">П'ятниця</option>
         </select>
+    </div>
+
+    <!-- Warnings Container for Constructor -->
+    <div id="constructor-warnings" style="display:none; background: #fff3cd; border: 1px solid #ffeeba; color: #856404; padding: 10px; border-radius: 8px; margin-bottom: 10px; text-align: left; font-size: 0.85rem;">
     </div>
 
     <div class="matrix-wrapper">
@@ -397,8 +404,10 @@
 <div id="edit-cell-modal" class="modal-overlay" style="z-index: 1001;">
   <div class="modal-content" style="max-width: 450px;">
     <h3 style="color: #2c3e50; margin-top:0; border-bottom: none; padding-bottom:0;" id="edit-cell-title">Редагування слоту</h3>
-    <p id="edit-cell-subtitle" style="color: #7f8c8d; font-size: 0.85rem; margin-top: 5px; margin-bottom: 20px;">Клас, День, Слот</p>
+    <p id="edit-cell-subtitle" style="color: #7f8c8d; font-size: 0.85rem; margin-top: 5px; margin-bottom: 10px;">Клас, День, Слот</p>
     
+    <div id="cell-live-warnings" style="display:none; margin-bottom: 15px; text-align: left; font-size: 0.8rem; border-radius: 6px; padding: 8px;"></div>
+
     <label>Тип слоту:</label>
     <select id="cell-type-select" style="margin-bottom:10px; border-color: #9b59b6;" onchange="toggleCellType()">
         <option value="lesson">📚 Урок</option>
@@ -438,15 +447,13 @@
                 <select id="extra-group-students" multiple style="height:150px; padding:5px; border-color:#bdc3c7;"></select>
             </div>
         </div>
-        <p style="font-size:0.75rem; color:#e67e22; margin-top:10px; margin-bottom:0; line-height:1.3;">*Якщо це групове заняття для кількох класів, воно автоматично з'явиться в їхніх розкладах у цей самий час.</p>
     </div>
 
     <div id="cell-teacher-wrapper">
         <label>Вчитель:</label>
-        <select id="cell-teacher-select" style="margin-bottom:10px; border-color: #e67e22;">
+        <select id="cell-teacher-select" style="margin-bottom:10px; border-color: #e67e22;" onchange="triggerSmartCheck()">
             <option value="">-- Не призначено --</option>
         </select>
-        <p style="font-size:0.75rem; color:#888; text-align:left; margin-top:0; margin-bottom:15px;">*Вчителю автоматично буде надано доступ до цього предмету.</p>
     </div>
 
     <div style="display:flex; gap:10px;">
@@ -542,6 +549,10 @@
   let globalAllStudents = {}; 
   window.myDetailedReactions = [];
 
+  // Конструктор State
+  let currentMatrixMode = 'live'; // 'live' or draftId
+  let draftWarningsCache = []; // To store warnings to highlight cells
+
   const today = new Date();
   const localDateString = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
   document.getElementById('global-date').value = localDateString;
@@ -587,6 +598,7 @@
           if(subjInput.value.toLowerCase().includes('перерва')) subjInput.value = '';
           numInput.disabled = false;
       }
+      window.triggerSmartCheck();
   };
 
   window.toggleExtraFormat = function() {
@@ -717,14 +729,86 @@
       try { await update(ref(db, `users/${auth.currentUser.uid}`), { firstName: fName, lastName: lName, photoURL: photoURL }); currentUserData.firstName = fName; currentUserData.lastName = lName; currentUserData.photoURL = photoURL; updateProfileBar(); closeProfileModal(); showToast("✅ Профіль успішно оновлено!"); } catch(e) { alert("Помилка збереження: " + e.message); } btn.disabled = false; btn.innerText = "💾 Зберегти зміни";
   };
 
-  // --- ВІЗУАЛЬНА МАТРИЦЯ РОЗКЛАДУ ---
-  window.openVisualMatrixModal = async function() {
-      document.getElementById('visual-matrix-modal').style.display = 'flex'; showToast("⏳ Завантаження розкладів усіх класів...");
+  // --- ВІЗУАЛЬНА МАТРИЦЯ & КОНСТРУКТОР ---
+  
+  // Добавлена логика черновиков
+  window.loadDrafts = function() {
+      get(ref(db, 'schedule_drafts')).then(snap => {
+          const container = document.getElementById('drafts-list-container');
+          if (snap.exists()) {
+              let html = '';
+              const drafts = snap.val();
+              for (let draftName in drafts) {
+                  html += `
+                  <div class="draft-item">
+                      <div>
+                          <b style="color:#006d77; font-size:1.1rem;">${draftName}</b>
+                      </div>
+                      <div style="display:flex; gap:10px;">
+                          <button style="background:#f39c12; color:white; padding:8px 15px; margin:0; width:auto;" onclick="openVisualMatrixModal('${draftName}')">✏️ Відкрити</button>
+                          <button style="background:#e74c3c; color:white; padding:8px 15px; margin:0; width:auto;" onclick="deleteDraft('${draftName}')">🗑</button>
+                          <button style="background:#27ae60; color:white; padding:8px 15px; margin:0; width:auto;" onclick="activateDraft('${draftName}')">🚀 Опублікувати (Зробити поточним)</button>
+                      </div>
+                  </div>`;
+              }
+              container.innerHTML = html;
+          } else {
+              container.innerHTML = '<p class="empty-msg">У вас поки немає чернеток. Створіть нову або відкрийте поточне розклад.</p>';
+          }
+      });
+  };
+
+  window.createNewDraft = async function() {
+      const name = document.getElementById('new-draft-name').value.trim();
+      if (!name) return alert("Введіть назву чернетки!");
+      
+      const confirmCopy = confirm("Хочете скопіювати поточне розклад як основу для чернетки? (ОК - так, Скасування - створити порожню)");
+      
+      if (confirmCopy) {
+          const liveSnap = await get(ref(db, 'schedules'));
+          if (liveSnap.exists()) {
+              await set(ref(db, `schedule_drafts/${name}`), liveSnap.val());
+          } else {
+              await set(ref(db, `schedule_drafts/${name}`), { placeholder: true });
+          }
+      } else {
+          await set(ref(db, `schedule_drafts/${name}`), { placeholder: true });
+      }
+      
+      document.getElementById('new-draft-name').value = '';
+      showToast("✅ Чернетка створена!");
+      loadDrafts();
+  };
+
+  window.deleteDraft = function(name) {
+      if(confirm(`Видалити чернетку "${name}"?`)) {
+          remove(ref(db, `schedule_drafts/${name}`)).then(() => loadDrafts());
+      }
+  };
+
+  window.activateDraft = async function(name) {
+      if(confirm(`⚠️ УВАГА! Ви збираєтесь зробити "${name}" основним розкладом школи. Старе розклад буде перезаписано (або ви можете зберегти його як іншу чернетку перед цим). Продовжити?`)) {
+          const snap = await get(ref(db, `schedule_drafts/${name}`));
+          if(snap.exists()) {
+              await set(ref(db, 'schedules'), snap.val());
+              showToast("🚀 Розклад успішно опубліковано для всієї школи!");
+          }
+      }
+  };
+
+  window.openVisualMatrixModal = async function(mode) {
+      currentMatrixMode = mode; // 'live' or draftName
+      document.getElementById('visual-matrix-modal').style.display = 'flex'; 
+      showToast("⏳ Завантаження...");
+      
+      let dbPath = mode === 'live' ? 'schedules' : `schedule_drafts/${mode}`;
+      
       const [snap, accessSnap, stSnap] = await Promise.all([
-          get(ref(db, 'schedules')),
+          get(ref(db, dbPath)),
           get(ref(db, 'teacher_access')),
           get(ref(db, 'students_list'))
       ]);
+      
       globalAllSchedules = snap.exists() ? snap.val() : {};
       globalTeacherAccess = accessSnap.exists() ? accessSnap.val() : {};
       globalAllStudents = stSnap.exists() ? stSnap.val() : {};
@@ -742,9 +826,127 @@
               } 
           } 
       }
+      
+      const title = document.getElementById('matrix-modal-title');
+      const warningsBox = document.getElementById('constructor-warnings');
+      
+      if(mode !== 'live') {
+          title.innerHTML = `🛠️ Конструктор: <span style="color:#e67e22">${mode}</span>`;
+          warningsBox.style.display = 'block';
+      } else {
+          title.innerHTML = `🗓️ Поточна Матриця розкладу`;
+          warningsBox.style.display = 'none';
+      }
+      
+      window.calculateMatrixWarnings();
       renderMatrixGrid();
   };
+
   window.closeVisualMatrixModal = function() { document.getElementById('visual-matrix-modal').style.display = 'none'; };
+
+  // Smart Constructor Logic
+  window.calculateMatrixWarnings = function() {
+      if (currentMatrixMode === 'live') return;
+      draftWarningsCache = [];
+      const day = document.getElementById('matrix-day-select').value;
+      
+      // We scan the day to find anomalies
+      let warningsHtml = '<b>⚠️ Аналіз накладок на цей день:</b><ul style="margin:5px 0 0 0; padding-left:20px;">';
+      let hasWarnings = false;
+      
+      // Track teacher positions: { teacherEmail: { slotIndex: { classId, building } } }
+      let tracker = {};
+
+      let maxRows = 8; 
+      for(let i=1; i<=11; i++) {
+          const cls = `class_${i}`;
+          if(globalAllSchedules[cls] && globalAllSchedules[cls].lessons && globalAllSchedules[cls].lessons[day]) {
+              maxRows = Math.max(maxRows, globalAllSchedules[cls].lessons[day].length);
+          }
+      }
+
+      for (let row = 0; row < maxRows; row++) {
+          let slotTeachers = {}; // who is teaching what in this slot
+          
+          for(let c=1; c<=11; c++) {
+              const clsId = `class_${c}`;
+              const building = c <= 5 ? 1 : 2; // 1-5 Корпус А, 6-11 Корпус Б
+              const lessonsArray = (globalAllSchedules[clsId] && globalAllSchedules[clsId].lessons && globalAllSchedules[clsId].lessons[day]) ? globalAllSchedules[clsId].lessons[day] : [];
+              const rawData = lessonsArray[row];
+              
+              let items = [];
+              if (Array.isArray(rawData)) items = rawData;
+              else if (rawData && Object.keys(rawData).length > 0 && rawData.subject) items = [rawData];
+
+              items.forEach((lesson, subIdx) => {
+                  if (lesson.type === 'break') return;
+                  let tEmail = lesson.teacherEmail;
+                  if(!tEmail && lesson.subject) {
+                      let sName = typeof lesson.subject === 'string' ? lesson.subject : (lesson.subject.ua || '');
+                      const defT = window.getDefaultTeacher(clsId, sName);
+                      if (defT) tEmail = defT.email;
+                  }
+                  
+                  if (tEmail) {
+                      // Init tracker
+                      if (!tracker[tEmail]) tracker[tEmail] = {};
+                      
+                      // Check double booking in same slot
+                      if (slotTeachers[tEmail]) {
+                          hasWarnings = true;
+                          warningsHtml += `<li style="color:#c0392b;"><b>Накладка!</b> Вчитель ${tEmail} призначений у ${clsId} та ${slotTeachers[tEmail].classId} одночасно (Слот №${row+1}).</li>`;
+                          draftWarningsCache.push({type: 'conflict', row: row, classId: clsId, subIdx: subIdx});
+                          draftWarningsCache.push({type: 'conflict', row: row, classId: slotTeachers[tEmail].classId, subIdx: slotTeachers[tEmail].subIdx});
+                      } else {
+                          slotTeachers[tEmail] = {classId: clsId, subIdx: subIdx};
+                      }
+                      
+                      tracker[tEmail][row] = { classId: clsId, building: building, subIdx: subIdx };
+                  }
+              });
+          }
+      }
+      
+      // Check travel time between adjacent slots
+      for (let tEmail in tracker) {
+          let slotsTaught = Object.keys(tracker[tEmail]).map(Number).sort((a,b)=>a-b);
+          for (let i = 0; i < slotsTaught.length - 1; i++) {
+              let s1 = slotsTaught[i];
+              let s2 = slotsTaught[i+1];
+              
+              if (s2 - s1 === 1) { // Adjacent slots
+                  let b1 = tracker[tEmail][s1].building;
+                  let b2 = tracker[tEmail][s2].building;
+                  
+                  if (b1 !== b2) {
+                      hasWarnings = true;
+                      warningsHtml += `<li style="color:#e67e22;"><b>Час на переїзд:</b> Вчитель ${tEmail} переходить з Корпусу ${b1==1?'А(1-5)':'Б(6-11)'} в Корпус ${b2==1?'А':'Б'} між слотами №${s1+1} та №${s2+1}.</li>`;
+                      draftWarningsCache.push({type: 'travel', row: s1, classId: tracker[tEmail][s1].classId, subIdx: tracker[tEmail][s1].subIdx});
+                      draftWarningsCache.push({type: 'travel', row: s2, classId: tracker[tEmail][s2].classId, subIdx: tracker[tEmail][s2].subIdx});
+                  }
+              }
+          }
+      }
+
+      warningsHtml += '</ul>';
+      const warningsBox = document.getElementById('constructor-warnings');
+      if (hasWarnings) {
+          warningsBox.innerHTML = warningsHtml;
+          warningsBox.style.display = 'block';
+      } else {
+          warningsBox.innerHTML = '✅ Накладок та проблем з переїздом не виявлено!';
+          warningsBox.style.display = 'block';
+      }
+  };
+
+  function hasWarningClass(row, clsId, subIdx) {
+      if (currentMatrixMode === 'live') return '';
+      let w = draftWarningsCache.find(x => x.row === row && x.classId === clsId && x.subIdx === subIdx);
+      if (!w) return '';
+      if (w.type === 'conflict') return 'cell-warning-conflict';
+      if (w.type === 'travel') return 'cell-warning-travel';
+      return '';
+  }
 
   function renderSingleMatrixCellContent(lesson, displayTName, isOverride, clsId, row, subIdx) {
       const subjName = typeof lesson.subject === 'string' ? lesson.subject : (lesson.subject.ua || '');
@@ -754,6 +956,8 @@
       
       const safeLesson = JSON.stringify(lesson).replace(/'/g, "&apos;").replace(/"/g, "&quot;");
       const onClickStr = `event.stopPropagation(); openCellEditor('${clsId}', ${row}, ${subIdx}, ${safeLesson})`;
+      
+      let extraClass = hasWarningClass(row, clsId, subIdx);
 
       if (isBreak) {
           return `<div class="matrix-cell cell-break" onclick="${onClickStr}">
@@ -776,7 +980,7 @@
               }
           }
           let teacherHtml = displayTName ? `<div class="cell-teacher" ${isOverride ? 'style="color:#e74c3c;" title="Призначено вручну (Заміна)"' : 'title="Автоматично"'}>👨‍🏫 ${displayTName} ${isOverride ? '🔄' : ''}</div>` : `<div class="cell-teacher" style="color:#aaa;">Без вчителя</div>`;
-          return `<div class="matrix-cell cell-club" onclick="${onClickStr}">
+          return `<div class="matrix-cell cell-club ${extraClass}" onclick="${onClickStr}">
                       <div class="cell-subj">🎸 ${subjName}</div>
                       ${teacherHtml}
                       ${extraInfo}
@@ -784,7 +988,7 @@
                   </div>`;
       } else {
           let teacherHtml = displayTName ? `<div class="cell-teacher" ${isOverride ? 'style="color:#e74c3c;" title="Призначено вручну (Заміна)"' : 'title="Автоматично за Матрицею доступу"'}>👨‍🏫 ${displayTName} ${isOverride ? '🔄' : ''}</div>` : `<div class="cell-teacher" style="color:#aaa;">Без вчителя</div>`;
-          return `<div class="matrix-cell cell-lesson" onclick="${onClickStr}">
+          return `<div class="matrix-cell cell-lesson ${extraClass}" onclick="${onClickStr}">
                       <div class="cell-subj">${subjName}</div>
                       ${teacherHtml}
                       <div class="cell-time">🕘 ${timeStr}</div>
@@ -892,6 +1096,7 @@
       const tSelect = document.getElementById('cell-teacher-select');
       const currentVal = tSelect.value;
       window.updateCellEditorTeacherOptions(clsId, sName, currentVal);
+      window.triggerSmartCheck();
   }
 
   window.updateCellEditorTeacherOptions = function(clsId, sName, currentEmail) {
@@ -918,6 +1123,82 @@
       }
   }
 
+  // Live checker within the modal
+  window.triggerSmartCheck = function() {
+      if(currentMatrixMode === 'live') return;
+      
+      const tSelect = document.getElementById('cell-teacher-select');
+      const tEmail = tSelect.value;
+      const warnBox = document.getElementById('cell-live-warnings');
+      
+      if(!tEmail) {
+          warnBox.style.display = 'none';
+          return;
+      }
+      
+      const day = document.getElementById('matrix-day-select').value;
+      const clsId = document.getElementById('cell-edit-class').value;
+      const targetBuilding = parseInt(clsId.replace('class_','')) <= 5 ? 1 : 2;
+      const row = parseInt(document.getElementById('cell-edit-row').value);
+      
+      let conflicts = [];
+      let travel = [];
+
+      for(let c=1; c<=11; c++) {
+          let checkCls = `class_${c}`;
+          if(checkCls === clsId) continue;
+          let building = c <= 5 ? 1 : 2;
+          
+          let dayArr = globalAllSchedules[checkCls]?.lessons?.[day] || [];
+          
+          // Check same slot
+          let sameSlot = dayArr[row];
+          let sameItems = Array.isArray(sameSlot) ? sameSlot : (sameSlot ? [sameSlot] : []);
+          sameItems.forEach(item => {
+              if(item.type !== 'break' && item.teacherEmail === tEmail) {
+                  conflicts.push(`Накладка: вчитель вже веде урок у ${c} Класі!`);
+              }
+          });
+          
+          // Check prev slot
+          if (row > 0) {
+              let prevSlot = dayArr[row-1];
+              let prevItems = Array.isArray(prevSlot) ? prevSlot : (prevSlot ? [prevSlot] : []);
+              prevItems.forEach(item => {
+                  if(item.type !== 'break' && item.teacherEmail === tEmail && building !== targetBuilding) {
+                      travel.push(`Корпус! На попередньому уроці вчитель у ${c} Класі (Корпус ${building==1?'А':'Б'}).`);
+                  }
+              });
+          }
+          
+          // Check next slot
+          let nextSlot = dayArr[row+1];
+          if(nextSlot) {
+              let nextItems = Array.isArray(nextSlot) ? nextSlot : [nextSlot];
+              nextItems.forEach(item => {
+                  if(item.type !== 'break' && item.teacherEmail === tEmail && building !== targetBuilding) {
+                      travel.push(`Корпус! На наступному уроці вчитель у ${c} Класі (Корпус ${building==1?'А':'Б'}).`);
+                  }
+              });
+          }
+      }
+      
+      if(conflicts.length > 0 || travel.length > 0) {
+          let html = '';
+          if(conflicts.length > 0) html += `<div style="color:#c0392b; font-weight:bold;">❌ ${conflicts[0]}</div>`;
+          if(travel.length > 0) html += `<div style="color:#e67e22; font-weight:bold;">⚠️ ${travel[0]}</div>`;
+          warnBox.innerHTML = html;
+          warnBox.style.display = 'block';
+          warnBox.style.background = conflicts.length > 0 ? '#fdedec' : '#fdf2e9';
+          warnBox.style.border = `1px solid ${conflicts.length > 0 ? '#e74c3c' : '#e67e22'}`;
+      } else {
+          warnBox.innerHTML = `<div style="color:#27ae60; font-weight:bold;">✅ Вчитель вільний, переїзд не потрібен.</div>`;
+          warnBox.style.display = 'block';
+          warnBox.style.background = '#eafaf1';
+          warnBox.style.border = '1px solid #2ecc71';
+      }
+  }
+
   window.openCellEditor = async function(clsId, rowIdx, subIdx, lessonObj) {
       const isArt = currentUserData.role === 'art_school_teacher';
 
@@ -934,6 +1215,8 @@
       }
 
       document.getElementById('edit-cell-modal').style.display = 'flex';
+      document.getElementById('cell-live-warnings').style.display = 'none';
+      
       const day = document.getElementById('matrix-day-select').value; const clsNum = clsId.replace('class_', '');
       document.getElementById('edit-cell-subtitle').innerText = `${clsNum} Клас | ${dayNamesUA[day]} | Слот № ${rowIdx + 1}`;
       document.getElementById('cell-edit-class').value = clsId; 
@@ -1016,6 +1299,7 @@
 
       window.updateCellEditorTeacherOptions(clsId, sName, lessonObj ? lessonObj.teacherEmail : '');
       toggleCellType();
+      if(currentMatrixMode !== 'live') window.triggerSmartCheck();
   };
 
   window.closeEditCellModal = function() { document.getElementById('edit-cell-modal').style.display = 'none'; };
@@ -1074,6 +1358,8 @@
           }
       }
 
+      let dbPathBase = currentMatrixMode === 'live' ? 'schedules' : `schedule_drafts/${currentMatrixMode}`;
+
       try {
           for (let tCls of targetClasses) {
               if (!globalAllSchedules[tCls]) globalAllSchedules[tCls] = {}; 
@@ -1094,10 +1380,11 @@
               }
 
               dayArray[rowIdx] = slotItems;
-              await set(ref(db, `schedules/${tCls}/lessons/${day}`), dayArray);
+              await set(ref(db, `${dbPathBase}/${tCls}/lessons/${day}`), dayArray);
           }
 
-          if (tEmail && subjUA && type !== 'break') {
+          // Auto-grant access only if LIVE
+          if (tEmail && subjUA && type !== 'break' && currentMatrixMode === 'live') {
               const safeEmail = tEmail.replace(/\./g, '_');
               for (let tCls of targetClasses) {
                   const accessSnap = await get(child(ref(db), `teacher_access/${safeEmail}/${tCls}`));
@@ -1105,7 +1392,11 @@
                   if (!currentAccess.includes("Всі предмети") && !currentAccess.includes(subjUA)) { currentAccess.push(subjUA); await set(ref(db, `teacher_access/${safeEmail}/${tCls}`), currentAccess); }
               }
           }
-          closeEditCellModal(); renderMatrixGrid(); showToast("✅ Збережено успішно!");
+          
+          closeEditCellModal(); 
+          if(currentMatrixMode !== 'live') window.calculateMatrixWarnings();
+          renderMatrixGrid(); 
+          showToast("✅ Збережено успішно!");
       } catch(e) { alert("Помилка: " + e.message); }
   };
 
@@ -1115,6 +1406,8 @@
       const subIdxStr = document.getElementById('cell-edit-subindex').value;
       const day = document.getElementById('matrix-day-select').value;
       
+      let dbPathBase = currentMatrixMode === 'live' ? 'schedules' : `schedule_drafts/${currentMatrixMode}`;
+
       if(globalAllSchedules[clsId] && globalAllSchedules[clsId].lessons && globalAllSchedules[clsId].lessons[day]) {
           let dayArray = globalAllSchedules[clsId].lessons[day]; 
           let existingSlot = dayArray[rowIdx];
@@ -1130,8 +1423,11 @@
           if (slotItems.length === 0) dayArray[rowIdx] = {};
           else dayArray[rowIdx] = slotItems;
 
-          await set(ref(db, `schedules/${clsId}/lessons/${day}`), dayArray); 
-          closeEditCellModal(); renderMatrixGrid(); showToast("🗑️ Видалено!");
+          await set(ref(db, `${dbPathBase}/${clsId}/lessons/${day}`), dayArray); 
+          closeEditCellModal(); 
+          if(currentMatrixMode !== 'live') window.calculateMatrixWarnings();
+          renderMatrixGrid(); 
+          showToast("🗑️ Видалено!");
       }
   };
 
@@ -1196,7 +1492,7 @@
 
   function initUserSession() {
     document.getElementById('calendar-block').style.display = 'block'; updateProfileBar();
-    if (currentUserData.role === 'director') { document.getElementById('director-screen').style.display = 'block'; document.getElementById('teacher-class-selector-box').style.display = 'none'; loadTeachersListForDirector(); handleDateChange(); } 
+    if (currentUserData.role === 'director') { document.getElementById('director-screen').style.display = 'block'; document.getElementById('teacher-class-selector-box').style.display = 'none'; loadTeachersListForDirector(); handleDateChange(); loadDrafts(); } 
     else if (currentUserData.role === 'administrator') { document.getElementById('admin-screen').style.display = 'block'; document.getElementById('teacher-class-selector-box').style.display = 'none'; handleDateChange(); } 
     else if (currentUserData.role === 'teacher' || currentUserData.role === 'art_school_teacher' || currentUserData.role === 'music_teacher') { 
         document.getElementById('teacher-screen').style.display = 'block'; 
