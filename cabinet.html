@@ -369,7 +369,7 @@
     </select>
 
     <label id="cell-subj-label">Назва предмету (UA):</label>
-    <input type="text" id="cell-subj-ua" placeholder="Напр. Математика" style="margin-bottom:10px; border-color: #3498db;">
+    <input type="text" id="cell-subj-ua" placeholder="Напр. Математика" style="margin-bottom:10px; border-color: #3498db;" oninput="handleSubjInput()">
     
     <div id="cell-teacher-wrapper">
         <label>Вчитель:</label>
@@ -454,10 +454,11 @@
   const dayKeys = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
   const dayNamesUA = { Monday: "Понеділок", Tuesday: "Вівторок", Wednesday: "Середа", Thursday: "Четвер", Friday: "П'ятниця" };
   const STICKER_GOAL = 30;
+  
   let teacherAccessMatrix = {}; 
-
   let globalAllSchedules = {};
   let globalTeachersList = [];
+  let globalTeacherAccess = {}; // Добавлена глобальная переменная для доступов учителей
 
   const today = new Date();
   const localDateString = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
@@ -472,6 +473,28 @@
 
   window.isSubjectAllowed = function(cls, subjectName) {
       if (!subjectName) return false; let raw = teacherAccessMatrix[cls] || []; let allowed = Array.isArray(raw) ? raw : Object.values(raw); let normAllowed = allowed.map(s => typeof s === 'string' ? s.trim() : ''); let normTarget = subjectName.trim(); if (normAllowed.includes("Всі предмети")) return true; return normAllowed.includes(normTarget);
+  };
+
+  // Новая функция: Умный поиск учителя по умолчанию
+  window.getDefaultTeacher = function(clsId, subjName) {
+      if (!subjName || !globalTeacherAccess) return null;
+      let normTarget = subjName.trim().toLowerCase();
+      for (let safeEmail in globalTeacherAccess) {
+          if (globalTeacherAccess[safeEmail][clsId]) {
+              let allowed = globalTeacherAccess[safeEmail][clsId];
+              let isAllowed = false;
+              if (Array.isArray(allowed)) {
+                  isAllowed = allowed.some(s => s.trim().toLowerCase() === "всі предмети" || s.trim().toLowerCase() === normTarget);
+              } else {
+                  isAllowed = Object.values(allowed).some(s => s.trim().toLowerCase() === "всі предмети" || s.trim().toLowerCase() === normTarget);
+              }
+              if (isAllowed) {
+                  let t = globalTeachersList.find(t => t.safeEmail === safeEmail);
+                  if (t) return { email: t.email, name: t.name };
+              }
+          }
+      }
+      return null;
   };
 
   function showToast(message) {
@@ -524,7 +547,14 @@
   // --- ВІЗУАЛЬНА МАТРИЦЯ РОЗКЛАДУ ---
   window.openVisualMatrixModal = async function() {
       document.getElementById('visual-matrix-modal').style.display = 'flex'; showToast("⏳ Завантаження розкладів усіх класів...");
-      const snap = await get(ref(db, 'schedules')); globalAllSchedules = snap.exists() ? snap.val() : {}; renderMatrixGrid();
+      // Теперь загружаем и расписания, и матрицу доступов для умной автоподстановки
+      const [snap, accessSnap] = await Promise.all([
+          get(ref(db, 'schedules')),
+          get(ref(db, 'teacher_access'))
+      ]);
+      globalAllSchedules = snap.exists() ? snap.val() : {};
+      globalTeacherAccess = accessSnap.exists() ? accessSnap.val() : {};
+      renderMatrixGrid();
   };
   window.closeVisualMatrixModal = function() { document.getElementById('visual-matrix-modal').style.display = 'none'; };
 
@@ -546,12 +576,11 @@
       }
       
       maxRows += 1; 
-      let lessonCounter = 1; // Динамічний лічильник тільки для уроків
+      let lessonCounter = 1;
 
       for (let row = 0; row < maxRows; row++) {
           let tr = document.createElement('tr');
           
-          // Визначаємо, чи є цей ряд переважно перервою (щоб правильно написати заголовок зліва)
           let breakCount = 0;
           let lessonCount = 0;
           
@@ -588,15 +617,32 @@
                   const timeStr = lesson.time || '';
                   const isBreak = subjName.toLowerCase().includes('перерва') || subjName.toLowerCase().includes('обід');
                   
+                  let displayTName = tName;
+                  let isOverride = false;
+
+                  // Умное наследование учителя
+                  if (!isBreak) {
+                      if (!tEmail && subjName) {
+                          const defT = window.getDefaultTeacher(clsId, subjName);
+                          if (defT) displayTName = defT.name;
+                      } else if (tEmail) {
+                          isOverride = true; // Это замена (выбрано вручную)
+                      }
+                  }
+
                   if (isBreak) {
                       innerHTML = `<div class="matrix-cell cell-break">
                                       <div class="cell-subj">${subjName}</div>
                                       <div class="cell-time">${timeStr}</div>
                                    </div>`;
                   } else {
+                      let teacherHtml = displayTName 
+                          ? `<div class="cell-teacher" ${isOverride ? 'style="color:#e74c3c;" title="Призначено вручну (Заміна)"' : 'title="Автоматично за Матрицею доступу"'}>👨‍🏫 ${displayTName} ${isOverride ? '🔄' : ''}</div>`
+                          : `<div class="cell-teacher" style="color:#aaa;">Без вчителя</div>`;
+                          
                       innerHTML = `<div class="matrix-cell cell-lesson">
                                       <div class="cell-subj">${subjName}</div>
-                                      ${tName ? `<div class="cell-teacher">👨‍🏫 ${tName}</div>` : `<div class="cell-teacher" style="color:#aaa;">Без вчителя</div>`}
+                                      ${teacherHtml}
                                       <div class="cell-time">🕘 ${timeStr}</div>
                                    </div>`;
                   }
@@ -637,22 +683,41 @@
       }
   };
 
+  window.handleSubjInput = function() {
+      const clsId = document.getElementById('cell-edit-class').value;
+      const sName = document.getElementById('cell-subj-ua').value.trim();
+      const tSelect = document.getElementById('cell-teacher-select');
+      const currentVal = tSelect.value;
+      window.updateCellEditorTeacherOptions(clsId, sName, currentVal);
+  }
+
+  window.updateCellEditorTeacherOptions = function(clsId, sName, currentEmail) {
+      const teacherSelect = document.getElementById('cell-teacher-select');
+      const defaultT = window.getDefaultTeacher(clsId, sName);
+      const defaultTName = defaultT ? defaultT.name : 'Не знайдено';
+      
+      teacherSelect.innerHTML = `<option value="">-- Автоматично (${defaultTName}) --</option>`;
+      globalTeachersList.forEach(t => { teacherSelect.innerHTML += `<option value="${t.email}">${t.name} (${t.email})</option>`; });
+      
+      if (currentEmail) { 
+          const optExists = Array.from(teacherSelect.options).some(o => o.value === currentEmail); 
+          if(optExists) teacherSelect.value = currentEmail; 
+      } else {
+          teacherSelect.value = '';
+      }
+  }
+
   window.openCellEditor = function(clsId, rowIdx, lessonObj) {
       document.getElementById('edit-cell-modal').style.display = 'flex';
       const day = document.getElementById('matrix-day-select').value; const clsNum = clsId.replace('class_', '');
       document.getElementById('edit-cell-subtitle').innerText = `${clsNum} Клас | ${dayNamesUA[day]} | Слот № ${rowIdx + 1}`;
       document.getElementById('cell-edit-class').value = clsId; document.getElementById('cell-edit-row').value = rowIdx;
       
-      const teacherSelect = document.getElementById('cell-teacher-select');
-      teacherSelect.innerHTML = '<option value="">-- Не призначено --</option>';
-      globalTeachersList.forEach(t => { teacherSelect.innerHTML += `<option value="${t.email}">${t.name} (${t.email})</option>`; });
-      teacherSelect.value = '';
-
+      let sName = '';
       if (lessonObj) {
-          const sName = typeof lessonObj.subject === 'string' ? lessonObj.subject : (lessonObj.subject.ua || '');
+          sName = typeof lessonObj.subject === 'string' ? lessonObj.subject : (lessonObj.subject.ua || '');
           document.getElementById('cell-subj-ua').value = sName;
           document.getElementById('cell-number').value = lessonObj.number || ''; document.getElementById('cell-time').value = lessonObj.time || '';
-          if (lessonObj.teacherEmail) { const optExists = Array.from(teacherSelect.options).some(o => o.value === lessonObj.teacherEmail); if(optExists) teacherSelect.value = lessonObj.teacherEmail; }
           const isBreak = sName.toLowerCase().includes('перерва') || sName.toLowerCase().includes('обід');
           document.getElementById('cell-type-select').value = isBreak ? 'break' : 'lesson';
       } else {
@@ -661,6 +726,8 @@
           document.getElementById('cell-time').value = '';
           document.getElementById('cell-type-select').value = 'lesson';
       }
+
+      window.updateCellEditorTeacherOptions(clsId, sName, lessonObj ? lessonObj.teacherEmail : '');
       toggleCellType();
   };
 
@@ -671,7 +738,10 @@
       const type = document.getElementById('cell-type-select').value;
       const subjUA = document.getElementById('cell-subj-ua').value.trim(); const timeStr = document.getElementById('cell-time').value.trim();
       const num = type === 'break' ? '' : document.getElementById('cell-number').value.trim();
-      const tSelect = document.getElementById('cell-teacher-select'); const tEmail = type === 'break' ? '' : tSelect.value; const tName = tEmail ? tSelect.options[tSelect.selectedIndex].text.split(' (')[0] : '';
+      const tSelect = document.getElementById('cell-teacher-select'); 
+      const tEmail = type === 'break' ? '' : tSelect.value; 
+      // Если tEmail пустой (выбрано "Автоматично"), tName тоже будет пустым, и сработает умное наследование
+      const tName = (tEmail && type !== 'break') ? tSelect.options[tSelect.selectedIndex].text.split(' (')[0] : '';
 
       if (!globalAllSchedules[clsId]) globalAllSchedules[clsId] = {}; if (!globalAllSchedules[clsId].lessons) globalAllSchedules[clsId].lessons = {}; if (!globalAllSchedules[clsId].lessons[day]) globalAllSchedules[clsId].lessons[day] = [];
       let dayArray = globalAllSchedules[clsId].lessons[day];
@@ -681,11 +751,12 @@
 
       try {
           await set(ref(db, `schedules/${clsId}/lessons/${day}`), dayArray);
+          // Авто-выдача прав, только если учитель выбран ВРУЧНУЮ (override)
           if (tEmail && subjUA && type !== 'break') {
               const safeEmail = tEmail.replace(/\./g, '_');
               const accessSnap = await get(child(ref(db), `teacher_access/${safeEmail}/${clsId}`));
               let currentAccess = accessSnap.exists() ? accessSnap.val() : []; if (!Array.isArray(currentAccess)) currentAccess = Object.values(currentAccess);
-              if (!currentAccess.includes("Всі предмети") && !currentAccess.includes(subjUA)) { currentAccess.push(subjUA); await set(ref(db, `teacher_access/${safeEmail}/${clsId}`), currentAccess); console.log(`Права доступу для ${tName} на ${subjUA} в ${clsId} автоматично додано!`); }
+              if (!currentAccess.includes("Всі предмети") && !currentAccess.includes(subjUA)) { currentAccess.push(subjUA); await set(ref(db, `teacher_access/${safeEmail}/${clsId}`), currentAccess); console.log(`Права доступу для ${tName} на ${subjUA} в ${clsId} автоматично додано (Заміна)!`); }
           }
           closeEditCellModal(); renderMatrixGrid(); showToast("✅ Слот збережено!");
       } catch(e) { alert("Помилка: " + e.message); }
