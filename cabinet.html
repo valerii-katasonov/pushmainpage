@@ -167,7 +167,6 @@
         <button onclick="openJournalModal('director')" style="flex:1; min-width: 200px; background: linear-gradient(135deg, #8e44ad, #9b59b6); color: white; margin-top: 0; font-size: 1rem; padding: 12px; box-shadow: 0 4px 10px rgba(142,68,173,0.3);">📖 Журнал успішності</button>
     </div>
 
-    <!-- ... rest of director UI ... -->
     <details style="margin-bottom: 25px; background: #fdfbfb; padding: 15px; border-radius: 12px; border: 1px solid #ddd;">
       <summary style="font-weight: bold; cursor: pointer; color: #8e44ad; font-size: 1.1rem;">📥 Імпорт старого розкладу з файлів</summary>
       <div style="margin-top: 15px; background: #e8eaed; padding: 15px; border-radius: 8px;">
@@ -272,7 +271,8 @@
 
   <div id="teacher-screen" class="panel">
     <h2 id="teacher-dashboard-title">👨‍🏫 Журнал</h2>
-    <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+    
+    <div id="t-exams-journal-btns" style="display: flex; gap: 10px; margin-bottom: 20px;">
         <button onclick="openExamsCalendar()" style="flex:1; background: linear-gradient(135deg, #f39c12, #d35400); color: white; margin-top: 0; font-size: 0.95rem; padding: 12px; box-shadow: 0 4px 10px rgba(211,84,0,0.3);">📅 Контрольні</button>
         <button onclick="openJournalModal('teacher')" style="flex:1; background: linear-gradient(135deg, #8e44ad, #9b59b6); color: white; margin-top: 0; font-size: 0.95rem; padding: 12px; box-shadow: 0 4px 10px rgba(142,68,173,0.3);">📖 Класний журнал</button>
     </div>
@@ -292,26 +292,36 @@
         <button onclick="teacherMarkAbsent()" style="margin-top:0; background:#e74c3c; color:white; width:auto; padding: 10px 15px; font-size:0.9rem;">Відмітити</button>
       </div>
     </div>
-    <div style="display: flex; gap: 10px; margin-bottom: 25px;">
-      <div style="flex: 1; background: #ffeaa7; padding: 15px; border-radius: 12px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05);"><h4 style="margin:0; color: #d35400; font-size: 0.85rem;">❤️ Індекс реакцій</h4><p id="t-karma-counter" style="font-size: 1.8rem; font-weight: 800; color: #e67e22; margin: 5px 0;">0</p></div>
-      <div style="flex: 1; background: linear-gradient(135deg, #a8ff78, #78ffd6); padding: 15px; border-radius: 12px; text-align: center; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.05);" onclick="showWeeklyWrapped()"><h4 style="margin:0; color: #006d77; font-size: 0.85rem;">📊 Підсумки</h4><p style="font-size: 1.8rem; margin: 5px 0;">🎁</p></div>
+    
+    <div id="t-stats-hw-wrapper">
+        <div style="display: flex; gap: 10px; margin-bottom: 25px;">
+          <div style="flex: 1; background: #ffeaa7; padding: 15px; border-radius: 12px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05);"><h4 style="margin:0; color: #d35400; font-size: 0.85rem;">❤️ Індекс реакцій</h4><p id="t-karma-counter" style="font-size: 1.8rem; font-weight: 800; color: #e67e22; margin: 5px 0;">0</p></div>
+          <div style="flex: 1; background: linear-gradient(135deg, #a8ff78, #78ffd6); padding: 15px; border-radius: 12px; text-align: center; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.05);" onclick="showWeeklyWrapped()"><h4 style="margin:0; color: #006d77; font-size: 0.85rem;">📊 Підсумки</h4><p style="font-size: 1.8rem; margin: 5px 0;">🎁</p></div>
+        </div>
+        <div class="data-card" style="border-left-color: #3498db; background: #f4f9fd;"><h4 style="margin-top:0; color: #2980b9;">📋 Зведення всіх ДЗ класса:</h4><ul id="t-daily-hw-list" class="list-dash"></ul></div>
     </div>
-    <div class="data-card" style="border-left-color: #3498db; background: #f4f9fd;"><h4 style="margin-top:0; color: #2980b9;">📋 Зведення всіх ДЗ класса:</h4><ul id="t-daily-hw-list" class="list-dash"></ul></div>
     
     <h3>✏️ Заповнення журналу</h3>
     <label>Предмет (Дозволені вам на цей день):</label> <select id="t-subject" onchange="loadCurrentData()"></select>
-    <label>Домашнє завдання (для всього класса):</label> <textarea id="t-hw" rows="2" placeholder="Введіть ДЗ..."></textarea>
-    <label>📸 Фото з підручника/зошита:</label> <input type="file" id="t-image" accept="image/*" multiple>
-    <div id="existing-image-info">📎 Вже прикріплено фото.</div>
+    
+    <div id="t-hw-input-wrapper">
+        <label>Домашнє завдання (для всього класса):</label> <textarea id="t-hw" rows="2" placeholder="Введіть ДЗ..."></textarea>
+        <label>📸 Фото з підручника/зошита:</label> <input type="file" id="t-image" accept="image/*" multiple>
+        <div id="existing-image-info">📎 Вже прикріплено фото.</div>
+    </div>
+
     <label style="margin-top:20px; border-top: 1px dashed #ccc; padding-top: 15px;">Учень (робота з учнем):</label>
     <select id="t-student" onchange="loadCurrentData()"><option value="">Оберіть учня...</option></select>
-    <div style="display: flex; gap: 10px; margin-top: 10px; align-items: center;">
+    
+    <div id="t-grade-sticker-wrapper" style="display: flex; gap: 10px; margin-top: 10px; align-items: center;">
         <div style="flex: 1;"><label style="margin-top:0;">Оцінка за урок:</label><input type="text" id="t-grade" style="font-weight:bold; color:#27ae60; border: 2px solid #2ecc71;"></div>
         <div style="flex: 2; display: flex; align-items: center; background: #fffcf0; padding: 12px; border-radius: 8px; border: 1px solid #fde3a7; height: 100%; margin-top: 22px; box-sizing: border-box;"><input type="checkbox" id="t-sticker" style="width: 24px; height: 24px; margin: 0 10px 0 0; cursor: pointer;"><label for="t-sticker" style="margin: 0; color: #d35400; cursor: pointer; font-weight: bold; line-height:1.2;">🌟 Наліпка</label></div>
     </div>
+    
     <label style="margin-top: 10px;">Особистий коментар:</label> <textarea id="t-comment" rows="2"></textarea>
     <button class="btn-save" id="btn-save-data" onclick="saveData()">💾 Зберегти дані</button>
     <div id="status-msg">Збережено!</div>
+    
     <details style="margin-top: 30px; background: #fff; padding: 15px; border-radius: 12px; border: 1px solid #ddd;">
       <summary style="font-weight: bold; cursor: pointer; color: #7f8c8d;">⚙️ Управління класом</summary>
       <div style="margin-top: 15px;">
@@ -338,7 +348,6 @@
 
 <!-- Модальні вікна -->
 <div id="profile-modal" class="modal-overlay">
-  <!-- content remains same -->
   <div class="modal-content">
     <h2 style="color: #006d77; margin-top:0;">⚙️ Налаштування профілю</h2>
     <div style="display:flex; justify-content:center; margin-bottom:15px;"><img id="modal-avatar-preview" src="https://cdn-icons-png.flaticon.com/512/149/149071.png" style="width:80px; height:80px; border-radius:50%; object-fit:cover; border: 3px solid #006d77;"></div>
@@ -702,7 +711,6 @@
       globalTeacherAccess = accessSnap.exists() ? accessSnap.val() : {};
       globalAllStudents = stSnap.exists() ? stSnap.val() : {};
       
-      // Load teachers array so we can select ourselves
       const usersSnap = await get(ref(db, 'users'));
       globalTeachersList = [];
       if(usersSnap.exists()) { 
@@ -873,18 +881,42 @@
       const defaultT = window.getDefaultTeacher(clsId, sName);
       const defaultTName = defaultT ? defaultT.name : 'Не знайдено';
       
+      const isArt = currentUserData.role === 'art_school_teacher';
+
       teacherSelect.innerHTML = `<option value="">-- Автоматично (${defaultTName}) --</option>`;
       globalTeachersList.forEach(t => { teacherSelect.innerHTML += `<option value="${t.email}">${t.name} (${t.email})</option>`; });
       
-      if (currentEmail) { 
-          const optExists = Array.from(teacherSelect.options).some(o => o.value === currentEmail); 
-          if(optExists) teacherSelect.value = currentEmail; 
+      if (isArt) {
+          // Если это учитель искусств, жестко фиксируем его как учителя
+          teacherSelect.value = currentUserData.email;
+          teacherSelect.disabled = true;
       } else {
-          teacherSelect.value = '';
+          if (currentEmail) { 
+              const optExists = Array.from(teacherSelect.options).some(o => o.value === currentEmail); 
+              if(optExists) teacherSelect.value = currentEmail; 
+          } else {
+              teacherSelect.value = '';
+          }
+          teacherSelect.disabled = false;
       }
   }
 
   window.openCellEditor = async function(clsId, rowIdx, subIdx, lessonObj) {
+      const isArt = currentUserData.role === 'art_school_teacher';
+
+      // Блокируем доступ, если учитель искусств пытается открыть чужой или обычный урок
+      if (isArt && lessonObj) {
+          const sName = typeof lessonObj.subject === 'string' ? lessonObj.subject : (lessonObj.subject.ua || '');
+          const isBreak = sName.toLowerCase().includes('перерва') || sName.toLowerCase().includes('обід');
+          const type = lessonObj.type || (isBreak ? 'break' : 'lesson');
+          const tEmail = lessonObj.teacherEmail || '';
+
+          if (type !== 'extra' || tEmail !== currentUserData.email) {
+              alert("⛔ Доступ заборонено: Ви можете редагувати лише власні додаткові заняття.");
+              return;
+          }
+      }
+
       document.getElementById('edit-cell-modal').style.display = 'flex';
       const day = document.getElementById('matrix-day-select').value; const clsNum = clsId.replace('class_', '');
       document.getElementById('edit-cell-subtitle').innerText = `${clsNum} Клас | ${dayNamesUA[day]} | Слот № ${rowIdx + 1}`;
@@ -916,6 +948,8 @@
       }
 
       let sName = '';
+      const typeSelect = document.getElementById('cell-type-select');
+
       if (lessonObj) {
           sName = typeof lessonObj.subject === 'string' ? lessonObj.subject : (lessonObj.subject.ua || '');
           document.getElementById('cell-subj-ua').value = sName;
@@ -923,7 +957,7 @@
           
           const isBreak = sName.toLowerCase().includes('перерва') || sName.toLowerCase().includes('обід');
           const type = lessonObj.type || (isBreak ? 'break' : 'lesson');
-          document.getElementById('cell-type-select').value = type;
+          typeSelect.value = type;
           
           if(type === 'extra' && lessonObj.extraData) {
               document.getElementById('cell-extra-format').value = lessonObj.extraData.format || 'group';
@@ -952,7 +986,17 @@
           document.getElementById('cell-subj-ua').value = '';
           document.getElementById('cell-number').value = ''; 
           document.getElementById('cell-time').value = '';
-          document.getElementById('cell-type-select').value = 'lesson';
+          typeSelect.value = isArt ? 'extra' : 'lesson';
+      }
+
+      // Блокируем смену типа для учителя искусств
+      if (isArt) {
+          typeSelect.value = 'extra';
+          Array.from(typeSelect.options).forEach(opt => {
+              opt.disabled = (opt.value !== 'extra');
+          });
+      } else {
+          Array.from(typeSelect.options).forEach(opt => { opt.disabled = false; });
       }
 
       window.updateCellEditorTeacherOptions(clsId, sName, lessonObj ? lessonObj.teacherEmail : '');
@@ -1145,9 +1189,19 @@
         
         if (currentUserData.role === 'art_school_teacher') {
             document.getElementById('t-matrix-btn-wrapper').style.display = 'block';
-            document.getElementById('t-mark-absent-block').style.display = 'none'; // Им не нужно отмечать свой класс, у них обзор
+            document.getElementById('t-mark-absent-block').style.display = 'none';
+            // Прячем всё ненужное для учителя искусств
+            document.getElementById('t-exams-journal-btns').style.display = 'none';
+            document.getElementById('t-stats-hw-wrapper').style.display = 'none';
+            document.getElementById('t-hw-input-wrapper').style.display = 'none';
+            document.getElementById('t-grade-sticker-wrapper').style.display = 'none';
         } else {
             document.getElementById('t-matrix-btn-wrapper').style.display = 'none';
+            document.getElementById('t-mark-absent-block').style.display = 'flex';
+            document.getElementById('t-exams-journal-btns').style.display = 'flex';
+            document.getElementById('t-stats-hw-wrapper').style.display = 'block';
+            document.getElementById('t-hw-input-wrapper').style.display = 'block';
+            document.getElementById('t-grade-sticker-wrapper').style.display = 'flex';
         }
 
         const classSelect = document.getElementById('t-class-selector'); classSelect.innerHTML = ''; 
@@ -1333,9 +1387,86 @@
 
   function renderHwItem(subject, data) { let text = typeof data === 'string' ? data : data.text; let imgHtml = ''; if (typeof data === 'object') { imgHtml += '<div class="gallery">'; if (data.image && typeof data.image === 'string') imgHtml += `<a href="${data.image}" target="_blank"><img src="${data.image}" class="hw-image-thumb"></a>`; if (data.images && Array.isArray(data.images)) data.images.forEach(img => imgHtml += `<a href="${img}" target="_blank"><img src="${img}" class="hw-image-thumb"></a>`); imgHtml += '</div>'; } return `<li><b>${subject}:</b> ${text} ${imgHtml}</li>`; }
   
-  window.saveData = async function() { const date = document.getElementById('global-date').value; const subject = document.getElementById('t-subject').value; const student = document.getElementById('t-student').value; const hwText = document.getElementById('t-hw').value.trim(); const comment = document.getElementById('t-comment').value.trim(); const stickerChecked = document.getElementById('t-sticker').checked; const grade = document.getElementById('t-grade').value.trim(); const fileInput = document.getElementById('t-image'); const activeClass = getActiveClass(); const btnSave = document.getElementById('btn-save-data'); const statusMsg = document.getElementById('status-msg'); const myUid = auth.currentUser.uid; const yMonth = date.substring(0, 7); btnSave.disabled = true; btnSave.innerText = "⏳ Збереження..."; await set(ref(db, `authors/${activeClass}/${date}/${subject}`), myUid); let finalImageUrls = [...currentHwImages]; if (fileInput.files.length > 0) { statusMsg.style.display = 'block'; statusMsg.innerText = `⏳ Завантаження фото...`; statusMsg.style.color = "#f39c12"; finalImageUrls = []; const uploadPromises = Array.from(fileInput.files).map(async (file) => { const formData = new FormData(); formData.append('file', file); formData.append('upload_preset', UPLOAD_PRESET); const res = await fetch(CLOUDINARY_URL, { method: 'POST', body: formData }); const data = await res.json(); return data.secure_url; }); try { finalImageUrls = await Promise.all(uploadPromises); } catch (e) { alert("Помилка завантаження фото! " + e.message); btnSave.disabled = false; btnSave.innerText = "💾 Зберегти дані"; return; } } if (hwText || finalImageUrls.length > 0) await set(ref(db, `homeworks/${activeClass}/${date}/${subject}`), { text: hwText, images: finalImageUrls }); if (student) { if (comment) await set(ref(db, `comments/${activeClass}/${date}/${subject}/${student}`), comment); if (stickerChecked) await set(ref(db, `stickers/${activeClass}/${student}/${date}_${subject}`), true); else await set(ref(db, `stickers/${activeClass}/${student}/${date}_${subject}`), null); if (grade) await set(ref(db, `grades/${activeClass}/${yMonth}/${subject}/${date}/${student}`), grade); else await set(ref(db, `grades/${activeClass}/${yMonth}/${subject}/${date}/${student}`), null); } statusMsg.style.color = "#2ed573"; statusMsg.innerText = "✅ Дані успішно збережено!"; btnSave.disabled = false; btnSave.innerText = "💾 Зберегти дані"; fileInput.value = ''; setTimeout(() => { statusMsg.style.display = 'none'; handleDateChange(); }, 2000); };
+  window.saveData = async function() { 
+      const date = document.getElementById('global-date').value; 
+      const subject = document.getElementById('t-subject').value; 
+      const student = document.getElementById('t-student').value; 
+      const hwText = document.getElementById('t-hw') ? document.getElementById('t-hw').value.trim() : ''; 
+      const comment = document.getElementById('t-comment').value.trim(); 
+      const stickerChecked = document.getElementById('t-sticker') ? document.getElementById('t-sticker').checked : false; 
+      const grade = document.getElementById('t-grade') ? document.getElementById('t-grade').value.trim() : ''; 
+      const fileInput = document.getElementById('t-image'); 
+      const activeClass = getActiveClass(); 
+      const btnSave = document.getElementById('btn-save-data'); 
+      const statusMsg = document.getElementById('status-msg'); 
+      const myUid = auth.currentUser.uid; 
+      const yMonth = date.substring(0, 7); 
+      
+      btnSave.disabled = true; btnSave.innerText = "⏳ Збереження..."; 
+      await set(ref(db, `authors/${activeClass}/${date}/${subject}`), myUid); 
+      
+      let finalImageUrls = [...currentHwImages]; 
+      if (fileInput && fileInput.files.length > 0) { 
+          statusMsg.style.display = 'block'; statusMsg.innerText = `⏳ Завантаження фото...`; statusMsg.style.color = "#f39c12"; 
+          finalImageUrls = []; 
+          const uploadPromises = Array.from(fileInput.files).map(async (file) => { 
+              const formData = new FormData(); formData.append('file', file); formData.append('upload_preset', UPLOAD_PRESET); 
+              const res = await fetch(CLOUDINARY_URL, { method: 'POST', body: formData }); 
+              const data = await res.json(); return data.secure_url; 
+          }); 
+          try { finalImageUrls = await Promise.all(uploadPromises); } catch (e) { alert("Помилка завантаження фото! " + e.message); btnSave.disabled = false; btnSave.innerText = "💾 Зберегти дані"; return; } 
+      } 
+      
+      if (hwText || finalImageUrls.length > 0) await set(ref(db, `homeworks/${activeClass}/${date}/${subject}`), { text: hwText, images: finalImageUrls }); 
+      
+      if (student) { 
+          if (comment) await set(ref(db, `comments/${activeClass}/${date}/${subject}/${student}`), comment); 
+          if (stickerChecked) await set(ref(db, `stickers/${activeClass}/${student}/${date}_${subject}`), true); else await set(ref(db, `stickers/${activeClass}/${student}/${date}_${subject}`), null); 
+          if (grade) await set(ref(db, `grades/${activeClass}/${yMonth}/${subject}/${date}/${student}`), grade); else await set(ref(db, `grades/${activeClass}/${yMonth}/${subject}/${date}/${student}`), null); 
+      } 
+      statusMsg.style.color = "#2ed573"; statusMsg.innerText = "✅ Дані успішно збережено!"; btnSave.disabled = false; btnSave.innerText = "💾 Зберегти дані"; 
+      if(fileInput) fileInput.value = ''; 
+      setTimeout(() => { statusMsg.style.display = 'none'; handleDateChange(); }, 2000); 
+  };
   
-  window.loadCurrentData = function() { const date = document.getElementById('global-date').value; const subject = document.getElementById('t-subject').value; const student = document.getElementById('t-student').value; const activeClass = getActiveClass(); document.getElementById('t-hw').value = ''; document.getElementById('t-comment').value = ''; document.getElementById('t-image').value = ''; document.getElementById('t-sticker').checked = false; document.getElementById('t-grade').value = ''; document.getElementById('existing-image-info').style.display = 'none'; currentHwImages = []; if (!subject) return; get(child(ref(db), `homeworks/${activeClass}/${date}/${subject}`)).then(snap => { if(snap.exists()) { const val = snap.val(); if(typeof val === 'string') document.getElementById('t-hw').value = val; else { document.getElementById('t-hw').value = val.text || ''; if (val.images && Array.isArray(val.images)) currentHwImages = val.images; else if (val.image) currentHwImages = [val.image]; if(currentHwImages.length > 0) { document.getElementById('existing-image-info').innerText = `📎 Вже прикріплено фото: ${currentHwImages.length} шт. Завантажте нові, щоб повністю їх замінити.`; document.getElementById('existing-image-info').style.display = 'block'; } } } }); if (student) { get(child(ref(db), `stickers/${activeClass}/${student}/${date}_${subject}`)).then(snap => { document.getElementById('t-sticker').checked = (snap.exists() && snap.val() === true); }); const yMonth = date.substring(0, 7); get(child(ref(db), `grades/${activeClass}/${yMonth}/${subject}/${date}/${student}`)).then(snap => { if(snap.exists()) document.getElementById('t-grade').value = snap.val(); }); } };
+  window.loadCurrentData = function() { 
+      const date = document.getElementById('global-date').value; 
+      const subject = document.getElementById('t-subject').value; 
+      const student = document.getElementById('t-student').value; 
+      const activeClass = getActiveClass(); 
+      
+      if(document.getElementById('t-hw')) document.getElementById('t-hw').value = ''; 
+      if(document.getElementById('t-comment')) document.getElementById('t-comment').value = ''; 
+      if(document.getElementById('t-image')) document.getElementById('t-image').value = ''; 
+      if(document.getElementById('t-sticker')) document.getElementById('t-sticker').checked = false; 
+      if(document.getElementById('t-grade')) document.getElementById('t-grade').value = ''; 
+      if(document.getElementById('existing-image-info')) document.getElementById('existing-image-info').style.display = 'none'; 
+      
+      currentHwImages = []; 
+      if (!subject) return; 
+      
+      get(child(ref(db, `homeworks/${activeClass}/${date}/${subject}`))).then(snap => { 
+          if(snap.exists()) { 
+              const val = snap.val(); 
+              if(typeof val === 'string' && document.getElementById('t-hw')) document.getElementById('t-hw').value = val; 
+              else { 
+                  if(document.getElementById('t-hw')) document.getElementById('t-hw').value = val.text || ''; 
+                  if (val.images && Array.isArray(val.images)) currentHwImages = val.images; else if (val.image) currentHwImages = [val.image]; 
+                  if(currentHwImages.length > 0 && document.getElementById('existing-image-info')) { document.getElementById('existing-image-info').innerText = `📎 Вже прикріплено фото: ${currentHwImages.length} шт. Завантажте нові, щоб повністю їх замінити.`; document.getElementById('existing-image-info').style.display = 'block'; } 
+              } 
+          } 
+      }); 
+      
+      if (student) { 
+          get(child(ref(db, `stickers/${activeClass}/${student}/${date}_${subject}`))).then(snap => { 
+              if(document.getElementById('t-sticker')) document.getElementById('t-sticker').checked = (snap.exists() && snap.val() === true); 
+          }); 
+          const yMonth = date.substring(0, 7); 
+          get(child(ref(db, `grades/${activeClass}/${yMonth}/${subject}/${date}/${student}`))).then(snap => { 
+              if(snap.exists() && document.getElementById('t-grade')) document.getElementById('t-grade').value = snap.val(); 
+          }); 
+      } 
+  };
   
   window.loadAdminDashboard = async function() { try { const date = document.getElementById('global-date').value; const dateParts = date.split('-'); document.getElementById('a-att-header').innerText = `🚨 Відсутні та Запізнення (На ${dateParts[2]}.${dateParts[1]}, вся школа)`; const attSnap = await get(child(ref(db), `attendance`)); let unifiedAttHtml = ''; if (attSnap.exists()) { const attData = attSnap.val(); for (let i = 1; i <= 11; i++) { let clsId = `class_${i}`; if (attData[clsId] && attData[clsId][date]) { for(let student in attData[clsId][date]) { const rec = attData[clsId][date][student]; if(rec && rec.status) { const badgeClass = rec.status === 'late' ? 'badge-late' : 'badge-absent'; const label = rec.status === 'late' ? 'Запізнення' : 'Відсутність'; unifiedAttHtml += `<li style="margin-bottom:10px; border-bottom:1px solid #eee; padding-bottom:5px;"><span style="font-size:0.75rem; background:#006d77; color:white; padding:2px 6px; border-radius:4px; margin-right:5px;">${i} Клас</span> <b>${student}</b> <span class="badge ${badgeClass}">${label}</span> <br><i style="font-size:0.8rem; color:#666;">Причина: ${rec.reason}</i></li>`; } } } } } document.getElementById('a-unified-att-list').innerHTML = unifiedAttHtml || '<li class="empty-msg">На обрану дату відсутніх немає.</li>'; } catch (e) { console.error(e); } };
   
