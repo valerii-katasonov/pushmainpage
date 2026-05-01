@@ -80,6 +80,9 @@
     .cell-teacher { font-size: 0.75rem; color: #e67e22; display: flex; align-items: center; gap: 4px; font-weight: 600; margin-bottom: 4px;}
     .cell-time { font-size: 0.7rem; color: #999; margin-top: auto; text-align: right; background: rgba(255,255,255,0.7); padding: 2px 4px; border-radius: 4px; display: inline-block; align-self: flex-end;}
 
+    /* Новий стиль для індивідуального учня в матриці */
+    .cell-student-linked { font-size: 0.75rem; color: #8e44ad; background: #f3e5f5; padding: 2px 6px; border-radius: 4px; font-weight: 800; margin-top: 4px; border: 1px solid #d1c4e9; }
+
     /* === Стили для Классного журнала === */
     .journal-table { width: 100%; border-collapse: collapse; min-width: 800px; text-align: center; font-size: 0.9rem; }
     .journal-table th, .journal-table td { border: 1px solid #ddd; padding: 8px 4px; vertical-align: middle; }
@@ -323,7 +326,6 @@
   </div>
 </div>
 
-<!-- Модальні вікна -->
 <div id="profile-modal" class="modal-overlay">
   <div class="modal-content">
     <h2 style="color: #006d77; margin-top:0;">⚙️ Налаштування профілю</h2>
@@ -371,6 +373,19 @@
     <label id="cell-subj-label">Назва предмету (UA):</label>
     <input type="text" id="cell-subj-ua" placeholder="Напр. Математика" style="margin-bottom:10px; border-color: #3498db;" oninput="handleSubjInput()">
     
+    <div id="cell-lesson-format-wrapper" style="margin-bottom:10px;">
+        <label>Формат заняття:</label>
+        <select id="cell-lesson-format" style="border-color: #8e44ad;" onchange="toggleLessonFormat()">
+            <option value="group">👥 Групове (весь клас)</option>
+            <option value="individual">👤 Індивідуальне (для учня)</option>
+        </select>
+    </div>
+
+    <div id="cell-individual-student-wrapper" style="display:none; margin-bottom:10px;">
+        <label>Оберіть учня:</label>
+        <select id="cell-individual-student" style="border-color: #9b59b6;"></select>
+    </div>
+
     <div id="cell-teacher-wrapper">
         <label>Вчитель:</label>
         <select id="cell-teacher-select" style="margin-bottom:10px; border-color: #e67e22;">
@@ -458,11 +473,17 @@
   let teacherAccessMatrix = {}; 
   let globalAllSchedules = {};
   let globalTeachersList = [];
-  let globalTeacherAccess = {}; // Добавлена глобальная переменная для доступов учителей
+  let globalTeacherAccess = {};
 
   const today = new Date();
   const localDateString = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
   document.getElementById('global-date').value = localDateString;
+
+  window.toggleLessonFormat = function() {
+      const format = document.getElementById('cell-lesson-format').value;
+      const studentWrapper = document.getElementById('cell-individual-student-wrapper');
+      studentWrapper.style.display = (format === 'individual') ? 'block' : 'none';
+  };
 
   window.getValidSubjectName = function(item) {
       if (!item) return null;
@@ -475,7 +496,6 @@
       if (!subjectName) return false; let raw = teacherAccessMatrix[cls] || []; let allowed = Array.isArray(raw) ? raw : Object.values(raw); let normAllowed = allowed.map(s => typeof s === 'string' ? s.trim() : ''); let normTarget = subjectName.trim(); if (normAllowed.includes("Всі предмети")) return true; return normAllowed.includes(normTarget);
   };
 
-  // Новая функция: Умный поиск учителя по умолчанию
   window.getDefaultTeacher = function(clsId, subjName) {
       if (!subjName || !globalTeacherAccess) return null;
       let normTarget = subjName.trim().toLowerCase();
@@ -547,7 +567,6 @@
   // --- ВІЗУАЛЬНА МАТРИЦЯ РОЗКЛАДУ ---
   window.openVisualMatrixModal = async function() {
       document.getElementById('visual-matrix-modal').style.display = 'flex'; showToast("⏳ Завантаження розкладів усіх класів...");
-      // Теперь загружаем и расписания, и матрицу доступов для умной автоподстановки
       const [snap, accessSnap] = await Promise.all([
           get(ref(db, 'schedules')),
           get(ref(db, 'teacher_access'))
@@ -620,15 +639,17 @@
                   let displayTName = tName;
                   let isOverride = false;
 
-                  // Умное наследование учителя
                   if (!isBreak) {
                       if (!tEmail && subjName) {
                           const defT = window.getDefaultTeacher(clsId, subjName);
                           if (defT) displayTName = defT.name;
                       } else if (tEmail) {
-                          isOverride = true; // Это замена (выбрано вручную)
+                          isOverride = true;
                       }
                   }
+
+                  let studentTag = (lesson.format === 'individual' && lesson.studentName) 
+                      ? `<div class="cell-student-linked">👤 ${lesson.studentName}</div>` : '';
 
                   if (isBreak) {
                       innerHTML = `<div class="matrix-cell cell-break">
@@ -643,6 +664,7 @@
                       innerHTML = `<div class="matrix-cell cell-lesson">
                                       <div class="cell-subj">${subjName}</div>
                                       ${teacherHtml}
+                                      ${studentTag}
                                       <div class="cell-time">🕘 ${timeStr}</div>
                                    </div>`;
                   }
@@ -664,9 +686,15 @@
       const subjInput = document.getElementById('cell-subj-ua');
       const numInput = document.getElementById('cell-number');
       const subjLabel = document.getElementById('cell-subj-label');
+      
+      const formatWrap = document.getElementById('cell-lesson-format-wrapper');
+      const studentWrap = document.getElementById('cell-individual-student-wrapper');
 
       if(type === 'break') {
           teacherWrap.style.display = 'none';
+          formatWrap.style.display = 'none';
+          studentWrap.style.display = 'none';
+          
           subjLabel.innerText = 'Назва перерви:';
           if(!subjInput.value.toLowerCase().includes('перерва') && !subjInput.value.toLowerCase().includes('обід')) {
               subjInput.value = 'Перерва';
@@ -675,6 +703,11 @@
           numInput.disabled = true;
       } else {
           teacherWrap.style.display = 'block';
+          formatWrap.style.display = 'block';
+          if(document.getElementById('cell-lesson-format').value === 'individual') {
+              studentWrap.style.display = 'block';
+          }
+          
           subjLabel.innerText = 'Назва предмету (UA):';
           if(subjInput.value.toLowerCase().includes('перерва')) {
               subjInput.value = '';
@@ -707,11 +740,23 @@
       }
   }
 
-  window.openCellEditor = function(clsId, rowIdx, lessonObj) {
+  window.openCellEditor = async function(clsId, rowIdx, lessonObj) {
       document.getElementById('edit-cell-modal').style.display = 'flex';
       const day = document.getElementById('matrix-day-select').value; const clsNum = clsId.replace('class_', '');
       document.getElementById('edit-cell-subtitle').innerText = `${clsNum} Клас | ${dayNamesUA[day]} | Слот № ${rowIdx + 1}`;
       document.getElementById('cell-edit-class').value = clsId; document.getElementById('cell-edit-row').value = rowIdx;
+      
+      // Завантажуємо учнів класу
+      const studentSelect = document.getElementById('cell-individual-student');
+      studentSelect.innerHTML = '<option value="">-- Оберіть учня --</option>';
+      try {
+          const stSnap = await get(ref(db, `students_list/${clsId}`));
+          if(stSnap.exists()) {
+              Object.values(stSnap.val()).sort().forEach(name => {
+                  studentSelect.innerHTML += `<option value="${name}">${name}</option>`;
+              });
+          }
+      } catch(e) { console.error(e); }
       
       let sName = '';
       if (lessonObj) {
@@ -720,15 +765,22 @@
           document.getElementById('cell-number').value = lessonObj.number || ''; document.getElementById('cell-time').value = lessonObj.time || '';
           const isBreak = sName.toLowerCase().includes('перерва') || sName.toLowerCase().includes('обід');
           document.getElementById('cell-type-select').value = isBreak ? 'break' : 'lesson';
+          
+          document.getElementById('cell-lesson-format').value = lessonObj.format || 'group';
+          // Затримка, щоб select встиг заповнитися учнями
+          setTimeout(() => { document.getElementById('cell-individual-student').value = lessonObj.studentName || ''; }, 50);
       } else {
           document.getElementById('cell-subj-ua').value = '';
           document.getElementById('cell-number').value = ''; 
           document.getElementById('cell-time').value = '';
           document.getElementById('cell-type-select').value = 'lesson';
+          document.getElementById('cell-lesson-format').value = 'group';
+          document.getElementById('cell-individual-student').value = '';
       }
 
       window.updateCellEditorTeacherOptions(clsId, sName, lessonObj ? lessonObj.teacherEmail : '');
       toggleCellType();
+      toggleLessonFormat();
   };
 
   window.closeEditCellModal = function() { document.getElementById('edit-cell-modal').style.display = 'none'; };
@@ -740,18 +792,27 @@
       const num = type === 'break' ? '' : document.getElementById('cell-number').value.trim();
       const tSelect = document.getElementById('cell-teacher-select'); 
       const tEmail = type === 'break' ? '' : tSelect.value; 
-      // Если tEmail пустой (выбрано "Автоматично"), tName тоже будет пустым, и сработает умное наследование
       const tName = (tEmail && type !== 'break') ? tSelect.options[tSelect.selectedIndex].text.split(' (')[0] : '';
+      
+      const format = type === 'break' ? 'group' : document.getElementById('cell-lesson-format').value;
+      const studentName = (format === 'individual' && type !== 'break') ? document.getElementById('cell-individual-student').value : null;
 
       if (!globalAllSchedules[clsId]) globalAllSchedules[clsId] = {}; if (!globalAllSchedules[clsId].lessons) globalAllSchedules[clsId].lessons = {}; if (!globalAllSchedules[clsId].lessons[day]) globalAllSchedules[clsId].lessons[day] = [];
       let dayArray = globalAllSchedules[clsId].lessons[day];
       while(dayArray.length <= rowIdx) { dayArray.push({ number: "", time: "", subject: { ua: "", pl: "" } }); }
       
-      dayArray[rowIdx] = { number: num, time: timeStr, subject: { ua: subjUA, pl: subjUA }, teacherEmail: tEmail, teacherName: tName };
+      dayArray[rowIdx] = { 
+          number: num, 
+          time: timeStr, 
+          subject: { ua: subjUA, pl: subjUA }, 
+          teacherEmail: tEmail, 
+          teacherName: tName,
+          format: format,
+          studentName: studentName
+      };
 
       try {
           await set(ref(db, `schedules/${clsId}/lessons/${day}`), dayArray);
-          // Авто-выдача прав, только если учитель выбран ВРУЧНУЮ (override)
           if (tEmail && subjUA && type !== 'break') {
               const safeEmail = tEmail.replace(/\./g, '_');
               const accessSnap = await get(child(ref(db), `teacher_access/${safeEmail}/${clsId}`));
