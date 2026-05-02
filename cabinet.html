@@ -164,18 +164,39 @@
   </div>
 
   <div id="director-screen" class="panel">
-    <h2 style="color: #2c3e50;">👔 Пульт Директора</h2>
+    <!-- ЗМІНЕНО НАЗВУ КАБІНЕТУ -->
+    <h2 style="color: #2c3e50;">👔 Кабінет Директора</h2>
 
     <div style="display: flex; gap:10px; margin-bottom:20px; flex-wrap: wrap;">
         <button onclick="openVisualMatrixModal('live')" style="flex:1; min-width: 200px; background: linear-gradient(135deg, #1abc9c, #16a085); color: white; margin-top: 0; font-size: 1rem; padding: 12px; box-shadow: 0 4px 10px rgba(26,188,156,0.3);">🗓️ Поточний розклад</button>
         <button onclick="openJournalModal('director')" style="flex:1; min-width: 200px; background: linear-gradient(135deg, #8e44ad, #9b59b6); color: white; margin-top: 0; font-size: 1rem; padding: 12px; box-shadow: 0 4px 10px rgba(142,68,173,0.3);">📖 Журнал успішності</button>
     </div>
 
-    <!-- NEW DRAFTS BLOCK -->
-    <details style="margin-bottom: 25px; background: #e0f2f1; padding: 15px; border-radius: 12px; border: 1px solid #1abc9c;" open>
+    <!-- НОВИЙ БЛОК: СТАТИСТИКА ОЦІНОК -->
+    <div class="data-card" style="border-left-color: #8e44ad; background: #fdfafc;">
+      <h4 style="margin-top:0; color: #8e44ad;">📈 Середні оцінки (по предметах)</h4>
+      <div style="display:flex; gap:10px; margin-bottom:10px; flex-wrap:wrap;">
+        <select id="d-stat-class" onchange="updateDirectorStatSubjects()" style="flex:1; min-width:120px; border:1px solid #c39bd3;">
+          <option value="">Оберіть клас...</option>
+          <option value="class_1">1 Клас</option><option value="class_2">2 Клас</option><option value="class_3">3 Клас</option>
+          <option value="class_4">4 Клас</option><option value="class_5">5 Клас</option><option value="class_6">6 Клас</option>
+          <option value="class_7">7 Клас</option><option value="class_8">8 Клас</option><option value="class_9">9 Клас</option>
+          <option value="class_10">10 Клас</option><option value="class_11">11 Клас</option>
+        </select>
+        <select id="d-stat-subj" onchange="renderDirectorStats()" style="flex:1; min-width:120px; border:1px solid #c39bd3;">
+          <option value="">Спочатку оберіть клас</option>
+        </select>
+      </div>
+      <div id="d-stat-results" style="margin-top:15px; font-size:0.9rem; overflow-x: auto;">
+         <p class="empty-msg">Оберіть клас та предмет для розрахунку.</p>
+      </div>
+    </div>
+    <!-- КІНЕЦЬ БЛОКУ СТАТИСТИКИ -->
+
+    <details style="margin-bottom: 25px; background: #e0f2f1; padding: 15px; border-radius: 12px; border: 1px solid #1abc9c; margin-top: 20px;" open>
       <summary style="font-weight: bold; cursor: pointer; color: #006d77; font-size: 1.1rem;">🛠️ Розумний Конструктор (Чернетки)</summary>
       <div style="margin-top: 15px;">
-         <p style="font-size:0.85rem; color:#555;">Тут ви можете створювати розклад на майбутній рік, не зачіпаючи поточний. Система автоматично перевіряє накладки та час на переїзд між корпусами (1-5 класи та 6-11 класи).</p>
+         <p style="font-size:0.85rem; color:#555;">Тут ви можете створювати розклад на майбутній рік, не зачіпаючи поточний. Система автоматично перевіряє накладки та час на переїзд між корпусами (молодша та старша школа).</p>
          
          <div id="drafts-list-container" style="margin-top: 15px; margin-bottom: 15px;">
             <p class="empty-msg">Завантаження чернеток...</p>
@@ -187,7 +208,6 @@
          </div>
       </div>
     </details>
-    <!-- END NEW DRAFTS BLOCK -->
 
     <div style="display: flex; gap: 10px; margin-bottom: 20px;">
       <div style="flex: 1; background: #e0f7fa; padding: 15px; border-radius: 12px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
@@ -920,7 +940,7 @@
                   
                   if (b1 !== b2) {
                       hasWarnings = true;
-                      warningsHtml += `<li style="color:#e67e22;"><b>Час на переїзд:</b> Вчитель ${tEmail} переходить з Корпусу ${b1==1?'А(1-5)':'Б(6-11)'} в Корпус ${b2==1?'А':'Б'} між слотами №${s1+1} та №${s2+1}.</li>`;
+                      warningsHtml += `<li style="color:#e67e22;"><b>Час на переїзд:</b> Вчитель ${tEmail} переходить з ${b1==1?'молодшої школи':'старшої школи'} в ${b2==1?'молодшу школу':'старшу школу'} між слотами №${s1+1} та №${s2+1}.</li>`;
                       draftWarningsCache.push({type: 'travel', row: s1, classId: tracker[tEmail][s1].classId, subIdx: tracker[tEmail][s1].subIdx});
                       draftWarningsCache.push({type: 'travel', row: s2, classId: tracker[tEmail][s2].classId, subIdx: tracker[tEmail][s2].subIdx});
                   }
@@ -1166,7 +1186,7 @@
               let prevItems = Array.isArray(prevSlot) ? prevSlot : (prevSlot ? [prevSlot] : []);
               prevItems.forEach(item => {
                   if(item.type !== 'break' && item.teacherEmail === tEmail && building !== targetBuilding) {
-                      travel.push(`Корпус! На попередньому уроці вчитель у ${c} Класі (Корпус ${building==1?'А':'Б'}).`);
+                      travel.push(`Будівля! На попередньому уроці вчитель у ${c} Класі (${building==1?'молодша школа':'старша школа'}).`);
                   }
               });
           }
@@ -1177,7 +1197,7 @@
               let nextItems = Array.isArray(nextSlot) ? nextSlot : [nextSlot];
               nextItems.forEach(item => {
                   if(item.type !== 'break' && item.teacherEmail === tEmail && building !== targetBuilding) {
-                      travel.push(`Корпус! На наступному уроці вчитель у ${c} Класі (Корпус ${building==1?'А':'Б'}).`);
+                      travel.push(`Будівля! На наступному уроці вчитель у ${c} Класі (${building==1?'молодша школа':'старша школа'}).`);
                   }
               });
           }
@@ -1435,6 +1455,122 @@
       const select = document.getElementById('d-acc-email-select'); select.innerHTML = '<option value="">-- Оберіть вчителя зі списку --</option>';
       const snap = await get(ref(db, 'users')); globalTeachersList = []; 
       if(snap.exists()) { const users = snap.val(); for(let uid in users) { const u = users[uid]; if((u.role === 'teacher' || u.role === 'art_school_teacher' || u.role === 'music_teacher') && u.email) { const name = (u.firstName || u.lastName) ? `${u.firstName || ''} ${u.lastName || ''}`.trim() : "Ім'я не вказано"; const safeEmail = u.email.replace(/\./g, '_'); select.innerHTML += `<option value="${safeEmail}">${name} (${u.email})</option>`; globalTeachersList.push({ email: u.email, name: name, safeEmail: safeEmail }); } } }
+  };
+
+  // --- НОВИЙ ФУНКЦІОНАЛ АНАЛІТИКИ ОЦІНОК ---
+  window.updateDirectorStatSubjects = function() {
+      const cls = document.getElementById('d-stat-class').value;
+      const subjSelect = document.getElementById('d-stat-subj');
+      if(!cls) { 
+          subjSelect.innerHTML = '<option value="">Спочатку оберіть клас</option>'; 
+          document.getElementById('d-stat-results').innerHTML = '<p class="empty-msg">Оберіть клас та предмет для розрахунку.</p>'; 
+          return; 
+      }
+      subjSelect.innerHTML = '<option value="">Завантаження...</option>';
+      
+      get(child(ref(db), `grades/${cls}`)).then(snap => {
+          let uniqueSubjects = new Set();
+          if(snap.exists()) {
+              const monthsData = snap.val();
+              for(let m in monthsData) {
+                  for(let s in monthsData[m]) {
+                      uniqueSubjects.add(s);
+                  }
+              }
+          }
+          subjSelect.innerHTML = '<option value="">-- Оберіть предмет --</option>';
+          if(uniqueSubjects.size > 0) {
+              [...uniqueSubjects].sort().forEach(s => subjSelect.innerHTML += `<option value="${s}">${s}</option>`);
+          } else {
+              subjSelect.innerHTML = '<option value="" disabled>Оцінок ще немає</option>';
+          }
+      });
+  };
+
+  window.renderDirectorStats = async function() {
+      const cls = document.getElementById('d-stat-class').value;
+      const subj = document.getElementById('d-stat-subj').value;
+      const resultsDiv = document.getElementById('d-stat-results');
+      
+      if(!cls || !subj) { 
+          resultsDiv.innerHTML = '<p class="empty-msg">Оберіть клас та предмет для розрахунку.</p>'; 
+          return; 
+      }
+      
+      resultsDiv.innerHTML = '<p>⏳ Обчислення...</p>';
+      
+      try {
+          const [studentsSnap, gradesSnap] = await Promise.all([
+              get(child(ref(db), `students_list/${cls}`)),
+              get(child(ref(db), `grades/${cls}`))
+          ]);
+          
+          let studentsList = [];
+          if (studentsSnap.exists()) studentsList = Object.values(studentsSnap.val()).sort();
+          if (studentsList.length === 0) { 
+              resultsDiv.innerHTML = '<p class="empty-msg">У списку немає учнів.</p>'; 
+              return; 
+          }
+          
+          const allGrades = gradesSnap.exists() ? gradesSnap.val() : {};
+          
+          let studentStats = {};
+          studentsList.forEach(st => studentStats[st] = { sum: 0, count: 0, letterCount: 0 });
+          
+          let classTotalSum = 0;
+          let classTotalCount = 0;
+          
+          for(let month in allGrades) {
+              if(allGrades[month][subj]) {
+                  for(let date in allGrades[month][subj]) {
+                      for(let st in allGrades[month][subj][date]) {
+                          if(studentStats[st] !== undefined) {
+                              let g = allGrades[month][subj][date][st];
+                              let num = parseFloat(g);
+                              if(!isNaN(num)) {
+                                  studentStats[st].sum += num;
+                                  studentStats[st].count++;
+                                  classTotalSum += num;
+                                  classTotalCount++;
+                              } else if (g) {
+                                  // Облік буквених оцінок (В, Д, С, П)
+                                  studentStats[st].letterCount++; 
+                              }
+                          }
+                      }
+                  }
+              }
+          }
+          
+          let html = '<table class="journal-table" style="width:100%; margin-bottom:15px; border-radius: 8px; overflow: hidden; border-style: hidden; box-shadow: 0 0 0 1px #ddd;"><thead><tr><th style="text-align:left; padding-left:15px;">Учень</th><th>Середній бал</th><th>Всього оцінок</th></tr></thead><tbody>';
+          
+          studentsList.forEach(st => {
+              let stData = studentStats[st];
+              let totalMarks = stData.count + stData.letterCount;
+              let avg = stData.count > 0 ? (stData.sum / stData.count).toFixed(2) : '-';
+              let extraInfo = stData.letterCount > 0 ? ` <span style="font-size:0.8rem; color:#888;">(+${stData.letterCount} літерних)</span>` : '';
+              
+              html += `<tr>
+                          <td style="text-align:left; padding-left:15px;"><b>${st}</b></td>
+                          <td style="color:#27ae60; font-weight:bold; font-size: 1.1rem;">${avg}</td>
+                          <td>${totalMarks} ${extraInfo}</td>
+                       </tr>`;
+          });
+          
+          let classAvg = classTotalCount > 0 ? (classTotalSum / classTotalCount).toFixed(2) : '-';
+          
+          html += `</tbody></table>`;
+          html += `<div style="background:#f4ecf7; border:1px solid #d2b4de; padding:15px; border-radius:8px; text-align:center;">
+                      <h4 style="margin:0; color:#8e44ad;">🏆 Середній бал класу з предмету:</h4>
+                      <p style="font-size:2rem; font-weight:800; margin:5px 0 0 0; color:#9b59b6;">${classAvg}</p>
+                   </div>`;
+                   
+          resultsDiv.innerHTML = html;
+
+      } catch(e) {
+          console.error(e);
+          resultsDiv.innerHTML = `<p style="color:red;">Помилка обчислення: ${e.message}</p>`;
+      }
   };
   
   // --- ІНШИЙ ФУНКЦІОНАЛ ДИРЕКТОРА (Імпорт, доступи) ---
