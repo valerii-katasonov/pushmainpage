@@ -85,7 +85,7 @@
     .add-parallel-btn:hover { background: #3498db; color: white; }
 
     /* Constructor specific styles */
-    .draft-item { display: flex; justify-content: space-between; align-items: center; background: #f4f9fd; padding: 15px; border-radius: 8px; border: 1px solid #3498db; margin-bottom: 10px; }
+    .draft-item { background: #f4f9fd; padding: 15px; border-radius: 8px; border: 1px solid #3498db; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
     .cell-warning-travel { border: 2px solid #e67e22 !important; box-shadow: inset 0 0 10px rgba(230, 126, 34, 0.3); }
     .cell-warning-conflict { border: 2px solid #e74c3c !important; box-shadow: inset 0 0 10px rgba(231, 76, 60, 0.3); background-color: #fdedec !important;}
 
@@ -164,7 +164,6 @@
   </div>
 
   <div id="director-screen" class="panel">
-    <!-- ЗМІНЕНО НАЗВУ КАБІНЕТУ -->
     <h2 style="color: #2c3e50;">👔 Кабінет Директора</h2>
 
     <div style="display: flex; gap:10px; margin-bottom:20px; flex-wrap: wrap;">
@@ -172,7 +171,7 @@
         <button onclick="openJournalModal('director')" style="flex:1; min-width: 200px; background: linear-gradient(135deg, #8e44ad, #9b59b6); color: white; margin-top: 0; font-size: 1rem; padding: 12px; box-shadow: 0 4px 10px rgba(142,68,173,0.3);">📖 Журнал успішності</button>
     </div>
 
-    <!-- НОВИЙ БЛОК: СТАТИСТИКА ОЦІНОК -->
+    <!-- СТАТИСТИКА ОЦІНОК -->
     <div class="data-card" style="border-left-color: #8e44ad; background: #fdfafc;">
       <h4 style="margin-top:0; color: #8e44ad;">📈 Середні оцінки (по предметах)</h4>
       <div style="display:flex; gap:10px; margin-bottom:10px; flex-wrap:wrap;">
@@ -191,8 +190,8 @@
          <p class="empty-msg">Оберіть клас та предмет для розрахунку.</p>
       </div>
     </div>
-    <!-- КІНЕЦЬ БЛОКУ СТАТИСТИКИ -->
 
+    <!-- РОЗУМНИЙ КОНСТРУКТОР -->
     <details style="margin-bottom: 25px; background: #e0f2f1; padding: 15px; border-radius: 12px; border: 1px solid #1abc9c; margin-top: 20px;" open>
       <summary style="font-weight: bold; cursor: pointer; color: #006d77; font-size: 1.1rem;">🛠️ Розумний Конструктор (Чернетки)</summary>
       <div style="margin-top: 15px;">
@@ -751,7 +750,6 @@
 
   // --- ВІЗУАЛЬНА МАТРИЦЯ & КОНСТРУКТОР ---
   
-  // Добавлена логика черновиков
   window.loadDrafts = function() {
       get(ref(db, 'schedule_drafts')).then(snap => {
           const container = document.getElementById('drafts-list-container');
@@ -759,15 +757,16 @@
               let html = '';
               const drafts = snap.val();
               for (let draftName in drafts) {
+                  // ОНОВЛЕНА ВЕРСТКА: адаптуємо під мобільні пристрої
                   html += `
-                  <div class="draft-item">
-                      <div>
-                          <b style="color:#006d77; font-size:1.1rem;">${draftName}</b>
+                  <div class="draft-item" style="flex-direction: column; align-items: stretch; gap: 12px;">
+                      <div style="text-align: center;">
+                          <b style="color:#006d77; font-size:1.1rem;">📝 ${draftName}</b>
                       </div>
-                      <div style="display:flex; gap:10px;">
-                          <button style="background:#f39c12; color:white; padding:8px 15px; margin:0; width:auto;" onclick="openVisualMatrixModal('${draftName}')">✏️ Відкрити</button>
-                          <button style="background:#e74c3c; color:white; padding:8px 15px; margin:0; width:auto;" onclick="deleteDraft('${draftName}')">🗑</button>
-                          <button style="background:#27ae60; color:white; padding:8px 15px; margin:0; width:auto;" onclick="activateDraft('${draftName}')">🚀 Опублікувати (Зробити поточним)</button>
+                      <div style="display:flex; gap:10px; flex-wrap: wrap;">
+                          <button style="flex: 1; background:#f39c12; color:white; padding:12px; margin:0; min-width: 120px;" onclick="openVisualMatrixModal('${draftName}')">✏️ Відкрити</button>
+                          <button style="background:#e74c3c; color:white; padding:12px 15px; margin:0; flex-shrink: 0;" onclick="deleteDraft('${draftName}')">🗑</button>
+                          <button style="flex: 100%; background:#27ae60; color:white; padding:12px; margin:0;" onclick="activateDraft('${draftName}')">🚀 Опублікувати (Зробити поточним)</button>
                       </div>
                   </div>`;
               }
