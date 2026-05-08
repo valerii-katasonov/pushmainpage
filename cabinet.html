@@ -337,7 +337,7 @@
     <div id="t-hw-input-wrapper">
         <label>Домашнє завдання (для всього класса):</label> <textarea id="t-hw" rows="2" placeholder="Введіть ДЗ..."></textarea>
         <label>📸 Фото з підручника/зошита:</label> <input type="file" id="t-image" accept="image/*" multiple>
-        <div id="existing-image-info">📎 Вже прикріплено фото.</div>
+        <div id="existing-image-info" style="display:none; font-size:0.85rem; color:#e67e22; margin-top:5px;">📎 Вже прикріплено фото.</div>
     </div>
 
     <label style="margin-top:20px; border-top: 1px dashed #ccc; padding-top: 15px;">Учень (робота з учнем):</label>
@@ -350,7 +350,8 @@
     
     <label style="margin-top: 10px;">Особистий коментар:</label> <textarea id="t-comment" rows="2"></textarea>
     <button class="btn-save" id="btn-save-data" onclick="saveData()">💾 Зберегти дані</button>
-    <div id="status-msg">Збережено!</div>
+    <!-- БАГ 2 ВИПРАВЛЕНО: додано display:none та стилі -->
+    <div id="status-msg" style="display:none; margin-top:10px; text-align:center; font-weight:bold; font-size:0.95rem;"></div>
     
     <details style="margin-top: 30px; background: #fff; padding: 15px; border-radius: 12px; border: 1px solid #ddd;">
       <summary style="font-weight: bold; cursor: pointer; color: #7f8c8d;">⚙️ Управління класом</summary>
@@ -757,7 +758,6 @@
               let html = '';
               const drafts = snap.val();
               for (let draftName in drafts) {
-                  // ОНОВЛЕНА ВЕРСТКА: адаптуємо під мобільні пристрої
                   html += `
                   <div class="draft-item" style="flex-direction: column; align-items: stretch; gap: 12px;">
                       <div style="text-align: center;">
@@ -816,7 +816,7 @@
   };
 
   window.openVisualMatrixModal = async function(mode) {
-      currentMatrixMode = mode; // 'live' or draftName
+      currentMatrixMode = mode;
       document.getElementById('visual-matrix-modal').style.display = 'flex'; 
       showToast("⏳ Завантаження...");
       
@@ -869,11 +869,9 @@
       draftWarningsCache = [];
       const day = document.getElementById('matrix-day-select').value;
       
-      // We scan the day to find anomalies
       let warningsHtml = '<b>⚠️ Аналіз накладок на цей день:</b><ul style="margin:5px 0 0 0; padding-left:20px;">';
       let hasWarnings = false;
       
-      // Track teacher positions: { teacherEmail: { slotIndex: { classId, building } } }
       let tracker = {};
 
       let maxRows = 8; 
@@ -885,11 +883,11 @@
       }
 
       for (let row = 0; row < maxRows; row++) {
-          let slotTeachers = {}; // who is teaching what in this slot
+          let slotTeachers = {};
           
           for(let c=1; c<=11; c++) {
               const clsId = `class_${c}`;
-              const building = c <= 5 ? 1 : 2; // 1-5 Корпус А, 6-11 Корпус Б
+              const building = c <= 5 ? 1 : 2;
               const lessonsArray = (globalAllSchedules[clsId] && globalAllSchedules[clsId].lessons && globalAllSchedules[clsId].lessons[day]) ? globalAllSchedules[clsId].lessons[day] : [];
               const rawData = lessonsArray[row];
               
@@ -907,10 +905,8 @@
                   }
                   
                   if (tEmail) {
-                      // Init tracker
                       if (!tracker[tEmail]) tracker[tEmail] = {};
                       
-                      // Check double booking in same slot
                       if (slotTeachers[tEmail]) {
                           hasWarnings = true;
                           warningsHtml += `<li style="color:#c0392b;"><b>Накладка!</b> Вчитель ${tEmail} призначений у ${clsId} та ${slotTeachers[tEmail].classId} одночасно (Слот №${row+1}).</li>`;
@@ -926,14 +922,13 @@
           }
       }
       
-      // Check travel time between adjacent slots
       for (let tEmail in tracker) {
           let slotsTaught = Object.keys(tracker[tEmail]).map(Number).sort((a,b)=>a-b);
           for (let i = 0; i < slotsTaught.length - 1; i++) {
               let s1 = slotsTaught[i];
               let s2 = slotsTaught[i+1];
               
-              if (s2 - s1 === 1) { // Adjacent slots
+              if (s2 - s1 === 1) {
                   let b1 = tracker[tEmail][s1].building;
                   let b2 = tracker[tEmail][s2].building;
                   
@@ -1031,7 +1026,7 @@
               maxRows = Math.max(maxRows, globalAllSchedules[cls].lessons[day].length);
           }
       }
-      maxRows += 1; 
+      maxRows += 1; // одна порожня строка для додавання нових слотів
       let lessonCounter = 1;
 
       for (let row = 0; row < maxRows; row++) {
@@ -1047,7 +1042,7 @@
               
               let items = [];
               if (Array.isArray(rawData)) items = rawData;
-              else if (rawData && Object.keys(rawData).length > 0) items = [rawData];
+              else if (rawData && Object.keys(rawData).length > 0 && rawData.subject) items = [rawData];
 
               items.forEach(lesson => {
                   if(lesson && lesson.subject) {
@@ -1058,9 +1053,13 @@
           }
 
           const isRowBreak = (breakCount > 0 && breakCount >= lessonCount);
+          // БАГ 4 ВИПРАВЛЕНО: порожні рядки не отримують номер уроку
+          const isRowEmpty = (breakCount === 0 && lessonCount === 0);
 
           if (isRowBreak) {
               tr.innerHTML = `<td class="time-col" style="background:#fce4ec; color:#e91e63;">☕ Перерва</td>`;
+          } else if (isRowEmpty) {
+              tr.innerHTML = `<td class="time-col" style="color:#ccc; font-size:1.2rem; font-weight:normal;">+</td>`;
           } else {
               tr.innerHTML = `<td class="time-col">Урок ${lessonCounter++}</td>`;
           }
@@ -1123,7 +1122,7 @@
       const defaultT = window.getDefaultTeacher(clsId, sName);
       const defaultTName = defaultT ? defaultT.name : 'Не знайдено';
       
-      const isArt = currentUserData.role === 'art_school_teacher';
+      const isArt = currentUserData && currentUserData.role === 'art_school_teacher';
 
       teacherSelect.innerHTML = `<option value="">-- Автоматично (${defaultTName}) --</option>`;
       globalTeachersList.forEach(t => { teacherSelect.innerHTML += `<option value="${t.email}">${t.name} (${t.email})</option>`; });
@@ -1142,7 +1141,6 @@
       }
   }
 
-  // Live checker within the modal
   window.triggerSmartCheck = function() {
       if(currentMatrixMode === 'live') return;
       
@@ -1170,7 +1168,6 @@
           
           let dayArr = globalAllSchedules[checkCls]?.lessons?.[day] || [];
           
-          // Check same slot
           let sameSlot = dayArr[row];
           let sameItems = Array.isArray(sameSlot) ? sameSlot : (sameSlot ? [sameSlot] : []);
           sameItems.forEach(item => {
@@ -1179,7 +1176,6 @@
               }
           });
           
-          // Check prev slot
           if (row > 0) {
               let prevSlot = dayArr[row-1];
               let prevItems = Array.isArray(prevSlot) ? prevSlot : (prevSlot ? [prevSlot] : []);
@@ -1190,7 +1186,6 @@
               });
           }
           
-          // Check next slot
           let nextSlot = dayArr[row+1];
           if(nextSlot) {
               let nextItems = Array.isArray(nextSlot) ? nextSlot : [nextSlot];
@@ -1219,7 +1214,7 @@
   }
 
   window.openCellEditor = async function(clsId, rowIdx, subIdx, lessonObj) {
-      const isArt = currentUserData.role === 'art_school_teacher';
+      const isArt = currentUserData && currentUserData.role === 'art_school_teacher';
 
       if (isArt && lessonObj) {
           const sName = typeof lessonObj.subject === 'string' ? lessonObj.subject : (lessonObj.subject.ua || '');
@@ -1402,7 +1397,6 @@
               await set(ref(db, `${dbPathBase}/${tCls}/lessons/${day}`), dayArray);
           }
 
-          // Auto-grant access only if LIVE
           if (tEmail && subjUA && type !== 'break' && currentMatrixMode === 'live') {
               const safeEmail = tEmail.replace(/\./g, '_');
               for (let tCls of targetClasses) {
@@ -1456,7 +1450,7 @@
       if(snap.exists()) { const users = snap.val(); for(let uid in users) { const u = users[uid]; if((u.role === 'teacher' || u.role === 'art_school_teacher' || u.role === 'music_teacher') && u.email) { const name = (u.firstName || u.lastName) ? `${u.firstName || ''} ${u.lastName || ''}`.trim() : "Ім'я не вказано"; const safeEmail = u.email.replace(/\./g, '_'); select.innerHTML += `<option value="${safeEmail}">${name} (${u.email})</option>`; globalTeachersList.push({ email: u.email, name: name, safeEmail: safeEmail }); } } }
   };
 
-  // --- НОВИЙ ФУНКЦІОНАЛ АНАЛІТИКИ ОЦІНОК ---
+  // --- АНАЛІТИКА ОЦІНОК ---
   window.updateDirectorStatSubjects = function() {
       const cls = document.getElementById('d-stat-class').value;
       const subjSelect = document.getElementById('d-stat-subj');
@@ -1532,7 +1526,6 @@
                                   classTotalSum += num;
                                   classTotalCount++;
                               } else if (g) {
-                                  // Облік буквених оцінок (В, Д, С, П)
                                   studentStats[st].letterCount++; 
                               }
                           }
@@ -1572,7 +1565,6 @@
       }
   };
   
-  // --- ІНШИЙ ФУНКЦІОНАЛ ДИРЕКТОРА (Імпорт, доступи) ---
   window.handleImportFiles = async function() { const jsFile = document.getElementById('import-js-file').files[0]; const htmlFile = document.getElementById('import-html-file').files[0]; const cls = document.getElementById('import-class').value; if(!cls) return alert("Оберіть клас для імпорту!"); if(!jsFile) return alert("Оберіть хоча б JS-файл з уроками!"); let finalLessons = null; let finalClubs = null; try { const jsText = await jsFile.text(); const match = jsText.match(/const schedule\s*=\s*(\{[\s\S]+?\n\});/); if (match) { finalLessons = new Function("return " + match[1])(); } else { alert("Не вдалося знайти змінну 'schedule' у JS файлі."); return; } } catch(e) { alert("Помилка парсингу JS: " + e.message); return; } if (htmlFile) { try { const htmlText = await htmlFile.text(); const match = htmlText.match(/const clubSchedule\s*=\s*(\{[\s\S]+?\n\s*\});/); if (match) { finalClubs = new Function("return " + match[1])(); } } catch(e) {} } if(finalLessons) { const updates = {}; updates[`schedules/${cls}/lessons`] = finalLessons; updates[`schedules/${cls}/clubs`] = finalClubs ? finalClubs : null; try { await update(ref(db), updates); alert("✅ Розклад розпарсено та завантажено в БД!"); document.getElementById('import-js-file').value = ''; document.getElementById('import-html-file').value = ''; } catch(e) { alert("Помилка збереження: " + e.message); } } };
   
   window.loadDirectorMatrixSubjects = function() { 
@@ -1597,7 +1589,21 @@
       }); 
   };
   
-  window.grantTeacherAccess = function() { const safeEmail = document.getElementById('d-acc-email-select').value; const cls = document.getElementById('d-acc-class').value; const opts = document.getElementById('d-acc-subjects').selectedOptions; const subjects = Array.from(opts).map(o => o.value); if(!safeEmail || !cls || subjects.length === 0) return alert('Оберіть вчителя зі списку, оберіть клас та хоча б 1 предмет!'); set(ref(db, `pre_approved_roles/${safeEmail}`), 'teacher'); set(ref(db, `teacher_access/${safeEmail}/${cls}`), subjects).then(() => { alert('✅ Доступ збережено!'); document.getElementById('d-acc-email-select').value = ''; document.getElementById('d-acc-class').value = ''; document.getElementById('d-acc-subjects').innerHTML = '<option value="" disabled>Спочатку оберіть клас...</option>'; }); };
+  // БАГ 5 ВИПРАВЛЕНО: додано .catch() до першого set
+  window.grantTeacherAccess = function() { 
+      const safeEmail = document.getElementById('d-acc-email-select').value; 
+      const cls = document.getElementById('d-acc-class').value; 
+      const opts = document.getElementById('d-acc-subjects').selectedOptions; 
+      const subjects = Array.from(opts).map(o => o.value); 
+      if(!safeEmail || !cls || subjects.length === 0) return alert('Оберіть вчителя зі списку, оберіть клас та хоча б 1 предмет!'); 
+      set(ref(db, `pre_approved_roles/${safeEmail}`), 'teacher').catch(e => console.error("pre_approved_roles error:", e)); 
+      set(ref(db, `teacher_access/${safeEmail}/${cls}`), subjects).then(() => { 
+          alert('✅ Доступ збережено!'); 
+          document.getElementById('d-acc-email-select').value = ''; 
+          document.getElementById('d-acc-class').value = ''; 
+          document.getElementById('d-acc-subjects').innerHTML = '<option value="" disabled>Спочатку оберіть клас...</option>'; 
+      }).catch(e => alert("Помилка збереження доступу: " + e.message)); 
+  };
   window.grantStaffRole = function() { const email = document.getElementById('new-staff-email').value.trim().replace(/\./g, '_'); const role = document.getElementById('new-staff-role').value; if (!email) return alert("Введіть Email!"); set(ref(db, `pre_approved_roles/${email}`), role).then(() => { alert(`✅ Доступ надано!`); document.getElementById('new-staff-email').value = ''; }); };
 
   // --- Ініціалізація та Сесія ---
@@ -1689,7 +1695,7 @@
 
   window.logoutUser = function() { if(teacherAttendanceListener) teacherAttendanceListener(); if(parentLessonInterval) clearInterval(parentLessonInterval); document.getElementById('profile-bar').style.display = 'none'; signOut(auth); };
 
-  // --- ЖУРНАЛ (Директор / Вчитель) ---
+  // --- ЖУРНАЛ ---
   window.openJournalModal = function(role) { document.getElementById('journal-modal').style.display = 'flex'; const monthInput = document.getElementById('j-month-select'); const dateParts = document.getElementById('global-date').value.split('-'); monthInput.value = `${dateParts[0]}-${dateParts[1]}`; const classSelect = document.getElementById('j-class-select'); if(role === 'director') { classSelect.style.display = 'block'; classSelect.innerHTML = '<option value="">Оберіть клас...</option>'; for(let i=1; i<=11; i++) classSelect.innerHTML += `<option value="class_${i}">${i} Клас</option>`; document.getElementById('j-subj-select').innerHTML = '<option value="">Спочатку оберіть клас</option>'; document.getElementById('journal-table-el').innerHTML = ''; } else { classSelect.style.display = 'none'; classSelect.innerHTML = `<option value="${getActiveClass()}">${getActiveClass()}</option>`; updateJournalSubjects(); } };
   window.closeJournalModal = function() { document.getElementById('journal-modal').style.display = 'none'; };
   
@@ -1723,7 +1729,7 @@
   function finishJournalSubjectsRender(uniqueSubjects, cls, subjSelect) { if(currentUserData.role === 'teacher' || currentUserData.role === 'art_school_teacher' || currentUserData.role === 'music_teacher') { uniqueSubjects = new Set([...uniqueSubjects].filter(s => window.isSubjectAllowed(cls, s))); } subjSelect.innerHTML = '<option value="">-- Оберіть предмет --</option>'; if(uniqueSubjects.size > 0) { [...uniqueSubjects].sort().forEach(s => subjSelect.innerHTML += `<option value="${s}">${s}</option>`); } else { subjSelect.innerHTML = '<option value="" disabled>Предмети відсутні (або немає доступу)</option>'; } if ((currentUserData.role === 'teacher' || currentUserData.role === 'art_school_teacher' || currentUserData.role === 'music_teacher') && document.getElementById('t-subject').value) { const currentSubj = document.getElementById('t-subject').value; if(uniqueSubjects.has(currentSubj)) subjSelect.value = currentSubj; } renderJournalTable(); }
   window.renderJournalTable = async function() { const cls = document.getElementById('j-class-select').value; const subj = document.getElementById('j-subj-select').value; const yMonth = document.getElementById('j-month-select').value; const table = document.getElementById('journal-table-el'); if(!cls || !subj || !yMonth) { table.innerHTML = ''; return; } table.innerHTML = '<tr><td style="padding: 20px;">⏳ Завантаження даних журналу...</td></tr>'; const [y, m] = yMonth.split('-'); const daysInMonth = new Date(y, m, 0).getDate(); try { const [studentsSnap, gradesSnap, attSnap] = await Promise.all([ get(child(ref(db), `students_list/${cls}`)), get(child(ref(db), `grades/${cls}/${yMonth}/${subj}`)), get(child(ref(db), `attendance/${cls}`)) ]); let students = []; if (studentsSnap.exists()) students = Object.values(studentsSnap.val()).sort(); if (students.length === 0) { table.innerHTML = '<tr><td style="padding: 20px;">У списку немає учнів.</td></tr>'; return; } const gradesData = gradesSnap.exists() ? gradesSnap.val() : {}; const attDataAll = attSnap.exists() ? attSnap.val() : {}; const attData = {}; for(let d in attDataAll) { if(d.startsWith(yMonth)) attData[d] = attDataAll[d]; } let thead = '<thead><tr><th class="student-name">Учень</th>'; for(let i=1; i<=daysInMonth; i++) thead += `<th>${i}</th>`; thead += '</tr></thead>'; let tbody = '<tbody>'; students.forEach(st => { tbody += `<tr><td class="student-name">${st}</td>`; for(let i=1; i<=daysInMonth; i++) { const dateStr = `${yMonth}-${String(i).padStart(2,'0')}`; const statusInfo = (attData[dateStr] && attData[dateStr][st]) ? attData[dateStr][st].status : null; const grade = (gradesData[dateStr] && gradesData[dateStr][st]) ? gradesData[dateStr][st] : ''; let cellContent = ''; if (grade) cellContent = `<span class="cell-grade">${grade}</span>`; if (statusInfo === 'absent') { cellContent += (cellContent ? `<br>` : '') + `<span class="cell-absent" title="Відсутній">н</span>`; } else if (statusInfo === 'late') { cellContent += (cellContent ? `<br>` : '') + `<span class="cell-absent" style="color:#f39c12;" title="Запізнення">з</span>`; } tbody += `<td>${cellContent}</td>`; } tbody += '</tr>'; }); tbody += '</tbody>'; table.innerHTML = thead + tbody; } catch(e) { console.error(e); table.innerHTML = '<tr><td style="padding: 20px; color: red;">Помилка завантаження журналу.</td></tr>'; } };
 
-  // --- КОНТРОЛЬНІ, ВІДВІДУВАНІСТЬ ТА ДЗ ---
+  // --- КОНТРОЛЬНІ ---
   window.openExamsCalendar = function() { document.getElementById('exams-modal').style.display = 'flex'; document.getElementById('exam-class-label').innerText = document.getElementById('t-class-selector').options[document.getElementById('t-class-selector').selectedIndex].text; document.getElementById('exams-day-details').style.display = 'none'; const monthInput = document.getElementById('exam-month-select'); const dateParts = document.getElementById('global-date').value.split('-'); monthInput.value = `${dateParts[0]}-${dateParts[1]}`; renderExamsCalendar(); };
   window.closeExamsModal = function() { document.getElementById('exams-modal').style.display = 'none'; };
   window.renderExamsCalendar = function() { const cls = getActiveClass(); const yMonth = document.getElementById('exam-month-select').value; if(!yMonth) return; const [y, m] = yMonth.split('-'); get(child(ref(db), `exams/${cls}/${y}-${m}`)).then(snap => { const data = snap.exists() ? snap.val() : {}; let html = '<div class="cal-grid">'; ['Пн','Вт','Ср','Чт','Пт','Сб','Нд'].forEach(d => html+= `<div class="cal-header">${d}</div>`); const daysInMonth = new Date(y, parseInt(m), 0).getDate(); let firstDay = new Date(y, parseInt(m)-1, 1).getDay(); if(firstDay === 0) firstDay = 7; for(let i=1; i<firstDay; i++) html += `<div></div>`; for(let i=1; i<=daysInMonth; i++) { const checkDate = `${y}-${m}-${String(i).padStart(2,'0')}`; const count = data[checkDate] ? Object.keys(data[checkDate]).length : 0; const cssClass = count === 1 ? 'has-1' : (count >= 2 ? 'has-2' : ''); html += `<div class="cal-day ${cssClass}" onclick="manageDayExams('${checkDate}')">${i}<br><small style="font-size:0.7rem; margin-top:5px;">${count>0?count+' к.р.':''}</small></div>`; } html += '</div>'; document.getElementById('exams-cal-container').innerHTML = html; }); };
@@ -1834,6 +1840,8 @@
 
   function renderHwItem(subject, data) { let text = typeof data === 'string' ? data : data.text; let imgHtml = ''; if (typeof data === 'object') { imgHtml += '<div class="gallery">'; if (data.image && typeof data.image === 'string') imgHtml += `<a href="${data.image}" target="_blank"><img src="${data.image}" class="hw-image-thumb"></a>`; if (data.images && Array.isArray(data.images)) data.images.forEach(img => imgHtml += `<a href="${img}" target="_blank"><img src="${img}" class="hw-image-thumb"></a>`); imgHtml += '</div>'; } return `<li><b>${subject}:</b> ${text} ${imgHtml}</li>`; }
   
+  // БАГ 3 ВИПРАВЛЕНО: перевірка пустого subject перед збереженням
+  // БАГ 1 ВИПРАВЛЕНО: get(ref(db, path)) замість get(child(ref(db, path)))
   window.saveData = async function() { 
       const date = document.getElementById('global-date').value; 
       const subject = document.getElementById('t-subject').value; 
@@ -1848,6 +1856,12 @@
       const statusMsg = document.getElementById('status-msg'); 
       const myUid = auth.currentUser.uid; 
       const yMonth = date.substring(0, 7); 
+
+      // БАГ 3: захист від порожнього предмету
+      if (!subject) { 
+          alert("Оберіть предмет зі списку перед збереженням!"); 
+          return; 
+      }
       
       btnSave.disabled = true; btnSave.innerText = "⏳ Збереження..."; 
       await set(ref(db, `authors/${activeClass}/${date}/${subject}`), myUid); 
@@ -1871,7 +1885,8 @@
           if (stickerChecked) await set(ref(db, `stickers/${activeClass}/${student}/${date}_${subject}`), true); else await set(ref(db, `stickers/${activeClass}/${student}/${date}_${subject}`), null); 
           if (grade) await set(ref(db, `grades/${activeClass}/${yMonth}/${subject}/${date}/${student}`), grade); else await set(ref(db, `grades/${activeClass}/${yMonth}/${subject}/${date}/${student}`), null); 
       } 
-      statusMsg.style.color = "#2ed573"; statusMsg.innerText = "✅ Дані успішно збережено!"; btnSave.disabled = false; btnSave.innerText = "💾 Зберегти дані"; 
+      statusMsg.style.color = "#2ed573"; statusMsg.innerText = "✅ Дані успішно збережено!"; statusMsg.style.display = 'block';
+      btnSave.disabled = false; btnSave.innerText = "💾 Зберегти дані"; 
       if(fileInput) fileInput.value = ''; 
       setTimeout(() => { statusMsg.style.display = 'none'; handleDateChange(); }, 2000); 
   };
@@ -1892,7 +1907,8 @@
       currentHwImages = []; 
       if (!subject) return; 
       
-      get(child(ref(db, `homeworks/${activeClass}/${date}/${subject}`))).then(snap => { 
+      // БАГ 1 ВИПРАВЛЕНО: get(ref(db, path)) замість get(child(ref(db, path)))
+      get(ref(db, `homeworks/${activeClass}/${date}/${subject}`)).then(snap => { 
           if(snap.exists()) { 
               const val = snap.val(); 
               if(typeof val === 'string' && document.getElementById('t-hw')) document.getElementById('t-hw').value = val; 
@@ -1905,11 +1921,13 @@
       }); 
       
       if (student) { 
-          get(child(ref(db, `stickers/${activeClass}/${student}/${date}_${subject}`))).then(snap => { 
+          // БАГ 1 ВИПРАВЛЕНО: get(ref(db, path)) замість get(child(ref(db, path)))
+          get(ref(db, `stickers/${activeClass}/${student}/${date}_${subject}`)).then(snap => { 
               if(document.getElementById('t-sticker')) document.getElementById('t-sticker').checked = (snap.exists() && snap.val() === true); 
           }); 
           const yMonth = date.substring(0, 7); 
-          get(child(ref(db, `grades/${activeClass}/${yMonth}/${subject}/${date}/${student}`))).then(snap => { 
+          // БАГ 1 ВИПРАВЛЕНО: get(ref(db, path)) замість get(child(ref(db, path)))
+          get(ref(db, `grades/${activeClass}/${yMonth}/${subject}/${date}/${student}`)).then(snap => { 
               if(snap.exists() && document.getElementById('t-grade')) document.getElementById('t-grade').value = snap.val(); 
           }); 
       } 
