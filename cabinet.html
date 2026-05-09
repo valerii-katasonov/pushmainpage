@@ -1148,24 +1148,32 @@
 <!-- Inbox Modal -->
 <div id="inbox-modal" class="modal-overlay">
   <div class="modal-content" style="max-width:500px; height:85vh; display:flex; flex-direction:column; padding:0; overflow:hidden;">
-    <div style="background:var(--purple); color:#fff; padding:15px; display:flex; justify-content:space-between; align-items:center;">
-      <h2 style="margin:0; font-size:1.2rem;">💬 Чат</h2>
-      <button onclick="closeInboxModal()" style="background:none; border:none; color:#fff; font-size:1.5rem; cursor:pointer; width:auto; padding:0;">✖</button>
-    </div>
     
-    <div style="padding:15px; border-bottom:1px solid #eee; background:#fff;">
-      <label style="font-size:.8rem; color:#666;">Виберіть співрозмовника:</label>
-      <select id="msg-recipient-select" onchange="selectChatContact()" style="margin-top:5px; border-color:var(--purple);"></select>
+    <!-- View 1: Chat List -->
+    <div id="chat-list-view" style="display:flex; flex-direction:column; height:100%;">
+      <div style="background:var(--purple); color:#fff; padding:15px; display:flex; justify-content:space-between; align-items:center;">
+        <h2 style="margin:0; font-size:1.2rem;">💬 Чати</h2>
+        <button onclick="closeInboxModal()" style="background:none; border:none; color:#fff; font-size:1.5rem; cursor:pointer; width:auto; padding:0;">✖</button>
+      </div>
+      <div id="inbox-contacts-list" style="flex:1; overflow-y:auto; background:#f4f4f9; padding:0;">
+        <p class="empty-msg" style="padding:15px;">Завантаження...</p>
+      </div>
     </div>
 
-    <div id="inbox-messages-list" style="flex:1; overflow-y:auto; padding:15px; display:flex; flex-direction:column; gap:10px; background:#f4f4f9;">
-      <p class="empty-msg">Оберіть співрозмовника для початку чату.</p>
+    <!-- View 2: Active Chat -->
+    <div id="chat-detail-view" style="display:none; flex-direction:column; height:100%;">
+      <div style="background:var(--purple); color:#fff; padding:10px 15px; display:flex; align-items:center; gap:10px;">
+        <button onclick="backToChatList()" style="background:none; border:none; color:#fff; font-size:1.5rem; cursor:pointer; padding:0; width:auto;">⬅</button>
+        <h2 id="chat-detail-title" style="margin:0; font-size:1.1rem; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Чат</h2>
+      </div>
+      <div id="inbox-messages-list" style="flex:1; overflow-y:auto; padding:15px; display:flex; flex-direction:column; gap:10px; background:#f4f4f9;">
+      </div>
+      <div style="padding:15px; border-top:1px solid #eee; display:flex; gap:10px; background:#fff; align-items:flex-end;">
+        <textarea id="msg-text-input" placeholder="Напишіть повідомлення..." rows="2" style="flex:1; margin:0; border-color:var(--purple); border-radius:10px; padding:10px;"></textarea>
+        <button onclick="sendInboxMessage()" style="background:var(--purple); color:#fff; width:auto; padding:12px 18px; margin:0; border-radius:12px; border:none; cursor:pointer; font-weight:700;">➔</button>
+      </div>
     </div>
 
-    <div style="padding:15px; border-top:1px solid #eee; display:flex; gap:10px; background:#fff; align-items:flex-end;">
-      <textarea id="msg-text-input" placeholder="Напишіть повідомлення..." rows="2" style="flex:1; margin:0; border-color:var(--purple); border-radius:10px; padding:10px;"></textarea>
-      <button onclick="sendInboxMessage()" style="background:var(--purple); color:#fff; width:auto; padding:12px 18px; margin:0; border-radius:12px; border:none; cursor:pointer; font-weight:700;">➔</button>
-    </div>
   </div>
 </div>
 
@@ -2237,177 +2245,216 @@ window.sendRetakeRequest=sendRetakeRequest;
 
 // ══════════ UNIFIED INBOX (Chat) ══════════
 let inboxMessagesListener = null;
+let chatListListener = null;
 let currentChatId = null;
 
 function getChatId(email1, email2) {
   return [email1, email2].sort().join('___');
 }
 
-window.openChatModal=async function(role){
-  document.getElementById('inbox-modal').style.display='flex';
-  const sel=document.getElementById('msg-recipient-select');
-  const list=document.getElementById('inbox-messages-list');
-  sel.innerHTML='<option value="">-- Оберіть співрозмовника --</option>';
-  list.innerHTML='<p class="empty-msg">Оберіть чат для початку спілкування.</p>';
-  currentChatId = null;
+window.openChatModal = async function(role) {
+  document.getElementById('inbox-modal').style.display = 'flex';
+  document.getElementById('chat-list-view').style.display = 'flex';
+  document.getElementById('chat-detail-view').style.display = 'none';
+  renderChatList(role);
+};
 
-  const myEmailSafe = auth.currentUser.email.replace(/\./g,'_');
+async function renderChatList(role) {
+  const container = document.getElementById('inbox-contacts-list');
+  container.innerHTML = '<p class="empty-msg" style="padding:15px;">Завантаження...</p>';
+
+  const myEmailSafe = auth.currentUser.email.replace(/\./g, '_');
   const usersSnap = await get(ref(db, 'users'));
   const allUsers = usersSnap.exists() ? usersSnap.val() : {};
 
   // Helper to get formatted name
-  const getFormattedName = (u) => {
-    let name = (u.firstName || u.lastName) ? `${u.firstName||''} ${u.lastName||''}`.trim() : (u.studentName || u.email || 'Невідомий');
-    let label = '';
-    if(u.role==='teacher'||u.role==='class_teacher') label=' (Вчитель)';
-    if(u.role==='director') label=' (Директор)';
-    if(u.role==='parent') label=' (Батьки)';
-    if(u.role==='student') label=' (Учень)';
-    return name + label;
+  const getFormattedName = (uEmailSafe) => {
+    if (uEmailSafe === 'director_push_school@gmail_com') return '👔 Директор (Адміністрація)';
+    let name = uEmailSafe.replace(/_/g, '.');
+    for (let uid in allUsers) {
+      if (allUsers[uid].email && allUsers[uid].email.replace(/\./g, '_') === uEmailSafe) {
+        const u = allUsers[uid];
+        const rName = (u.firstName || u.lastName) ? `${u.firstName || ''} ${u.lastName || ''}`.trim() : (u.studentName || u.email);
+        let label = '';
+        if (u.role === 'teacher' || u.role === 'class_teacher') label = ' (Вчитель)';
+        else if (u.role === 'director') label = ' (Директор)';
+        else if (u.role === 'parent') label = ' (Батьки)';
+        else if (u.role === 'student') label = ' (Учень)';
+        return rName + label;
+      }
+    }
+    return name;
   };
 
-  // Populate Recipient List
-  if(role==='parent'||role==='student'){
-    sel.innerHTML+='<option value="director_push_school@gmail_com">👔 Директор (Адміністрація)</option>';
-    const cls=getActiveClass();
-    const accSnap = await get(ref(db, 'teacher_access'));
-    if(accSnap.exists()){
-      const acc = accSnap.val();
-      for(let email in acc) {
-        if(acc[email][cls]) {
-          let tName = email.replace(/_/g,'.');
-          for(let uid in allUsers) {
-            if(allUsers[uid].email && allUsers[uid].email.replace(/\./g,'_') === email) {
-               tName = getFormattedName(allUsers[uid]);
-               break;
-            }
-          }
-          if(!tName.includes('(')) tName += ' (Вчитель)';
-          sel.innerHTML+=`<option value="${email}">${tName}</option>`;
-        }
-      }
-    }
-  } else if(role==='teacher'){
-    const chatsSnap = await get(ref(db, 'chats'));
-    if(chatsSnap.exists()){
-      const chats = chatsSnap.val();
-      for(let chatId in chats) {
-        if(chatId.includes(myEmailSafe)) {
-          const parts = chatId.split('___');
-          if(parts.length === 2) {
-            const otherEmail = parts[0] === myEmailSafe ? parts[1] : parts[0];
-            let cName = otherEmail.replace(/_/g,'.');
-            for(let uid in allUsers) {
-               if(allUsers[uid].email && allUsers[uid].email.replace(/\./g,'_') === otherEmail) {
-                 cName = getFormattedName(allUsers[uid]);
-                 break;
-               }
-            }
-            sel.innerHTML += `<option value="${otherEmail}">${cName}</option>`;
-          }
-        }
-      }
-    }
-  } else if(role==='director'){
-    const chatsSnap = await get(ref(db, 'chats'));
-    if(chatsSnap.exists()){
-      const chats = chatsSnap.val();
-      for(let chatId in chats) {
-        const parts = chatId.split('___');
-        if(parts.length === 2) {
-          let n1 = parts[0].replace(/_/g,'.'), n2 = parts[1].replace(/_/g,'.');
-          for(let uid in allUsers) {
-            const se = allUsers[uid].email ? allUsers[uid].email.replace(/\./g,'_') : '';
-            if(se === parts[0]) n1 = getFormattedName(allUsers[uid]);
-            if(se === parts[1]) n2 = getFormattedName(allUsers[uid]);
-          }
-          if (parts[0] === 'director_push_school@gmail_com') n1 = 'Директор';
-          if (parts[1] === 'director_push_school@gmail_com') n2 = 'Директор';
-          sel.innerHTML += `<option value="${chatId}">💬 ${n1} ↔ ${n2}</option>`;
-        }
-      }
-    }
-  }
-};
+  if (chatListListener) chatListListener();
+  chatListListener = onValue(ref(db, 'chats'), async (snap) => {
+    const chats = snap.exists() ? snap.val() : {};
+    let html = '';
+    const activeContacts = new Map();
 
-window.selectChatContact = function() {
-   const val = document.getElementById('msg-recipient-select').value;
-   if(!val) {
-     document.getElementById('inbox-messages-list').innerHTML = '<p class="empty-msg">Оберіть співрозмовника.</p>';
-     if(inboxMessagesListener) inboxMessagesListener();
-     currentChatId = null;
-     return;
-   }
-   
-   if(currentUserData.role === 'director' && val.includes('___')) {
-     currentChatId = val;
-   } else {
-     const myEmailSafe = auth.currentUser.email.replace(/\./g,'_');
-     currentChatId = getChatId(myEmailSafe, val);
-   }
-   
-   loadChatMessages(currentChatId);
+    // 1. Collect potential contacts for Parents/Students
+    if (role === 'parent' || role === 'student') {
+      activeContacts.set('director_push_school@gmail_com', { name: '👔 Директор (Адміністрація)', lastMsg: '', time: 0, unread: 0 });
+      const cls = getActiveClass();
+      const accSnap = await get(ref(db, 'teacher_access'));
+      if (accSnap.exists()) {
+        const acc = accSnap.val();
+        for (let email in acc) {
+          if (acc[email][cls]) {
+            activeContacts.set(email, { name: getFormattedName(email), lastMsg: '', time: 0, unread: 0 });
+          }
+        }
+      }
+    }
+
+    // 2. Map actual chat data
+    for (let chatId in chats) {
+      const parts = chatId.split('___');
+      if (parts.length !== 2) continue;
+
+      const isParticipant = parts.includes(myEmailSafe);
+      const isDirector = role === 'director';
+
+      if (isParticipant || isDirector) {
+        const messages = chats[chatId].messages ? Object.values(chats[chatId].messages) : [];
+        if (messages.length === 0 && !isParticipant) continue;
+
+        const lastMsg = messages.length > 0 ? messages[messages.length - 1] : null;
+        const unreadCount = messages.filter(m => m.from !== myEmailSafe && !m.read).length;
+
+        if (isDirector) {
+          // Director sees the whole thread as one item
+          let n1 = getFormattedName(parts[0]), n2 = getFormattedName(parts[1]);
+          html += `<div class="chat-list-item" onclick="selectChatThread('${chatId}', '💬 ${n1} ↔ ${n2}')" style="padding:15px; border-bottom:1px solid #eee; cursor:pointer; background:#fff;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <b style="font-size:.95rem; color:var(--purple);">${n1} ↔ ${n2}</b>
+              ${unreadCount > 0 ? `<span style="background:var(--red); color:#fff; font-size:.7rem; padding:2px 7px; border-radius:10px;">${unreadCount}</span>` : ''}
+            </div>
+            <div style="font-size:.8rem; color:#888; margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+              ${lastMsg ? `<b>${lastMsg.fromName.split(' ')[0]}:</b> ${lastMsg.text}` : 'Почніть переписку...'}
+            </div>
+          </div>`;
+        } else {
+          // Normal user: Update contact info or add new active contact
+          const otherEmail = parts[0] === myEmailSafe ? parts[1] : parts[0];
+          activeContacts.set(otherEmail, {
+            name: getFormattedName(otherEmail),
+            lastMsg: lastMsg ? lastMsg.text : '',
+            time: lastMsg ? lastMsg.time : 0,
+            unread: unreadCount
+          });
+        }
+      }
+    }
+
+    if (role !== 'director') {
+      const sorted = Array.from(activeContacts.entries()).sort((a, b) => b[1].time - a[1].time);
+      sorted.forEach(([email, data]) => {
+        const cid = getChatId(myEmailSafe, email);
+        html += `<div class="chat-list-item" onclick="selectChatThread('${cid}', '${data.name}', '${email}')" style="padding:15px; border-bottom:1px solid #eee; cursor:pointer; background:#fff; display:flex; gap:12px; align-items:center;">
+          <div style="width:45px; height:45px; border-radius:50%; background:var(--purple); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:1.2rem; flex-shrink:0;">${data.name.charAt(0)}</div>
+          <div style="flex:1; overflow:hidden;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <b style="font-size:.95rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:80%;">${data.name}</b>
+              ${data.unread > 0 ? `<span style="background:var(--red); color:#fff; font-size:.7rem; padding:2px 7px; border-radius:10px; font-weight:700;">${data.unread}</span>` : ''}
+            </div>
+            <div style="font-size:.82rem; color:#888; margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+              ${data.lastMsg || 'Повідомлень ще немає'}
+            </div>
+          </div>
+        </div>`;
+      });
+    }
+
+    container.innerHTML = html || '<p class="empty-msg" style="padding:20px; text-align:center;">У вас ще немає активних чатів.</p>';
+  });
+}
+
+window.selectChatThread = function(chatId, title, otherEmailSafe = null) {
+  currentChatId = chatId;
+  document.getElementById('chat-detail-title').innerText = title;
+  document.getElementById('chat-list-view').style.display = 'none';
+  document.getElementById('chat-detail-view').style.display = 'flex';
+  loadChatMessages(chatId);
 };
 
 function loadChatMessages(chatId) {
   const list = document.getElementById('inbox-messages-list');
-  if(inboxMessagesListener) inboxMessagesListener();
+  if (inboxMessagesListener) inboxMessagesListener();
+  
+  const myEmailSafe = auth.currentUser.email.replace(/\./g, '_');
+
   inboxMessagesListener = onValue(ref(db, `chats/${chatId}/messages`), snap => {
-    list.innerHTML='';
-    if(snap.exists()){
-      const msgs = Object.values(snap.val()).sort((a,b)=>a.time-b.time);
-      const myEmailSafe = auth.currentUser.email.replace(/\./g,'_');
+    list.innerHTML = '';
+    if (snap.exists()) {
+      const data = snap.val();
+      const msgs = Object.keys(data).map(k => ({ id: k, ...data[k] })).sort((a, b) => a.time - b.time);
+      
       msgs.forEach(m => {
         const isMe = m.from === myEmailSafe;
         const align = isMe ? 'flex-end' : 'flex-start';
         const bg = isMe ? 'var(--purple)' : '#fff';
         const color = isMe ? '#fff' : '#333';
-        const name = isMe ? 'Я' : m.fromName;
-        list.innerHTML+=`<div style="align-self:${align}; max-width:85%; background:${bg}; color:${color}; padding:10px 14px; border-radius:15px; box-shadow:0 2px 5px rgba(0,0,0,0.05); margin-bottom:5px;">
-          <div style="font-size:.65rem; opacity:.8; margin-bottom:3px; font-weight:700;">${name} • ${new Date(m.time).toLocaleString('uk-UA')}</div>
-          <div style="font-size:.9rem; word-break:break-word; line-height:1.4;">${m.text}</div>
+        
+        list.innerHTML += `<div style="align-self:${align}; max-width:85%; background:${bg}; color:${color}; padding:10px 14px; border-radius:15px; box-shadow:0 2px 5px rgba(0,0,0,0.05); margin-bottom:5px;">
+          <div style="font-size:.65rem; opacity:.8; margin-bottom:3px; font-weight:700;">${isMe ? 'Я' : m.fromName} • ${new Date(m.time).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' })}</div>
+          <div style="font-size:.92rem; word-break:break-word; line-height:1.4;">${m.text}</div>
         </div>`;
+
+        // Mark as read if from others
+        if (!isMe && !m.read) {
+          update(ref(db, `chats/${chatId}/messages/${m.id}`), { read: true });
+        }
       });
       list.scrollTop = list.scrollHeight;
-    } else list.innerHTML='<p class="empty-msg">Немає повідомлень. Почніть переписку!</p>';
+    } else list.innerHTML = '<p class="empty-msg">Немає повідомлень. Напишіть що-небудь!</p>';
   });
 }
 
-window.closeInboxModal=function(){
-  document.getElementById('inbox-modal').style.display='none';
-  if(inboxMessagesListener) inboxMessagesListener();
+window.backToChatList = function() {
+  if (inboxMessagesListener) inboxMessagesListener();
+  document.getElementById('chat-detail-view').style.display = 'none';
+  document.getElementById('chat-list-view').style.display = 'flex';
+  currentChatId = null;
 };
 
-window.sendInboxMessage=async function(){
-  if(!currentChatId) return alert("Оберіть чат!");
+window.closeInboxModal = function() {
+  document.getElementById('inbox-modal').style.display = 'none';
+  if (inboxMessagesListener) inboxMessagesListener();
+  if (chatListListener) chatListListener();
+};
+
+window.sendInboxMessage = async function() {
+  if (!currentChatId) return;
   const input = document.getElementById('msg-text-input');
   const text = input.value.trim();
-  if(!text) return;
-  
-  const myEmailSafe = auth.currentUser.email.replace(/\./g,'_');
+  if (!text) return;
+
+  const myEmailSafe = auth.currentUser.email.replace(/\./g, '_');
   let roleLabel = '';
-  if(currentUserData.role==='teacher'||currentUserData.role==='class_teacher') roleLabel='(Вчитель)';
-  if(currentUserData.role==='director') roleLabel='(Директор)';
-  if(currentUserData.role==='parent') roleLabel='(Батьки)';
-  if(currentUserData.role==='student') roleLabel='(Учень)';
-  
-  const myName = (currentUserData.firstName || currentUserData.lastName) ? `${currentUserData.firstName||''} ${currentUserData.lastName||''}`.trim() : (currentUserData.studentName || auth.currentUser.email);
+  if (currentUserData.role === 'teacher' || currentUserData.role === 'class_teacher') roleLabel = '(Вчитель)';
+  else if (currentUserData.role === 'director') roleLabel = '(Директор)';
+  else if (currentUserData.role === 'parent') roleLabel = '(Батьки)';
+  else if (currentUserData.role === 'student') roleLabel = '(Учень)';
+
+  const myName = (currentUserData.firstName || currentUserData.lastName) ? `${currentUserData.firstName || ''} ${currentUserData.lastName || ''}`.trim() : (currentUserData.studentName || auth.currentUser.email);
   const fullName = `${myName} ${roleLabel}`.trim();
 
   const msg = {
     from: myEmailSafe,
     fromName: fullName,
     text: text,
-    time: Date.now()
+    time: Date.now(),
+    read: false
   };
 
-  const btn = document.querySelector('button[onclick="sendInboxMessage()"]');
-  btn.disabled=true;
   try {
     await push(ref(db, `chats/${currentChatId}/messages`), msg);
-    input.value='';
-  } catch(e) { alert("Помилка: " + e.message); }
-  btn.disabled=false;
+    input.value = '';
+    // Reset scroll just in case
+    const list = document.getElementById('inbox-messages-list');
+    list.scrollTop = list.scrollHeight;
+  } catch (e) { alert("Помилка: " + e.message); }
 };
 
 // ════════════════════════════════════════════════════════════════
