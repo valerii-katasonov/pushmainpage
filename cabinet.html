@@ -1149,17 +1149,17 @@
 <div id="inbox-modal" class="modal-overlay">
   <div class="modal-content" style="max-width:500px; height:85vh; display:flex; flex-direction:column; padding:0; overflow:hidden;">
     <div style="background:var(--purple); color:#fff; padding:15px; display:flex; justify-content:space-between; align-items:center;">
-      <h2 style="margin:0; font-size:1.2rem;">💬 Повідомлення</h2>
+      <h2 style="margin:0; font-size:1.2rem;">💬 Чат</h2>
       <button onclick="closeInboxModal()" style="background:none; border:none; color:#fff; font-size:1.5rem; cursor:pointer; width:auto; padding:0;">✖</button>
     </div>
     
     <div style="padding:15px; border-bottom:1px solid #eee; background:#fff;">
-      <label style="font-size:.8rem; color:#666;">Кому:</label>
-      <select id="msg-recipient-select" style="margin-top:5px; border-color:var(--purple);"></select>
+      <label style="font-size:.8rem; color:#666;">Виберіть співрозмовника:</label>
+      <select id="msg-recipient-select" onchange="selectChatContact()" style="margin-top:5px; border-color:var(--purple);"></select>
     </div>
 
     <div id="inbox-messages-list" style="flex:1; overflow-y:auto; padding:15px; display:flex; flex-direction:column; gap:10px; background:#f4f4f9;">
-      <p class="empty-msg">Завантаження повідомлень...</p>
+      <p class="empty-msg">Оберіть співрозмовника для початку чату.</p>
     </div>
 
     <div style="padding:15px; border-top:1px solid #eee; display:flex; gap:10px; background:#fff; align-items:flex-end;">
@@ -2237,59 +2237,141 @@ window.sendRetakeRequest=sendRetakeRequest;
 
 // ══════════ UNIFIED INBOX (Chat) ══════════
 let inboxMessagesListener = null;
+let currentChatId = null;
+
+function getChatId(email1, email2) {
+  return [email1, email2].sort().join('___');
+}
 
 window.openChatModal=async function(role){
   document.getElementById('inbox-modal').style.display='flex';
   const sel=document.getElementById('msg-recipient-select');
   const list=document.getElementById('inbox-messages-list');
-  sel.innerHTML='<option value="">-- Оберіть отримувача --</option>';
-  list.innerHTML='<p class="empty-msg">Завантаження...</p>';
+  sel.innerHTML='<option value="">-- Оберіть співрозмовника --</option>';
+  list.innerHTML='<p class="empty-msg">Оберіть чат для початку спілкування.</p>';
+  currentChatId = null;
 
   const myEmailSafe = auth.currentUser.email.replace(/\./g,'_');
+  const usersSnap = await get(ref(db, 'users'));
+  const allUsers = usersSnap.exists() ? usersSnap.val() : {};
+
+  // Helper to get formatted name
+  const getFormattedName = (u) => {
+    let name = (u.firstName || u.lastName) ? `${u.firstName||''} ${u.lastName||''}`.trim() : (u.studentName || u.email || 'Невідомий');
+    let label = '';
+    if(u.role==='teacher'||u.role==='class_teacher') label=' (Вчитель)';
+    if(u.role==='director') label=' (Директор)';
+    if(u.role==='parent') label=' (Батьки)';
+    if(u.role==='student') label=' (Учень)';
+    return name + label;
+  };
 
   // Populate Recipient List
   if(role==='parent'||role==='student'){
-    // Director & Admins (Hardcoded or fetched from pre_approved_roles)
-    sel.innerHTML+='<option value="director_push_school@gmail_com">👔 Директор</option>';
-    // Teachers of this class
+    sel.innerHTML+='<option value="director_push_school@gmail_com">👔 Директор (Адміністрація)</option>';
     const cls=getActiveClass();
     const accSnap = await get(ref(db, 'teacher_access'));
     if(accSnap.exists()){
       const acc = accSnap.val();
-      for(let email in acc) if(acc[email][cls]) sel.innerHTML+=`<option value="${email}">👨‍🏫 Вчитель (${acc[email][cls].join(', ')})</option>`;
+      for(let email in acc) {
+        if(acc[email][cls]) {
+          let tName = email.replace(/_/g,'.');
+          for(let uid in allUsers) {
+            if(allUsers[uid].email && allUsers[uid].email.replace(/\./g,'_') === email) {
+               tName = getFormattedName(allUsers[uid]);
+               break;
+            }
+          }
+          if(!tName.includes('(')) tName += ' (Вчитель)';
+          sel.innerHTML+=`<option value="${email}">${tName}</option>`;
+        }
+      }
     }
-  } else {
-    // For Staff: List parents/students who messaged us
-    const msgSnap = await get(child(ref(db), `messages/${myEmailSafe}`));
-    const contacts = new Set();
-    if(msgSnap.exists()){
-      const msgs = msgSnap.val();
-      for(let k in msgs) if(msgs[k].from) contacts.add(msgs[k].from);
+  } else if(role==='teacher'){
+    const chatsSnap = await get(ref(db, 'chats'));
+    if(chatsSnap.exists()){
+      const chats = chatsSnap.val();
+      for(let chatId in chats) {
+        if(chatId.includes(myEmailSafe)) {
+          const parts = chatId.split('___');
+          if(parts.length === 2) {
+            const otherEmail = parts[0] === myEmailSafe ? parts[1] : parts[0];
+            let cName = otherEmail.replace(/_/g,'.');
+            for(let uid in allUsers) {
+               if(allUsers[uid].email && allUsers[uid].email.replace(/\./g,'_') === otherEmail) {
+                 cName = getFormattedName(allUsers[uid]);
+                 break;
+               }
+            }
+            sel.innerHTML += `<option value="${otherEmail}">${cName}</option>`;
+          }
+        }
+      }
     }
-    contacts.forEach(c => sel.innerHTML+=`<option value="${c}">${c.replace(/_/g,'.')}</option>`);
+  } else if(role==='director'){
+    const chatsSnap = await get(ref(db, 'chats'));
+    if(chatsSnap.exists()){
+      const chats = chatsSnap.val();
+      for(let chatId in chats) {
+        const parts = chatId.split('___');
+        if(parts.length === 2) {
+          let n1 = parts[0].replace(/_/g,'.'), n2 = parts[1].replace(/_/g,'.');
+          for(let uid in allUsers) {
+            const se = allUsers[uid].email ? allUsers[uid].email.replace(/\./g,'_') : '';
+            if(se === parts[0]) n1 = getFormattedName(allUsers[uid]);
+            if(se === parts[1]) n2 = getFormattedName(allUsers[uid]);
+          }
+          if (parts[0] === 'director_push_school@gmail_com') n1 = 'Директор';
+          if (parts[1] === 'director_push_school@gmail_com') n2 = 'Директор';
+          sel.innerHTML += `<option value="${chatId}">💬 ${n1} ↔ ${n2}</option>`;
+        }
+      }
+    }
   }
+};
 
-  // Listen for messages
+window.selectChatContact = function() {
+   const val = document.getElementById('msg-recipient-select').value;
+   if(!val) {
+     document.getElementById('inbox-messages-list').innerHTML = '<p class="empty-msg">Оберіть співрозмовника.</p>';
+     if(inboxMessagesListener) inboxMessagesListener();
+     currentChatId = null;
+     return;
+   }
+   
+   if(currentUserData.role === 'director' && val.includes('___')) {
+     currentChatId = val;
+   } else {
+     const myEmailSafe = auth.currentUser.email.replace(/\./g,'_');
+     currentChatId = getChatId(myEmailSafe, val);
+   }
+   
+   loadChatMessages(currentChatId);
+};
+
+function loadChatMessages(chatId) {
+  const list = document.getElementById('inbox-messages-list');
   if(inboxMessagesListener) inboxMessagesListener();
-  inboxMessagesListener = onValue(ref(db, `messages/${myEmailSafe}`), snap => {
+  inboxMessagesListener = onValue(ref(db, `chats/${chatId}/messages`), snap => {
     list.innerHTML='';
     if(snap.exists()){
       const msgs = Object.values(snap.val()).sort((a,b)=>a.time-b.time);
+      const myEmailSafe = auth.currentUser.email.replace(/\./g,'_');
       msgs.forEach(m => {
         const isMe = m.from === myEmailSafe;
         const align = isMe ? 'flex-end' : 'flex-start';
         const bg = isMe ? 'var(--purple)' : '#fff';
         const color = isMe ? '#fff' : '#333';
-        const name = isMe ? 'Я' : (m.fromName || m.from.replace(/_/g,'.'));
-        list.innerHTML+=`<div style="align-self:${align}; max-width:80%; background:${bg}; color:${color}; padding:10px 14px; border-radius:15px; box-shadow:0 2px 5px rgba(0,0,0,0.05); margin-bottom:5px;">
-          <div style="font-size:.65rem; opacity:.7; margin-bottom:3px;">${name} • ${new Date(m.time).toLocaleString('uk-UA')}</div>
-          <div style="font-size:.9rem;">${m.text}</div>
+        const name = isMe ? 'Я' : m.fromName;
+        list.innerHTML+=`<div style="align-self:${align}; max-width:85%; background:${bg}; color:${color}; padding:10px 14px; border-radius:15px; box-shadow:0 2px 5px rgba(0,0,0,0.05); margin-bottom:5px;">
+          <div style="font-size:.65rem; opacity:.8; margin-bottom:3px; font-weight:700;">${name} • ${new Date(m.time).toLocaleString('uk-UA')}</div>
+          <div style="font-size:.9rem; word-break:break-word; line-height:1.4;">${m.text}</div>
         </div>`;
       });
       list.scrollTop = list.scrollHeight;
-    } else list.innerHTML='<p class="empty-msg">Повідомлень немає.</p>';
+    } else list.innerHTML='<p class="empty-msg">Немає повідомлень. Почніть переписку!</p>';
   });
-};
+}
 
 window.closeInboxModal=function(){
   document.getElementById('inbox-modal').style.display='none';
@@ -2297,29 +2379,33 @@ window.closeInboxModal=function(){
 };
 
 window.sendInboxMessage=async function(){
-  const recipient = document.getElementById('msg-recipient-select').value;
-  const text = document.getElementById('msg-text-input').value.trim();
+  if(!currentChatId) return alert("Оберіть чат!");
+  const input = document.getElementById('msg-text-input');
+  const text = input.value.trim();
+  if(!text) return;
+  
   const myEmailSafe = auth.currentUser.email.replace(/\./g,'_');
+  let roleLabel = '';
+  if(currentUserData.role==='teacher'||currentUserData.role==='class_teacher') roleLabel='(Вчитель)';
+  if(currentUserData.role==='director') roleLabel='(Директор)';
+  if(currentUserData.role==='parent') roleLabel='(Батьки)';
+  if(currentUserData.role==='student') roleLabel='(Учень)';
+  
   const myName = (currentUserData.firstName || currentUserData.lastName) ? `${currentUserData.firstName||''} ${currentUserData.lastName||''}`.trim() : (currentUserData.studentName || auth.currentUser.email);
-
-  if(!recipient || !text) return alert("Оберіть отримувача та введіть текст!");
+  const fullName = `${myName} ${roleLabel}`.trim();
 
   const msg = {
     from: myEmailSafe,
-    fromName: myName,
+    fromName: fullName,
     text: text,
     time: Date.now()
   };
 
   const btn = document.querySelector('button[onclick="sendInboxMessage()"]');
   btn.disabled=true;
-
   try {
-    // Send to recipient
-    await push(ref(db, `messages/${recipient}`), msg);
-    // Keep in my inbox (as sent)
-    await push(ref(db, `messages/${myEmailSafe}`), msg);
-    document.getElementById('msg-text-input').value='';
+    await push(ref(db, `chats/${currentChatId}/messages`), msg);
+    input.value='';
   } catch(e) { alert("Помилка: " + e.message); }
   btn.disabled=false;
 };
