@@ -951,6 +951,22 @@
       <div id="p-behavior-list"><p class="empty-msg">Завантаження...</p></div>
     </div>
 
+    <!-- Чат -->
+    <div class="data-card" id="p-chat-card" style="border-left-color:var(--purple);background:#f9f4ff;">
+      <h4 style="margin-top:0;color:#7b1fa2;">💬 Зв'язок зі школою</h4>
+      <div style="display:flex;flex-direction:column;gap:9px;margin-top:9px;">
+        <select id="p-chat-recipient" style="border-color:#ce93d8;">
+          <option value="director">👔 Директору (Загальне питання)</option>
+          <option value="class_teacher">🎓 Класному керівнику</option>
+          <option value="teacher">👨‍🏫 Вчителю-предметнику (вкажіть предмет у тексті)</option>
+        </select>
+        <textarea id="p-chat-message" rows="2" placeholder="Ваше повідомлення..." style="border-color:#ce93d8;"></textarea>
+        <button onclick="sendParentMessage()" style="background:#7b1fa2;color:#fff;padding:11px;">Відправити</button>
+      </div>
+      <p id="p-chat-status" style="font-size:.83rem;color:var(--green);font-weight:700;margin-top:9px;display:none;">✅ Повідомлення надіслано!</p>
+      <div id="p-chat-history" style="margin-top:13px;max-height:250px;overflow-y:auto;border-top:1px dashed #ce93d8;padding-top:9px;display:flex;flex-direction:column;"></div>
+    </div>
+
     <!-- ПЛАТЕЖІ (ЗАГЛУШКА) -->
     <h3 style="margin-top:22px;">💳 Платежі</h3>
     <div id="payments-section"></div>
