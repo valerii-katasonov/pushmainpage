@@ -952,19 +952,8 @@
     </div>
 
     <!-- Чат -->
-    <div class="data-card" id="p-chat-card" style="border-left-color:var(--purple);background:#f9f4ff;">
-      <h4 style="margin-top:0;color:#7b1fa2;">💬 Зв'язок зі школою</h4>
-      <div style="display:flex;flex-direction:column;gap:9px;margin-top:9px;">
-        <select id="p-chat-recipient" style="border-color:#ce93d8;">
-          <option value="director">👔 Директору (Загальне питання)</option>
-          <option value="class_teacher">🎓 Класному керівнику</option>
-          <option value="teacher">👨‍🏫 Вчителю-предметнику (вкажіть предмет у тексті)</option>
-        </select>
-        <textarea id="p-chat-message" rows="2" placeholder="Ваше повідомлення..." style="border-color:#ce93d8;"></textarea>
-        <button onclick="sendParentMessage()" style="background:#7b1fa2;color:#fff;padding:11px;">Відправити</button>
-      </div>
-      <p id="p-chat-status" style="font-size:.83rem;color:var(--green);font-weight:700;margin-top:9px;display:none;">✅ Повідомлення надіслано!</p>
-      <div id="p-chat-history" style="margin-top:13px;max-height:250px;overflow-y:auto;border-top:1px dashed #ce93d8;padding-top:9px;display:flex;flex-direction:column;"></div>
+    <div class="data-card" style="border-left-color:var(--purple);background:#f9f4ff; text-align:center;">
+      <button onclick="openChatModal('parent')" style="background:var(--purple); color:#fff; padding:12px; border-radius:12px; font-weight:700; width:100%;">💬 Написати вчителю / директору</button>
     </div>
 
     <!-- ПЛАТЕЖІ (ЗАГЛУШКА) -->
@@ -973,6 +962,70 @@
 
     <button class="btn-logout" onclick="logoutUser()">Вийти</button>
   </div>
+
+  <!-- ══════════════════════════════
+       STUDENT SCREEN
+       ══════════════════════════════ -->
+  <div id="student-screen" class="panel">
+
+    <!-- ДИНАМІЧНИЙ РОЗКЛАД -->
+    <div class="schedule-box">
+      <div class="schedule-day-label" id="s-schedule-day-label">📅 Мій розклад на сегодня</div>
+      <div id="s-dynamic-schedule">
+        <div class="no-lessons-msg">⏳ Завантаження розкладу...</div>
+      </div>
+      <a id="s-schedule-link" href="#" target="_blank" style="display:block;background:var(--blue);color:#fff;padding:10px;border-radius:10px;text-decoration:none;font-weight:700;margin-top:10px;text-align:center;font-size:.88rem;">📅 Відкрити повний розклад</a>
+    </div>
+
+    <!-- Відсутність (учень) -->
+    <div class="data-card" style="border-left-color:var(--red);background:#fdfbfb;">
+      <h4 style="margin-top:0;color:var(--red);">🕒 Я запізнююсь / буду відсутній</h4>
+      <div style="display:flex;flex-direction:column;gap:9px;margin-top:9px;">
+        <select id="s-att-type" onchange="updateAttOptionsStudent()" style="border-color:var(--red);"><option value="late">Запізнююсь</option><option value="absent">Буду відсутній</option></select>
+        <select id="s-att-reason" style="border-color:var(--red);"><option value="на 10 хвилин">на 10 хвилин</option></select>
+      </div>
+      <button onclick="submitAttendance('student')" style="background:var(--red);padding:11px;color:#fff;margin-top:13px;">Відправити</button>
+      <p id="s-att-status" style="font-size:.83rem;color:var(--green);font-weight:700;margin-top:9px;display:none;">✅ Повідомлення надіслано!</p>
+    </div>
+
+    <!-- Наліпки -->
+    <div class="data-card" style="border-left-color:#f1c40f;background:#fffcf0;text-align:center;">
+      <h4 style="margin-top:0;color:var(--orange);font-size:1rem;">🌟 Мої наліпки</h4>
+      <div class="progress-bar-container"><div id="s-ribbon-progress" class="progress-bar"></div></div>
+      <p id="s-ribbon-count" style="font-size:1.1rem;font-weight:700;color:#d35400;margin:13px 0 4px 0;">Завантаження...</p>
+    </div>
+
+    <!-- Підручники -->
+    <div class="data-card" style="border-left-color:var(--blue);background:#f0f8ff;">
+      <h4 style="margin-top:0;color:var(--blue);">📘 Мої підручники</h4>
+      <div id="s-textbooks-list"><p class="empty-msg">Завантаження...</p></div>
+    </div>
+
+    <!-- ДЗ -->
+    <div class="data-card" style="border-left-color:#00b894;background:#f0fff4;">
+      <h4 style="margin-top:0;color:#00b894;">📚 Завдання для мене:</h4>
+      <ul id="s-daily-hw-list" class="list-dash"></ul>
+    </div>
+
+    <!-- Журнал та коментарі -->
+    <div class="data-card" style="border-left-color:#ff4757;background:#fff0f1;">
+      <h4 style="margin-top:0;color:#ff4757;">📝 Мої оцінки та коментарі:</h4>
+      <ul id="s-daily-comments-list" class="list-dash"></ul>
+    </div>
+
+    <!-- Behavior -->
+    <div class="data-card" style="border-left-color:#3949ab;background:#e8eaf6;">
+      <h4 style="margin-top:0;color:#283593;">🤝 Поведінка (цей тиждень):</h4>
+      <div id="s-behavior-list"><p class="empty-msg">Завантаження...</p></div>
+    </div>
+
+    <!-- Чат (учень) -->
+    <div class="data-card" style="border-left-color:var(--purple);background:#f9f4ff; text-align:center;">
+      <button onclick="openChatModal('student')" style="background:var(--purple); color:#fff; padding:12px; border-radius:12px; font-weight:700; width:100%;">💬 Написати вчителю / директору</button>
+    </div>
+
+    <button class="btn-logout" onclick="logoutUser()">Вийти</button>
+    </div>
 </div>
 
 <!-- ══════════════════ MODALS ══════════════════ -->
@@ -1089,6 +1142,30 @@
     <!-- Weighted Average info -->
     <div id="j-weighted-avg" style="margin-top:9px;background:#f4ecf7;border-radius:9px;padding:11px;font-size:.82rem;display:none;"></div>
     <button onclick="closeJournalModal()" style="background:#333;color:#fff;width:100%;margin-top:13px;">Закрити</button>
+  </div>
+</div>
+
+<!-- Inbox Modal -->
+<div id="inbox-modal" class="modal-overlay">
+  <div class="modal-content" style="max-width:500px; height:85vh; display:flex; flex-direction:column; padding:0; overflow:hidden;">
+    <div style="background:var(--purple); color:#fff; padding:15px; display:flex; justify-content:space-between; align-items:center;">
+      <h2 style="margin:0; font-size:1.2rem;">💬 Повідомлення</h2>
+      <button onclick="closeInboxModal()" style="background:none; border:none; color:#fff; font-size:1.5rem; cursor:pointer; width:auto; padding:0;">✖</button>
+    </div>
+    
+    <div style="padding:15px; border-bottom:1px solid #eee; background:#fff;">
+      <label style="font-size:.8rem; color:#666;">Кому:</label>
+      <select id="msg-recipient-select" style="margin-top:5px; border-color:var(--purple);"></select>
+    </div>
+
+    <div id="inbox-messages-list" style="flex:1; overflow-y:auto; padding:15px; display:flex; flex-direction:column; gap:10px; background:#f4f4f9;">
+      <p class="empty-msg">Завантаження повідомлень...</p>
+    </div>
+
+    <div style="padding:15px; border-top:1px solid #eee; display:flex; gap:10px; background:#fff; align-items:flex-end;">
+      <textarea id="msg-text-input" placeholder="Напишіть повідомлення..." rows="2" style="flex:1; margin:0; border-color:var(--purple); border-radius:10px; padding:10px;"></textarea>
+      <button onclick="sendInboxMessage()" style="background:var(--purple); color:#fff; width:auto; padding:12px 18px; margin:0; border-radius:12px; border:none; cursor:pointer; font-weight:700;">➔</button>
+    </div>
   </div>
 </div>
 
@@ -1564,9 +1641,11 @@ window.removeTextbook=async function(cls,subj,key){
   await remove(ref(db,`textbooks/${cls}/${subj.replace(/[.#$[\]]/g,'_')}/${key}`));
   showToast("🗑️ Видалено");loadTextbooksForTeacher();
 };
-async function loadTextbooksForParent(){
+async function loadTextbooksForParent(role='parent'){
+  const prefix = role==='student'?'s':'p';
   const cls=getActiveClass();const snap=await get(ref(db,`textbooks/${cls}`));
-  const container=document.getElementById('p-textbooks-list');container.innerHTML='';
+  const container=document.getElementById(`${prefix}-textbooks-list`);if(!container)return;
+  container.innerHTML='';
   if(snap.exists()){const data=snap.val();let html='';for(let subj in data){for(let k in data[subj]){const tb=data[subj][k];html+=`<div class="textbook-item">📘 <b>${subj}:</b> <a href="${tb.url}" target="_blank">${tb.title||tb.url}</a></div>`;}}container.innerHTML=html||'<p class="empty-msg">Підручників немає.</p>';}
   else container.innerHTML='<p class="empty-msg">Підручників немає.</p>';
 }
@@ -1732,6 +1811,7 @@ window.handleDateChange=function(){
   if(currentUserData.role==='teacher'||currentUserData.role==='class_teacher'||currentUserData.role==='art_school_teacher'||currentUserData.role==='music_teacher'){updateSubjectList();loadTeacherDashboard();loadCurrentTopicAndHW();listenTeacherAttendance();}
   else if(currentUserData.role==='director'){loadDirectorDashboard();document.getElementById('d-detail-hw-class')&&(document.getElementById('d-detail-hw-class').value='');}
   else if(currentUserData.role==='administrator'){loadAdminDashboard();}
+  else if(currentUserData.role==='student'){loadStudentDashboard();}
   else{loadParentDashboard();}
 };
 window.handleClassChange=function(){
@@ -1762,8 +1842,9 @@ function buildDynamicSchedule(schedule,dayName,isToday){
   return flat;
 }
 
-function renderDynamicSchedule(){
+function renderDynamicSchedule(role='parent'){
   if(!window.schedule)return;
+  const prefix = role==='student'?'s':'p';
   const now=new Date();const currentMins=now.getHours()*60+now.getMinutes();
   const todayDow=now.getDay();const todayDayName=dayKeys[todayDow];
   const tomorrowDate=new Date(now);tomorrowDate.setDate(tomorrowDate.getDate()+1);
@@ -1776,10 +1857,10 @@ function renderDynamicSchedule(){
   const showTomorrow=todayLessons.length>0&&currentMins>=lastEndMins&&lastEndMins>0;
   const targetDayName=showTomorrow?tomorrowDayName:todayDayName;
   const label=showTomorrow?'📅 Розклад на завтра':'📅 Розклад на сьогодні';
-  document.getElementById('p-schedule-day-label').textContent=label;
+  const lblEl=document.getElementById(`${prefix}-schedule-day-label`);if(lblEl)lblEl.textContent=label;
 
   const lessons=buildDynamicSchedule(window.schedule,targetDayName,!showTomorrow)||[];
-  const container=document.getElementById('p-dynamic-schedule');
+  const container=document.getElementById(`${prefix}-dynamic-schedule`);if(!container)return;
   if(lessons.length===0){container.innerHTML='<div class="no-lessons-msg">🎉 Уроків немає — вихідний!</div>';return;}
 
   let html='';
@@ -1845,8 +1926,8 @@ function updateProfileBar(){
   if(!currentUserData)return;document.getElementById('profile-bar').style.display='flex';
   const src=currentUserData.photoURL||"https://cdn-icons-png.flaticon.com/512/149/149071.png";
   document.getElementById('pb-avatar').src=src;document.getElementById('modal-avatar-preview').src=src;
-  let n="Користувач";if(currentUserData.firstName||currentUserData.lastName)n=`${currentUserData.firstName||''} ${currentUserData.lastName||''}`.trim();else if(currentUserData.studentName)n=`Батьки (${currentUserData.studentName})`;else if(currentUserData.email)n=currentUserData.email;
-  let r="";if(currentUserData.role==='teacher')r="Вчитель";if(currentUserData.role==='class_teacher')r="🎓 Класний керівник";if(currentUserData.role==='art_school_teacher'||currentUserData.role==='music_teacher')r="Вчитель школи мистецтв";if(currentUserData.role==='director')r="Директор";if(currentUserData.role==='administrator')r="Адміністратор";if(currentUserData.role==='parent'){if(currentUserData.parentRole==='mother')r="Мати";else if(currentUserData.parentRole==='father')r="Батько";else r="Опекун";}
+  let n="Користувач";if(currentUserData.firstName||currentUserData.lastName)n=`${currentUserData.firstName||''} ${currentUserData.lastName||''}`.trim();else if(currentUserData.studentName)n=currentUserData.role==='student'?currentUserData.studentName:`Батьки (${currentUserData.studentName})`;else if(currentUserData.email)n=currentUserData.email;
+  let r="";if(currentUserData.role==='teacher')r="Вчитель";if(currentUserData.role==='class_teacher')r="🎓 Класний керівник";if(currentUserData.role==='art_school_teacher'||currentUserData.role==='music_teacher')r="Вчитель школи мистецтв";if(currentUserData.role==='director')r="Директор";if(currentUserData.role==='administrator')r="Адміністратор";if(currentUserData.role==='student')r="🎒 Учень";if(currentUserData.role==='parent'){if(currentUserData.parentRole==='mother')r="Мати";else if(currentUserData.parentRole==='father')r="Батько";else r="Опекун";}
   document.getElementById('pb-name').innerText=n;document.getElementById('pb-role').innerText=r;
 }
 window.openProfileModal=async function(){
@@ -1949,7 +2030,9 @@ onAuthStateChanged(auth,async user=>{
     const snap=await get(child(ref(db),`users/${user.uid}`));
     if(snap.exists()){currentUserData=snap.val();if(!currentUserData.email){currentUserData.email=user.email;update(ref(db,`users/${user.uid}`),{email:user.email});}if(currentUserData.role==='teacher'||currentUserData.role==='class_teacher'||currentUserData.role==='art_school_teacher'||currentUserData.role==='music_teacher')await fetchTeacherAccess(se);initUserSession();}
     else{const rs=await get(child(ref(db),`pre_approved_roles/${se}`));if(rs.exists()){const ar=rs.val();const nd={role:ar,email:user.email};if(ar==='teacher'||ar==='class_teacher'||ar==='art_school_teacher'||ar==='music_teacher')await fetchTeacherAccess(se);await set(ref(db,`users/${user.uid}`),nd);currentUserData=nd;initUserSession();}
-    else{const ls=await get(child(ref(db),`parent_links/${se}`));if(ls.exists()){const ld=ls.val();let sn,sc,pr='guardian';if(typeof ld==='string'){sn=ld;sc="class_2";}else{sn=ld.studentName;sc=ld.class;pr=ld.role||'guardian';}const nd={role:"parent",studentName:sn,class:sc,parentRole:pr,email:user.email};await set(ref(db,`users/${user.uid}`),nd);currentUserData=nd;initUserSession();}else{alert("Ваш Email не зареєстровано.");signOut(auth);}}}
+    else{const ls=await get(child(ref(db),`parent_links/${se}`));if(ls.exists()){const ld=ls.val();let sn,sc,pr='guardian';if(typeof ld==='string'){sn=ld;sc="class_2";}else{sn=ld.studentName;sc=ld.class;pr=ld.role||'guardian';}const nd={role:"parent",studentName:sn,class:sc,parentRole:pr,email:user.email};await set(ref(db,`users/${user.uid}`),nd);currentUserData=nd;initUserSession();}
+    else{const sls=await get(child(ref(db),`student_links/${se}`));if(sls.exists()){const sd=sls.val();const nd={role:"student",studentName:sd.studentName,class:sd.class,email:user.email};await set(ref(db,`users/${user.uid}`),nd);currentUserData=nd;initUserSession();}
+    else{alert("Ваш Email не зареєстровано.");signOut(auth);}}}}
   }else document.getElementById('login-screen').style.display='block';
 });
 async function fetchTeacherAccess(se){const s=await get(child(ref(db),`teacher_access/${se}`));teacherAccessMatrix=s.exists()?s.val():{};}
@@ -2105,10 +2188,141 @@ window.loadParentDashboard=function(){
   });
 };
 window.updateAttOptions=function(){const t=document.getElementById('p-att-type').value;const r=document.getElementById('p-att-reason');r.innerHTML='';if(t==='late')r.innerHTML='<option value="на 10 хвилин">на 10 хвилин</option><option value="на 15 хвилин">на 15 хвилин</option><option value="до 2-го уроку">до 2-го уроку</option><option value="до 3-го уроку">до 3-го уроку</option>';else r.innerHTML='<option value="за сімейними обставинами">За сімейними обставинами</option><option value="через хворобу">Через хворобу</option>';};
-window.submitAttendance=function(){const date=document.getElementById('global-date').value;const type=document.getElementById('p-att-type').value;const reason=document.getElementById('p-att-reason').value;set(ref(db,`attendance/${getActiveClass()}/${date}/${currentUserData.studentName}`),{status:type,reason}).then(()=>{document.getElementById('p-att-status').innerText=`✅ ${type==='late'?'Запізнення':'Відсутність'} (${reason})`;document.getElementById('p-att-status').style.display='block';});};
+window.submitAttendance=function(role='parent'){
+  const date=document.getElementById('global-date').value;
+  const prefix=role==='student'?'s':'p';
+  const type=document.getElementById(`${prefix}-att-type`).value;
+  const reason=document.getElementById(`${prefix}-att-reason`).value;
+  set(ref(db,`attendance/${getActiveClass()}/${date}/${currentUserData.studentName}`),{status:type,reason}).then(()=>{
+    document.getElementById(`${prefix}-att-status`).innerText=`✅ ${type==='late'?'Запізнення':'Відсутність'} (${reason})`;
+    document.getElementById(`${prefix}-att-status`).style.display='block';
+  });
+};
+window.updateAttOptionsStudent=function(){const t=document.getElementById('s-att-type').value;const r=document.getElementById('s-att-reason');r.innerHTML='';if(t==='late')r.innerHTML='<option value="на 10 хвилин">на 10 хвилин</option><option value="на 15 хвилин">на 15 хвилин</option><option value="до 2-го уроку">до 2-го уроку</option><option value="до 3-го уроку">до 3-го уроку</option>';else r.innerHTML='<option value="за сімейними обставинами">За сімейними обставинами</option><option value="через хворобу">Через хворобу</option>';};
+
+// ══════════ STUDENT DASHBOARD ══════════
+window.loadStudentDashboard=function(){
+  if(!currentUserData)return;const date=document.getElementById('global-date').value;const cls=getActiveClass();
+  if(window.schedule){renderDynamicSchedule('student');if(parentLessonInterval)clearInterval(parentLessonInterval);parentLessonInterval=setInterval(()=>renderDynamicSchedule('student'),30000);}
+  get(child(ref(db),`stickers/${cls}/${currentUserData.studentName}`)).then(snap=>{const cnt=snap.exists()?Object.keys(snap.val()).length:0;const pct=Math.min((cnt/STICKER_GOAL)*100,100);document.getElementById('s-ribbon-progress').style.width=pct+'%';document.getElementById('s-ribbon-count').innerText=`${cnt} / ${STICKER_GOAL} наліпок до призу`;});
+  get(child(ref(db),`attendance/${cls}/${date}/${currentUserData.studentName}`)).then(snap=>{const se=document.getElementById('s-att-status');if(snap.exists()){const d=snap.val();se.innerText=`✅ Повідомлено: ${d.status==='late'?'Запізнення':'Відсутність'} (${d.reason})`;se.style.display='block';}else se.style.display='none';});
+  get(child(ref(db),`homeworks/${cls}/${date}`)).then(snap=>{const hl=document.getElementById('s-daily-hw-list');hl.innerHTML='';if(snap.exists()){const d=snap.val();for(let s in d)hl.innerHTML+=renderHwItem(s,d[s]);}else hl.innerHTML='<li class="empty-msg">ДЗ не задано.</li>';});
+  loadTextbooksForParent('student');
+  const ym=date.substring(0,7);
+  Promise.all([get(child(ref(db),`comments/${cls}/${date}`)),get(child(ref(db),`grades/${cls}/${ym}`)),get(child(ref(db),`grade_types/${cls}/${ym}`)),get(child(ref(db),`behavior_grades/${cls}/${ym}`))]).then(([cmS,grS,gtS,bhS])=>{
+    const list=document.getElementById('s-daily-comments-list');list.innerHTML='';let hasItems=false;
+    const gr=grS.exists()?grS.val():{};const gt=gtS.exists()?gtS.val():{};const sn=currentUserData.studentName;
+    const subjs=new Set();
+    if(cmS.exists())Object.keys(cmS.val()).forEach(s=>subjs.add(s));
+    if(grS.exists())Object.keys(gr).forEach(s=>{if(gr[s][date]&&gr[s][date][sn])subjs.add(s);});
+    subjs.forEach(s=>{
+      const cm=cmS.exists()&&cmS.val()[s]&&cmS.val()[s][sn]?cmS.val()[s][sn]:'';
+      const gv=gr[s]&&gr[s][date]&&gr[s][date][sn]?gr[s][date][sn]:'';
+      const gtp=gt[s]&&gt[s][date]&&gt[s][date][sn]?gt[s][date][sn]:'';
+      if(cm||gv){
+        hasItems=true;const gc=gradeClass6(gv);const dispVal=displayGrade(gv,cls);
+        let gHtml=gv?`<span class="g-cell ${gc}" style="display:inline-flex;padding:4px 9px;border-radius:8px;gap:5px;margin-bottom:3px;"><span class="g-val">${dispVal}</span>${gtp?`<span class="g-type">${gtp}</span>`:''}</span>`:'';
+        let retakeBtn='';if(gv){const n=parseInt(gv);if(!isNaN(n)&&n<=3)retakeBtn=`<button class="retake-btn" onclick="sendRetakeRequest('${cls}','${s}','${date}','${sn}',${n})" style="margin-left:6px;">🔄 Покращити</button>`;}
+        list.innerHTML+=`<li><b>${s}:</b><br>${gHtml}${retakeBtn}${cm?`<div style="background:#f0f8ff;padding:5px 9px;border-radius:6px;font-style:italic;font-size:.88rem;margin-top:3px;">${cm}</div>`:''}</li>`;
+      }
+    });
+    if(!hasItems)list.innerHTML='<li class="empty-msg">Немає оцінок або коментарів.</li>';
+    const bEl=document.getElementById('s-behavior-list');bEl.innerHTML='';
+    if(bhS.exists()){const bd=bhS.val();const wDates=getWeekDates(date);let bh='';wDates.forEach(wd=>{if(bd[wd]&&bd[wd][sn]){const bv=bd[wd][sn];const dispBv=displayGrade(String(bv),cls);const gc=gradeClass6(bv);bh+=`<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px dashed #c5cae9;font-size:.85rem;"><span style="color:#888;flex:1;">${wd.split('-').slice(1).reverse().join('.')}</span><span class="g-cell ${gc}" style="padding:3px 8px;">${dispBv}</span></div>`;}});bEl.innerHTML=bh||'<p class="empty-msg" style="font-size:.82rem;">Оцінок поведінки немає.</p>';}
+  });
+};
 window.sendReaction=function(date,subject,emoji){if(!currentUserData)return;set(ref(db,`reactions/${getActiveClass()}/${date}/${subject}/${currentUserData.studentName}`),emoji).then(()=>loadParentDashboard());};
 // sendRetakeRequest is already defined above as async window function
 window.sendRetakeRequest=sendRetakeRequest;
+
+// ══════════ UNIFIED INBOX (Chat) ══════════
+let inboxMessagesListener = null;
+
+window.openChatModal=async function(role){
+  document.getElementById('inbox-modal').style.display='flex';
+  const sel=document.getElementById('msg-recipient-select');
+  const list=document.getElementById('inbox-messages-list');
+  sel.innerHTML='<option value="">-- Оберіть отримувача --</option>';
+  list.innerHTML='<p class="empty-msg">Завантаження...</p>';
+
+  const myEmailSafe = auth.currentUser.email.replace(/\./g,'_');
+
+  // Populate Recipient List
+  if(role==='parent'||role==='student'){
+    // Director & Admins (Hardcoded or fetched from pre_approved_roles)
+    sel.innerHTML+='<option value="director_push_school@gmail_com">👔 Директор</option>';
+    // Teachers of this class
+    const cls=getActiveClass();
+    const accSnap = await get(ref(db, 'teacher_access'));
+    if(accSnap.exists()){
+      const acc = accSnap.val();
+      for(let email in acc) if(acc[email][cls]) sel.innerHTML+=`<option value="${email}">👨‍🏫 Вчитель (${acc[email][cls].join(', ')})</option>`;
+    }
+  } else {
+    // For Staff: List parents/students who messaged us
+    const msgSnap = await get(child(ref(db), `messages/${myEmailSafe}`));
+    const contacts = new Set();
+    if(msgSnap.exists()){
+      const msgs = msgSnap.val();
+      for(let k in msgs) if(msgs[k].from) contacts.add(msgs[k].from);
+    }
+    contacts.forEach(c => sel.innerHTML+=`<option value="${c}">${c.replace(/_/g,'.')}</option>`);
+  }
+
+  // Listen for messages
+  if(inboxMessagesListener) inboxMessagesListener();
+  inboxMessagesListener = onValue(ref(db, `messages/${myEmailSafe}`), snap => {
+    list.innerHTML='';
+    if(snap.exists()){
+      const msgs = Object.values(snap.val()).sort((a,b)=>a.time-b.time);
+      msgs.forEach(m => {
+        const isMe = m.from === myEmailSafe;
+        const align = isMe ? 'flex-end' : 'flex-start';
+        const bg = isMe ? 'var(--purple)' : '#fff';
+        const color = isMe ? '#fff' : '#333';
+        const name = isMe ? 'Я' : (m.fromName || m.from.replace(/_/g,'.'));
+        list.innerHTML+=`<div style="align-self:${align}; max-width:80%; background:${bg}; color:${color}; padding:10px 14px; border-radius:15px; box-shadow:0 2px 5px rgba(0,0,0,0.05); margin-bottom:5px;">
+          <div style="font-size:.65rem; opacity:.7; margin-bottom:3px;">${name} • ${new Date(m.time).toLocaleString('uk-UA')}</div>
+          <div style="font-size:.9rem;">${m.text}</div>
+        </div>`;
+      });
+      list.scrollTop = list.scrollHeight;
+    } else list.innerHTML='<p class="empty-msg">Повідомлень немає.</p>';
+  });
+};
+
+window.closeInboxModal=function(){
+  document.getElementById('inbox-modal').style.display='none';
+  if(inboxMessagesListener) inboxMessagesListener();
+};
+
+window.sendInboxMessage=async function(){
+  const recipient = document.getElementById('msg-recipient-select').value;
+  const text = document.getElementById('msg-text-input').value.trim();
+  const myEmailSafe = auth.currentUser.email.replace(/\./g,'_');
+  const myName = (currentUserData.firstName || currentUserData.lastName) ? `${currentUserData.firstName||''} ${currentUserData.lastName||''}`.trim() : (currentUserData.studentName || auth.currentUser.email);
+
+  if(!recipient || !text) return alert("Оберіть отримувача та введіть текст!");
+
+  const msg = {
+    from: myEmailSafe,
+    fromName: myName,
+    text: text,
+    time: Date.now()
+  };
+
+  const btn = document.querySelector('button[onclick="sendInboxMessage()"]');
+  btn.disabled=true;
+
+  try {
+    // Send to recipient
+    await push(ref(db, `messages/${recipient}`), msg);
+    // Keep in my inbox (as sent)
+    await push(ref(db, `messages/${myEmailSafe}`), msg);
+    document.getElementById('msg-text-input').value='';
+  } catch(e) { alert("Помилка: " + e.message); }
+  btn.disabled=false;
+};
 
 // ════════════════════════════════════════════════════════════════
 // ═══════════════════ CURRICULUM MODULE (v3) ═════════════════════
