@@ -10,6 +10,7 @@
   <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/330/330996.png">
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;800&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <style>
     :root {
       --teal:#006d77; --teal-l:#e0f2f1; --accent:#00f2fe;
@@ -213,6 +214,25 @@
     .topic-card{background:linear-gradient(135deg,#667eea12,#764ba212);border:1px solid #764ba230;border-radius:12px;padding:13px;margin-bottom:12px;}
     .topic-card label{margin-top:0;color:#764ba2;font-size:.83rem;}
     .topic-display{background:#f3e5f5;border-left:3px solid #764ba2;padding:6px 11px;border-radius:6px;font-size:.83rem;color:#4a148c;font-weight:600;margin-top:5px;}
+
+    /* ── CURRICULUM ── */
+    .curr-drop-zone{border:2px dashed var(--blue);border-radius:11px;padding:16px;text-align:center;background:#f0f8ff;cursor:pointer;transition:.2s;display:block;}
+    .curr-drop-zone:hover{background:#d6ecff;border-color:#1565c0;}
+    .curr-drop-zone input[type=file]{display:none;}
+    .curr-drop-zone.has-file{border-style:solid;background:#e8f5e9;border-color:var(--green);}
+    .topic-preview{background:#fff;border-radius:9px;padding:11px;margin:6px 0;border:1px solid #e0e0e0;font-size:.85rem;}
+    .topic-preview-subj{font-weight:800;color:var(--purple);margin-bottom:5px;}
+    .topic-preview-row{display:grid;grid-template-columns:30px 1fr 80px 50px;gap:8px;padding:4px 0;border-bottom:1px dashed #f0f0f0;font-size:.78rem;align-items:center;}
+    .topic-preview-row:last-child{border-bottom:none;}
+    .topic-preview-row .num{color:var(--orange);font-weight:800;text-align:center;}
+    .topic-preview-row .hrs{color:#888;text-align:center;font-size:.72rem;}
+    .topic-select-wrap{position:relative;}
+    .topic-select{width:100%;padding:11px;border:1px solid #ce93d8;border-radius:11px;font-size:.92rem;background:#fff;cursor:pointer;font-family:inherit;}
+    .topic-select option:disabled{color:#bbb;background:#f5f5f5;}
+    .topic-status-bar{display:flex;justify-content:space-between;align-items:center;font-size:.76rem;color:#666;margin-top:6px;padding:6px 10px;background:#f3e5f5;border-radius:7px;}
+    .topic-progress-mini{flex:1;height:5px;background:#e0e0e0;border-radius:3px;margin:0 10px;overflow:hidden;min-width:30px;}
+    .topic-progress-mini-fill{height:100%;background:linear-gradient(90deg,#9c27b0,#673ab7);transition:width .4s;}
+    .ct-badge{display:inline-block;background:linear-gradient(135deg,#ff6e40,#ff5252);color:#fff;padding:3px 10px;border-radius:12px;font-size:.7rem;font-weight:800;margin-left:6px;text-transform:uppercase;letter-spacing:.5px;}
   </style>
 </head>
 <body>
@@ -402,9 +422,32 @@
         <input type="email" id="new-staff-email" placeholder="Email співробітника">
         <select id="new-staff-role" style="margin-top:8px;">
           <option value="teacher">Вчитель</option><option value="art_school_teacher">Вчитель школи мистецтв</option>
+          <option value="class_teacher">🎓 Класний керівник</option>
           <option value="director">Директор</option><option value="administrator">Адміністратор</option>
         </select>
         <button style="background:#c0392b;padding:8px;margin-top:9px;color:#fff;" onclick="grantStaffRole()">Надати доступ</button>
+      </div>
+    </details>
+
+    <!-- Class Teacher Assignment -->
+    <details style="margin-bottom:18px;background:#fff3e0;padding:14px;border-radius:12px;border:1px solid #ffb74d;">
+      <summary style="font-weight:700;cursor:pointer;color:#e65100;font-size:.95rem;">🎓 Призначення класних керівників</summary>
+      <div style="margin-top:13px;">
+        <p style="font-size:.83rem;color:#555;">Кл. керівник може завантажувати календарне планування для свого класу.</p>
+        <select id="ct-class-select" style="margin-top:8px;border:2px solid #ff9800;">
+          <option value="">-- Оберіть клас --</option>
+          <option value="class_1">1 Клас</option><option value="class_2">2 Клас</option>
+          <option value="class_3">3 Клас</option><option value="class_4">4 Клас</option>
+          <option value="class_5">5 Клас</option><option value="class_6">6 Клас</option>
+          <option value="class_7">7 Клас</option><option value="class_8">8 Клас</option>
+          <option value="class_9">9 Клас</option><option value="class_10">10 Клас</option>
+          <option value="class_11">11 Клас</option>
+        </select>
+        <select id="ct-teacher-select" style="margin-top:8px;border:2px solid #ff9800;">
+          <option value="">-- Оберіть вчителя --</option>
+        </select>
+        <div id="ct-current-info" style="margin-top:8px;font-size:.83rem;color:#666;padding:8px;background:#fff;border-radius:7px;display:none;"></div>
+        <button onclick="assignClassTeacher()" style="background:#e65100;color:#fff;padding:11px;margin-top:10px;">💾 Призначити кл. керівника</button>
       </div>
     </details>
 
@@ -493,10 +536,42 @@
       </div>
     </details>
 
+    <!-- Curriculum Upload (visible to class_teacher of THIS class or director) -->
+    <div id="curriculum-upload-section" style="display:none;margin-bottom:18px;background:#e3f2fd;padding:14px;border-radius:12px;border:1px solid #64b5f6;">
+      <h4 style="margin:0 0 8px 0;color:#0d47a1;font-size:.95rem;">📅 Календарне планування <span class="ct-badge">Кл. керівник</span></h4>
+      <p style="font-size:.78rem;color:#555;margin-bottom:10px;">Завантажте Excel-файл — теми автоматично прив'яжуться до уроків.</p>
+      <label class="curr-drop-zone" id="curr-drop-zone-label">
+        <input type="file" id="curr-file-input" accept=".xlsx,.xls">
+        <div id="curr-drop-text">📤 Натисніть або перетягніть Excel файл сюди</div>
+      </label>
+      <div id="curr-preview-section" style="display:none;margin-top:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <b style="color:#0d47a1;">Превʼю плану:</b>
+          <span id="curr-preview-class" style="font-size:.78rem;color:#666;"></span>
+        </div>
+        <div id="curr-preview-content" style="max-height:280px;overflow-y:auto;"></div>
+        <button onclick="saveCurriculumToDb()" id="btn-save-curr" style="background:#0d47a1;color:#fff;padding:11px;margin-top:10px;">💾 Зберегти план у систему</button>
+      </div>
+      <details style="margin-top:10px;">
+        <summary style="cursor:pointer;color:#1565c0;font-size:.82rem;">📥 Поточний план у системі</summary>
+        <div id="current-curriculum-display" style="margin-top:8px;font-size:.82rem;"></div>
+      </details>
+    </div>
+
     <!-- Тема уроку -->
     <div class="topic-card" id="t-topic-card" style="margin-top:13px;">
       <label>📌 Тема уроку:</label>
-      <input type="text" id="t-topic" placeholder="Оберіть або введіть тему уроку...">
+      <div class="topic-select-wrap">
+        <select id="t-topic-select" onchange="onTopicSelectChange()" class="topic-select">
+          <option value="__custom__">✏️ Власна тема (ввести вручну)</option>
+        </select>
+        <div id="topic-status-line" style="display:none;" class="topic-status-bar">
+          <span id="topic-status-text">—</span>
+          <div class="topic-progress-mini"><div class="topic-progress-mini-fill" id="topic-progress-fill" style="width:0%"></div></div>
+          <span id="topic-status-count" style="font-weight:800;color:var(--purple);">0/0</span>
+        </div>
+      </div>
+      <input type="text" id="t-topic" placeholder="Введіть тему вручну..." style="margin-top:6px;display:none;">
       <div id="t-topic-display" style="display:none;" class="topic-display"></div>
     </div>
 
@@ -889,7 +964,7 @@ function calculateStudentWeightedAvg(studentGrades,studentTypes){
 
 // ══════════ UTILITIES ══════════
 function showToast(msg){const c=document.getElementById('toast-container');const t=document.createElement('div');t.className='toast';t.innerHTML=`<span>🔔 ${msg}</span>`;c.appendChild(t);setTimeout(()=>{t.style.opacity='0';setTimeout(()=>t.remove(),300);},4000);}
-function getActiveClass(){if(currentUserData&&(currentUserData.role==='teacher'||currentUserData.role==='art_school_teacher'||currentUserData.role==='music_teacher'))return document.getElementById('t-class-selector').value;return currentUserData?currentUserData.class:'class_2';}
+function getActiveClass(){if(currentUserData&&(currentUserData.role==='teacher'||currentUserData.role==='class_teacher'||currentUserData.role==='art_school_teacher'||currentUserData.role==='music_teacher'))return document.getElementById('t-class-selector').value;return currentUserData?currentUserData.class:'class_2';}
 window.getTodayLessonsFlattened=function(dayName){if(!window.schedule||!window.schedule[dayName])return[];let flat=[];window.schedule[dayName].forEach(slot=>{if(Array.isArray(slot))flat.push(...slot);else if(slot&&Object.keys(slot).length>0)flat.push(slot);});return flat;};
 window.getValidSubjectName=function(item){if(!item)return null;let sName=item.subject&&item.subject.ua?item.subject.ua:item.subject;if(sName&&typeof sName==='string'&&sName.trim()!=="Перерва"&&item.number!==" ")return sName.trim();return null;};
 window.isSubjectAllowed=function(cls,subjectName){if(!subjectName)return false;let raw=teacherAccessMatrix[cls]||[];let allowed=Array.isArray(raw)?raw:Object.values(raw);let normAllowed=allowed.map(s=>typeof s==='string'?s.trim():'');if(normAllowed.includes("Всі предмети"))return true;return normAllowed.includes(subjectName.trim());};
@@ -1082,6 +1157,7 @@ window.handleSubjectChange=function(){
   const subj=document.getElementById('t-subject').value;
   ['t-subject-for-comment'].forEach(id=>{const el=document.getElementById(id);if(el)Array.from(el.options).forEach(o=>o.selected=(o.value===subj));});
   loadTextbooksForTeacher();loadCurriculumTopics();
+  populateTopicSelector(); /* CURRICULUM v3 */
 };
 
 window.loadCurrentTopicAndHW=function(){
@@ -1090,22 +1166,80 @@ window.loadCurrentTopicAndHW=function(){
   if(document.getElementById('t-hw'))document.getElementById('t-hw').value='';
   if(document.getElementById('existing-image-info'))document.getElementById('existing-image-info').style.display='none';
   currentHwImages=[];
-  get(ref(db,`lesson_topics/${cls}/${subject}/${date}`)).then(snap=>{
-    if(snap.exists()){document.getElementById('t-topic').value=snap.val();document.getElementById('t-topic-display').innerText=snap.val();document.getElementById('t-topic-display').style.display='block';}
-    else{document.getElementById('t-topic').value='';document.getElementById('t-topic-display').style.display='none';}
-  });
+  /* Topic loading is now handled by populateTopicSelector() → loadSavedTopicForLesson() */
   get(ref(db,`homeworks/${cls}/${date}/${subject}`)).then(snap=>{
     if(snap.exists()){const val=snap.val();if(typeof val==='string'&&document.getElementById('t-hw'))document.getElementById('t-hw').value=val;else{if(document.getElementById('t-hw'))document.getElementById('t-hw').value=val.text||'';if(val.images&&Array.isArray(val.images))currentHwImages=val.images;else if(val.image)currentHwImages=[val.image];if(currentHwImages.length>0&&document.getElementById('existing-image-info')){document.getElementById('existing-image-info').innerText=`📎 Фото: ${currentHwImages.length} шт.`;document.getElementById('existing-image-info').style.display='block';}}}
   });
 };
 
 window.saveTopicAndHW=async function(){
-  const date=document.getElementById('global-date').value;const subject=document.getElementById('t-subject').value;
-  const topic=document.getElementById('t-topic').value.trim();const hwText=document.getElementById('t-hw')?document.getElementById('t-hw').value.trim():'';
-  const fileInput=document.getElementById('t-image');const cls=getActiveClass();const btn=document.getElementById('btn-save-hw');const sm=document.getElementById('status-msg');const uid=auth.currentUser.uid;
+  const date=document.getElementById('global-date').value;
+  const subject=document.getElementById('t-subject').value;
+  const sk=subjKey(subject);
+  const sel=document.getElementById('t-topic-select');
+  const selectedId=sel?sel.value:'__custom__';
+  const customText=document.getElementById('t-topic')?document.getElementById('t-topic').value.trim():'';
+  const hwText=document.getElementById('t-hw')?document.getElementById('t-hw').value.trim():'';
+  const fileInput=document.getElementById('t-image');
+  const cls=getActiveClass();
+  const btn=document.getElementById('btn-save-hw');
+  const sm=document.getElementById('status-msg');
+  const uid=auth.currentUser.uid;
   if(!subject){alert("Оберіть предмет!");return;}
   btn.disabled=true;btn.innerText="⏳ Збереження...";
-  if(topic)await set(ref(db,`lesson_topics/${cls}/${subject}/${date}`),topic);
+
+  // 1. Прочитати попередній topicId — щоб скоригувати hoursUsed якщо тема змінилась
+  const prevSnap=await get(ref(db,`lesson_topics/${cls}/${sk}/${date}`));
+  let prevTopicId=null;
+  if(prevSnap.exists()){
+    const v=prevSnap.val();
+    if(typeof v==='object'&&v.topicId)prevTopicId=v.topicId;
+  }
+
+  // 2. Сформувати новий запис
+  let topicData=null;
+  let newTopicId=null;
+  if(selectedId==='__custom__'){
+    if(customText) topicData={customText};
+  } else {
+    topicData={topicId:selectedId};
+    newTopicId=selectedId;
+  }
+
+  // 3. Якщо обираємо нову тему — перевірити, чи не вичерпані години
+  if(newTopicId&&newTopicId!==prevTopicId){
+    const newTSnap=await get(ref(db,`curriculum_plans/${cls}/${sk}/topics/${newTopicId}`));
+    if(newTSnap.exists()){
+      const t=newTSnap.val();
+      if((t.hoursUsed||0)>=t.plannedHours){
+        showToast(`⚠️ Усі години теми "${t.title}" вже використано!`);
+        btn.disabled=false;btn.innerText="💾 Зберегти тему та ДЗ";return;
+      }
+    }
+  }
+
+  // 4. Зберегти / видалити lesson_topic
+  if(topicData) await set(ref(db,`lesson_topics/${cls}/${sk}/${date}`),topicData);
+  else await remove(ref(db,`lesson_topics/${cls}/${sk}/${date}`));
+
+  // 5. Декремент попередньої теми + інкремент нової
+  if(prevTopicId&&prevTopicId!==newTopicId){
+    const pSnap=await get(ref(db,`curriculum_plans/${cls}/${sk}/topics/${prevTopicId}`));
+    if(pSnap.exists()){
+      const t=pSnap.val();
+      const newHU=Math.max(0,(t.hoursUsed||0)-1);
+      await set(ref(db,`curriculum_plans/${cls}/${sk}/topics/${prevTopicId}/hoursUsed`),newHU);
+    }
+  }
+  if(newTopicId&&newTopicId!==prevTopicId){
+    const nSnap=await get(ref(db,`curriculum_plans/${cls}/${sk}/topics/${newTopicId}`));
+    if(nSnap.exists()){
+      const t=nSnap.val();
+      await set(ref(db,`curriculum_plans/${cls}/${sk}/topics/${newTopicId}/hoursUsed`),(t.hoursUsed||0)+1);
+    }
+  }
+
+  // 6. Author + HW
   await set(ref(db,`authors/${cls}/${date}/${subject}`),uid);
   let finalImageUrls=[...currentHwImages];
   if(fileInput&&fileInput.files.length>0){
@@ -1114,10 +1248,18 @@ window.saveTopicAndHW=async function(){
     catch(e){alert("Помилка фото: "+e.message);btn.disabled=false;btn.innerText="💾 Зберегти тему та ДЗ";return;}
   }
   if(hwText||finalImageUrls.length>0)await set(ref(db,`homeworks/${cls}/${date}/${subject}`),{text:hwText,images:finalImageUrls});
+
+  // 7. UI feedback
   sm.style.color='#1a7d3a';sm.innerText='✅ Збережено!';sm.style.display='block';sm.style.background='#e8f5e9';
-  if(topic){document.getElementById('t-topic-display').innerText=topic;document.getElementById('t-topic-display').style.display='block';}
+  const display=document.getElementById('t-topic-display');
+  if(newTopicId&&availableTopicsCache[newTopicId]){
+    const t=availableTopicsCache[newTopicId];
+    display.innerText=`№ ${t.lessonNum}. ${t.title}`;display.style.display='block';
+  } else if(customText){display.innerText=customText;display.style.display='block';}
+  else display.style.display='none';
   btn.disabled=false;btn.innerText="💾 Зберегти тему та ДЗ";
   if(fileInput)fileInput.value='';
+  populateTopicSelector(); /* refresh dropdown — covered topics will disable */
   setTimeout(()=>{sm.style.display='none';loadTeacherDashboard();},2500);
 };
 
@@ -1321,7 +1463,7 @@ window.removeMySkill=function(i){mySkillsTemp.splice(i,1);renderMySkillsTags();}
 // ══════════ DATE / CLASS CHANGE ══════════
 window.handleDateChange=function(){
   if(!currentUserData)return;
-  if(currentUserData.role==='teacher'||currentUserData.role==='art_school_teacher'||currentUserData.role==='music_teacher'){updateSubjectList();loadTeacherDashboard();loadCurrentTopicAndHW();listenTeacherAttendance();}
+  if(currentUserData.role==='teacher'||currentUserData.role==='class_teacher'||currentUserData.role==='art_school_teacher'||currentUserData.role==='music_teacher'){updateSubjectList();loadTeacherDashboard();loadCurrentTopicAndHW();listenTeacherAttendance();}
   else if(currentUserData.role==='director'){loadDirectorDashboard();document.getElementById('d-detail-hw-class')&&(document.getElementById('d-detail-hw-class').value='');}
   else if(currentUserData.role==='administrator'){loadAdminDashboard();}
   else{loadParentDashboard();}
@@ -1331,6 +1473,7 @@ window.handleClassChange=function(){
   const sel=document.getElementById('t-class-selector');const label=sel.options[sel.selectedIndex].text;
   document.getElementById('teacher-dashboard-title').innerText=`👨‍🏫 Журнал: ${label}`;
   loadStudentsList();loadScheduleScript(ac,()=>handleDateChange());
+  checkCurriculumUploadAccess(); /* CURRICULUM v3 */
 };
 
 function updateSubjectList(){
@@ -1437,7 +1580,7 @@ function updateProfileBar(){
   const src=currentUserData.photoURL||"https://cdn-icons-png.flaticon.com/512/149/149071.png";
   document.getElementById('pb-avatar').src=src;document.getElementById('modal-avatar-preview').src=src;
   let n="Користувач";if(currentUserData.firstName||currentUserData.lastName)n=`${currentUserData.firstName||''} ${currentUserData.lastName||''}`.trim();else if(currentUserData.studentName)n=`Батьки (${currentUserData.studentName})`;else if(currentUserData.email)n=currentUserData.email;
-  let r="";if(currentUserData.role==='teacher')r="Вчитель";if(currentUserData.role==='art_school_teacher'||currentUserData.role==='music_teacher')r="Вчитель школи мистецтв";if(currentUserData.role==='director')r="Директор";if(currentUserData.role==='administrator')r="Адміністратор";if(currentUserData.role==='parent'){if(currentUserData.parentRole==='mother')r="Мати";else if(currentUserData.parentRole==='father')r="Батько";else r="Опекун";}
+  let r="";if(currentUserData.role==='teacher')r="Вчитель";if(currentUserData.role==='class_teacher')r="🎓 Класний керівник";if(currentUserData.role==='art_school_teacher'||currentUserData.role==='music_teacher')r="Вчитель школи мистецтв";if(currentUserData.role==='director')r="Директор";if(currentUserData.role==='administrator')r="Адміністратор";if(currentUserData.role==='parent'){if(currentUserData.parentRole==='mother')r="Мати";else if(currentUserData.parentRole==='father')r="Батько";else r="Опекун";}
   document.getElementById('pb-name').innerText=n;document.getElementById('pb-role').innerText=r;
 }
 window.openProfileModal=async function(){
@@ -1538,8 +1681,8 @@ onAuthStateChanged(auth,async user=>{
   if(user){
     const se=user.email.replace(/\./g,'_');
     const snap=await get(child(ref(db),`users/${user.uid}`));
-    if(snap.exists()){currentUserData=snap.val();if(!currentUserData.email){currentUserData.email=user.email;update(ref(db,`users/${user.uid}`),{email:user.email});}if(currentUserData.role==='teacher'||currentUserData.role==='art_school_teacher'||currentUserData.role==='music_teacher')await fetchTeacherAccess(se);initUserSession();}
-    else{const rs=await get(child(ref(db),`pre_approved_roles/${se}`));if(rs.exists()){const ar=rs.val();const nd={role:ar,email:user.email};if(ar==='teacher'||ar==='art_school_teacher'||ar==='music_teacher')await fetchTeacherAccess(se);await set(ref(db,`users/${user.uid}`),nd);currentUserData=nd;initUserSession();}
+    if(snap.exists()){currentUserData=snap.val();if(!currentUserData.email){currentUserData.email=user.email;update(ref(db,`users/${user.uid}`),{email:user.email});}if(currentUserData.role==='teacher'||currentUserData.role==='class_teacher'||currentUserData.role==='art_school_teacher'||currentUserData.role==='music_teacher')await fetchTeacherAccess(se);initUserSession();}
+    else{const rs=await get(child(ref(db),`pre_approved_roles/${se}`));if(rs.exists()){const ar=rs.val();const nd={role:ar,email:user.email};if(ar==='teacher'||ar==='class_teacher'||ar==='art_school_teacher'||ar==='music_teacher')await fetchTeacherAccess(se);await set(ref(db,`users/${user.uid}`),nd);currentUserData=nd;initUserSession();}
     else{const ls=await get(child(ref(db),`parent_links/${se}`));if(ls.exists()){const ld=ls.val();let sn,sc,pr='guardian';if(typeof ld==='string'){sn=ld;sc="class_2";}else{sn=ld.studentName;sc=ld.class;pr=ld.role||'guardian';}const nd={role:"parent",studentName:sn,class:sc,parentRole:pr,email:user.email};await set(ref(db,`users/${user.uid}`),nd);currentUserData=nd;initUserSession();}else{alert("Ваш Email не зареєстровано.");signOut(auth);}}}
   }else document.getElementById('login-screen').style.display='block';
 });
@@ -1549,7 +1692,7 @@ function initUserSession(){
   const r=currentUserData.role;
   if(r==='director'){document.getElementById('director-screen').style.display='block';document.getElementById('teacher-class-selector-box').style.display='none';loadTeachersListForDirector();loadDirectorTeacherSkillsList();handleDateChange();loadDrafts();}
   else if(r==='administrator'){document.getElementById('admin-screen').style.display='block';document.getElementById('teacher-class-selector-box').style.display='none';handleDateChange();}
-  else if(r==='teacher'||r==='art_school_teacher'||r==='music_teacher'){
+  else if(r==='teacher'||r==='class_teacher'||r==='art_school_teacher'||r==='music_teacher'){
     document.getElementById('teacher-screen').style.display='block';document.getElementById('teacher-class-selector-box').style.display='block';
     const isArt=r==='art_school_teacher';
     document.getElementById('t-matrix-btn-wrapper').style.display=isArt?'block':'none';
@@ -1700,6 +1843,312 @@ window.submitAttendance=function(){const date=document.getElementById('global-da
 window.sendReaction=function(date,subject,emoji){if(!currentUserData)return;set(ref(db,`reactions/${getActiveClass()}/${date}/${subject}/${currentUserData.studentName}`),emoji).then(()=>loadParentDashboard());};
 // sendRetakeRequest is already defined above as async window function
 window.sendRetakeRequest=sendRetakeRequest;
+
+// ════════════════════════════════════════════════════════════════
+// ═══════════════════ CURRICULUM MODULE (v3) ═════════════════════
+// ════════════════════════════════════════════════════════════════
+let parsedCurriculum=null;        // після парсингу xlsx
+let availableTopicsCache={};      // {topicId: topicData} для вибору
+let currentClassTeacherEmail=null;
+
+// Helper: безпечний ключ предмету
+window.subjKey=function(s){return (s||'').replace(/[.#$[\]/]/g,'_').trim();};
+
+// Helper: Excel serial → ISO дата
+function excelDateToISO(val){
+  if(val instanceof Date) return val.toISOString().slice(0,10);
+  if(typeof val==='number'){
+    const d=new Date(Date.UTC(1899,11,30)+val*86400000);
+    return d.toISOString().slice(0,10);
+  }
+  if(typeof val==='string'&&val.match(/^\d{4}-\d{2}-\d{2}/))return val.slice(0,10);
+  return null;
+}
+
+// ═══════ Парсер Excel ═══════
+window.handleCurriculumFile=function(e){
+  const file=e.target.files[0];if(!file)return;
+  const dropEl=document.getElementById('curr-drop-zone-label');
+  const txtEl=document.getElementById('curr-drop-text');
+  txtEl.innerText=`📄 ${file.name}`;
+  dropEl.classList.add('has-file');
+  const reader=new FileReader();
+  reader.onload=function(evt){
+    try{
+      const wb=XLSX.read(evt.target.result,{type:'array',cellDates:true});
+      parsedCurriculum=parseCurriculumWorkbook(wb);
+      renderCurriculumPreview(parsedCurriculum);
+    }catch(err){alert("Помилка парсингу: "+err.message);console.error(err);}
+  };
+  reader.readAsArrayBuffer(file);
+};
+
+function parseCurriculumWorkbook(wb){
+  const result={sheets:{}};
+  wb.SheetNames.forEach(sheetName=>{
+    const sheet=wb.Sheets[sheetName];
+    const rows=XLSX.utils.sheet_to_json(sheet,{header:1,defval:null});
+    const meta={};let dataStartRow=0;
+    for(let i=0;i<rows.length;i++){
+      const r=rows[i];if(!r||!r[0])continue;
+      const key=String(r[0]).trim().replace(/:$/,'');
+      if(key==='Розділ / блок'){dataStartRow=i+1;break;}
+      if(r[1]!==null&&r[1]!==undefined)meta[key]=r[1];
+    }
+    const topics=[];
+    for(let i=dataStartRow;i<rows.length;i++){
+      const r=rows[i];if(!r||!r[2])continue;
+      topics.push({
+        section:r[0]?String(r[0]).trim():'',
+        lessonNum:r[1]?parseInt(r[1]):(topics.length+1),
+        title:String(r[2]).trim(),
+        plannedDate:excelDateToISO(r[3]),
+        plannedHours:r[4]?parseInt(r[4]):1,
+        tags:r[5]?String(r[5]).trim():''
+      });
+    }
+    if(topics.length>0){
+      result.sheets[sheetName]={
+        meta:{
+          year:meta['Навчальний рік']||'',
+          classNum:meta['Клас']?parseInt(meta['Клас']):null,
+          subject:meta['Предмет']||sheetName,
+          teacher:meta['Учитель']||'',
+          language:meta['Мова викладання']||''
+        },
+        topics:topics
+      };
+    }
+  });
+  return result;
+}
+
+function renderCurriculumPreview(data){
+  const container=document.getElementById('curr-preview-content');
+  const classSpan=document.getElementById('curr-preview-class');
+  const cls=getActiveClass();
+  classSpan.innerText=`→ ${cls.replace('class_','')} клас`;
+  let html='';
+  for(let sheetName in data.sheets){
+    const s=data.sheets[sheetName];
+    html+=`<div class="topic-preview"><div class="topic-preview-subj">📚 ${s.meta.subject} (${s.topics.length} тем) <span style="font-size:.72rem;color:#888;font-weight:400;">— ${s.meta.year}, ${s.meta.teacher}</span></div>`;
+    s.topics.forEach(t=>{
+      html+=`<div class="topic-preview-row"><span class="num">${t.lessonNum}</span><span><b>${t.title}</b><br><span style="color:#888;font-size:.7rem;">${t.section}${t.tags?' · '+t.tags:''}</span></span><span class="hrs">${t.plannedDate||'—'}</span><span class="hrs">${t.plannedHours} год.</span></div>`;
+    });
+    html+=`</div>`;
+  }
+  container.innerHTML=html;
+  document.getElementById('curr-preview-section').style.display='block';
+}
+
+window.saveCurriculumToDb=async function(){
+  if(!parsedCurriculum)return alert("Спочатку завантажте файл!");
+  const cls=getActiveClass();
+  const btn=document.getElementById('btn-save-curr');
+  btn.disabled=true;btn.innerText="⏳ Збереження...";
+  try{
+    for(let sheetName in parsedCurriculum.sheets){
+      const s=parsedCurriculum.sheets[sheetName];
+      const sk=window.subjKey(s.meta.subject);
+      await set(ref(db,`curriculum_plans/${cls}/${sk}/meta`),{
+        ...s.meta,
+        uploadedBy:auth.currentUser.uid,
+        uploadedAt:localDateString
+      });
+      // Зберігаємо існуючі hoursUsed якщо план перезавантажують
+      const existSnap=await get(ref(db,`curriculum_plans/${cls}/${sk}/topics`));
+      const existing=existSnap.exists()?existSnap.val():{};
+      const existByLesson={};
+      for(let id in existing) existByLesson[existing[id].lessonNum]={id,hoursUsed:existing[id].hoursUsed||0};
+
+      const newTopics={};
+      s.topics.forEach((t,idx)=>{
+        const id=`t_${t.lessonNum}_${idx}`;
+        const prevHU=existByLesson[t.lessonNum]?.hoursUsed||0;
+        newTopics[id]={...t,hoursUsed:Math.min(prevHU,t.plannedHours)};
+      });
+      await set(ref(db,`curriculum_plans/${cls}/${sk}/topics`),newTopics);
+    }
+    showToast("✅ Календарне планування збережено!");
+    parsedCurriculum=null;
+    document.getElementById('curr-preview-section').style.display='none';
+    document.getElementById('curr-file-input').value='';
+    document.getElementById('curr-drop-text').innerText='📤 Натисніть або перетягніть Excel файл сюди';
+    document.getElementById('curr-drop-zone-label').classList.remove('has-file');
+    loadCurrentCurriculumDisplay();
+    populateTopicSelector();
+  }catch(e){alert("Помилка: "+e.message);}
+  btn.disabled=false;btn.innerText="💾 Зберегти план у систему";
+};
+
+async function loadCurrentCurriculumDisplay(){
+  const cls=getActiveClass();
+  const snap=await get(ref(db,`curriculum_plans/${cls}`));
+  const el=document.getElementById('current-curriculum-display');
+  if(!el)return;
+  if(!snap.exists()){el.innerHTML='<p class="empty-msg">План ще не завантажено.</p>';return;}
+  const data=snap.val();let html='';
+  for(let sk in data){
+    const meta=data[sk].meta||{};
+    const topics=data[sk].topics||{};
+    const total=Object.keys(topics).length;
+    let coveredCount=0;
+    for(let id in topics) if((topics[id].hoursUsed||0)>=topics[id].plannedHours) coveredCount++;
+    html+=`<div style="padding:7px 0;border-bottom:1px dashed #ccc;"><b>${meta.subject||sk}</b> — ${coveredCount}/${total} тем пройдено <span style="color:#888;font-size:.72rem;">(${meta.year||''})</span></div>`;
+  }
+  el.innerHTML=html||'<p class="empty-msg">План порожній.</p>';
+}
+
+// ═══════ Topic Selector ═══════
+window.populateTopicSelector=async function(){
+  const cls=getActiveClass();
+  const subj=document.getElementById('t-subject')?document.getElementById('t-subject').value:'';
+  const sel=document.getElementById('t-topic-select');
+  const statusLine=document.getElementById('topic-status-line');
+  if(!sel)return;
+  if(!subj){sel.innerHTML='<option value="__custom__">✏️ Власна тема</option>';if(statusLine)statusLine.style.display='none';return;}
+  const sk=window.subjKey(subj);
+  const snap=await get(ref(db,`curriculum_plans/${cls}/${sk}/topics`));
+  availableTopicsCache={};
+  let html='<option value="__custom__">✏️ Власна тема (ввести вручну)</option>';
+  let totalTopics=0;let coveredTopics=0;
+  if(snap.exists()){
+    const topics=snap.val();
+    const sorted=Object.entries(topics).sort((a,b)=>(a[1].lessonNum||0)-(b[1].lessonNum||0));
+    sorted.forEach(([id,t])=>{
+      availableTopicsCache[id]=t;totalTopics++;
+      const hu=t.hoursUsed||0;
+      const isCovered=hu>=t.plannedHours;
+      if(isCovered)coveredTopics++;
+      const dis=isCovered?'disabled':'';
+      const tag=t.tags?` [${t.tags}]`:'';
+      const label=isCovered
+        ?`✅ № ${t.lessonNum}. ${t.title} — пройдено`
+        :`№ ${t.lessonNum}. ${t.title} (${hu}/${t.plannedHours} год.${tag})`;
+      html+=`<option value="${id}" ${dis}>${label}</option>`;
+    });
+  }
+  sel.innerHTML=html;
+  if(totalTopics>0&&statusLine){
+    statusLine.style.display='flex';
+    document.getElementById('topic-status-text').innerText=`📚 ${subj}`;
+    document.getElementById('topic-status-count').innerText=`${coveredTopics}/${totalTopics} пройдено`;
+    const pct=totalTopics>0?(coveredTopics/totalTopics)*100:0;
+    document.getElementById('topic-progress-fill').style.width=pct+'%';
+  } else if(statusLine) statusLine.style.display='none';
+  await loadSavedTopicForLesson();
+};
+
+async function loadSavedTopicForLesson(){
+  const cls=getActiveClass();
+  const subj=document.getElementById('t-subject')?document.getElementById('t-subject').value:'';
+  const date=document.getElementById('global-date').value;
+  if(!subj)return;
+  const sk=window.subjKey(subj);
+  const snap=await get(ref(db,`lesson_topics/${cls}/${sk}/${date}`));
+  const sel=document.getElementById('t-topic-select');
+  const customInput=document.getElementById('t-topic');
+  const display=document.getElementById('t-topic-display');
+  if(!sel)return;
+  if(snap.exists()){
+    const v=snap.val();
+    if(typeof v==='string'){
+      // legacy
+      sel.value='__custom__';if(customInput){customInput.style.display='block';customInput.value=v;}
+      if(display){display.innerText=v;display.style.display='block';}
+    }else if(v.topicId){
+      // Перевіряємо що така опція існує (не disabled)
+      const opt=Array.from(sel.options).find(o=>o.value===v.topicId);
+      if(opt){sel.value=v.topicId;if(customInput)customInput.style.display='none';
+        const t=availableTopicsCache[v.topicId];
+        if(t&&display){display.innerText=`№ ${t.lessonNum}. ${t.title}`;display.style.display='block';}
+      } else if(display){display.innerText='(тема видалена з плану)';display.style.display='block';}
+    }else if(v.customText){
+      sel.value='__custom__';if(customInput){customInput.style.display='block';customInput.value=v.customText;}
+      if(display){display.innerText=v.customText;display.style.display='block';}
+    }
+  } else {
+    sel.value='__custom__';if(customInput){customInput.style.display='none';customInput.value='';}
+    if(display)display.style.display='none';
+  }
+  onTopicSelectChange();
+}
+
+window.onTopicSelectChange=function(){
+  const sel=document.getElementById('t-topic-select');
+  const customInput=document.getElementById('t-topic');
+  if(!sel||!customInput)return;
+  customInput.style.display=sel.value==='__custom__'?'block':'none';
+};
+
+// ═══════ Class Teacher Assignment ═══════
+window.assignClassTeacher=async function(){
+  const cls=document.getElementById('ct-class-select').value;
+  const teacherSE=document.getElementById('ct-teacher-select').value;
+  if(!cls||!teacherSE)return alert("Оберіть клас та вчителя!");
+  const teacher=globalTeachersList.find(t=>t.safeEmail===teacherSE);
+  if(!teacher)return alert("Вчителя не знайдено!");
+  await set(ref(db,`class_teachers/${cls}`),{
+    teacherEmail:teacher.email,
+    teacherName:teacher.name,
+    assignedAt:localDateString,
+    assignedBy:auth.currentUser.uid
+  });
+  showToast(`✅ ${teacher.name} призначений кл. керівником ${cls.replace('class_','')} класу!`);
+  loadClassTeacherInfo();
+};
+
+window.loadClassTeacherInfo=async function(){
+  const cls=document.getElementById('ct-class-select')?.value;
+  const info=document.getElementById('ct-current-info');
+  const tSel=document.getElementById('ct-teacher-select');
+  if(!info||!tSel)return;
+  // Заповнюємо вчителів
+  tSel.innerHTML='<option value="">-- Оберіть вчителя --</option>';
+  globalTeachersList.forEach(t=>tSel.innerHTML+=`<option value="${t.safeEmail}">${t.name} (${t.email})</option>`);
+  if(!cls){info.style.display='none';return;}
+  const snap=await get(ref(db,`class_teachers/${cls}`));
+  if(snap.exists()){
+    const d=snap.val();
+    info.innerHTML=`🎓 Поточний кл. керівник: <b>${d.teacherName}</b> <span style="color:#888;">(${d.teacherEmail})</span><br><span style="font-size:.72rem;color:#888;">з ${d.assignedAt}</span>`;
+    info.style.display='block';
+  } else {
+    info.innerHTML=`<i style="color:#888;">Кл. керівник ще не призначений.</i>`;
+    info.style.display='block';
+  }
+};
+
+// ═══════ Curriculum Upload Access ═══════
+window.checkCurriculumUploadAccess=async function(){
+  const sec=document.getElementById('curriculum-upload-section');
+  if(!sec||!currentUserData)return;
+  if(currentUserData.role==='director'){sec.style.display='block';loadCurrentCurriculumDisplay();return;}
+  if(currentUserData.role!=='teacher'&&currentUserData.role!=='class_teacher'&&currentUserData.role!=='art_school_teacher'){sec.style.display='none';return;}
+  const cls=getActiveClass();
+  const snap=await get(ref(db,`class_teachers/${cls}`));
+  if(snap.exists()&&snap.val().teacherEmail===currentUserData.email){
+    sec.style.display='block';
+    loadCurrentCurriculumDisplay();
+  } else sec.style.display='none';
+};
+
+// ═══════ Hooks ═══════
+// File input handler
+const currFileInput=document.getElementById('curr-file-input');
+if(currFileInput) currFileInput.addEventListener('change',window.handleCurriculumFile);
+
+// Class selector listener for director
+const ctClassSelect=document.getElementById('ct-class-select');
+if(ctClassSelect) ctClassSelect.addEventListener('change',window.loadClassTeacherInfo);
+
+// Initial setup: коли директор завантажується, ініціалізуємо teacher list для кл. керівників
+const _origInit=window.initUserSession;
+// Замість патчити initUserSession, додаємо хук через таймаут після auth
+setTimeout(()=>{
+  if(currentUserData?.role==='director'&&typeof loadClassTeacherInfo==='function'){
+    setTimeout(loadClassTeacherInfo,500);
+  }
+},1500);
 </script>
 </body>
 </html>
