@@ -548,6 +548,7 @@
     <div style="display:flex;gap:9px;margin-bottom:18px;flex-wrap:wrap;">
       <button onclick="openVisualMatrixModal('live')" style="flex:1;min-width:170px;background:linear-gradient(135deg,#1abc9c,#16a085);color:#fff;margin-top:0;font-size:.95rem;padding:11px;">🗓️ Розклад</button>
       <button onclick="openJournalModal('director')" style="flex:1;min-width:170px;background:linear-gradient(135deg,var(--purple),#9b59b6);color:#fff;margin-top:0;font-size:.95rem;padding:11px;">📖 Журнал</button>
+      <button onclick="openChatModal('director')" style="flex:1;min-width:170px;background:linear-gradient(135deg,#9b59b6,#8e44ad);color:#fff;margin-top:0;font-size:.95rem;padding:11px;">💬 Чат з батьками</button>
     </div>
 
     <!-- SMART MATCHING — замени -->
@@ -739,6 +740,13 @@
       </div>
     </div>
 
+    <div style="display:flex;gap:9px;margin-bottom:14px;" id="t-chat-row">
+      <div id="t-chat-btn" style="flex:1;background:#f3e5f5;padding:13px;border-radius:12px;text-align:center;cursor:pointer;" onclick="openChatModal('teacher')">
+        <h4 style="margin:0;color:#7b1fa2;font-size:.82rem;">💬 Чат з батьками</h4>
+        <p style="font-size:1.6rem;margin:4px 0;">✉️</p>
+      </div>
+    </div>
+
     <!-- ДЗ зведення -->
     <div id="t-hw-list-wrapper" class="data-card" style="border-left-color:var(--blue);background:#f4f9fd;margin-bottom:14px;">
       <h4 style="margin-top:0;color:var(--blue);">📋 ДЗ класу сьогодні:</h4>
@@ -870,6 +878,7 @@
       <summary style="font-weight:700;cursor:pointer;color:#7f8c8d;">⚙️ Управління класом</summary>
       <div style="margin-top:13px;">
         <input type="text" id="new-student-name" placeholder="Прізвище та Ім'я учня">
+        <input type="email" id="new-student-email" placeholder="Email учня (для входу)" style="margin-top:5px; border-color:#f1c40f;">
         <button style="background:#f1c40f;padding:8px;margin-top:5px;margin-bottom:13px;" onclick="addStudent()">Додати учня</button>
         <hr>
         <p style="font-size:.83rem;color:#555;margin-top:13px;font-weight:700;">Прив'язка батьків:</p>
@@ -1985,7 +1994,7 @@ window.loadAdminDashboard=async function(){try{const date=document.getElementByI
 // ══════════ ATTENDANCE ══════════
 window.loadStudentsList=function(){get(child(ref(db),`students_list/${getActiveClass()}`)).then(snap=>{const els=['t-student','t-mark-absent-student','t-sticker-student','t-behavior-student','t-student-for-parent'];els.forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML='<option value="">Учень...</option>';});if(snap.exists())Object.values(snap.val()).sort().forEach(name=>{els.forEach(id=>{const el=document.getElementById(id);if(el){const o=document.createElement('option');o.value=name;o.innerText=name;el.appendChild(o.cloneNode(true));}});});});};
 window.teacherMarkAbsent=function(){const st=document.getElementById('t-mark-absent-student').value;const rs=document.getElementById('t-mark-absent-reason').value;const date=document.getElementById('global-date').value;if(!st)return alert('Оберіть учня!');const status=rs==='запізнення'?'late':'absent';set(ref(db,`attendance/${getActiveClass()}/${date}/${st}`),{status,reason:rs}).then(()=>{showToast(`✅ ${st} відмічений.`);document.getElementById('t-mark-absent-student').value='';});};
-window.addStudent=function(){const name=document.getElementById('new-student-name').value.trim();if(name)push(ref(db,`students_list/${getActiveClass()}`),name).then(()=>{alert("Учня додано!");loadStudentsList();document.getElementById('new-student-name').value='';});};
+window.addStudent=function(){const name=document.getElementById('new-student-name').value.trim();const emailEl=document.getElementById('new-student-email');const email=emailEl?emailEl.value.trim().replace(/\./g,'_'):'';if(name){push(ref(db,`students_list/${getActiveClass()}`),name).then(()=>{if(email)set(ref(db,`student_links/${email}`),{studentName:name,class:getActiveClass()});alert("Учня додано!");loadStudentsList();document.getElementById('new-student-name').value='';if(emailEl)emailEl.value='';});}};
 window.linkParent=function(){const e=document.getElementById('parent-email').value.trim().replace(/\./g,'_');const st=document.getElementById('t-student-for-parent').value;const cls=getActiveClass();const role=document.getElementById('t-parent-role').value;if(e&&st){set(ref(db,`parent_links/${e}`),{studentName:st,class:cls,role}).then(()=>{alert(`✅ Email прив'язано!`);document.getElementById('parent-email').value='';});}else alert("Оберіть учня та Email");};
 
 function listenTeacherAttendance(){
