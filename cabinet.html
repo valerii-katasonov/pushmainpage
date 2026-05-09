@@ -233,6 +233,247 @@
     .topic-progress-mini{flex:1;height:5px;background:#e0e0e0;border-radius:3px;margin:0 10px;overflow:hidden;min-width:30px;}
     .topic-progress-mini-fill{height:100%;background:linear-gradient(90deg,#9c27b0,#673ab7);transition:width .4s;}
     .ct-badge{display:inline-block;background:linear-gradient(135deg,#ff6e40,#ff5252);color:#fff;padding:3px 10px;border-radius:12px;font-size:.7rem;font-weight:800;margin-left:6px;text-transform:uppercase;letter-spacing:.5px;}
+
+    /* ═══════════════════════════════════════════════════════
+       RESPONSIVE — MOBILE / TABLET / DESKTOP
+       ═══════════════════════════════════════════════════════ */
+
+    /* === Touch targets: prevent iOS zoom on input focus === */
+    @media (pointer: coarse) {
+      input[type=text], input[type=email], input[type=password], input[type=date], input[type=month], select, textarea { font-size: 16px !important; }
+      button { min-height: 44px; }
+      .reaction-btn { min-height: 44px !important; min-width: 44px !important; }
+      .g-cell { min-height: 32px; min-width: 32px; }
+    }
+
+    /* === SMALL MOBILE (<=480px) === */
+    @media (max-width: 480px) {
+      body { padding: 10px; }
+      .container { padding: 16px 14px; border-radius: 14px; margin-bottom: 20px; }
+      h2 { font-size: 1.25rem; }
+      h3 { font-size: 1rem; margin-top: 18px; }
+      label { font-size: .85rem; margin-top: 11px; }
+      button { padding: 12px; font-size: .9rem; margin-top: 13px; }
+      input[type=email], input[type=password], input[type=text], input[type=date], input[type=month], select, textarea { padding: 10px; font-size: 15px; }
+
+      /* Profile bar — compact */
+      #profile-bar { gap: 10px; padding: 10px; }
+      #pb-avatar { width: 42px !important; height: 42px !important; }
+      #pb-name { font-size: .95rem !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 130px; }
+      #pb-role { font-size: .72rem !important; }
+      #profile-bar > button { padding: 7px 11px !important; font-size: .78rem !important; }
+
+      /* Quick actions stack vertically on tiny screens */
+      .qa-row { flex-direction: column; gap: 7px; }
+      .qa-btn { width: 100%; min-width: 0; padding: 12px; }
+
+      /* Two-button rows wrap nicely */
+      #t-exams-journal-btns, .qa-row { gap: 7px; }
+
+      /* Attendance form — wraps to vertical */
+      #t-mark-absent-block { flex-wrap: wrap; gap: 7px; }
+      #t-mark-absent-block select { flex: 1 1 100%; }
+      #t-mark-absent-block button { flex: 1 1 100%; }
+
+      /* Sticker / behavior / comment rows wrap */
+      .sticker-row, .behavior-row, [style*="display:flex"][style*="gap:8px"][style*="align-items:flex-end"] { flex-wrap: wrap; }
+
+      /* Modals — full screen feel */
+      .modal-content { padding: 18px 14px; border-radius: 14px; max-height: 95vh; }
+      .modal-overlay { padding: 4px; }
+      #grade-editor-popup { min-width: 175px; padding: 10px; }
+      #grade-editor-popup .type-btn { padding: 5px 2px; font-size: .65rem; }
+
+      /* Date picker box */
+      .date-picker-box { padding: 11px; }
+
+      /* Lesson rows in dynamic schedule — more compact */
+      .lesson-row { padding: 7px 8px; gap: 8px; }
+      .lesson-num { width: 22px; height: 22px; font-size: .68rem; }
+      .lesson-subj { font-size: .82rem; }
+      .lesson-time { font-size: .68rem; }
+      .lesson-countdown { font-size: .7rem; padding: 2px 6px; }
+
+      /* Payments — tighter */
+      .payment-card { padding: 13px; }
+      .payment-row { font-size: .82rem; padding: 6px 0; }
+
+      /* Stats counters smaller */
+      .data-card h4 { font-size: .82rem !important; }
+
+      /* Schedule day label */
+      .schedule-day-label { font-size: .72rem; }
+
+      /* Smart matching form */
+      #sm-class, #sm-subject, #sm-date, #sm-time { flex: 1 1 100% !important; min-width: 0 !important; }
+
+      /* Cell editor tighter */
+      #edit-cell-modal .modal-content { padding: 16px 12px; }
+
+      /* Toast remains at bottom (standard UX) */
+      .toast { font-size: .85rem; padding: 11px 14px; }
+
+      /* Reactions modal */
+      .reaction-box { gap: 5px; }
+    }
+
+    /* === MEDIUM MOBILE (481-767px) === */
+    @media (min-width: 481px) and (max-width: 767px) {
+      .container { max-width: 100%; padding: 22px 20px; }
+      .qa-btn { font-size: .85rem; padding: 12px 8px; }
+    }
+
+    /* === TABLET (768-1023px) === */
+    @media (min-width: 768px) and (max-width: 1023px) {
+      body { padding: 24px; }
+      .container { max-width: 720px; padding: 30px 32px; }
+      h2 { font-size: 1.55rem; }
+      .qa-btn { font-size: .92rem; }
+
+      /* Stats and counters can sit in row of 3 */
+      [style*="display:flex"][style*="gap:9px"][style*="margin-bottom:14px"] { gap: 12px; }
+
+      /* Modals get a bit wider */
+      .modal-content { max-width: 600px; }
+      #journal-modal .modal-content,
+      #visual-matrix-modal .modal-content { max-width: 95%; }
+    }
+
+    /* === DESKTOP (>=1024px) ═══ MULTI-COLUMN LAYOUTS === */
+    @media (min-width: 1024px) {
+      body { padding: 30px 40px; align-items: flex-start; }
+      .container { max-width: 1180px; padding: 30px 40px; border-radius: 22px; }
+      h2 { font-size: 1.7rem; }
+      h3 { font-size: 1.15rem; margin-top: 24px; }
+
+      /* Login stays compact and centered inside wide container */
+      #login-screen { max-width: 440px; margin: 40px auto; }
+      #login-screen h2 { font-size: 1.6rem; }
+
+      /* Profile bar — wider, name doesn't need ellipsis */
+      #profile-bar { padding: 18px 22px; }
+      #pb-avatar { width: 56px !important; height: 56px !important; }
+      #pb-name { font-size: 1.2rem !important; }
+      #pb-role { font-size: .9rem !important; }
+
+      /* Date picker box — make it inline-style on desktop */
+      .date-picker-box { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding: 16px 22px; }
+      .date-picker-box label { margin: 0 !important; flex-shrink: 0; }
+      .date-picker-box input[type=date] { flex: 1; max-width: 280px; margin-top: 0 !important; }
+      #teacher-class-selector-box { flex: 1 1 100%; padding-bottom: 14px !important; margin-bottom: 14px !important; display: flex; align-items: center; gap: 14px; }
+      #teacher-class-selector-box select { flex: 1; max-width: 280px; margin-top: 0 !important; }
+      #teacher-class-selector-box label { margin-top: 0 !important; }
+
+      /* === PARENT PANEL — 2-COLUMN LAYOUT === */
+      #parent-screen[style*="display: block"], #parent-screen[style*="display:block"] {
+        display: grid !important;
+        grid-template-columns: 1.25fr 1fr;
+        column-gap: 28px;
+        row-gap: 16px;
+        align-items: start;
+      }
+      /* Schedule + payments are full-width items */
+      #parent-screen > .schedule-box,
+      #parent-screen > h3,
+      #parent-screen > #payments-section,
+      #parent-screen > .btn-logout {
+        grid-column: 1 / -1;
+      }
+      #parent-screen > .schedule-box { margin-bottom: 8px; }
+
+      /* === TEACHER PANEL — 2-COLUMN AFTER QUICK ACTIONS === */
+      #teacher-screen[style*="display: block"], #teacher-screen[style*="display:block"] {
+        display: grid !important;
+        grid-template-columns: 1fr 1fr;
+        column-gap: 28px;
+        row-gap: 14px;
+        align-items: start;
+      }
+      #teacher-screen > h2,
+      #teacher-screen > h3,
+      #teacher-screen > #t-exams-journal-btns,
+      #teacher-screen > #t-matrix-btn-wrapper,
+      #teacher-screen > #curriculum-upload-section,
+      #teacher-screen > .btn-logout {
+        grid-column: 1 / -1;
+      }
+      /* Stats cards row — full width */
+      #teacher-screen > div[style*="display:flex"][style*="margin-bottom:14px"] {
+        grid-column: 1 / -1;
+      }
+
+      /* === DIRECTOR PANEL — Wider container, internal flexes adapt naturally === */
+      #director-screen .data-card { margin-top: 18px; }
+      /* Stats counter rows expand to fit */
+      #director-screen [style*="display:flex"][style*="margin-bottom:16px"],
+      #director-screen [style*="display:flex"][style*="gap:9px"]:not(.qa-row) {
+        gap: 16px !important;
+      }
+
+      /* Quick actions — stays in row */
+      .qa-row { flex-wrap: nowrap; }
+
+      /* Modals can be wider */
+      .modal-content { max-width: 700px; padding: 32px 36px; }
+      #journal-modal .modal-content,
+      #visual-matrix-modal .modal-content,
+      #edit-cell-modal .modal-content { max-width: 95%; }
+      #profile-modal .modal-content,
+      #wrapped-modal .modal-content,
+      #reactions-modal .modal-content { max-width: 540px; }
+
+      /* Journal table — more comfortable */
+      .journal-table { font-size: .88rem; }
+      .journal-table td { height: 38px; min-width: 36px; }
+
+      /* Lesson rows in dynamic schedule a bit larger */
+      .lesson-row { padding: 11px 14px; }
+      .lesson-num { width: 28px; height: 28px; font-size: .8rem; }
+      .lesson-subj { font-size: 1rem; }
+      .lesson-time { font-size: .8rem; }
+
+      /* Smart matching grid */
+      [style*="display:flex"][style*="gap:8px"][style*="flex-wrap:wrap"] { gap: 12px; }
+
+      /* Toasts — bottom right on desktop */
+      #toast-container { left: auto; right: 20px; bottom: 20px; transform: none; }
+
+      /* Hover on cards = subtle elevation */
+      .data-card:hover, .payment-card:hover, .schedule-box:hover { transition: .25s; box-shadow: 0 6px 20px rgba(0,0,0,.08); }
+
+      /* Modals adapt height */
+      .modal-overlay { padding: 30px; }
+    }
+
+    /* === BIG DESKTOP (>=1440px) — Even more breathing room === */
+    @media (min-width: 1440px) {
+      .container { max-width: 1320px; padding: 36px 48px; }
+      #parent-screen { grid-template-columns: 1.3fr 1fr; column-gap: 36px; }
+      #teacher-screen { column-gap: 36px; }
+    }
+
+    /* === Print-friendly === */
+    @media print {
+      body { background: #fff !important; padding: 0; }
+      .container { box-shadow: none; max-width: 100%; padding: 0; }
+      #profile-bar, .btn-logout, #toast-container, .modal-overlay { display: none !important; }
+      .data-card { break-inside: avoid; box-shadow: none !important; border: 1px solid #ddd; }
+    }
+
+    /* === Accessibility: focus states === */
+    button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+      outline: 3px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    /* === Reduce motion if user prefers === */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .01ms !important;
+      }
+    }
   </style>
 </head>
 <body>
