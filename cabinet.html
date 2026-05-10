@@ -339,24 +339,28 @@
       #visual-matrix-modal .modal-content { max-width: 95%; }
     }
 
-    /* === DESKTOP (>=1024px) ═══ MULTI-COLUMN LAYOUTS === */
+    /* ═══════════════════════════════════════════════════════
+       DESKTOP (>=1024px) — ПРОРАБОТАННЫЕ LAYOUTS ДЛЯ КАЖДОГО КАБИНЕТА
+       ═══════════════════════════════════════════════════════ */
     @media (min-width: 1024px) {
       body { padding: 30px 40px; align-items: flex-start; }
       .container { max-width: 1180px; padding: 30px 40px; border-radius: 22px; }
       h2 { font-size: 1.7rem; }
       h3 { font-size: 1.15rem; margin-top: 24px; }
 
-      /* Login stays compact and centered inside wide container */
-      #login-screen { max-width: 440px; margin: 40px auto; }
+      /* ───── LOGIN ───── */
+      #login-screen[style*="display: block"], #login-screen[style*="display:block"] {
+        max-width: 440px; margin: 50px auto;
+      }
       #login-screen h2 { font-size: 1.6rem; }
 
-      /* Profile bar — wider, name doesn't need ellipsis */
+      /* ───── PROFILE BAR ───── */
       #profile-bar { padding: 18px 22px; }
       #pb-avatar { width: 56px !important; height: 56px !important; }
       #pb-name { font-size: 1.2rem !important; }
       #pb-role { font-size: .9rem !important; }
 
-      /* Date picker box — make it inline-style on desktop */
+      /* ───── DATE PICKER (горизонтальный) ───── */
       .date-picker-box { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding: 16px 22px; }
       .date-picker-box label { margin: 0 !important; flex-shrink: 0; }
       .date-picker-box input[type=date] { flex: 1; max-width: 280px; margin-top: 0 !important; }
@@ -364,24 +368,77 @@
       #teacher-class-selector-box select { flex: 1; max-width: 280px; margin-top: 0 !important; }
       #teacher-class-selector-box label { margin-top: 0 !important; }
 
-      /* === PARENT PANEL — 2-COLUMN LAYOUT === */
-      #parent-screen[style*="display: block"], #parent-screen[style*="display:block"] {
+      /* ═════════════════════════════════════════
+         ADMIN — простой одноколоночный layout
+         ═════════════════════════════════════════ */
+      #admin-screen[style*="display: block"], #admin-screen[style*="display:block"] {
+        display: block !important;
+        max-width: 800px; margin: 0 auto;
+      }
+
+      /* ═════════════════════════════════════════
+         DIRECTOR — 2 колонки + умные spans
+         Layout:
+         [ Title ───────────────────────────────── ]
+         [ 3 кнопки действий (full) ───────────── ]
+         [ Smart Matching   │ Skill Matrix       ]
+         [ Grade Stats (full) ─────────────────── ]
+         [ HW + Comments (full row) ───────────── ]
+         [ Week Stats (full) ──────────────────── ]
+         [ Absent List (full) ─────────────────── ]
+         [ Drafts          │ Access Matrix      ]
+         [ Staff Mgmt      │ Class Teacher      ]
+         [ Logout (full) ──────────────────────── ]
+         ═════════════════════════════════════════ */
+      #director-screen[style*="display: block"], #director-screen[style*="display:block"] {
         display: grid !important;
-        grid-template-columns: 1.25fr 1fr;
+        grid-template-columns: 1fr 1fr;
         column-gap: 28px;
-        row-gap: 16px;
+        row-gap: 18px;
         align-items: start;
       }
-      /* Schedule + payments are full-width items */
-      #parent-screen > .schedule-box,
-      #parent-screen > h3,
-      #parent-screen > #payments-section,
-      #parent-screen > .btn-logout {
+      /* Items spanning both columns in director */
+      #director-screen > h2,
+      #director-screen > .data-card,
+      #director-screen > .btn-logout {
         grid-column: 1 / -1;
       }
-      #parent-screen > .schedule-box { margin-bottom: 8px; }
+      /* Action buttons row, counters row, week stats — все full width */
+      #director-screen > div {
+        grid-column: 1 / -1;
+      }
+      /* Details (collapsibles) — auto-flow в 2 колонки */
+      #director-screen > details {
+        grid-column: auto;
+        margin: 0 !important;
+        align-self: stretch;
+      }
+      /* Counter cards more spacious in director */
+      #director-screen > div[style*="margin-bottom:18px"][style*="gap:9px"],
+      #director-screen > div[style*="margin:16px 0"] {
+        gap: 14px !important;
+      }
 
-      /* === TEACHER PANEL — 2-COLUMN AFTER QUICK ACTIONS === */
+      /* ═════════════════════════════════════════
+         TEACHER — 2 колонки + продуманные пары
+         Layout:
+         [ Title (full) ──────────────────────── ]
+         [ Контр.+Журнал (full) ──────────────── ]
+         [ Matrix btn (если арт, full) ───────── ]
+         [ Attendance     │ Stats row           ]
+         [ Chat row       │ HW list             ]
+         [ ───────── Заповнення журналу ────── ]
+         [ Subject + Textbooks (left)           ]
+         [               │ Curriculum (legacy)  ]
+         [ Curriculum upload (full, кл.рук.)─── ]
+         [ Topic card     │ HW input + photos   ]
+         [ ───────── [Виставити] [Зберегти] ─── ]
+         [ Status msg (full) ──────────────────── ]
+         [ Behavior       │ Sticker             ]
+         [ Comment (full) ─────────────────────── ]
+         [ Class Mgmt (full, collapsed) ──────── ]
+         [ Logout (full) ──────────────────────── ]
+         ═════════════════════════════════════════ */
       #teacher-screen[style*="display: block"], #teacher-screen[style*="display:block"] {
         display: grid !important;
         grid-template-columns: 1fr 1fr;
@@ -389,31 +446,91 @@
         row-gap: 14px;
         align-items: start;
       }
+      /* Span all */
       #teacher-screen > h2,
       #teacher-screen > h3,
       #teacher-screen > #t-exams-journal-btns,
       #teacher-screen > #t-matrix-btn-wrapper,
       #teacher-screen > #curriculum-upload-section,
-      #teacher-screen > .btn-logout {
+      #teacher-screen > .qa-row,
+      #teacher-screen > #status-msg,
+      #teacher-screen > .btn-logout,
+      #teacher-screen > details {
         grid-column: 1 / -1;
       }
-      /* Stats cards row — full width */
-      #teacher-screen > div[style*="display:flex"][style*="margin-bottom:14px"] {
+      /* Label + select#t-subject — span 2 (без них layout рассыпается) */
+      #teacher-screen > label,
+      #teacher-screen > select {
+        grid-column: 1 / -1;
+        margin-top: 8px !important;
+      }
+      /* Comment block — full width т.к. содержит textarea */
+      #teacher-screen > div[style*="background:#f3e5f5"][style*="padding:13px"] {
+        grid-column: 1 / -1;
+      }
+      /* Reduce excess top-margins for grid items */
+      #teacher-screen > .data-card { margin-top: 0; margin-bottom: 0; }
+      #teacher-screen > div[style*="margin-top:14px"],
+      #teacher-screen > div[style*="margin-top:13px"] {
+        margin-top: 0 !important;
+      }
+
+      /* ═════════════════════════════════════════
+         PARENT — 2 колонки 1.25fr | 1fr
+         Layout:
+         [ Schedule (full, prominent) ──────────── ]
+         [ Attendance     │ Stickers progress     ]
+         [ Textbooks      │ HW today              ]
+         [ Grades+coms    │ Behavior              ]
+         [ Chat (full, purple) ──────────────────── ]
+         [ ───────── Платежі (h3) ────────────── ]
+         [ [Оплата][Харчування][Послуги] (3-col)  ]
+         [ Debt summary (full, alert) ─────────── ]
+         [ Logout (full) ──────────────────────── ]
+         ═════════════════════════════════════════ */
+      #parent-screen[style*="display: block"], #parent-screen[style*="display:block"],
+      #student-screen[style*="display: block"], #student-screen[style*="display:block"] {
+        display: grid !important;
+        grid-template-columns: 1.25fr 1fr;
+        column-gap: 28px;
+        row-gap: 16px;
+        align-items: start;
+      }
+      /* Span all in parent/student */
+      #parent-screen > .schedule-box,
+      #parent-screen > h3,
+      #parent-screen > #payments-section,
+      #parent-screen > .btn-logout,
+      #student-screen > .schedule-box,
+      #student-screen > .btn-logout {
+        grid-column: 1 / -1;
+      }
+      /* Chat card (фиолетовый бордер) — full width — важная коммуникация */
+      #parent-screen > .data-card[style*="border-left-color:var(--purple)"],
+      #student-screen > .data-card[style*="border-left-color:var(--purple)"] {
+        grid-column: 1 / -1;
+      }
+      /* Reset margin-top для data-cards в grid (gap-ом контролируем) */
+      #parent-screen > .data-card,
+      #student-screen > .data-card { margin-top: 0; }
+      #parent-screen > .schedule-box,
+      #student-screen > .schedule-box { margin-bottom: 0; }
+
+      /* ───── PAYMENTS — 3-колоночная структура внутри ───── */
+      #payments-section {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 18px;
+      }
+      #payments-section > .payment-card { margin-bottom: 0; }
+      /* 4-я карточка (Заборгованість) — full width */
+      #payments-section > .payment-card:nth-child(4) {
         grid-column: 1 / -1;
       }
 
-      /* === DIRECTOR PANEL — Wider container, internal flexes adapt naturally === */
-      #director-screen .data-card { margin-top: 18px; }
-      /* Stats counter rows expand to fit */
-      #director-screen [style*="display:flex"][style*="margin-bottom:16px"],
-      #director-screen [style*="display:flex"][style*="gap:9px"]:not(.qa-row) {
-        gap: 16px !important;
-      }
-
-      /* Quick actions — stays in row */
-      .qa-row { flex-wrap: nowrap; }
-
-      /* Modals can be wider */
+      /* ═════════════════════════════════════════
+         MODALS — шире и комфортнее на ПК
+         ═════════════════════════════════════════ */
       .modal-content { max-width: 700px; padding: 32px 36px; }
       #journal-modal .modal-content,
       #visual-matrix-modal .modal-content,
@@ -421,35 +538,46 @@
       #profile-modal .modal-content,
       #wrapped-modal .modal-content,
       #reactions-modal .modal-content { max-width: 540px; }
+      #inbox-modal .modal-content { max-width: 720px; height: 85vh; }
+      .modal-overlay { padding: 30px; }
 
-      /* Journal table — more comfortable */
+      /* ───── Журнал table комфортнее ───── */
       .journal-table { font-size: .88rem; }
       .journal-table td { height: 38px; min-width: 36px; }
 
-      /* Lesson rows in dynamic schedule a bit larger */
+      /* ───── Lesson rows в schedule крупнее ───── */
       .lesson-row { padding: 11px 14px; }
       .lesson-num { width: 28px; height: 28px; font-size: .8rem; }
       .lesson-subj { font-size: 1rem; }
       .lesson-time { font-size: .8rem; }
 
-      /* Smart matching grid */
-      [style*="display:flex"][style*="gap:8px"][style*="flex-wrap:wrap"] { gap: 12px; }
+      /* ───── Quick actions — в один ряд ───── */
+      .qa-row { flex-wrap: nowrap; }
 
-      /* Toasts — bottom right on desktop */
+      /* ───── Toasts — bottom right ───── */
       #toast-container { left: auto; right: 20px; bottom: 20px; transform: none; }
 
-      /* Hover on cards = subtle elevation */
-      .data-card:hover, .payment-card:hover, .schedule-box:hover { transition: .25s; box-shadow: 0 6px 20px rgba(0,0,0,.08); }
-
-      /* Modals adapt height */
-      .modal-overlay { padding: 30px; }
+      /* ───── Hover effects ───── */
+      .data-card, .payment-card, .schedule-box { transition: box-shadow .25s, transform .25s; }
+      .data-card:hover, .payment-card:hover, .schedule-box:hover { box-shadow: 0 6px 20px rgba(0,0,0,.08); }
+      details[open] { animation: subtleOpen .25s ease-out; }
+      @keyframes subtleOpen { from { opacity: .7; } to { opacity: 1; } }
     }
 
-    /* === BIG DESKTOP (>=1440px) — Even more breathing room === */
+    /* ═══════════════════════════════════════════════════════
+       BIG DESKTOP (>=1440px) — Больше воздуха
+       ═══════════════════════════════════════════════════════ */
     @media (min-width: 1440px) {
       .container { max-width: 1320px; padding: 36px 48px; }
-      #parent-screen { grid-template-columns: 1.3fr 1fr; column-gap: 36px; }
-      #teacher-screen { column-gap: 36px; }
+      #parent-screen[style*="display: block"], #parent-screen[style*="display:block"],
+      #student-screen[style*="display: block"], #student-screen[style*="display:block"] {
+        grid-template-columns: 1.3fr 1fr;
+        column-gap: 36px;
+      }
+      #teacher-screen[style*="display: block"], #teacher-screen[style*="display:block"],
+      #director-screen[style*="display: block"], #director-screen[style*="display:block"] {
+        column-gap: 36px;
+      }
     }
 
     /* === Print-friendly === */
@@ -977,7 +1105,7 @@
       <a id="s-schedule-link" href="#" target="_blank" style="display:block;background:var(--blue);color:#fff;padding:10px;border-radius:10px;text-decoration:none;font-weight:700;margin-top:10px;text-align:center;font-size:.88rem;">📅 Відкрити повний розклад</a>
     </div>
 
-    <!-- Відсутність (учень) -->
+    <!-- Відсутність -->
     <div class="data-card" style="border-left-color:var(--red);background:#fdfbfb;">
       <h4 style="margin-top:0;color:var(--red);">🕒 Я запізнююсь / буду відсутній</h4>
       <div style="display:flex;flex-direction:column;gap:9px;margin-top:9px;">
@@ -1019,13 +1147,13 @@
       <div id="s-behavior-list"><p class="empty-msg">Завантаження...</p></div>
     </div>
 
-    <!-- Чат (учень) -->
+    <!-- Чат -->
     <div class="data-card" style="border-left-color:var(--purple);background:#f9f4ff; text-align:center;">
       <button onclick="openChatModal('student')" style="background:var(--purple); color:#fff; padding:12px; border-radius:12px; font-weight:700; width:100%;">💬 Написати вчителю / директору</button>
     </div>
 
     <button class="btn-logout" onclick="logoutUser()">Вийти</button>
-    </div>
+  </div>
 </div>
 
 <!-- ══════════════════ MODALS ══════════════════ -->
@@ -1145,10 +1273,21 @@
   </div>
 </div>
 
-<!-- Inbox Modal -->
+<!-- Exams Modal -->
+<div id="exams-modal" class="modal-overlay">
+  <div class="modal-content">
+    <h2 style="color:#d35400;margin-top:0;">📅 Контрольні роботи</h2>
+    <p style="font-size:.83rem;color:#666;margin-bottom:13px;">Клас: <b id="exam-class-label"></b></p>
+    <input type="month" id="exam-month-select" onchange="renderExamsCalendar()" style="margin-bottom:13px;border:2px solid #d35400;color:#d35400;font-weight:700;text-align:center;">
+    <div id="exams-cal-container"></div>
+    <div id="exams-day-details" style="margin-top:18px;text-align:left;background:#fffcf0;padding:13px;border-radius:12px;border:1px dashed var(--orange);display:none;"></div>
+    <button onclick="closeExamsModal()" style="background:#333;color:#fff;width:100%;margin-top:18px;">Закрити</button>
+  </div>
+</div>
+
+<!-- Inbox / Chat Modal -->
 <div id="inbox-modal" class="modal-overlay">
   <div class="modal-content" style="max-width:500px; height:85vh; display:flex; flex-direction:column; padding:0; overflow:hidden;">
-    
     <!-- View 1: Chat List -->
     <div id="chat-list-view" style="display:flex; flex-direction:column; height:100%;">
       <div style="background:var(--purple); color:#fff; padding:15px; display:flex; justify-content:space-between; align-items:center;">
@@ -1159,33 +1298,18 @@
         <p class="empty-msg" style="padding:15px;">Завантаження...</p>
       </div>
     </div>
-
     <!-- View 2: Active Chat -->
     <div id="chat-detail-view" style="display:none; flex-direction:column; height:100%;">
       <div style="background:var(--purple); color:#fff; padding:10px 15px; display:flex; align-items:center; gap:10px;">
         <button onclick="backToChatList()" style="background:none; border:none; color:#fff; font-size:1.5rem; cursor:pointer; padding:0; width:auto;">⬅</button>
         <h2 id="chat-detail-title" style="margin:0; font-size:1.1rem; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Чат</h2>
       </div>
-      <div id="inbox-messages-list" style="flex:1; overflow-y:auto; padding:15px; display:flex; flex-direction:column; gap:10px; background:#f4f4f9;">
-      </div>
+      <div id="inbox-messages-list" style="flex:1; overflow-y:auto; padding:15px; display:flex; flex-direction:column; gap:10px; background:#f4f4f9;"></div>
       <div style="padding:15px; border-top:1px solid #eee; display:flex; gap:10px; background:#fff; align-items:flex-end;">
         <textarea id="msg-text-input" placeholder="Напишіть повідомлення..." rows="2" style="flex:1; margin:0; border-color:var(--purple); border-radius:10px; padding:10px;"></textarea>
         <button onclick="sendInboxMessage()" style="background:var(--purple); color:#fff; width:auto; padding:12px 18px; margin:0; border-radius:12px; border:none; cursor:pointer; font-weight:700;">➔</button>
       </div>
     </div>
-
-  </div>
-</div>
-
-<!-- Exams Modal -->
-<div id="exams-modal" class="modal-overlay">
-  <div class="modal-content">
-    <h2 style="color:#d35400;margin-top:0;">📅 Контрольні роботи</h2>
-    <p style="font-size:.83rem;color:#666;margin-bottom:13px;">Клас: <b id="exam-class-label"></b></p>
-    <input type="month" id="exam-month-select" onchange="renderExamsCalendar()" style="margin-bottom:13px;border:2px solid #d35400;color:#d35400;font-weight:700;text-align:center;">
-    <div id="exams-cal-container"></div>
-    <div id="exams-day-details" style="margin-top:18px;text-align:left;background:#fffcf0;padding:13px;border-radius:12px;border:1px dashed var(--orange);display:none;"></div>
-    <button onclick="closeExamsModal()" style="background:#333;color:#fff;width:100%;margin-top:18px;">Закрити</button>
   </div>
 </div>
 
@@ -1934,7 +2058,7 @@ function updateProfileBar(){
   if(!currentUserData)return;document.getElementById('profile-bar').style.display='flex';
   const src=currentUserData.photoURL||"https://cdn-icons-png.flaticon.com/512/149/149071.png";
   document.getElementById('pb-avatar').src=src;document.getElementById('modal-avatar-preview').src=src;
-  let n="Користувач";if(currentUserData.firstName||currentUserData.lastName)n=`${currentUserData.firstName||''} ${currentUserData.lastName||''}`.trim();else if(currentUserData.studentName)n=currentUserData.role==='student'?currentUserData.studentName:`Батьки (${currentUserData.studentName})`;else if(currentUserData.email)n=currentUserData.email;
+  let n="Користувач";if(currentUserData.firstName||currentUserData.lastName)n=`${currentUserData.firstName||''} ${currentUserData.lastName||''}`.trim();else if(currentUserData.studentName)n=`Батьки (${currentUserData.studentName})`;else if(currentUserData.email)n=currentUserData.email;
   let r="";if(currentUserData.role==='teacher')r="Вчитель";if(currentUserData.role==='class_teacher')r="🎓 Класний керівник";if(currentUserData.role==='art_school_teacher'||currentUserData.role==='music_teacher')r="Вчитель школи мистецтв";if(currentUserData.role==='director')r="Директор";if(currentUserData.role==='administrator')r="Адміністратор";if(currentUserData.role==='student')r="🎒 Учень";if(currentUserData.role==='parent'){if(currentUserData.parentRole==='mother')r="Мати";else if(currentUserData.parentRole==='father')r="Батько";else r="Опекун";}
   document.getElementById('pb-name').innerText=n;document.getElementById('pb-role').innerText=r;
 }
@@ -2038,9 +2162,7 @@ onAuthStateChanged(auth,async user=>{
     const snap=await get(child(ref(db),`users/${user.uid}`));
     if(snap.exists()){currentUserData=snap.val();if(!currentUserData.email){currentUserData.email=user.email;update(ref(db,`users/${user.uid}`),{email:user.email});}if(currentUserData.role==='teacher'||currentUserData.role==='class_teacher'||currentUserData.role==='art_school_teacher'||currentUserData.role==='music_teacher')await fetchTeacherAccess(se);initUserSession();}
     else{const rs=await get(child(ref(db),`pre_approved_roles/${se}`));if(rs.exists()){const ar=rs.val();const nd={role:ar,email:user.email};if(ar==='teacher'||ar==='class_teacher'||ar==='art_school_teacher'||ar==='music_teacher')await fetchTeacherAccess(se);await set(ref(db,`users/${user.uid}`),nd);currentUserData=nd;initUserSession();}
-    else{const ls=await get(child(ref(db),`parent_links/${se}`));if(ls.exists()){const ld=ls.val();let sn,sc,pr='guardian';if(typeof ld==='string'){sn=ld;sc="class_2";}else{sn=ld.studentName;sc=ld.class;pr=ld.role||'guardian';}const nd={role:"parent",studentName:sn,class:sc,parentRole:pr,email:user.email};await set(ref(db,`users/${user.uid}`),nd);currentUserData=nd;initUserSession();}
-    else{const sls=await get(child(ref(db),`student_links/${se}`));if(sls.exists()){const sd=sls.val();const nd={role:"student",studentName:sd.studentName,class:sd.class,email:user.email};await set(ref(db,`users/${user.uid}`),nd);currentUserData=nd;initUserSession();}
-    else{alert("Ваш Email не зареєстровано.");signOut(auth);}}}}
+    else{const ls=await get(child(ref(db),`parent_links/${se}`));if(ls.exists()){const ld=ls.val();let sn,sc,pr='guardian';if(typeof ld==='string'){sn=ld;sc="class_2";}else{sn=ld.studentName;sc=ld.class;pr=ld.role||'guardian';}const nd={role:"parent",studentName:sn,class:sc,parentRole:pr,email:user.email};await set(ref(db,`users/${user.uid}`),nd);currentUserData=nd;initUserSession();}else{const sls=await get(child(ref(db),`student_links/${se}`));if(sls.exists()){const sd=sls.val();const nd={role:"student",studentName:sd.studentName,class:sd.class,email:user.email};await set(ref(db,`users/${user.uid}`),nd);currentUserData=nd;initUserSession();}else{alert("Ваш Email не зареєстровано.");signOut(auth);}}}}
   }else document.getElementById('login-screen').style.display='block';
 });
 async function fetchTeacherAccess(se){const s=await get(child(ref(db),`teacher_access/${se}`));teacherAccessMatrix=s.exists()?s.val():{};}
@@ -2064,6 +2186,12 @@ function initUserSession(){
     if(cs.options.length===0){if(isArt)cs.innerHTML='<option value="class_1">1 Клас</option>';else{alert("Класи не призначено.");return;}}
     window.handleClassChange();
   }
+  else if(r==='student'){
+    document.getElementById('student-screen').style.display='block';
+    const cn=currentUserData.class.replace('class_','');document.getElementById('s-schedule-link').href=`https://planlekcjipush.netlify.app/class-${cn}`;
+    loadScheduleScript(currentUserData.class,()=>handleDateChange());
+    loadTextbooksForParent('student');
+  }
   else{
     document.getElementById('parent-screen').style.display='block';
     const cn=currentUserData.class.replace('class_','');document.getElementById('p-schedule-link').href=`https://planlekcjipush.netlify.app/class-${cn}`;
@@ -2072,7 +2200,7 @@ function initUserSession(){
   }
 }
 window.loginUser=function(){signInWithEmailAndPassword(auth,document.getElementById('email').value.trim(),document.getElementById('pass').value.trim()).catch(()=>{document.getElementById('login-error').innerText="Помилка входу.";document.getElementById('login-error').style.display='block';});};
-window.registerUser=async function(){const e=document.getElementById('email').value.trim();const p=document.getElementById('pass').value.trim();if(!e||!p)return alert("Введіть Email та пароль!");if(p.length<6)return alert("Пароль мінімум 6 символів.");const se=e.replace(/\./g,'_');try{const rs=await get(child(ref(db),`pre_approved_roles/${se}`));const ls=await get(child(ref(db),`parent_links/${se}`));if(!rs.exists()&&!ls.exists())return alert("Email не додано директором.");await createUserWithEmailAndPassword(auth,e,p);}catch(err){if(err.code==='auth/email-already-in-use')alert("Акаунт існує! Натисніть 'Увійти'.");else alert("Помилка: "+err.message);}};
+window.registerUser=async function(){const e=document.getElementById('email').value.trim();const p=document.getElementById('pass').value.trim();if(!e||!p)return alert("Введіть Email та пароль!");if(p.length<6)return alert("Пароль мінімум 6 символів.");const se=e.replace(/\./g,'_');try{const rs=await get(child(ref(db),`pre_approved_roles/${se}`));const ls=await get(child(ref(db),`parent_links/${se}`));const sls=await get(child(ref(db),`student_links/${se}`));if(!rs.exists()&&!ls.exists()&&!sls.exists())return alert("Email не додано директором/вчителем.");await createUserWithEmailAndPassword(auth,e,p);}catch(err){if(err.code==='auth/email-already-in-use')alert("Акаунт існує! Натисніть 'Увійти'.");else alert("Помилка: "+err.message);}};
 window.logoutUser=function(){if(teacherAttendanceListener)teacherAttendanceListener();if(parentLessonInterval)clearInterval(parentLessonInterval);document.getElementById('profile-bar').style.display='none';signOut(auth);};
 
 // ══════════ TEACHER LIST FOR DIRECTOR ══════════
@@ -2207,6 +2335,9 @@ window.submitAttendance=function(role='parent'){
   });
 };
 window.updateAttOptionsStudent=function(){const t=document.getElementById('s-att-type').value;const r=document.getElementById('s-att-reason');r.innerHTML='';if(t==='late')r.innerHTML='<option value="на 10 хвилин">на 10 хвилин</option><option value="на 15 хвилин">на 15 хвилин</option><option value="до 2-го уроку">до 2-го уроку</option><option value="до 3-го уроку">до 3-го уроку</option>';else r.innerHTML='<option value="за сімейними обставинами">За сімейними обставинами</option><option value="через хворобу">Через хворобу</option>';};
+window.sendReaction=function(date,subject,emoji){if(!currentUserData)return;set(ref(db,`reactions/${getActiveClass()}/${date}/${subject}/${currentUserData.studentName}`),emoji).then(()=>loadParentDashboard());};
+// sendRetakeRequest is already defined above as async window function
+window.sendRetakeRequest=sendRetakeRequest;
 
 // ══════════ STUDENT DASHBOARD ══════════
 window.loadStudentDashboard=function(){
@@ -2237,11 +2368,9 @@ window.loadStudentDashboard=function(){
     if(!hasItems)list.innerHTML='<li class="empty-msg">Немає оцінок або коментарів.</li>';
     const bEl=document.getElementById('s-behavior-list');bEl.innerHTML='';
     if(bhS.exists()){const bd=bhS.val();const wDates=getWeekDates(date);let bh='';wDates.forEach(wd=>{if(bd[wd]&&bd[wd][sn]){const bv=bd[wd][sn];const dispBv=displayGrade(String(bv),cls);const gc=gradeClass6(bv);bh+=`<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px dashed #c5cae9;font-size:.85rem;"><span style="color:#888;flex:1;">${wd.split('-').slice(1).reverse().join('.')}</span><span class="g-cell ${gc}" style="padding:3px 8px;">${dispBv}</span></div>`;}});bEl.innerHTML=bh||'<p class="empty-msg" style="font-size:.82rem;">Оцінок поведінки немає.</p>';}
+    else bEl.innerHTML='<p class="empty-msg" style="font-size:.82rem;">Оцінок поведінки немає.</p>';
   });
 };
-window.sendReaction=function(date,subject,emoji){if(!currentUserData)return;set(ref(db,`reactions/${getActiveClass()}/${date}/${subject}/${currentUserData.studentName}`),emoji).then(()=>loadParentDashboard());};
-// sendRetakeRequest is already defined above as async window function
-window.sendRetakeRequest=sendRetakeRequest;
 
 // ══════════ UNIFIED INBOX (Chat) ══════════
 let inboxMessagesListener = null;
@@ -2262,12 +2391,10 @@ window.openChatModal = async function(role) {
 async function renderChatList(role) {
   const container = document.getElementById('inbox-contacts-list');
   container.innerHTML = '<p class="empty-msg" style="padding:15px;">Завантаження...</p>';
-
   const myEmailSafe = auth.currentUser.email.replace(/\./g, '_');
   const usersSnap = await get(ref(db, 'users'));
   const allUsers = usersSnap.exists() ? usersSnap.val() : {};
 
-  // Helper to get formatted name
   const getFormattedName = (uEmailSafe) => {
     if (uEmailSafe === 'director_push_school@gmail_com') return '👔 Директор (Адміністрація)';
     let name = uEmailSafe.replace(/_/g, '.');
@@ -2292,7 +2419,6 @@ async function renderChatList(role) {
     let html = '';
     const activeContacts = new Map();
 
-    // 1. Collect potential contacts for Parents/Students
     if (role === 'parent' || role === 'student') {
       activeContacts.set('director_push_school@gmail_com', { name: '👔 Директор (Адміністрація)', lastMsg: '', time: 0, unread: 0 });
       const cls = getActiveClass();
@@ -2307,23 +2433,19 @@ async function renderChatList(role) {
       }
     }
 
-    // 2. Map actual chat data
     for (let chatId in chats) {
       const parts = chatId.split('___');
       if (parts.length !== 2) continue;
-
       const isParticipant = parts.includes(myEmailSafe);
       const isDirector = role === 'director';
 
       if (isParticipant || isDirector) {
         const messages = chats[chatId].messages ? Object.values(chats[chatId].messages) : [];
         if (messages.length === 0 && !isParticipant) continue;
-
         const lastMsg = messages.length > 0 ? messages[messages.length - 1] : null;
         const unreadCount = messages.filter(m => m.from !== myEmailSafe && !m.read).length;
 
         if (isDirector) {
-          // Director sees the whole thread as one item
           let n1 = getFormattedName(parts[0]), n2 = getFormattedName(parts[1]);
           html += `<div class="chat-list-item" onclick="selectChatThread('${chatId}', '💬 ${n1} ↔ ${n2}')" style="padding:15px; border-bottom:1px solid #eee; cursor:pointer; background:#fff;">
             <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -2335,7 +2457,6 @@ async function renderChatList(role) {
             </div>
           </div>`;
         } else {
-          // Normal user: Update contact info or add new active contact
           const otherEmail = parts[0] === myEmailSafe ? parts[1] : parts[0];
           activeContacts.set(otherEmail, {
             name: getFormattedName(otherEmail),
@@ -2381,30 +2502,22 @@ window.selectChatThread = function(chatId, title, otherEmailSafe = null) {
 function loadChatMessages(chatId) {
   const list = document.getElementById('inbox-messages-list');
   if (inboxMessagesListener) inboxMessagesListener();
-  
   const myEmailSafe = auth.currentUser.email.replace(/\./g, '_');
-
   inboxMessagesListener = onValue(ref(db, `chats/${chatId}/messages`), snap => {
     list.innerHTML = '';
     if (snap.exists()) {
       const data = snap.val();
       const msgs = Object.keys(data).map(k => ({ id: k, ...data[k] })).sort((a, b) => a.time - b.time);
-      
       msgs.forEach(m => {
         const isMe = m.from === myEmailSafe;
         const align = isMe ? 'flex-end' : 'flex-start';
         const bg = isMe ? 'var(--purple)' : '#fff';
         const color = isMe ? '#fff' : '#333';
-        
         list.innerHTML += `<div style="align-self:${align}; max-width:85%; background:${bg}; color:${color}; padding:10px 14px; border-radius:15px; box-shadow:0 2px 5px rgba(0,0,0,0.05); margin-bottom:5px;">
           <div style="font-size:.65rem; opacity:.8; margin-bottom:3px; font-weight:700;">${isMe ? 'Я' : m.fromName} • ${new Date(m.time).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' })}</div>
           <div style="font-size:.92rem; word-break:break-word; line-height:1.4;">${m.text}</div>
         </div>`;
-
-        // Mark as read if from others
-        if (!isMe && !m.read) {
-          update(ref(db, `chats/${chatId}/messages/${m.id}`), { read: true });
-        }
+        if (!isMe && !m.read) update(ref(db, `chats/${chatId}/messages/${m.id}`), { read: true });
       });
       list.scrollTop = list.scrollHeight;
     } else list.innerHTML = '<p class="empty-msg">Немає повідомлень. Напишіть що-небудь!</p>';
@@ -2429,29 +2542,18 @@ window.sendInboxMessage = async function() {
   const input = document.getElementById('msg-text-input');
   const text = input.value.trim();
   if (!text) return;
-
   const myEmailSafe = auth.currentUser.email.replace(/\./g, '_');
   let roleLabel = '';
   if (currentUserData.role === 'teacher' || currentUserData.role === 'class_teacher') roleLabel = '(Вчитель)';
   else if (currentUserData.role === 'director') roleLabel = '(Директор)';
   else if (currentUserData.role === 'parent') roleLabel = '(Батьки)';
   else if (currentUserData.role === 'student') roleLabel = '(Учень)';
-
   const myName = (currentUserData.firstName || currentUserData.lastName) ? `${currentUserData.firstName || ''} ${currentUserData.lastName || ''}`.trim() : (currentUserData.studentName || auth.currentUser.email);
   const fullName = `${myName} ${roleLabel}`.trim();
-
-  const msg = {
-    from: myEmailSafe,
-    fromName: fullName,
-    text: text,
-    time: Date.now(),
-    read: false
-  };
-
+  const msg = { from: myEmailSafe, fromName: fullName, text: text, time: Date.now(), read: false };
   try {
     await push(ref(db, `chats/${currentChatId}/messages`), msg);
     input.value = '';
-    // Reset scroll just in case
     const list = document.getElementById('inbox-messages-list');
     list.scrollTop = list.scrollHeight;
   } catch (e) { alert("Помилка: " + e.message); }
