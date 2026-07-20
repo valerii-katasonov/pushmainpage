@@ -1,0 +1,360 @@
+// ═══════════════════════════════════════════════════════════════
+// journal.js — Grade editor popup, Journal modal + table rendering,
+// and the Visual (schedule) Matrix modal used for both the live
+// schedule and director's drafts.
+// ═══════════════════════════════════════════════════════════════
+import { ref, set, get, child } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+import { db, getActiveClass, currentUserData, displayGrade, gradeClass6, calculateStudentWeightedAvg, getClassNum, GRADE_WEIGHTS, dayKeys, dayNamesUA, showToast, localDateString, summarizeAttendanceSlots, gradeTypesCache } from './common.js';
+
+// globalTeacherAccess is reassigned only in this file (openVisualMatrixModal)
+// and read from common.js (window.getDefaultTeacher) — plain export/import.
+export let globalTeacherAccess={};
+// globalAllSchedules / globalAllStudents / currentMatrixMode / draftWarningsCache
+// are only ever used within this file's Visual Matrix functions.
+let globalAllSchedules={};
+let globalAllStudents={};
+let currentMatrixMode='live';
+let draftWarningsCache=[];
+// globalTeachersList is written to both from here and from director.js
+// (loadTeachersListForDirector), so it stays on window (see common.js note).
+window.globalTeachersList = window.globalTeachersList || [];
+
+let journalMode='view'; let journalIsTeacher=false;
+let gepCls=''; let gepSubj=''; let gepDate=''; let gepStudent=''; let gepType='П'; let gepCellEl=null; let gepYMonth='';
+// Phase 4b: journal zoom state (10% steps, 60%-150%), applied via --journal-scale on .journal-table
+let journalZoomLevel=100;
+
+// ══════════ GRADE EDITOR POPUP ══════════
+window.selectGradeType=function(type){gepType=type;document.querySelectorAll('.type-btn').forEach(b=>b.classList.toggle('active',b.dataset.type===type));};
+// Phase 5: #gep-type-btns is no longer 7-8 hardcoded <button> tags in HTML —
+// they're generated here from gradeTypesCache (falls back to GRADE_WEIGHTS'
+// codes if the cache hasn't loaded yet), same className/onclick pattern as before.
+function renderGradeTypeButtons(){
+  const c=document.getElementById('gep-type-btns');
+  if(!c)return;
+  const codes=Object.keys(gradeTypesCache).length>0?Object.keys(gradeTypesCache):Object.keys(GRADE_WEIGHTS);
+  c.innerHTML=codes.map(code=>{
+    const shortLabel=(gradeTypesCache[code]&&gradeTypesCache[code].shortLabel)||code;
+    const label=(gradeTypesCache[code]&&gradeTypesCache[code].label)||code;
+    return `<button type="button" class="type-btn" data-type="${code}" title="${label}" onclick="selectGradeType('${code}')">${shortLabel}</button>`;
+  }).join('');
+}
+// Phase 4b: added presetType param — when a cell has no existing grade_type yet (new grade),
+// the editor now prefills from the date column's pre-set "Тип" (journal_column_types) instead
+// of always defaulting to 'П'.
+function openGradeEditor(cls,subj,dateStr,student,yMonth,cellEl,existingVal,existingType,presetType){
+  gepCls=cls;gepSubj=subj;gepDate=dateStr;gepStudent=student;gepYMonth=yMonth;gepCellEl=cellEl;gepType=existingType||presetType||'П';
+  document.getElementById('gep-label').textContent=`${student} | ${subj} | ${dateStr.split('-').reverse().join('.')}`;
+  document.getElementById('gep-value').value=existingVal||'';
+  renderGradeTypeButtons();
+  selectGradeType(gepType);
+  const popup=document.getElementById('grade-editor-popup');popup.style.display='block';
+  const rect=cellEl.getBoundingClientRect();let top=rect.bottom+6;let left=rect.left;
+  if(top+230>window.innerHeight)top=rect.top-236;if(left+220>window.innerWidth)left=window.innerWidth-225;
+  popup.style.top=top+'px';popup.style.left=left+'px';
+  setTimeout(()=>document.getElementById('gep-value').focus(),50);
+}
+window.closeGradeEditor=function(){document.getElementById('grade-editor-popup').style.display='none';gepCellEl=null;};
+window.confirmGrade=async function(){
+  let val=document.getElementById('gep-value').value.trim();
+  if(!val)return window.deleteGrade();
+  // validate 1-6 scale
+  const n=parseInt(val);
+  if(!isNaN(n)&&(n<1||n>6)){showToast('⚠️ Оцінка має бути від 1 до 6!');return;}
+  await set(ref(db,`grades/${gepCls}/${gepYMonth}/${gepSubj}/${gepDate}/${gepStudent}`),val);
+  await set(ref(db,`grade_types/${gepCls}/${gepYMonth}/${gepSubj}/${gepDate}/${gepStudent}`),gepType);
+  closeGradeEditor();renderJournalTable();showToast(`✅ ${gepStudent}: ${displayGrade(val,gepCls)} (${gepType})`);
+};
+window.deleteGrade=async function(){
+  await set(ref(db,`grades/${gepCls}/${gepYMonth}/${gepSubj}/${gepDate}/${gepStudent}`),null);
+  await set(ref(db,`grade_types/${gepCls}/${gepYMonth}/${gepSubj}/${gepDate}/${gepStudent}`),null);
+  closeGradeEditor();renderJournalTable();showToast('🗑️ Оцінку видалено');
+};
+document.getElementById('gep-value').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();window.confirmGrade();}if(e.key==='Escape'){e.preventDefault();window.closeGradeEditor();}});
+document.addEventListener('click',function(e){const p=document.getElementById('grade-editor-popup');if(p.style.display==='block'&&!p.contains(e.target)&&!e.target.closest('.g-cell'))closeGradeEditor();});
+// ══════════ JOURNAL MODE ══════════
+window.setJournalMode=function(mode){journalMode=mode;document.getElementById('j-mode-view').classList.toggle('active',mode==='view');document.getElementById('j-mode-edit').classList.toggle('active',mode==='edit');document.getElementById('j-edit-hint').style.display=mode==='edit'?'block':'none';renderJournalTable();};
+// ══════════ JOURNAL MODAL ══════════
+// Phase 5: legend replacing whatever static "П=1.0 У=1.0 ДЗ=0.5..." text block
+// currently lives in the journal-modal markup — swap that block for
+// <div id="journal-type-legend"></div> and this renders into it.
+function renderGradeTypesLegend(){
+  const c=document.getElementById('journal-type-legend');
+  if(!c)return;
+  const codes=Object.keys(gradeTypesCache).length>0?Object.keys(gradeTypesCache):Object.keys(GRADE_WEIGHTS);
+  c.innerHTML=codes.map(code=>{
+    const w=(gradeTypesCache[code]&&gradeTypesCache[code].weight)??GRADE_WEIGHTS[code]??1.0;
+    const label=(gradeTypesCache[code]&&gradeTypesCache[code].label)||code;
+    return `<span style="margin-right:9px;font-size:.78rem;color:#666;"><b>${code}</b> — ${label} (×${w})</span>`;
+  }).join('');
+}
+window.openJournalModal=function(role){
+  journalIsTeacher=(role==='teacher');journalMode=journalIsTeacher?'edit':'view';
+  document.getElementById('journal-modal').style.display='flex';
+  journalZoomLevel=100;applyJournalZoom();
+  renderGradeTypesLegend();
+  const mp=document.getElementById('j-month-select');const dp=document.getElementById('global-date').value.split('-');mp.value=`${dp[0]}-${dp[1]}`;
+  const cs=document.getElementById('j-class-select');const mw=document.getElementById('j-mode-toggle-wrap');
+  mw.style.display=journalIsTeacher?'flex':'none';
+  document.getElementById('j-edit-hint').style.display=journalIsTeacher&&journalMode==='edit'?'block':'none';
+  if(journalIsTeacher){document.getElementById('j-mode-view').classList.toggle('active',journalMode==='view');document.getElementById('j-mode-edit').classList.toggle('active',journalMode==='edit');}
+  if(role==='director'){cs.style.display='block';cs.innerHTML='<option value="">Оберіть клас...</option>';for(let i=1;i<=11;i++)cs.innerHTML+=`<option value="class_${i}">${i} Клас</option>`;document.getElementById('j-subj-select').innerHTML='<option value="">Спочатку клас</option>';document.getElementById('journal-table-el').innerHTML='';}
+  else{cs.style.display='none';cs.innerHTML=`<option value="${getActiveClass()}">${getActiveClass()}</option>`;updateJournalSubjects();}
+};
+window.closeJournalModal=function(){document.getElementById('journal-modal').style.display='none';};
+window.openJournalForGrading=function(){
+  openJournalModal('teacher');const subj=document.getElementById('t-subject').value;
+  setTimeout(()=>{const s=document.getElementById('j-subj-select');if(subj&&Array.from(s.options).some(o=>o.value===subj))s.value=subj;renderJournalTable();},300);
+};
+window.updateJournalSubjects=function(){
+  const cls=document.getElementById('j-class-select').value;const ss=document.getElementById('j-subj-select');
+  if(!cls){ss.innerHTML='<option value="">Спочатку клас</option>';return;}
+  ss.innerHTML='<option value="">Завантаження...</option>';
+  window.loadScheduleScript(cls,()=>{
+    let unique=new Set();if(window.schedule)dayKeys.forEach(d=>window.getTodayLessonsFlattened(d).forEach(i=>{let s=window.getValidSubjectName(i);if(s)unique.add(s);}));
+    if(unique.size===0){get(child(ref(db),`grades/${cls}`)).then(snap=>{if(snap.exists()){const md=snap.val();for(let m in md)for(let s in md[m])unique.add(s);}finishJournalSubjectsRender(unique,cls,ss);});return;}
+    finishJournalSubjectsRender(unique,cls,ss);
+  });
+};
+function finishJournalSubjectsRender(unique,cls,ss){
+  if(currentUserData.role==='teacher'||currentUserData.role==='art_school_teacher')unique=new Set([...unique].filter(s=>window.isSubjectAllowed(cls,s)));
+  ss.innerHTML='<option value="">-- Предмет --</option>';
+  if(unique.size>0)[...unique].sort().forEach(s=>ss.innerHTML+=`<option value="${s}">${s}</option>`);
+  else ss.innerHTML='<option value="" disabled>Предметів немає</option>';
+  if(document.getElementById('t-subject')?.value){const cv=document.getElementById('t-subject').value;if(unique.has(cv))ss.value=cv;}
+  renderJournalTable();
+}
+// ══════════ RENDER JOURNAL TABLE ══════════
+window.renderJournalTable=async function(){
+  const cls=document.getElementById('j-class-select').value;
+  const subj=document.getElementById('j-subj-select').value;
+  const yMonth=document.getElementById('j-month-select').value;
+  const table=document.getElementById('journal-table-el');
+  const wAvgDiv=document.getElementById('j-weighted-avg');
+  if(!cls||!subj||!yMonth){table.innerHTML='';wAvgDiv.style.display='none';return;}
+  table.innerHTML='<tr><td style="padding:20px;color:#aaa;">⏳ Завантаження...</td></tr>';
+  const [y,m]=yMonth.split('-');const daysInMonth=new Date(y,m,0).getDate();
+  const clsNum=getClassNum(cls);
+  try{
+    const [studSnap,gradesSnap,typesSnap,attSnap,retakeSnap,colTypesSnap]=await Promise.all([
+      get(child(ref(db),`students_list/${cls}`)),
+      get(child(ref(db),`grades/${cls}/${yMonth}/${subj}`)),
+      get(child(ref(db),`grade_types/${cls}/${yMonth}/${subj}`)),
+      get(child(ref(db),`attendance/${cls}`)),
+      get(child(ref(db),`retake_requests/${cls}/${subj}`)),
+      get(child(ref(db),`journal_column_types/${cls}/${yMonth}/${subj}`))
+    ]);
+    let students=[];if(studSnap.exists())students=Object.values(studSnap.val()).sort();
+    if(students.length===0){table.innerHTML='<tr><td style="padding:20px;">Учнів немає.</td></tr>';return;}
+    const gradesData=gradesSnap.exists()?gradesSnap.val():{};
+    const typesData=typesSnap.exists()?typesSnap.val():{};
+    const attDataAll=attSnap.exists()?attSnap.val():{};
+    const retakeData=retakeSnap.exists()?retakeSnap.val():{};
+    // Phase 4b: teacher's pre-set "expected type" per date (before any grades exist)
+    const journalColumnTypes=colTypesSnap.exists()?colTypesSnap.val():{};
+    const attData={};for(let d in attDataAll)if(d.startsWith(yMonth))attData[d]=attDataAll[d];
+    // Build date columns
+    let dateCols=[];
+    for(let i=1;i<=daysInMonth;i++){
+      const ds=`${yMonth}-${String(i).padStart(2,'0')}`;
+      const dow=new Date(y,parseInt(m)-1,i).getDay();
+      if(dow===0||dow===6)continue;
+      const hasGrade=gradesData[ds]&&Object.keys(gradesData[ds]).length>0;
+      const hasAtt=attData[ds]&&Object.keys(attData[ds]).length>0;
+      const isToday=ds===localDateString;
+      if(hasGrade||hasAtt||isToday)dateCols.push({ds,day:i,dow});
+    }
+    for(let ds in gradesData)if(!dateCols.find(c=>c.ds===ds)){const[,,dd]=ds.split('-');dateCols.push({ds,day:parseInt(dd),dow:new Date(ds).getDay()});}
+    dateCols.sort((a,b)=>a.day-b.day);
+    dateCols=[...new Map(dateCols.map(c=>[c.ds,c])).values()];
+    const canEdit=journalIsTeacher&&journalMode==='edit';
+    const dayN=['Нд','Пн','Вт','Ср','Чт','Пт','Сб'];
+    // Weighted type header row
+    let thead='<thead><tr><th class="sn">Учень</th>';
+    dateCols.forEach(({ds,day,dow})=>{
+      const isToday=ds===localDateString;
+      // Phase 4b: replaced the passive, grade-derived type/weight hint with an editable
+      // pre-set "expected type" control (journal_column_types), used by openGradeEditor()
+      // to prefill gepType for cells that don't have a grade yet.
+      const presetType=journalColumnTypes[ds]||'';
+      // Phase 5: option list now sourced from gradeTypesCache (falls back to
+      // GRADE_WEIGHTS' codes if the cache hasn't loaded yet), same as elsewhere.
+      const typeCodes=Object.keys(gradeTypesCache).length>0?Object.keys(gradeTypesCache):Object.keys(GRADE_WEIGHTS);
+      const weightOf=t=>(gradeTypesCache[t]&&gradeTypesCache[t].weight)??GRADE_WEIGHTS[t]??1.0;
+      let typeCell;
+      if(canEdit){
+        typeCell=`<br><select class="jct-type-select" onclick="event.stopPropagation();" onchange="setJournalColumnType('${cls}','${subj}','${yMonth}','${ds}',this.value)" title="Тип оцінки на цю дату">
+          <option value="">—</option>
+          ${typeCodes.map(t=>`<option value="${t}" ${presetType===t?'selected':''}>${t} ×${weightOf(t)}</option>`).join('')}
+        </select>`;
+      } else {
+        typeCell=presetType?`<br><span style="font-size:.55rem;color:#e67e22;">${presetType}${weightOf(presetType)?` ×${weightOf(presetType)}`:''}</span>`:'';
+      }
+      thead+=`<th class="${isToday?'today-col':''}" title="${ds}">${day}<br><span style="font-size:.62rem;font-weight:400;">${dayN[dow]}</span>${typeCell}</th>`;
+    });
+    thead+='<th class="avg-col">Зважений<br>сер. бал</th></tr></thead>';
+    // Body
+    let tbody='<tbody>';let classWeightedAvg=0;let classCount=0;
+    students.forEach((st)=>{
+      let stGrades={};let stTypes={};
+      dateCols.forEach(({ds})=>{
+        const v=(gradesData[ds]&&gradesData[ds][st])?gradesData[ds][st]:'';
+        const tp=(typesData[ds]&&typesData[ds][st])?typesData[ds][st]:'П';
+        if(v){stGrades[ds]=v;stTypes[ds]=tp;}
+      });
+      const avg=calculateStudentWeightedAvg(stGrades,stTypes);
+      if(avg!==null){classWeightedAvg+=avg;classCount++;}
+      const avgStr=avg!==null?avg.toFixed(2):'-';
+      let rowHtml=`<tr><td class="sn" title="${st}">${st}</td>`;
+      dateCols.forEach(({ds})=>{
+        const isToday=ds===localDateString;
+        const attInfo=summarizeAttendanceSlots(attData[ds]&&attData[ds][st]);
+        const gradeVal=(gradesData[ds]&&gradesData[ds][st])?gradesData[ds][st]:'';
+        const gradeType=(typesData[ds]&&typesData[ds][st])?typesData[ds][st]:'';
+        const dispVal=displayGrade(gradeVal,cls);
+        const presetType=journalColumnTypes[ds]||'';
+        let cell='';
+        if(gradeVal){
+          const gc=gradeClass6(gradeVal);
+          cell+=`<span class="g-cell ${gc}" onclick="handleGradeClick(event,'${cls}','${subj}','${ds}','${st}','${yMonth}','${gradeVal}','${gradeType}','${presetType}')"><span class="g-val">${dispVal}</span>${gradeType?`<span class="g-type">${gradeType}</span>`:''}</span>`;
+        } else if(canEdit){
+          cell+=`<span class="g-cell g-empty" onclick="handleGradeClick(event,'${cls}','${subj}','${ds}','${st}','${yMonth}','','','${presetType}')">＋</span>`;
+        }
+        if(attInfo){const ac=attInfo.status==='absent'?'att-absent':'att-late';const al=attInfo.status==='absent'?'н':'з';cell+=`<span class="${ac}" title="${attInfo.reason}">${al}</span>`;}
+        rowHtml+=`<td class="${isToday?'today-col':''}">${cell}</td>`;
+      });
+      const avgGc=avg!==null?gradeClass6(Math.round(avg)):'';
+      rowHtml+=`<td class="avg-col"><span class="${avgGc}" style="border-radius:6px;padding:2px 5px;font-weight:800;">${displayGrade(avgStr!=='-'?String(Math.round(avg)):'-',cls)}</span><br><span style="font-size:.62rem;color:#aaa;">${avgStr}</span></td>`;
+      rowHtml+='</tr>';tbody+=rowHtml;
+    });
+    tbody+='</tbody>';
+    table.innerHTML=thead+tbody;
+    applyJournalZoom(); // Phase 4b: re-apply current zoom + sticky-column width compensation after re-render
+    // Weighted avg summary
+    if(classCount>0){
+      const ca=(classWeightedAvg/classCount).toFixed(2);
+      wAvgDiv.style.display='block';
+      wAvgDiv.innerHTML=`<b style="color:var(--purple);">📊 Середньозважений бал класу з ${subj}:</b><br>
+        <span style="font-size:1.6rem;font-weight:800;color:#7b1fa2;">${ca}</span>
+        <span style="font-size:.8rem;color:#888;margin-left:8px;">(зважений: ДЗ×0.5, СР/ДК/ПР×1.5, К×2.0)</span>`;
+    } else wAvgDiv.style.display='none';
+  }catch(e){console.error(e);table.innerHTML=`<tr><td style="padding:20px;color:red;">Помилка: ${e.message}</td></tr>`;}
+};
+window.handleGradeClick=function(e,cls,subj,ds,student,yMonth,existingVal,existingType,presetType){
+  if(!journalIsTeacher||journalMode!=='edit')return;
+  e.stopPropagation();openGradeEditor(cls,subj,ds,student,yMonth,e.currentTarget,existingVal,existingType,presetType);
+};
+// ══════════ PHASE 4b: PER-DATE PRESET "ТИП" (before any grades exist) ══════════
+window.setJournalColumnType=async function(cls,subj,yMonth,date,type){
+  await set(ref(db,`journal_column_types/${cls}/${yMonth}/${subj}/${date}`),type||null);
+  showToast(type?`✅ Тип на ${date.split('-').reverse().join('.')}: ${type}`:'🗑️ Тип знято');
+};
+// ══════════ PHASE 4b: JOURNAL ZOOM (60%–150%, 10% steps) ══════════
+// Uses transform:scale() on .journal-table (driven by --journal-scale) with transform-origin:top left.
+// #journal-scale-inner's width/height are set from the table's *unscaled* offsetWidth/offsetHeight
+// (offsetWidth/Height are unaffected by CSS transforms) so .journal-wrap's overflow-x scrollbar
+// reflects the true scaled size instead of leaving a stale full-size empty gutter. Because the whole
+// <table> — including the sticky .sn / avg-col cells — is scaled as one unit, their sticky left:0/right:0
+// offsets stay consistent with everything else in the same transformed coordinate space, so they don't
+// drift out of alignment as the zoom level changes.
+function applyJournalZoom(){
+  const table=document.getElementById('journal-table-el');
+  const inner=document.getElementById('journal-scale-inner');
+  const label=document.getElementById('journal-zoom-label');
+  if(!table||!inner)return;
+  const scale=journalZoomLevel/100;
+  table.style.setProperty('--journal-scale',scale);
+  const naturalW=table.offsetWidth,naturalH=table.offsetHeight;
+  inner.style.width=(naturalW*scale)+'px';
+  inner.style.height=(naturalH*scale)+'px';
+  if(label)label.innerText=journalZoomLevel+'%';
+}
+window.journalZoomOut=function(){journalZoomLevel=Math.max(60,journalZoomLevel-10);applyJournalZoom();};
+window.journalZoomIn=function(){journalZoomLevel=Math.min(150,journalZoomLevel+10);applyJournalZoom();};
+window.journalZoomReset=function(){journalZoomLevel=100;applyJournalZoom();};
+// ══════════ PHASE 4b: PDF EXPORT (html2canvas + jsPDF, landscape) ══════════
+window.exportJournalToPDF=async function(){
+  const table=document.getElementById('journal-table-el');
+  if(!table||!table.innerHTML.trim()){showToast('⚠️ Немає даних для експорту!');return;}
+  const cls=document.getElementById('j-class-select').value;
+  const subj=document.getElementById('j-subj-select').value;
+  const ym=document.getElementById('j-month-select').value;
+  if(!cls||!subj||!ym){showToast('⚠️ Оберіть клас, предмет і місяць!');return;}
+  if(typeof html2canvas==='undefined'||!window.jspdf){showToast('⚠️ Бібліотеки експорту ще завантажуються, спробуйте ще раз.');return;}
+  const btn=document.getElementById('btn-export-journal-pdf');
+  if(btn){btn.disabled=true;btn.innerText='⏳ Експорт...';}
+  const savedZoom=journalZoomLevel;
+  try{
+    // Capture at a consistent 100% zoom regardless of what the teacher currently has selected,
+    // so the exported PDF layout doesn't depend on/get cropped by the on-screen zoom level.
+    if(savedZoom!==100){journalZoomLevel=100;applyJournalZoom();await new Promise(r=>setTimeout(r,150));}
+    const canvas=await html2canvas(table,{scale:2,backgroundColor:'#ffffff'});
+    const imgData=canvas.toDataURL('image/png');
+    const {jsPDF}=window.jspdf;
+    const pdf=new jsPDF({orientation:'landscape',unit:'pt',format:'a4'});
+    const pageW=pdf.internal.pageSize.getWidth();const pageH=pdf.internal.pageSize.getHeight();
+    const imgRatio=canvas.width/canvas.height;
+    let renderW=pageW-40,renderH=renderW/imgRatio;
+    if(renderH>pageH-60){renderH=pageH-60;renderW=renderH*imgRatio;}
+    pdf.setFontSize(12);
+    pdf.text(`${cls.replace('class_','')} клас — ${subj} — ${ym}`,20,25);
+    pdf.addImage(imgData,'PNG',20,35,renderW,renderH);
+    pdf.save(`journal_${cls}_${subj}_${ym}.pdf`);
+  }catch(e){alert('Помилка експорту: '+e.message);}
+  finally{
+    if(savedZoom!==100){journalZoomLevel=savedZoom;applyJournalZoom();}
+    if(btn){btn.disabled=false;btn.innerText='📄 Експорт PDF';}
+  }
+};
+// ══════════ VISUAL MATRIX ══════════
+window.openVisualMatrixModal=async function(mode){
+  currentMatrixMode=mode;document.getElementById('visual-matrix-modal').style.display='flex';showToast("⏳ Завантаження...");
+  let dbPath=mode==='live'?'schedules':`schedule_drafts/${mode}`;
+  const [snap,accSnap,stSnap]=await Promise.all([get(ref(db,dbPath)),get(ref(db,'teacher_access')),get(ref(db,'students_list'))]);
+  globalAllSchedules=snap.exists()?snap.val():{};globalTeacherAccess=accSnap.exists()?accSnap.val():{};globalAllStudents=stSnap.exists()?stSnap.val():{};
+  const uSnap=await get(ref(db,'users'));window.globalTeachersList=[];
+  if(uSnap.exists()){const u=uSnap.val();for(let uid in u){const us=u[uid];if((us.role==='teacher'||us.role==='art_school_teacher'||us.role==='music_teacher')&&us.email){const n=(us.firstName||us.lastName)?`${us.firstName||''} ${us.lastName||''}`.trim():"Ім'я";const se=us.email.replace(/\./g,'_');window.globalTeachersList.push({email:us.email,name:n,safeEmail:se});}}}
+  const title=document.getElementById('matrix-modal-title');const wb=document.getElementById('constructor-warnings');
+  if(mode!=='live'){title.innerHTML=`🛠️ Конструктор: <span style="color:#e67e22">${mode}</span>`;wb.style.display='block';}
+  else{title.innerHTML='🗓️ Матриця розкладу';wb.style.display='none';}
+  window.calculateMatrixWarnings();renderMatrixGrid();
+};
+window.closeVisualMatrixModal=function(){document.getElementById('visual-matrix-modal').style.display='none';};
+window.calculateMatrixWarnings=function(){if(currentMatrixMode==='live')return;draftWarningsCache=[];const day=document.getElementById('matrix-day-select').value;let wHtml='<b>⚠️ Аналіз накладок:</b><ul style="margin:4px 0 0 0;padding-left:18px;">';let hasW=false;let tracker={};let maxR=8;for(let i=1;i<=11;i++){const cls=`class_${i}`;if(globalAllSchedules[cls]?.lessons?.[day])maxR=Math.max(maxR,globalAllSchedules[cls].lessons[day].length);}for(let row=0;row<maxR;row++){let slotT={};for(let c=1;c<=11;c++){const clsId=`class_${c}`;const building=c<=5?1:2;const la=(globalAllSchedules[clsId]?.lessons?.[day])||[];const raw=la[row];let items=Array.isArray(raw)?raw:(raw&&raw.subject?[raw]:[]);items.forEach((lesson,si)=>{if(lesson.type==='break')return;let te=lesson.teacherEmail;if(!te&&lesson.subject){const sn=typeof lesson.subject==='string'?lesson.subject:(lesson.subject.ua||'');const dt=window.getDefaultTeacher(clsId,sn);if(dt)te=dt.email;}if(te){if(!tracker[te])tracker[te]={};if(slotT[te]){hasW=true;wHtml+=`<li style="color:#c0392b;"><b>Накладка!</b> ${te}: ${clsId}+${slotT[te].classId} (Слот ${row+1})</li>`;draftWarningsCache.push({type:'conflict',row,classId:clsId,subIdx:si});draftWarningsCache.push({type:'conflict',row,classId:slotT[te].classId,subIdx:slotT[te].subIdx});}else slotT[te]={classId:clsId,subIdx:si};tracker[te][row]={classId:clsId,building,subIdx:si};}});}}for(let te in tracker){const slots=Object.keys(tracker[te]).map(Number).sort((a,b)=>a-b);for(let i=0;i<slots.length-1;i++){if(slots[i+1]-slots[i]===1&&tracker[te][slots[i]].building!==tracker[te][slots[i+1]].building){hasW=true;wHtml+=`<li style="color:#e67e22;"><b>Переїзд:</b> ${te} між слотами ${slots[i]+1}→${slots[i+1]+1}</li>`;draftWarningsCache.push({type:'travel',row:slots[i],classId:tracker[te][slots[i]].classId,subIdx:tracker[te][slots[i]].subIdx});draftWarningsCache.push({type:'travel',row:slots[i+1],classId:tracker[te][slots[i+1]].classId,subIdx:tracker[te][slots[i+1]].subIdx});}}}wHtml+='</ul>';const wb=document.getElementById('constructor-warnings');if(hasW){wb.innerHTML=wHtml;wb.style.display='block';}else{wb.innerHTML='✅ Накладок не виявлено!';wb.style.display='block';}};
+function hasWC(row,clsId,subIdx){if(currentMatrixMode==='live')return'';const w=draftWarningsCache.find(x=>x.row===row&&x.classId===clsId&&x.subIdx===subIdx);if(!w)return'';return w.type==='conflict'?'cell-warning-conflict':'cell-warning-travel';}
+function rsmcc(lesson,dTName,isOvr,clsId,row,si){const sn=typeof lesson.subject==='string'?lesson.subject:(lesson.subject.ua||'');const ts=lesson.time||'';const isB=sn.toLowerCase().includes('перерва')||sn.toLowerCase().includes('обід');const isX=lesson.type==='extra';const sl=JSON.stringify(lesson).replace(/'/g,"&apos;").replace(/"/g,"&quot;");const oc=`event.stopPropagation();openCellEditor('${clsId}',${row},${si},${sl})`;const wc=hasWC(row,clsId,si);if(isB)return`<div class="matrix-cell cell-break" onclick="${oc}"><div class="cell-subj">${sn}</div><div class="cell-time">${ts}</div></div>`;if(isX){let xi='';if(lesson.extraData){if(lesson.extraData.format==='individual')xi=`<div class="cell-student-linked">👤${lesson.extraData.student||''}</div>`;else xi=`<div class="cell-student-linked" style="background:#e8f8f5;color:#16a085;">👥Група</div>`;}const th=dTName?`<div class="cell-teacher">👨‍🏫${dTName}${isOvr?' 🔄':''}</div>`:`<div class="cell-teacher" style="color:#aaa;">—</div>`;return`<div class="matrix-cell cell-club ${wc}" onclick="${oc}"><div class="cell-subj">🎸${sn}</div>${th}${xi}<div class="cell-time">🕘${ts}</div></div>`;}const th=dTName?`<div class="cell-teacher">👨‍🏫${dTName}${isOvr?' 🔄':''}</div>`:`<div class="cell-teacher" style="color:#aaa;">—</div>`;return`<div class="matrix-cell cell-lesson ${wc}" onclick="${oc}"><div class="cell-subj">${sn}</div>${th}<div class="cell-time">🕘${ts}</div></div>`;}
+window.renderMatrixGrid=function(){const day=document.getElementById('matrix-day-select').value;const th=document.getElementById('matrix-thead-row');const tb=document.getElementById('matrix-tbody');th.innerHTML='<th class="time-col">№/Час</th>';for(let i=1;i<=11;i++)th.innerHTML+=`<th>${i} Кл</th>`;tb.innerHTML='';let maxR=8;for(let i=1;i<=11;i++){const cls=`class_${i}`;if(globalAllSchedules[cls]?.lessons?.[day])maxR=Math.max(maxR,globalAllSchedules[cls].lessons[day].length);}maxR+=1;let lc=1;for(let row=0;row<maxR;row++){let tr=document.createElement('tr');let bc=0;let lsc=0;for(let c=1;c<=11;c++){const clsId=`class_${c}`;const la=(globalAllSchedules[clsId]?.lessons?.[day])||[];const raw=la[row];let items=Array.isArray(raw)?raw:(raw&&raw.subject?[raw]:[]);items.forEach(l=>{if(l&&l.subject){const sn=typeof l.subject==='string'?l.subject:(l.subject.ua||'');if(sn.toLowerCase().includes('перерва')||sn.toLowerCase().includes('обід'))bc++;else lsc++;}});}const isB=bc>0&&bc>=lsc;const isE=bc===0&&lsc===0;if(isB)tr.innerHTML='<td class="time-col" style="background:#fce4ec;color:#e91e63;">☕</td>';else if(isE)tr.innerHTML='<td class="time-col" style="color:#ccc;font-size:1.1rem;">+</td>';else tr.innerHTML=`<td class="time-col">Ур.${lc++}</td>`;for(let c=1;c<=11;c++){const clsId=`class_${c}`;const la=(globalAllSchedules[clsId]?.lessons?.[day])||[];const raw=la[row];let items=Array.isArray(raw)?raw:(raw&&raw.subject?[raw]:[]);let td=document.createElement('td');let h='';if(items.length>0){h+=`<div class="matrix-cell-container">`;items.forEach((lesson,si)=>{const sn=typeof lesson.subject==='string'?lesson.subject:(lesson.subject.ua||'');const te=lesson.teacherEmail||'';let dn=lesson.teacherName||'';let isOvr=false;const isB2=sn.toLowerCase().includes('перерва')||sn.toLowerCase().includes('обід');if(!isB2){if(!te&&sn){const dt=window.getDefaultTeacher(clsId,sn);if(dt)dn=dt.name;}else if(te)isOvr=true;}h+=rsmcc(lesson,dn,isOvr,clsId,row,si);});h+=`<div class="add-parallel-btn" onclick="event.stopPropagation();openCellEditor('${clsId}',${row},null,null)">+Паралельний</div>`;h+=`</div>`;}else h=`<div class="matrix-cell cell-empty" onclick="openCellEditor('${clsId}',${row},null,null)">+ Додати</div>`;td.innerHTML=h;tr.appendChild(td);}tb.appendChild(tr);}};
+window.toggleCellType=function(){const t=document.getElementById('cell-type-select').value;const tw=document.getElementById('cell-teacher-wrapper');const si=document.getElementById('cell-subj-ua');const ni=document.getElementById('cell-number');const sl=document.getElementById('cell-subj-label');const ew=document.getElementById('cell-extra-wrapper');if(t==='break'){tw.style.display='none';ew.style.display='none';sl.innerText='Назва перерви:';if(!si.value.toLowerCase().includes('перерва')&&!si.value.toLowerCase().includes('обід'))si.value='Перерва';ni.value='';ni.disabled=true;}else if(t==='extra'){tw.style.display='block';ew.style.display='block';sl.innerText='Назва гуртка:';if(si.value.toLowerCase().includes('перерва'))si.value='';ni.disabled=false;toggleExtraFormat();}else{tw.style.display='block';ew.style.display='none';sl.innerText='Назва предмету:';if(si.value.toLowerCase().includes('перерва'))si.value='';ni.disabled=false;}window.triggerSmartCheck();};
+window.toggleExtraFormat=function(){const f=document.getElementById('cell-extra-format').value;document.getElementById('extra-individual-wrap').style.display=f==='individual'?'block':'none';document.getElementById('extra-group-wrap').style.display=f==='group'?'block':'none';if(f==='group')toggleExtraGroupType();};
+window.toggleExtraGroupType=function(){const gt=document.getElementById('extra-group-type').value;document.getElementById('extra-group-classes-wrap').style.display=gt==='classes'?'block':'none';document.getElementById('extra-group-students-wrap').style.display=gt==='students'?'block':'none';};
+window.handleSubjInput=function(){const c=document.getElementById('cell-edit-class').value;const s=document.getElementById('cell-subj-ua').value.trim();const ts=document.getElementById('cell-teacher-select');window.updateCellEditorTeacherOptions(c,s,ts.value);window.triggerSmartCheck();};
+window.updateCellEditorTeacherOptions=function(clsId,sName,curE){const ts=document.getElementById('cell-teacher-select');const dt=window.getDefaultTeacher(clsId,sName);ts.innerHTML=`<option value="">-- Авто (${dt?dt.name:'—'}) --</option>`;window.globalTeachersList.forEach(t=>ts.innerHTML+=`<option value="${t.email}">${t.name} (${t.email})</option>`);if(curE&&Array.from(ts.options).some(o=>o.value===curE))ts.value=curE;else ts.value='';};
+window.triggerSmartCheck=function(){if(currentMatrixMode==='live')return;const te=document.getElementById('cell-teacher-select').value;const wb=document.getElementById('cell-live-warnings');if(!te){wb.style.display='none';return;}const day=document.getElementById('matrix-day-select').value;const clsId=document.getElementById('cell-edit-class').value;const tB=parseInt(clsId.replace('class_',''))<=5?1:2;const row=parseInt(document.getElementById('cell-edit-row').value);let conf=[];let trav=[];for(let c=1;c<=11;c++){let cc=`class_${c}`;if(cc===clsId)continue;let b=c<=5?1:2;let da=globalAllSchedules[cc]?.lessons?.[day]||[];let ss=da[row];let si=Array.isArray(ss)?ss:(ss?[ss]:[]);si.forEach(item=>{if(item.type!=='break'&&item.teacherEmail===te)conf.push(`Накладка: ${c} клас!`);});[row-1,row+1].forEach(nr=>{if(nr<0)return;let ns=da[nr];let ni=Array.isArray(ns)?ns:(ns?[ns]:[]);ni.forEach(item=>{if(item.type!=='break'&&item.teacherEmail===te&&b!==tB)trav.push(`Переїзд: ${c} клас`);});});}if(conf.length>0||trav.length>0){let h=conf.length>0?`<div style="color:#c0392b;font-weight:700;">❌ ${conf[0]}</div>`:'';if(trav.length>0)h+=`<div style="color:#e67e22;font-weight:700;">⚠️ ${trav[0]}</div>`;wb.innerHTML=h;wb.style.display='block';wb.style.background=conf.length>0?'#fdedec':'#fdf2e9';wb.style.border=`1px solid ${conf.length>0?'var(--red)':'#e67e22'}`;}else{wb.innerHTML='<div style="color:#27ae60;font-weight:700;">✅ Вільний, переїзд не потрібен.</div>';wb.style.display='block';wb.style.background='#eafaf1';wb.style.border='1px solid #2ecc71';}};
+window.openCellEditor=async function(clsId,rowIdx,subIdx,lessonObj){
+  const isArt=currentUserData?.role==='art_school_teacher';
+  if(isArt&&lessonObj){const sn=typeof lessonObj.subject==='string'?lessonObj.subject:(lessonObj.subject.ua||'');const t=lessonObj.type||(sn.toLowerCase().includes('перерва')?'break':'lesson');if(t!=='extra'||lessonObj.teacherEmail!==currentUserData.email){alert("⛔ Тільки власні заняття.");return;}}
+  document.getElementById('edit-cell-modal').style.display='flex';document.getElementById('cell-live-warnings').style.display='none';
+  const day=document.getElementById('matrix-day-select').value;document.getElementById('edit-cell-subtitle').innerText=`${clsId.replace('class_','')} Клас | ${dayNamesUA[day]} | Слот ${rowIdx+1}`;
+  document.getElementById('cell-edit-class').value=clsId;document.getElementById('cell-edit-row').value=rowIdx;document.getElementById('cell-edit-subindex').value=subIdx!==null?subIdx:'';
+  const is=document.getElementById('extra-ind-student');const gc=document.getElementById('extra-group-classes');const gs=document.getElementById('extra-group-students');
+  is.innerHTML='<option value="">-- Учень --</option>';gc.innerHTML='';gs.innerHTML='';
+  for(let i=1;i<=11;i++){const cId=`class_${i}`;gc.innerHTML+=`<option value="${cId}">${i} Клас</option>`;if(globalAllStudents[cId]){const og1=document.createElement('optgroup');og1.label=`${i} Клас`;const og2=document.createElement('optgroup');og2.label=`${i} Клас`;Object.values(globalAllStudents[cId]).sort().forEach(st=>{og1.innerHTML+=`<option value="${st}">${st}</option>`;og2.innerHTML+=`<option value="${st}">${st}</option>`;});is.appendChild(og1);gs.appendChild(og2.cloneNode(true));}}
+  let sn='';const ts=document.getElementById('cell-type-select');
+  if(lessonObj){sn=typeof lessonObj.subject==='string'?lessonObj.subject:(lessonObj.subject.ua||'');document.getElementById('cell-subj-ua').value=sn;document.getElementById('cell-number').value=lessonObj.number||'';document.getElementById('cell-time').value=lessonObj.time||'';const isB=sn.toLowerCase().includes('перерва')||sn.toLowerCase().includes('обід');ts.value=lessonObj.type||(isB?'break':'lesson');if(lessonObj.type==='extra'&&lessonObj.extraData){document.getElementById('cell-extra-format').value=lessonObj.extraData.format||'group';if(lessonObj.extraData.format==='individual')setTimeout(()=>document.getElementById('extra-ind-student').value=lessonObj.extraData.student||'',50);else{document.getElementById('extra-group-type').value=lessonObj.extraData.groupType||'classes';}}}
+  else{document.getElementById('cell-subj-ua').value='';document.getElementById('cell-number').value='';document.getElementById('cell-time').value='';ts.value=isArt?'extra':'lesson';}
+  if(isArt)Array.from(ts.options).forEach(o=>o.disabled=(o.value!=='extra'));else Array.from(ts.options).forEach(o=>o.disabled=false);
+  window.updateCellEditorTeacherOptions(clsId,sn,lessonObj?lessonObj.teacherEmail:'');toggleCellType();if(currentMatrixMode!=='live')window.triggerSmartCheck();
+};
+window.closeEditCellModal=function(){document.getElementById('edit-cell-modal').style.display='none';};
+window.saveMatrixCell=async function(){
+  const clsId=document.getElementById('cell-edit-class').value;const ri=parseInt(document.getElementById('cell-edit-row').value);const sis=document.getElementById('cell-edit-subindex').value;const day=document.getElementById('matrix-day-select').value;
+  const type=document.getElementById('cell-type-select').value;const subj=document.getElementById('cell-subj-ua').value.trim();const time=document.getElementById('cell-time').value.trim();const num=type==='break'?'':document.getElementById('cell-number').value.trim();
+  const ts=document.getElementById('cell-teacher-select');const te=type==='break'?'':ts.value;const tn=te?ts.options[ts.selectedIndex].text.split(' (')[0]:'';
+  let ed=null;if(type==='extra'){const fmt=document.getElementById('cell-extra-format').value;ed={format:fmt};if(fmt==='individual')ed.student=document.getElementById('extra-ind-student').value;else{ed.groupType=document.getElementById('extra-group-type').value;const opts=ed.groupType==='classes'?document.getElementById('extra-group-classes').selectedOptions:document.getElementById('extra-group-students').selectedOptions;ed[ed.groupType==='classes'?'classes':'students']=Array.from(opts).map(o=>o.value);}}
+  const nc={number:num,time,subject:{ua:subj,pl:subj},teacherEmail:te,teacherName:tn,type,extraData:ed};
+  let tClasses=[clsId];if(type==='extra'&&ed?.format==='group'){if(ed.groupType==='classes'&&ed.classes?.length>0)tClasses=ed.classes;else if(ed.groupType==='students'&&ed.students?.length>0){let ac=new Set();ed.students.forEach(st=>{for(let c in globalAllStudents)if(Object.values(globalAllStudents[c]).includes(st)){ac.add(c);break;}});if(ac.size>0)tClasses=Array.from(ac);}}
+  const dp=currentMatrixMode==='live'?'schedules':`schedule_drafts/${currentMatrixMode}`;
+  try{for(let tc of tClasses){if(!globalAllSchedules[tc])globalAllSchedules[tc]={};if(!globalAllSchedules[tc].lessons)globalAllSchedules[tc].lessons={};if(!globalAllSchedules[tc].lessons[day])globalAllSchedules[tc].lessons[day]=[];let da=globalAllSchedules[tc].lessons[day];while(da.length<=ri)da.push({});let es=da[ri];let si2=Array.isArray(es)?[...es]:(es&&es.subject?[es]:[]);if(sis!=='')si2[parseInt(sis)]={...nc};else si2.push({...nc});da[ri]=si2;await set(ref(db,`${dp}/${tc}/lessons/${day}`),da);}
+  if(te&&subj&&type!=='break'&&currentMatrixMode==='live'){const se=te.replace(/\./g,'_');for(let tc of tClasses){const as=await get(child(ref(db),`teacher_access/${se}/${tc}`));let ca=as.exists()?as.val():[];if(!Array.isArray(ca))ca=Object.values(ca);if(!ca.includes("Всі предмети")&&!ca.includes(subj)){ca.push(subj);await set(ref(db,`teacher_access/${se}/${tc}`),ca);}}}
+  closeEditCellModal();if(currentMatrixMode!=='live')window.calculateMatrixWarnings();renderMatrixGrid();showToast("✅ Збережено!");}catch(e){alert("Помилка: "+e.message);}};
+window.deleteMatrixCell=async function(){const clsId=document.getElementById('cell-edit-class').value;const ri=parseInt(document.getElementById('cell-edit-row').value);const sis=document.getElementById('cell-edit-subindex').value;const day=document.getElementById('matrix-day-select').value;const dp=currentMatrixMode==='live'?'schedules':`schedule_drafts/${currentMatrixMode}`;if(globalAllSchedules[clsId]?.lessons?.[day]){let da=globalAllSchedules[clsId].lessons[day];let es=da[ri];let si2=Array.isArray(es)?[...es]:(es&&es.subject?[es]:[]);if(sis!=='')si2.splice(parseInt(sis),1);da[ri]=si2.length===0?{}:si2;await set(ref(db,`${dp}/${clsId}/lessons/${day}`),da);closeEditCellModal();if(currentMatrixMode!=='live')window.calculateMatrixWarnings();renderMatrixGrid();showToast("🗑️ Видалено!");}};
