@@ -21,8 +21,13 @@ window.globalTeachersList = window.globalTeachersList || [];
 
 let journalMode='view'; let journalIsTeacher=false;
 let gepCls=''; let gepSubj=''; let gepDate=''; let gepStudent=''; let gepType='П'; let gepCellEl=null; let gepYMonth='';
-// Phase 4b: journal zoom state (10% steps, 60%-150%), applied via --journal-scale on .journal-table
+// Phase 4b/9: journal zoom state (10% steps, 40%-150%), applied via --journal-scale on
+// .journal-table. journalZoomIsAuto=true means "recompute fit-to-width after every
+// render" (the default); it flips to false the moment the teacher manually zooms
+// in/out, so their choice survives re-renders (subject/period change, edit-mode
+// toggle) until they click the zoom-label button to snap back to auto-fit.
 let journalZoomLevel=100;
+let journalZoomIsAuto=true;
 
 // ══════════ GRADE EDITOR POPUP ══════════
 window.selectGradeType=function(type){gepType=type;document.querySelectorAll('.type-btn').forEach(b=>b.classList.toggle('active',b.dataset.type===type));};
@@ -85,15 +90,16 @@ function renderGradeTypesLegend(){
   c.innerHTML=codes.map(code=>{
     const w=(gradeTypesCache[code]&&gradeTypesCache[code].weight)??GRADE_WEIGHTS[code]??1.0;
     const label=(gradeTypesCache[code]&&gradeTypesCache[code].label)||code;
-    return `<span style="margin-right:9px;font-size:.78rem;color:#666;"><b>${code}</b> — ${label} (×${w})</span>`;
+    return `<span style="display:inline-block;background:#f8f9fa;border:1px solid #e6e6e6;border-radius:var(--badge-radius);padding:2px 8px;margin:2px 4px 2px 0;font-size:var(--text-xs);color:#666;"><b style="color:#333;">${code}</b> ${label} ×${w}</span>`;
   }).join('');
 }
 window.openJournalModal=function(role){
   journalIsTeacher=(role==='teacher');journalMode=journalIsTeacher?'edit':'view';
   document.getElementById('journal-modal').style.display='flex';
-  journalZoomLevel=100;applyJournalZoom();
+  journalZoomIsAuto=true;journalZoomLevel=100;applyJournalZoom();
   renderGradeTypesLegend();
-  const mp=document.getElementById('j-month-select');const dp=document.getElementById('global-date').value.split('-');mp.value=`${dp[0]}-${dp[1]}`;
+  const dp=document.getElementById('global-date').value.split('-');const curYM=`${dp[0]}-${dp[1]}`;
+  document.getElementById('j-month-from').value=curYM;document.getElementById('j-month-to').value=curYM;
   const cs=document.getElementById('j-class-select');const mw=document.getElementById('j-mode-toggle-wrap');
   mw.style.display=journalIsTeacher?'flex':'none';
   document.getElementById('j-edit-hint').style.display=journalIsTeacher&&journalMode==='edit'?'block':'none';
@@ -125,31 +131,42 @@ function finishJournalSubjectsRender(unique,cls,ss){
   renderJournalTable();
 }
 // ══════════ RENDER JOURNAL TABLE ══════════
-// Phase 8: journal is no longer locked to a single calendar month — the teacher/
-// director picks a start month (#j-month-select) + a period length (#j-period-select:
-// 1/3/6/12 months) and the table shows every school day across ALL those months.
-// Firebase data stays month-keyed (grades/{cls}/{yMonth}/{subj}/...), so we just
-// fetch each month in the range in parallel and merge the results client-side —
-// nothing about the underlying DB schema changes.
+// Phase 8/9: journal is no longer locked to a single calendar month — the teacher/
+// director picks an explicit "від—до" month range (#j-month-from / #j-month-to) and
+// the table shows every school day across ALL months in that range. Firebase data
+// stays month-keyed (grades/{cls}/{yMonth}/{subj}/...), so we just fetch each month
+// in the range in parallel and merge the results client-side — nothing about the
+// underlying DB schema changes.
 function getJournalMonths(){
-  const start=document.getElementById('j-month-select').value;
-  if(!start)return[];
-  const period=parseInt(document.getElementById('j-period-select')?.value||'1')||1;
-  const [y,m]=start.split('-').map(Number);
+  const from=document.getElementById('j-month-from').value;
+  let to=document.getElementById('j-month-to').value||from;
+  if(!from)return[];
+  if(to<from)to=from; // handleJournalRangeChange() already corrects+warns on this; this is just a safety net
+  const [fy,fm]=from.split('-').map(Number);
+  const [ty,tm]=to.split('-').map(Number);
+  const total=(ty-fy)*12+(tm-fm)+1;
+  if(total<=0)return[];
   const months=[];
-  for(let i=0;i<period;i++){
-    const total=(m-1)+i; const yy=y+Math.floor(total/12); const mm=(total%12)+1;
+  for(let i=0;i<total;i++){
+    const t=(fm-1)+i; const yy=fy+Math.floor(t/12); const mm=(t%12)+1;
     months.push(`${yy}-${String(mm).padStart(2,'0')}`);
   }
   return months;
 }
+// Validates "до" isn't before "від" (auto-corrects + warns), then re-renders.
+window.handleJournalRangeChange=function(){
+  const fromEl=document.getElementById('j-month-from');const toEl=document.getElementById('j-month-to');
+  if(fromEl.value&&toEl.value&&toEl.value<fromEl.value){toEl.value=fromEl.value;showToast('⚠️ "До" не може бути раніше "Від" — виправлено.');}
+  renderJournalTable();
+};
 window.renderJournalTable=async function(){
   const cls=document.getElementById('j-class-select').value;
   const subj=document.getElementById('j-subj-select').value;
   const months=getJournalMonths();
   const table=document.getElementById('journal-table-el');
   const wAvgDiv=document.getElementById('j-weighted-avg');
-  if(!cls||!subj||months.length===0){table.innerHTML='';wAvgDiv.style.display='none';return;}
+  const rangeSummary=document.getElementById('j-range-summary');
+  if(!cls||!subj||months.length===0){table.innerHTML='';wAvgDiv.style.display='none';if(rangeSummary)rangeSummary.textContent='';return;}
   if(months.length>12){showToast('⚠️ Максимальний період перегляду — 12 місяців.');return;}
   table.innerHTML='<tr><td style="padding:20px;color:#aaa;">⏳ Завантаження...</td></tr>';
   const clsNum=getClassNum(cls);
@@ -260,7 +277,15 @@ window.renderJournalTable=async function(){
     });
     tbody+='</tbody>';
     table.innerHTML=thead+tbody;
-    applyJournalZoom(); // Phase 4b: re-apply current zoom + sticky-column width compensation after re-render
+    // Phase 9: recompute fit-to-width on every render UNLESS the teacher has manually
+    // zoomed (journalZoomIsAuto===false) — see journalZoomOut/In/Fit above.
+    if(journalZoomIsAuto)journalZoomLevel=computeJournalFitPercent();
+    applyJournalZoom();
+    // Range summary — quick "what am I looking at" context above the table.
+    if(rangeSummary){
+      const periodStr=months.length>1?`${months[0]} – ${months[months.length-1]}`:months[0];
+      rangeSummary.textContent=`👥 ${students.length} учнів · 🗓️ ${dateCols.length} уроків · ${periodStr}`;
+    }
     // Weighted avg summary
     if(classCount>0){
       const ca=(classWeightedAvg/classCount).toFixed(2);
@@ -281,7 +306,7 @@ window.setJournalColumnType=async function(cls,subj,yMonth,date,type){
   await set(ref(db,`journal_column_types/${cls}/${yMonth}/${subj}/${date}`),type||null);
   showToast(type?`✅ Тип на ${date.split('-').reverse().join('.')}: ${type}`:'🗑️ Тип знято');
 };
-// ══════════ PHASE 4b: JOURNAL ZOOM (60%–150%, 10% steps) ══════════
+// ══════════ PHASE 4b/9: JOURNAL ZOOM (40%–150%, 10% steps, smart fit-to-width) ══════════
 // Uses transform:scale() on .journal-table (driven by --journal-scale) with transform-origin:top left.
 // #journal-scale-inner's width/height are set from the table's *unscaled* offsetWidth/offsetHeight
 // (offsetWidth/Height are unaffected by CSS transforms) so .journal-wrap's overflow-x scrollbar
@@ -301,9 +326,26 @@ function applyJournalZoom(){
   inner.style.height=(naturalH*scale)+'px';
   if(label)label.innerText=journalZoomLevel+'%';
 }
-window.journalZoomOut=function(){journalZoomLevel=Math.max(60,journalZoomLevel-10);applyJournalZoom();};
-window.journalZoomIn=function(){journalZoomLevel=Math.min(150,journalZoomLevel+10);applyJournalZoom();};
-window.journalZoomReset=function(){journalZoomLevel=100;applyJournalZoom();};
+// Multi-month ranges can produce a very wide table (up to ~12 months × ~22 school
+// days each); a single month with few students can be much narrower than the modal.
+// Rather than always defaulting to a fixed 100% (leaving either a giant horizontal
+// scrollbar or wasted empty space), compute the scale that makes the table exactly
+// fill the available width — same idea as "zoom to fit" in spreadsheet apps. Capped
+// to the same 40%–150% range as manual zoom so text never becomes illegible or blurry.
+function computeJournalFitPercent(){
+  const inner=document.getElementById('journal-scale-inner');
+  const table=document.getElementById('journal-table-el');
+  if(!table||!inner||!inner.parentElement)return 100;
+  const naturalW=table.offsetWidth; // unaffected by the current transform:scale()
+  const availW=inner.parentElement.clientWidth; // .journal-wrap's visible width
+  if(!naturalW||!availW)return 100;
+  return Math.max(40,Math.min(150,Math.floor((availW/naturalW)*100)));
+}
+window.journalZoomOut=function(){journalZoomIsAuto=false;journalZoomLevel=Math.max(40,journalZoomLevel-10);applyJournalZoom();};
+window.journalZoomIn=function(){journalZoomIsAuto=false;journalZoomLevel=Math.min(150,journalZoomLevel+10);applyJournalZoom();};
+// Clicking the % label snaps back to auto-fit — and re-enables auto-fit on future
+// re-renders (subject/period change, edit-mode toggle) until the user next zooms manually.
+window.journalZoomFit=function(){journalZoomIsAuto=true;journalZoomLevel=computeJournalFitPercent();applyJournalZoom();};
 // ══════════ PHASE 4b: PDF EXPORT (html2canvas + jsPDF, landscape) ══════════
 window.exportJournalToPDF=async function(){
   const table=document.getElementById('journal-table-el');

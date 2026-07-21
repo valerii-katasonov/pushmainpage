@@ -1263,39 +1263,53 @@
 <div id="journal-modal" class="modal-overlay">
   <div class="modal-content" style="max-width:96%;width:100%;padding:18px;">
     <h2 style="color:var(--blue);margin-top:0;">📖 Класний журнал</h2>
-    <div style="display:flex;gap:7px;margin-bottom:9px;flex-wrap:wrap;">
-      <select id="j-class-select" style="flex:1;min-width:100px;" onchange="updateJournalSubjects()"></select>
-      <select id="j-subj-select" style="flex:1;min-width:100px;" onchange="renderJournalTable()"></select>
-      <input type="month" id="j-month-select" title="Місяць початку періоду" style="flex:1;min-width:100px;" onchange="renderJournalTable()">
-      <select id="j-period-select" title="Скільки місяців показати від початкового" style="flex:1;min-width:100px;" onchange="renderJournalTable()">
-        <option value="1">1 місяць</option>
-        <option value="3">3 місяці</option>
-        <option value="6">6 місяців</option>
-        <option value="12">Рік</option>
-      </select>
+
+    <!-- Toolbar: Клас / Предмет / Період (від—до) -->
+    <div style="display:flex;gap:var(--space-3);flex-wrap:wrap;margin-bottom:var(--space-3);">
+      <div style="flex:1;min-width:110px;">
+        <label style="margin-top:0;font-size:var(--text-xs);">Клас</label>
+        <select id="j-class-select" style="margin-top:2px;" onchange="updateJournalSubjects()"></select>
+      </div>
+      <div style="flex:1;min-width:110px;">
+        <label style="margin-top:0;font-size:var(--text-xs);">Предмет</label>
+        <select id="j-subj-select" style="margin-top:2px;" onchange="renderJournalTable()"></select>
+      </div>
+      <div style="flex:2;min-width:210px;">
+        <label style="margin-top:0;font-size:var(--text-xs);">Період</label>
+        <div style="display:flex;gap:6px;align-items:center;margin-top:2px;">
+          <input type="month" id="j-month-from" title="Місяць від" style="margin-top:0;flex:1;" onchange="handleJournalRangeChange()">
+          <span style="color:#aaa;">—</span>
+          <input type="month" id="j-month-to" title="Місяць до" style="margin-top:0;flex:1;" onchange="handleJournalRangeChange()">
+        </div>
+      </div>
     </div>
-    <div id="j-mode-toggle-wrap" class="mode-toggle" style="display:none;">
-      <button id="j-mode-view" class="active" onclick="setJournalMode('view')">👁 Перегляд</button>
-      <button id="j-mode-edit" onclick="setJournalMode('edit')">✏️ Редагування</button>
+
+    <!-- Controls row: mode toggle (teacher/director) + zoom -->
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:var(--space-2);flex-wrap:wrap;margin-bottom:var(--space-2);">
+      <div id="j-mode-toggle-wrap" class="mode-toggle" style="display:none;margin-bottom:0;">
+        <button id="j-mode-view" class="active" onclick="setJournalMode('view')">👁 Перегляд</button>
+        <button id="j-mode-edit" onclick="setJournalMode('edit')">✏️ Редагування</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;margin-left:auto;">
+        <span style="font-size:var(--text-xs);color:#888;">🔍</span>
+        <button onclick="journalZoomOut()" title="Зменшити" style="width:auto;padding:5px 11px;margin:0;background:#ecf0f1;color:#333;border-radius:7px;">−</button>
+        <button onclick="journalZoomFit()" id="journal-zoom-label" title="Підібрати за шириною" style="width:auto;padding:5px 11px;margin:0;background:#ecf0f1;color:#333;border-radius:7px;font-size:var(--text-xs);min-width:56px;">100%</button>
+        <button onclick="journalZoomIn()" title="Збільшити" style="width:auto;padding:5px 11px;margin:0;background:#ecf0f1;color:#333;border-radius:7px;">+</button>
+      </div>
     </div>
+
     <div id="j-edit-hint" style="display:none;background:#e0f7fa;padding:8px 12px;border-radius:8px;margin-bottom:7px;font-size:.8rem;color:#006064;">
       💡 Клікніть на клітинку щоб виставити або змінити оцінку. Tab/Enter — наступний учень.
     </div>
-    <div id="journal-type-legend" style="margin:4px 0 8px 0;"></div>
-    <!-- PHASE 4b: zoom controls -->
-    <div style="display:flex;align-items:center;justify-content:flex-end;gap:6px;margin-bottom:7px;">
-      <span style="font-size:.78rem;color:#888;">🔍 Масштаб:</span>
-      <button onclick="journalZoomOut()" style="width:auto;padding:5px 11px;margin:0;background:#ecf0f1;color:#333;border-radius:7px;">−</button>
-      <button onclick="journalZoomReset()" id="journal-zoom-label" style="width:auto;padding:5px 11px;margin:0;background:#ecf0f1;color:#333;border-radius:7px;font-size:.8rem;min-width:52px;">100%</button>
-      <button onclick="journalZoomIn()" style="width:auto;padding:5px 11px;margin:0;background:#ecf0f1;color:#333;border-radius:7px;">+</button>
-    </div>
+    <div id="journal-type-legend" style="margin:4px 0 6px 0;"></div>
+    <div id="j-range-summary" style="font-size:var(--text-xs);color:#999;margin:0 0 6px 2px;"></div>
     <div class="journal-wrap">
       <div id="journal-scale-inner">
         <table class="journal-table" id="journal-table-el"></table>
       </div>
     </div>
     <!-- Weighted Average info -->
-    <div id="j-weighted-avg" style="margin-top:9px;background:#f4ecf7;border-radius:9px;padding:11px;font-size:.82rem;display:none;"></div>
+    <div id="j-weighted-avg" style="margin-top:var(--space-3);background:#f4ecf7;border-radius:var(--card-radius);padding:var(--space-3);font-size:var(--text-sm);display:none;"></div>
     <div style="display:flex;gap:9px;margin-top:13px;">
       <button id="btn-export-journal-pdf" onclick="exportJournalToPDF()" style="background:linear-gradient(135deg,#e74c3c,#c0392b);color:#fff;flex:1;margin-top:0;">📄 Експорт PDF</button>
       <button onclick="closeJournalModal()" style="background:#333;color:#fff;flex:1;margin-top:0;">Закрити</button>
