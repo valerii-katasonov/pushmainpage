@@ -215,10 +215,35 @@ window.renderJournalTable=async function(){
     dateCols=[...new Map(dateCols.map(c=>[c.ds,c])).values()];
     const canEdit=journalIsTeacher&&journalMode==='edit';
     const dayN=['Нд','Пн','Вт','Ср','Чт','Пт','Сб'];
-    // Weighted type header row
-    let thead='<thead><tr><th class="sn">Учень</th>';
+    const monthNamesUA=['Січень','Лютий','Березень','Квітень','Травень','Червень','Липень','Серпень','Вересень','Жовтень','Листопад','Грудень'];
+    // Phase 9: without an explicit month label, a multi-month range just shows
+    // repeating bare day numbers ("1 2 3...") with zero indication of which month
+    // is which — group consecutive date columns by their source month so a
+    // "Місяць Рік" band can span each month's columns (always shown, even for a
+    // single month, so the header never silently depends on range length).
+    const monthBands=[];
+    dateCols.forEach(c=>{
+      const last=monthBands[monthBands.length-1];
+      if(last&&last.ym===c.ym)last.count++;
+      else monthBands.push({ym:c.ym,count:1,bandIdx:monthBands.length});
+    });
+    const bandColorOf=idx=>idx%2===0?'#e8f4fd':'#e8f5e9';
+    // Row 1: month bands, with rowspan-2 corner cells for the sticky student/avg columns
+    let monthRow='<tr class="jt-month-row"><th class="sn" rowspan="2">Учень</th>';
+    monthBands.forEach(({ym,count,bandIdx})=>{
+      const [yy,mm]=ym.split('-');
+      monthRow+=`<th colspan="${count}" style="background:${bandColorOf(bandIdx)};">${monthNamesUA[parseInt(mm)-1]} ${yy}</th>`;
+    });
+    monthRow+='<th class="avg-col" rowspan="2">Зважений<br>сер. бал</th></tr>';
+    // Row 2: day-of-month + weekday (+ editable/preset "тип" control) — same content
+    // as before, just tinted to match its month's band so the grouping reads clearly
+    // top-to-bottom, not just from the label row.
+    let dayRow='<tr class="jt-day-row">';
+    let bandPtr=0,bandRemaining=monthBands.length?monthBands[0].count:0;
     dateCols.forEach(({ds,day,dow,ym})=>{
       const isToday=ds===localDateString;
+      if(bandRemaining===0){bandPtr++;bandRemaining=monthBands[bandPtr].count;}
+      const bandColor=bandColorOf(monthBands[bandPtr].bandIdx);bandRemaining--;
       // Phase 4b: replaced the passive, grade-derived type/weight hint with an editable
       // pre-set "expected type" control (journal_column_types), used by openGradeEditor()
       // to prefill gepType for cells that don't have a grade yet.
@@ -238,9 +263,10 @@ window.renderJournalTable=async function(){
       } else {
         typeCell=presetType?`<br><span style="font-size:.55rem;color:#e67e22;">${presetType}${weightOf(presetType)?` ×${weightOf(presetType)}`:''}</span>`:'';
       }
-      thead+=`<th class="${isToday?'today-col':''}" title="${ds}">${day}<br><span style="font-size:.62rem;font-weight:400;">${dayN[dow]}</span>${typeCell}</th>`;
+      dayRow+=`<th class="${isToday?'today-col':''}" style="background:${bandColor};" title="${ds}">${day}<br><span style="font-size:.62rem;font-weight:400;">${dayN[dow]}</span>${typeCell}</th>`;
     });
-    thead+='<th class="avg-col">Зважений<br>сер. бал</th></tr></thead>';
+    dayRow+='</tr>';
+    let thead='<thead>'+monthRow+dayRow+'</thead>';
     // Body
     let tbody='<tbody>';let classWeightedAvg=0;let classCount=0;
     students.forEach((st)=>{
@@ -339,7 +365,11 @@ function computeJournalFitPercent(){
   const naturalW=table.offsetWidth; // unaffected by the current transform:scale()
   const availW=inner.parentElement.clientWidth; // .journal-wrap's visible width
   if(!naturalW||!availW)return 100;
-  return Math.max(40,Math.min(150,Math.floor((availW/naturalW)*100)));
+  // Auto-fit only ever SHRINKS a too-wide table to stop it overflowing — it never
+  // blows up a small class (e.g. 2 students, one month) past its natural 100% size,
+  // which would look absurd (huge cells, oversized text) just to "fill" the modal.
+  // Manual + still lets a teacher zoom in past 100% (up to 150%) if they want to.
+  return Math.max(40,Math.min(100,Math.floor((availW/naturalW)*100)));
 }
 window.journalZoomOut=function(){journalZoomIsAuto=false;journalZoomLevel=Math.max(40,journalZoomLevel-10);applyJournalZoom();};
 window.journalZoomIn=function(){journalZoomIsAuto=false;journalZoomLevel=Math.min(150,journalZoomLevel+10);applyJournalZoom();};

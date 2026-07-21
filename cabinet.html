@@ -90,13 +90,21 @@
     .journal-table th{background:#e8f4fd;color:#154360;font-weight:800;position:sticky;top:0;z-index:3;border:1px solid #ddd;padding:7px 4px;white-space:nowrap;}
     .journal-table td{border:1px solid #eee;padding:2px;vertical-align:middle;height:34px;min-width:32px;max-width:48px;}
     .journal-table td.sn{text-align:left;font-weight:700;background:#fffcf0;position:sticky;left:0;z-index:2;border-right:2px solid #ccc;padding-left:8px;min-width:140px;font-size:.82rem;white-space:nowrap;}
-    .journal-table th.sn{background:#e8f4fd;z-index:4;border-right:2px solid #ccc;left:0;}
+    .journal-table th.sn{background:#e8f4fd;z-index:6;border-right:2px solid #ccc;left:0;top:0;vertical-align:middle;}
     .journal-table td.avg-col{background:#f4ecf7;font-weight:800;color:var(--purple);position:sticky;right:0;border-left:2px solid #d1c4e9;min-width:46px;}
-    .journal-table th.avg-col{background:#f4ecf7;color:var(--purple);position:sticky;right:0;border-left:2px solid #d1c4e9;z-index:4;}
+    .journal-table th.avg-col{background:#f4ecf7;color:var(--purple);position:sticky;right:0;border-left:2px solid #d1c4e9;z-index:6;top:0;vertical-align:middle;}
     .journal-table td.today-col{background:#fffde7;}
     .journal-table th.today-col{background:#fff3cd!important;color:#d35400!important;border-bottom:3px solid var(--orange)!important;}
     .journal-table tr:hover td{background:#e0f7fa!important;}
     .journal-table tr:nth-child(even) td{background:#fafbfc;}
+    /* ── PHASE 9: month-group header row — without this, a multi-month range just
+       shows repeating bare day numbers with no indication of which month they're
+       in. jt-month-row (rowspan-2 "Учень"/avg-col corners + one <th> per month,
+       colspan = days shown that month) sits above jt-day-row (the existing day/
+       weekday/тип cells). Both rows are sticky, stacked via an explicit top offset
+       so jt-day-row sticks *below* jt-month-row instead of overlapping it. ── */
+    .journal-table thead tr.jt-month-row th{position:sticky;top:0;z-index:5;height:20px;padding:3px 4px;font-size:.72rem;letter-spacing:.2px;}
+    .journal-table thead tr.jt-day-row th{position:sticky;top:22px;z-index:4;}
     .jct-type-select{font-size:.55rem;width:100%;margin-top:2px;padding:0 1px;border:1px solid #bbdefb;border-radius:4px;background:#fff;color:#154360;}
     /* ── GRADE EDITOR POPUP ── */
     .grade-editor-popup{position:fixed;z-index:5000;background:#fff;border-radius:13px;box-shadow:0 8px 30px rgba(0,0,0,.25);padding:13px;display:none;min-width:210px;border:2px solid var(--teal);animation:popIn .15s ease-out;}
@@ -330,7 +338,9 @@
       #teacher-screen [style*="display:flex"][style*="gap:9px"] { gap: 12px; }
       /* Modals get a bit wider */
       .modal-content { max-width: 600px; }
-      #journal-modal .modal-content,
+      /* Journal gets its own ceiling — see the desktop breakpoint for why: it
+         should use more of a big screen without becoming absurdly wide on one. */
+      #journal-modal .modal-content { max-width: min(95vw, 1100px); }
       #visual-matrix-modal .modal-content { max-width: 95%; }
     }
     /* ═══════════════════════════════════════════════════════
@@ -423,7 +433,10 @@
          MODALS — шире и комфортнее на ПК
          ═════════════════════════════════════════ */
       .modal-content { max-width: 700px; padding: 32px 36px; }
-      #journal-modal .modal-content,
+      /* Journal: scale with the monitor (min(vw,px)) instead of a flat 95% — on a
+         big/ultrawide desktop 95% of the viewport is excessive for a data table,
+         while on a modest laptop screen it should still use most of the width. */
+      #journal-modal .modal-content { max-width: min(95vw, 1500px); }
       #visual-matrix-modal .modal-content,
       #edit-cell-modal .modal-content { max-width: 95%; }
       #profile-modal .modal-content,
@@ -434,6 +447,9 @@
       /* ───── Журнал table комфортнее ───── */
       .journal-table { font-size: .88rem; }
       .journal-table td { height: 38px; min-width: 36px; }
+      /* More vertical room on desktop — screens are taller, and the modal's own
+         padding already grew above, so the table can afford a bigger viewport. */
+      #journal-modal .journal-wrap { max-height: 66vh; }
       /* ───── Lesson rows в schedule крупнее ───── */
       .lesson-row { padding: 11px 14px; }
       .lesson-num { width: 28px; height: 28px; font-size: .8rem; }
