@@ -42,6 +42,13 @@
     .btn-logout{background:var(--red);color:#fff;margin-top:var(--space-5);}
     .btn-save{background:linear-gradient(135deg,#43e97b,#38f9d7);color:#1a1a1a;box-shadow:0 4px 14px rgba(67,233,123,.3);}
     .panel{display:none;}
+    /* ── DESIGN SYSTEM: .screen-section groups related cards/details under one
+       heading on every role screen (admin/director/teacher/parent/student).
+       On mobile it's just spacing; on desktop (see @media 1024px) it becomes
+       the actual grid unit, replacing the old brittle inline-style selectors. */
+    .screen-section{margin-bottom:var(--space-6);}
+    .screen-section:last-of-type{margin-bottom:var(--space-4);}
+    .screen-section>h3:first-child{margin-top:0;}
     /* ── DESIGN SYSTEM: unified card pattern (was 3 near-duplicate rules) ── */
     .data-card,.payment-card,.schedule-box{background:#fff;border-radius:var(--card-radius);padding:var(--space-4);box-shadow:var(--card-shadow);}
     .data-card{border-left:4px solid var(--teal);margin-top:var(--space-4);}
@@ -320,7 +327,7 @@
       h2 { font-size: 1.55rem; }
       .qa-btn { font-size: .92rem; }
       /* Stats and counters can sit in row of 3 */
-      [style*="display:flex"][style*="gap:9px"][style*="margin-bottom:14px"] { gap: 12px; }
+      #teacher-screen [style*="display:flex"][style*="gap:9px"] { gap: 12px; }
       /* Modals get a bit wider */
       .modal-content { max-width: 600px; }
       #journal-modal .modal-content,
@@ -352,100 +359,56 @@
       #teacher-class-selector-box select { flex: 1; max-width: 280px; margin-top: 0 !important; }
       #teacher-class-selector-box label { margin-top: 0 !important; }
       /* ═════════════════════════════════════════
-         ADMIN — простой одноколоночный layout
+         ALL 4 ROLE SCREENS — .screen-section is the grid unit.
+         Each screen's HTML groups its cards/details into
+         <section class="screen-section"> (optionally "half" width)
+         blocks; this replaces the old per-inline-style attribute
+         selectors, which broke the moment a card's inline style
+         string changed and couldn't account for new cards at all.
          ═════════════════════════════════════════ */
-      #admin-screen[style*="display: block"], #admin-screen[style*="display:block"] {
-        display: block !important;
-        max-width: 800px; margin: 0 auto;
-      }
-      /* ═════════════════════════════════════════
-         DIRECTOR — 2 колонки + умные spans
-         ═════════════════════════════════════════ */
-      #director-screen[style*="display: block"], #director-screen[style*="display:block"] {
-        display: grid !important;
-        grid-template-columns: 1fr 1fr;
-        column-gap: 28px;
-        row-gap: 18px;
-        align-items: start;
-      }
-      #director-screen > h2,
-      #director-screen > .data-card,
-      #director-screen > .btn-logout {
-        grid-column: 1 / -1;
-      }
-      #director-screen > div {
-        grid-column: 1 / -1;
-      }
-      #director-screen > details {
-        grid-column: auto;
-        margin: 0 !important;
-        align-self: stretch;
-      }
-      #director-screen > div[style*="margin-bottom:18px"][style*="gap:9px"],
-      #director-screen > div[style*="margin:16px 0"] {
-        gap: 14px !important;
-      }
-      /* ═════════════════════════════════════════
-         TEACHER — 2 колонки + продуманные пары
-         ═════════════════════════════════════════ */
+      #admin-screen[style*="display: block"], #admin-screen[style*="display:block"],
+      #director-screen[style*="display: block"], #director-screen[style*="display:block"],
       #teacher-screen[style*="display: block"], #teacher-screen[style*="display:block"] {
         display: grid !important;
         grid-template-columns: 1fr 1fr;
         column-gap: 28px;
-        row-gap: 14px;
+        row-gap: var(--space-6);
         align-items: start;
       }
-      #teacher-screen > h2,
-      #teacher-screen > h3,
-      #teacher-screen > #t-exams-journal-btns,
-      #teacher-screen > #t-matrix-btn-wrapper,
-      #teacher-screen > #curriculum-upload-section,
-      #teacher-screen > .qa-row,
-      #teacher-screen > #status-msg,
-      #teacher-screen > .btn-logout,
-      #teacher-screen > details {
-        grid-column: 1 / -1;
-      }
-      #teacher-screen > label,
-      #teacher-screen > select {
-        grid-column: 1 / -1;
-        margin-top: 8px !important;
-      }
-      #teacher-screen > div[style*="background:#f3e5f5"][style*="padding:13px"] {
-        grid-column: 1 / -1;
-      }
-      #teacher-screen > .data-card { margin-top: 0; margin-bottom: 0; }
-      #teacher-screen > div[style*="margin-top:14px"],
-      #teacher-screen > div[style*="margin-top:13px"] {
-        margin-top: 0 !important;
-      }
-      /* ═════════════════════════════════════════
-         PARENT — 2 колонки 1.25fr | 1fr
-         ═════════════════════════════════════════ */
       #parent-screen[style*="display: block"], #parent-screen[style*="display:block"],
       #student-screen[style*="display: block"], #student-screen[style*="display:block"] {
         display: grid !important;
         grid-template-columns: 1.25fr 1fr;
         column-gap: 28px;
-        row-gap: 16px;
+        row-gap: var(--space-6);
         align-items: start;
       }
-      #parent-screen > .schedule-box,
-      #parent-screen > h3,
-      #parent-screen > #payments-section,
+      #admin-screen[style*="display: block"], #admin-screen[style*="display:block"] {
+        max-width: 800px; margin: 0 auto;
+      }
+      #admin-screen > h2, #admin-screen > .btn-logout,
+      #director-screen > h2, #director-screen > .btn-logout,
+      #teacher-screen > h2, #teacher-screen > .btn-logout,
       #parent-screen > .btn-logout,
-      #student-screen > .schedule-box,
       #student-screen > .btn-logout {
         grid-column: 1 / -1;
       }
-      #parent-screen > .data-card[style*="border-left-color:var(--purple)"],
-      #student-screen > .data-card[style*="border-left-color:var(--purple)"] {
+      #admin-screen > .screen-section,
+      #director-screen > .screen-section,
+      #teacher-screen > .screen-section,
+      #parent-screen > .screen-section,
+      #student-screen > .screen-section {
         grid-column: 1 / -1;
+        margin-bottom: 0; /* grid row-gap already spaces sections out */
+        align-self: stretch;
       }
-      #parent-screen > .data-card,
-      #student-screen > .data-card { margin-top: 0; }
-      #parent-screen > .schedule-box,
-      #student-screen > .schedule-box { margin-bottom: 0; }
+      #admin-screen > .screen-section.half,
+      #director-screen > .screen-section.half,
+      #teacher-screen > .screen-section.half,
+      #parent-screen > .screen-section.half,
+      #student-screen > .screen-section.half {
+        grid-column: span 1;
+      }
       /* ───── PAYMENTS — 3-колоночная структура внутри ───── */
       #payments-section {
         display: grid;
@@ -567,232 +530,258 @@
   <!-- ADMIN -->
   <div id="admin-screen" class="panel">
     <h2 style="color:#2c3e50;">🛡️ Панель Адміністратора</h2>
-    <div class="data-card" style="border-left-color:var(--red);background:#fdfbfb;">
-      <h4 id="a-att-header" style="margin-top:0;color:var(--red);">🚨 Відсутні та Запізнення</h4>
-      <ul id="a-unified-att-list" class="list-dash" style="padding-left:0;list-style:none;"><li class="empty-msg">Завантаження...</li></ul>
-    </div>
+    <!-- Нові картки адміністратора додавайте новими <section class="screen-section">
+         (додайте клас "half" для пів-ширини на десктопі) — grid підхопить їх автоматично. -->
+    <section class="screen-section">
+      <h3>🔔 Сповіщення</h3>
+      <div class="data-card" style="border-left-color:var(--red);background:#fdfbfb;">
+        <h4 id="a-att-header" style="margin-top:0;color:var(--red);">🚨 Відсутні та Запізнення</h4>
+        <ul id="a-unified-att-list" class="list-dash" style="padding-left:0;list-style:none;"><li class="empty-msg">Завантаження...</li></ul>
+      </div>
+    </section>
     <button class="btn-logout" onclick="logoutUser()">Вийти</button>
   </div>
   <!-- DIRECTOR -->
   <div id="director-screen" class="panel">
     <h2 style="color:#2c3e50;">👔 Кабінет Директора</h2>
-    <div style="display:flex;gap:9px;margin-bottom:18px;flex-wrap:wrap;">
-      <button onclick="openVisualMatrixModal('live')" style="flex:1;min-width:170px;background:linear-gradient(135deg,#1abc9c,#16a085);color:#fff;margin-top:0;font-size:.95rem;padding:11px;">🗓️ Розклад</button>
-      <button onclick="openJournalModal('director')" style="flex:1;min-width:170px;background:linear-gradient(135deg,var(--purple),#9b59b6);color:#fff;margin-top:0;font-size:.95rem;padding:11px;">📖 Журнал</button>
-      <button onclick="openChatModal('director')" style="flex:1;min-width:170px;background:linear-gradient(135deg,#9b59b6,#8e44ad);color:#fff;margin-top:0;font-size:.95rem;padding:11px;">💬 Чат з батьками</button>
-    </div>
-    <!-- SMART MATCHING -->
-    <details style="margin-bottom:20px;background:#e8f5e9;padding:14px;border-radius:12px;border:1px solid #a5d6a7;" open>
-      <summary style="font-weight:700;cursor:pointer;color:#1b5e20;font-size:1rem;">🔄 Smart Matching — Підбір на Заміну</summary>
-      <div style="margin-top:13px;">
-        <p style="font-size:.83rem;color:#555;">Система автоматично знаходить вільних учителів з потрібним скілом.</p>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
-          <select id="sm-class" style="flex:1;min-width:110px;border:2px solid #4caf50;margin-top:0;">
-            <option value="">Клас...</option>
+
+    <section class="screen-section">
+      <h3>🚀 Швидкі дії</h3>
+      <div style="display:flex;gap:9px;flex-wrap:wrap;">
+        <button onclick="openVisualMatrixModal('live')" style="flex:1;min-width:170px;background:linear-gradient(135deg,#1abc9c,#16a085);color:#fff;margin-top:0;font-size:.95rem;padding:11px;">🗓️ Розклад</button>
+        <button onclick="openJournalModal('director')" style="flex:1;min-width:170px;background:linear-gradient(135deg,var(--purple),#9b59b6);color:#fff;margin-top:0;font-size:.95rem;padding:11px;">📖 Журнал</button>
+        <button onclick="openChatModal('director')" style="flex:1;min-width:170px;background:linear-gradient(135deg,#9b59b6,#8e44ad);color:#fff;margin-top:0;font-size:.95rem;padding:11px;">💬 Чат з батьками</button>
+      </div>
+    </section>
+
+    <section class="screen-section">
+      <h3>📊 Огляд</h3>
+      <!-- Статистика -->
+      <div class="data-card" style="border-left-color:var(--purple);background:#fdfafc;margin-top:0;">
+        <h4 style="margin-top:0;color:var(--purple);">📈 Середні оцінки</h4>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:9px;">
+          <select id="d-stat-class" onchange="updateDirectorStatSubjects()" style="flex:1;min-width:110px;">
+            <option value="">Оберіть клас...</option>
+            <option value="class_1">1</option><option value="class_2">2</option><option value="class_3">3</option>
+            <option value="class_4">4</option><option value="class_5">5</option><option value="class_6">6</option>
+            <option value="class_7">7</option><option value="class_8">8</option><option value="class_9">9</option>
+            <option value="class_10">10</option><option value="class_11">11</option>
+          </select>
+          <select id="d-stat-subj" onchange="renderDirectorStats()" style="flex:1;min-width:110px;"><option value="">Спочатку клас</option></select>
+        </div>
+        <div id="d-stat-results"><p class="empty-msg">Оберіть клас та предмет.</p></div>
+      </div>
+      <!-- Дашборд -->
+      <div style="display:flex;gap:9px;margin:16px 0;">
+        <div style="flex:1;background:#e0f7fa;padding:13px;border-radius:12px;text-align:center;">
+          <h4 style="margin:0;color:#00838f;font-size:.82rem;">📚 ДЗ (сьогодні)</h4>
+          <p id="d-hw-counter" style="font-size:1.7rem;font-weight:800;color:#00acc1;margin:4px 0;">0</p>
+        </div>
+        <div style="flex:1;background:#fce4ec;padding:13px;border-radius:12px;text-align:center;">
+          <h4 style="margin:0;color:#ad1457;font-size:.82rem;">💬 Коментарів</h4>
+          <p id="d-com-counter" style="font-size:1.7rem;font-weight:800;color:#d81b60;margin:4px 0;">0</p>
+        </div>
+      </div>
+      <div style="background:#fff3e0;padding:13px;border-radius:12px;text-align:center;margin-bottom:16px;">
+        <h4 style="margin:0;color:#e65100;font-size:.88rem;">🗓️ Статистика тижня</h4>
+        <div style="display:flex;justify-content:space-around;margin-top:9px;">
+          <div><p id="d-week-late" style="font-size:1.4rem;font-weight:800;color:var(--orange);margin:0;">0</p><span style="font-size:.68rem;color:#888;">запізнень</span></div>
+          <div><p id="d-week-absent" style="font-size:1.4rem;font-weight:800;color:#c0392b;margin:0;">0</p><span style="font-size:.68rem;color:#888;">відсутніх</span></div>
+        </div>
+      </div>
+      <div class="data-card" style="border-left-color:var(--red);background:#fdfbfb;margin-top:0;">
+        <h4 id="d-att-header" style="margin-top:0;color:var(--red);">🚨 Відсутні та Запізнення</h4>
+        <ul id="d-unified-att-list" class="list-dash" style="padding-left:0;list-style:none;"><li class="empty-msg">Завантаження...</li></ul>
+      </div>
+    </section>
+
+    <section class="screen-section">
+      <h3>🗓️ Розклад та заміни</h3>
+      <!-- SMART MATCHING -->
+      <details style="margin-bottom:12px;background:#e8f5e9;padding:14px;border-radius:12px;border:1px solid #a5d6a7;" open>
+        <summary style="font-weight:700;cursor:pointer;color:#1b5e20;font-size:1rem;">🔄 Smart Matching — Підбір на Заміну</summary>
+        <div style="margin-top:13px;">
+          <p style="font-size:.83rem;color:#555;">Система автоматично знаходить вільних учителів з потрібним скілом.</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+            <select id="sm-class" style="flex:1;min-width:110px;border:2px solid #4caf50;margin-top:0;">
+              <option value="">Клас...</option>
+              <option value="class_1">1 Клас</option><option value="class_2">2 Клас</option><option value="class_3">3 Клас</option>
+              <option value="class_4">4 Клас</option><option value="class_5">5 Клас</option><option value="class_6">6 Клас</option>
+              <option value="class_7">7 Клас</option><option value="class_8">8 Клас</option><option value="class_9">9 Клас</option>
+              <option value="class_10">10 Клас</option><option value="class_11">11 Клас</option>
+            </select>
+            <input type="text" id="sm-subject" placeholder="Предмет (напр. Математика)" style="flex:2;min-width:140px;margin-top:0;border:2px solid #4caf50;">
+            <input type="date" id="sm-date" style="flex:1;min-width:110px;margin-top:0;border:2px solid #4caf50;">
+            <input type="text" id="sm-time" placeholder="09:00 - 09:45" style="flex:1;min-width:100px;margin-top:0;border:2px solid #4caf50;">
+          </div>
+          <button onclick="findSubstitute()" style="background:#1b5e20;color:#fff;padding:11px;margin-top:10px;">🔍 Знайти кандидатів</button>
+          <div id="sm-results" style="margin-top:12px;"></div>
+        </div>
+      </details>
+      <!-- Скіли вчителів -->
+      <details style="margin-bottom:12px;background:#e3f2fd;padding:14px;border-radius:12px;border:1px solid #90caf9;">
+        <summary style="font-weight:700;cursor:pointer;color:#0d47a1;font-size:1rem;">🧠 Матриця скілів вчителів</summary>
+        <div style="margin-top:13px;">
+          <p style="font-size:.83rem;color:#555;">Призначайте компетенції (скіли) вчителям — які предмети вони можуть вести на заміні.</p>
+          <select id="d-skills-teacher" style="margin-top:8px;border:2px solid #90caf9;"><option value="">-- Оберіть вчителя --</option></select>
+          <div id="d-skills-current" style="margin-top:8px;min-height:30px;"></div>
+          <div style="display:flex;gap:8px;margin-top:8px;">
+            <input type="text" id="d-skill-input" placeholder="Додати предмет (напр. Фізика)" style="flex:2;margin-top:0;border:2px solid #90caf9;">
+            <button onclick="addTeacherSkill()" style="flex:1;margin-top:0;background:#0d47a1;color:#fff;padding:10px 8px;font-size:.85rem;">+ Додати</button>
+          </div>
+          <button onclick="saveTeacherSkills()" style="background:#0d47a1;color:#fff;padding:10px;margin-top:8px;font-size:.88rem;">💾 Зберегти скіли</button>
+        </div>
+      </details>
+      <!-- Конструктор -->
+      <details style="margin-bottom:12px;background:#e0f2f1;padding:14px;border-radius:12px;border:1px solid #1abc9c;" open>
+        <summary style="font-weight:700;cursor:pointer;color:var(--teal);font-size:1rem;">🛠️ Конструктор Розкладу (Чернетки)</summary>
+        <div style="margin-top:13px;">
+          <div id="drafts-list-container"><p class="empty-msg">Завантаження...</p></div>
+          <div style="display:flex;gap:9px;margin-top:12px;">
+            <input type="text" id="new-draft-name" placeholder="Назва (напр. 2026-2027)" style="flex:2;margin-top:0;">
+            <button onclick="createNewDraft()" style="flex:1;margin-top:0;background:var(--teal);color:#fff;">+ Створити</button>
+          </div>
+        </div>
+      </details>
+      <!-- Access Matrix -->
+      <details style="background:#e0f7fa;padding:14px;border-radius:12px;border:1px solid #00acc1;">
+        <summary style="font-weight:700;cursor:pointer;color:#00838f;">🔐 Матриця доступу вчителів</summary>
+        <div style="margin-top:13px;">
+          <select id="d-acc-email-select" style="margin-top:8px;border:2px solid #00acc1;"><option value="">-- Оберіть вчителя --</option></select>
+          <select id="d-acc-class" style="margin-top:8px;" onchange="loadDirectorMatrixSubjects()">
+            <option value="">-- Оберіть клас --</option>
             <option value="class_1">1 Клас</option><option value="class_2">2 Клас</option><option value="class_3">3 Клас</option>
             <option value="class_4">4 Клас</option><option value="class_5">5 Клас</option><option value="class_6">6 Клас</option>
             <option value="class_7">7 Клас</option><option value="class_8">8 Клас</option><option value="class_9">9 Клас</option>
             <option value="class_10">10 Клас</option><option value="class_11">11 Клас</option>
           </select>
-          <input type="text" id="sm-subject" placeholder="Предмет (напр. Математика)" style="flex:2;min-width:140px;margin-top:0;border:2px solid #4caf50;">
-          <input type="date" id="sm-date" style="flex:1;min-width:110px;margin-top:0;border:2px solid #4caf50;">
-          <input type="text" id="sm-time" placeholder="09:00 - 09:45" style="flex:1;min-width:100px;margin-top:0;border:2px solid #4caf50;">
+          <label style="margin-top:13px;">Дозволені предмети:</label>
+          <select id="d-acc-subjects" multiple style="height:130px;margin-top:4px;"><option value="" disabled>Оберіть клас...</option></select>
+          <button style="background:#00838f;padding:11px;margin-top:13px;color:#fff;" onclick="grantTeacherAccess()">💾 Зберегти доступ</button>
         </div>
-        <button onclick="findSubstitute()" style="background:#1b5e20;color:#fff;padding:11px;margin-top:10px;">🔍 Знайти кандидатів</button>
-        <div id="sm-results" style="margin-top:12px;"></div>
-      </div>
-    </details>
-    <!-- Скіли вчителів -->
-    <details style="margin-bottom:20px;background:#e3f2fd;padding:14px;border-radius:12px;border:1px solid #90caf9;">
-      <summary style="font-weight:700;cursor:pointer;color:#0d47a1;font-size:1rem;">🧠 Матриця скілів вчителів</summary>
-      <div style="margin-top:13px;">
-        <p style="font-size:.83rem;color:#555;">Призначайте компетенції (скіли) вчителям — які предмети вони можуть вести на заміні.</p>
-        <select id="d-skills-teacher" style="margin-top:8px;border:2px solid #90caf9;"><option value="">-- Оберіть вчителя --</option></select>
-        <div id="d-skills-current" style="margin-top:8px;min-height:30px;"></div>
-        <div style="display:flex;gap:8px;margin-top:8px;">
-          <input type="text" id="d-skill-input" placeholder="Додати предмет (напр. Фізика)" style="flex:2;margin-top:0;border:2px solid #90caf9;">
-          <button onclick="addTeacherSkill()" style="flex:1;margin-top:0;background:#0d47a1;color:#fff;padding:10px 8px;font-size:.85rem;">+ Додати</button>
+      </details>
+    </section>
+
+    <section class="screen-section half">
+      <h3>👥 Персонал</h3>
+      <!-- Staff Management -->
+      <details style="margin-bottom:12px;background:#fff;padding:14px;border-radius:12px;border:1px solid #ddd;">
+        <summary style="font-weight:700;cursor:pointer;color:#c0392b;">⚙️ Управління персоналом</summary>
+        <div style="margin-top:13px;">
+          <input type="email" id="new-staff-email" placeholder="Email співробітника">
+          <select id="new-staff-role" style="margin-top:8px;">
+            <option value="teacher">Вчитель</option><option value="art_school_teacher">Вчитель школи мистецтв</option>
+            <option value="class_teacher">🎓 Класний керівник</option>
+            <option value="director">Директор</option><option value="administrator">Адміністратор</option>
+          </select>
+          <button style="background:#c0392b;padding:8px;margin-top:9px;color:#fff;" onclick="grantStaffRole()">Надати доступ</button>
         </div>
-        <button onclick="saveTeacherSkills()" style="background:#0d47a1;color:#fff;padding:10px;margin-top:8px;font-size:.88rem;">💾 Зберегти скіли</button>
-      </div>
-    </details>
-    <!-- Статистика -->
-    <div class="data-card" style="border-left-color:var(--purple);background:#fdfafc;">
-      <h4 style="margin-top:0;color:var(--purple);">📈 Середні оцінки</h4>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:9px;">
-        <select id="d-stat-class" onchange="updateDirectorStatSubjects()" style="flex:1;min-width:110px;">
-          <option value="">Оберіть клас...</option>
-          <option value="class_1">1</option><option value="class_2">2</option><option value="class_3">3</option>
-          <option value="class_4">4</option><option value="class_5">5</option><option value="class_6">6</option>
-          <option value="class_7">7</option><option value="class_8">8</option><option value="class_9">9</option>
-          <option value="class_10">10</option><option value="class_11">11</option>
-        </select>
-        <select id="d-stat-subj" onchange="renderDirectorStats()" style="flex:1;min-width:110px;"><option value="">Спочатку клас</option></select>
-      </div>
-      <div id="d-stat-results"><p class="empty-msg">Оберіть клас та предмет.</p></div>
-    </div>
-    <!-- Дашборд -->
-    <div style="display:flex;gap:9px;margin:16px 0;">
-      <div style="flex:1;background:#e0f7fa;padding:13px;border-radius:12px;text-align:center;">
-        <h4 style="margin:0;color:#00838f;font-size:.82rem;">📚 ДЗ (сьогодні)</h4>
-        <p id="d-hw-counter" style="font-size:1.7rem;font-weight:800;color:#00acc1;margin:4px 0;">0</p>
-      </div>
-      <div style="flex:1;background:#fce4ec;padding:13px;border-radius:12px;text-align:center;">
-        <h4 style="margin:0;color:#ad1457;font-size:.82rem;">💬 Коментарів</h4>
-        <p id="d-com-counter" style="font-size:1.7rem;font-weight:800;color:#d81b60;margin:4px 0;">0</p>
-      </div>
-    </div>
-    <div style="background:#fff3e0;padding:13px;border-radius:12px;text-align:center;margin-bottom:16px;">
-      <h4 style="margin:0;color:#e65100;font-size:.88rem;">🗓️ Статистика тижня</h4>
-      <div style="display:flex;justify-content:space-around;margin-top:9px;">
-        <div><p id="d-week-late" style="font-size:1.4rem;font-weight:800;color:var(--orange);margin:0;">0</p><span style="font-size:.68rem;color:#888;">запізнень</span></div>
-        <div><p id="d-week-absent" style="font-size:1.4rem;font-weight:800;color:#c0392b;margin:0;">0</p><span style="font-size:.68rem;color:#888;">відсутніх</span></div>
-      </div>
-    </div>
-    <div class="data-card" style="border-left-color:var(--red);background:#fdfbfb;">
-      <h4 id="d-att-header" style="margin-top:0;color:var(--red);">🚨 Відсутні та Запізнення</h4>
-      <ul id="d-unified-att-list" class="list-dash" style="padding-left:0;list-style:none;"><li class="empty-msg">Завантаження...</li></ul>
-    </div>
-    <!-- Конструктор -->
-    <details style="margin:18px 0;background:#e0f2f1;padding:14px;border-radius:12px;border:1px solid #1abc9c;" open>
-      <summary style="font-weight:700;cursor:pointer;color:var(--teal);font-size:1rem;">🛠️ Конструктор Розкладу (Чернетки)</summary>
-      <div style="margin-top:13px;">
-        <div id="drafts-list-container"><p class="empty-msg">Завантаження...</p></div>
-        <div style="display:flex;gap:9px;margin-top:12px;">
-          <input type="text" id="new-draft-name" placeholder="Назва (напр. 2026-2027)" style="flex:2;margin-top:0;">
-          <button onclick="createNewDraft()" style="flex:1;margin-top:0;background:var(--teal);color:#fff;">+ Створити</button>
+      </details>
+      <!-- Class Teacher Assignment -->
+      <details style="background:#fff3e0;padding:14px;border-radius:12px;border:1px solid #ffb74d;">
+        <summary style="font-weight:700;cursor:pointer;color:#e65100;font-size:.95rem;">🎓 Призначення класних керівників</summary>
+        <div style="margin-top:13px;">
+          <p style="font-size:.83rem;color:#555;">Кл. керівник може завантажувати календарне планування для свого класу.</p>
+          <select id="ct-class-select" style="margin-top:8px;border:2px solid #ff9800;">
+            <option value="">-- Оберіть клас --</option>
+            <option value="class_1">1 Клас</option><option value="class_2">2 Клас</option>
+            <option value="class_3">3 Клас</option><option value="class_4">4 Клас</option>
+            <option value="class_5">5 Клас</option><option value="class_6">6 Клас</option>
+            <option value="class_7">7 Клас</option><option value="class_8">8 Клас</option>
+            <option value="class_9">9 Клас</option><option value="class_10">10 Клас</option>
+            <option value="class_11">11 Клас</option>
+          </select>
+          <select id="ct-teacher-select" style="margin-top:8px;border:2px solid #ff9800;">
+            <option value="">-- Оберіть вчителя --</option>
+          </select>
+          <div id="ct-current-info" style="margin-top:8px;font-size:.83rem;color:#666;padding:8px;background:#fff;border-radius:7px;display:none;"></div>
+          <button onclick="assignClassTeacher()" style="background:#e65100;color:#fff;padding:11px;margin-top:10px;">💾 Призначити кл. керівника</button>
         </div>
-      </div>
-    </details>
-    <!-- Access Matrix -->
-    <details style="margin-bottom:18px;background:#e0f7fa;padding:14px;border-radius:12px;border:1px solid #00acc1;">
-      <summary style="font-weight:700;cursor:pointer;color:#00838f;">🔐 Матриця доступу вчителів</summary>
-      <div style="margin-top:13px;">
-        <select id="d-acc-email-select" style="margin-top:8px;border:2px solid #00acc1;"><option value="">-- Оберіть вчителя --</option></select>
-        <select id="d-acc-class" style="margin-top:8px;" onchange="loadDirectorMatrixSubjects()">
-          <option value="">-- Оберіть клас --</option>
-          <option value="class_1">1 Клас</option><option value="class_2">2 Клас</option><option value="class_3">3 Клас</option>
-          <option value="class_4">4 Клас</option><option value="class_5">5 Клас</option><option value="class_6">6 Клас</option>
-          <option value="class_7">7 Клас</option><option value="class_8">8 Клас</option><option value="class_9">9 Клас</option>
-          <option value="class_10">10 Клас</option><option value="class_11">11 Клас</option>
-        </select>
-        <label style="margin-top:13px;">Дозволені предмети:</label>
-        <select id="d-acc-subjects" multiple style="height:130px;margin-top:4px;"><option value="" disabled>Оберіть клас...</option></select>
-        <button style="background:#00838f;padding:11px;margin-top:13px;color:#fff;" onclick="grantTeacherAccess()">💾 Зберегти доступ</button>
-      </div>
-    </details>
-    <!-- Staff Management -->
-    <details style="margin-bottom:18px;background:#fff;padding:14px;border-radius:12px;border:1px solid #ddd;">
-      <summary style="font-weight:700;cursor:pointer;color:#c0392b;">⚙️ Управління персоналом</summary>
-      <div style="margin-top:13px;">
-        <input type="email" id="new-staff-email" placeholder="Email співробітника">
-        <select id="new-staff-role" style="margin-top:8px;">
-          <option value="teacher">Вчитель</option><option value="art_school_teacher">Вчитель школи мистецтв</option>
-          <option value="class_teacher">🎓 Класний керівник</option>
-          <option value="director">Директор</option><option value="administrator">Адміністратор</option>
-        </select>
-        <button style="background:#c0392b;padding:8px;margin-top:9px;color:#fff;" onclick="grantStaffRole()">Надати доступ</button>
-      </div>
-    </details>
-    <!-- Class Teacher Assignment -->
-    <details style="margin-bottom:18px;background:#fff3e0;padding:14px;border-radius:12px;border:1px solid #ffb74d;">
-      <summary style="font-weight:700;cursor:pointer;color:#e65100;font-size:.95rem;">🎓 Призначення класних керівників</summary>
-      <div style="margin-top:13px;">
-        <p style="font-size:.83rem;color:#555;">Кл. керівник може завантажувати календарне планування для свого класу.</p>
-        <select id="ct-class-select" style="margin-top:8px;border:2px solid #ff9800;">
-          <option value="">-- Оберіть клас --</option>
-          <option value="class_1">1 Клас</option><option value="class_2">2 Клас</option>
-          <option value="class_3">3 Клас</option><option value="class_4">4 Клас</option>
-          <option value="class_5">5 Клас</option><option value="class_6">6 Клас</option>
-          <option value="class_7">7 Клас</option><option value="class_8">8 Клас</option>
-          <option value="class_9">9 Клас</option><option value="class_10">10 Клас</option>
-          <option value="class_11">11 Клас</option>
-        </select>
-        <select id="ct-teacher-select" style="margin-top:8px;border:2px solid #ff9800;">
-          <option value="">-- Оберіть вчителя --</option>
-        </select>
-        <div id="ct-current-info" style="margin-top:8px;font-size:.83rem;color:#666;padding:8px;background:#fff;border-radius:7px;display:none;"></div>
-        <button onclick="assignClassTeacher()" style="background:#e65100;color:#fff;padding:11px;margin-top:10px;">💾 Призначити кл. керівника</button>
-      </div>
-    </details>
-    <!-- PHASE 1: Академічний рік -->
-    <details style="margin-bottom:18px;background:#fff8e1;padding:14px;border-radius:12px;border:1px solid #ffe0b2;" ontoggle="if(this.open)loadAcademicYear()">
-      <summary style="font-weight:700;cursor:pointer;color:#e65100;font-size:.95rem;">📅 Навчальний рік <span id="ay-year-label" style="font-weight:400;color:#888;font-size:.8rem;"></span></summary>
-      <div style="margin-top:13px;">
-        <h4 style="margin:0 0 7px 0;color:#e65100;font-size:.86rem;">Семестри</h4>
-        <div id="ay-semesters-list"></div>
-        <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:8px;">
-          <input type="text" id="ay-sem-name" placeholder="Назва (напр. I семестр)" style="flex:2;min-width:140px;margin-top:0;">
-          <input type="date" id="ay-sem-start" style="flex:1;min-width:120px;margin-top:0;">
-          <input type="date" id="ay-sem-end" style="flex:1;min-width:120px;margin-top:0;">
-          <button onclick="addSemester()" style="flex:1;min-width:100px;margin-top:0;background:#e65100;color:#fff;">+ Додати</button>
+      </details>
+    </section>
+
+    <section class="screen-section half">
+      <h3>📅 Навчальний рік</h3>
+      <!-- PHASE 1: Академічний рік -->
+      <details style="margin-bottom:12px;background:#fff8e1;padding:14px;border-radius:12px;border:1px solid #ffe0b2;" ontoggle="if(this.open)loadAcademicYear()">
+        <summary style="font-weight:700;cursor:pointer;color:#e65100;font-size:.95rem;">📅 Навчальний рік <span id="ay-year-label" style="font-weight:400;color:#888;font-size:.8rem;"></span></summary>
+        <div style="margin-top:13px;">
+          <h4 style="margin:0 0 7px 0;color:#e65100;font-size:.86rem;">Семестри</h4>
+          <div id="ay-semesters-list"></div>
+          <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:8px;">
+            <input type="text" id="ay-sem-name" placeholder="Назва (напр. I семестр)" style="flex:2;min-width:140px;margin-top:0;">
+            <input type="date" id="ay-sem-start" style="flex:1;min-width:120px;margin-top:0;">
+            <input type="date" id="ay-sem-end" style="flex:1;min-width:120px;margin-top:0;">
+            <button onclick="addSemester()" style="flex:1;min-width:100px;margin-top:0;background:#e65100;color:#fff;">+ Додати</button>
+          </div>
+          <h4 style="margin:16px 0 7px 0;color:#e65100;font-size:.86rem;">Канікули</h4>
+          <div id="ay-breaks-list"></div>
+          <input type="text" id="ay-break-title" placeholder="Назва канікул" style="margin-top:8px;">
+          <div style="display:flex;gap:7px;margin-top:6px;">
+            <input type="date" id="ay-break-start" style="flex:1;margin-top:0;">
+            <input type="date" id="ay-break-end" style="flex:1;margin-top:0;">
+          </div>
+          <label style="display:flex;align-items:center;gap:6px;margin-top:6px;font-weight:400;font-size:.82rem;">
+            <input type="checkbox" id="ay-break-all-classes" onchange="toggleAllClasses('break')" style="width:auto;margin:0;"> Усі класи
+          </label>
+          <select id="ay-break-classes" multiple style="height:90px;margin-top:4px;">
+            <option value="class_1">1 Клас</option><option value="class_2">2 Клас</option><option value="class_3">3 Клас</option>
+            <option value="class_4">4 Клас</option><option value="class_5">5 Клас</option><option value="class_6">6 Клас</option>
+            <option value="class_7">7 Клас</option><option value="class_8">8 Клас</option><option value="class_9">9 Клас</option>
+            <option value="class_10">10 Клас</option><option value="class_11">11 Клас</option>
+          </select>
+          <button onclick="addBreak()" style="background:#e65100;color:#fff;margin-top:8px;">+ Додати канікули</button>
+          <h4 style="margin:16px 0 7px 0;color:#e65100;font-size:.86rem;">Свята</h4>
+          <div id="ay-holidays-list"></div>
+          <input type="text" id="ay-holiday-title" placeholder="Назва свята" style="margin-top:8px;">
+          <input type="date" id="ay-holiday-date" style="margin-top:6px;">
+          <label style="display:flex;align-items:center;gap:6px;margin-top:6px;font-weight:400;font-size:.82rem;">
+            <input type="checkbox" id="ay-holiday-all-classes" onchange="toggleAllClasses('holiday')" style="width:auto;margin:0;"> Усі класи
+          </label>
+          <select id="ay-holiday-classes" multiple style="height:90px;margin-top:4px;">
+            <option value="class_1">1 Клас</option><option value="class_2">2 Клас</option><option value="class_3">3 Клас</option>
+            <option value="class_4">4 Клас</option><option value="class_5">5 Клас</option><option value="class_6">6 Клас</option>
+            <option value="class_7">7 Клас</option><option value="class_8">8 Клас</option><option value="class_9">9 Клас</option>
+            <option value="class_10">10 Клас</option><option value="class_11">11 Клас</option>
+          </select>
+          <select id="ay-holiday-calendar-type" style="margin-top:6px;">
+            <option value="general">🏫 Загальна школа</option>
+            <option value="art_school">🎵 Школа мистецтв</option>
+          </select>
+          <button onclick="addHoliday()" style="background:#e65100;color:#fff;margin-top:8px;">+ Додати свято</button>
         </div>
-        <h4 style="margin:16px 0 7px 0;color:#e65100;font-size:.86rem;">Канікули</h4>
-        <div id="ay-breaks-list"></div>
-        <input type="text" id="ay-break-title" placeholder="Назва канікул" style="margin-top:8px;">
-        <div style="display:flex;gap:7px;margin-top:6px;">
-          <input type="date" id="ay-break-start" style="flex:1;margin-top:0;">
-          <input type="date" id="ay-break-end" style="flex:1;margin-top:0;">
+      </details>
+      <!-- PHASE 2: Розклад дзвінків -->
+      <details style="margin-bottom:12px;background:#e8eaf6;padding:14px;border-radius:12px;border:1px solid #9fa8da;">
+        <summary style="font-weight:700;cursor:pointer;color:#283593;font-size:.95rem;">🔔 Розклад дзвінків</summary>
+        <div style="margin-top:13px;">
+          <select id="bell-class-select" onchange="loadBellSchedule()" style="border:2px solid #7986cb;">
+            <option value="">-- Оберіть клас --</option>
+            <option value="class_1">1 Клас</option><option value="class_2">2 Клас</option><option value="class_3">3 Клас</option>
+            <option value="class_4">4 Клас</option><option value="class_5">5 Клас</option><option value="class_6">6 Клас</option>
+            <option value="class_7">7 Клас</option><option value="class_8">8 Клас</option><option value="class_9">9 Клас</option>
+            <option value="class_10">10 Клас</option><option value="class_11">11 Клас</option>
+          </select>
+          <div id="bell-slots-table" style="margin-top:10px;"><p class="empty-msg">Оберіть клас.</p></div>
+          <button onclick="addBellSlot()" style="background:#7986cb;color:#fff;margin-top:8px;">+ Додати урок</button>
+          <button onclick="saveBellSchedule()" style="background:#283593;color:#fff;margin-top:8px;">💾 Зберегти розклад дзвінків</button>
         </div>
-        <label style="display:flex;align-items:center;gap:6px;margin-top:6px;font-weight:400;font-size:.82rem;">
-          <input type="checkbox" id="ay-break-all-classes" onchange="toggleAllClasses('break')" style="width:auto;margin:0;"> Усі класи
-        </label>
-        <select id="ay-break-classes" multiple style="height:90px;margin-top:4px;">
-          <option value="class_1">1 Клас</option><option value="class_2">2 Клас</option><option value="class_3">3 Клас</option>
-          <option value="class_4">4 Клас</option><option value="class_5">5 Клас</option><option value="class_6">6 Клас</option>
-          <option value="class_7">7 Клас</option><option value="class_8">8 Клас</option><option value="class_9">9 Клас</option>
-          <option value="class_10">10 Клас</option><option value="class_11">11 Клас</option>
-        </select>
-        <button onclick="addBreak()" style="background:#e65100;color:#fff;margin-top:8px;">+ Додати канікули</button>
-        <h4 style="margin:16px 0 7px 0;color:#e65100;font-size:.86rem;">Свята</h4>
-        <div id="ay-holidays-list"></div>
-        <input type="text" id="ay-holiday-title" placeholder="Назва свята" style="margin-top:8px;">
-        <input type="date" id="ay-holiday-date" style="margin-top:6px;">
-        <label style="display:flex;align-items:center;gap:6px;margin-top:6px;font-weight:400;font-size:.82rem;">
-          <input type="checkbox" id="ay-holiday-all-classes" onchange="toggleAllClasses('holiday')" style="width:auto;margin:0;"> Усі класи
-        </label>
-        <select id="ay-holiday-classes" multiple style="height:90px;margin-top:4px;">
-          <option value="class_1">1 Клас</option><option value="class_2">2 Клас</option><option value="class_3">3 Клас</option>
-          <option value="class_4">4 Клас</option><option value="class_5">5 Клас</option><option value="class_6">6 Клас</option>
-          <option value="class_7">7 Клас</option><option value="class_8">8 Клас</option><option value="class_9">9 Клас</option>
-          <option value="class_10">10 Клас</option><option value="class_11">11 Клас</option>
-        </select>
-        <select id="ay-holiday-calendar-type" style="margin-top:6px;">
-          <option value="general">🏫 Загальна школа</option>
-          <option value="art_school">🎵 Школа мистецтв</option>
-        </select>
-        <button onclick="addHoliday()" style="background:#e65100;color:#fff;margin-top:8px;">+ Додати свято</button>
-      </div>
-    </details>
-    <!-- PHASE 2: Розклад дзвінків -->
-    <details style="margin-bottom:18px;background:#e8eaf6;padding:14px;border-radius:12px;border:1px solid #9fa8da;">
-      <summary style="font-weight:700;cursor:pointer;color:#283593;font-size:.95rem;">🔔 Розклад дзвінків</summary>
-      <div style="margin-top:13px;">
-        <select id="bell-class-select" onchange="loadBellSchedule()" style="border:2px solid #7986cb;">
-          <option value="">-- Оберіть клас --</option>
-          <option value="class_1">1 Клас</option><option value="class_2">2 Клас</option><option value="class_3">3 Клас</option>
-          <option value="class_4">4 Клас</option><option value="class_5">5 Клас</option><option value="class_6">6 Клас</option>
-          <option value="class_7">7 Клас</option><option value="class_8">8 Клас</option><option value="class_9">9 Клас</option>
-          <option value="class_10">10 Клас</option><option value="class_11">11 Клас</option>
-        </select>
-        <div id="bell-slots-table" style="margin-top:10px;"><p class="empty-msg">Оберіть клас.</p></div>
-        <button onclick="addBellSlot()" style="background:#7986cb;color:#fff;margin-top:8px;">+ Додати урок</button>
-        <button onclick="saveBellSchedule()" style="background:#283593;color:#fff;margin-top:8px;">💾 Зберегти розклад дзвінків</button>
-      </div>
-    </details>
-    <!-- PHASE 5: Типи оцінок -->
-    <details style="margin-bottom:18px;background:#fdf2e9;padding:14px;border-radius:12px;border:1px solid #f5cba7;" ontoggle="if(this.open)loadGradeTypesAdmin()">
-      <summary style="font-weight:700;cursor:pointer;color:#d35400;font-size:.95rem;">🎯 Типи оцінок</summary>
-      <div style="margin-top:13px;">
-        <div id="gt-types-table"><p class="empty-msg">Відкрийте блок для завантаження...</p></div>
-        <div style="display:flex;gap:7px;margin-top:12px;flex-wrap:wrap;">
-          <input id="gt-new-code" placeholder="Код (напр. ЛР)" style="width:90px;margin:0;">
-          <input id="gt-new-label" placeholder="Назва" style="flex:1;min-width:140px;margin:0;">
-          <input id="gt-new-weight" type="number" step="0.1" min="0.1" placeholder="Коеф." style="width:80px;margin:0;">
-          <button onclick="addGradeType()" style="background:var(--green);color:#fff;width:auto;padding:8px 14px;margin:0;">➕ Додати</button>
+      </details>
+      <!-- PHASE 5: Типи оцінок -->
+      <details style="background:#fdf2e9;padding:14px;border-radius:12px;border:1px solid #f5cba7;" ontoggle="if(this.open)loadGradeTypesAdmin()">
+        <summary style="font-weight:700;cursor:pointer;color:#d35400;font-size:.95rem;">🎯 Типи оцінок</summary>
+        <div style="margin-top:13px;">
+          <div id="gt-types-table"><p class="empty-msg">Відкрийте блок для завантаження...</p></div>
+          <div style="display:flex;gap:7px;margin-top:12px;flex-wrap:wrap;">
+            <input id="gt-new-code" placeholder="Код (напр. ЛР)" style="width:90px;margin:0;">
+            <input id="gt-new-label" placeholder="Назва" style="flex:1;min-width:140px;margin:0;">
+            <input id="gt-new-weight" type="number" step="0.1" min="0.1" placeholder="Коеф." style="width:80px;margin:0;">
+            <button onclick="addGradeType()" style="background:var(--green);color:#fff;width:auto;padding:8px 14px;margin:0;">➕ Додати</button>
+          </div>
         </div>
-      </div>
-    </details>
+      </details>
+    </section>
+
     <button class="btn-logout" onclick="logoutUser()">Вийти</button>
   </div>
   <!-- ══════════════════════════════
@@ -800,336 +789,388 @@
        ══════════════════════════════ -->
   <div id="teacher-screen" class="panel">
     <h2 id="teacher-dashboard-title">👨‍🏫 Журнал</h2>
-    <div id="t-exams-journal-btns" style="display:flex;gap:9px;margin-bottom:14px;">
-      <button onclick="openExamsCalendar()" class="qa-btn qa-exams" style="flex:1;min-width:0;">📅 Контрольні</button>
-      <button onclick="openJournalModal('teacher')" class="qa-btn qa-journal" style="flex:1;min-width:0;">📖 Журнал</button>
-    </div>
-    <div id="t-matrix-btn-wrapper" style="display:none;margin-bottom:14px;">
-      <button onclick="openVisualMatrixModal('live')" style="width:100%;background:linear-gradient(135deg,#1abc9c,#16a085);color:#fff;margin-top:0;padding:11px;">🗓️ Матриця розкладу</button>
-    </div>
-    <!-- Відвідуваність -->
-    <div class="data-card" style="border-left-color:var(--red);background:#fdfbfb;margin-top:0;margin-bottom:14px;">
-      <h4 id="t-att-header" style="margin-top:0;color:var(--red);">🚨 Відвідуваність сьогодні:</h4>
-      <ul id="t-attendance-list" class="list-dash" style="list-style:none;padding-left:0;"><li class="empty-msg">Завантаження...</li></ul>
-      <div id="t-mark-absent-block" style="margin-top:13px;display:flex;gap:8px;border-top:1px dashed #f5b7b1;padding-top:13px;">
-        <select id="t-mark-absent-student" style="flex:1;margin-top:0;border:1px solid #f5b7b1;"><option value="">Учень...</option></select>
-        <select id="t-mark-absent-lesson" style="flex:1;margin-top:0;border:1px solid #f5b7b1;"><option value="all">Увесь день</option></select>
-        <select id="t-mark-absent-reason" style="flex:1;margin-top:0;border:1px solid #f5b7b1;">
-          <option value="Відмічено вчителем">Без причини</option><option value="через хворобу">Хвороба</option>
-          <option value="за сімейними обставинами">Сімейні обставини</option><option value="запізнення">Запізнення</option>
-        </select>
-        <button onclick="teacherMarkAbsent()" style="margin-top:0;background:var(--red);color:#fff;width:auto;padding:9px 13px;font-size:.85rem;">Відмітити</button>
+
+    <section class="screen-section">
+      <h3>🚀 Швидкі дії</h3>
+      <div id="t-exams-journal-btns" style="display:flex;gap:9px;">
+        <button onclick="openExamsCalendar()" class="qa-btn qa-exams" style="flex:1;min-width:0;">📅 Контрольні</button>
+        <button onclick="openJournalModal('teacher')" class="qa-btn qa-journal" style="flex:1;min-width:0;">📖 Журнал</button>
       </div>
-    </div>
-    <!-- Реакції + Підсумки + Перездачі -->
-    <div style="display:flex;gap:9px;margin-bottom:14px;">
-      <div style="flex:1;background:#ffeaa7;padding:13px;border-radius:12px;text-align:center;cursor:pointer;" onclick="showReactionsDetails()">
-        <h4 style="margin:0;color:#d35400;font-size:.82rem;">❤️ Реакції</h4>
-        <p id="t-karma-counter" style="font-size:1.6rem;font-weight:800;color:#e67e22;margin:4px 0;">0</p>
+      <div id="t-matrix-btn-wrapper" style="display:none;margin-top:9px;">
+        <button onclick="openVisualMatrixModal('live')" style="width:100%;background:linear-gradient(135deg,#1abc9c,#16a085);color:#fff;margin-top:0;padding:11px;">🗓️ Матриця розкладу</button>
       </div>
-      <div id="t-wrapped-btn" style="flex:1;background:linear-gradient(135deg,#a8ff78,#78ffd6);padding:13px;border-radius:12px;text-align:center;cursor:pointer;" onclick="showWeeklyWrapped()">
-        <h4 style="margin:0;color:var(--teal);font-size:.82rem;">📊 Підсумки</h4>
-        <p style="font-size:1.6rem;margin:4px 0;">🎁</p>
-      </div>
-      <div id="t-retake-btn" style="flex:1;background:#fff3cd;padding:13px;border-radius:12px;text-align:center;cursor:pointer;" onclick="openRetakeRequestsModal()">
-        <h4 style="margin:0;color:#856404;font-size:.82rem;">🔄 Перездачі</h4>
-        <p id="t-retake-counter" style="font-size:1.6rem;font-weight:800;color:#d35400;margin:4px 0;">0</p>
-      </div>
-    </div>
-    <!-- PHASE 7: Статистика наліпок -->
-    <div style="display:flex;gap:9px;margin-bottom:14px;">
-      <button onclick="openStickerStatsModal()" style="flex:1;min-width:130px;background:linear-gradient(135deg,#f39c12,#f1c40f);color:#fff;">🌟 Статистика наліпок</button>
-    </div>
-    <div style="display:flex;gap:9px;margin-bottom:14px;" id="t-chat-row">
-      <div id="t-chat-btn" style="flex:1;background:#f3e5f5;padding:13px;border-radius:12px;text-align:center;cursor:pointer;" onclick="openChatModal('teacher')">
-        <h4 style="margin:0;color:#7b1fa2;font-size:.82rem;">💬 Чат з батьками</h4>
-        <p style="font-size:1.6rem;margin:4px 0;">✉️</p>
-      </div>
-    </div>
-    <!-- ДЗ зведення -->
-    <div id="t-hw-list-wrapper" class="data-card" style="border-left-color:var(--blue);background:#f4f9fd;margin-bottom:14px;">
-      <h4 style="margin-top:0;color:var(--blue);">📋 ДЗ класу сьогодні:</h4>
-      <ul id="t-daily-hw-list" class="list-dash"></ul>
-    </div>
-    <!-- Заповнення журналу -->
-    <h3>✏️ Заповнення журналу</h3>
-    <label>Предмет:</label>
-    <select id="t-subject" onchange="handleSubjectChange()"></select>
-    <!-- Підручники -->
-    <div style="margin-top:12px;background:#f0f8ff;padding:13px;border-radius:11px;border:1px solid #d0e8f2;">
-      <h4 style="margin:0 0 8px 0;color:var(--blue);font-size:.88rem;">📘 Посилання на підручники</h4>
-      <div id="t-textbooks-list" style="margin-bottom:8px;"></div>
-      <div style="display:flex;gap:7px;">
-        <input type="text" id="t-tb-title" placeholder="Назва підручника" style="flex:2;margin-top:0;font-size:.85rem;">
-        <input type="text" id="t-tb-url" placeholder="https://..." style="flex:3;margin-top:0;font-size:.85rem;">
-        <button onclick="saveTextbook()" style="flex:1;margin-top:0;background:var(--blue);color:#fff;padding:10px 6px;font-size:.82rem;">+ Додати</button>
-      </div>
-    </div>
-    <!-- Навчальний план -->
-    <details style="margin-top:14px;background:#f9f4ff;padding:14px;border-radius:11px;border:1px solid #ce93d8;">
-      <summary style="font-weight:700;cursor:pointer;color:#7b1fa2;font-size:.95rem;">📚 Навчальний план (Теми)</summary>
-      <div style="margin-top:12px;">
-        <div id="curriculum-smart-alert" class="smart-alert">
-          ⚠️ <b>Увага!</b> Залишок годин значно перевищує кількість тем. Перевірте план.
-        </div>
-        <div id="curriculum-topics" style="max-height:250px;overflow-y:auto;margin-top:8px;"></div>
-        <div style="display:flex;gap:7px;margin-top:9px;">
-          <input type="text" id="new-topic-title" placeholder="Нова тема..." style="flex:3;margin-top:0;font-size:.85rem;">
-          <input type="number" id="new-topic-hours" placeholder="Год." style="flex:1;margin-top:0;font-size:.85rem;" min="1" max="10">
-          <button onclick="addCurriculumTopic()" style="flex:1;margin-top:0;background:var(--purple);color:#fff;padding:10px 6px;font-size:.82rem;">+ Тема</button>
+    </section>
+
+    <section class="screen-section">
+      <h3>📋 Сьогодні</h3>
+      <!-- Відвідуваність -->
+      <div class="data-card" style="border-left-color:var(--red);background:#fdfbfb;margin-top:0;">
+        <h4 id="t-att-header" style="margin-top:0;color:var(--red);">🚨 Відвідуваність сьогодні:</h4>
+        <ul id="t-attendance-list" class="list-dash" style="list-style:none;padding-left:0;"><li class="empty-msg">Завантаження...</li></ul>
+        <div id="t-mark-absent-block" style="margin-top:13px;display:flex;gap:8px;border-top:1px dashed #f5b7b1;padding-top:13px;">
+          <select id="t-mark-absent-student" style="flex:1;margin-top:0;border:1px solid #f5b7b1;"><option value="">Учень...</option></select>
+          <select id="t-mark-absent-lesson" style="flex:1;margin-top:0;border:1px solid #f5b7b1;"><option value="all">Увесь день</option></select>
+          <select id="t-mark-absent-reason" style="flex:1;margin-top:0;border:1px solid #f5b7b1;">
+            <option value="Відмічено вчителем">Без причини</option><option value="через хворобу">Хвороба</option>
+            <option value="за сімейними обставинами">Сімейні обставини</option><option value="запізнення">Запізнення</option>
+          </select>
+          <button onclick="teacherMarkAbsent()" style="margin-top:0;background:var(--red);color:#fff;width:auto;padding:9px 13px;font-size:.85rem;">Відмітити</button>
         </div>
       </div>
-    </details>
-    <!-- Curriculum Upload (visible to class_teacher of THIS class or director) -->
-    <div id="curriculum-upload-section" style="display:none;margin-bottom:18px;background:#e3f2fd;padding:14px;border-radius:12px;border:1px solid #64b5f6;">
-      <h4 style="margin:0 0 8px 0;color:#0d47a1;font-size:.95rem;">📅 Календарне планування <span class="ct-badge">Кл. керівник</span></h4>
-      <p style="font-size:.78rem;color:#555;margin-bottom:10px;">Завантажте Excel-файл — теми автоматично прив'яжуться до уроків.</p>
-      <label class="curr-drop-zone" id="curr-drop-zone-label">
-        <input type="file" id="curr-file-input" accept=".xlsx,.xls">
-        <div id="curr-drop-text">📤 Натисніть або перетягніть Excel файл сюди</div>
-      </label>
-      <div id="curr-preview-section" style="display:none;margin-top:12px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-          <b style="color:#0d47a1;">Превʼю плану:</b>
-          <span id="curr-preview-class" style="font-size:.78rem;color:#666;"></span>
+      <!-- Реакції + Підсумки + Перездачі -->
+      <div style="display:flex;gap:9px;margin:14px 0 0 0;">
+        <div style="flex:1;background:#ffeaa7;padding:13px;border-radius:12px;text-align:center;cursor:pointer;" onclick="showReactionsDetails()">
+          <h4 style="margin:0;color:#d35400;font-size:.82rem;">❤️ Реакції</h4>
+          <p id="t-karma-counter" style="font-size:1.6rem;font-weight:800;color:#e67e22;margin:4px 0;">0</p>
         </div>
-        <div id="curr-preview-content" style="max-height:280px;overflow-y:auto;"></div>
-        <button onclick="saveCurriculumToDb()" id="btn-save-curr" style="background:#0d47a1;color:#fff;padding:11px;margin-top:10px;">💾 Зберегти план у систему</button>
+        <div id="t-wrapped-btn" style="flex:1;background:linear-gradient(135deg,#a8ff78,#78ffd6);padding:13px;border-radius:12px;text-align:center;cursor:pointer;" onclick="showWeeklyWrapped()">
+          <h4 style="margin:0;color:var(--teal);font-size:.82rem;">📊 Підсумки</h4>
+          <p style="font-size:1.6rem;margin:4px 0;">🎁</p>
+        </div>
+        <div id="t-retake-btn" style="flex:1;background:#fff3cd;padding:13px;border-radius:12px;text-align:center;cursor:pointer;" onclick="openRetakeRequestsModal()">
+          <h4 style="margin:0;color:#856404;font-size:.82rem;">🔄 Перездачі</h4>
+          <p id="t-retake-counter" style="font-size:1.6rem;font-weight:800;color:#d35400;margin:4px 0;">0</p>
+        </div>
       </div>
-      <details style="margin-top:10px;">
-        <summary style="cursor:pointer;color:#1565c0;font-size:.82rem;">📥 Поточний план у системі</summary>
-        <div id="current-curriculum-display" style="margin-top:8px;font-size:.82rem;"></div>
+      <!-- PHASE 7: Статистика наліпок -->
+      <div style="display:flex;gap:9px;margin:14px 0 0 0;">
+        <button onclick="openStickerStatsModal()" style="flex:1;min-width:130px;background:linear-gradient(135deg,#f39c12,#f1c40f);color:#fff;">🌟 Статистика наліпок</button>
+      </div>
+      <div style="display:flex;gap:9px;margin:14px 0 0 0;" id="t-chat-row">
+        <div id="t-chat-btn" style="flex:1;background:#f3e5f5;padding:13px;border-radius:12px;text-align:center;cursor:pointer;" onclick="openChatModal('teacher')">
+          <h4 style="margin:0;color:#7b1fa2;font-size:.82rem;">💬 Чат з батьками</h4>
+          <p style="font-size:1.6rem;margin:4px 0;">✉️</p>
+        </div>
+      </div>
+      <!-- ДЗ зведення -->
+      <div id="t-hw-list-wrapper" class="data-card" style="border-left-color:var(--blue);background:#f4f9fd;margin:14px 0 0 0;">
+        <h4 style="margin-top:0;color:var(--blue);">📋 ДЗ класу сьогодні:</h4>
+        <ul id="t-daily-hw-list" class="list-dash"></ul>
+      </div>
+    </section>
+
+    <section class="screen-section">
+      <h3>✏️ Заповнення журналу</h3>
+      <label>Предмет:</label>
+      <select id="t-subject" onchange="handleSubjectChange()"></select>
+      <!-- Підручники -->
+      <div style="margin-top:12px;background:#f0f8ff;padding:13px;border-radius:11px;border:1px solid #d0e8f2;">
+        <h4 style="margin:0 0 8px 0;color:var(--blue);font-size:.88rem;">📘 Посилання на підручники</h4>
+        <div id="t-textbooks-list" style="margin-bottom:8px;"></div>
+        <div style="display:flex;gap:7px;">
+          <input type="text" id="t-tb-title" placeholder="Назва підручника" style="flex:2;margin-top:0;font-size:.85rem;">
+          <input type="text" id="t-tb-url" placeholder="https://..." style="flex:3;margin-top:0;font-size:.85rem;">
+          <button onclick="saveTextbook()" style="flex:1;margin-top:0;background:var(--blue);color:#fff;padding:10px 6px;font-size:.82rem;">+ Додати</button>
+        </div>
+      </div>
+      <!-- Навчальний план -->
+      <details style="margin-top:14px;background:#f9f4ff;padding:14px;border-radius:11px;border:1px solid #ce93d8;">
+        <summary style="font-weight:700;cursor:pointer;color:#7b1fa2;font-size:.95rem;">📚 Навчальний план (Теми)</summary>
+        <div style="margin-top:12px;">
+          <div id="curriculum-smart-alert" class="smart-alert">
+            ⚠️ <b>Увага!</b> Залишок годин значно перевищує кількість тем. Перевірте план.
+          </div>
+          <div id="curriculum-topics" style="max-height:250px;overflow-y:auto;margin-top:8px;"></div>
+          <div style="display:flex;gap:7px;margin-top:9px;">
+            <input type="text" id="new-topic-title" placeholder="Нова тема..." style="flex:3;margin-top:0;font-size:.85rem;">
+            <input type="number" id="new-topic-hours" placeholder="Год." style="flex:1;margin-top:0;font-size:.85rem;" min="1" max="10">
+            <button onclick="addCurriculumTopic()" style="flex:1;margin-top:0;background:var(--purple);color:#fff;padding:10px 6px;font-size:.82rem;">+ Тема</button>
+          </div>
+        </div>
       </details>
-    </div>
-    <!-- Тема уроку (PHASE 6: до 2 тем на урок, custom dropdown замість <select>) -->
-    <div class="topic-card" id="t-topic-card" style="margin-top:13px;">
-      <label>📌 Тема уроку 1:</label>
-      <div class="topic-select-wrap">
-        <div class="topic-dropdown" id="t-topic-dropdown-1">
-          <div class="topic-dropdown-trigger" onclick="toggleTopicDropdown(1)" id="t-topic-trigger-1">✏️ Власна тема</div>
-          <div class="topic-dropdown-list" id="t-topic-list-1" style="display:none;"></div>
-          <input type="hidden" id="t-topic-value-1" value="__custom__">
+      <!-- Curriculum Upload (visible to class_teacher of THIS class or director) -->
+      <div id="curriculum-upload-section" style="display:none;margin-top:18px;background:#e3f2fd;padding:14px;border-radius:12px;border:1px solid #64b5f6;">
+        <h4 style="margin:0 0 8px 0;color:#0d47a1;font-size:.95rem;">📅 Календарне планування <span class="ct-badge">Кл. керівник</span></h4>
+        <p style="font-size:.78rem;color:#555;margin-bottom:10px;">Завантажте Excel-файл — теми автоматично прив'яжуться до уроків.</p>
+        <label class="curr-drop-zone" id="curr-drop-zone-label">
+          <input type="file" id="curr-file-input" accept=".xlsx,.xls">
+          <div id="curr-drop-text">📤 Натисніть або перетягніть Excel файл сюди</div>
+        </label>
+        <div id="curr-preview-section" style="display:none;margin-top:12px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <b style="color:#0d47a1;">Превʼю плану:</b>
+            <span id="curr-preview-class" style="font-size:.78rem;color:#666;"></span>
+          </div>
+          <div id="curr-preview-content" style="max-height:280px;overflow-y:auto;"></div>
+          <button onclick="saveCurriculumToDb()" id="btn-save-curr" style="background:#0d47a1;color:#fff;padding:11px;margin-top:10px;">💾 Зберегти план у систему</button>
         </div>
-        <div id="topic-status-line" style="display:none;" class="topic-status-bar">
-          <span id="topic-status-text">—</span>
-          <div class="topic-progress-mini"><div class="topic-progress-mini-fill" id="topic-progress-fill" style="width:0%"></div></div>
-          <span id="topic-status-count" style="font-weight:800;color:var(--purple);">0/0</span>
+        <details style="margin-top:10px;">
+          <summary style="cursor:pointer;color:#1565c0;font-size:.82rem;">📥 Поточний план у системі</summary>
+          <div id="current-curriculum-display" style="margin-top:8px;font-size:.82rem;"></div>
+        </details>
+      </div>
+      <!-- Тема уроку (PHASE 6: до 2 тем на урок, custom dropdown замість <select>) -->
+      <div class="topic-card" id="t-topic-card" style="margin-top:13px;">
+        <label>📌 Тема уроку 1:</label>
+        <div class="topic-select-wrap">
+          <div class="topic-dropdown" id="t-topic-dropdown-1">
+            <div class="topic-dropdown-trigger" onclick="toggleTopicDropdown(1)" id="t-topic-trigger-1">✏️ Власна тема</div>
+            <div class="topic-dropdown-list" id="t-topic-list-1" style="display:none;"></div>
+            <input type="hidden" id="t-topic-value-1" value="__custom__">
+          </div>
+          <div id="topic-status-line" style="display:none;" class="topic-status-bar">
+            <span id="topic-status-text">—</span>
+            <div class="topic-progress-mini"><div class="topic-progress-mini-fill" id="topic-progress-fill" style="width:0%"></div></div>
+            <span id="topic-status-count" style="font-weight:800;color:var(--purple);">0/0</span>
+          </div>
+        </div>
+        <input type="text" id="t-topic-1" placeholder="Введіть тему вручну..." style="margin-top:6px;display:none;">
+        <div id="t-topic-display-1" style="display:none;" class="topic-display"></div>
+        <button type="button" id="btn-add-second-topic" onclick="showSecondTopicSlot()" style="margin-top:8px;background:#ecf0f1;color:#333;">+ Додати другу тему</button>
+        <div id="t-topic-slot-2-wrap" style="display:none;margin-top:8px;">
+          <label>📌 Тема уроку 2:</label>
+          <div class="topic-dropdown" id="t-topic-dropdown-2">
+            <div class="topic-dropdown-trigger" onclick="toggleTopicDropdown(2)" id="t-topic-trigger-2">✏️ Власна тема</div>
+            <div class="topic-dropdown-list" id="t-topic-list-2" style="display:none;"></div>
+            <input type="hidden" id="t-topic-value-2" value="__custom__">
+          </div>
+          <input type="text" id="t-topic-2" placeholder="Введіть тему вручну..." style="margin-top:6px;display:none;">
+          <div id="t-topic-display-2" style="display:none;" class="topic-display"></div>
+          <button type="button" onclick="hideSecondTopicSlot()" style="margin-top:5px;background:none;color:var(--red);width:auto;padding:2px;">✖ Прибрати</button>
         </div>
       </div>
-      <input type="text" id="t-topic-1" placeholder="Введіть тему вручну..." style="margin-top:6px;display:none;">
-      <div id="t-topic-display-1" style="display:none;" class="topic-display"></div>
-      <button type="button" id="btn-add-second-topic" onclick="showSecondTopicSlot()" style="margin-top:8px;background:#ecf0f1;color:#333;">+ Додати другу тему</button>
-      <div id="t-topic-slot-2-wrap" style="display:none;margin-top:8px;">
-        <label>📌 Тема уроку 2:</label>
-        <div class="topic-dropdown" id="t-topic-dropdown-2">
-          <div class="topic-dropdown-trigger" onclick="toggleTopicDropdown(2)" id="t-topic-trigger-2">✏️ Власна тема</div>
-          <div class="topic-dropdown-list" id="t-topic-list-2" style="display:none;"></div>
-          <input type="hidden" id="t-topic-value-2" value="__custom__">
+      <!-- ДЗ + Фото -->
+      <div id="t-hw-input-wrapper">
+        <label>📚 Домашнє завдання (для всього класу):</label>
+        <textarea id="t-hw" rows="2" placeholder="Введіть ДЗ..."></textarea>
+        <label>📸 Фото:</label>
+        <input type="file" id="t-image" accept="image/*" multiple>
+        <div id="existing-image-info" style="display:none;font-size:.83rem;color:#e67e22;margin-top:4px;"></div>
+      </div>
+      <!-- КНОПКИ -->
+      <div class="qa-row" style="margin-top:13px;">
+        <button class="qa-btn qa-grades" onclick="openJournalForGrading()">📊 Виставити оцінки</button>
+        <button class="qa-btn qa-save" onclick="saveTopicAndHW()" id="btn-save-hw">💾 Зберегти тему та ДЗ</button>
+      </div>
+      <div id="status-msg"></div>
+    </section>
+
+    <section class="screen-section half">
+      <h3>📝 Оцінювання учня</h3>
+      <!-- Оцінка поведінки -->
+      <div style="background:#e8eaf6;padding:13px;border-radius:12px;border:1px solid #c5cae9;">
+        <h4 style="margin:0 0 9px 0;color:#283593;font-size:.9rem;">🤝 Оцінка поведінки (Класний урок)</h4>
+        <div style="display:flex;gap:8px;align-items:flex-end;">
+          <select id="t-behavior-student" style="flex:2;margin-top:0;border-color:#7986cb;"><option value="">Учень...</option></select>
+          <div style="flex:1;display:flex;flex-direction:column;gap:4px;">
+            <label style="margin-top:0;font-size:.72rem;color:#3949ab;">Оцінка (1-6):</label>
+            <input type="text" id="t-behavior-grade" placeholder="1-6" style="margin-top:0;border:2px solid #7986cb;text-align:center;font-weight:800;color:#283593;">
+          </div>
+          <button onclick="saveBehaviorGrade()" style="flex:1;margin-top:0;background:#283593;color:#fff;padding:11px 8px;font-size:.82rem;border-radius:10px;border:none;cursor:pointer;font-weight:700;">💾 Зберегти</button>
         </div>
-        <input type="text" id="t-topic-2" placeholder="Введіть тему вручну..." style="margin-top:6px;display:none;">
-        <div id="t-topic-display-2" style="display:none;" class="topic-display"></div>
-        <button type="button" onclick="hideSecondTopicSlot()" style="margin-top:5px;background:none;color:var(--red);width:auto;padding:2px;">✖ Прибрати</button>
       </div>
-    </div>
-    <!-- ДЗ + Фото -->
-    <div id="t-hw-input-wrapper">
-      <label>📚 Домашнє завдання (для всього класу):</label>
-      <textarea id="t-hw" rows="2" placeholder="Введіть ДЗ..."></textarea>
-      <label>📸 Фото:</label>
-      <input type="file" id="t-image" accept="image/*" multiple>
-      <div id="existing-image-info" style="display:none;font-size:.83rem;color:#e67e22;margin-top:4px;"></div>
-    </div>
-    <!-- КНОПКИ -->
-    <div class="qa-row" style="margin-top:13px;">
-      <button class="qa-btn qa-grades" onclick="openJournalForGrading()">📊 Виставити оцінки</button>
-      <button class="qa-btn qa-save" onclick="saveTopicAndHW()" id="btn-save-hw">💾 Зберегти тему та ДЗ</button>
-    </div>
-    <div id="status-msg"></div>
-    <!-- Оцінка поведінки -->
-    <div style="margin-top:14px;background:#e8eaf6;padding:13px;border-radius:12px;border:1px solid #c5cae9;">
-      <h4 style="margin:0 0 9px 0;color:#283593;font-size:.9rem;">🤝 Оцінка поведінки (Класний урок)</h4>
-      <div style="display:flex;gap:8px;align-items:flex-end;">
-        <select id="t-behavior-student" style="flex:2;margin-top:0;border-color:#7986cb;"><option value="">Учень...</option></select>
-        <div style="flex:1;display:flex;flex-direction:column;gap:4px;">
-          <label style="margin-top:0;font-size:.72rem;color:#3949ab;">Оцінка (1-6):</label>
-          <input type="text" id="t-behavior-grade" placeholder="1-6" style="margin-top:0;border:2px solid #7986cb;text-align:center;font-weight:800;color:#283593;">
+      <!-- Наліпка -->
+      <div style="margin-top:13px;background:#fffcf0;padding:13px;border-radius:12px;border:1px solid #fde3a7;">
+        <h4 style="margin:0 0 8px 0;color:#d35400;font-size:.88rem;">🌟 Видати наліпку учню</h4>
+        <div style="display:flex;gap:8px;align-items:flex-end;">
+          <select id="t-sticker-student" style="flex:2;margin-top:0;"></select>
+          <button onclick="giveStickerToStudent()" style="flex:1;margin-top:0;background:#f1c40f;color:#333;padding:11px 8px;border-radius:10px;border:none;cursor:pointer;font-weight:800;font-size:.88rem;">🌟 Дати</button>
         </div>
-        <button onclick="saveBehaviorGrade()" style="flex:1;margin-top:0;background:#283593;color:#fff;padding:11px 8px;font-size:.82rem;border-radius:10px;border:none;cursor:pointer;font-weight:700;">💾 Зберегти</button>
       </div>
-    </div>
-    <!-- Наліпка -->
-    <div style="margin-top:13px;background:#fffcf0;padding:13px;border-radius:12px;border:1px solid #fde3a7;">
-      <h4 style="margin:0 0 8px 0;color:#d35400;font-size:.88rem;">🌟 Видати наліпку учню</h4>
-      <div style="display:flex;gap:8px;align-items:flex-end;">
-        <select id="t-sticker-student" style="flex:2;margin-top:0;"></select>
-        <button onclick="giveStickerToStudent()" style="flex:1;margin-top:0;background:#f1c40f;color:#333;padding:11px 8px;border-radius:10px;border:none;cursor:pointer;font-weight:800;font-size:.88rem;">🌟 Дати</button>
+      <!-- Коментар -->
+      <div style="margin-top:13px;background:#f3e5f5;padding:13px;border-radius:12px;border:1px solid #ce93d8;">
+        <h4 style="margin:0 0 8px 0;color:#7b1fa2;font-size:.88rem;">💬 Коментар учню</h4>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
+          <select id="t-student" style="flex:2;margin-top:0;border-color:#a1887f;"><option value="">Учень...</option></select>
+          <select id="t-subject-for-comment" style="flex:1;margin-top:0;border-color:#a1887f;"></select>
+        </div>
+        <textarea id="t-comment" rows="2" placeholder="Коментар для батьків..." style="margin-top:7px;border-color:#a1887f;font-size:.88rem;"></textarea>
+        <button onclick="saveComment()" style="background:#7b1fa2;color:#fff;padding:9px;margin-top:7px;border-radius:9px;font-size:.85rem;border:none;cursor:pointer;width:100%;font-weight:700;">💬 Зберегти коментар</button>
       </div>
-    </div>
-    <!-- Коментар -->
-    <div style="margin-top:13px;background:#f3e5f5;padding:13px;border-radius:12px;border:1px solid #ce93d8;">
-      <h4 style="margin:0 0 8px 0;color:#7b1fa2;font-size:.88rem;">💬 Коментар учню</h4>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
-        <select id="t-student" style="flex:2;margin-top:0;border-color:#a1887f;"><option value="">Учень...</option></select>
-        <select id="t-subject-for-comment" style="flex:1;margin-top:0;border-color:#a1887f;"></select>
-      </div>
-      <textarea id="t-comment" rows="2" placeholder="Коментар для батьків..." style="margin-top:7px;border-color:#a1887f;font-size:.88rem;"></textarea>
-      <button onclick="saveComment()" style="background:#7b1fa2;color:#fff;padding:9px;margin-top:7px;border-radius:9px;font-size:.85rem;border:none;cursor:pointer;width:100%;font-weight:700;">💬 Зберегти коментар</button>
-    </div>
-    <!-- Управління класом -->
-    <details style="margin-top:22px;background:#fff;padding:13px;border-radius:12px;border:1px solid #ddd;">
-      <summary style="font-weight:700;cursor:pointer;color:#7f8c8d;">⚙️ Управління класом</summary>
-      <div style="margin-top:13px;">
-        <input type="text" id="new-student-name" placeholder="Прізвище та Ім'я учня">
-        <input type="email" id="new-student-email" placeholder="Email учня (для входу)" style="margin-top:5px; border-color:#f1c40f;">
-        <button style="background:#f1c40f;padding:8px;margin-top:5px;margin-bottom:13px;" onclick="addStudent()">Додати учня</button>
-        <hr>
-        <p style="font-size:.83rem;color:#555;margin-top:13px;font-weight:700;">Прив'язка батьків:</p>
-        <select id="t-parent-role" style="margin-top:4px;border-color:#9b59b6;">
-          <option value="mother">👩‍👧 Мати</option><option value="father">👨‍👦 Батько</option><option value="guardian">🛡️ Опекун</option>
-        </select>
-        <input type="email" id="parent-email" placeholder="Email батьків" style="margin-top:4px;">
-        <select id="t-student-for-parent" style="margin-top:4px;"><option value="">Учень...</option></select>
-        <button style="background:#9b59b6;padding:8px;margin-top:9px;color:#fff;" onclick="linkParent()">Прив'язати Email</button>
-      </div>
-    </details>
+    </section>
+
+    <section class="screen-section half">
+      <!-- Управління класом -->
+      <details style="background:#fff;padding:13px;border-radius:12px;border:1px solid #ddd;">
+        <summary style="font-weight:700;cursor:pointer;color:#7f8c8d;">⚙️ Управління класом</summary>
+        <div style="margin-top:13px;">
+          <input type="text" id="new-student-name" placeholder="Прізвище та Ім'я учня">
+          <input type="email" id="new-student-email" placeholder="Email учня (для входу)" style="margin-top:5px; border-color:#f1c40f;">
+          <button style="background:#f1c40f;padding:8px;margin-top:5px;margin-bottom:13px;" onclick="addStudent()">Додати учня</button>
+          <hr>
+          <p style="font-size:.83rem;color:#555;margin-top:13px;font-weight:700;">Прив'язка батьків:</p>
+          <select id="t-parent-role" style="margin-top:4px;border-color:#9b59b6;">
+            <option value="mother">👩‍👧 Мати</option><option value="father">👨‍👦 Батько</option><option value="guardian">🛡️ Опекун</option>
+          </select>
+          <input type="email" id="parent-email" placeholder="Email батьків" style="margin-top:4px;">
+          <select id="t-student-for-parent" style="margin-top:4px;"><option value="">Учень...</option></select>
+          <button style="background:#9b59b6;padding:8px;margin-top:9px;color:#fff;" onclick="linkParent()">Прив'язати Email</button>
+        </div>
+      </details>
+    </section>
+
     <button class="btn-logout" onclick="logoutUser()">Вийти</button>
   </div>
   <!-- ══════════════════════════════
        PARENT / STUDENT SCREEN
        ══════════════════════════════ -->
   <div id="parent-screen" class="panel">
-    <!-- ДИНАМІЧНЕ РОЗКЛАД -->
-    <div class="schedule-box">
-      <div class="schedule-day-label" id="p-schedule-day-label">📅 Розклад на сьогодні</div>
-      <div id="p-dynamic-schedule">
-        <div class="no-lessons-msg">⏳ Завантаження розкладу...</div>
+
+    <section class="screen-section">
+      <h3>🗓️ Розклад</h3>
+      <!-- ДИНАМІЧНЕ РОЗКЛАД -->
+      <div class="schedule-box" style="margin-top:0;">
+        <div class="schedule-day-label" id="p-schedule-day-label">📅 Розклад на сьогодні</div>
+        <div id="p-dynamic-schedule">
+          <div class="no-lessons-msg">⏳ Завантаження розкладу...</div>
+        </div>
+        <a id="p-schedule-link" href="#" target="_blank" style="display:block;background:var(--blue);color:#fff;padding:10px;border-radius:10px;text-decoration:none;font-weight:700;margin-top:10px;text-align:center;font-size:.88rem;">📅 Відкрити повний розклад</a>
       </div>
-      <a id="p-schedule-link" href="#" target="_blank" style="display:block;background:var(--blue);color:#fff;padding:10px;border-radius:10px;text-decoration:none;font-weight:700;margin-top:10px;text-align:center;font-size:.88rem;">📅 Відкрити повний розклад</a>
-    </div>
-    <!-- PHASE 2: Алерт про невизнану відмітку вчителя -->
-    <div id="p-teacher-att-alert" style="display:none;background:#fff3cd;border:1px solid #ffeeba;color:#856404;padding:11px 14px;border-radius:10px;margin-bottom:12px;font-size:.85rem;"></div>
-    <!-- Відсутність -->
-    <div class="data-card" style="border-left-color:var(--red);background:#fdfbfb;">
-      <h4 style="margin-top:0;color:var(--red);">🕒 Повідомити про відсутність</h4>
-      <div style="display:flex;flex-direction:column;gap:9px;margin-top:9px;">
-        <select id="p-att-type" onchange="updateAttOptions()" style="border-color:var(--red);"><option value="late">Запізнюється</option><option value="absent">Відсутній (весь день)</option></select>
-        <select id="p-att-reason" style="border-color:var(--red);"><option value="на 10 хвилин">на 10 хвилин</option></select>
+      <!-- PHASE 3: Календар (іспити/канікули/свята) -->
+      <div class="data-card" style="border-left-color:var(--orange);background:#fffcf0;">
+        <h4 style="margin-top:0;color:var(--orange);">📅 Календар класу</h4>
+        <div id="p-calendar-container"></div>
+        <div id="p-cal-day-details" style="display:none;margin-top:10px;background:#fff;border-radius:8px;padding:9px;border:1px dashed var(--orange);font-size:.82rem;"></div>
       </div>
-      <button onclick="submitAttendance()" style="background:var(--red);padding:11px;color:#fff;margin-top:13px;">Відправити</button>
-      <p id="p-att-status" style="font-size:.83rem;color:var(--green);font-weight:700;margin-top:9px;display:none;">✅ Сповіщення надіслано!</p>
-    </div>
-    <!-- PHASE 3: Календар (іспити/канікули/свята) -->
-    <div class="data-card" style="border-left-color:var(--orange);background:#fffcf0;">
-      <h4 style="margin-top:0;color:var(--orange);">📅 Календар класу</h4>
-      <div id="p-calendar-container"></div>
-      <div id="p-cal-day-details" style="display:none;margin-top:10px;background:#fff;border-radius:8px;padding:9px;border:1px dashed var(--orange);font-size:.82rem;"></div>
-    </div>
-    <!-- PHASE 3: Розклад дзвінків -->
-    <div class="data-card" style="border-left-color:#7986cb;background:#f5f6ff;">
-      <h4 style="margin-top:0;color:#283593;">🔔 Розклад дзвінків</h4>
-      <div id="p-bell-schedule-container"><p class="empty-msg">Завантаження...</p></div>
-    </div>
-    <!-- Наліпки -->
-    <div class="data-card" style="border-left-color:#f1c40f;background:#fffcf0;text-align:center;">
-      <h4 style="margin-top:0;color:var(--orange);font-size:1rem;">🌟 Прогрес наліпок</h4>
-      <div class="progress-bar-container"><div id="p-ribbon-progress" class="progress-bar"></div></div>
-      <p id="p-ribbon-count" style="font-size:1.1rem;font-weight:700;color:#d35400;margin:13px 0 4px 0;">Завантаження...</p>
-      <p id="p-ribbon-msg" style="color:var(--green);font-weight:800;margin:0;font-size:.95rem;"></p>
-    </div>
-    <!-- Підручники -->
-    <div class="data-card" style="border-left-color:var(--blue);background:#f0f8ff;">
-      <h4 style="margin-top:0;color:var(--blue);">📘 Підручники</h4>
-      <div id="p-textbooks-list"><p class="empty-msg">Завантаження...</p></div>
-    </div>
-    <!-- ДЗ -->
-    <div class="data-card" style="border-left-color:#00b894;background:#f0fff4;">
-      <h4 style="margin-top:0;color:#00b894;">📚 Задано:</h4>
-      <ul id="p-daily-hw-list" class="list-dash"></ul>
-    </div>
-    <!-- Журнал та коментарі -->
-    <div class="data-card" style="border-left-color:#ff4757;background:#fff0f1;">
-      <h4 style="margin-top:0;color:#ff4757;">📝 Журнал та коментарі:</h4>
-      <ul id="p-daily-comments-list" class="list-dash"></ul>
-    </div>
-    <!-- Оцінка поведінки -->
-    <div class="data-card" style="border-left-color:#3949ab;background:#e8eaf6;">
-      <h4 style="margin-top:0;color:#283593;">🤝 Поведінка (цей тиждень):</h4>
-      <div id="p-behavior-list"><p class="empty-msg">Завантаження...</p></div>
-    </div>
-    <!-- Чат -->
-    <div class="data-card" style="border-left-color:var(--purple);background:#f9f4ff; text-align:center;">
-      <button onclick="openChatModal('parent')" style="background:var(--purple); color:#fff; padding:12px; border-radius:12px; font-weight:700; width:100%;">💬 Написати вчителю / директору</button>
-    </div>
-    <!-- ПЛАТЕЖІ (ЗАГЛУШКА) -->
-    <h3 style="margin-top:22px;">💳 Платежі</h3>
-    <div id="payments-section"></div>
+      <!-- PHASE 3: Розклад дзвінків -->
+      <div class="data-card" style="border-left-color:#7986cb;background:#f5f6ff;">
+        <h4 style="margin-top:0;color:#283593;">🔔 Розклад дзвінків</h4>
+        <div id="p-bell-schedule-container"><p class="empty-msg">Завантаження...</p></div>
+      </div>
+    </section>
+
+    <section class="screen-section">
+      <h3>📚 Навчання</h3>
+      <!-- Наліпки -->
+      <div class="data-card" style="border-left-color:#f1c40f;background:#fffcf0;text-align:center;margin-top:0;">
+        <h4 style="margin-top:0;color:var(--orange);font-size:1rem;">🌟 Прогрес наліпок</h4>
+        <div class="progress-bar-container"><div id="p-ribbon-progress" class="progress-bar"></div></div>
+        <p id="p-ribbon-count" style="font-size:1.1rem;font-weight:700;color:#d35400;margin:13px 0 4px 0;">Завантаження...</p>
+        <p id="p-ribbon-msg" style="color:var(--green);font-weight:800;margin:0;font-size:.95rem;"></p>
+      </div>
+      <!-- Підручники -->
+      <div class="data-card" style="border-left-color:var(--blue);background:#f0f8ff;">
+        <h4 style="margin-top:0;color:var(--blue);">📘 Підручники</h4>
+        <div id="p-textbooks-list"><p class="empty-msg">Завантаження...</p></div>
+      </div>
+      <!-- ДЗ -->
+      <div class="data-card" style="border-left-color:#00b894;background:#f0fff4;">
+        <h4 style="margin-top:0;color:#00b894;">📚 Задано:</h4>
+        <ul id="p-daily-hw-list" class="list-dash"></ul>
+      </div>
+      <!-- Журнал та коментарі -->
+      <div class="data-card" style="border-left-color:#ff4757;background:#fff0f1;">
+        <h4 style="margin-top:0;color:#ff4757;">📝 Журнал та коментарі:</h4>
+        <ul id="p-daily-comments-list" class="list-dash"></ul>
+      </div>
+      <!-- Оцінка поведінки -->
+      <div class="data-card" style="border-left-color:#3949ab;background:#e8eaf6;">
+        <h4 style="margin-top:0;color:#283593;">🤝 Поведінка (цей тиждень):</h4>
+        <div id="p-behavior-list"><p class="empty-msg">Завантаження...</p></div>
+      </div>
+    </section>
+
+    <section class="screen-section half">
+      <h3>🕒 Відвідуваність</h3>
+      <!-- PHASE 2: Алерт про невизнану відмітку вчителя -->
+      <div id="p-teacher-att-alert" style="display:none;background:#fff3cd;border:1px solid #ffeeba;color:#856404;padding:11px 14px;border-radius:10px;margin-bottom:12px;font-size:.85rem;"></div>
+      <!-- Відсутність -->
+      <div class="data-card" style="border-left-color:var(--red);background:#fdfbfb;margin-top:0;">
+        <h4 style="margin-top:0;color:var(--red);">🕒 Повідомити про відсутність</h4>
+        <div style="display:flex;flex-direction:column;gap:9px;margin-top:9px;">
+          <select id="p-att-type" onchange="updateAttOptions()" style="border-color:var(--red);"><option value="late">Запізнюється</option><option value="absent">Відсутній (весь день)</option></select>
+          <select id="p-att-reason" style="border-color:var(--red);"><option value="на 10 хвилин">на 10 хвилин</option></select>
+        </div>
+        <button onclick="submitAttendance()" style="background:var(--red);padding:11px;color:#fff;margin-top:13px;">Відправити</button>
+        <p id="p-att-status" style="font-size:.83rem;color:var(--green);font-weight:700;margin-top:9px;display:none;">✅ Сповіщення надіслано!</p>
+      </div>
+    </section>
+
+    <section class="screen-section half">
+      <h3>💬 Комунікація та оплата</h3>
+      <!-- Чат -->
+      <div class="data-card" style="border-left-color:var(--purple);background:#f9f4ff; text-align:center;margin-top:0;">
+        <button onclick="openChatModal('parent')" style="background:var(--purple); color:#fff; padding:12px; border-radius:12px; font-weight:700; width:100%;">💬 Написати вчителю / директору</button>
+      </div>
+      <!-- ПЛАТЕЖІ (ЗАГЛУШКА) -->
+      <h4 style="margin:16px 0 8px 0;color:#333;">💳 Платежі</h4>
+      <div id="payments-section"></div>
+    </section>
+
     <button class="btn-logout" onclick="logoutUser()">Вийти</button>
   </div>
   <!-- ══════════════════════════════
        STUDENT SCREEN
        ══════════════════════════════ -->
   <div id="student-screen" class="panel">
-    <!-- ДИНАМІЧНИЙ РОЗКЛАД -->
-    <div class="schedule-box">
-      <div class="schedule-day-label" id="s-schedule-day-label">📅 Мій розклад на сегодня</div>
-      <div id="s-dynamic-schedule">
-        <div class="no-lessons-msg">⏳ Завантаження розкладу...</div>
+
+    <section class="screen-section">
+      <h3>🗓️ Розклад</h3>
+      <!-- ДИНАМІЧНИЙ РОЗКЛАД -->
+      <div class="schedule-box" style="margin-top:0;">
+        <div class="schedule-day-label" id="s-schedule-day-label">📅 Мій розклад на сегодня</div>
+        <div id="s-dynamic-schedule">
+          <div class="no-lessons-msg">⏳ Завантаження розкладу...</div>
+        </div>
+        <a id="s-schedule-link" href="#" target="_blank" style="display:block;background:var(--blue);color:#fff;padding:10px;border-radius:10px;text-decoration:none;font-weight:700;margin-top:10px;text-align:center;font-size:.88rem;">📅 Відкрити повний розклад</a>
       </div>
-      <a id="s-schedule-link" href="#" target="_blank" style="display:block;background:var(--blue);color:#fff;padding:10px;border-radius:10px;text-decoration:none;font-weight:700;margin-top:10px;text-align:center;font-size:.88rem;">📅 Відкрити повний розклад</a>
-    </div>
-    <!-- PHASE 2: Алерт про невизнану відмітку вчителя -->
-    <div id="s-teacher-att-alert" style="display:none;background:#fff3cd;border:1px solid #ffeeba;color:#856404;padding:11px 14px;border-radius:10px;margin-bottom:12px;font-size:.85rem;"></div>
-    <!-- Відсутність -->
-    <div class="data-card" style="border-left-color:var(--red);background:#fdfbfb;">
-      <h4 style="margin-top:0;color:var(--red);">🕒 Я запізнююсь / буду відсутній</h4>
-      <div style="display:flex;flex-direction:column;gap:9px;margin-top:9px;">
-        <select id="s-att-type" onchange="updateAttOptionsStudent()" style="border-color:var(--red);"><option value="late">Запізнююсь</option><option value="absent">Буду відсутній</option></select>
-        <select id="s-att-reason" style="border-color:var(--red);"><option value="на 10 хвилин">на 10 хвилин</option></select>
+      <!-- PHASE 3: Календар -->
+      <div class="data-card" style="border-left-color:var(--orange);background:#fffcf0;">
+        <h4 style="margin-top:0;color:var(--orange);">📅 Календар класу</h4>
+        <div id="s-calendar-container"></div>
+        <div id="s-cal-day-details" style="display:none;margin-top:10px;background:#fff;border-radius:8px;padding:9px;border:1px dashed var(--orange);font-size:.82rem;"></div>
       </div>
-      <button onclick="submitAttendance('student')" style="background:var(--red);padding:11px;color:#fff;margin-top:13px;">Відправити</button>
-      <p id="s-att-status" style="font-size:.83rem;color:var(--green);font-weight:700;margin-top:9px;display:none;">✅ Повідомлення надіслано!</p>
-    </div>
-    <!-- PHASE 3: Календар -->
-    <div class="data-card" style="border-left-color:var(--orange);background:#fffcf0;">
-      <h4 style="margin-top:0;color:var(--orange);">📅 Календар класу</h4>
-      <div id="s-calendar-container"></div>
-      <div id="s-cal-day-details" style="display:none;margin-top:10px;background:#fff;border-radius:8px;padding:9px;border:1px dashed var(--orange);font-size:.82rem;"></div>
-    </div>
-    <!-- PHASE 3: Розклад дзвінків -->
-    <div class="data-card" style="border-left-color:#7986cb;background:#f5f6ff;">
-      <h4 style="margin-top:0;color:#283593;">🔔 Розклад дзвінків</h4>
-      <div id="s-bell-schedule-container"><p class="empty-msg">Завантаження...</p></div>
-    </div>
-    <!-- Наліпки -->
-    <div class="data-card" style="border-left-color:#f1c40f;background:#fffcf0;text-align:center;">
-      <h4 style="margin-top:0;color:var(--orange);font-size:1rem;">🌟 Мої наліпки</h4>
-      <div class="progress-bar-container"><div id="s-ribbon-progress" class="progress-bar"></div></div>
-      <p id="s-ribbon-count" style="font-size:1.1rem;font-weight:700;color:#d35400;margin:13px 0 4px 0;">Завантаження...</p>
-    </div>
-    <!-- Підручники -->
-    <div class="data-card" style="border-left-color:var(--blue);background:#f0f8ff;">
-      <h4 style="margin-top:0;color:var(--blue);">📘 Мої підручники</h4>
-      <div id="s-textbooks-list"><p class="empty-msg">Завантаження...</p></div>
-    </div>
-    <!-- ДЗ -->
-    <div class="data-card" style="border-left-color:#00b894;background:#f0fff4;">
-      <h4 style="margin-top:0;color:#00b894;">📚 Завдання для мене:</h4>
-      <ul id="s-daily-hw-list" class="list-dash"></ul>
-    </div>
-    <!-- Журнал та коментарі -->
-    <div class="data-card" style="border-left-color:#ff4757;background:#fff0f1;">
-      <h4 style="margin-top:0;color:#ff4757;">📝 Мої оцінки та коментарі:</h4>
-      <ul id="s-daily-comments-list" class="list-dash"></ul>
-    </div>
-    <!-- Behavior -->
-    <div class="data-card" style="border-left-color:#3949ab;background:#e8eaf6;">
-      <h4 style="margin-top:0;color:#283593;">🤝 Поведінка (цей тиждень):</h4>
-      <div id="s-behavior-list"><p class="empty-msg">Завантаження...</p></div>
-    </div>
-    <!-- Чат -->
-    <div class="data-card" style="border-left-color:var(--purple);background:#f9f4ff; text-align:center;">
-      <button onclick="openChatModal('student')" style="background:var(--purple); color:#fff; padding:12px; border-radius:12px; font-weight:700; width:100%;">💬 Написати вчителю / директору</button>
-    </div>
+      <!-- PHASE 3: Розклад дзвінків -->
+      <div class="data-card" style="border-left-color:#7986cb;background:#f5f6ff;">
+        <h4 style="margin-top:0;color:#283593;">🔔 Розклад дзвінків</h4>
+        <div id="s-bell-schedule-container"><p class="empty-msg">Завантаження...</p></div>
+      </div>
+    </section>
+
+    <section class="screen-section">
+      <h3>📚 Навчання</h3>
+      <!-- Наліпки -->
+      <div class="data-card" style="border-left-color:#f1c40f;background:#fffcf0;text-align:center;margin-top:0;">
+        <h4 style="margin-top:0;color:var(--orange);font-size:1rem;">🌟 Мої наліпки</h4>
+        <div class="progress-bar-container"><div id="s-ribbon-progress" class="progress-bar"></div></div>
+        <p id="s-ribbon-count" style="font-size:1.1rem;font-weight:700;color:#d35400;margin:13px 0 4px 0;">Завантаження...</p>
+      </div>
+      <!-- Підручники -->
+      <div class="data-card" style="border-left-color:var(--blue);background:#f0f8ff;">
+        <h4 style="margin-top:0;color:var(--blue);">📘 Мої підручники</h4>
+        <div id="s-textbooks-list"><p class="empty-msg">Завантаження...</p></div>
+      </div>
+      <!-- ДЗ -->
+      <div class="data-card" style="border-left-color:#00b894;background:#f0fff4;">
+        <h4 style="margin-top:0;color:#00b894;">📚 Завдання для мене:</h4>
+        <ul id="s-daily-hw-list" class="list-dash"></ul>
+      </div>
+      <!-- Журнал та коментарі -->
+      <div class="data-card" style="border-left-color:#ff4757;background:#fff0f1;">
+        <h4 style="margin-top:0;color:#ff4757;">📝 Мої оцінки та коментарі:</h4>
+        <ul id="s-daily-comments-list" class="list-dash"></ul>
+      </div>
+      <!-- Behavior -->
+      <div class="data-card" style="border-left-color:#3949ab;background:#e8eaf6;">
+        <h4 style="margin-top:0;color:#283593;">🤝 Поведінка (цей тиждень):</h4>
+        <div id="s-behavior-list"><p class="empty-msg">Завантаження...</p></div>
+      </div>
+    </section>
+
+    <section class="screen-section half">
+      <h3>🕒 Відвідуваність</h3>
+      <!-- PHASE 2: Алерт про невизнану відмітку вчителя -->
+      <div id="s-teacher-att-alert" style="display:none;background:#fff3cd;border:1px solid #ffeeba;color:#856404;padding:11px 14px;border-radius:10px;margin-bottom:12px;font-size:.85rem;"></div>
+      <!-- Відсутність -->
+      <div class="data-card" style="border-left-color:var(--red);background:#fdfbfb;margin-top:0;">
+        <h4 style="margin-top:0;color:var(--red);">🕒 Я запізнююсь / буду відсутній</h4>
+        <div style="display:flex;flex-direction:column;gap:9px;margin-top:9px;">
+          <select id="s-att-type" onchange="updateAttOptionsStudent()" style="border-color:var(--red);"><option value="late">Запізнююсь</option><option value="absent">Буду відсутній</option></select>
+          <select id="s-att-reason" style="border-color:var(--red);"><option value="на 10 хвилин">на 10 хвилин</option></select>
+        </div>
+        <button onclick="submitAttendance('student')" style="background:var(--red);padding:11px;color:#fff;margin-top:13px;">Відправити</button>
+        <p id="s-att-status" style="font-size:.83rem;color:var(--green);font-weight:700;margin-top:9px;display:none;">✅ Повідомлення надіслано!</p>
+      </div>
+    </section>
+
+    <section class="screen-section half">
+      <h3>💬 Комунікація</h3>
+      <!-- Чат -->
+      <div class="data-card" style="border-left-color:var(--purple);background:#f9f4ff; text-align:center;margin-top:0;">
+        <button onclick="openChatModal('student')" style="background:var(--purple); color:#fff; padding:12px; border-radius:12px; font-weight:700; width:100%;">💬 Написати вчителю / директору</button>
+      </div>
+    </section>
+
     <button class="btn-logout" onclick="logoutUser()">Вийти</button>
   </div>
 </div>
