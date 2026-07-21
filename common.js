@@ -29,9 +29,14 @@ export const app=initializeApp(firebaseConfig); export const auth=getAuth(app); 
 // ══════════ CONSTANTS ══════════
 // Phase 5: GRADE_WEIGHTS stays as the fallback/default and as the one-time
 // migration seed source — the actual source of truth is now Firebase
-// (grade_types/{code}={label,shortLabel,weight}), cached in gradeTypesCache below.
+// (grade_type_defs/{code}={label,shortLabel,weight}), cached in gradeTypesCache
+// below. NOTE: deliberately NOT called "grade_types" — that name is already used
+// by a separate, pre-existing collection (per-cell grade type values,
+// grade_types/{cls}/{yMonth}/{subj}/{date}/{student}) written by journal.js's
+// confirmGrade()/deleteGrade(). Naming them the same caused real data to
+// collide (see loadGradeTypesCache below for the incident this fixed).
 export const GRADE_WEIGHTS={'П':1.0,'У':1.0,'ДЗ':0.5,'СР':1.5,'ДК':1.5,'ПР':1.5,'ПЗ':1.5,'К':2.0};
-// Best-guess full Ukrainian labels used only to seed grade_types on first run —
+// Best-guess full Ukrainian labels used only to seed grade_type_defs on first run —
 // director can rename via delete+recreate in the new "🎯 Типи оцінок" panel if wrong.
 const GRADE_TYPE_LABELS={'П':'Поточна','У':'Усна відповідь','ДЗ':'Домашнє завдання','СР':'Самостійна робота','ДК':'Диктант','ПР':'Практична робота','ПЗ':'Проектне завдання','К':'Контрольна робота'};
 export const STICKER_GOAL=30;
@@ -102,22 +107,35 @@ export function getGradeWeight(code){
   if(gradeTypesCache&&gradeTypesCache[code]&&typeof gradeTypesCache[code].weight==='number')return gradeTypesCache[code].weight;
   return GRADE_WEIGHTS[code]||1.0;
 }
-// One-time load (+ one-time migration seed) of grade_types from Firebase into
-// gradeTypesCache. Called during auth/session init (see onAuthStateChanged
+// One-time load (+ one-time migration seed) of grade type CONFIG from Firebase
+// into gradeTypesCache. Called during auth/session init (see onAuthStateChanged
 // below) for every role, since parent/student also need it (formula info
 // block) and teacher/director need it for calculations + the type buttons.
+//
+// IMPORTANT: this lives at `grade_type_defs/{code}` (config: {label,shortLabel,
+// weight}) — NOT at `grade_types`. `grade_types/{cls}/{yMonth}/{subj}/{date}/
+// {student}` is a *different*, pre-existing collection (the actual per-cell
+// grade-type VALUE a teacher picks for one student's one grade, written by
+// confirmGrade()/deleteGrade() in journal.js — this predates Phase 5 entirely).
+// An earlier version of this function read/wrote the config at `grade_types`
+// directly, which collided with that collection: e.g. grading any student in
+// class_2 creates `grade_types/class_2/...`, which then got misread as a bogus
+// "class_2" grade-type code (label "class_2", weight defaulting to 1) by every
+// function that iterates Object.keys(gradeTypesCache) — that's the "class_2 —
+// class_2 (×1)" line that showed up in the journal legend. Renamed to a
+// separate root to make the two collections structurally impossible to collide.
 export async function loadGradeTypesCache(){
-  const snap=await get(ref(db,'grade_types'));
+  const snap=await get(ref(db,'grade_type_defs'));
   if(snap.exists()){gradeTypesCache=snap.val();return;}
   gradeTypesCache={};
   // Only the director performs the one-time seed write, so concurrently
   // logging-in teachers/parents/students don't race to create the node —
   // they just fall back to GRADE_WEIGHTS via getGradeWeight() until the
-  // director's next login seeds grade_types for everyone.
+  // director's next login seeds grade_type_defs for everyone.
   if(currentUserData?.role==='director'){
     const seed={};
     for(let code in GRADE_WEIGHTS)seed[code]={label:GRADE_TYPE_LABELS[code]||code,shortLabel:code,weight:GRADE_WEIGHTS[code]};
-    await set(ref(db,'grade_types'),seed);
+    await set(ref(db,'grade_type_defs'),seed);
     gradeTypesCache=seed;
   }
 }

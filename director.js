@@ -232,7 +232,7 @@ function renderGradeTypesTable(){
 window.updateGradeTypeWeight=async function(code,val){
   const w=parseFloat(val);
   if(isNaN(w)||w<=0){showToast('⚠️ Коефіцієнт має бути додатним числом!');renderGradeTypesTable();return;}
-  await set(ref(db,`grade_types/${code}/weight`),w);
+  await set(ref(db,`grade_type_defs/${code}/weight`),w);
   await loadGradeTypesCache();renderGradeTypesTable();
   showToast(`✅ Коефіцієнт "${code}" оновлено: ×${w}`);
 };
@@ -242,14 +242,14 @@ window.addGradeType=async function(){
   const weight=parseFloat(document.getElementById('gt-new-weight').value);
   if(!code||!label||isNaN(weight)||weight<=0)return alert("Заповніть усі поля коректно!");
   if(gradeTypesCache[code]&&!confirm(`Тип "${code}" вже існує. Перезаписати?`))return;
-  await set(ref(db,`grade_types/${code}`),{label,shortLabel:code,weight});
+  await set(ref(db,`grade_type_defs/${code}`),{label,shortLabel:code,weight});
   document.getElementById('gt-new-code').value='';document.getElementById('gt-new-label').value='';document.getElementById('gt-new-weight').value='';
   await loadGradeTypesCache();renderGradeTypesTable();
   showToast(`✅ Тип "${code}" додано!`);
 };
 window.removeGradeType=async function(code){
   if(!confirm(`Видалити тип "${code}"? Це вплине на вже виставлені оцінки цього типу.`))return;
-  await remove(ref(db,`grade_types/${code}`));
+  await remove(ref(db,`grade_type_defs/${code}`));
   await loadGradeTypesCache();renderGradeTypesTable();
   showToast(`🗑️ Тип "${code}" видалено`);
 };
