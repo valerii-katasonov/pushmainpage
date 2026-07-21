@@ -5,7 +5,7 @@
 // lives in teacher.js).
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, getActiveClass, currentUserData, STICKER_GOAL, getWeekDates, displayGrade, gradeClass6, showToast, renderHwItem, dayKeys, localDateString, formatAttendanceSlotLabel, renderGradeFormulaInfo } from './common.js';
+import { db, getActiveClass, currentUserData, STICKER_GOAL, getWeekDates, displayGrade, gradeClass6, showToast, renderHwItem, dayKeys, localDateString, formatAttendanceSlotLabel, renderGradeFormulaInfo, escJs } from './common.js';
 import { ACADEMIC_YEAR_ID } from './director.js';
 
 // parentLessonInterval is reassigned only here and read/cleared from
@@ -292,8 +292,8 @@ export function loadParentDashboard(){
         hasItems=true;const cr=rx[s]?.[sn]||null;const gc=gradeClass6(gv);const dispVal=displayGrade(gv,cls);
         let gHtml=gv?`<span class="g-cell ${gc}" style="display:inline-flex;padding:4px 9px;border-radius:8px;gap:5px;margin-bottom:3px;"><span class="g-val">${dispVal}</span>${gtp?`<span class="g-type">${gtp}</span>`:''}</span>`:'';
         // Retake button
-        let retakeBtn='';if(gv){const n=parseInt(gv);if(!isNaN(n)&&n<=3)retakeBtn=`<button class="retake-btn" onclick="sendRetakeRequest('${cls}','${s}','${date}','${sn}',${n})" style="margin-left:6px;">🔄 Покращити</button>`;}
-        const rxHtml=`<div style="display:flex;gap:8px;margin-top:8px;padding-top:7px;border-top:1px dashed #eee;align-items:center;"><button style="background:none;border:none;font-size:1.3rem;cursor:pointer;filter:${cr==='👍'?'none':'grayscale(100%)'};opacity:${cr==='👍'?'1':'.5'};padding:4px;width:auto;margin:0;" onclick="sendReaction('${date}','${s}','👍')">👍</button><button style="background:none;border:none;font-size:1.3rem;cursor:pointer;filter:${cr==='❤️'?'none':'grayscale(100%)'};opacity:${cr==='❤️'?'1':'.5'};padding:4px;width:auto;margin:0;" onclick="sendReaction('${date}','${s}','❤️')">❤️</button><button style="background:none;border:none;font-size:1.3rem;cursor:pointer;filter:${cr==='🔥'?'none':'grayscale(100%)'};opacity:${cr==='🔥'?'1':'.5'};padding:4px;width:auto;margin:0;" onclick="sendReaction('${date}','${s}','🔥')">🔥</button></div>`;
+        let retakeBtn='';if(gv){const n=parseInt(gv);if(!isNaN(n)&&n<=3)retakeBtn=`<button class="retake-btn" onclick="sendRetakeRequest('${cls}','${escJs(s)}','${date}','${escJs(sn)}',${n})" style="margin-left:6px;">🔄 Покращити</button>`;}
+        const rxHtml=`<div style="display:flex;gap:8px;margin-top:8px;padding-top:7px;border-top:1px dashed #eee;align-items:center;"><button style="background:none;border:none;font-size:1.3rem;cursor:pointer;filter:${cr==='👍'?'none':'grayscale(100%)'};opacity:${cr==='👍'?'1':'.5'};padding:4px;width:auto;margin:0;" onclick="sendReaction('${date}','${escJs(s)}','👍')">👍</button><button style="background:none;border:none;font-size:1.3rem;cursor:pointer;filter:${cr==='❤️'?'none':'grayscale(100%)'};opacity:${cr==='❤️'?'1':'.5'};padding:4px;width:auto;margin:0;" onclick="sendReaction('${date}','${escJs(s)}','❤️')">❤️</button><button style="background:none;border:none;font-size:1.3rem;cursor:pointer;filter:${cr==='🔥'?'none':'grayscale(100%)'};opacity:${cr==='🔥'?'1':'.5'};padding:4px;width:auto;margin:0;" onclick="sendReaction('${date}','${escJs(s)}','🔥')">🔥</button></div>`;
         list.innerHTML+=`<li><b>${s}:</b><br>${gHtml}${retakeBtn}${cm?`<div style="background:#f0f8ff;padding:5px 9px;border-radius:6px;font-style:italic;font-size:.88rem;margin-top:3px;">${cm}</div>`:''}${rxHtml}</li>`;
       }
     });
@@ -344,7 +344,7 @@ export function loadStudentDashboard(){
       if(cm||gv){
         hasItems=true;const gc=gradeClass6(gv);const dispVal=displayGrade(gv,cls);
         let gHtml=gv?`<span class="g-cell ${gc}" style="display:inline-flex;padding:4px 9px;border-radius:8px;gap:5px;margin-bottom:3px;"><span class="g-val">${dispVal}</span>${gtp?`<span class="g-type">${gtp}</span>`:''}</span>`:'';
-        let retakeBtn='';if(gv){const n=parseInt(gv);if(!isNaN(n)&&n<=3)retakeBtn=`<button class="retake-btn" onclick="sendRetakeRequest('${cls}','${s}','${date}','${sn}',${n})" style="margin-left:6px;">🔄 Покращити</button>`;}
+        let retakeBtn='';if(gv){const n=parseInt(gv);if(!isNaN(n)&&n<=3)retakeBtn=`<button class="retake-btn" onclick="sendRetakeRequest('${cls}','${escJs(s)}','${date}','${escJs(sn)}',${n})" style="margin-left:6px;">🔄 Покращити</button>`;}
         list.innerHTML+=`<li><b>${s}:</b><br>${gHtml}${retakeBtn}${cm?`<div style="background:#f0f8ff;padding:5px 9px;border-radius:6px;font-style:italic;font-size:.88rem;margin-top:3px;">${cm}</div>`:''}</li>`;
       }
     });

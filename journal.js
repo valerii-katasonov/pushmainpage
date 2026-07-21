@@ -4,7 +4,7 @@
 // schedule and director's drafts.
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, getActiveClass, currentUserData, displayGrade, gradeClass6, calculateStudentWeightedAvg, getClassNum, GRADE_WEIGHTS, dayKeys, dayNamesUA, showToast, localDateString, summarizeAttendanceSlots, gradeTypesCache } from './common.js';
+import { db, getActiveClass, currentUserData, displayGrade, gradeClass6, calculateStudentWeightedAvg, getClassNum, GRADE_WEIGHTS, dayKeys, dayNamesUA, showToast, localDateString, summarizeAttendanceSlots, gradeTypesCache, escJs } from './common.js';
 
 // globalTeacherAccess is reassigned only in this file (openVisualMatrixModal)
 // and read from common.js (window.getDefaultTeacher) — plain export/import.
@@ -28,6 +28,24 @@ let gepCls=''; let gepSubj=''; let gepDate=''; let gepStudent=''; let gepType='�
 // toggle) until they click the zoom-label button to snap back to auto-fit.
 let journalZoomLevel=100;
 let journalZoomIsAuto=true;
+
+// Shared by the journal table's month-band headers and the range/weighted-avg
+// summary lines below it — hoisted to module scope so it's built once, not
+// re-allocated on every renderJournalTable() call.
+const monthNamesUA=['Січень','Лютий','Березень','Квітень','Травень','Червень','Липень','Серпень','Вересень','Жовтень','Листопад','Грудень'];
+// "yyyy-mm" → "Місяць рррр" (e.g. "2026-07" → "Липень 2026") — used anywhere a
+// Firebase month-key needs to be shown to a human instead of a raw ISO fragment.
+function fmtYM(ym){const [yy,mm]=ym.split('-');return `${monthNamesUA[parseInt(mm)-1]} ${yy}`;}
+// Standard Slavic/Ukrainian plural-form picker: forms=[one,few,many], e.g.
+// pluralUA(3,['учень','учні','учнів']) -> 'учні'. Handles the 11-14 "always many"
+// exception (11 учнів, not 11 учень) that a naive n%10 check would get wrong.
+function pluralUA(n,forms){
+  const n100=Math.abs(n)%100,n10=n100%10;
+  if(n100>10&&n100<20)return forms[2];
+  if(n10>1&&n10<5)return forms[1];
+  if(n10===1)return forms[0];
+  return forms[2];
+}
 
 // ══════════ GRADE EDITOR POPUP ══════════
 window.selectGradeType=function(type){gepType=type;document.querySelectorAll('.type-btn').forEach(b=>b.classList.toggle('active',b.dataset.type===type));};
@@ -100,12 +118,14 @@ window.openJournalModal=function(role){
   renderGradeTypesLegend();
   const dp=document.getElementById('global-date').value.split('-');const curYM=`${dp[0]}-${dp[1]}`;
   document.getElementById('j-month-from').value=curYM;document.getElementById('j-month-to').value=curYM;
-  const cs=document.getElementById('j-class-select');const mw=document.getElementById('j-mode-toggle-wrap');
+  const cs=document.getElementById('j-class-select');const cf=document.getElementById('j-class-field');const mw=document.getElementById('j-mode-toggle-wrap');
   mw.style.display=journalIsTeacher?'flex':'none';
   document.getElementById('j-edit-hint').style.display=journalIsTeacher&&journalMode==='edit'?'block':'none';
   if(journalIsTeacher){document.getElementById('j-mode-view').classList.toggle('active',journalMode==='view');document.getElementById('j-mode-edit').classList.toggle('active',journalMode==='edit');}
-  if(role==='director'){cs.style.display='block';cs.innerHTML='<option value="">Оберіть клас...</option>';for(let i=1;i<=11;i++)cs.innerHTML+=`<option value="class_${i}">${i} Клас</option>`;document.getElementById('j-subj-select').innerHTML='<option value="">Спочатку клас</option>';document.getElementById('journal-table-el').innerHTML='';}
-  else{cs.style.display='none';cs.innerHTML=`<option value="${getActiveClass()}">${getActiveClass()}</option>`;updateJournalSubjects();}
+  // Toggle the whole label+select field (#j-class-field), not just the <select> —
+  // otherwise non-directors were left with a "Клас" label floating over nothing.
+  if(role==='director'){cf.style.display='block';cs.innerHTML='<option value="">Оберіть клас...</option>';for(let i=1;i<=11;i++)cs.innerHTML+=`<option value="class_${i}">${i} Клас</option>`;document.getElementById('j-subj-select').innerHTML='<option value="">Спочатку клас</option>';document.getElementById('journal-table-el').innerHTML='';}
+  else{cf.style.display='none';cs.innerHTML=`<option value="${getActiveClass()}">${getActiveClass()}</option>`;updateJournalSubjects();}
 };
 window.closeJournalModal=function(){document.getElementById('journal-modal').style.display='none';};
 window.openJournalForGrading=function(){
@@ -215,7 +235,6 @@ window.renderJournalTable=async function(){
     dateCols=[...new Map(dateCols.map(c=>[c.ds,c])).values()];
     const canEdit=journalIsTeacher&&journalMode==='edit';
     const dayN=['Нд','Пн','Вт','Ср','Чт','Пт','Сб'];
-    const monthNamesUA=['Січень','Лютий','Березень','Квітень','Травень','Червень','Липень','Серпень','Вересень','Жовтень','Листопад','Грудень'];
     // Phase 9: without an explicit month label, a multi-month range just shows
     // repeating bare day numbers ("1 2 3...") with zero indication of which month
     // is which — group consecutive date columns by their source month so a
@@ -256,7 +275,7 @@ window.renderJournalTable=async function(){
       if(canEdit){
         // Phase 8: use this column's own source month (`ym`), not a single outer
         // yMonth — the range can now span several Firebase month-keys at once.
-        typeCell=`<br><select class="jct-type-select" onclick="event.stopPropagation();" onchange="setJournalColumnType('${cls}','${subj}','${ym}','${ds}',this.value)" title="Тип оцінки на цю дату">
+        typeCell=`<br><select class="jct-type-select" onclick="event.stopPropagation();" onchange="setJournalColumnType('${cls}','${escJs(subj)}','${ym}','${ds}',this.value)" title="Тип оцінки на цю дату">
           <option value="">—</option>
           ${typeCodes.map(t=>`<option value="${t}" ${presetType===t?'selected':''}>${t} ×${weightOf(t)}</option>`).join('')}
         </select>`;
@@ -288,11 +307,14 @@ window.renderJournalTable=async function(){
         const dispVal=displayGrade(gradeVal,cls);
         const presetType=journalColumnTypes[ds]||'';
         let cell='';
+        // escJs on subject + student name — both routinely contain apostrophes in
+        // Ukrainian (Комп'ютерні науки, Дем'яненко) which would otherwise terminate
+        // the onclick's string literal early and kill the handler.
         if(gradeVal){
           const gc=gradeClass6(gradeVal);
-          cell+=`<span class="g-cell ${gc}" onclick="handleGradeClick(event,'${cls}','${subj}','${ds}','${st}','${ym}','${gradeVal}','${gradeType}','${presetType}')"><span class="g-val">${dispVal}</span>${gradeType?`<span class="g-type">${gradeType}</span>`:''}</span>`;
+          cell+=`<span class="g-cell ${gc}" onclick="handleGradeClick(event,'${cls}','${escJs(subj)}','${ds}','${escJs(st)}','${ym}','${gradeVal}','${gradeType}','${presetType}')"><span class="g-val">${dispVal}</span>${gradeType?`<span class="g-type">${gradeType}</span>`:''}</span>`;
         } else if(canEdit){
-          cell+=`<span class="g-cell g-empty" onclick="handleGradeClick(event,'${cls}','${subj}','${ds}','${st}','${ym}','','','${presetType}')">＋</span>`;
+          cell+=`<span class="g-cell g-empty" onclick="handleGradeClick(event,'${cls}','${escJs(subj)}','${ds}','${escJs(st)}','${ym}','','','${presetType}')">＋</span>`;
         }
         if(attInfo){const ac=attInfo.status==='absent'?'att-absent':'att-late';const al=attInfo.status==='absent'?'н':'з';cell+=`<span class="${ac}" title="${attInfo.reason}">${al}</span>`;}
         rowHtml+=`<td class="${isToday?'today-col':''}">${cell}</td>`;
@@ -308,18 +330,32 @@ window.renderJournalTable=async function(){
     if(journalZoomIsAuto)journalZoomLevel=computeJournalFitPercent();
     applyJournalZoom();
     // Range summary — quick "what am I looking at" context above the table.
+    // Uses fmtYM/pluralUA so it reads as real Ukrainian ("3 учні", "Липень 2026")
+    // instead of raw ISO fragments and mechanically-wrong plurals ("3 учнів").
     if(rangeSummary){
-      const periodStr=months.length>1?`${months[0]} – ${months[months.length-1]}`:months[0];
-      rangeSummary.textContent=`👥 ${students.length} учнів · 🗓️ ${dateCols.length} уроків · ${periodStr}`;
+      const periodStr=months.length>1?`${fmtYM(months[0])} – ${fmtYM(months[months.length-1])}`:fmtYM(months[0]);
+      const studentsWord=pluralUA(students.length,['учень','учні','учнів']);
+      const lessonsWord=pluralUA(dateCols.length,['урок','уроки','уроків']);
+      rangeSummary.textContent=`👥 ${students.length} ${studentsWord} · 🗓️ ${dateCols.length} ${lessonsWord} · ${periodStr}`;
     }
     // Weighted avg summary
     if(classCount>0){
       const ca=(classWeightedAvg/classCount).toFixed(2);
-      const periodLabel=months.length>1?` за ${months[0]}–${months[months.length-1]}`:'';
+      const periodLabel=months.length>1?` за ${fmtYM(months[0])} – ${fmtYM(months[months.length-1])}`:` за ${fmtYM(months[0])}`;
+      // Build the weights hint from the live config (grade_type_defs via
+      // gradeTypesCache), NOT a hardcoded string — the director can change any
+      // weight at runtime, so a baked-in "ДЗ×0.5, К×2.0" would silently lie the
+      // moment they do. Only non-×1 codes shown, to keep the hint short.
+      const hintCodes=Object.keys(gradeTypesCache).length>0?Object.keys(gradeTypesCache):Object.keys(GRADE_WEIGHTS);
+      const weightHint=hintCodes
+        .map(c=>({c,w:(gradeTypesCache[c]&&gradeTypesCache[c].weight)??GRADE_WEIGHTS[c]??1.0}))
+        .filter(x=>x.w!==1.0)
+        .map(x=>`${x.c}×${x.w}`)
+        .join(', ');
       wAvgDiv.style.display='block';
       wAvgDiv.innerHTML=`<b style="color:var(--purple);">📊 Середньозважений бал класу з ${subj}${periodLabel}:</b><br>
         <span style="font-size:1.6rem;font-weight:800;color:#7b1fa2;">${ca}</span>
-        <span style="font-size:.8rem;color:#888;margin-left:8px;">(зважений: ДЗ×0.5, СР/ДК/ПР×1.5, К×2.0)</span>`;
+        ${weightHint?`<span style="font-size:.8rem;color:#888;margin-left:8px;">(зважений: ${weightHint})</span>`:''}`;
     } else wAvgDiv.style.display='none';
   }catch(e){console.error(e);table.innerHTML=`<tr><td style="padding:20px;color:red;">Помилка: ${e.message}</td></tr>`;}
 };
@@ -376,6 +412,17 @@ window.journalZoomIn=function(){journalZoomIsAuto=false;journalZoomLevel=Math.mi
 // Clicking the % label snaps back to auto-fit — and re-enables auto-fit on future
 // re-renders (subject/period change, edit-mode toggle) until the user next zooms manually.
 window.journalZoomFit=function(){journalZoomIsAuto=true;journalZoomLevel=computeJournalFitPercent();applyJournalZoom();};
+// Re-fit on window resize (debounced) — the available width changes when the user
+// resizes the browser or rotates a phone/tablet; only meaningful while the modal
+// is open AND auto-fit is active (manual zoom choices are never overridden).
+let journalResizeTimer=null;
+window.addEventListener('resize',function(){
+  if(!journalZoomIsAuto)return;
+  const modal=document.getElementById('journal-modal');
+  if(!modal||modal.style.display!=='flex')return;
+  clearTimeout(journalResizeTimer);
+  journalResizeTimer=setTimeout(()=>{journalZoomLevel=computeJournalFitPercent();applyJournalZoom();},150);
+});
 // ══════════ PHASE 4b: PDF EXPORT (html2canvas + jsPDF, landscape) ══════════
 window.exportJournalToPDF=async function(){
   const table=document.getElementById('journal-table-el');
@@ -384,7 +431,10 @@ window.exportJournalToPDF=async function(){
   const subj=document.getElementById('j-subj-select').value;
   const months=getJournalMonths();
   if(!cls||!subj||months.length===0){showToast('⚠️ Оберіть клас, предмет і місяць!');return;}
-  const periodStr=months.length>1?`${months[0]}–${months[months.length-1]}`:months[0];
+  // Human-readable label for the text printed ON the PDF page; a raw ISO-ish
+  // string (safe filename characters, no spaces) for the downloaded file's name.
+  const periodStrHuman=months.length>1?`${fmtYM(months[0])} – ${fmtYM(months[months.length-1])}`:fmtYM(months[0]);
+  const periodStrFile=months.length>1?`${months[0]}_${months[months.length-1]}`:months[0];
   if(typeof html2canvas==='undefined'||!window.jspdf){showToast('⚠️ Бібліотеки експорту ще завантажуються, спробуйте ще раз.');return;}
   const btn=document.getElementById('btn-export-journal-pdf');
   if(btn){btn.disabled=true;btn.innerText='⏳ Експорт...';}
@@ -402,9 +452,9 @@ window.exportJournalToPDF=async function(){
     let renderW=pageW-40,renderH=renderW/imgRatio;
     if(renderH>pageH-60){renderH=pageH-60;renderW=renderH*imgRatio;}
     pdf.setFontSize(12);
-    pdf.text(`${cls.replace('class_','')} клас — ${subj} — ${periodStr}`,20,25);
+    pdf.text(`${cls.replace('class_','')} клас — ${subj} — ${periodStrHuman}`,20,25);
     pdf.addImage(imgData,'PNG',20,35,renderW,renderH);
-    pdf.save(`journal_${cls}_${subj}_${periodStr}.pdf`);
+    pdf.save(`journal_${cls}_${subj}_${periodStrFile}.pdf`);
   }catch(e){alert('Помилка експорту: '+e.message);}
   finally{
     if(savedZoom!==100){journalZoomLevel=savedZoom;applyJournalZoom();}

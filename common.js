@@ -180,6 +180,12 @@ export function renderGradeFormulaInfo(){
 }
 // ══════════ UTILITIES ══════════
 export function showToast(msg){const c=document.getElementById('toast-container');const t=document.createElement('div');t.className='toast';t.innerHTML=`<span>🔔 ${msg}</span>`;c.appendChild(t);setTimeout(()=>{t.style.opacity='0';setTimeout(()=>t.remove(),300);},4000);}
+// Escapes a value for interpolation into a single-quoted JS string inside an
+// inline onclick="fn('...')" attribute. Ukrainian names and subjects routinely
+// contain apostrophes (Дем'яненко, Комп'ютерні науки, Мар'яна) — unescaped,
+// one of those breaks the inline handler's string literal and the whole
+// onclick dies with a SyntaxError. Backslashes escaped first, then quotes.
+export function escJs(s){return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');}
 export function getActiveClass(){if(currentUserData&&(currentUserData.role==='teacher'||currentUserData.role==='class_teacher'||currentUserData.role==='art_school_teacher'||currentUserData.role==='music_teacher'))return document.getElementById('t-class-selector').value;return currentUserData?currentUserData.class:'class_2';}
 window.getTodayLessonsFlattened=function(dayName){if(!window.schedule||!window.schedule[dayName])return[];let flat=[];window.schedule[dayName].forEach(slot=>{if(Array.isArray(slot))flat.push(...slot);else if(slot&&Object.keys(slot).length>0)flat.push(slot);});return flat;};
 window.getValidSubjectName=function(item){if(!item)return null;let sName=item.subject&&item.subject.ua?item.subject.ua:item.subject;if(sName&&typeof sName==='string'&&sName.trim()!=="Перерва"&&item.number!==" ")return sName.trim();return null;};
@@ -400,7 +406,7 @@ async function renderChatList(role) {
         const unreadCount = messages.filter(m => m.from !== myEmailSafe && !m.read).length;
         if (isDirector) {
           let n1 = getFormattedName(parts[0]), n2 = getFormattedName(parts[1]);
-          html += `<div class="chat-list-item" onclick="selectChatThread('${chatId}', '💬 ${n1} ↔ ${n2}')" style="padding:15px; border-bottom:1px solid #eee; cursor:pointer; background:#fff;">
+          html += `<div class="chat-list-item" onclick="selectChatThread('${chatId}', '💬 ${escJs(n1)} ↔ ${escJs(n2)}')" style="padding:15px; border-bottom:1px solid #eee; cursor:pointer; background:#fff;">
             <div style="display:flex; justify-content:space-between; align-items:center;">
               <b style="font-size:.95rem; color:var(--purple);">${n1} ↔ ${n2}</b>
               ${unreadCount > 0 ? `<span style="background:var(--red); color:#fff; font-size:.7rem; padding:2px 7px; border-radius:10px;">${unreadCount}</span>` : ''}
@@ -424,7 +430,7 @@ async function renderChatList(role) {
       const sorted = Array.from(activeContacts.entries()).sort((a, b) => b[1].time - a[1].time);
       sorted.forEach(([email, data]) => {
         const cid = getChatId(myEmailSafe, email);
-        html += `<div class="chat-list-item" onclick="selectChatThread('${cid}', '${data.name}', '${email}')" style="padding:15px; border-bottom:1px solid #eee; cursor:pointer; background:#fff; display:flex; gap:12px; align-items:center;">
+        html += `<div class="chat-list-item" onclick="selectChatThread('${cid}', '${escJs(data.name)}', '${email}')" style="padding:15px; border-bottom:1px solid #eee; cursor:pointer; background:#fff; display:flex; gap:12px; align-items:center;">
           <div style="width:45px; height:45px; border-radius:50%; background:var(--purple); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:1.2rem; flex-shrink:0;">${data.name.charAt(0)}</div>
           <div style="flex:1; overflow:hidden;">
             <div style="display:flex; justify-content:space-between; align-items:center;">

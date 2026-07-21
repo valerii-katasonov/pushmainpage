@@ -86,7 +86,15 @@
     /* ── JOURNAL TABLE ── */
     .journal-wrap{overflow-x:auto;background:#fff;border-radius:11px;border:1px solid #ddd;max-height:58vh;}
     #journal-scale-inner{ /* width/height set inline via JS (Phase 4b zoom) to compensate the scrollbar */ }
-    .journal-table{border-collapse:collapse;font-size:.8rem;text-align:center;min-width:680px;transform:scale(var(--journal-scale,1));transform-origin:top left;}
+    /* NOTE: deliberately no min-width here (there used to be a hardcoded 680px floor).
+       Ranges can now be as short as a single day, and that old floor forced the
+       fit-to-width zoom (see journal.js computeJournalFitPercent) to always measure
+       the table as "at least 680px wide" even when the real content was much
+       narrower — on mobile that made a 3-student/1-column table zoom out to ~47%
+       for no reason. Column-level min-widths (.sn/.avg-col/td below) already give
+       every real column a sane minimum, so the table's natural width now genuinely
+       reflects what's actually shown. */
+    .journal-table{border-collapse:collapse;font-size:.8rem;text-align:center;transform:scale(var(--journal-scale,1));transform-origin:top left;}
     .journal-table th{background:#e8f4fd;color:#154360;font-weight:800;position:sticky;top:0;z-index:3;border:1px solid #ddd;padding:7px 4px;white-space:nowrap;}
     .journal-table td{border:1px solid #eee;padding:2px;vertical-align:middle;height:34px;min-width:32px;max-width:48px;}
     .journal-table td.sn{text-align:left;font-weight:700;background:#fffcf0;position:sticky;left:0;z-index:2;border-right:2px solid #ccc;padding-left:8px;min-width:140px;font-size:.82rem;white-space:nowrap;}
@@ -1114,7 +1122,7 @@
       <h3>🗓️ Розклад</h3>
       <!-- ДИНАМІЧНИЙ РОЗКЛАД -->
       <div class="schedule-box" style="margin-top:0;">
-        <div class="schedule-day-label" id="s-schedule-day-label">📅 Мій розклад на сегодня</div>
+        <div class="schedule-day-label" id="s-schedule-day-label">📅 Мій розклад на сьогодні</div>
         <div id="s-dynamic-schedule">
           <div class="no-lessons-msg">⏳ Завантаження розкладу...</div>
         </div>
@@ -1282,7 +1290,7 @@
 
     <!-- Toolbar: Клас / Предмет / Період (від—до) -->
     <div style="display:flex;gap:var(--space-3);flex-wrap:wrap;margin-bottom:var(--space-3);">
-      <div style="flex:1;min-width:110px;">
+      <div id="j-class-field" style="flex:1;min-width:110px;display:none;">
         <label style="margin-top:0;font-size:var(--text-xs);">Клас</label>
         <select id="j-class-select" style="margin-top:2px;" onchange="updateJournalSubjects()"></select>
       </div>
