@@ -280,9 +280,9 @@ window.renderJournalTable=async function(){
           ${typeCodes.map(t=>`<option value="${t}" ${presetType===t?'selected':''}>${t} ×${weightOf(t)}</option>`).join('')}
         </select>`;
       } else {
-        typeCell=presetType?`<br><span style="font-size:.55rem;color:#e67e22;">${presetType}${weightOf(presetType)?` ×${weightOf(presetType)}`:''}</span>`:'';
+        typeCell=presetType?`<br><span style="font-size:.69em;color:#e67e22;">${presetType}${weightOf(presetType)?` ×${weightOf(presetType)}`:''}</span>`:'';
       }
-      dayRow+=`<th class="${isToday?'today-col':''}" style="background:${bandColor};" title="${ds}">${day}<br><span style="font-size:.62rem;font-weight:400;">${dayN[dow]}</span>${typeCell}</th>`;
+      dayRow+=`<th class="${isToday?'today-col':''}" style="background:${bandColor};" title="${ds}">${day}<br><span style="font-size:.78em;font-weight:400;">${dayN[dow]}</span>${typeCell}</th>`;
     });
     dayRow+='</tr>';
     let thead='<thead>'+monthRow+dayRow+'</thead>';
@@ -320,7 +320,7 @@ window.renderJournalTable=async function(){
         rowHtml+=`<td class="${isToday?'today-col':''}">${cell}</td>`;
       });
       const avgGc=avg!==null?gradeClass6(Math.round(avg)):'';
-      rowHtml+=`<td class="avg-col"><span class="${avgGc}" style="border-radius:6px;padding:2px 5px;font-weight:800;">${displayGrade(avgStr!=='-'?String(Math.round(avg)):'-',cls)}</span><br><span style="font-size:.62rem;color:#aaa;">${avgStr}</span></td>`;
+      rowHtml+=`<td class="avg-col"><span class="${avgGc}" style="border-radius:6px;padding:.16em .39em;font-weight:800;">${displayGrade(avgStr!=='-'?String(Math.round(avg)):'-',cls)}</span><br><span style="font-size:.78em;color:#aaa;">${avgStr}</span></td>`;
       rowHtml+='</tr>';tbody+=rowHtml;
     });
     tbody+='</tbody>';
@@ -368,44 +368,46 @@ window.setJournalColumnType=async function(cls,subj,yMonth,date,type){
   await set(ref(db,`journal_column_types/${cls}/${yMonth}/${subj}/${date}`),type||null);
   showToast(type?`✅ Тип на ${date.split('-').reverse().join('.')}: ${type}`:'🗑️ Тип знято');
 };
-// ══════════ PHASE 4b/9: JOURNAL ZOOM (40%–150%, 10% steps, smart fit-to-width) ══════════
-// Uses transform:scale() on .journal-table (driven by --journal-scale) with transform-origin:top left.
-// #journal-scale-inner's width/height are set from the table's *unscaled* offsetWidth/offsetHeight
-// (offsetWidth/Height are unaffected by CSS transforms) so .journal-wrap's overflow-x scrollbar
-// reflects the true scaled size instead of leaving a stale full-size empty gutter. Because the whole
-// <table> — including the sticky .sn / avg-col cells — is scaled as one unit, their sticky left:0/right:0
-// offsets stay consistent with everything else in the same transformed coordinate space, so they don't
-// drift out of alignment as the zoom level changes.
+// ══════════ PHASE 4b/9/10: JOURNAL ZOOM (40%–150%, 10% steps, smart fit-to-width) ══════════
+// Metric-based zoom: --journal-scale multiplies the table's font-size (see the
+// .journal-table CSS block), and every internal metric is in em, so the whole grid
+// resizes natively. NO transform:scale() — the previous transform-based zoom broke
+// position:sticky (sticky offsets resolve in unscaled layout coordinates, so at
+// 54% the right-stuck average column visually landed mid-screen). With metric
+// scaling there's nothing to compensate: sticky columns/headers and the scroll
+// area's own scrollbars all just work at any zoom level.
 function applyJournalZoom(){
   const table=document.getElementById('journal-table-el');
   const inner=document.getElementById('journal-scale-inner');
   const label=document.getElementById('journal-zoom-label');
-  if(!table||!inner)return;
-  const scale=journalZoomLevel/100;
-  table.style.setProperty('--journal-scale',scale);
-  const naturalW=table.offsetWidth,naturalH=table.offsetHeight;
-  inner.style.width=(naturalW*scale)+'px';
-  inner.style.height=(naturalH*scale)+'px';
+  if(!table)return;
+  table.style.setProperty('--journal-scale',journalZoomLevel/100);
+  // Clear any leftover explicit sizing from the old transform-era compensation —
+  // the wrapper must shrink-wrap the table naturally for scrollbars to be correct.
+  if(inner){inner.style.width='';inner.style.height='';}
   if(label)label.innerText=journalZoomLevel+'%';
 }
 // Multi-month ranges can produce a very wide table (up to ~12 months × ~22 school
 // days each); a single month with few students can be much narrower than the modal.
 // Rather than always defaulting to a fixed 100% (leaving either a giant horizontal
 // scrollbar or wasted empty space), compute the scale that makes the table exactly
-// fill the available width — same idea as "zoom to fit" in spreadsheet apps. Capped
-// to the same 40%–150% range as manual zoom so text never becomes illegible or blurry.
+// fill the available width — same idea as "zoom to fit" in spreadsheet apps.
 function computeJournalFitPercent(){
-  const inner=document.getElementById('journal-scale-inner');
   const table=document.getElementById('journal-table-el');
-  if(!table||!inner||!inner.parentElement)return 100;
-  const naturalW=table.offsetWidth; // unaffected by the current transform:scale()
-  const availW=inner.parentElement.clientWidth; // .journal-wrap's visible width
-  if(!naturalW||!availW)return 100;
+  const wrap=table&&table.closest('.journal-wrap');
+  if(!table||!wrap)return 100;
+  // Table width scales ≈linearly with the zoom percent (all metrics are em-based;
+  // only 1px borders don't scale), so extrapolate from the CURRENT rendered width
+  // at the CURRENT zoom instead of assuming we're measuring an unscaled table.
+  const curW=table.offsetWidth;
+  const availW=wrap.clientWidth;
+  if(!curW||!availW)return 100;
+  const fit=Math.floor(journalZoomLevel*availW/curW);
   // Auto-fit only ever SHRINKS a too-wide table to stop it overflowing — it never
   // blows up a small class (e.g. 2 students, one month) past its natural 100% size,
   // which would look absurd (huge cells, oversized text) just to "fill" the modal.
   // Manual + still lets a teacher zoom in past 100% (up to 150%) if they want to.
-  return Math.max(40,Math.min(100,Math.floor((availW/naturalW)*100)));
+  return Math.max(40,Math.min(100,fit));
 }
 window.journalZoomOut=function(){journalZoomIsAuto=false;journalZoomLevel=Math.max(40,journalZoomLevel-10);applyJournalZoom();};
 window.journalZoomIn=function(){journalZoomIsAuto=false;journalZoomLevel=Math.min(150,journalZoomLevel+10);applyJournalZoom();};

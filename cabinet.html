@@ -85,35 +85,57 @@
     .att-late{background:#fff8e1;color:#a04a02;font-weight:800;border-radius:4px;padding:1px 4px;}
     /* ── JOURNAL TABLE ── */
     .journal-wrap{overflow-x:auto;background:#fff;border-radius:11px;border:1px solid #ddd;max-height:58vh;}
-    #journal-scale-inner{ /* width/height set inline via JS (Phase 4b zoom) to compensate the scrollbar */ }
-    /* NOTE: deliberately no min-width here (there used to be a hardcoded 680px floor).
-       Ranges can now be as short as a single day, and that old floor forced the
-       fit-to-width zoom (see journal.js computeJournalFitPercent) to always measure
-       the table as "at least 680px wide" even when the real content was much
-       narrower — on mobile that made a 3-student/1-column table zoom out to ~47%
-       for no reason. Column-level min-widths (.sn/.avg-col/td below) already give
-       every real column a sane minimum, so the table's natural width now genuinely
-       reflects what's actually shown. */
-    .journal-table{border-collapse:collapse;font-size:.8rem;text-align:center;transform:scale(var(--journal-scale,1));transform-origin:top left;}
-    .journal-table th{background:#e8f4fd;color:#154360;font-weight:800;position:sticky;top:0;z-index:3;border:1px solid #ddd;padding:7px 4px;white-space:nowrap;}
-    .journal-table td{border:1px solid #eee;padding:2px;vertical-align:middle;height:34px;min-width:32px;max-width:48px;}
-    .journal-table td.sn{text-align:left;font-weight:700;background:#fffcf0;position:sticky;left:0;z-index:2;border-right:2px solid #ccc;padding-left:8px;min-width:140px;font-size:.82rem;white-space:nowrap;}
+    #journal-scale-inner{ /* plain wrapper; zoom is metric-based now (see .journal-table note below), no JS sizing needed */ }
+    /* ── PHASE 9/10: ZOOM ARCHITECTURE — metric scaling, NOT transform:scale().
+       The zoom used to be transform:scale(var(--journal-scale)) on the whole
+       table. That fundamentally breaks position:sticky: the browser resolves
+       sticky left/right/top offsets in UNSCALED layout coordinates and only then
+       applies the visual transform, so at e.g. 54% the "right:0"-stuck average
+       column visually landed at 54% of the viewport — the middle of the screen.
+       Instead, the table's font-size is what scales (calc(base * --journal-scale))
+       and every internal metric (paddings, heights, min-widths) is in em, so the
+       entire grid grows/shrinks with the zoom level natively — the same way real
+       spreadsheet apps implement zoom — and sticky columns/headers keep working
+       because there is no transform at all.
+       (Also deliberately no table-level min-width: column-level em minimums below
+       are the real floor, so fit-to-width measures true content width.) */
+    .journal-table{border-collapse:collapse;font-size:calc(.8rem*var(--journal-scale,1));text-align:center;}
+    .journal-table th{background:#e8f4fd;color:#154360;font-weight:800;position:sticky;top:0;z-index:3;border:1px solid #ddd;padding:.55em .31em;white-space:nowrap;}
+    .journal-table td{border:1px solid #eee;padding:.16em;vertical-align:middle;height:2.66em;min-width:2.5em;max-width:3.75em;}
+    .journal-table td.sn{text-align:left;font-weight:700;background:#fffcf0;position:sticky;left:0;z-index:2;border-right:2px solid #ccc;padding-left:.63em;min-width:10.9em;font-size:1.03em;white-space:nowrap;}
     .journal-table th.sn{background:#e8f4fd;z-index:6;border-right:2px solid #ccc;left:0;top:0;vertical-align:middle;}
-    .journal-table td.avg-col{background:#f4ecf7;font-weight:800;color:var(--purple);position:sticky;right:0;border-left:2px solid #d1c4e9;min-width:46px;}
+    .journal-table td.avg-col{background:#f4ecf7;font-weight:800;color:var(--purple);position:sticky;right:0;border-left:2px solid #d1c4e9;min-width:3.6em;}
     .journal-table th.avg-col{background:#f4ecf7;color:var(--purple);position:sticky;right:0;border-left:2px solid #d1c4e9;z-index:6;top:0;vertical-align:middle;}
     .journal-table td.today-col{background:#fffde7;}
     .journal-table th.today-col{background:#fff3cd!important;color:#d35400!important;border-bottom:3px solid var(--orange)!important;}
     .journal-table tr:hover td{background:#e0f7fa!important;}
     .journal-table tr:nth-child(even) td{background:#fafbfc;}
+    /* Frozen-pane affordance (à la Sheets): soft shadow off the pinned edges so
+       it reads as "these columns float above the scrolling grid". */
+    .journal-table td.sn,.journal-table th.sn{box-shadow:2px 0 4px rgba(0,0,0,.05);}
+    .journal-table td.avg-col,.journal-table th.avg-col{box-shadow:-2px 0 4px rgba(0,0,0,.05);}
+    /* Grade cells / attendance marks inside the journal scale with the table font
+       (em) — same visual size at 100% as their global rem-based defaults. */
+    .journal-table .g-cell{min-width:2.5em;padding:.23em .39em;}
+    .journal-table .g-val{font-size:1.19em;}
+    .journal-table .g-type{font-size:.69em;}
+    .journal-table .att-absent,.journal-table .att-late{padding:.08em .31em;}
     /* ── PHASE 9: month-group header row — without this, a multi-month range just
        shows repeating bare day numbers with no indication of which month they're
        in. jt-month-row (rowspan-2 "Учень"/avg-col corners + one <th> per month,
        colspan = days shown that month) sits above jt-day-row (the existing day/
-       weekday/тип cells). Both rows are sticky, stacked via an explicit top offset
-       so jt-day-row sticks *below* jt-month-row instead of overlapping it. ── */
-    .journal-table thead tr.jt-month-row th{position:sticky;top:0;z-index:5;height:20px;padding:3px 4px;font-size:.72rem;letter-spacing:.2px;}
-    .journal-table thead tr.jt-day-row th{position:sticky;top:22px;z-index:4;}
-    .jct-type-select{font-size:.55rem;width:100%;margin-top:2px;padding:0 1px;border:1px solid #bbdefb;border-radius:4px;background:#fff;color:#154360;}
+       weekday/тип cells). Both rows are sticky; the day row's top offset (1.8em,
+       in table-font ems) equals the month row's height (2em × .9em font) at every
+       zoom level, so the two rows stack instead of overlapping — px offsets would
+       drift the moment the zoom changed. ── */
+    .journal-table thead tr.jt-month-row th{position:sticky;top:0;z-index:5;height:2em;line-height:2em;padding:0 .4em;font-size:.9em;letter-spacing:.2px;}
+    /* Corner cells (Учень / Зважений сер. бал) are rowspan=2 — they span both
+       header rows, so the month-band row's compact height/line-height must not
+       squash their multi-line labels. */
+    .journal-table thead tr.jt-month-row th.sn,
+    .journal-table thead tr.jt-month-row th.avg-col{height:auto;line-height:normal;font-size:1em;padding:.55em .31em;}
+    .journal-table thead tr.jt-day-row th{position:sticky;top:calc(1.8em - 1px);z-index:4;}
+    .jct-type-select{font-size:.69em;width:100%;margin-top:2px;padding:0 1px;border:1px solid #bbdefb;border-radius:4px;background:#fff;color:#154360;}
     /* ── GRADE EDITOR POPUP ── */
     .grade-editor-popup{position:fixed;z-index:5000;background:#fff;border-radius:13px;box-shadow:0 8px 30px rgba(0,0,0,.25);padding:13px;display:none;min-width:210px;border:2px solid var(--teal);animation:popIn .15s ease-out;}
     .grade-editor-popup input[type=text]{width:100%;padding:8px 12px;border:2px solid var(--teal);border-radius:8px;font-size:1.1rem;font-weight:800;text-align:center;color:var(--teal);margin-top:0;}
@@ -452,9 +474,8 @@
       #reactions-modal .modal-content { max-width: 540px; }
       #inbox-modal .modal-content { max-width: 720px; height: 85vh; }
       .modal-overlay { padding: 30px; }
-      /* ───── Журнал table комфортнее ───── */
-      .journal-table { font-size: .88rem; }
-      .journal-table td { height: 38px; min-width: 36px; }
+      /* ───── Журнал table комфортнее (base font up; em metrics scale with it) ───── */
+      .journal-table { font-size: calc(.88rem * var(--journal-scale, 1)); }
       /* More vertical room on desktop — screens are taller, and the modal's own
          padding already grew above, so the table can afford a bigger viewport. */
       #journal-modal .journal-wrap { max-height: 66vh; }
