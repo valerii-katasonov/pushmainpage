@@ -1225,7 +1225,13 @@
     <div style="display:flex;gap:7px;margin-bottom:9px;flex-wrap:wrap;">
       <select id="j-class-select" style="flex:1;min-width:100px;" onchange="updateJournalSubjects()"></select>
       <select id="j-subj-select" style="flex:1;min-width:100px;" onchange="renderJournalTable()"></select>
-      <input type="month" id="j-month-select" style="flex:1;min-width:100px;" onchange="renderJournalTable()">
+      <input type="month" id="j-month-select" title="Місяць початку періоду" style="flex:1;min-width:100px;" onchange="renderJournalTable()">
+      <select id="j-period-select" title="Скільки місяців показати від початкового" style="flex:1;min-width:100px;" onchange="renderJournalTable()">
+        <option value="1">1 місяць</option>
+        <option value="3">3 місяці</option>
+        <option value="6">6 місяців</option>
+        <option value="12">Рік</option>
+      </select>
     </div>
     <div id="j-mode-toggle-wrap" class="mode-toggle" style="display:none;">
       <button id="j-mode-view" class="active" onclick="setJournalMode('view')">👁 Перегляд</button>

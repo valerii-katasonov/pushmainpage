@@ -125,53 +125,82 @@ function finishJournalSubjectsRender(unique,cls,ss){
   renderJournalTable();
 }
 // ══════════ RENDER JOURNAL TABLE ══════════
+// Phase 8: journal is no longer locked to a single calendar month — the teacher/
+// director picks a start month (#j-month-select) + a period length (#j-period-select:
+// 1/3/6/12 months) and the table shows every school day across ALL those months.
+// Firebase data stays month-keyed (grades/{cls}/{yMonth}/{subj}/...), so we just
+// fetch each month in the range in parallel and merge the results client-side —
+// nothing about the underlying DB schema changes.
+function getJournalMonths(){
+  const start=document.getElementById('j-month-select').value;
+  if(!start)return[];
+  const period=parseInt(document.getElementById('j-period-select')?.value||'1')||1;
+  const [y,m]=start.split('-').map(Number);
+  const months=[];
+  for(let i=0;i<period;i++){
+    const total=(m-1)+i; const yy=y+Math.floor(total/12); const mm=(total%12)+1;
+    months.push(`${yy}-${String(mm).padStart(2,'0')}`);
+  }
+  return months;
+}
 window.renderJournalTable=async function(){
   const cls=document.getElementById('j-class-select').value;
   const subj=document.getElementById('j-subj-select').value;
-  const yMonth=document.getElementById('j-month-select').value;
+  const months=getJournalMonths();
   const table=document.getElementById('journal-table-el');
   const wAvgDiv=document.getElementById('j-weighted-avg');
-  if(!cls||!subj||!yMonth){table.innerHTML='';wAvgDiv.style.display='none';return;}
+  if(!cls||!subj||months.length===0){table.innerHTML='';wAvgDiv.style.display='none';return;}
+  if(months.length>12){showToast('⚠️ Максимальний період перегляду — 12 місяців.');return;}
   table.innerHTML='<tr><td style="padding:20px;color:#aaa;">⏳ Завантаження...</td></tr>';
-  const [y,m]=yMonth.split('-');const daysInMonth=new Date(y,m,0).getDate();
   const clsNum=getClassNum(cls);
   try{
-    const [studSnap,gradesSnap,typesSnap,attSnap,retakeSnap,colTypesSnap]=await Promise.all([
+    const [studSnap,attSnap,retakeSnap,...perMonth]=await Promise.all([
       get(child(ref(db),`students_list/${cls}`)),
-      get(child(ref(db),`grades/${cls}/${yMonth}/${subj}`)),
-      get(child(ref(db),`grade_types/${cls}/${yMonth}/${subj}`)),
       get(child(ref(db),`attendance/${cls}`)),
       get(child(ref(db),`retake_requests/${cls}/${subj}`)),
-      get(child(ref(db),`journal_column_types/${cls}/${yMonth}/${subj}`))
+      ...months.flatMap(ym=>[
+        get(child(ref(db),`grades/${cls}/${ym}/${subj}`)),
+        get(child(ref(db),`grade_types/${cls}/${ym}/${subj}`)),
+        get(child(ref(db),`journal_column_types/${cls}/${ym}/${subj}`))
+      ])
     ]);
     let students=[];if(studSnap.exists())students=Object.values(studSnap.val()).sort();
     if(students.length===0){table.innerHTML='<tr><td style="padding:20px;">Учнів немає.</td></tr>';return;}
-    const gradesData=gradesSnap.exists()?gradesSnap.val():{};
-    const typesData=typesSnap.exists()?typesSnap.val():{};
+    // Merge each month's grades/types/column-types into one flat, date-keyed object.
+    const gradesData={};const typesData={};const journalColumnTypes={};
+    months.forEach((ym,i)=>{
+      const [gradesSnap,typesSnap,colTypesSnap]=[perMonth[i*3],perMonth[i*3+1],perMonth[i*3+2]];
+      if(gradesSnap.exists())Object.assign(gradesData,gradesSnap.val());
+      if(typesSnap.exists())Object.assign(typesData,typesSnap.val());
+      if(colTypesSnap.exists())Object.assign(journalColumnTypes,colTypesSnap.val());
+    });
     const attDataAll=attSnap.exists()?attSnap.val():{};
     const retakeData=retakeSnap.exists()?retakeSnap.val():{};
-    // Phase 4b: teacher's pre-set "expected type" per date (before any grades exist)
-    const journalColumnTypes=colTypesSnap.exists()?colTypesSnap.val():{};
-    const attData={};for(let d in attDataAll)if(d.startsWith(yMonth))attData[d]=attDataAll[d];
-    // Build date columns
+    const attData={};for(let d in attDataAll)if(months.some(ym=>d.startsWith(ym)))attData[d]=attDataAll[d];
+    // Build date columns across every month in the range (each column remembers
+    // its own source month `ym`, since grade writes/reads need the *correct*
+    // Firebase month key, not just the range's start month).
     let dateCols=[];
-    for(let i=1;i<=daysInMonth;i++){
-      const ds=`${yMonth}-${String(i).padStart(2,'0')}`;
-      const dow=new Date(y,parseInt(m)-1,i).getDay();
-      if(dow===0||dow===6)continue;
-      const hasGrade=gradesData[ds]&&Object.keys(gradesData[ds]).length>0;
-      const hasAtt=attData[ds]&&Object.keys(attData[ds]).length>0;
-      const isToday=ds===localDateString;
-      if(hasGrade||hasAtt||isToday)dateCols.push({ds,day:i,dow});
-    }
-    for(let ds in gradesData)if(!dateCols.find(c=>c.ds===ds)){const[,,dd]=ds.split('-');dateCols.push({ds,day:parseInt(dd),dow:new Date(ds).getDay()});}
-    dateCols.sort((a,b)=>a.day-b.day);
+    months.forEach(ym=>{
+      const [y,m]=ym.split('-');const daysInMonth=new Date(y,m,0).getDate();
+      for(let i=1;i<=daysInMonth;i++){
+        const ds=`${ym}-${String(i).padStart(2,'0')}`;
+        const dow=new Date(y,parseInt(m)-1,i).getDay();
+        if(dow===0||dow===6)continue;
+        const hasGrade=gradesData[ds]&&Object.keys(gradesData[ds]).length>0;
+        const hasAtt=attData[ds]&&Object.keys(attData[ds]).length>0;
+        const isToday=ds===localDateString;
+        if(hasGrade||hasAtt||isToday)dateCols.push({ds,day:i,dow,ym});
+      }
+    });
+    for(let ds in gradesData)if(!dateCols.find(c=>c.ds===ds)){const[yy,mm,dd]=ds.split('-');dateCols.push({ds,day:parseInt(dd),dow:new Date(ds).getDay(),ym:`${yy}-${mm}`});}
+    dateCols.sort((a,b)=>a.ds.localeCompare(b.ds));
     dateCols=[...new Map(dateCols.map(c=>[c.ds,c])).values()];
     const canEdit=journalIsTeacher&&journalMode==='edit';
     const dayN=['Нд','Пн','Вт','Ср','Чт','Пт','Сб'];
     // Weighted type header row
     let thead='<thead><tr><th class="sn">Учень</th>';
-    dateCols.forEach(({ds,day,dow})=>{
+    dateCols.forEach(({ds,day,dow,ym})=>{
       const isToday=ds===localDateString;
       // Phase 4b: replaced the passive, grade-derived type/weight hint with an editable
       // pre-set "expected type" control (journal_column_types), used by openGradeEditor()
@@ -183,7 +212,9 @@ window.renderJournalTable=async function(){
       const weightOf=t=>(gradeTypesCache[t]&&gradeTypesCache[t].weight)??GRADE_WEIGHTS[t]??1.0;
       let typeCell;
       if(canEdit){
-        typeCell=`<br><select class="jct-type-select" onclick="event.stopPropagation();" onchange="setJournalColumnType('${cls}','${subj}','${yMonth}','${ds}',this.value)" title="Тип оцінки на цю дату">
+        // Phase 8: use this column's own source month (`ym`), not a single outer
+        // yMonth — the range can now span several Firebase month-keys at once.
+        typeCell=`<br><select class="jct-type-select" onclick="event.stopPropagation();" onchange="setJournalColumnType('${cls}','${subj}','${ym}','${ds}',this.value)" title="Тип оцінки на цю дату">
           <option value="">—</option>
           ${typeCodes.map(t=>`<option value="${t}" ${presetType===t?'selected':''}>${t} ×${weightOf(t)}</option>`).join('')}
         </select>`;
@@ -206,7 +237,7 @@ window.renderJournalTable=async function(){
       if(avg!==null){classWeightedAvg+=avg;classCount++;}
       const avgStr=avg!==null?avg.toFixed(2):'-';
       let rowHtml=`<tr><td class="sn" title="${st}">${st}</td>`;
-      dateCols.forEach(({ds})=>{
+      dateCols.forEach(({ds,ym})=>{
         const isToday=ds===localDateString;
         const attInfo=summarizeAttendanceSlots(attData[ds]&&attData[ds][st]);
         const gradeVal=(gradesData[ds]&&gradesData[ds][st])?gradesData[ds][st]:'';
@@ -216,9 +247,9 @@ window.renderJournalTable=async function(){
         let cell='';
         if(gradeVal){
           const gc=gradeClass6(gradeVal);
-          cell+=`<span class="g-cell ${gc}" onclick="handleGradeClick(event,'${cls}','${subj}','${ds}','${st}','${yMonth}','${gradeVal}','${gradeType}','${presetType}')"><span class="g-val">${dispVal}</span>${gradeType?`<span class="g-type">${gradeType}</span>`:''}</span>`;
+          cell+=`<span class="g-cell ${gc}" onclick="handleGradeClick(event,'${cls}','${subj}','${ds}','${st}','${ym}','${gradeVal}','${gradeType}','${presetType}')"><span class="g-val">${dispVal}</span>${gradeType?`<span class="g-type">${gradeType}</span>`:''}</span>`;
         } else if(canEdit){
-          cell+=`<span class="g-cell g-empty" onclick="handleGradeClick(event,'${cls}','${subj}','${ds}','${st}','${yMonth}','','','${presetType}')">＋</span>`;
+          cell+=`<span class="g-cell g-empty" onclick="handleGradeClick(event,'${cls}','${subj}','${ds}','${st}','${ym}','','','${presetType}')">＋</span>`;
         }
         if(attInfo){const ac=attInfo.status==='absent'?'att-absent':'att-late';const al=attInfo.status==='absent'?'н':'з';cell+=`<span class="${ac}" title="${attInfo.reason}">${al}</span>`;}
         rowHtml+=`<td class="${isToday?'today-col':''}">${cell}</td>`;
@@ -233,8 +264,9 @@ window.renderJournalTable=async function(){
     // Weighted avg summary
     if(classCount>0){
       const ca=(classWeightedAvg/classCount).toFixed(2);
+      const periodLabel=months.length>1?` за ${months[0]}–${months[months.length-1]}`:'';
       wAvgDiv.style.display='block';
-      wAvgDiv.innerHTML=`<b style="color:var(--purple);">📊 Середньозважений бал класу з ${subj}:</b><br>
+      wAvgDiv.innerHTML=`<b style="color:var(--purple);">📊 Середньозважений бал класу з ${subj}${periodLabel}:</b><br>
         <span style="font-size:1.6rem;font-weight:800;color:#7b1fa2;">${ca}</span>
         <span style="font-size:.8rem;color:#888;margin-left:8px;">(зважений: ДЗ×0.5, СР/ДК/ПР×1.5, К×2.0)</span>`;
     } else wAvgDiv.style.display='none';
@@ -278,8 +310,9 @@ window.exportJournalToPDF=async function(){
   if(!table||!table.innerHTML.trim()){showToast('⚠️ Немає даних для експорту!');return;}
   const cls=document.getElementById('j-class-select').value;
   const subj=document.getElementById('j-subj-select').value;
-  const ym=document.getElementById('j-month-select').value;
-  if(!cls||!subj||!ym){showToast('⚠️ Оберіть клас, предмет і місяць!');return;}
+  const months=getJournalMonths();
+  if(!cls||!subj||months.length===0){showToast('⚠️ Оберіть клас, предмет і місяць!');return;}
+  const periodStr=months.length>1?`${months[0]}–${months[months.length-1]}`:months[0];
   if(typeof html2canvas==='undefined'||!window.jspdf){showToast('⚠️ Бібліотеки експорту ще завантажуються, спробуйте ще раз.');return;}
   const btn=document.getElementById('btn-export-journal-pdf');
   if(btn){btn.disabled=true;btn.innerText='⏳ Експорт...';}
@@ -297,9 +330,9 @@ window.exportJournalToPDF=async function(){
     let renderW=pageW-40,renderH=renderW/imgRatio;
     if(renderH>pageH-60){renderH=pageH-60;renderW=renderH*imgRatio;}
     pdf.setFontSize(12);
-    pdf.text(`${cls.replace('class_','')} клас — ${subj} — ${ym}`,20,25);
+    pdf.text(`${cls.replace('class_','')} клас — ${subj} — ${periodStr}`,20,25);
     pdf.addImage(imgData,'PNG',20,35,renderW,renderH);
-    pdf.save(`journal_${cls}_${subj}_${ym}.pdf`);
+    pdf.save(`journal_${cls}_${subj}_${periodStr}.pdf`);
   }catch(e){alert('Помилка експорту: '+e.message);}
   finally{
     if(savedZoom!==100){journalZoomLevel=savedZoom;applyJournalZoom();}
