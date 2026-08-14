@@ -364,7 +364,22 @@ function initUserSession(){
     document.getElementById('t-topic-card').style.display=isArt?'none':'block';
     const cs=document.getElementById('t-class-selector');cs.innerHTML='';
     Object.keys(teacherAccessMatrix).forEach(c=>cs.innerHTML+=`<option value="${c}">${c.replace('class_','')} Клас</option>`);
-    if(cs.options.length===0){if(isArt)cs.innerHTML='<option value="class_1">1 Клас</option>';else{alert("Класи не призначено.");return;}}
+    if(cs.options.length===0){
+      if(isArt)cs.innerHTML='<option value="class_1">1 Клас</option>';
+      else{
+        // No teacher_access entries at all. Previously this fired a bare
+        // "Класи не призначено." alert and returned, leaving a blank screen with
+        // no explanation of what to do. Now the screen itself explains it.
+        cs.innerHTML='<option value="" disabled>Класи не призначено</option>';
+        const banner=document.createElement('div');
+        banner.className='data-card';
+        banner.style.cssText='border-left-color:var(--orange);background:#fff8e1;';
+        banner.innerHTML='<h4 style="margin-top:0;color:#e65100;">⚠️ Класи ще не призначено</h4><p style="font-size:.85rem;color:#555;margin:0;">Директор має надати вам доступ до класу (Кабінет директора → «Матриця доступу вчителів»). Якщо ви класний керівник — доступ призначається автоматично при призначенні на клас.</p>';
+        const screen=document.getElementById('teacher-screen');
+        screen.insertBefore(banner,screen.querySelector('.screen-section'));
+        return;
+      }
+    }
     window.handleClassChange();
   }
   else if(r==='student'){
