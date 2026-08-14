@@ -814,6 +814,47 @@
       </details>
     </section>
 
+    <section class="screen-section">
+      <h3>🎓 Переведення учнів</h3>
+      <!-- Переведення одного учня (перехід у паралель / інший клас серед року) -->
+      <details style="margin-bottom:12px;background:#f9f4ff;padding:14px;border-radius:12px;border:1px solid #ce93d8;" ontoggle="if(this.open)loadTransferClasses()">
+        <summary style="font-weight:700;cursor:pointer;color:#7b1fa2;font-size:.95rem;">↔️ Перевести учня в інший клас</summary>
+        <div style="margin-top:13px;">
+          <p style="font-size:.83rem;color:#555;">Оцінки та відвідуваність за попередній клас залишаються в архіві того класу — переноситься лише сам учень і прив'язки батьків.</p>
+          <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:8px;">
+            <select id="tr-from-class" onchange="loadTransferStudents()" style="flex:1;min-width:120px;margin-top:0;border:2px solid #ce93d8;">
+              <option value="">Із класу...</option>
+              <option value="class_1">1 Клас</option><option value="class_2">2 Клас</option><option value="class_3">3 Клас</option>
+              <option value="class_4">4 Клас</option><option value="class_5">5 Клас</option><option value="class_6">6 Клас</option>
+              <option value="class_7">7 Клас</option><option value="class_8">8 Клас</option><option value="class_9">9 Клас</option>
+              <option value="class_10">10 Клас</option><option value="class_11">11 Клас</option>
+            </select>
+            <select id="tr-student" style="flex:2;min-width:150px;margin-top:0;border:2px solid #ce93d8;"><option value="">Спочатку клас</option></select>
+            <select id="tr-to-class" style="flex:1;min-width:120px;margin-top:0;border:2px solid #ce93d8;">
+              <option value="">У клас...</option>
+              <option value="class_1">1 Клас</option><option value="class_2">2 Клас</option><option value="class_3">3 Клас</option>
+              <option value="class_4">4 Клас</option><option value="class_5">5 Клас</option><option value="class_6">6 Клас</option>
+              <option value="class_7">7 Клас</option><option value="class_8">8 Клас</option><option value="class_9">9 Клас</option>
+              <option value="class_10">10 Клас</option><option value="class_11">11 Клас</option>
+            </select>
+          </div>
+          <button onclick="transferStudent()" style="background:var(--purple);color:#fff;padding:11px;margin-top:10px;">↔️ Перевести учня</button>
+          <div id="tr-result" style="margin-top:10px;"></div>
+        </div>
+      </details>
+      <!-- Річний перехід усієї школи -->
+      <details style="background:#e8f5e9;padding:14px;border-radius:12px;border:1px solid #a5d6a7;">
+        <summary style="font-weight:700;cursor:pointer;color:#1b5e20;font-size:.95rem;">🎓 Перевести школу на наступний навчальний рік</summary>
+        <div style="margin-top:13px;">
+          <div style="background:#fff3cd;border:1px solid #ffc107;border-radius:10px;padding:10px 14px;font-size:.83rem;color:#856404;">
+            ⚠️ <b>Незворотна операція.</b> Усі учні переходять на клас вище (1→2, 2→3 … 10→11), а 11 клас випускається в архів. Оцінки, відвідуваність і коментарі залишаються в архіві своїх класів — переносяться лише списки учнів і прив'язки акаунтів.
+          </div>
+          <button onclick="previewYearRollover()" style="background:#1b5e20;color:#fff;padding:11px;margin-top:10px;">🔍 Переглянути зміни</button>
+          <div id="yr-preview" style="margin-top:12px;"></div>
+        </div>
+      </details>
+    </section>
+
     <section class="screen-section half">
       <h3>📅 Навчальний рік</h3>
       <!-- PHASE 1: Академічний рік -->
