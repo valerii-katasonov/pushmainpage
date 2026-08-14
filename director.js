@@ -7,7 +7,7 @@
 // header for why.)
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, push, remove, update } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, showToast, getClassNum, displayGrade, gradeClass6, teacherAccessMatrix, getWeekDates, formatAttendanceSlotLabel, gradeTypesCache, loadGradeTypesCache, calculateStudentWeightedAvg, escJs } from './common.js';
+import { db, showToast, getClassNum, displayGrade, gradeClass6, teacherAccessMatrix, getWeekDates, formatAttendanceSlotLabel, gradeTypesCache, loadGradeTypesCache, calculateStudentWeightedAvg, escJs, escHtml, localDateString } from './common.js';
 
 let directorSkillsTemp=[];
 
@@ -283,4 +283,170 @@ window.removeGradeType=async function(code){
   await remove(ref(db,`grade_type_defs/${code}`));
   await loadGradeTypesCache();renderGradeTypesTable();
   showToast(`🗑️ Тип "${code}" видалено`);
+};
+// ═══════════════════════════════════════════════════════════════
+// CLASS MIGRATION — single-student transfer + end-of-year rollover
+// ═══════════════════════════════════════════════════════════════
+// DESIGN NOTE (history): grades/attendance/comments/etc. are keyed by class
+// (grades/{cls}/{yMonth}/...). Moving a student does NOT rewrite that history —
+// records made while they were in class_2 stay under class_2, which is
+// historically correct and keeps every past report/journal intact. Only the
+// "who is where NOW" pointers move: students_list, users/{uid}.class and the
+// parent_links/student_links records that seed those accounts.
+//
+// Every write below is idempotent-ish and ordered so a partial failure leaves
+// the data readable (student may briefly appear in both lists rather than in
+// neither).
+
+// Shared: find the students_list key holding a given name in a class.
+async function findStudentKey(cls,name){
+  const snap=await get(child(ref(db),`students_list/${cls}`));
+  if(!snap.exists())return null;
+  const d=snap.val();
+  for(let k in d)if(d[k]===name)return k;
+  return null;
+}
+// Shared: repoint every account/link that references this student to a new class.
+// Returns a list of human-readable changes for the confirmation/result output.
+async function repointStudentAccounts(name,fromCls,toCls){
+  const changes=[];
+  // users/{uid}: the student's own account AND every parent account linked to them
+  const us=await get(ref(db,'users'));
+  if(us.exists()){
+    const u=us.val();
+    for(let uid in u){
+      if(u[uid].studentName===name&&u[uid].class===fromCls){
+        await update(ref(db,`users/${uid}`),{class:toCls});
+        changes.push(`${u[uid].role==='parent'?'батьки':'учень'} ${u[uid].email||uid}`);
+      }
+    }
+  }
+  // parent_links / student_links keep a class too — they seed users/{uid} on a
+  // first login, so a stale class here would silently undo the migration for any
+  // parent who hasn't registered yet.
+  for(const branch of ['parent_links','student_links']){
+    const ls=await get(ref(db,branch));
+    if(!ls.exists())continue;
+    const l=ls.val();
+    for(let se in l){
+      const v=l[se];
+      if(typeof v==='object'&&v.studentName===name&&v.class===fromCls){
+        await update(ref(db,`${branch}/${se}`),{class:toCls});
+        changes.push(`${branch==='parent_links'?'прив\'язка батьків':'прив\'язка учня'} ${se.replace(/_/g,'.')}`);
+      }
+    }
+  }
+  return changes;
+}
+// ── Single-student transfer ──
+window.loadTransferClasses=function(){
+  const sel=document.getElementById('tr-student');
+  if(sel)sel.innerHTML='<option value="">Спочатку клас</option>';
+};
+window.loadTransferStudents=async function(){
+  const cls=document.getElementById('tr-from-class').value;
+  const sel=document.getElementById('tr-student');
+  if(!cls){sel.innerHTML='<option value="">Спочатку клас</option>';return;}
+  sel.innerHTML='<option value="">Завантаження...</option>';
+  const snap=await get(child(ref(db),`students_list/${cls}`));
+  sel.innerHTML='<option value="">Учень...</option>';
+  if(snap.exists())Object.values(snap.val()).sort().forEach(st=>{const o=document.createElement('option');o.value=st;o.innerText=st;sel.appendChild(o);});
+  else sel.innerHTML='<option value="" disabled>Учнів немає</option>';
+};
+window.transferStudent=async function(){
+  const fromCls=document.getElementById('tr-from-class').value;
+  const toCls=document.getElementById('tr-to-class').value;
+  const name=document.getElementById('tr-student').value;
+  const out=document.getElementById('tr-result');
+  if(!fromCls||!toCls||!name)return alert('Оберіть клас, учня та клас призначення!');
+  if(fromCls===toCls)return alert('Класи збігаються — переводити нікуди.');
+  if(!confirm(`Перевести ${name} з ${fromCls.replace('class_','')} у ${toCls.replace('class_','')} клас?\n\nОцінки та відвідуваність залишаться в архіві ${fromCls.replace('class_','')} класу.`))return;
+  out.innerHTML='<p class="empty-msg">⏳ Переведення...</p>';
+  try{
+    const key=await findStudentKey(fromCls,name);
+    if(!key)throw new Error('Учня не знайдено у списку класу.');
+    // Add to the destination first, remove from the source second — if the second
+    // write fails the student is duplicated (visible, fixable) rather than lost.
+    await push(ref(db,`students_list/${toCls}`),name);
+    await remove(ref(db,`students_list/${fromCls}/${key}`));
+    const changes=await repointStudentAccounts(name,fromCls,toCls);
+    await push(ref(db,'migration_log'),{type:'transfer',student:name,from:fromCls,to:toCls,at:localDateString,by:'director'});
+    out.innerHTML=`<div class="data-card" style="border-left-color:var(--green);background:#f0fff4;margin-top:0;"><b style="color:var(--green);">✅ ${escHtml(name)} → ${toCls.replace('class_','')} клас</b><br><span style="font-size:.8rem;color:#666;">Оновлено: ${changes.length?escHtml(changes.join(', ')):'лише список класу (акаунтів ще немає)'}</span></div>`;
+    showToast(`✅ ${name} переведено у ${toCls.replace('class_','')} клас`);
+    loadTransferStudents();
+  }catch(e){out.innerHTML=`<p style="color:red;font-size:.85rem;">Помилка: ${escHtml(e.message)}</p>`;}
+};
+// ── End-of-year rollover ──
+// Preview first (nothing is written), then an explicit typed confirmation.
+window.previewYearRollover=async function(){
+  const box=document.getElementById('yr-preview');
+  box.innerHTML='<p class="empty-msg">⏳ Аналіз...</p>';
+  try{
+    const snap=await get(ref(db,'students_list'));
+    const lists=snap.exists()?snap.val():{};
+    let rows='';let total=0;let graduating=0;
+    // Show 11 first (graduating), then 10→11 … 1→2
+    const grads=lists['class_11']?Object.values(lists['class_11']):[];
+    graduating=grads.length;
+    if(graduating>0)rows+=`<div style="background:#fdecea;border:1px solid #f5c6cb;border-radius:8px;padding:9px 12px;margin-bottom:6px;font-size:.85rem;"><b style="color:var(--red);">🎓 11 клас → випуск (архів)</b><br><span style="color:#666;">${escHtml(grads.sort().join(', '))}</span></div>`;
+    for(let i=10;i>=1;i--){
+      const from=`class_${i}`,to=`class_${i+1}`;
+      const st=lists[from]?Object.values(lists[from]):[];
+      if(st.length===0)continue;
+      total+=st.length;
+      rows+=`<div style="background:#fff;border:1px solid #e0e0e0;border-radius:8px;padding:9px 12px;margin-bottom:6px;font-size:.85rem;"><b>${i} клас → ${i+1} клас</b> <span style="color:#888;">(${st.length})</span><br><span style="color:#666;">${escHtml(st.sort().join(', '))}</span></div>`;
+    }
+    if(!rows){box.innerHTML='<p class="empty-msg">Немає учнів для переведення.</p>';return;}
+    box.innerHTML=`<div style="max-height:280px;overflow-y:auto;margin-bottom:10px;">${rows}</div>
+      <div style="background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:10px 12px;font-size:.83rem;color:#856404;">
+        Буде переведено <b>${total}</b> учнів, випущено <b>${graduating}</b>.<br>
+        Для підтвердження введіть слово <b>ПЕРЕВЕСТИ</b>:
+      </div>
+      <div style="display:flex;gap:7px;margin-top:8px;">
+        <input type="text" id="yr-confirm-input" placeholder="ПЕРЕВЕСТИ" style="flex:2;margin-top:0;text-align:center;font-weight:800;letter-spacing:1px;">
+        <button onclick="runYearRollover()" style="flex:1;margin-top:0;background:var(--red);color:#fff;">🎓 Виконати</button>
+      </div>
+      <div id="yr-result" style="margin-top:10px;"></div>`;
+  }catch(e){box.innerHTML=`<p style="color:red;font-size:.85rem;">Помилка: ${escHtml(e.message)}</p>`;}
+};
+window.runYearRollover=async function(){
+  const input=document.getElementById('yr-confirm-input');
+  const out=document.getElementById('yr-result');
+  if(!input||input.value.trim().toUpperCase()!=='ПЕРЕВЕСТИ')return alert('Введіть слово ПЕРЕВЕСТИ для підтвердження.');
+  out.innerHTML='<p class="empty-msg">⏳ Виконується переведення...</p>';
+  try{
+    const snap=await get(ref(db,'students_list'));
+    const lists=snap.exists()?snap.val():{};
+    const year=(document.getElementById('global-date').value||localDateString).split('-')[0];
+    let moved=0,graduated=0;
+    // 1) Graduate class 11 FIRST — otherwise the 10→11 step would merge into it.
+    if(lists['class_11']){
+      const grads=Object.values(lists['class_11']);
+      for(const name of grads){
+        await push(ref(db,`graduates/${year}`),{name,graduatedFrom:'class_11',at:localDateString});
+        // Mark accounts inactive rather than deleting them: history stays
+        // attributable, and a graduate can't log in to a class they left.
+        const us=await get(ref(db,'users'));
+        if(us.exists()){const u=us.val();for(let uid in u)if(u[uid].studentName===name&&u[uid].class==='class_11')await update(ref(db,`users/${uid}`),{class:null,graduated:true,graduatedYear:year});}
+        graduated++;
+      }
+      await remove(ref(db,'students_list/class_11'));
+    }
+    // 2) Walk DOWNWARD (10→11, 9→10 … 1→2). Order matters: going upward would
+    //    move class_1 into class_2 and then move those same students again.
+    for(let i=10;i>=1;i--){
+      const from=`class_${i}`,to=`class_${i+1}`;
+      if(!lists[from])continue;
+      const names=Object.values(lists[from]);
+      for(const name of names){
+        await push(ref(db,`students_list/${to}`),name);
+        await repointStudentAccounts(name,from,to);
+        moved++;
+      }
+      await remove(ref(db,`students_list/${from}`));
+    }
+    await push(ref(db,'migration_log'),{type:'year_rollover',year,moved,graduated,at:localDateString,by:'director'});
+    out.innerHTML=`<div class="data-card" style="border-left-color:var(--green);background:#f0fff4;margin-top:0;"><b style="color:var(--green);">✅ Переведення завершено</b><br><span style="font-size:.85rem;color:#555;">Переведено: <b>${moved}</b> · Випущено: <b>${graduated}</b></span><br><span style="font-size:.78rem;color:#888;">Оцінки та відвідуваність залишились в архіві своїх класів. Не забудьте перепризначити класних керівників.</span></div>`;
+    showToast(`✅ Переведено ${moved} учнів, випущено ${graduated}`);
+  }catch(e){out.innerHTML=`<p style="color:red;font-size:.85rem;">Помилка: ${escHtml(e.message)}</p>`;}
 };
