@@ -6,7 +6,7 @@
 // (Class Teacher Assignment lives in curriculum.js — see that file's
 // header for why.)
 // ═══════════════════════════════════════════════════════════════
-import { ref, set, get, child, push, remove } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+import { ref, set, get, child, push, remove, update } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { db, showToast, getClassNum, displayGrade, gradeClass6, teacherAccessMatrix, getWeekDates, formatAttendanceSlotLabel, gradeTypesCache, loadGradeTypesCache, calculateStudentWeightedAvg, escJs } from './common.js';
 
 let directorSkillsTemp=[];
@@ -142,7 +142,34 @@ export async function loadTeachersListForDirector(){const s=document.getElementB
 window.loadTeachersListForDirector=loadTeachersListForDirector;
 window.loadDirectorMatrixSubjects=function(){const cls=document.getElementById('d-acc-class').value;const ss=document.getElementById('d-acc-subjects');if(!cls){ss.innerHTML='<option disabled>Оберіть клас...</option>';return;}ss.innerHTML='<option disabled>Завантаження...</option>';window.loadScheduleScript(cls,()=>{let u=new Set();if(window.schedule)['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'].forEach(d=>window.getTodayLessonsFlattened(d).forEach(i=>{const s=window.getValidSubjectName(i);if(s)u.add(s);}));ss.innerHTML='<option value="Всі предмети" style="font-weight:700;color:#d35400;">🌟 Всі предмети</option>';if(u.size>0)[...u].sort().forEach(subj=>ss.innerHTML+=`<option value="${subj}">${subj}</option>`);else ss.innerHTML='<option disabled>Розклад не знайдено</option>';});};
 window.grantTeacherAccess=function(){const se=document.getElementById('d-acc-email-select').value;const cls=document.getElementById('d-acc-class').value;const opts=document.getElementById('d-acc-subjects').selectedOptions;const subjs=Array.from(opts).map(o=>o.value);if(!se||!cls||subjs.length===0)return alert('Заповніть усі поля!');set(ref(db,`pre_approved_roles/${se}`),'teacher').catch(()=>{});set(ref(db,`teacher_access/${se}/${cls}`),subjs).then(()=>{alert('✅ Доступ збережено!');}).catch(e=>alert("Помилка: "+e.message));};
-window.grantStaffRole=function(){const e=document.getElementById('new-staff-email').value.trim().replace(/\./g,'_');const r=document.getElementById('new-staff-role').value;if(!e)return alert("Введіть Email!");set(ref(db,`pre_approved_roles/${e}`),r).then(()=>alert('✅ Доступ надано!'));};
+window.grantStaffRole=async function(){
+  const raw=document.getElementById('new-staff-email').value.trim().toLowerCase();
+  const r=document.getElementById('new-staff-role').value;
+  if(!raw)return alert("Введіть Email!");
+  const se=raw.replace(/\./g,'_');
+  try{
+    await set(ref(db,`pre_approved_roles/${se}`),r);
+    // pre_approved_roles is only consulted on a user's FIRST-ever login (the auth
+    // flow in common.js reads it only when users/{uid} doesn't exist yet). If this
+    // person has already logged in before, their users/{uid} record — with the OLD
+    // role — already exists and would win forever. So also find any existing
+    // account with this email and update its live role directly.
+    let updatedExisting=false;
+    const us=await get(ref(db,'users'));
+    if(us.exists()){
+      const u=us.val();
+      for(let uid in u){
+        if((u[uid].email||'').toLowerCase()===raw){
+          await update(ref(db,`users/${uid}`),{role:r});
+          updatedExisting=true;
+        }
+      }
+    }
+    alert(updatedExisting
+      ?'✅ Роль оновлено! У користувача вже був акаунт — нова роль запрацює після його наступного входу.'
+      :'✅ Доступ надано! Роль застосується при першому вході.');
+  }catch(e){alert('Помилка: '+e.message);}
+};
 // ══════════ DIRECTOR STATS ══════════
 window.updateDirectorStatSubjects=function(){const cls=document.getElementById('d-stat-class').value;const ss=document.getElementById('d-stat-subj');if(!cls){ss.innerHTML='<option>Оберіть клас</option>';document.getElementById('d-stat-results').innerHTML='<p class="empty-msg">Оберіть клас та предмет.</p>';return;}ss.innerHTML='<option>Завантаження...</option>';get(child(ref(db),`grades/${cls}`)).then(snap=>{let u=new Set();if(snap.exists()){const d=snap.val();for(let m in d)for(let s in d[m])u.add(s);}ss.innerHTML='<option value="">-- Предмет --</option>';if(u.size>0)[...u].sort().forEach(s=>ss.innerHTML+=`<option value="${s}">${s}</option>`);else ss.innerHTML='<option disabled>Оцінок немає</option>';});};
 window.renderDirectorStats=async function(){const cls=document.getElementById('d-stat-class').value;const subj=document.getElementById('d-stat-subj').value;const rd=document.getElementById('d-stat-results');if(!cls||!subj){rd.innerHTML='<p class="empty-msg">Оберіть клас та предмет.</p>';return;}rd.innerHTML='<p>⏳ Обчислення...</p>';try{const [ss,gs,ts]=await Promise.all([get(child(ref(db),`students_list/${cls}`)),get(child(ref(db),`grades/${cls}`)),get(child(ref(db),`grade_types/${cls}`))]);let stList=[];if(ss.exists())stList=Object.values(ss.val()).sort();if(stList.length===0){rd.innerHTML='<p class="empty-msg">Немає учнів.</p>';return;}const gd=gs.exists()?gs.val():{};const td=ts.exists()?ts.val():{};let stats={};stList.forEach(st=>stats[st]={grades:{},types:{}});for(let m in gd)if(gd[m][subj])for(let date in gd[m][subj])for(let st in gd[m][subj][date])if(stats[st]){stats[st].grades[`${m}_${date}`]=gd[m][subj][date][st];const tp=td[m]?.[subj]?.[date]?.[st];if(tp)stats[st].types[`${m}_${date}`]=tp;}
