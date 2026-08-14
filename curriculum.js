@@ -7,7 +7,7 @@
 // physically grouped in the original script).
 // XLSX comes from the CDN <script> tag already in <head> (global).
 // ═══════════════════════════════════════════════════════════════
-import { ref, set, get } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+import { ref, set, get, update } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { db, auth, getActiveClass, currentUserData, showToast, localDateString } from './common.js';
 
 let parsedCurriculum=null;        // після парсингу xlsx
@@ -324,12 +324,48 @@ window.assignClassTeacher=async function(){
   if(!cls||!teacherSE)return alert("Оберіть клас та вчителя!");
   const teacher=window.globalTeachersList.find(t=>t.safeEmail===teacherSE);
   if(!teacher)return alert("Вчителя не знайдено!");
+  // Who held the post before — needed to demote them below.
+  const prevSnap=await get(ref(db,`class_teachers/${cls}`));
+  const prevEmail=prevSnap.exists()?(prevSnap.val().teacherEmail||''):'';
   await set(ref(db,`class_teachers/${cls}`),{
     teacherEmail:teacher.email,
     teacherName:teacher.name,
     assignedAt:localDateString,
     assignedBy:auth.currentUser.uid
   });
+  // Assigning the post used to write ONLY this record — the teacher got no
+  // teacher_access entry for the class and kept their old role, so on their next
+  // login teacherAccessMatrix was empty and initUserSession bailed out with
+  // "Класи не призначено." on a blank screen. A homeroom teacher must actually
+  // have access to their own class, so grant it (only if they have nothing for
+  // this class yet — never overwrite a narrower, deliberately-set subject list).
+  const accSnap=await get(ref(db,`teacher_access/${teacherSE}/${cls}`));
+  if(!accSnap.exists())await set(ref(db,`teacher_access/${teacherSE}/${cls}`),["Всі предмети"]);
+  // Promote a plain teacher to class_teacher (both in pre_approved_roles, which
+  // seeds first logins, and in any existing users/{uid} record, which is what an
+  // already-registered account actually reads). Specialist roles
+  // (art_school_teacher / music_teacher / director) are left untouched.
+  await set(ref(db,`pre_approved_roles/${teacherSE}`),'class_teacher');
+  const usersSnap=await get(ref(db,'users'));
+  if(usersSnap.exists()){
+    const u=usersSnap.val();
+    for(let uid in u){
+      const email=(u[uid].email||'').toLowerCase();
+      if(email===teacher.email.toLowerCase()&&u[uid].role==='teacher'){
+        await update(ref(db,`users/${uid}`),{role:'class_teacher'});
+      }
+      // Demote the previous holder back to plain teacher — but only if they're
+      // not still class teacher of some OTHER class.
+      if(prevEmail&&email===prevEmail.toLowerCase()&&email!==teacher.email.toLowerCase()&&u[uid].role==='class_teacher'){
+        const ctSnap=await get(ref(db,'class_teachers'));
+        const stillCT=ctSnap.exists()&&Object.values(ctSnap.val()).some(v=>(v.teacherEmail||'').toLowerCase()===email);
+        if(!stillCT){
+          await update(ref(db,`users/${uid}`),{role:'teacher'});
+          await set(ref(db,`pre_approved_roles/${prevEmail.replace(/\./g,'_')}`),'teacher');
+        }
+      }
+    }
+  }
   showToast(`✅ ${teacher.name} призначений кл. керівником ${cls.replace('class_','')} класу!`);
   loadClassTeacherInfo();
 };
