@@ -124,7 +124,10 @@ window.openJournalModal=function(role){
   if(journalIsTeacher){document.getElementById('j-mode-view').classList.toggle('active',journalMode==='view');document.getElementById('j-mode-edit').classList.toggle('active',journalMode==='edit');}
   // Toggle the whole label+select field (#j-class-field), not just the <select> —
   // otherwise non-directors were left with a "Клас" label floating over nothing.
-  if(role==='director'){cf.style.display='block';cs.innerHTML='<option value="">Оберіть клас...</option>';for(let i=1;i<=11;i++)cs.innerHTML+=`<option value="class_${i}">${i} Клас</option>`;document.getElementById('j-subj-select').innerHTML='<option value="">Спочатку клас</option>';document.getElementById('journal-table-el').innerHTML='';}
+  // director AND administrator both browse any class (the administrator/secretary
+  // in strictly read-only mode: journalIsTeacher stays false, so setJournalMode's
+  // edit branch and every handleGradeClick are inert for them).
+  if(role==='director'||role==='administrator'){cf.style.display='block';cs.innerHTML='<option value="">Оберіть клас...</option>';for(let i=1;i<=11;i++)cs.innerHTML+=`<option value="class_${i}">${i} Клас</option>`;document.getElementById('j-subj-select').innerHTML='<option value="">Спочатку клас</option>';document.getElementById('journal-table-el').innerHTML='';}
   else{cf.style.display='none';cs.innerHTML=`<option value="${getActiveClass()}">${getActiveClass()}</option>`;updateJournalSubjects();}
 };
 window.closeJournalModal=function(){document.getElementById('journal-modal').style.display='none';};
