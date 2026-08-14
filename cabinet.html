@@ -577,13 +577,82 @@
     <h2 style="color:#2c3e50;">🛡️ Панель Адміністратора</h2>
     <!-- Нові картки адміністратора додавайте новими <section class="screen-section">
          (додайте клас "half" для пів-ширини на десктопі) — grid підхопить їх автоматично. -->
+
     <section class="screen-section">
-      <h3>🔔 Сповіщення</h3>
-      <div class="data-card" style="border-left-color:var(--red);background:#fdfbfb;">
-        <h4 id="a-att-header" style="margin-top:0;color:var(--red);">🚨 Відсутні та Запізнення</h4>
-        <ul id="a-unified-att-list" class="list-dash" style="padding-left:0;list-style:none;"><li class="empty-msg">Завантаження...</li></ul>
+      <h3>🚀 Швидкі дії</h3>
+      <div style="display:flex;gap:9px;flex-wrap:wrap;">
+        <button onclick="openVisualMatrixModal('live')" style="flex:1;min-width:160px;background:linear-gradient(135deg,#1abc9c,#16a085);color:#fff;margin-top:0;font-size:.95rem;padding:11px;">🗓️ Розклад</button>
+        <button onclick="openJournalModal('administrator')" style="flex:1;min-width:160px;background:linear-gradient(135deg,var(--purple),#9b59b6);color:#fff;margin-top:0;font-size:.95rem;padding:11px;">📖 Журнал</button>
+        <button onclick="openChatModal('administrator')" style="flex:1;min-width:160px;background:linear-gradient(135deg,#9b59b6,#8e44ad);color:#fff;margin-top:0;font-size:.95rem;padding:11px;">💬 Чат з батьками</button>
       </div>
     </section>
+
+    <section class="screen-section">
+      <h3>📋 Відвідуваність</h3>
+      <div class="data-card" style="border-left-color:var(--red);background:#fdfbfb;margin-top:0;">
+        <h4 id="a-att-header" style="margin-top:0;color:var(--red);">🚨 Відсутні та Запізнення</h4>
+        <ul id="a-unified-att-list" class="list-dash" style="padding-left:0;list-style:none;"><li class="empty-msg">Завантаження...</li></ul>
+        <!-- Секретар приймає дзвінки від батьків і відмічає учнів будь-якого класу -->
+        <div id="a-mark-absent-block" style="margin-top:13px;display:flex;gap:8px;flex-wrap:wrap;border-top:1px dashed #f5b7b1;padding-top:13px;">
+          <select id="a-mark-class" onchange="loadAdminStudentsForClass()" style="flex:1;min-width:120px;margin-top:0;border:1px solid #f5b7b1;">
+            <option value="">Клас...</option>
+            <option value="class_1">1 Клас</option><option value="class_2">2 Клас</option><option value="class_3">3 Клас</option>
+            <option value="class_4">4 Клас</option><option value="class_5">5 Клас</option><option value="class_6">6 Клас</option>
+            <option value="class_7">7 Клас</option><option value="class_8">8 Клас</option><option value="class_9">9 Клас</option>
+            <option value="class_10">10 Клас</option><option value="class_11">11 Клас</option>
+          </select>
+          <select id="a-mark-student" style="flex:1;min-width:130px;margin-top:0;border:1px solid #f5b7b1;"><option value="">Спочатку клас</option></select>
+          <select id="a-mark-reason" style="flex:1;min-width:130px;margin-top:0;border:1px solid #f5b7b1;">
+            <option value="Відмічено секретарем">Без причини</option><option value="через хворобу">Хвороба</option>
+            <option value="за сімейними обставинами">Сімейні обставини</option><option value="запізнення">Запізнення</option>
+          </select>
+          <button onclick="adminMarkAbsent()" style="margin-top:0;background:var(--red);color:#fff;width:auto;padding:9px 13px;font-size:.85rem;">Відмітити</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="screen-section half">
+      <h3>📊 Огляд</h3>
+      <div style="display:flex;gap:9px;">
+        <div style="flex:1;background:#e0f7fa;padding:13px;border-radius:12px;text-align:center;">
+          <h4 style="margin:0;color:#00838f;font-size:.82rem;">📚 ДЗ (сьогодні)</h4>
+          <p id="a-hw-counter" style="font-size:1.7rem;font-weight:800;color:#00acc1;margin:4px 0;">0</p>
+        </div>
+        <div style="flex:1;background:#fce4ec;padding:13px;border-radius:12px;text-align:center;">
+          <h4 style="margin:0;color:#ad1457;font-size:.82rem;">💬 Коментарів</h4>
+          <p id="a-com-counter" style="font-size:1.7rem;font-weight:800;color:#d81b60;margin:4px 0;">0</p>
+        </div>
+      </div>
+      <div style="background:#fff3e0;padding:13px;border-radius:12px;text-align:center;margin-top:12px;">
+        <h4 style="margin:0;color:#e65100;font-size:.88rem;">🗓️ Статистика тижня</h4>
+        <div style="display:flex;justify-content:space-around;margin-top:9px;">
+          <div><p id="a-week-late" style="font-size:1.4rem;font-weight:800;color:var(--orange);margin:0;">0</p><span style="font-size:.68rem;color:#888;">запізнень</span></div>
+          <div><p id="a-week-absent" style="font-size:1.4rem;font-weight:800;color:#c0392b;margin:0;">0</p><span style="font-size:.68rem;color:#888;">відсутніх</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="screen-section half">
+      <h3>📚 Довідники</h3>
+      <details style="margin-bottom:12px;background:#e8eaf6;padding:14px;border-radius:12px;border:1px solid #9fa8da;" ontoggle="if(this.open)loadAdminBellSchedule()">
+        <summary style="font-weight:700;cursor:pointer;color:#283593;font-size:.95rem;">🔔 Розклад дзвінків</summary>
+        <div style="margin-top:13px;">
+          <select id="a-bell-class" onchange="loadAdminBellSchedule()" style="border:2px solid #7986cb;">
+            <option value="">-- Оберіть клас --</option>
+            <option value="class_1">1 Клас</option><option value="class_2">2 Клас</option><option value="class_3">3 Клас</option>
+            <option value="class_4">4 Клас</option><option value="class_5">5 Клас</option><option value="class_6">6 Клас</option>
+            <option value="class_7">7 Клас</option><option value="class_8">8 Клас</option><option value="class_9">9 Клас</option>
+            <option value="class_10">10 Клас</option><option value="class_11">11 Клас</option>
+          </select>
+          <div id="a-bell-view" style="margin-top:10px;"><p class="empty-msg">Оберіть клас.</p></div>
+        </div>
+      </details>
+      <details style="background:#fff8e1;padding:14px;border-radius:12px;border:1px solid #ffe0b2;" ontoggle="if(this.open)loadAdminAcademicYear()">
+        <summary style="font-weight:700;cursor:pointer;color:#e65100;font-size:.95rem;">📅 Навчальний рік</summary>
+        <div id="a-academic-view" style="margin-top:13px;"><p class="empty-msg">Завантаження...</p></div>
+      </details>
+    </section>
+
     <button class="btn-logout" onclick="logoutUser()">Вийти</button>
   </div>
   <!-- DIRECTOR -->
@@ -717,7 +786,7 @@
           <select id="new-staff-role" style="margin-top:8px;">
             <option value="teacher">Вчитель</option><option value="art_school_teacher">Вчитель школи мистецтв</option>
             <option value="class_teacher">🎓 Класний керівник</option>
-            <option value="director">Директор</option><option value="administrator">Адміністратор</option>
+            <option value="director">Директор</option><option value="administrator">🛡️ Секретар (Адміністратор)</option>
           </select>
           <button style="background:#c0392b;padding:8px;margin-top:9px;color:#fff;" onclick="grantStaffRole()">Надати доступ</button>
         </div>
