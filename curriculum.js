@@ -8,7 +8,7 @@
 // XLSX comes from the CDN <script> tag already in <head> (global).
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, update } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, auth, getActiveClass, currentUserData, showToast, localDateString } from './common.js';
+import { db, auth, getActiveClass, currentUserData, showToast, localDateString, escHtml } from './common.js';
 
 let parsedCurriculum=null;        // після парсингу xlsx
 // availableTopicsCache is reassigned only here (populateTopicSelector)
@@ -94,7 +94,7 @@ function renderCurriculumPreview(data){
     const s=data.sheets[sheetName];
     html+=`<div class="topic-preview"><div class="topic-preview-subj">📚 ${s.meta.subject} (${s.topics.length} тем) <span style="font-size:.72rem;color:#888;font-weight:400;">— ${s.meta.year}, ${s.meta.teacher}</span></div>`;
     s.topics.forEach(t=>{
-      html+=`<div class="topic-preview-row"><span class="num">${t.lessonNum}</span><span><b>${t.title}</b><br><span style="color:#888;font-size:.7rem;">${t.section}${t.tags?' · '+t.tags:''}</span></span><span class="hrs">${t.plannedDate||'—'}</span><span class="hrs">${t.plannedHours} год.</span></div>`;
+      html+=`<div class="topic-preview-row"><span class="num">${escHtml(t.lessonNum)}</span><span><b>${escHtml(t.title)}</b><br><span style="color:#888;font-size:.7rem;">${escHtml(t.section)}${t.tags?' · '+escHtml(t.tags):''}</span></span><span class="hrs">${escHtml(t.plannedDate||'—')}</span><span class="hrs">${escHtml(t.plannedHours)} год.</span></div>`;
     });
     html+=`</div>`;
   }
@@ -226,10 +226,10 @@ function renderTopicOptionsList(slot,topicsObj){
     const isCovered=hu>=t.plannedHours;
     // Phase 6 color rule: green = untouched, yellow = partially used, red = fully used
     const colorClass=isCovered?'topic-opt-red':(hu>0?'topic-opt-yellow':'topic-opt-green');
-    const tag=t.tags?` [${t.tags}]`:'';
+    const tag=t.tags?` [${escHtml(t.tags)}]`:'';
     const label=isCovered
-      ?`✅ № ${t.lessonNum}. ${t.title} — пройдено (${hu}/${t.plannedHours} год.)`
-      :`№ ${t.lessonNum}. ${t.title} (${hu}/${t.plannedHours} год.${tag}, залишилось ${t.plannedHours-hu})`;
+      ?`✅ № ${escHtml(t.lessonNum)}. ${escHtml(t.title)} — пройдено (${hu}/${escHtml(t.plannedHours)} год.)`
+      :`№ ${escHtml(t.lessonNum)}. ${escHtml(t.title)} (${hu}/${escHtml(t.plannedHours)} год.${tag}, залишилось ${t.plannedHours-hu})`;
     html+=`<div class="topic-opt ${colorClass}" onclick="selectTopicOption(${slot},'${id}',${isCovered})">${label}</div>`;
   });
   list.innerHTML=html;
