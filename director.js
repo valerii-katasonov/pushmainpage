@@ -7,7 +7,7 @@
 // header for why.)
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, push, remove, update } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, showToast, getClassNum, displayGrade, gradeClass6, teacherAccessMatrix, getWeekDates, formatAttendanceSlotLabel, gradeTypesCache, loadGradeTypesCache, calculateStudentWeightedAvg, escJs, escHtml, localDateString } from './common.js';
+import { db, showToast, getClassNum, displayGrade, gradeClass6, teacherAccessMatrix, getWeekDates, formatAttendanceSlotLabel, gradeTypesCache, loadGradeTypesCache, calculateStudentWeightedAvg, escJs, escHtml, localDateString, normalizeRoles, getUserRoles, ROLE_LABELS, currentUserData } from './common.js';
 
 let directorSkillsTemp=[];
 
@@ -58,7 +58,7 @@ window.confirmSubstitute=async function(email,cls,subj,date){
 export async function loadDirectorTeacherSkillsList(){
   const select=document.getElementById('d-skills-teacher');select.innerHTML='<option value="">-- Оберіть вчителя --</option>';
   const snap=await get(ref(db,'users'));if(!snap.exists())return;
-  const users=snap.val();for(let uid in users){const u=users[uid];if((u.role==='teacher'||u.role==='art_school_teacher')&&u.email){const n=(u.firstName||u.lastName)?`${u.firstName||''} ${u.lastName||''}`.trim():u.email;select.innerHTML+=`<option value="${u.email.replace(/\./g,'_')}">${n} (${u.email})</option>`;}}
+  const users=snap.val();for(let uid in users){const u=users[uid];const rs=getUserRoles(u);if(rs.some(r=>r==='teacher'||r==='art_school_teacher'||r==='class_teacher'||r==='music_teacher')&&u.email&&!u.disabled){const n=(u.firstName||u.lastName)?`${u.firstName||''} ${u.lastName||''}`.trim():u.email;select.innerHTML+=`<option value="${u.email.replace(/\./g,'_')}">${escHtml(n)} (${escHtml(u.email)})</option>`;}}
 }
 window.loadDirectorTeacherSkillsList=loadDirectorTeacherSkillsList;
 document.getElementById('d-skills-teacher').addEventListener('change',async function(){
@@ -138,36 +138,123 @@ window.addHoliday=async function(){
 };
 window.removeHoliday=function(id){if(confirm("Видалити це свято?"))remove(ref(db,`academic_year/${ACADEMIC_YEAR_ID}/holidays/${id}`)).then(()=>{showToast("🗑️ Видалено");loadHolidays();});};
 // ══════════ TEACHER LIST FOR DIRECTOR (access matrix + staff mgmt) ══════════
-export async function loadTeachersListForDirector(){const s=document.getElementById('d-acc-email-select');s.innerHTML='<option value="">-- Вчитель --</option>';const snap=await get(ref(db,'users'));window.globalTeachersList=[];if(snap.exists()){const u=snap.val();for(let uid in u){const us=u[uid];if((us.role==='teacher'||us.role==='art_school_teacher'||us.role==='music_teacher')&&us.email){const n=(us.firstName||us.lastName)?`${us.firstName||''} ${us.lastName||''}`.trim():us.email;const se=us.email.replace(/\./g,'_');s.innerHTML+=`<option value="${se}">${n} (${us.email})</option>`;window.globalTeachersList.push({email:us.email,name:n,safeEmail:se});}}}}
+// Мультиролі: вчителем вважається той, у кого вчительська роль є СЕРЕД ролей,
+// а не лише як активна. Відключених (disabled) до списків не додаємо.
+export async function loadTeachersListForDirector(){const s=document.getElementById('d-acc-email-select');s.innerHTML='<option value="">-- Вчитель --</option>';const snap=await get(ref(db,'users'));window.globalTeachersList=[];if(snap.exists()){const u=snap.val();for(let uid in u){const us=u[uid];const rs=getUserRoles(us);if(rs.some(r=>r==='teacher'||r==='art_school_teacher'||r==='class_teacher'||r==='music_teacher')&&us.email&&!us.disabled){const n=(us.firstName||us.lastName)?`${us.firstName||''} ${us.lastName||''}`.trim():us.email;const se=us.email.replace(/\./g,'_');s.innerHTML+=`<option value="${se}">${escHtml(n)} (${escHtml(us.email)})</option>`;window.globalTeachersList.push({email:us.email,name:n,safeEmail:se});}}}}
 window.loadTeachersListForDirector=loadTeachersListForDirector;
 window.loadDirectorMatrixSubjects=function(){const cls=document.getElementById('d-acc-class').value;const ss=document.getElementById('d-acc-subjects');if(!cls){ss.innerHTML='<option disabled>Оберіть клас...</option>';return;}ss.innerHTML='<option disabled>Завантаження...</option>';window.loadScheduleScript(cls,()=>{let u=new Set();if(window.schedule)['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'].forEach(d=>window.getTodayLessonsFlattened(d).forEach(i=>{const s=window.getValidSubjectName(i);if(s)u.add(s);}));ss.innerHTML='<option value="Всі предмети" style="font-weight:700;color:#d35400;">🌟 Всі предмети</option>';if(u.size>0)[...u].sort().forEach(subj=>ss.innerHTML+=`<option value="${subj}">${subj}</option>`);else ss.innerHTML='<option disabled>Розклад не знайдено</option>';});};
 window.grantTeacherAccess=function(){const se=document.getElementById('d-acc-email-select').value;const cls=document.getElementById('d-acc-class').value;const opts=document.getElementById('d-acc-subjects').selectedOptions;const subjs=Array.from(opts).map(o=>o.value);if(!se||!cls||subjs.length===0)return alert('Заповніть усі поля!');set(ref(db,`pre_approved_roles/${se}`),'teacher').catch(()=>{});set(ref(db,`teacher_access/${se}/${cls}`),subjs).then(()=>{alert('✅ Доступ збережено!');}).catch(e=>alert("Помилка: "+e.message));};
+// pre_approved_roles/{safeEmail} тепер може містити масив ролей — одна особа
+// може бути одночасно, напр., вчителем і адміністратором.
 window.grantStaffRole=async function(){
   const raw=document.getElementById('new-staff-email').value.trim().toLowerCase();
-  const r=document.getElementById('new-staff-role').value;
+  const sel=document.getElementById('new-staff-role');
+  const roles=Array.from(sel.selectedOptions).map(o=>o.value);
   if(!raw)return alert("Введіть Email!");
+  if(roles.length===0)return alert("Виберіть хоча б одну роль!");
   const se=raw.replace(/\./g,'_');
   try{
-    await set(ref(db,`pre_approved_roles/${se}`),r);
-    // pre_approved_roles is only consulted on a user's FIRST-ever login (the auth
-    // flow in common.js reads it only when users/{uid} doesn't exist yet). If this
-    // person has already logged in before, their users/{uid} record — with the OLD
-    // role — already exists and would win forever. So also find any existing
-    // account with this email and update its live role directly.
-    let updatedExisting=false;
+    await set(ref(db,`pre_approved_roles/${se}`),roles);
+    // Якщо людина вже заходила раніше — оновлюємо і її профіль, щоб нові ролі
+    // застосувались без очікування повторного входу. Заодно знімаємо disabled,
+    // якщо співробітника раніше видаляли, а тепер повертають.
     const us=await get(ref(db,'users'));
     if(us.exists()){
       const u=us.val();
       for(let uid in u){
         if((u[uid].email||'').toLowerCase()===raw){
-          await update(ref(db,`users/${uid}`),{role:r});
-          updatedExisting=true;
+          const patch={roles,disabled:null};
+          if(!roles.includes(u[uid].role))patch.role=roles[0];
+          await update(ref(db,`users/${uid}`),patch);
         }
       }
     }
-    alert(updatedExisting
-      ?'✅ Роль оновлено! У користувача вже був акаунт — нова роль запрацює після його наступного входу.'
-      :'✅ Доступ надано! Роль застосується при першому вході.');
+    const names=roles.map(r=>ROLE_LABELS[r]||r).join(', ');
+    showToast(`✅ Доступ надано: ${names}`);
+    document.getElementById('new-staff-email').value='';
+    window.loadStaffList();
+  }catch(e){alert('Помилка: '+e.message);}
+};
+// ══════════ ПЕРСОНАЛ: список ══════════
+window.loadStaffList=async function(){
+  const box=document.getElementById('staff-list');
+  if(!box)return;
+  box.innerHTML='<p class="empty-msg">Завантаження...</p>';
+  try{
+    const [approvedSnap,usersSnap]=await Promise.all([
+      get(child(ref(db),'pre_approved_roles')),
+      get(child(ref(db),'users'))
+    ]);
+    const approved=approvedSnap.exists()?approvedSnap.val():{};
+    const users=usersSnap.exists()?usersSnap.val():{};
+    // Індекс users за safeEmail — щоб показати ім'я та статус
+    const byEmail={};
+    for(let uid in users){
+      const u=users[uid];
+      if(u.email)byEmail[u.email.replace(/\./g,'_')]={uid,...u};
+    }
+    const keys=Object.keys(approved);
+    if(keys.length===0){box.innerHTML='<p class="empty-msg">Персоналу ще не додано.</p>';return;}
+    const myEmailSafe=(currentUserData?.email||'').replace(/\./g,'_');
+    let html='';
+    keys.sort().forEach(safeEmail=>{
+      const roles=normalizeRoles(approved[safeEmail]);
+      const u=byEmail[safeEmail];
+      const email=u?.email||safeEmail.replace(/_/g,'.');
+      const name=(u&&(u.firstName||u.lastName))?`${u.firstName||''} ${u.lastName||''}`.trim():'—';
+      const isMe=safeEmail===myEmailSafe;
+      const neverLoggedIn=!u;
+      html+=`<div class="staff-row${u?.disabled?' is-disabled':''}">
+        <div class="staff-main">
+          <div><b>${escHtml(name)}</b>${isMe?' <span style="font-size:.7rem;color:var(--teal);">(це ви)</span>':''}${neverLoggedIn?' <span style="font-size:.68rem;color:#f39c12;">ще не входив</span>':''}</div>
+          <div class="staff-email">${escHtml(email)}</div>
+          <div class="staff-roles">${roles.map(r=>`<span class="staff-role-tag">${escHtml(ROLE_LABELS[r]||r)}</span>`).join('')}</div>
+        </div>
+        ${isMe?'':`<button class="staff-del" onclick="removeStaffMember('${escJs(safeEmail)}')">🗑 Видалити</button>`}
+      </div>`;
+    });
+    box.innerHTML=html;
+  }catch(e){box.innerHTML=`<p style="color:red;font-size:.8rem;">Помилка: ${escHtml(e.message)}</p>`;}
+};
+// ══════════ ПЕРСОНАЛ: відкликання доступу ══════════
+// ВАЖЛИВО: сам акаунт Firebase Auth з браузера видалити НЕМОЖЛИВО — для цього
+// потрібен Admin SDK (серверна функція). Тому "видалення співробітника" тут —
+// це повне відкликання доступу: людина зникає зі списків, втрачає роль і всі
+// дозволи, а при спробі входу отримує відмову (перевірка disabled у common.js).
+// Історичні дані (виставлені нею оцінки, ДЗ) свідомо НЕ видаляються.
+window.removeStaffMember=async function(safeEmail){
+  const readable=safeEmail.replace(/_/g,'.');
+  if(!confirm(`Видалити співробітника ${readable}?\n\nБуде відкликано:\n• роль і доступ до кабінету\n• доступ до класів і предметів\n• компетенції (скіли)\n\nВиставлені раніше оцінки та ДЗ залишаться в журналі.\n\nПродовжити?`))return;
+  try{
+    // 1. Прибираємо з дозволених ролей, доступів і скілів
+    await Promise.all([
+      remove(ref(db,`pre_approved_roles/${safeEmail}`)),
+      remove(ref(db,`teacher_access/${safeEmail}`)),
+      remove(ref(db,`teacher_skills/${safeEmail}`))
+    ]);
+    // 2. Позначаємо профіль як відключений (блокує вхід)
+    const usersSnap=await get(child(ref(db),'users'));
+    if(usersSnap.exists()){
+      const users=usersSnap.val();
+      for(let uid in users){
+        if(users[uid].email&&users[uid].email.replace(/\./g,'_')===safeEmail){
+          await update(ref(db,`users/${uid}`),{disabled:true,roles:null,role:null});
+        }
+      }
+    }
+    // 3. Знімаємо з посади класного керівника, якщо він ним був
+    const ctSnap=await get(child(ref(db),'class_teachers'));
+    if(ctSnap.exists()){
+      const ct=ctSnap.val();
+      for(let cls in ct){
+        if(ct[cls]?.teacherEmail&&ct[cls].teacherEmail.replace(/\./g,'_')===safeEmail){
+          await remove(ref(db,`class_teachers/${cls}`));
+        }
+      }
+    }
+    showToast(`🗑️ Доступ відкликано: ${readable}`);
+    window.loadStaffList();
+    if(typeof window.loadTeachersListForDirector==='function')window.loadTeachersListForDirector();
   }catch(e){alert('Помилка: '+e.message);}
 };
 // ══════════ DIRECTOR STATS ══════════
@@ -181,10 +268,10 @@ window.renderDirectorStats=async function(){const cls=document.getElementById('d
   const clsNum=getClassNum(cls);
   let h='<table style="width:100%;border-collapse:collapse;font-size:.85rem;"><thead><tr><th style="text-align:left;padding:5px;background:#e8f4fd;">Учень</th><th style="background:#e8f4fd;">Зважений сер.</th><th style="background:#e8f4fd;">Оцінок</th></tr></thead><tbody>';
   let totalAvg=0;let cnt=0;
-  stList.forEach(st=>{const g=stats[st].grades;const count=Object.keys(g).length;const avg=calculateStudentWeightedAvg(g,stats[st].types);const disp=avg!==null?displayGrade(String(Math.round(avg)),cls)+' ('+avg.toFixed(2)+')':'-';if(avg!==null){totalAvg+=avg;cnt++;}const gc=avg!==null?gradeClass6(Math.round(avg)):'';h+=`<tr><td style="padding:5px;border-bottom:1px solid #eee;"><b>${st}</b></td><td style="text-align:center;"><span class="g-cell ${gc}" style="display:inline-block;padding:3px 8px;">${disp}</span></td><td style="text-align:center;">${count}</td></tr>`;});
+  stList.forEach(st=>{const g=stats[st].grades;const count=Object.keys(g).length;const avg=calculateStudentWeightedAvg(g,stats[st].types);const disp=avg!==null?displayGrade(String(Math.round(avg)),cls)+' ('+avg.toFixed(2)+')':'-';if(avg!==null){totalAvg+=avg;cnt++;}const gc=avg!==null?gradeClass6(Math.round(avg)):'';h+=`<tr><td style="padding:5px;border-bottom:1px solid #eee;"><b>${escHtml(st)}</b></td><td style="text-align:center;"><span class="g-cell ${gc}" style="display:inline-block;padding:3px 8px;">${disp}</span></td><td style="text-align:center;">${count}</td></tr>`;});
   const ca=cnt>0?(totalAvg/cnt).toFixed(2):'-';h+=`</tbody></table><div style="background:#f4ecf7;border:1px solid #d2b4de;padding:12px;border-radius:8px;text-align:center;margin-top:10px;"><b style="color:var(--purple);">🏆 Середній бал класу:</b><br><span style="font-size:1.5rem;font-weight:800;color:#7b1fa2;">${displayGrade(String(Math.round(parseFloat(ca)||0)),cls)} (${ca})</span></div>`;rd.innerHTML=h;}catch(e){rd.innerHTML=`<p style="color:red;">Помилка: ${e.message}</p>`;}};
 // ══════════ DIRECTOR DASHBOARD ══════════
-export async function loadDirectorDashboard(){try{const date=document.getElementById('global-date').value;const dp=date.split('-');document.getElementById('d-att-header').innerText=`🚨 Відсутні (${dp[2]}.${dp[1]}, вся школа)`;const wd=getWeekDates(date);let hw=0,com=0,wl=0,wa=0,attHtml='';const[hwS,comS,attS]=await Promise.all([get(child(ref(db),'homeworks')),get(child(ref(db),'comments')),get(child(ref(db),'attendance'))]);const hd=hwS.exists()?hwS.val():{};const cd=comS.exists()?comS.val():{};const ad=attS.exists()?attS.val():{};for(let i=1;i<=11;i++){const c=`class_${i}`;if(hd[c]&&hd[c][date])hw+=Object.keys(hd[c][date]).length;if(cd[c]&&cd[c][date]){for(let s in cd[c][date])if(typeof cd[c][date][s]==='object')com+=Object.keys(cd[c][date][s]).length;}if(ad[c]&&ad[c][date])for(let st in ad[c][date]){const slots=ad[c][date][st];for(let sk in slots){const r=slots[sk];if(r?.status){const bc=r.status==='late'?'badge-late':'badge-absent';const lb=r.status==='late'?'Запізнення':'Відсутність';const markerIcon=r.markedBy==='teacher'?'👨‍🏫':(r.markedBy==='student'?'🎒':'👪');attHtml+=`<li style="margin-bottom:9px;border-bottom:1px solid #eee;padding-bottom:4px;"><span style="font-size:.72rem;background:var(--teal);color:#fff;padding:2px 5px;border-radius:4px;margin-right:4px;">${i} Кл</span> <b>${st}</b> <span class="badge ${bc}">${lb}</span> <span style="font-size:.72rem;color:#888;">${formatAttendanceSlotLabel(sk)} ${markerIcon}</span><br><i style="font-size:.78rem;color:#666;">${r.reason}</i></li>`;}}}if(ad[c])wd.forEach(w=>{if(ad[c][w]&&typeof ad[c][w]==='object')Object.values(ad[c][w]).forEach(slots=>{if(slots&&typeof slots==='object')Object.values(slots).forEach(r=>{if(r?.status==='late')wl++;else if(r?.status==='absent')wa++;});});});}document.getElementById('d-hw-counter').innerText=hw;document.getElementById('d-com-counter').innerText=com;document.getElementById('d-week-late').innerText=wl;document.getElementById('d-week-absent').innerText=wa;document.getElementById('d-unified-att-list').innerHTML=attHtml||'<li class="empty-msg">Усі присутні!</li>';}catch(e){console.error(e);}}
+export async function loadDirectorDashboard(){try{const date=document.getElementById('global-date').value;const dp=date.split('-');document.getElementById('d-att-header').innerText=`🚨 Відсутні (${dp[2]}.${dp[1]}, вся школа)`;const wd=getWeekDates(date);let hw=0,com=0,wl=0,wa=0,attHtml='';const[hwS,comS,attS]=await Promise.all([get(child(ref(db),'homeworks')),get(child(ref(db),'comments')),get(child(ref(db),'attendance'))]);const hd=hwS.exists()?hwS.val():{};const cd=comS.exists()?comS.val():{};const ad=attS.exists()?attS.val():{};for(let i=1;i<=11;i++){const c=`class_${i}`;if(hd[c]&&hd[c][date])hw+=Object.keys(hd[c][date]).length;if(cd[c]&&cd[c][date]){for(let s in cd[c][date])if(typeof cd[c][date][s]==='object')com+=Object.keys(cd[c][date][s]).length;}if(ad[c]&&ad[c][date])for(let st in ad[c][date]){const slots=ad[c][date][st];for(let sk in slots){const r=slots[sk];if(r?.status){const bc=r.status==='late'?'badge-late':'badge-absent';const lb=r.status==='late'?'Запізнення':'Відсутність';const markerIcon=r.markedBy==='teacher'?'👨‍🏫':(r.markedBy==='student'?'🎒':'👪');attHtml+=`<li style="margin-bottom:9px;border-bottom:1px solid #eee;padding-bottom:4px;"><span style="font-size:.72rem;background:var(--teal);color:#fff;padding:2px 5px;border-radius:4px;margin-right:4px;">${i} Кл</span> <b>${escHtml(st)}</b> <span class="badge ${bc}">${lb}</span> <span style="font-size:.72rem;color:#888;">${escHtml(formatAttendanceSlotLabel(sk))} ${markerIcon}</span><br><i style="font-size:.78rem;color:#666;">${escHtml(r.reason)}</i></li>`;}}}if(ad[c])wd.forEach(w=>{if(ad[c][w]&&typeof ad[c][w]==='object')Object.values(ad[c][w]).forEach(slots=>{if(slots&&typeof slots==='object')Object.values(slots).forEach(r=>{if(r?.status==='late')wl++;else if(r?.status==='absent')wa++;});});});}document.getElementById('d-hw-counter').innerText=hw;document.getElementById('d-com-counter').innerText=com;document.getElementById('d-week-late').innerText=wl;document.getElementById('d-week-absent').innerText=wa;document.getElementById('d-unified-att-list').innerHTML=attHtml||'<li class="empty-msg">Усі присутні!</li>';}catch(e){console.error(e);}}
 window.loadDirectorDashboard=loadDirectorDashboard;
 // ══════════ BELL SCHEDULES (Розклад дзвінків) ══════════
 let bellSlotsTemp=[];
