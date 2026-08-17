@@ -42,6 +42,38 @@ const GRADE_TYPE_LABELS={'П':'Поточна','У':'Усна відповідь
 export const STICKER_GOAL=30;
 export const dayKeys=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 export const dayNamesUA={Monday:"Понеділок",Tuesday:"Вівторок",Wednesday:"Середа",Thursday:"Четвер",Friday:"П'ятниця"};
+// ══════════ MULTI-ROLE SUPPORT ══════════
+// Історично роль була одним рядком: users/{uid}/role = "teacher".
+// Тепер одна особа може мати кілька ролей (напр. вчитель + адміністратор):
+//   users/{uid}/roles = ["teacher","administrator"]   ← повний список
+//   users/{uid}/role  = "teacher"                     ← АКТИВНА роль (та, в якій
+//                                                        людина працює зараз)
+// Поле role залишається, щоб уся наявна логіка (getActiveClass, initUserSession,
+// підписи в чаті тощо) працювала без змін. pre_approved_roles/{email} тепер може
+// містити або рядок (як раніше), або масив ролей — normalizeRoles() розбирає обидва.
+export const ROLE_LABELS={
+  director:'👔 Директор', administrator:'🛡️ Секретар (Адміністратор)',
+  teacher:'👨‍🏫 Вчитель', class_teacher:'🎓 Класний керівник',
+  art_school_teacher:'🎨 Вчитель школи мистецтв', music_teacher:'🎵 Вчитель музики',
+  parent:'👪 Батьки', student:'🎒 Учень'
+};
+// Ролі, для яких потрібна матриця доступу до класів (teacherAccessMatrix)
+export const TEACHER_ROLES=['teacher','class_teacher','art_school_teacher','music_teacher'];
+export function isTeacherRole(r){return TEACHER_ROLES.includes(r);}
+// Приводить будь-яке представлення (рядок / масив / об'єкт з Firebase) до масиву
+export function normalizeRoles(raw){
+  if(!raw)return[];
+  if(typeof raw==='string')return[raw];
+  if(Array.isArray(raw))return raw.filter(Boolean);
+  return Object.values(raw).filter(v=>typeof v==='string');
+}
+// Усі ролі користувача (roles, а якщо його ще немає — одиночний role)
+export function getUserRoles(u){
+  if(!u)return[];
+  const list=normalizeRoles(u.roles);
+  if(list.length>0)return list;
+  return u.role?[u.role]:[];
+}
 
 // ══════════ STATE ══════════
 // currentUserData is reassigned only here (onAuthStateChanged); every
@@ -194,6 +226,13 @@ export function escJs(s){return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\
 // itself. User/Firebase-sourced text (chat messages, comments, names, topics,
 // HW text...) rendered via innerHTML without this is an XSS hole: a message like
 // <img src=x onerror=alert(document.cookie)> would execute for everyone.
+// Безпечне посилання: escHtml сам по собі НЕ рятує від href="javascript:...",
+// бо там немає символів < > " '. Тому окремо перевіряємо протокол і повертаємо
+// '#' для всього, що не http(s). Використовувати скрізь, де url від користувача.
+export function safeUrl(u){
+  const s=String(u??'').trim();
+  return /^https?:\/\//i.test(s)?escHtml(s):'#';
+}
 export function escHtml(s){
   return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;')
     .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
@@ -246,7 +285,38 @@ function updateProfileBar(){
   let n="Користувач";if(currentUserData.firstName||currentUserData.lastName)n=`${currentUserData.firstName||''} ${currentUserData.lastName||''}`.trim();else if(currentUserData.studentName)n=`Батьки (${currentUserData.studentName})`;else if(currentUserData.email)n=currentUserData.email;
   let r="";if(currentUserData.role==='teacher')r="Вчитель";if(currentUserData.role==='class_teacher')r="🎓 Класний керівник";if(currentUserData.role==='art_school_teacher'||currentUserData.role==='music_teacher')r="Вчитель школи мистецтв";if(currentUserData.role==='director')r="Директор";if(currentUserData.role==='administrator')r="🛡️ Секретар (Адміністратор)";if(currentUserData.role==='student')r="🎒 Учень";if(currentUserData.role==='parent'){if(currentUserData.parentRole==='mother')r="Мати";else if(currentUserData.parentRole==='father')r="Батько";else r="Опекун";}
   document.getElementById('pb-name').innerText=n;document.getElementById('pb-role').innerText=r;
+  renderRoleSwitcher();
 }
+// Перемикач кабінетів — показується лише тим, у кого призначено >1 ролі.
+function renderRoleSwitcher(){
+  const box=document.getElementById('pb-role-switcher');
+  if(!box)return;
+  const roles=getUserRoles(currentUserData);
+  if(roles.length<2){box.style.display='none';box.innerHTML='';return;}
+  box.style.display='block';
+  box.innerHTML=`<select id="pb-role-select" title="Переключити кабінет">
+    ${roles.map(r=>`<option value="${escHtml(r)}" ${r===currentUserData.role?'selected':''}>${escHtml(ROLE_LABELS[r]||r)}</option>`).join('')}
+  </select>`;
+  document.getElementById('pb-role-select').addEventListener('change',e=>window.switchRole(e.target.value));
+}
+// ══════════ ПЕРЕКЛЮЧЕННЯ РОЛІ ══════════
+// Активна роль зберігається в users/{uid}/role, тому після перезаходу людина
+// опиняється в тому ж кабінеті, де працювала останній раз.
+window.switchRole=async function(newRole){
+  if(!currentUserData)return;
+  const roles=getUserRoles(currentUserData);
+  if(!roles.includes(newRole)){showToast('⚠️ Ця роль вам не призначена');return;}
+  if(newRole===currentUserData.role)return;
+  // Знімаємо слухачі/таймери попереднього кабінету, щоб вони не продовжували
+  // писати у DOM, якого вже немає на екрані.
+  if(teacherAttendanceListener)teacherAttendanceListener();
+  if(parentLessonInterval)clearInterval(parentLessonInterval);
+  currentUserData.role=newRole;
+  try{await update(ref(db,`users/${auth.currentUser.uid}`),{role:newRole});}catch(e){console.error(e);}
+  if(isTeacherRole(newRole))await fetchTeacherAccess(currentUserData.email.replace(/\./g,'_'));
+  initUserSession();
+  showToast(`🔄 Кабінет: ${ROLE_LABELS[newRole]||newRole}`);
+};
 window.openProfileModal=async function(){
   document.getElementById('profile-modal').style.display='flex';
   document.getElementById('profile-first-name').value=currentUserData.firstName||'';
@@ -318,6 +388,10 @@ onAuthStateChanged(auth,async user=>{
     const snap=await get(child(ref(db),`users/${user.uid}`));
     if(snap.exists()){
       currentUserData=snap.val();
+      // Доступ відкликано директором — не пускаємо, навіть якщо акаунт існує.
+      // (Видалити сам акаунт Firebase Auth з браузера неможливо — лише через
+      //  Admin SDK, тому "видалення співробітника" = відкликання доступу.)
+      if(currentUserData.disabled){alert("Ваш доступ до системи закрито. Зверніться до адміністрації.");signOut(auth);return;}
       if(!currentUserData.email){currentUserData.email=user.email;update(ref(db,`users/${user.uid}`),{email:user.email});}
       // ROLE SYNC: pre_approved_roles is the director-controlled source of truth for
       // STAFF roles, but it used to be read only when users/{uid} didn't exist yet
@@ -329,25 +403,34 @@ onAuthStateChanged(auth,async user=>{
       // Now every login reconciles the two. Parent/student roles are derived from
       // parent_links/student_links, never from pre_approved_roles, so they're left
       // alone unless an entry explicitly exists for that email.
+      // Тепер синхронізуємо ВЕСЬ набір ролей, а не одну: директор міг додати
+      // другу роль (напр. вчитель + адміністратор) вже після першого входу.
       try{
         const prs=await get(child(ref(db),`pre_approved_roles/${se}`));
         if(prs.exists()){
-          const approved=prs.val();
-          if(approved&&approved!==currentUserData.role){
-            await update(ref(db,`users/${user.uid}`),{role:approved});
-            currentUserData.role=approved;
+          const approved=normalizeRoles(prs.val());
+          const known=getUserRoles(currentUserData);
+          const same=approved.length===known.length&&approved.every(r=>known.includes(r));
+          if(approved.length>0&&!same){
+            currentUserData.roles=approved;
+            // Активну роль зберігаємо, якщо вона ще дозволена; інакше беремо першу.
+            if(!approved.includes(currentUserData.role))currentUserData.role=approved[0];
+            await update(ref(db,`users/${user.uid}`),{roles:approved,role:currentUserData.role});
           }
         }
       }catch(e){console.warn('Role sync skipped:',e.message);}
-      if(currentUserData.role==='teacher'||currentUserData.role==='class_teacher'||currentUserData.role==='art_school_teacher'||currentUserData.role==='music_teacher')await fetchTeacherAccess(se);
+      if(isTeacherRole(currentUserData.role))await fetchTeacherAccess(se);
       await loadGradeTypesCache();initUserSession();
     }
-    else{const rs=await get(child(ref(db),`pre_approved_roles/${se}`));if(rs.exists()){const ar=rs.val();const nd={role:ar,email:user.email};if(ar==='teacher'||ar==='class_teacher'||ar==='art_school_teacher'||ar==='music_teacher')await fetchTeacherAccess(se);await set(ref(db,`users/${user.uid}`),nd);currentUserData=nd;await loadGradeTypesCache();initUserSession();}
+    else{const rs=await get(child(ref(db),`pre_approved_roles/${se}`));if(rs.exists()){const roles=normalizeRoles(rs.val());const primary=roles[0];const nd={role:primary,roles,email:user.email};if(isTeacherRole(primary))await fetchTeacherAccess(se);await set(ref(db,`users/${user.uid}`),nd);currentUserData=nd;await loadGradeTypesCache();initUserSession();}
     else{const ls=await get(child(ref(db),`parent_links/${se}`));if(ls.exists()){const ld=ls.val();let sn,sc,pr='guardian';if(typeof ld==='string'){sn=ld;sc="class_2";}else{sn=ld.studentName;sc=ld.class;pr=ld.role||'guardian';}const nd={role:"parent",studentName:sn,class:sc,parentRole:pr,email:user.email};await set(ref(db,`users/${user.uid}`),nd);currentUserData=nd;await loadGradeTypesCache();initUserSession();}else{const sls=await get(child(ref(db),`student_links/${se}`));if(sls.exists()){const sd=sls.val();const nd={role:"student",studentName:sd.studentName,class:sd.class,email:user.email};await set(ref(db,`users/${user.uid}`),nd);currentUserData=nd;await loadGradeTypesCache();initUserSession();}else{alert("Ваш Email не зареєстровано.");signOut(auth);}}}}
   }else document.getElementById('login-screen').style.display='block';
 });
 async function fetchTeacherAccess(se){const s=await get(child(ref(db),`teacher_access/${se}`));teacherAccessMatrix=s.exists()?s.val():{};}
 function initUserSession(){
+  // Приховуємо всі кабінети перед відкриттям потрібного — обов'язково для
+  // switchRole(), інакше попередній кабінет залишиться на екрані поверх нового.
+  document.querySelectorAll('.panel').forEach(p=>p.style.display='none');
   document.getElementById('calendar-block').style.display='block';updateProfileBar();
   const r=currentUserData.role;
   if(r==='director'){document.getElementById('director-screen').style.display='block';document.getElementById('teacher-class-selector-box').style.display='none';loadTeachersListForDirector();loadDirectorTeacherSkillsList();handleDateChange();loadDrafts();}
