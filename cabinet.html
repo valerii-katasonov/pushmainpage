@@ -182,6 +182,17 @@
     .paid-badge{background:#d4edda;border:1px solid #c3e6cb;color:var(--green);}
     /* ── SKILLS ── */
     .skill-tag{display:inline-block;background:#e0f2f1;color:var(--teal);border:1px solid #a5d6d1;border-radius:20px;padding:3px 10px;font-size:.75rem;font-weight:700;margin:2px;}
+    /* ── ПЕРЕМИКАЧ КАБІНЕТІВ (для тих, у кого кілька ролей) ── */
+    #pb-role-switcher select{width:auto;max-width:220px;margin-top:0;padding:4px 8px;font-size:.78rem;font-weight:700;color:var(--teal);border:1px solid var(--teal);border-radius:7px;background:#f0f8ff;cursor:pointer;}
+    /* ── СПИСОК ПЕРСОНАЛУ ── */
+    .staff-row{display:flex;align-items:center;gap:10px;padding:9px 11px;border:1px solid #e8e8e8;border-radius:9px;margin-bottom:6px;background:#fff;}
+    .staff-row.is-disabled{opacity:.5;background:#fafafa;}
+    .staff-main{flex:1;min-width:0;}
+    .staff-email{font-size:.75rem;color:#888;word-break:break-all;}
+    .staff-roles{margin-top:4px;display:flex;flex-wrap:wrap;gap:3px;}
+    .staff-role-tag{display:inline-block;background:#eef2ff;color:#3949ab;border:1px solid #c5cae9;border-radius:12px;padding:1px 8px;font-size:.68rem;font-weight:700;}
+    .staff-del{width:auto;flex-shrink:0;margin:0;padding:6px 11px;font-size:.75rem;background:#fdecea;color:var(--red);border:1px solid #f5c6cb;border-radius:8px;cursor:pointer;font-weight:700;}
+    .staff-del:hover{background:var(--red);color:#fff;}
     .skill-tag.remove{cursor:pointer;background:#fdecea;color:var(--red);border-color:#f5c6cb;}
     .skill-tag.remove:hover{background:var(--red);color:#fff;}
     /* ── RETAKE ── */
@@ -560,6 +571,8 @@
     <div style="flex:1;">
       <h3 id="pb-name" style="margin:0;font-size:1.05rem;color:#333;border:none;padding:0;">Користувач</h3>
       <p id="pb-role" style="margin:0;font-size:.82rem;color:#777;">Роль</p>
+      <!-- Перемикач кабінетів — видно лише тим, у кого кілька ролей -->
+      <div id="pb-role-switcher" style="display:none;margin-top:5px;"></div>
     </div>
     <button onclick="openProfileModal()" style="width:auto;padding:7px 13px;margin:0;background:var(--teal);color:#fff;border-radius:8px;font-size:.85rem;">⚙️ Профіль</button>
   </div>
@@ -783,12 +796,20 @@
         <summary style="font-weight:700;cursor:pointer;color:#c0392b;">⚙️ Управління персоналом</summary>
         <div style="margin-top:13px;">
           <input type="email" id="new-staff-email" placeholder="Email співробітника">
-          <select id="new-staff-role" style="margin-top:8px;">
-            <option value="teacher">Вчитель</option><option value="art_school_teacher">Вчитель школи мистецтв</option>
+          <label style="font-size:.8rem;color:#777;margin-top:8px;">Ролі (можна обрати кілька — Ctrl/Cmd + клік):</label>
+          <select id="new-staff-role" multiple size="5" style="margin-top:4px;">
+            <option value="teacher">👨‍🏫 Вчитель</option><option value="art_school_teacher">🎨 Вчитель школи мистецтв</option>
             <option value="class_teacher">🎓 Класний керівник</option>
-            <option value="director">Директор</option><option value="administrator">🛡️ Секретар (Адміністратор)</option>
+            <option value="director">👔 Директор</option><option value="administrator">🛡️ Секретар (Адміністратор)</option>
           </select>
           <button style="background:#c0392b;padding:8px;margin-top:9px;color:#fff;" onclick="grantStaffRole()">Надати доступ</button>
+          <div style="margin-top:14px;border-top:1px dashed #ddd;padding-top:12px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <b style="font-size:.88rem;color:#c0392b;">👥 Список персоналу</b>
+              <button onclick="loadStaffList()" style="width:auto;padding:5px 11px;margin:0;font-size:.78rem;background:#f0f0f0;color:#333;">🔄 Оновити</button>
+            </div>
+            <div id="staff-list" style="margin-top:8px;"><p class="empty-msg">Натисніть «Оновити».</p></div>
+          </div>
         </div>
       </details>
       <!-- Class Teacher Assignment -->
