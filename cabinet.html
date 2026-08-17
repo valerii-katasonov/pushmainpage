@@ -181,6 +181,18 @@
     .debt-badge{background:#fdecea;border:1px solid #f5c6cb;color:var(--red);}
     .paid-badge{background:#d4edda;border:1px solid #c3e6cb;color:var(--green);}
     /* ── SKILLS ── */
+    /* ── ЕКРАН ВХОДУ ── */
+    #login-screen label{margin-top:12px;font-size:.82rem;color:#666;}
+    #login-screen input{margin-top:4px;}
+    .pass-wrap{position:relative;}
+    .pass-wrap input{padding-right:44px;}
+    .pass-toggle{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:34px;height:34px;padding:0;margin:0;border:none;background:transparent;cursor:pointer;font-size:1.05rem;opacity:.55;border-radius:8px;}
+    .pass-toggle:hover{opacity:1;background:#f0f0f0;}
+    .login-hint{margin:10px 0 0 0;padding:9px 12px;border-radius:9px;font-size:.82rem;line-height:1.45;background:#e8f4fd;color:#154360;border:1px solid #bbdefb;}
+    .login-hint.warn{background:#fff8e1;color:#8a6d1f;border-color:#ffe0a3;}
+    .link-btn{width:auto;display:block;margin:12px auto 0 auto;padding:6px 10px;background:none;border:none;color:var(--teal);font-size:.84rem;font-weight:700;text-decoration:underline;cursor:pointer;}
+    .link-btn:hover{color:#004d40;}
+    #login-screen.first-login-mode #login-title::after{content:' — перший раз';font-size:.75rem;color:var(--orange);font-weight:400;display:block;margin-top:2px;}
     .skill-tag{display:inline-block;background:#e0f2f1;color:var(--teal);border:1px solid #a5d6d1;border-radius:20px;padding:3px 10px;font-size:.75rem;font-weight:700;margin:2px;}
     /* ── ПЕРЕМИКАЧ КАБІНЕТІВ (для тих, у кого кілька ролей) ── */
     #pb-role-switcher select{width:auto;max-width:220px;margin-top:0;padding:4px 8px;font-size:.78rem;font-weight:700;color:var(--teal);border:1px solid var(--teal);border-radius:7px;background:#f0f8ff;cursor:pointer;}
@@ -558,11 +570,28 @@
 <div class="container">
   <!-- LOGIN -->
   <div id="login-screen" class="panel" style="display:block;">
-    <h2>Вхід до порталу</h2>
-    <input type="email" id="email" placeholder="Email">
-    <input type="password" id="pass" placeholder="Пароль">
-    <button class="btn-login" onclick="loginUser()">Увійти</button>
-    <button style="background:#f0f8ff;color:var(--teal);border:2px solid var(--accent);margin-top:9px;" onclick="registerUser()">Перший вхід (Встановити пароль)</button>
+    <h2 id="login-title">Вхід до порталу</h2>
+    <!-- Справжня <form>: завдяки їй Enter надсилає форму нативно (раніше
+         доводилось тиснути кнопку мишею) і менеджери паролів коректно
+         розпізнають поля. -->
+    <form id="login-form" novalidate>
+      <label for="email">Email</label>
+      <input type="email" id="email" name="email" autocomplete="username"
+             placeholder="ім'я@пошта.com" autocapitalize="none" spellcheck="false" required>
+      <label for="pass">Пароль</label>
+      <div class="pass-wrap">
+        <input type="password" id="pass" name="password" autocomplete="current-password"
+               placeholder="Пароль" required>
+        <button type="button" class="pass-toggle" id="pass-toggle"
+                onclick="togglePassVisibility()" aria-label="Показати пароль">👁</button>
+      </div>
+      <p id="login-hint" class="login-hint" style="display:none;"></p>
+      <button type="submit" class="btn-login" id="btn-login-submit">Увійти</button>
+    </form>
+    <!-- Друга дія — не рівноцінна кнопка, а посилання: раніше дві однакові
+         кнопки збивали з пантелику, бо незрозуміло, яку тиснути. -->
+    <button type="button" class="link-btn" id="btn-first-login-toggle"
+            onclick="toggleFirstLoginMode()">Перший вхід? Встановити пароль</button>
     <p id="login-error" style="color:red;text-align:center;display:none;margin-top:9px;"></p>
   </div>
   <!-- PROFILE BAR -->
