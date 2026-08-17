@@ -181,9 +181,11 @@
     .debt-badge{background:#fdecea;border:1px solid #f5c6cb;color:var(--red);}
     .paid-badge{background:#d4edda;border:1px solid #c3e6cb;color:var(--green);}
     /* ── SKILLS ── */
-    /* ── ЕКРАН ВХОДУ ── */
-    #login-screen label{margin-top:12px;font-size:.82rem;color:#666;}
-    #login-screen input{margin-top:4px;}
+    /* ── ЕКРАНИ ВХОДУ ── */
+    #login-screen label,#first-login-screen label{margin-top:12px;font-size:.82rem;color:#666;}
+    #login-screen input,#first-login-screen input{margin-top:4px;}
+    .fl-intro{font-size:.86rem;color:#555;line-height:1.5;background:#f0f8ff;border:1px solid #d0e8f2;border-radius:10px;padding:11px 13px;margin:0 0 4px 0;}
+    .login-err{color:var(--red);text-align:center;margin:10px 0 0 0;font-size:.85rem;font-weight:600;}
     .pass-wrap{position:relative;}
     .pass-wrap input{padding-right:44px;}
     .pass-toggle{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:34px;height:34px;padding:0;margin:0;border:none;background:transparent;cursor:pointer;font-size:1.05rem;opacity:.55;border-radius:8px;}
@@ -569,12 +571,15 @@
 </div>
 <div class="container">
   <!-- LOGIN -->
+  <!-- ═══ ЕКРАН 1: ЗВИЧАЙНИЙ ВХІД ═══
+       onsubmit прописаний АТРИБУТОМ, а не через addEventListener у модулі.
+       Це критично: атрибут працює з моменту парсингу HTML, тому навіть якщо
+       JS-модуль не завантажився (кеш, збій CDN, стара версія файлу) — форма
+       НЕ піде звичайним GET-запитом і пароль ніколи не потрапить в URL. -->
   <div id="login-screen" class="panel" style="display:block;">
-    <h2 id="login-title">Вхід до порталу</h2>
-    <!-- Справжня <form>: завдяки їй Enter надсилає форму нативно (раніше
-         доводилось тиснути кнопку мишею) і менеджери паролів коректно
-         розпізнають поля. -->
-    <form id="login-form" novalidate>
+    <h2>Вхід до порталу</h2>
+    <form id="login-form" novalidate
+          onsubmit="event.preventDefault();if(window.submitLogin)window.submitLogin(event);return false;">
       <label for="email">Email</label>
       <input type="email" id="email" name="email" autocomplete="username"
              placeholder="ім'я@пошта.com" autocapitalize="none" spellcheck="false" required>
@@ -583,16 +588,41 @@
         <input type="password" id="pass" name="password" autocomplete="current-password"
                placeholder="Пароль" required>
         <button type="button" class="pass-toggle" id="pass-toggle"
-                onclick="togglePassVisibility()" aria-label="Показати пароль">👁</button>
+                onclick="togglePassVisibility('pass','pass-toggle')" aria-label="Показати пароль">👁</button>
       </div>
       <p id="login-hint" class="login-hint" style="display:none;"></p>
       <button type="submit" class="btn-login" id="btn-login-submit">Увійти</button>
+      <p id="login-error" class="login-err" style="display:none;"></p>
     </form>
-    <!-- Друга дія — не рівноцінна кнопка, а посилання: раніше дві однакові
-         кнопки збивали з пантелику, бо незрозуміло, яку тиснути. -->
-    <button type="button" class="link-btn" id="btn-first-login-toggle"
-            onclick="toggleFirstLoginMode()">Перший вхід? Встановити пароль</button>
-    <p id="login-error" style="color:red;text-align:center;display:none;margin-top:9px;"></p>
+    <button type="button" class="link-btn" onclick="showFirstLoginScreen()">Перший вхід? Встановити пароль →</button>
+  </div>
+  <!-- ═══ ЕКРАН 2: ПЕРШИЙ ВХІД (окремий екран, не режим) ═══ -->
+  <div id="first-login-screen" class="panel">
+    <h2>🔑 Перший вхід</h2>
+    <p class="fl-intro">
+      Якщо школа вже додала вашу електронну адресу, тут ви <b>створюєте власний пароль</b>.
+      Надалі входитимете з ним на головному екрані.
+    </p>
+    <form id="first-login-form" novalidate
+          onsubmit="event.preventDefault();if(window.submitFirstLogin)window.submitFirstLogin(event);return false;">
+      <label for="fl-email">Email, який вам видала школа</label>
+      <input type="email" id="fl-email" name="email" autocomplete="username"
+             placeholder="ім'я@пошта.com" autocapitalize="none" spellcheck="false" required>
+      <label for="fl-pass">Новий пароль (мінімум 6 символів)</label>
+      <div class="pass-wrap">
+        <input type="password" id="fl-pass" name="new-password" autocomplete="new-password"
+               placeholder="Придумайте пароль" required>
+        <button type="button" class="pass-toggle" id="fl-pass-toggle"
+                onclick="togglePassVisibility('fl-pass','fl-pass-toggle')" aria-label="Показати пароль">👁</button>
+      </div>
+      <label for="fl-pass2">Повторіть пароль</label>
+      <input type="password" id="fl-pass2" name="confirm-password" autocomplete="new-password"
+             placeholder="Ще раз той самий пароль" required>
+      <p id="fl-hint" class="login-hint" style="display:none;"></p>
+      <button type="submit" class="btn-login" id="btn-fl-submit">Встановити пароль і увійти</button>
+      <p id="fl-error" class="login-err" style="display:none;"></p>
+    </form>
+    <button type="button" class="link-btn" onclick="showLoginScreen()">← Назад до входу</button>
   </div>
   <!-- PROFILE BAR -->
   <div id="profile-bar" style="display:none;align-items:center;gap:13px;margin-bottom:18px;background:#fff;padding:13px;border-radius:12px;box-shadow:0 4px 10px rgba(0,0,0,.05);border:1px solid #eee;">
