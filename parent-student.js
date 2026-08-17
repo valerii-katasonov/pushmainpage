@@ -5,7 +5,7 @@
 // lives in teacher.js).
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, getActiveClass, currentUserData, STICKER_GOAL, getWeekDates, displayGrade, gradeClass6, showToast, renderHwItem, dayKeys, localDateString, formatAttendanceSlotLabel, renderGradeFormulaInfo, escJs } from './common.js';
+import { db, getActiveClass, currentUserData, STICKER_GOAL, getWeekDates, displayGrade, gradeClass6, showToast, renderHwItem, dayKeys, localDateString, formatAttendanceSlotLabel, renderGradeFormulaInfo, escJs, escHtml, safeUrl } from './common.js';
 import { ACADEMIC_YEAR_ID } from './director.js';
 
 // parentLessonInterval is reassigned only here and read/cleared from
@@ -78,7 +78,7 @@ function renderDynamicSchedule(role='parent'){
     html+=`<div class="lesson-row${isCurrent?' current':isPassed?' passed':''}">
       <div class="lesson-num">${i+1}</div>
       <div class="lesson-info">
-        <div class="lesson-subj">${sn}</div>
+        <div class="lesson-subj">${escHtml(sn)}</div>
         <div class="lesson-time">${l.time||'—'}</div>
         ${isCurrent?`<div class="progress-thin"><div class="progress-thin-fill" style="width:${progress}%"></div></div>`:''}
       </div>
@@ -126,7 +126,7 @@ export async function loadTextbooksForParent(role='parent'){
   const cls=getActiveClass();const snap=await get(ref(db,`textbooks/${cls}`));
   const container=document.getElementById(`${prefix}-textbooks-list`);if(!container)return;
   container.innerHTML='';
-  if(snap.exists()){const data=snap.val();let html='';for(let subj in data){for(let k in data[subj]){const tb=data[subj][k];html+=`<div class="textbook-item">📘 <b>${subj}:</b> <a href="${tb.url}" target="_blank">${tb.title||tb.url}</a></div>`;}}container.innerHTML=html||'<p class="empty-msg">Підручників немає.</p>';}
+  if(snap.exists()){const data=snap.val();let html='';for(let subj in data){for(let k in data[subj]){const tb=data[subj][k];html+=`<div class="textbook-item">📘 <b>${escHtml(subj)}:</b> <a href="${safeUrl(tb.url)}" target="_blank" rel="noopener noreferrer">${escHtml(tb.title||tb.url)}</a></div>`;}}container.innerHTML=html||'<p class="empty-msg">Підручників немає.</p>';}
   else container.innerHTML='<p class="empty-msg">Підручників немає.</p>';
 }
 // ══════════ CALENDAR (read-only): holidays / breaks / exams ══════════
@@ -294,7 +294,7 @@ export function loadParentDashboard(){
         // Retake button
         let retakeBtn='';if(gv){const n=parseInt(gv);if(!isNaN(n)&&n<=3)retakeBtn=`<button class="retake-btn" onclick="sendRetakeRequest('${cls}','${escJs(s)}','${date}','${escJs(sn)}',${n})" style="margin-left:6px;">🔄 Покращити</button>`;}
         const rxHtml=`<div style="display:flex;gap:8px;margin-top:8px;padding-top:7px;border-top:1px dashed #eee;align-items:center;"><button style="background:none;border:none;font-size:1.3rem;cursor:pointer;filter:${cr==='👍'?'none':'grayscale(100%)'};opacity:${cr==='👍'?'1':'.5'};padding:4px;width:auto;margin:0;" onclick="sendReaction('${date}','${escJs(s)}','👍')">👍</button><button style="background:none;border:none;font-size:1.3rem;cursor:pointer;filter:${cr==='❤️'?'none':'grayscale(100%)'};opacity:${cr==='❤️'?'1':'.5'};padding:4px;width:auto;margin:0;" onclick="sendReaction('${date}','${escJs(s)}','❤️')">❤️</button><button style="background:none;border:none;font-size:1.3rem;cursor:pointer;filter:${cr==='🔥'?'none':'grayscale(100%)'};opacity:${cr==='🔥'?'1':'.5'};padding:4px;width:auto;margin:0;" onclick="sendReaction('${date}','${escJs(s)}','🔥')">🔥</button></div>`;
-        list.innerHTML+=`<li><b>${s}:</b><br>${gHtml}${retakeBtn}${cm?`<div style="background:#f0f8ff;padding:5px 9px;border-radius:6px;font-style:italic;font-size:.88rem;margin-top:3px;">${cm}</div>`:''}${rxHtml}</li>`;
+        list.innerHTML+=`<li><b>${escHtml(s)}:</b><br>${gHtml}${retakeBtn}${cm?`<div style="background:#f0f8ff;padding:5px 9px;border-radius:6px;font-style:italic;font-size:.88rem;margin-top:3px;">${escHtml(cm)}</div>`:''}${rxHtml}</li>`;
       }
     });
     if(!hasItems)list.innerHTML+='<li class="empty-msg">Немає оцінок або коментарів.</li>';
@@ -345,7 +345,7 @@ export function loadStudentDashboard(){
         hasItems=true;const gc=gradeClass6(gv);const dispVal=displayGrade(gv,cls);
         let gHtml=gv?`<span class="g-cell ${gc}" style="display:inline-flex;padding:4px 9px;border-radius:8px;gap:5px;margin-bottom:3px;"><span class="g-val">${dispVal}</span>${gtp?`<span class="g-type">${gtp}</span>`:''}</span>`:'';
         let retakeBtn='';if(gv){const n=parseInt(gv);if(!isNaN(n)&&n<=3)retakeBtn=`<button class="retake-btn" onclick="sendRetakeRequest('${cls}','${escJs(s)}','${date}','${escJs(sn)}',${n})" style="margin-left:6px;">🔄 Покращити</button>`;}
-        list.innerHTML+=`<li><b>${s}:</b><br>${gHtml}${retakeBtn}${cm?`<div style="background:#f0f8ff;padding:5px 9px;border-radius:6px;font-style:italic;font-size:.88rem;margin-top:3px;">${cm}</div>`:''}</li>`;
+        list.innerHTML+=`<li><b>${escHtml(s)}:</b><br>${gHtml}${retakeBtn}${cm?`<div style="background:#f0f8ff;padding:5px 9px;border-radius:6px;font-style:italic;font-size:.88rem;margin-top:3px;">${escHtml(cm)}</div>`:''}</li>`;
       }
     });
     if(!hasItems)list.innerHTML+='<li class="empty-msg">Немає оцінок або коментарів.</li>';
