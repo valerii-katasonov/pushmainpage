@@ -478,61 +478,62 @@ function initUserSession(){
     renderPaymentsMockup();loadTextbooksForParent();
   }
 }
-// ══════════ ЕКРАН ВХОДУ ══════════
-// Було дві рівноцінні кнопки ("Увійти" і "Перший вхід"), і Enter не працював.
-// Тепер: одна кнопка в справжній <form> (Enter надсилає нативно), а "перший
-// вхід" — режим, який вмикається посиланням АБО автоматично, коли система
-// бачить, що акаунта ще немає, а email вже доданий директором.
-let firstLoginMode=false;
-// ВАЖЛИВО: email скрізь приводимо до нижнього регістру. Директор зберігає
-// pre_approved_roles з .toLowerCase(), тож "Ivan@School.com", введений при
-// першому вході, раніше не знаходив свій дозвіл і вхід зривався.
-const emailKey=e=>e.trim().toLowerCase().replace(/\./g,'_');
-function setLoginBusy(on,label){
-  const b=document.getElementById('btn-login-submit');
+// ══════════ ЕКРАНИ ВХОДУ ══════════
+// Два ОКРЕМІ екрани, а не один з режимом:
+//   #login-screen        — звичайний вхід
+//   #first-login-screen  — створення пароля при першому вході
+// Обробники submit навішені атрибутом onsubmit прямо в HTML (див. cabinet.html),
+// тому форма фізично не може піти звичайним GET-запитом навіть якщо цей модуль
+// не виконався — інакше пароль потрапляє в адресний рядок.
+// email скрізь у нижньому регістрі: директор зберігає pre_approved_roles через
+// .toLowerCase(), тож "Ivan@School.com" інакше не знаходив свій дозвіл.
+const emailKey=e=>String(e||'').trim().toLowerCase().replace(/\./g,'_');
+function setBusy(btnId,on,label){
+  const b=document.getElementById(btnId);
   if(!b)return;
   b.disabled=on;
-  b.innerText=on?'⏳ Зачекайте...':(label||(firstLoginMode?'Встановити пароль і увійти':'Увійти'));
+  if(on){b.dataset.label=b.innerText;b.innerText='⏳ Зачекайте...';}
+  else b.innerText=label||b.dataset.label||b.innerText;
 }
-function showLoginError(msg){
-  const el=document.getElementById('login-error');
+function setMsg(id,msg,cls){
+  const el=document.getElementById(id);
   if(!el)return;
-  el.innerText=msg||'';el.style.display=msg?'block':'none';
-}
-function showLoginHint(msg,warn){
-  const el=document.getElementById('login-hint');
-  if(!el)return;
-  el.innerHTML=msg||'';el.className='login-hint'+(warn?' warn':'');
+  el.innerHTML=msg||'';
+  if(cls!==undefined)el.className=cls;
   el.style.display=msg?'block':'none';
 }
-window.setFirstLoginMode=function(on,hint){
-  firstLoginMode=!!on;
-  const screen=document.getElementById('login-screen');
-  const toggle=document.getElementById('btn-first-login-toggle');
-  const pass=document.getElementById('pass');
-  if(screen)screen.classList.toggle('first-login-mode',firstLoginMode);
-  if(toggle)toggle.innerText=firstLoginMode?'← Повернутись до звичайного входу':'Перший вхід? Встановити пароль';
-  if(pass){
-    pass.setAttribute('autocomplete',firstLoginMode?'new-password':'current-password');
-    pass.placeholder=firstLoginMode?'Придумайте пароль (мін. 6 символів)':'Пароль';
-  }
-  showLoginError('');
-  showLoginHint(hint||(firstLoginMode
-    ?'Введіть свій email і <b>придумайте пароль</b> — він стане постійним. Email має бути заздалегідь доданий школою.'
-    :''));
-  setLoginBusy(false);
+// ── перемикання екранів ──
+window.showFirstLoginScreen=function(prefillEmail,hint){
+  document.getElementById('login-screen').style.display='none';
+  document.getElementById('first-login-screen').style.display='block';
+  const em=document.getElementById('fl-email');
+  const src=prefillEmail||document.getElementById('email').value;
+  if(em&&src)em.value=String(src).trim().toLowerCase();
+  setMsg('fl-error','');
+  setMsg('fl-hint',hint||'','login-hint');
+  (em&&!em.value?em:document.getElementById('fl-pass'))?.focus();
 };
-window.toggleFirstLoginMode=function(){window.setFirstLoginMode(!firstLoginMode);};
-window.togglePassVisibility=function(){
-  const p=document.getElementById('pass');const b=document.getElementById('pass-toggle');
+window.showLoginScreen=function(prefillEmail,hint){
+  document.getElementById('first-login-screen').style.display='none';
+  document.getElementById('login-screen').style.display='block';
+  const em=document.getElementById('email');
+  if(em&&prefillEmail)em.value=String(prefillEmail).trim().toLowerCase();
+  setMsg('login-error','');
+  setMsg('login-hint',hint||'','login-hint');
+  (em&&!em.value?em:document.getElementById('pass'))?.focus();
+};
+window.togglePassVisibility=function(inputId,btnId){
+  const p=document.getElementById(inputId||'pass');
+  const b=document.getElementById(btnId||'pass-toggle');
   if(!p)return;
   const show=p.type==='password';
   p.type=show?'text':'password';
   if(b){b.innerText=show?'🙈':'👁';b.setAttribute('aria-label',show?'Сховати пароль':'Показати пароль');}
 };
-// Чи доданий цей email школою (директором/вчителем) — три можливі джерела
+// Чи додала школа цей email (три можливі джерела дозволу)
 async function isEmailApproved(rawEmail){
   const se=emailKey(rawEmail);
+  if(!se)return false;
   const [rs,ls,sls]=await Promise.all([
     get(child(ref(db),`pre_approved_roles/${se}`)),
     get(child(ref(db),`parent_links/${se}`)),
@@ -540,66 +541,78 @@ async function isEmailApproved(rawEmail){
   ]);
   return rs.exists()||ls.exists()||sls.exists();
 }
+const AUTH_ERRORS={
+  'auth/invalid-email':'Невірний формат email.',
+  'auth/too-many-requests':'Забагато спроб. Спробуйте за кілька хвилин.',
+  'auth/network-request-failed':"Немає зв'язку із сервером. Перевірте інтернет.",
+  'auth/user-disabled':'Цей акаунт відключено. Зверніться до адміністрації.',
+  'auth/weak-password':'Пароль занадто простий (мінімум 6 символів).'
+};
+// ── ЗВИЧАЙНИЙ ВХІД ──
 window.submitLogin=async function(ev){
   if(ev&&ev.preventDefault)ev.preventDefault();
   const email=document.getElementById('email').value.trim().toLowerCase();
   const pass=document.getElementById('pass').value;
-  showLoginError('');
-  if(!email||!pass){showLoginError('Введіть email і пароль.');return;}
-  if(firstLoginMode&&pass.length<6){showLoginError('Пароль має бути не коротшим за 6 символів.');return;}
-  setLoginBusy(true);
+  setMsg('login-error','');setMsg('login-hint','','login-hint');
+  if(!email||!pass){setMsg('login-error','Введіть email і пароль.','login-err');return false;}
+  setBusy('btn-login-submit',true);
   try{
-    if(firstLoginMode){
-      if(!await isEmailApproved(email)){
-        setLoginBusy(false);
-        showLoginError('Цей email ще не додано школою. Зверніться до класного керівника або директора.');
-        return;
-      }
-      await createUserWithEmailAndPassword(auth,email,pass);
-    } else {
-      await signInWithEmailAndPassword(auth,email,pass);
-    }
+    await signInWithEmailAndPassword(auth,email,pass);
     // Успіх — onAuthStateChanged сам відкриє потрібний кабінет.
   }catch(err){
-    setLoginBusy(false);
+    setBusy('btn-login-submit',false,'Увійти');
     const code=err&&err.code||'';
-    if(code==='auth/email-already-in-use'){
-      window.setFirstLoginMode(false,'Акаунт із таким email вже існує — просто увійдіть своїм паролем.');
-      return;
-    }
     if(code==='auth/user-not-found'){
-      // Акаунта немає. Якщо email доданий школою — це саме перший вхід.
-      if(await isEmailApproved(email)){
-        window.setFirstLoginMode(true,'Схоже, це ваш <b>перший вхід</b>. Придумайте пароль і натисніть кнопку — він стане постійним.');
-      } else {
-        showLoginError('Цей email не зареєстровано у школі.');
-      }
-      return;
+      if(await isEmailApproved(email))
+        window.showFirstLoginScreen(email,'Схоже, це ваш <b>перший вхід</b> — акаунта ще немає. Придумайте пароль нижче.');
+      else
+        setMsg('login-error','Цей email не зареєстровано у школі.','login-err');
+      return false;
     }
     if(code==='auth/invalid-credential'||code==='auth/wrong-password'){
-      // Firebase не розрізняє "немає акаунта" і "невірний пароль", коли
-      // увімкнений захист від перебору. Тому підказуємо обидва варіанти.
+      // Firebase із захистом від перебору не розрізняє "немає акаунта" і
+      // "невірний пароль", тому підказуємо обидва варіанти.
+      setMsg('login-error','Невірний email або пароль.','login-err');
       if(await isEmailApproved(email))
-        showLoginHint('Якщо ви входите <b>вперше</b> — натисніть «Перший вхід? Встановити пароль» нижче.',true);
-      showLoginError('Невірний email або пароль.');
-      return;
+        setMsg('login-hint','Якщо ви входите <b>вперше</b> — натисніть «Перший вхід? Встановити пароль» внизу.','login-hint warn');
+      return false;
     }
-    const map={
-      'auth/invalid-email':'Невірний формат email.',
-      'auth/too-many-requests':'Забагато спроб. Спробуйте за кілька хвилин.',
-      'auth/network-request-failed':"Немає зв'язку із сервером. Перевірте інтернет.",
-      'auth/user-disabled':'Цей акаунт відключено. Зверніться до адміністрації.',
-      'auth/weak-password':'Пароль занадто простий (мінімум 6 символів).'
-    };
-    showLoginError(map[code]||('Помилка входу: '+(err.message||code)));
+    setMsg('login-error',AUTH_ERRORS[code]||('Помилка входу: '+(err.message||code)),'login-err');
   }
+  return false;
 };
-// Enter у будь-якому полі форми тепер працює — це нативна поведінка <form>.
-const loginForm=document.getElementById('login-form');
-if(loginForm)loginForm.addEventListener('submit',window.submitLogin);
-// Сумісність: стара розмітка/код могли викликати ці імена напряму.
+// ── ПЕРШИЙ ВХІД (створення пароля) ──
+window.submitFirstLogin=async function(ev){
+  if(ev&&ev.preventDefault)ev.preventDefault();
+  const email=document.getElementById('fl-email').value.trim().toLowerCase();
+  const p1=document.getElementById('fl-pass').value;
+  const p2=document.getElementById('fl-pass2').value;
+  setMsg('fl-error','');
+  if(!email||!p1){setMsg('fl-error','Заповніть email і пароль.','login-err');return false;}
+  if(p1.length<6){setMsg('fl-error','Пароль має бути не коротшим за 6 символів.','login-err');return false;}
+  if(p1!==p2){setMsg('fl-error','Паролі не збігаються.','login-err');return false;}
+  setBusy('btn-fl-submit',true);
+  try{
+    if(!await isEmailApproved(email)){
+      setBusy('btn-fl-submit',false,'Встановити пароль і увійти');
+      setMsg('fl-error','Цей email ще не додано школою. Зверніться до класного керівника або директора.','login-err');
+      return false;
+    }
+    await createUserWithEmailAndPassword(auth,email,p1);
+  }catch(err){
+    setBusy('btn-fl-submit',false,'Встановити пароль і увійти');
+    const code=err&&err.code||'';
+    if(code==='auth/email-already-in-use'){
+      window.showLoginScreen(email,'Акаунт із таким email вже існує — увійдіть своїм паролем.');
+      return false;
+    }
+    setMsg('fl-error',AUTH_ERRORS[code]||('Помилка: '+(err.message||code)),'login-err');
+  }
+  return false;
+};
+// Сумісність зі старими викликами
 window.loginUser=()=>window.submitLogin();
-window.registerUser=()=>window.setFirstLoginMode(true);
+window.registerUser=()=>window.showFirstLoginScreen();
 window.logoutUser=function(){if(teacherAttendanceListener)teacherAttendanceListener();if(parentLessonInterval)clearInterval(parentLessonInterval);document.getElementById('profile-bar').style.display='none';signOut(auth);};
 // ══════════ ADMIN DASHBOARD ══════════
 window.loadAdminDashboard=async function(){try{const date=document.getElementById('global-date').value;document.getElementById('a-att-header').innerText=`🚨 Відсутні (${date.split('-').reverse().slice(0,2).join('.')})`;const wd=getWeekDates(date);let wl=0,wa=0,hw=0,com=0;const[s,hwS,comS]=await Promise.all([get(child(ref(db),'attendance')),get(child(ref(db),'homeworks')),get(child(ref(db),'comments'))]);let h='';if(s.exists()){const d=s.val();for(let i=1;i<=11;i++){const c=`class_${i}`;if(d[c]&&d[c][date])for(let st in d[c][date]){const slots=d[c][date][st];for(let sk in slots){const r=slots[sk];if(r?.status){const bc=r.status==='late'?'badge-late':'badge-absent';const markerIcon=r.markedBy==='teacher'?'👨‍🏫':(r.markedBy==='student'?'🎒':(r.markedBy==='administrator'?'🛡️':'👪'));h+=`<li style="margin-bottom:9px;border-bottom:1px solid #eee;padding-bottom:4px;"><span style="font-size:.72rem;background:var(--teal);color:#fff;padding:2px 5px;border-radius:4px;margin-right:4px;">${i} Кл</span> <b>${escHtml(st)}</b> <span class="badge ${bc}">${r.status==='late'?'Запізнення':'Відсутність'}</span> <span style="font-size:.72rem;color:#888;">${escHtml(formatAttendanceSlotLabel(sk))} ${markerIcon}</span></li>`;}}}
