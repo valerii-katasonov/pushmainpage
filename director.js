@@ -7,7 +7,7 @@
 // header for why.)
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, push, remove, update } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, showToast, getClassNum, displayGrade, gradeClass6, teacherAccessMatrix, getWeekDates, formatAttendanceSlotLabel, gradeTypesCache, loadGradeTypesCache, calculateStudentWeightedAvg, escJs, escHtml, localDateString, normalizeRoles, getUserRoles, ROLE_LABELS, currentUserData } from './common.js';
+import { db, showToast, getClassNum, displayGrade, gradeClass6, teacherAccessMatrix, getWeekDates, formatAttendanceSlotLabel, gradeTypesCache, loadGradeTypesCache, calculateStudentWeightedAvg, escJs, escHtml, localDateString, normalizeRoles, getUserRoles, ROLE_LABELS, currentUserData, dayNamesUA } from './common.js';
 
 let directorSkillsTemp=[];
 
@@ -222,9 +222,51 @@ window.loadStaffList=async function(){
 // це повне відкликання доступу: людина зникає зі списків, втрачає роль і всі
 // дозволи, а при спробі входу отримує відмову (перевірка disabled у common.js).
 // Історичні дані (виставлені нею оцінки, ДЗ) свідомо НЕ видаляються.
+// Скільки уроків у ЖИВОМУ розкладі закріплено за цим учителем. Рахуємо лише
+// явні призначення (lesson.teacherEmail) — там, де вчитель підставлявся
+// автоматично за матрицею доступу, зв'язку в даних немає, про це попереджаємо
+// окремим рядком.
+async function findTeacherLessons(safeEmail){
+  const snap=await get(child(ref(db),'schedules'));
+  const result={total:0,byClass:{}};
+  if(!snap.exists())return result;
+  const all=snap.val();
+  for(let cls in all){
+    const groups=[all[cls]?.lessons,all[cls]?.clubs];
+    groups.forEach(days=>{
+      if(!days)return;
+      for(let day in days){
+        const slots=days[day]||[];
+        (Array.isArray(slots)?slots:[slots]).forEach(slot=>{
+          const items=Array.isArray(slot)?slot:(slot&&slot.subject?[slot]:[]);
+          items.forEach(l=>{
+            if(!l||!l.teacherEmail)return;
+            if(l.teacherEmail.replace(/\./g,'_')!==safeEmail)return;
+            result.total++;
+            if(!result.byClass[cls])result.byClass[cls]=new Set();
+            result.byClass[cls].add(dayNamesUA[day]||day);
+          });
+        });
+      }
+    });
+  }
+  return result;
+}
 window.removeStaffMember=async function(safeEmail){
   const readable=safeEmail.replace(/_/g,'.');
-  if(!confirm(`Видалити співробітника ${readable}?\n\nБуде відкликано:\n• роль і доступ до кабінету\n• доступ до класів і предметів\n• компетенції (скіли)\n\nВиставлені раніше оцінки та ДЗ залишаться в журналі.\n\nПродовжити?`))return;
+  // Попередження про розклад — рахуємо ДО діалогу підтвердження
+  let scheduleWarning='';
+  try{
+    const found=await findTeacherLessons(safeEmail);
+    if(found.total>0){
+      const lines=Object.keys(found.byClass).sort((a,b)=>getClassNum(a)-getClassNum(b))
+        .map(cls=>`   • ${cls.replace('class_','')} клас — ${[...found.byClass[cls]].join(', ')}`);
+      scheduleWarning=`\n⚠️ УВАГА: у розкладі за цим учителем закріплено ${found.total} ур.:\n`
+        +lines.join('\n')
+        +`\n\nУроки залишаться в розкладі, але без учителя — їх треба\nпереназначити вручну через «🗓️ Розклад».\n`;
+    }
+  }catch(e){console.warn('Не вдалося перевірити розклад:',e.message);}
+  if(!confirm(`Видалити співробітника ${readable}?\n${scheduleWarning}\nБуде відкликано:\n• роль і доступ до кабінету\n• доступ до класів і предметів\n• компетенції (скіли)\n\nВиставлені раніше оцінки, ДЗ та коментарі залишаться\nв журналі — вони не прив'язані до вчителя.\n\nПродовжити?`))return;
   try{
     // 1. Прибираємо з дозволених ролей, доступів і скілів
     await Promise.all([
@@ -252,7 +294,9 @@ window.removeStaffMember=async function(safeEmail){
         }
       }
     }
-    showToast(`🗑️ Доступ відкликано: ${readable}`);
+    showToast(scheduleWarning
+      ?`🗑️ Доступ відкликано: ${readable}. Не забудьте переназначити його уроки в розкладі!`
+      :`🗑️ Доступ відкликано: ${readable}`);
     window.loadStaffList();
     if(typeof window.loadTeachersListForDirector==='function')window.loadTeachersListForDirector();
   }catch(e){alert('Помилка: '+e.message);}
