@@ -352,13 +352,63 @@ function renderBellSlotsTable(){
 window.updateBellSlot=function(i,field,val){if(bellSlotsTemp[i])bellSlotsTemp[i][field]=val;};
 window.addBellSlot=function(){const nextNum=bellSlotsTemp.length>0?Math.max(...bellSlotsTemp.map(s=>parseInt(s.number)||0))+1:1;bellSlotsTemp.push({number:nextNum,start:'',end:''});renderBellSlotsTable();};
 window.removeBellSlot=function(i){bellSlotsTemp.splice(i,1);renderBellSlotsTable();};
+// Перетворює поточні (можливо ще не збережені) слоти на об'єкт для запису.
+// Повертає null, якщо жодного повного слота немає.
+function buildBellObject(){
+  const obj={};let n=0;
+  bellSlotsTemp.forEach(s=>{if(s.start&&s.end){obj[s.number]={number:s.number,start:s.start,end:s.end};n++;}});
+  return n>0?obj:null;
+}
 window.saveBellSchedule=async function(){
   const cls=document.getElementById('bell-class-select').value;
   if(!cls)return alert("Оберіть клас!");
-  const obj={};
-  bellSlotsTemp.forEach(s=>{if(s.start&&s.end)obj[s.number]={number:s.number,start:s.start,end:s.end};});
+  const obj=buildBellObject();
+  if(!obj)return alert("Додайте хоча б один урок із заповненим часом початку і кінця.");
   await set(ref(db,`bell_schedules/${cls}`),obj);
   showToast("✅ Розклад дзвінків збережено!");
+  window.loadBellCoverage();
+};
+// ── Застосувати поточний розклад дзвінків одразу всім 11 класам ──
+window.applyBellToAllClasses=async function(){
+  const obj=buildBellObject();
+  if(!obj)return alert("Спочатку налаштуйте час дзвінків вище (потрібен хоча б один повний урок).");
+  const slotCount=Object.keys(obj).length;
+  if(!confirm(`Застосувати цей розклад (${slotCount} ур.) до ВСІХ 11 класів?\n\nІснуючий розклад дзвінків усіх класів буде замінено.`))return;
+  try{
+    // Один апдейт замість 11 окремих записів
+    const patch={};
+    for(let i=1;i<=11;i++)patch[`class_${i}`]=obj;
+    await update(ref(db,'bell_schedules'),patch);
+    showToast('✅ Розклад дзвінків застосовано до всіх 11 класів');
+    window.loadBellCoverage();
+  }catch(e){alert('Помилка: '+e.message);}
+};
+// ── Хто який розклад має і в кого не вказано ──
+window.loadBellCoverage=async function(){
+  const box=document.getElementById('bell-coverage');
+  if(!box)return;
+  box.innerHTML='<p class="empty-msg">Завантаження...</p>';
+  try{
+    const snap=await get(child(ref(db),'bell_schedules'));
+    const data=snap.exists()?snap.val():{};
+    const missing=[];let rows='';
+    for(let i=1;i<=11;i++){
+      const cls=`class_${i}`;
+      const d=data[cls];
+      const slots=d?Object.keys(d).sort((a,b)=>(parseInt(a)||0)-(parseInt(b)||0)).map(k=>d[k]).filter(s=>s&&s.start&&s.end):[];
+      if(slots.length===0){
+        missing.push(i);
+        rows+=`<div class="bell-row empty"><span class="cls">${i} клас</span><span class="times">не вказано</span></div>`;
+      }else{
+        const times=slots.map(s=>`${escHtml(s.number)}) ${escHtml(s.start)}–${escHtml(s.end)}`).join(' · ');
+        rows+=`<div class="bell-row"><span class="cls">${i} клас</span><span class="times">${times}</span></div>`;
+      }
+    }
+    const head=missing.length>0
+      ? `<div class="bell-missing">⚠️ Розклад не вказано: ${missing.join(', ')} клас</div>`
+      : `<div style="background:#e8f5e9;border:1px solid #a5d6a7;color:#1b5e20;border-radius:9px;padding:8px 11px;font-size:.8rem;font-weight:700;margin-bottom:8px;">✓ Розклад заповнено в усіх 11 класах</div>`;
+    box.innerHTML=head+rows;
+  }catch(e){box.innerHTML=`<p style="color:red;font-size:.78rem;">Помилка: ${escHtml(e.message)}</p>`;}
 };
 // ══════════ PHASE 5: GRADE TYPES (Типи оцінок) ══════════
 // gradeTypesCache itself is only ever reassigned inside common.js
