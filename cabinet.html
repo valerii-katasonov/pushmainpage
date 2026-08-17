@@ -198,6 +198,14 @@
     .skill-tag{display:inline-block;background:#e0f2f1;color:var(--teal);border:1px solid #a5d6d1;border-radius:20px;padding:3px 10px;font-size:.75rem;font-weight:700;margin:2px;}
     /* ── ПЕРЕМИКАЧ КАБІНЕТІВ (для тих, у кого кілька ролей) ── */
     #pb-role-switcher select{width:auto;max-width:220px;margin-top:0;padding:4px 8px;font-size:.78rem;font-weight:700;color:var(--teal);border:1px solid var(--teal);border-radius:7px;background:#f0f8ff;cursor:pointer;}
+    /* ── РОЗКЛАД ДЗВІНКІВ ПО КЛАСАХ ── */
+    .bell-missing{background:#ffebee;border:1px solid #ef9a9a;color:#b71c1c;border-radius:9px;padding:8px 11px;font-size:.8rem;font-weight:700;margin-bottom:8px;}
+    .bell-row{display:flex;gap:9px;align-items:baseline;padding:6px 0;border-bottom:1px dashed #e0e0e0;font-size:.8rem;}
+    .bell-row:last-child{border-bottom:none;}
+    .bell-row .cls{flex-shrink:0;width:58px;font-weight:800;color:#283593;}
+    .bell-row .times{flex:1;color:#444;line-height:1.5;word-break:break-word;}
+    .bell-row.empty .cls{color:var(--red);}
+    .bell-row.empty .times{color:var(--red);font-style:italic;}
     /* ── СПИСОК ПЕРСОНАЛУ ── */
     .staff-row{display:flex;align-items:center;gap:10px;padding:9px 11px;border:1px solid #e8e8e8;border-radius:9px;margin-bottom:6px;background:#fff;}
     .staff-row.is-disabled{opacity:.5;background:#fafafa;}
@@ -999,7 +1007,17 @@
           </select>
           <div id="bell-slots-table" style="margin-top:10px;"><p class="empty-msg">Оберіть клас.</p></div>
           <button onclick="addBellSlot()" style="background:#7986cb;color:#fff;margin-top:8px;">+ Додати урок</button>
-          <button onclick="saveBellSchedule()" style="background:#283593;color:#fff;margin-top:8px;">💾 Зберегти розклад дзвінків</button>
+          <button onclick="saveBellSchedule()" style="background:#283593;color:#fff;margin-top:8px;">💾 Зберегти для цього класу</button>
+          <!-- Один раз налаштувати — застосувати всім класам -->
+          <button onclick="applyBellToAllClasses()" style="background:#00838f;color:#fff;margin-top:8px;">📤 Застосувати цей розклад до ВСІХ класів</button>
+          <!-- Хто який розклад має і в кого не вказано -->
+          <div style="margin-top:14px;border-top:1px dashed #b0bec5;padding-top:10px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <b style="font-size:.85rem;color:#283593;">📊 Розклад дзвінків по класах</b>
+              <button onclick="loadBellCoverage()" style="width:auto;padding:4px 10px;margin:0;font-size:.75rem;background:#eceff1;color:#333;">🔄 Оновити</button>
+            </div>
+            <div id="bell-coverage" style="margin-top:7px;"><p class="empty-msg">Завантаження...</p></div>
+          </div>
         </div>
       </details>
       <!-- PHASE 5: Типи оцінок -->
