@@ -6,7 +6,7 @@
 // exams calendar, and reactions/weekly-wrapped.
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, push, remove, onValue } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, auth, CLOUDINARY_URL, UPLOAD_PRESET, getActiveClass, currentUserData, showToast, displayGrade, renderHwItem, dayKeys, formatAttendanceSlotLabel, STICKER_GOAL, escJs } from './common.js';
+import { db, auth, CLOUDINARY_URL, UPLOAD_PRESET, getActiveClass, currentUserData, showToast, displayGrade, renderHwItem, dayKeys, formatAttendanceSlotLabel, STICKER_GOAL, escJs, escHtml, safeUrl } from './common.js';
 import { populateTopicSelector, availableTopicsCache } from './curriculum.js';
 
 let currentHwImages=[];
@@ -159,7 +159,7 @@ async function loadTextbooksForTeacher(){
   if(!subj)return;
   const snap=await get(ref(db,`textbooks/${cls}/${subj.replace(/[.#$[\]]/g,'_')}`));
   const container=document.getElementById('t-textbooks-list');container.innerHTML='';
-  if(snap.exists()){const data=snap.val();for(let k in data){const tb=data[k];container.innerHTML+=`<div class="textbook-item">📘 <a href="${tb.url}" target="_blank">${tb.title||tb.url}</a><button onclick="removeTextbook('${cls}','${escJs(subj)}','${k}')" style="background:none;border:none;color:var(--red);cursor:pointer;padding:0;width:auto;margin:0;font-size:1rem;">✖</button></div>`;}}
+  if(snap.exists()){const data=snap.val();for(let k in data){const tb=data[k];container.innerHTML+=`<div class="textbook-item">📘 <a href="${safeUrl(tb.url)}" target="_blank" rel="noopener noreferrer">${escHtml(tb.title||tb.url)}</a><button onclick="removeTextbook('${cls}','${escJs(subj)}','${k}')" style="background:none;border:none;color:var(--red);cursor:pointer;padding:0;width:auto;margin:0;font-size:1rem;">✖</button></div>`;}}
   else container.innerHTML='<p class="empty-msg" style="font-size:.8rem;">Підручників ще не додано.</p>';
 }
 window.saveTextbook=async function(){
@@ -187,7 +187,7 @@ async function loadCurriculumTopics(){
     const c=t.covered?'covered':'';
     container.innerHTML+=`<div class="topic-row ${c}">
       <input type="checkbox" ${t.covered?'checked':''} onchange="toggleTopicCovered('${cls}','${subj}','${k}',this.checked)">
-      <span style="flex:1;${t.covered?'text-decoration:line-through;color:#aaa;':''}">${t.title}</span>
+      <span style="flex:1;${t.covered?'text-decoration:line-through;color:#aaa;':''}">${escHtml(t.title)}</span>
       <span style="font-size:.75rem;color:#888;flex-shrink:0;">${t.hours||1} год.</span>
     </div>`;
   }
@@ -268,7 +268,7 @@ function buildMarkAbsentLessonOptions(){
   if(flat.length>0){
     flat.forEach((l,i)=>{
       const sn=window.getValidSubjectName(l)||'Урок';
-      sel.innerHTML+=`<option value="${i+1}">${l.number||(i+1)}. ${sn}</option>`;
+      sel.innerHTML+=`<option value="${i+1}">${escHtml(l.number||(i+1))}. ${escHtml(sn)}</option>`;
     });
   } else {
     const fallbackSubj=document.getElementById('t-subject')?.value;
@@ -296,10 +296,10 @@ export function listenTeacherAttendance(){
   buildMarkAbsentLessonOptions();
   if(currentUserData.role==='art_school_teacher'){
     document.getElementById('t-att-header').innerText="🚨 Відсутні (Вся школа):";
-    teacherAttendanceListener=onValue(ref(db,'attendance'),snap=>{list.innerHTML='';if(snap.exists()){const d=snap.val();let h='';for(let i=1;i<=11;i++){const c=`class_${i}`;if(d[c]&&d[c][date])for(let st in d[c][date]){const slots=d[c][date][st];for(let sk in slots){const r=slots[sk];if(!r?.status)continue;const bc=r.status==='late'?'badge-late':'badge-absent';const lb=r.status==='late'?'Запізнення':'Відсутність';const markerIcon=r.markedBy==='teacher'?'👨‍🏫':(r.markedBy==='student'?'🎒':'👪');h+=`<li style="margin-bottom:7px;border-bottom:1px dashed #eee;padding-bottom:4px;"><span style="font-size:.72rem;background:var(--teal);color:#fff;padding:2px 5px;border-radius:4px;margin-right:4px;">${i} Кл</span> <b>${st}</b> <span class="badge ${bc}">${lb}</span> <span style="font-size:.72rem;color:#888;">${formatAttendanceSlotLabel(sk)} ${markerIcon}</span></li>`;}}}list.innerHTML=h||'<li class="empty-msg">Усі на місці.</li>';}else list.innerHTML='<li class="empty-msg">Усі на місці.</li>';});
+    teacherAttendanceListener=onValue(ref(db,'attendance'),snap=>{list.innerHTML='';if(snap.exists()){const d=snap.val();let h='';for(let i=1;i<=11;i++){const c=`class_${i}`;if(d[c]&&d[c][date])for(let st in d[c][date]){const slots=d[c][date][st];for(let sk in slots){const r=slots[sk];if(!r?.status)continue;const bc=r.status==='late'?'badge-late':'badge-absent';const lb=r.status==='late'?'Запізнення':'Відсутність';const markerIcon=r.markedBy==='teacher'?'👨‍🏫':(r.markedBy==='student'?'🎒':'👪');h+=`<li style="margin-bottom:7px;border-bottom:1px dashed #eee;padding-bottom:4px;"><span style="font-size:.72rem;background:var(--teal);color:#fff;padding:2px 5px;border-radius:4px;margin-right:4px;">${i} Кл</span> <b>${escHtml(st)}</b> <span class="badge ${bc}">${lb}</span> <span style="font-size:.72rem;color:#888;">${escHtml(formatAttendanceSlotLabel(sk))} ${markerIcon}</span></li>`;}}}list.innerHTML=h||'<li class="empty-msg">Усі на місці.</li>';}else list.innerHTML='<li class="empty-msg">Усі на місці.</li>';});
   }else{
     const cls=getActiveClass();document.getElementById('t-att-header').innerText="🚨 Відвідуваність сьогодні:";
-    teacherAttendanceListener=onValue(ref(db,`attendance/${cls}/${date}`),snap=>{list.innerHTML='';if(snap.exists()){const d=snap.val();let h='';for(let st in d){const slots=d[st];for(let sk in slots){const r=slots[sk];if(!r?.status)continue;const bc=r.status==='late'?'badge-late':'badge-absent';const lb=r.status==='late'?'Запізнення':'Відсутність';const markerIcon=r.markedBy==='teacher'?'👨‍🏫':(r.markedBy==='student'?'🎒':'👪');h+=`<li style="margin-bottom:7px;border-bottom:1px dashed #eee;padding-bottom:4px;"><b>${st}</b> <span class="badge ${bc}">${lb}</span> <span style="font-size:.72rem;color:#888;">${formatAttendanceSlotLabel(sk)} ${markerIcon}</span> <i style="font-size:.78rem;color:#666;">(${r.reason})</i></li>`;}}list.innerHTML=h||'<li class="empty-msg">Усі на місці.</li>';}else list.innerHTML='<li class="empty-msg">Усі на місці.</li>';});
+    teacherAttendanceListener=onValue(ref(db,`attendance/${cls}/${date}`),snap=>{list.innerHTML='';if(snap.exists()){const d=snap.val();let h='';for(let st in d){const slots=d[st];for(let sk in slots){const r=slots[sk];if(!r?.status)continue;const bc=r.status==='late'?'badge-late':'badge-absent';const lb=r.status==='late'?'Запізнення':'Відсутність';const markerIcon=r.markedBy==='teacher'?'👨‍🏫':(r.markedBy==='student'?'🎒':'👪');h+=`<li style="margin-bottom:7px;border-bottom:1px dashed #eee;padding-bottom:4px;"><b>${escHtml(st)}</b> <span class="badge ${bc}">${lb}</span> <span style="font-size:.72rem;color:#888;">${escHtml(formatAttendanceSlotLabel(sk))} ${markerIcon}</span> <i style="font-size:.78rem;color:#666;">(${escHtml(r.reason)})</i></li>`;}}list.innerHTML=h||'<li class="empty-msg">Усі на місці.</li>';}else list.innerHTML='<li class="empty-msg">Усі на місці.</li>';});
   }
 }
 window.listenTeacherAttendance=listenTeacherAttendance;
