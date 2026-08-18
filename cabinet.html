@@ -637,6 +637,29 @@
     </form>
     <button type="button" class="link-btn" onclick="showLoginScreen()">← Назад до входу</button>
   </div>
+  <!-- ═══ ЕКРАН 3: ВСТАНОВЛЕННЯ НОВОГО ПАРОЛЯ ═══
+       Відкривається, коли людина переходить за посиланням із листа
+       відновлення. Працює лише якщо у Firebase Console → Authentication →
+       Templates задано "Customize action URL" на адресу цієї сторінки. -->
+  <div id="reset-password-screen" class="panel">
+    <h2>🔐 Новий пароль</h2>
+    <p id="rp-email" class="fl-intro">Встановлення нового пароля</p>
+    <form id="reset-password-form" novalidate
+          onsubmit="event.preventDefault();if(window.submitNewPassword)window.submitNewPassword(event);return false;">
+      <label for="rp-pass">Новий пароль (мінімум 6 символів)</label>
+      <div class="pass-wrap">
+        <input type="password" id="rp-pass" name="new-password" autocomplete="new-password"
+               placeholder="Придумайте пароль" required>
+        <button type="button" class="pass-toggle" id="rp-pass-toggle"
+                onclick="togglePassVisibility('rp-pass','rp-pass-toggle')" aria-label="Показати пароль">👁</button>
+      </div>
+      <label for="rp-pass2">Повторіть пароль</label>
+      <input type="password" id="rp-pass2" name="confirm-password" autocomplete="new-password"
+             placeholder="Ще раз той самий пароль" required>
+      <button type="submit" class="btn-login" id="btn-rp-submit">Зберегти новий пароль</button>
+      <p id="rp-error" class="login-err" style="display:none;"></p>
+    </form>
+  </div>
   <!-- PROFILE BAR -->
   <div id="profile-bar" style="display:none;align-items:center;gap:13px;margin-bottom:18px;background:#fff;padding:13px;border-radius:12px;box-shadow:0 4px 10px rgba(0,0,0,.05);border:1px solid #eee;">
     <img id="pb-avatar" src="https://cdn-icons-png.flaticon.com/512/149/149071.png" style="width:48px;height:48px;border-radius:50%;object-fit:cover;border:2px solid var(--teal);">
