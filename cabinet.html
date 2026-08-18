@@ -213,6 +213,10 @@
     .staff-email{font-size:.75rem;color:#888;word-break:break-all;}
     .staff-roles{margin-top:4px;display:flex;flex-wrap:wrap;gap:3px;}
     .staff-role-tag{display:inline-block;background:#eef2ff;color:#3949ab;border:1px solid #c5cae9;border-radius:12px;padding:1px 8px;font-size:.68rem;font-weight:700;}
+    /* ── СПИСОК УЧНІВ У ДИРЕКТОРА ── */
+    .ds-row{display:flex;align-items:center;gap:9px;padding:6px 8px;background:#fff;border:1px solid #e0e0e0;border-radius:8px;margin-bottom:4px;font-size:.85rem;}
+    .ds-num{width:22px;text-align:center;color:#888;font-size:.75rem;flex-shrink:0;}
+    .ds-name{flex:1;font-weight:600;color:#333;word-break:break-word;}
     .staff-actions{display:flex;flex-direction:column;gap:4px;flex-shrink:0;}
     .staff-reset{width:auto;margin:0;padding:6px 11px;font-size:.75rem;background:#e8f4fd;color:#0d47a1;border:1px solid #bbdefb;border-radius:8px;cursor:pointer;font-weight:700;white-space:nowrap;}
     .staff-reset:hover{background:#0d47a1;color:#fff;}
@@ -931,7 +935,27 @@
     </section>
 
     <section class="screen-section">
-      <h3>🎓 Переведення учнів</h3>
+      <h3>🎓 Учні</h3>
+      <!-- Директор може вести списки учнів БУДЬ-ЯКОГО класу (вчитель — лише своїх) -->
+      <details style="margin-bottom:12px;background:#e8f5e9;padding:14px;border-radius:12px;border:1px solid #a5d6a7;" ontoggle="if(this.open)loadDirectorStudents()">
+        <summary style="font-weight:700;cursor:pointer;color:#1b5e20;font-size:.95rem;">👨‍🎓 Списки учнів по класах</summary>
+        <div style="margin-top:13px;">
+          <select id="ds-class" onchange="loadDirectorStudents()" style="border:2px solid #66bb6a;">
+            <option value="">-- Оберіть клас --</option>
+            <option value="class_1">1 Клас</option><option value="class_2">2 Клас</option><option value="class_3">3 Клас</option>
+            <option value="class_4">4 Клас</option><option value="class_5">5 Клас</option><option value="class_6">6 Клас</option>
+            <option value="class_7">7 Клас</option><option value="class_8">8 Клас</option><option value="class_9">9 Клас</option>
+            <option value="class_10">10 Клас</option><option value="class_11">11 Клас</option>
+          </select>
+          <div id="ds-list" style="margin-top:10px;"><p class="empty-msg">Оберіть клас.</p></div>
+          <div style="margin-top:12px;border-top:1px dashed #a5d6a7;padding-top:10px;">
+            <b style="font-size:.85rem;color:#1b5e20;">➕ Додати учня</b>
+            <input type="text" id="ds-new-name" placeholder="Прізвище та Ім'я" style="margin-top:6px;">
+            <input type="email" id="ds-new-email" placeholder="Email учня (необов'язково — для власного входу)" style="margin-top:5px;">
+            <button onclick="directorAddStudent()" style="background:#1b5e20;color:#fff;margin-top:8px;">➕ Додати до обраного класу</button>
+          </div>
+        </div>
+      </details>
       <!-- Переведення одного учня (перехід у паралель / інший клас серед року) -->
       <details style="margin-bottom:12px;background:#f9f4ff;padding:14px;border-radius:12px;border:1px solid #ce93d8;" ontoggle="if(this.open)loadTransferClasses()">
         <summary style="font-weight:700;cursor:pointer;color:#7b1fa2;font-size:.95rem;">↔️ Перевести учня в інший клас</summary>
