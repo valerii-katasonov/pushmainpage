@@ -213,7 +213,10 @@
     .staff-email{font-size:.75rem;color:#888;word-break:break-all;}
     .staff-roles{margin-top:4px;display:flex;flex-wrap:wrap;gap:3px;}
     .staff-role-tag{display:inline-block;background:#eef2ff;color:#3949ab;border:1px solid #c5cae9;border-radius:12px;padding:1px 8px;font-size:.68rem;font-weight:700;}
-    .staff-del{width:auto;flex-shrink:0;margin:0;padding:6px 11px;font-size:.75rem;background:#fdecea;color:var(--red);border:1px solid #f5c6cb;border-radius:8px;cursor:pointer;font-weight:700;}
+    .staff-actions{display:flex;flex-direction:column;gap:4px;flex-shrink:0;}
+    .staff-reset{width:auto;margin:0;padding:6px 11px;font-size:.75rem;background:#e8f4fd;color:#0d47a1;border:1px solid #bbdefb;border-radius:8px;cursor:pointer;font-weight:700;white-space:nowrap;}
+    .staff-reset:hover{background:#0d47a1;color:#fff;}
+    .staff-del{width:auto;flex-shrink:0;margin:0;padding:6px 11px;font-size:.75rem;background:#fdecea;color:var(--red);border:1px solid #f5c6cb;border-radius:8px;cursor:pointer;font-weight:700;white-space:nowrap;}
     .staff-del:hover{background:var(--red);color:#fff;}
     .skill-tag.remove{cursor:pointer;background:#fdecea;color:var(--red);border-color:#f5c6cb;}
     .skill-tag.remove:hover{background:var(--red);color:#fff;}
@@ -603,6 +606,8 @@
       <p id="login-error" class="login-err" style="display:none;"></p>
     </form>
     <button type="button" class="link-btn" onclick="showFirstLoginScreen()">Перший вхід? Встановити пароль →</button>
+    <button type="button" class="link-btn" style="color:#7f8c8d;font-weight:600;margin-top:2px;"
+            onclick="requestPasswordReset()">Забули пароль?</button>
   </div>
   <!-- ═══ ЕКРАН 2: ПЕРШИЙ ВХІД (окремий екран, не режим) ═══ -->
   <div id="first-login-screen" class="panel">
