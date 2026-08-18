@@ -13,7 +13,7 @@
 // bindings. Everything else uses normal export/import.
 // ═══════════════════════════════════════════════════════════════
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, updatePassword, sendPasswordResetEmail, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, updatePassword, sendPasswordResetEmail, verifyPasswordResetCode, confirmPasswordReset, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
 import { getDatabase, ref, set, get, child, push, onValue, remove, update } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 
 import { loadTeacherDashboard, loadCurrentTopicAndHW, listenTeacherAttendance, teacherAttendanceListener } from './teacher.js';
@@ -398,6 +398,9 @@ function updateSubjectList(){
 }
 // ══════════ AUTH ══════════
 onAuthStateChanged(auth,async user=>{
+  // Людина перейшла за посиланням із листа відновлення пароля — показуємо
+  // сторінку встановлення нового пароля і не чіпаємо звичайний вхід.
+  if(hasPendingAuthAction()){initPasswordResetScreen();return;}
   document.querySelectorAll('.panel').forEach(p=>p.style.display='none');document.getElementById('calendar-block').style.display='none';document.getElementById('profile-bar').style.display='none';
   if(user){
     const se=user.email.replace(/\./g,'_');
@@ -634,9 +637,65 @@ window.submitFirstLogin=async function(ev){
 export async function sendPasswordReset(rawEmail){
   const email=String(rawEmail||'').trim().toLowerCase();
   if(!email)throw new Error('Вкажіть email.');
-  await sendPasswordResetEmail(auth,email);
+  // continueUrl: після встановлення пароля на сторінці Firebase людина
+  // отримує кнопку «Продовжити», яка повертає її сюди, на портал.
+  // Домен має бути в Firebase Console → Authentication → Settings →
+  // Authorized domains, інакше Firebase відхилить посилання.
+  await sendPasswordResetEmail(auth,email,{
+    url:window.location.origin+window.location.pathname,
+    handleCodeInApp:false
+  });
   return email;
 }
+// ══════════ СТОРІНКА ВСТАНОВЛЕННЯ НОВОГО ПАРОЛЯ ══════════
+// Працює, коли у Firebase Console → Authentication → Templates задано
+// "Customize action URL" на адресу цієї сторінки. Тоді посилання з листа веде
+// СЮДИ (з параметрами ?mode=resetPassword&oobCode=...), і людина взагалі не
+// потрапляє на сторінку Firebase — усе відбувається на порталі, українською.
+// Поки custom action URL не налаштований, цей код просто не спрацьовує.
+let resetOobCode=null;
+export function hasPendingAuthAction(){
+  const p=new URLSearchParams(window.location.search);
+  return p.get('mode')==='resetPassword'&&!!p.get('oobCode');
+}
+async function initPasswordResetScreen(){
+  const p=new URLSearchParams(window.location.search);
+  resetOobCode=p.get('oobCode');
+  document.querySelectorAll('.panel').forEach(el=>el.style.display='none');
+  const scr=document.getElementById('reset-password-screen');
+  if(!scr)return;
+  scr.style.display='block';
+  try{
+    // Перевіряємо код і показуємо, для якої адреси змінюється пароль
+    const email=await verifyPasswordResetCode(auth,resetOobCode);
+    const box=document.getElementById('rp-email');
+    if(box)box.innerHTML=`Встановлення нового пароля для <b>${escHtml(email)}</b>`;
+  }catch(err){
+    setMsg('rp-error','Посилання недійсне або застаріле. Запросіть новий лист для відновлення пароля.','login-err');
+    const form=document.getElementById('reset-password-form');
+    if(form)form.style.display='none';
+  }
+}
+window.submitNewPassword=async function(ev){
+  if(ev&&ev.preventDefault)ev.preventDefault();
+  const p1=document.getElementById('rp-pass').value;
+  const p2=document.getElementById('rp-pass2').value;
+  setMsg('rp-error','');
+  if(p1.length<6){setMsg('rp-error','Пароль має бути не коротшим за 6 символів.','login-err');return false;}
+  if(p1!==p2){setMsg('rp-error','Паролі не збігаються.','login-err');return false;}
+  setBusy('btn-rp-submit',true);
+  try{
+    await confirmPasswordReset(auth,resetOobCode,p1);
+    // Прибираємо oobCode з адреси, щоб при перезавантаженні не спрацював знову
+    window.history.replaceState({},'',window.location.pathname);
+    document.getElementById('reset-password-screen').style.display='none';
+    window.showLoginScreen('','✅ Пароль змінено. Тепер увійдіть із новим паролем.');
+  }catch(err){
+    setBusy('btn-rp-submit',false,'Зберегти новий пароль');
+    setMsg('rp-error',AUTH_ERRORS[err&&err.code]||('Не вдалося змінити пароль: '+(err.message||'')),'login-err');
+  }
+  return false;
+};
 window.requestPasswordReset=async function(){
   const email=document.getElementById('email').value.trim().toLowerCase();
   setMsg('login-error','');
