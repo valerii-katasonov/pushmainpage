@@ -7,7 +7,7 @@
 // header for why.)
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, push, remove, update } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, showToast, getClassNum, displayGrade, gradeClass6, teacherAccessMatrix, getWeekDates, formatAttendanceSlotLabel, gradeTypesCache, loadGradeTypesCache, calculateStudentWeightedAvg, escJs, escHtml, localDateString, normalizeRoles, getUserRoles, ROLE_LABELS, currentUserData, dayNamesUA } from './common.js';
+import { db, showToast, getClassNum, displayGrade, gradeClass6, teacherAccessMatrix, getWeekDates, formatAttendanceSlotLabel, gradeTypesCache, loadGradeTypesCache, calculateStudentWeightedAvg, escJs, escHtml, localDateString, normalizeRoles, getUserRoles, ROLE_LABELS, currentUserData, dayNamesUA, sendPasswordReset } from './common.js';
 
 let directorSkillsTemp=[];
 
@@ -210,11 +210,27 @@ window.loadStaffList=async function(){
           <div class="staff-email">${escHtml(email)}</div>
           <div class="staff-roles">${roles.map(r=>`<span class="staff-role-tag">${escHtml(ROLE_LABELS[r]||r)}</span>`).join('')}</div>
         </div>
-        ${isMe?'':`<button class="staff-del" onclick="removeStaffMember('${escJs(safeEmail)}')">🗑 Видалити</button>`}
+        <div class="staff-actions">
+          <button class="staff-reset" onclick="resetStaffPassword('${escJs(email)}')" title="Надіслати лист для встановлення нового пароля">📧 Скинути пароль</button>
+          ${isMe?'':`<button class="staff-del" onclick="removeStaffMember('${escJs(safeEmail)}')">🗑 Видалити</button>`}
+        </div>
       </div>`;
     });
     box.innerHTML=html;
   }catch(e){box.innerHTML=`<p style="color:red;font-size:.8rem;">Помилка: ${escHtml(e.message)}</p>`;}
+};
+// ══════════ ПЕРСОНАЛ: скидання пароля ══════════
+// Пароль лежить у Firebase Auth, а не в базі порталу, тому перестворення
+// email+ролі його НЕ змінює. Правильний шлях — лист для відновлення.
+window.resetStaffPassword=async function(email){
+  if(!confirm(`Надіслати на ${email} лист для встановлення нового пароля?\n\nЛюдина перейде за посиланням із листа і задасть новий пароль.\nСтарий пароль перестане діяти.`))return;
+  try{
+    await sendPasswordReset(email);
+    showToast(`📧 Лист надіслано на ${email}`);
+  }catch(e){
+    alert('Не вдалося надіслати лист: '+(e.message||e.code)+
+      '\n\nЯкщо ця адреса не є справжньою поштою, лист не дійде. Тоді пароль\nскидається вручну у Firebase Console → Authentication.');
+  }
 };
 // ══════════ ПЕРСОНАЛ: відкликання доступу ══════════
 // ВАЖЛИВО: сам акаунт Firebase Auth з браузера видалити НЕМОЖЛИВО — для цього
