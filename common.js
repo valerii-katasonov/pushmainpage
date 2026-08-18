@@ -13,7 +13,7 @@
 // bindings. Everything else uses normal export/import.
 // ═══════════════════════════════════════════════════════════════
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, updatePassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, updatePassword, sendPasswordResetEmail, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
 import { getDatabase, ref, set, get, child, push, onValue, remove, update } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 
 import { loadTeacherDashboard, loadCurrentTopicAndHW, listenTeacherAttendance, teacherAttendanceListener } from './teacher.js';
@@ -369,16 +369,32 @@ window.handleClassChange=function(){
   loadStudentsList();loadScheduleScript(ac,()=>handleDateChange());
   checkCurriculumUploadAccess(); /* CURRICULUM v3 */
 };
+// Предмети НЕ зберігаються окремим списком — вони беруться з РОЗКЛАДУ класу
+// (schedules/{clas}/lessons/{день}) і додатково фільтруються матрицею доступу
+// вчителя. Тому «порожньо» означає одне з трьох, і раніше всі три випадки
+// показувались однаковим текстом «Немає предметів на цей день», через що
+// незрозуміло, що робити. Тепер розрізняємо.
 function updateSubjectList(){
   const cls=getActiveClass();const dateStr=document.getElementById('global-date').value;
   const [y,m,d]=dateStr.split('-');const dv=new Date(y,m-1,d);const dn=dayKeys[dv.getDay()];
-  const flat=window.getTodayLessonsFlattened(dn);let subjs=[...new Set(flat.map(window.getValidSubjectName).filter(Boolean).filter(s=>window.isSubjectAllowed(cls,s)))];
+  const flat=window.getTodayLessonsFlattened(dn);
+  const allSubjs=[...new Set(flat.map(window.getValidSubjectName).filter(Boolean))];
+  const subjs=allSubjs.filter(s=>window.isSubjectAllowed(cls,s));
   const sel=document.getElementById('t-subject');sel.innerHTML='';
   const sc=document.getElementById('t-subject-for-comment');if(sc)sc.innerHTML='';
   subjs.forEach(s=>{
     [sel,sc].forEach(el=>{if(el){const o=document.createElement('option');o.value=s;o.innerText=s;el.appendChild(o.cloneNode(true));}});
   });
-  if(subjs.length===0)sel.innerHTML='<option value="" disabled>Немає предметів на цей день</option>';
+  if(subjs.length===0){
+    // Чи є взагалі розклад у цього класу (хоч на якийсь день тижня)?
+    const hasAnySchedule=window.schedule&&Object.keys(window.schedule).length>0&&
+      dayKeys.some(k=>(window.getTodayLessonsFlattened(k)||[]).some(i=>window.getValidSubjectName(i)));
+    let msg;
+    if(!hasAnySchedule)msg='⚠️ Розклад класу не заповнено — додайте уроки в «🗓️ Розклад»';
+    else if(allSubjs.length===0)msg='На цей день у розкладі уроків немає';
+    else msg='⛔ Вам не надано доступ до предметів цього дня';
+    sel.innerHTML=`<option value="" disabled>${msg}</option>`;
+  }
 }
 // ══════════ AUTH ══════════
 onAuthStateChanged(auth,async user=>{
@@ -433,7 +449,7 @@ function initUserSession(){
   document.querySelectorAll('.panel').forEach(p=>p.style.display='none');
   document.getElementById('calendar-block').style.display='block';updateProfileBar();
   const r=currentUserData.role;
-  if(r==='director'){document.getElementById('director-screen').style.display='block';document.getElementById('teacher-class-selector-box').style.display='none';loadTeachersListForDirector();loadDirectorTeacherSkillsList();handleDateChange();loadDrafts();}
+  if(r==='director'){document.getElementById('director-screen').style.display='block';document.getElementById('teacher-class-selector-box').style.display='none';loadTeachersListForDirector();loadDirectorTeacherSkillsList();handleDateChange();loadDrafts();if(window.loadBellCoverage)window.loadBellCoverage();}
   else if(r==='administrator'){document.getElementById('admin-screen').style.display='block';document.getElementById('teacher-class-selector-box').style.display='none';handleDateChange();}
   else if(r==='teacher'||r==='class_teacher'||r==='art_school_teacher'||r==='music_teacher'){
     document.getElementById('teacher-screen').style.display='block';document.getElementById('teacher-class-selector-box').style.display='block';
@@ -609,6 +625,35 @@ window.submitFirstLogin=async function(ev){
     setMsg('fl-error',AUTH_ERRORS[code]||('Помилка: '+(err.message||code)),'login-err');
   }
   return false;
+};
+// ── ВІДНОВЛЕННЯ ПАРОЛЯ ──
+// Пароль зберігається у Firebase Auth, а НЕ в базі даних порталу. Тому
+// видалення й повторне створення email+ролі в «Управлінні персоналом» пароль
+// не змінює — акаунт лишається зі старим паролем. Єдиний коректний шлях —
+// лист для відновлення (або скидання вручну у Firebase Console).
+export async function sendPasswordReset(rawEmail){
+  const email=String(rawEmail||'').trim().toLowerCase();
+  if(!email)throw new Error('Вкажіть email.');
+  await sendPasswordResetEmail(auth,email);
+  return email;
+}
+window.requestPasswordReset=async function(){
+  const email=document.getElementById('email').value.trim().toLowerCase();
+  setMsg('login-error','');
+  if(!email){
+    setMsg('login-hint','Спочатку введіть свій email у поле вище — і натисніть «Забули пароль?» ще раз.','login-hint warn');
+    document.getElementById('email').focus();
+    return;
+  }
+  try{
+    await sendPasswordReset(email);
+    // Нейтральне формулювання: Firebase із захистом від перебору не повідомляє,
+    // чи існує акаунт, тому не стверджуємо це і ми.
+    setMsg('login-hint',`📧 Якщо акаунт із адресою <b>${escHtml(email)}</b> існує, ми надіслали на неї лист для встановлення нового пароля.<br><span style="font-size:.76rem;">Перевірте також папку «Спам». Лист дійсний обмежений час.</span>`,'login-hint');
+  }catch(err){
+    const code=err&&err.code||'';
+    setMsg('login-error',AUTH_ERRORS[code]||('Не вдалося надіслати лист: '+(err.message||code)),'login-err');
+  }
 };
 // Сумісність зі старими викликами
 window.loginUser=()=>window.submitLogin();
