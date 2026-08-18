@@ -637,14 +637,29 @@ window.submitFirstLogin=async function(ev){
 export async function sendPasswordReset(rawEmail){
   const email=String(rawEmail||'').trim().toLowerCase();
   if(!email)throw new Error('Вкажіть email.');
-  // continueUrl: після встановлення пароля на сторінці Firebase людина
-  // отримує кнопку «Продовжити», яка повертає її сюди, на портал.
-  // Домен має бути в Firebase Console → Authentication → Settings →
-  // Authorized domains, інакше Firebase відхилить посилання.
-  await sendPasswordResetEmail(auth,email,{
-    url:window.location.origin+window.location.pathname,
-    handleCodeInApp:false
-  });
+  // continueUrl додає в лист кнопку «Продовжити», яка повертає людину на
+  // портал. Але Firebase приймає його ЛИШЕ якщо домен є в
+  // Authentication → Settings → Authorized domains, інакше кидає
+  // auth/unauthorized-continue-uri і лист не надсилається взагалі.
+  // Тому: пробуємо з кнопкою повернення, а якщо домен не дозволений —
+  // мовчки надсилаємо звичайний лист. Відновлення пароля важливіше за
+  // зручність повернення і не має залежати від налаштувань консолі.
+  const origin=window.location.origin;
+  const canUseContinue=/^https?:/i.test(origin); // file:// не підходить
+  if(canUseContinue){
+    try{
+      await sendPasswordResetEmail(auth,email,{url:origin+window.location.pathname,handleCodeInApp:false});
+      return email;
+    }catch(err){
+      if(!err||err.code!=='auth/unauthorized-continue-uri')throw err;
+      console.warn(
+        `[Push School] Домен ${origin} не дозволений у Firebase.\n`+
+        `Лист надіслано БЕЗ кнопки повернення на портал.\n`+
+        `Щоб додати кнопку: Firebase Console → Authentication → Settings →\n`+
+        `Authorized domains → Add domain → ${location.hostname}`);
+    }
+  }
+  await sendPasswordResetEmail(auth,email);
   return email;
 }
 // ══════════ СТОРІНКА ВСТАНОВЛЕННЯ НОВОГО ПАРОЛЯ ══════════
