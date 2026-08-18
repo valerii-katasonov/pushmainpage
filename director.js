@@ -536,6 +536,56 @@ async function repointStudentAccounts(name,fromCls,toCls){
   return changes;
 }
 // ── Single-student transfer ──
+// ══════════ УЧНІ: ведення списків директором ══════════
+// Вчитель може додавати учнів лише у «свої» класи (ті, що є в його матриці
+// доступу). Директор — у будь-який, тому цей блок продубльовано тут із
+// вибором класу замість прив'язки до t-class-selector.
+window.loadDirectorStudents=async function(){
+  const cls=document.getElementById('ds-class')?.value;
+  const box=document.getElementById('ds-list');
+  if(!box)return;
+  if(!cls){box.innerHTML='<p class="empty-msg">Оберіть клас.</p>';return;}
+  box.innerHTML='<p class="empty-msg">Завантаження...</p>';
+  try{
+    const snap=await get(child(ref(db),`students_list/${cls}`));
+    if(!snap.exists()){box.innerHTML='<p class="empty-msg">У цьому класі ще немає учнів.</p>';return;}
+    const data=snap.val();
+    const rows=Object.keys(data).map(k=>({key:k,name:data[k]})).sort((a,b)=>String(a.name).localeCompare(String(b.name),'uk'));
+    let h=`<p style="font-size:.78rem;color:#666;margin:0 0 6px 0;">Усього: <b>${rows.length}</b></p>`;
+    rows.forEach((r,i)=>{
+      h+=`<div class="ds-row">
+        <span class="ds-num">${i+1}</span>
+        <span class="ds-name">${escHtml(r.name)}</span>
+        <button class="staff-del" onclick="directorRemoveStudent('${escJs(cls)}','${escJs(r.key)}','${escJs(r.name)}')">🗑</button>
+      </div>`;
+    });
+    box.innerHTML=h;
+  }catch(e){box.innerHTML=`<p style="color:red;font-size:.8rem;">Помилка: ${escHtml(e.message)}</p>`;}
+};
+window.directorAddStudent=async function(){
+  const cls=document.getElementById('ds-class').value;
+  const name=document.getElementById('ds-new-name').value.trim();
+  const emailRaw=document.getElementById('ds-new-email').value.trim().toLowerCase();
+  if(!cls)return alert('Спочатку оберіть клас.');
+  if(!name)return alert('Введіть прізвище та ім\'я учня.');
+  try{
+    await push(ref(db,`students_list/${cls}`),name);
+    // Email потрібен лише якщо учень заходитиме у портал самостійно
+    if(emailRaw)await set(ref(db,`student_links/${emailRaw.replace(/\./g,'_')}`),{studentName:name,class:cls});
+    document.getElementById('ds-new-name').value='';
+    document.getElementById('ds-new-email').value='';
+    showToast(`✅ ${name} доданий до ${cls.replace('class_','')} класу`);
+    window.loadDirectorStudents();
+  }catch(e){alert('Помилка: '+e.message);}
+};
+window.directorRemoveStudent=async function(cls,key,name){
+  if(!confirm(`Прибрати ${name} зі списку ${cls.replace('class_','')} класу?\n\nВиставлені оцінки, відвідуваність і коментарі ЗАЛИШАТЬСЯ в журналі —\nвони зберігаються окремо і не видаляються.\n\nПродовжити?`))return;
+  try{
+    await remove(ref(db,`students_list/${cls}/${key}`));
+    showToast(`🗑️ ${name} прибраний зі списку`);
+    window.loadDirectorStudents();
+  }catch(e){alert('Помилка: '+e.message);}
+};
 window.loadTransferClasses=function(){
   const sel=document.getElementById('tr-student');
   if(sel)sel.innerHTML='<option value="">Спочатку клас</option>';
