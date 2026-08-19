@@ -553,9 +553,10 @@ window.loadDirectorStudents=async function(){
     const rows=Object.keys(data).map(k=>({key:k,name:data[k]})).sort((a,b)=>String(a.name).localeCompare(String(b.name),'uk'));
     let h=`<p style="font-size:.78rem;color:#666;margin:0 0 6px 0;">Усього: <b>${rows.length}</b></p>`;
     rows.forEach((r,i)=>{
-      h+=`<div class="ds-row">
+      h+=`<div class="ds-row" id="ds-row-${escHtml(r.key)}">
         <span class="ds-num">${i+1}</span>
         <span class="ds-name">${escHtml(r.name)}</span>
+        <button class="ds-edit" title="Редагувати ім'я" onclick="directorEditStudent('${escJs(cls)}','${escJs(r.key)}','${escJs(r.name)}')">✏️</button>
         <button class="staff-del" onclick="directorRemoveStudent('${escJs(cls)}','${escJs(r.key)}','${escJs(r.name)}')">🗑</button>
       </div>`;
     });
@@ -577,6 +578,129 @@ window.directorAddStudent=async function(){
     showToast(`✅ ${name} доданий до ${cls.replace('class_','')} класу`);
     window.loadDirectorStudents();
   }catch(e){alert('Помилка: '+e.message);}
+};
+// ══════════ УЧНІ: перейменування ══════════
+// ВАЖЛИВО: у базі оцінки, відвідуваність, коментарі тощо зберігаються під
+// ІМ'ЯМ учня (grades/{clas}/{місяць}/{предмет}/{дата}/{ІМ'Я}), а не під
+// внутрішнім ідентифікатором. Тому просто змінити ім'я у списку не можна —
+// вся історія лишиться під старим ключем і зникне з журналу. Нижче ім'я
+// переноситься в усіх гілках одночасно.
+// Замінює ключ oldK на newK на вказаній глибині вкладеності.
+// depth=0 означає, що ключ лежить прямо в цьому вузлі.
+function renameKeyAtDepth(node,depth,oldK,newK){
+  if(!node||typeof node!=='object')return node;
+  if(depth===0){
+    if(!(oldK in node))return node;
+    const out={...node};
+    // Якщо під новим іменем щось уже є — зливаємо, старе не затираємо мовчки
+    out[newK]=(newK in out&&typeof out[newK]==='object'&&typeof out[oldK]==='object')
+      ?{...out[newK],...out[oldK]}:out[oldK];
+    delete out[oldK];
+    return out;
+  }
+  const out={};
+  for(const k in node)out[k]=renameKeyAtDepth(node[k],depth-1,oldK,newK);
+  return out;
+}
+// Гілки, де ім'я учня є ключем, із глибиною відносно {branch}/{clas}
+const STUDENT_KEYED=[
+  ['grades',3],           // {місяць}/{предмет}/{дата}/{ІМ'Я}
+  ['grade_types',3],
+  ['attendance',1],       // {дата}/{ІМ'Я}
+  ['behavior_grades',2],  // {місяць}/{дата}/{ІМ'Я}
+  ['stickers',0],         // {ІМ'Я}
+  ['comments',2],         // {дата}/{предмет}/{ІМ'Я}
+  ['reactions',2],
+  ['retake_requests',2]   // {предмет}/{дата}/{ІМ'Я}
+];
+async function renameStudentEverywhere(cls,oldName,newName){
+  const touched=[];
+  // 1. Гілки, прив'язані до класу
+  for(const [branch,depth] of STUDENT_KEYED){
+    const snap=await get(child(ref(db),`${branch}/${cls}`));
+    if(!snap.exists())continue;
+    const before=snap.val();
+    const after=renameKeyAtDepth(before,depth,oldName,newName);
+    if(JSON.stringify(before)!==JSON.stringify(after)){
+      await set(ref(db,`${branch}/${cls}`),after);
+      touched.push(branch);
+    }
+  }
+  // 2. Прив'язки батьків та учня (там ім'я — значення, а не ключ)
+  for(const linkBranch of ['parent_links','student_links']){
+    const snap=await get(child(ref(db),linkBranch));
+    if(!snap.exists())continue;
+    const d=snap.val();const patch={};
+    for(const k in d){
+      const v=d[k];
+      if(v&&typeof v==='object'&&v.studentName===oldName&&v.class===cls)patch[`${k}/studentName`]=newName;
+    }
+    if(Object.keys(patch).length){await update(ref(db,linkBranch),patch);touched.push(linkBranch);}
+  }
+  // 3. Профілі батьків/учня, які вже заходили в портал
+  const uSnap=await get(child(ref(db),'users'));
+  if(uSnap.exists()){
+    const u=uSnap.val();const patch={};
+    for(const uid in u)if(u[uid]?.studentName===oldName&&u[uid]?.class===cls)patch[`${uid}/studentName`]=newName;
+    if(Object.keys(patch).length){await update(ref(db,'users'),patch);touched.push('users');}
+  }
+  // 4. Індивідуальні гуртки в розкладі (ім'я лежить в extraData.student)
+  const sSnap=await get(child(ref(db),'schedules'));
+  if(sSnap.exists()){
+    const all=sSnap.val();let changed=false;
+    for(const c in all){
+      const days=all[c]?.lessons;if(!days)continue;
+      for(const day in days){
+        const slots=days[day];if(!Array.isArray(slots))continue;
+        slots.forEach(slot=>{
+          const items=Array.isArray(slot)?slot:(slot&&slot.subject?[slot]:[]);
+          items.forEach(l=>{if(l?.extraData?.student===oldName){l.extraData.student=newName;changed=true;}});
+        });
+      }
+    }
+    if(changed){await set(ref(db,'schedules'),all);touched.push('schedules');}
+  }
+  return touched;
+}
+window.directorEditStudent=function(cls,key,name){
+  const row=document.getElementById(`ds-row-${key}`);
+  if(!row)return;
+  row.innerHTML=`<input type="text" id="ds-edit-${key}" value="${escHtml(name)}" style="flex:1;margin:0;padding:6px 9px;font-size:.85rem;">
+    <button class="ds-ok" onclick="directorSaveStudentName('${escJs(cls)}','${escJs(key)}','${escJs(name)}')">✔</button>
+    <button class="staff-del" onclick="loadDirectorStudents()">✖</button>`;
+  const inp=document.getElementById(`ds-edit-${key}`);
+  if(inp){inp.focus();inp.select();
+    inp.addEventListener('keydown',e=>{
+      if(e.key==='Enter'){e.preventDefault();window.directorSaveStudentName(cls,key,name);}
+      if(e.key==='Escape'){e.preventDefault();window.loadDirectorStudents();}
+    });}
+};
+window.directorSaveStudentName=async function(cls,key,oldName){
+  const inp=document.getElementById(`ds-edit-${key}`);
+  if(!inp)return;
+  const newName=inp.value.trim().replace(/\s+/g,' ');
+  if(!newName)return alert("Ім'я не може бути порожнім.");
+  if(newName===oldName)return window.loadDirectorStudents();
+  // Firebase забороняє ці символи в ключах, а ім'я стає ключем в оцінках
+  if(/[.#$[\]/]/.test(newName))return alert('Ім\'я не може містити символи . # $ [ ] /');
+  // Перевірка на дубль у цьому ж класі
+  const listSnap=await get(child(ref(db),`students_list/${cls}`));
+  if(listSnap.exists()){
+    const names=Object.entries(listSnap.val());
+    if(names.some(([k,v])=>k!==key&&v===newName))
+      return alert(`У цьому класі вже є учень «${newName}». Оберіть інше написання.`);
+  }
+  if(!confirm(`Перейменувати «${oldName}» → «${newName}»?\n\nІм'я буде змінено разом з усією історією: оцінки,\nвідвідуваність, коментарі, поведінка, наліпки, а також\nприв'язки батьків.\n\nПродовжити?`))return;
+  const row=document.getElementById(`ds-row-${key}`);
+  if(row)row.innerHTML='<span style="font-size:.82rem;color:#888;">⏳ Перейменування та перенесення історії...</span>';
+  try{
+    await set(ref(db,`students_list/${cls}/${key}`),newName);
+    const touched=await renameStudentEverywhere(cls,oldName,newName);
+    showToast(touched.length
+      ?`✅ Перейменовано. Оновлено: ${touched.length} розд.`
+      :'✅ Перейменовано');
+    window.loadDirectorStudents();
+  }catch(e){alert('Помилка: '+e.message);window.loadDirectorStudents();}
 };
 window.directorRemoveStudent=async function(cls,key,name){
   if(!confirm(`Прибрати ${name} зі списку ${cls.replace('class_','')} класу?\n\nВиставлені оцінки, відвідуваність і коментарі ЗАЛИШАТЬСЯ в журналі —\nвони зберігаються окремо і не видаляються.\n\nПродовжити?`))return;
