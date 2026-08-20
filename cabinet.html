@@ -213,6 +213,13 @@
     .staff-email{font-size:.75rem;color:#888;word-break:break-all;}
     .staff-roles{margin-top:4px;display:flex;flex-wrap:wrap;gap:3px;}
     .staff-role-tag{display:inline-block;background:#eef2ff;color:#3949ab;border:1px solid #c5cae9;border-radius:12px;padding:1px 8px;font-size:.68rem;font-weight:700;}
+    /* ── AI-ЧЕРНЕТКА ДЗ ── */
+    .ai-hw-row{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:7px;}
+    #btn-ai-hw{width:auto;margin:0;padding:8px 14px;font-size:.82rem;font-weight:700;border:none;border-radius:9px;cursor:pointer;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;}
+    #btn-ai-hw:disabled{opacity:.6;cursor:wait;}
+    .ai-hw-note{font-size:.72rem;color:#999;font-style:italic;}
+    .ai-hw-msg{margin:7px 0 0 0;font-size:.8rem;padding:8px 11px;border-radius:8px;background:#f3e5f5;color:#4a148c;border:1px solid #ce93d8;}
+    .ai-hw-msg.err{background:#fdecea;color:#b71c1c;border-color:#f5c6cb;}
     /* ── СПИСОК УЧНІВ У ДИРЕКТОРА ── */
     .ds-row{display:flex;align-items:center;gap:9px;padding:6px 8px;background:#fff;border:1px solid #e0e0e0;border-radius:8px;margin-bottom:4px;font-size:.85rem;}
     .ds-num{width:22px;text-align:center;color:#888;font-size:.75rem;flex-shrink:0;}
@@ -1241,6 +1248,13 @@
       <div id="t-hw-input-wrapper">
         <label>📚 Домашнє завдання (для всього класу):</label>
         <textarea id="t-hw" rows="2" placeholder="Введіть ДЗ..."></textarea>
+        <!-- AI-чернетка ДЗ за темою уроку. Предмет, тему і клас система бере
+             сама — вчителю не треба нічого формулювати. -->
+        <div class="ai-hw-row">
+          <button type="button" id="btn-ai-hw" onclick="generateHomeworkAI()">✨ Згенерувати чернетку ДЗ</button>
+          <span class="ai-hw-note">чернетка — перевірте й відредагуйте перед збереженням</span>
+        </div>
+        <p id="ai-hw-msg" class="ai-hw-msg" style="display:none;"></p>
         <label>📸 Фото:</label>
         <input type="file" id="t-image" accept="image/*" multiple>
         <div id="existing-image-info" style="display:none;font-size:.83rem;color:#e67e22;margin-top:4px;"></div>
