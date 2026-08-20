@@ -1229,7 +1229,10 @@
             <span id="topic-status-count" style="font-weight:800;color:var(--purple);">0/0</span>
           </div>
         </div>
-        <input type="text" id="t-topic-1" placeholder="Введіть тему вручну..." style="margin-top:6px;display:none;">
+        <!-- Видиме за замовчуванням: у t-topic-value-1 початково стоїть
+             __custom__, тож поле ручного вводу має бути показане одразу,
+             інакше стан розмітки суперечить стану значення. -->
+        <input type="text" id="t-topic-1" placeholder="Введіть тему вручну..." style="margin-top:6px;">
         <div id="t-topic-display-1" style="display:none;" class="topic-display"></div>
         <button type="button" id="btn-add-second-topic" onclick="showSecondTopicSlot()" style="margin-top:8px;background:#ecf0f1;color:#333;">+ Додати другу тему</button>
         <div id="t-topic-slot-2-wrap" style="display:none;margin-top:8px;">
