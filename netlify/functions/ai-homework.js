@@ -94,7 +94,6 @@ exports.handler = async (event) => {
   // обривалася на півслові: майже весь бюджет ішов на роздуми.
   // Для складання ДЗ глибокі роздуми не потрібні — вимикаємо їх
   // (thinkingBudget: 0) і піднімаємо ліміт виводу.
-  const genCfg = { temperature: 0.7, maxOutputTokens: 2048, thinkingConfig: { thinkingBudget: 0 } };
   const callGemini = (cfg) => fetch(`${API}?key=${encodeURIComponent(key)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -102,14 +101,16 @@ exports.handler = async (event) => {
   });
 
   try {
-    let r = await callGemini(genCfg);
+    // Спроба 1: з вимкненими роздумами — так увесь бюджет іде на сам текст.
+    let r = await callGemini({ temperature: 0.7, maxOutputTokens: 2048, thinkingConfig: { thinkingBudget: 0 } });
     let data = await r.json();
 
-    // Не всі моделі приймають thinkingConfig — якщо саме через нього 400,
-    // повторюємо без нього, щоб не втрачати працездатність.
-    if (!r.ok && r.status === 400 && /thinking/i.test(data?.error?.message || '')) {
-      const { thinkingConfig, ...noThinking } = genCfg;
-      r = await callGemini(noThinking);
+    // Спроба 2: не всі моделі приймають thinkingConfig, і Google при цьому
+    // відповідає загальним «invalid argument» без згадки причини. Тому на
+    // БУДЬ-ЯКУ 400 повторюємо запит без цього параметра, компенсуючи
+    // збільшеним лімітом виводу (роздуми з'їдять частину — має вистачити).
+    if (!r.ok && r.status === 400) {
+      r = await callGemini({ temperature: 0.7, maxOutputTokens: 4096 });
       data = await r.json();
     }
 
