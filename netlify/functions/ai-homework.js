@@ -89,17 +89,29 @@ exports.handler = async (event) => {
     '- не використовуй розмітку Markdown (ні зірочок, ні решіток).'
   ].join('\n');
 
-  try {
-    const r = await fetch(`${API}?key=${encodeURIComponent(key)}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.7, maxOutputTokens: 800 }
-      })
-    });
+  // Сучасні моделі Gemini за замовчуванням «розмірковують» перед відповіддю,
+  // і ці внутрішні токени рахуються в maxOutputTokens. Через це відповідь
+  // обривалася на півслові: майже весь бюджет ішов на роздуми.
+  // Для складання ДЗ глибокі роздуми не потрібні — вимикаємо їх
+  // (thinkingBudget: 0) і піднімаємо ліміт виводу.
+  const genCfg = { temperature: 0.7, maxOutputTokens: 2048, thinkingConfig: { thinkingBudget: 0 } };
+  const callGemini = (cfg) => fetch(`${API}?key=${encodeURIComponent(key)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: cfg })
+  });
 
-    const data = await r.json();
+  try {
+    let r = await callGemini(genCfg);
+    let data = await r.json();
+
+    // Не всі моделі приймають thinkingConfig — якщо саме через нього 400,
+    // повторюємо без нього, щоб не втрачати працездатність.
+    if (!r.ok && r.status === 400 && /thinking/i.test(data?.error?.message || '')) {
+      const { thinkingConfig, ...noThinking } = genCfg;
+      r = await callGemini(noThinking);
+      data = await r.json();
+    }
 
     if (!r.ok) {
       const msg = data?.error?.message || 'Помилка сервісу Gemini';
@@ -111,10 +123,20 @@ exports.handler = async (event) => {
       return fail(r.status, msg, origin);
     }
 
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+    const cand = data?.candidates?.[0];
+    // Частини можуть приходити кількома шматками — склеюємо всі, інакше
+    // втрачається хвіст відповіді.
+    const text = (cand?.content?.parts || []).map(p => p?.text || '').join('').trim();
     if (!text) return fail(502, 'AI не повернув відповіді. Спробуйте ще раз.', origin);
 
-    return { statusCode: 200, headers: cors(origin), body: JSON.stringify({ text }) };
+    // Якщо модель уперлася в ліміт — чесно кажемо, що текст неповний,
+    // а не віддаємо обрізаний шматок як готовий результат.
+    const truncated = cand?.finishReason === 'MAX_TOKENS';
+    return {
+      statusCode: 200,
+      headers: cors(origin),
+      body: JSON.stringify({ text, truncated })
+    };
   } catch (e) {
     return fail(500, 'Не вдалося звернутися до AI: ' + e.message, origin);
   }
