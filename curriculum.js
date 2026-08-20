@@ -207,6 +207,11 @@ window.selectTopicOption=function(slot,value,disabled){
 window.showSecondTopicSlot=function(){
   const wrap=document.getElementById('t-topic-slot-2-wrap');const btn=document.getElementById('btn-add-second-topic');
   if(wrap)wrap.style.display='block';if(btn)btn.style.display='none';
+  // Другий слот відкривається порожнім у ручному режимі — показуємо поле
+  // введення одразу, щоб не повторювати ту саму пастку, що й зі слотом 1.
+  const v=document.getElementById('t-topic-value-2');
+  const ci=document.getElementById('t-topic-2');
+  if(v&&v.value==='__custom__'&&ci)ci.style.display='block';
 };
 window.hideSecondTopicSlot=function(){
   const wrap=document.getElementById('t-topic-slot-2-wrap');const btn=document.getElementById('btn-add-second-topic');
@@ -242,6 +247,11 @@ export async function populateTopicSelector(){
   if(!subj){
     [1,2].forEach(slot=>renderTopicOptionsList(slot,{}));
     if(statusLine)statusLine.style.display='none';
+    // Без предмета далі йти нема куди, але стан слотів усе одно треба
+    // привести до «власна тема» — інакше в прихованому полі лишається
+    // __custom__, а саме поле введення сховане, і вчитель не може ввести
+    // тему вручну (саме цей випадок ловився, коли в класу немає розкладу).
+    [1,2].forEach(slot=>applyTopicToSlot(slot,null));
     return;
   }
   const sk=window.subjKey(subj);
@@ -286,7 +296,11 @@ function applyTopicToSlot(slot,entry){
       if(trigger)trigger.innerText=`№ ${t.lessonNum}. ${t.title} (${t.hoursUsed||0}/${t.plannedHours} год.)`;
       if(display){display.innerText=`№ ${t.lessonNum}. ${t.title}`;display.style.display='block';}
     } else {
+      // Тему видалили з плану — повертаємо слот у ручний режим, інакше
+      // вчитель бачить «(тема видалена)» і не має куди вписати нову.
       valueInput.value='__custom__';
+      if(customInput){customInput.style.display='block';customInput.value='';}
+      if(trigger)trigger.innerText='✏️ Власна тема';
       if(display){display.innerText='(тема видалена з плану)';display.style.display='block';}
     }
   } else if(entry.customText){
