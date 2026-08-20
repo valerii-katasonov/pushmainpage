@@ -39,6 +39,53 @@ window.loadCurrentTopicAndHW=loadCurrentTopicAndHW;
 // {topics:[{topicId|customText}, {topicId|customText}?]} (slot 2 optional).
 // hoursUsed inc/dec now compares prev vs new PER ARRAY POSITION (slot 1 vs
 // slot 1, slot 2 vs slot 2) instead of the old single prevTopicId/newTopicId pair.
+// ══════════ AI: ЧЕРНЕТКА ДОМАШНЬОГО ЗАВДАННЯ ══════════
+// Викликає нашу серверну функцію (netlify/functions/ai-homework.js), а не
+// Gemini напряму: ключ до AI не має потрапляти в браузер.
+// У запит іде ЛИШЕ предмет, тема і номер класу — жодних даних про учнів.
+function readCurrentTopicText(){
+  // Тема береться так само, як у saveTopicAndHW: спершу обрана з плану,
+  // інакше — введена вручну.
+  const idEl=document.getElementById('t-topic-value-1');
+  const selectedId=idEl?idEl.value:'__custom__';
+  if(selectedId&&selectedId!=='__custom__'){
+    const t=availableTopicsCache[selectedId];
+    if(t&&t.title)return t.title;
+  }
+  const custom=document.getElementById('t-topic-1');
+  return custom?custom.value.trim():'';
+}
+window.generateHomeworkAI=async function(){
+  const subject=document.getElementById('t-subject').value;
+  const topic=readCurrentTopicText();
+  const cls=getActiveClass();
+  const classNum=parseInt(String(cls||'').replace('class_',''),10);
+  const btn=document.getElementById('btn-ai-hw');
+  const msg=document.getElementById('ai-hw-msg');
+  const area=document.getElementById('t-hw');
+  const show=(text,isErr)=>{msg.textContent=text;msg.className='ai-hw-msg'+(isErr?' err':'');msg.style.display=text?'block':'none';};
+  if(!subject){show('Спочатку оберіть предмет.',true);return;}
+  if(!topic){show('Спочатку вкажіть тему уроку — з плану або вручну.',true);return;}
+  if(area.value.trim()&&!confirm('Поле ДЗ не порожнє. Замінити його згенерованою чернеткою?'))return;
+  btn.disabled=true;const label=btn.textContent;btn.textContent='⏳ Генерую...';
+  show('');
+  try{
+    const r=await fetch('/.netlify/functions/ai-homework',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({subject,topic,classNum})
+    });
+    const data=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(data.error||`Помилка ${r.status}`);
+    area.value=data.text||'';
+    area.rows=Math.min(12,Math.max(3,String(data.text||'').split('\n').length+1));
+    show('✨ Чернетку створено. Перевірте, за потреби відредагуйте — і збережіть.');
+  }catch(e){
+    show('Не вдалося згенерувати: '+e.message,true);
+  }finally{
+    btn.disabled=false;btn.textContent=label;
+  }
+};
 window.saveTopicAndHW=async function(){
   const date=document.getElementById('global-date').value;
   const subject=document.getElementById('t-subject').value;
