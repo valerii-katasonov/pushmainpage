@@ -79,7 +79,10 @@ window.generateHomeworkAI=async function(){
     if(!r.ok)throw new Error(data.error||`Помилка ${r.status}`);
     area.value=data.text||'';
     area.rows=Math.min(12,Math.max(3,String(data.text||'').split('\n').length+1));
-    show('✨ Чернетку створено. Перевірте, за потреби відредагуйте — і збережіть.');
+    show(data.truncated
+      ?'⚠️ Текст обірвався на середині (модель уперлася в ліміт). Допишіть вручну або згенеруйте ще раз.'
+      :'✨ Чернетку створено. Перевірте, за потреби відредагуйте — і збережіть.',
+      !!data.truncated);
   }catch(e){
     show('Не вдалося згенерувати: '+e.message,true);
   }finally{
