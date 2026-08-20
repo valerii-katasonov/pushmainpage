@@ -13,10 +13,15 @@
 //      Add: GEMINI_API_KEY = <ключ>
 //   3. Redeploy сайту
 //
-// Безкоштовний ліміт Gemini 2.5 Flash: ~10 запитів/хв, 250/добу.
+// Безкоштовний тариф Gemini обмежений кількістю запитів на хвилину та на добу.
 // Для школи з ~20 вчителями цього вистачає із запасом.
-
-const MODEL = 'gemini-2.5-flash';
+//
+// МОДЕЛЬ. Google час від часу припиняє підтримку старих моделей для нових
+// проєктів (так сталося з gemini-2.5-flash). Тому назва винесена в змінну
+// оточення: якщо колись знову прийде повідомлення «model is no longer
+// available», достатньо змінити GEMINI_MODEL у Netlify і зробити redeploy —
+// без правок коду.
+const MODEL = process.env.GEMINI_MODEL || 'gemini-3.6-flash';
 const API = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
 
 // Домени, з яких приймаємо запити. Проста перешкода для чужих сайтів, які
@@ -100,6 +105,9 @@ exports.handler = async (event) => {
       const msg = data?.error?.message || 'Помилка сервісу Gemini';
       // 429 — вичерпано безкоштовну квоту; повідомляємо зрозуміло
       if (r.status === 429) return fail(429, 'Ліміт запитів до AI на сьогодні вичерпано. Спробуйте завтра.', origin);
+      // Модель припинили підтримувати — підказуємо адміністратору, що робити
+      if (/no longer available|not found|is not supported/i.test(msg))
+        return fail(r.status, `Модель «${MODEL}» більше не доступна. Адміністратору: змініть змінну GEMINI_MODEL у Netlify. Відповідь Google: ${msg}`, origin);
       return fail(r.status, msg, origin);
     }
 
