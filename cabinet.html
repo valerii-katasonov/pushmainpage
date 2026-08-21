@@ -198,6 +198,7 @@
     .skill-tag{display:inline-block;background:#e0f2f1;color:var(--teal);border:1px solid #a5d6d1;border-radius:20px;padding:3px 10px;font-size:.75rem;font-weight:700;margin:2px;}
     /* ── ПЕРЕМИКАЧ КАБІНЕТІВ (для тих, у кого кілька ролей) ── */
     #pb-role-switcher select{width:auto;max-width:220px;margin-top:0;padding:4px 8px;font-size:.78rem;font-weight:700;color:var(--teal);border:1px solid var(--teal);border-radius:7px;background:#f0f8ff;cursor:pointer;}
+    #pb-child-switcher select{width:auto;max-width:240px;margin-top:0;padding:4px 8px;font-size:.78rem;font-weight:700;color:var(--purple);border:1px solid var(--purple);border-radius:7px;background:#f9f4ff;cursor:pointer;}
     /* ── РОЗКЛАД ДЗВІНКІВ ПО КЛАСАХ ── */
     .bell-missing{background:#ffebee;border:1px solid #ef9a9a;color:#b71c1c;border-radius:9px;padding:8px 11px;font-size:.8rem;font-weight:700;margin-bottom:8px;}
     .bell-row{display:flex;gap:9px;align-items:baseline;padding:6px 0;border-bottom:1px dashed #e0e0e0;font-size:.8rem;}
@@ -225,6 +226,15 @@
     #btn-ai-parent,#btn-ai-student,#btn-ai-ann{width:auto;margin:0;padding:8px 14px;font-size:.82rem;font-weight:700;border:none;border-radius:9px;cursor:pointer;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;white-space:nowrap;}
     #btn-ai-parent:disabled,#btn-ai-student:disabled,#btn-ai-ann:disabled{opacity:.6;cursor:wait;}
     .ai-out{margin-top:9px;background:#fff;border:1px solid #d1c4e9;border-left:4px solid var(--purple);border-radius:9px;padding:11px 13px;font-size:.85rem;line-height:1.55;color:#333;white-space:pre-wrap;}
+    /* ── БАТЬКИ УЧНІВ (зріз для директора) ── */
+    .po-row{display:flex;gap:11px;align-items:flex-start;padding:8px;background:#fff;border:1px solid #e8e0f0;border-radius:9px;margin-bottom:5px;font-size:.83rem;}
+    .po-child{flex:0 0 40%;font-weight:700;color:#4a148c;word-break:break-word;}
+    .po-parents{flex:1;display:flex;flex-direction:column;gap:3px;}
+    .po-parent{display:flex;gap:6px;align-items:baseline;flex-wrap:wrap;}
+    .po-role{font-size:.72rem;color:#7b1fa2;white-space:nowrap;}
+    .po-email{color:#555;word-break:break-all;font-size:.78rem;}
+    .po-new{font-size:.68rem;color:#f39c12;white-space:nowrap;}
+    .po-none{font-size:.78rem;color:var(--red);font-style:italic;}
     /* ── СПИСОК УЧНІВ У ДИРЕКТОРА ── */
     .ds-row{display:flex;align-items:center;gap:9px;padding:6px 8px;background:#fff;border:1px solid #e0e0e0;border-radius:8px;margin-bottom:4px;font-size:.85rem;}
     .ds-num{width:22px;text-align:center;color:#888;font-size:.75rem;flex-shrink:0;}
@@ -687,6 +697,8 @@
       <p id="pb-role" style="margin:0;font-size:.82rem;color:#777;">Роль</p>
       <!-- Перемикач кабінетів — видно лише тим, у кого кілька ролей -->
       <div id="pb-role-switcher" style="display:none;margin-top:5px;"></div>
+      <!-- Перемикач дітей — для батьків, у яких у школі кілька дітей -->
+      <div id="pb-child-switcher" style="display:none;margin-top:5px;"></div>
     </div>
     <button onclick="openProfileModal()" style="width:auto;padding:7px 13px;margin:0;background:var(--teal);color:#fff;border-radius:8px;font-size:.85rem;">⚙️ Профіль</button>
   </div>
@@ -987,6 +999,22 @@
             <input type="email" id="ds-new-email" placeholder="Email учня (необов'язково — для власного входу)" style="margin-top:5px;">
             <button onclick="directorAddStudent()" style="background:#1b5e20;color:#fff;margin-top:8px;">➕ Додати до обраного класу</button>
           </div>
+        </div>
+      </details>
+      <!-- Зріз «дитина → її батьки»: дані зберігаються навпаки (за поштою
+           батьків), тому директору показуємо перевернутий вигляд -->
+      <details style="margin-bottom:12px;background:#f9f4ff;padding:14px;border-radius:12px;border:1px solid #ce93d8;" ontoggle="if(this.open)loadParentsOverview()">
+        <summary style="font-weight:700;cursor:pointer;color:#7b1fa2;font-size:.95rem;">👪 Батьки учнів</summary>
+        <div style="margin-top:13px;">
+          <select id="po-class" onchange="loadParentsOverview()" style="border:2px solid #ce93d8;">
+            <option value="">-- Оберіть клас --</option>
+            <option value="class_1">1 Клас</option><option value="class_2">2 Клас</option><option value="class_3">3 Клас</option>
+            <option value="class_4">4 Клас</option><option value="class_5">5 Клас</option><option value="class_6">6 Клас</option>
+            <option value="class_7">7 Клас</option><option value="class_8">8 Клас</option><option value="class_9">9 Клас</option>
+            <option value="class_10">10 Клас</option><option value="class_11">11 Клас</option>
+          </select>
+          <p style="font-size:.78rem;color:#666;margin:7px 0 0 0;">Прив'язує батьків учитель у своєму кабінеті: «⚙️ Управління класом» → «Прив'язка батьків».</p>
+          <div id="po-list" style="margin-top:9px;"><p class="empty-msg">Оберіть клас.</p></div>
         </div>
       </details>
       <!-- Переведення одного учня (перехід у паралель / інший клас серед року) -->
