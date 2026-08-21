@@ -181,7 +181,94 @@
     .debt-badge{background:#fdecea;border:1px solid #f5c6cb;color:var(--red);}
     .paid-badge{background:#d4edda;border:1px solid #c3e6cb;color:var(--green);}
     /* ── SKILLS ── */
-    /* ── ЕКРАНИ ВХОДУ ── */
+    /* ══════════════════════════════════════════════════════════
+       ЕКРАНИ ВХОДУ — темна тема у кольорах логотипа
+       Вмикається класом body.auth-mode (ставиться в common.js,
+       поки користувач не увійшов). Після входу портал лишається
+       світлим, як і був.
+       ══════════════════════════════════════════════════════════ */
+    :root{
+      --logo-teal:#22b8cf; --logo-cyan:#4dd0e1; --logo-mint:#a7f3d0;
+      --logo-yellow:#ffd54f; --logo-pink:#f48fb1; --logo-bird:#4a90d9;
+      --auth-bg:#041b22; --auth-fg:#f2fbfc; --auth-sub:#9fc4cb;
+    }
+    #auth-bg{display:none;}
+    body.auth-mode{background:var(--auth-bg);align-items:center;}
+    body.auth-mode #auth-bg{display:block;}
+    #auth-bg .glow{position:fixed;border-radius:50%;filter:blur(90px);pointer-events:none;z-index:0;}
+    #auth-bg .g1{width:580px;height:470px;background:var(--logo-teal);opacity:.42;top:-150px;left:-130px;animation:authFloat1 22s ease-in-out infinite alternate;}
+    #auth-bg .g2{width:520px;height:430px;background:var(--logo-bird);opacity:.32;bottom:-170px;right:-110px;animation:authFloat2 26s ease-in-out infinite alternate;}
+    /* Теплі акценти — відсилка до метелика й квітів на логотипі */
+    #auth-bg .g3{width:300px;height:260px;background:var(--logo-yellow);opacity:.13;top:16%;right:18%;animation:authFloat1 30s ease-in-out infinite alternate-reverse;}
+    #auth-bg .g4{width:260px;height:230px;background:var(--logo-pink);opacity:.11;bottom:18%;left:12%;animation:authFloat2 34s ease-in-out infinite alternate;}
+    #auth-bg .auth-backdrop{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:min(900px,94vw);height:520px;background:#01121a;opacity:.82;filter:blur(82px);pointer-events:none;z-index:0;}
+    @keyframes authFloat1{0%{transform:translate(0,0) scale(1);}100%{transform:translate(60px,50px) scale(1.12);}}
+    @keyframes authFloat2{0%{transform:translate(0,0) scale(1);}100%{transform:translate(-50px,-40px) scale(1.08);}}
+    /* Контейнер порталу на екранах входу «розчиняється» — карткою стає сам екран */
+    body.auth-mode .container{background:transparent;box-shadow:none;backdrop-filter:none;padding:0;max-width:440px;margin-bottom:0;position:relative;z-index:1;}
+    /* Liquid glass — техніка з референсу, кант підфарбований у бірюзу */
+    body.auth-mode .panel[style*="block"],
+    body.auth-mode #login-screen,body.auth-mode #first-login-screen,body.auth-mode #reset-password-screen{
+      background:rgba(255,255,255,.04);
+      backdrop-filter:blur(18px) saturate(135%);
+      -webkit-backdrop-filter:blur(18px) saturate(135%);
+      border-radius:26px;padding:36px 32px 28px;position:relative;overflow:hidden;
+      box-shadow:inset 0 1px 1px rgba(255,255,255,.12),0 30px 70px rgba(0,0,0,.5);
+      color:var(--auth-fg);
+    }
+    body.auth-mode #login-screen::before,body.auth-mode #first-login-screen::before,body.auth-mode #reset-password-screen::before{
+      content:"";position:absolute;inset:0;border-radius:inherit;padding:1.4px;
+      background:linear-gradient(180deg,rgba(180,245,255,.5) 0%,rgba(180,245,255,.16) 20%,rgba(255,255,255,0) 40%,rgba(255,255,255,0) 60%,rgba(180,245,255,.16) 80%,rgba(180,245,255,.5) 100%);
+      -webkit-mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);
+      -webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none;
+    }
+    .auth-brand{display:flex;justify-content:center;margin-bottom:16px;}
+    .auth-logo{
+      width:112px;height:112px;border-radius:50%;display:block;object-fit:cover;
+      box-shadow:0 14px 40px rgba(34,184,207,.45),0 0 0 1px rgba(180,245,255,.22),0 0 60px rgba(34,184,207,.28);
+      animation:logoIn .7s cubic-bezier(.2,.8,.3,1) both;
+    }
+    @keyframes logoIn{from{opacity:0;transform:translateY(-8px) scale(.94);}to{opacity:1;transform:none;}}
+    /* Заголовок не дублює назву школи — вона вже є на логотипі */
+    body.auth-mode #login-screen h2,body.auth-mode #first-login-screen h2,body.auth-mode #reset-password-screen h2{
+      font-size:1.75rem;font-weight:800;letter-spacing:-.02em;margin:0;
+      background-image:linear-gradient(100deg,var(--logo-cyan),var(--logo-mint) 48%,var(--logo-yellow));
+      -webkit-background-clip:text;background-clip:text;color:transparent;
+    }
+    .auth-sub{margin:9px 0 20px;text-align:center;color:var(--auth-sub);font-size:.88rem;line-height:1.55;}
+    body.auth-mode #login-screen label,body.auth-mode #first-login-screen label,body.auth-mode #reset-password-screen label{
+      color:var(--auth-sub);margin-top:13px;font-size:.78rem;
+    }
+    body.auth-mode #login-screen input,body.auth-mode #first-login-screen input,body.auth-mode #reset-password-screen input{
+      background:rgba(255,255,255,.055);border:1px solid rgba(160,230,240,.18);color:var(--auth-fg);
+      border-radius:13px;padding:13px 15px;
+    }
+    body.auth-mode input::placeholder{color:rgba(214,240,245,.34);}
+    body.auth-mode #login-screen input:focus,body.auth-mode #first-login-screen input:focus,body.auth-mode #reset-password-screen input:focus{
+      outline:none;border-color:var(--logo-cyan);background:rgba(255,255,255,.09);
+      box-shadow:0 0 0 4px rgba(77,208,225,.18);
+    }
+    body.auth-mode .btn-login{
+      background:linear-gradient(100deg,var(--logo-cyan),var(--logo-teal) 70%);
+      color:#032b33;border-radius:13px;padding:15px;
+      box-shadow:0 12px 30px rgba(34,184,207,.4);
+      transition:transform .16s,box-shadow .16s,filter .16s;
+    }
+    body.auth-mode .btn-login:hover{transform:translateY(-1px);box-shadow:0 16px 38px rgba(34,184,207,.5);filter:brightness(1.07);}
+    body.auth-mode .link-btn{color:var(--logo-mint);}
+    body.auth-mode .link-btn:hover{color:#fff;}
+    body.auth-mode .pass-toggle{color:var(--auth-fg);}
+    body.auth-mode .pass-toggle:hover{background:rgba(255,255,255,.08);}
+    body.auth-mode .fl-intro{background:rgba(255,255,255,.05);border-color:rgba(160,230,240,.18);color:var(--auth-sub);}
+    body.auth-mode .login-hint{background:rgba(77,208,225,.10);border-color:rgba(77,208,225,.3);color:#c9f2f8;}
+    body.auth-mode .login-hint.warn{background:rgba(255,213,79,.12);border-color:rgba(255,213,79,.35);color:#ffe9a8;}
+    body.auth-mode .login-err{color:#ff8f8f;}
+    @media(max-width:480px){
+      body.auth-mode #login-screen,body.auth-mode #first-login-screen,body.auth-mode #reset-password-screen{padding:28px 20px 22px;border-radius:20px;}
+      body.auth-mode #login-screen h2,body.auth-mode #first-login-screen h2,body.auth-mode #reset-password-screen h2{font-size:1.45rem;}
+      .auth-logo{width:88px;height:88px;}
+    }
+    /* ── поля екранів входу (світла тема, коли auth-mode не активний) ── */
     #login-screen label,#first-login-screen label{margin-top:12px;font-size:.82rem;color:#666;}
     #login-screen input,#first-login-screen input{margin-top:4px;}
     .fl-intro{font-size:.86rem;color:#555;line-height:1.5;background:#f0f8ff;border:1px solid #d0e8f2;border-radius:10px;padding:11px 13px;margin:0 0 4px 0;}
@@ -597,6 +684,14 @@
   </style>
 </head>
 <body>
+<!-- Фон екранів входу: світлові плями в кольорах логотипа замість
+     фонового відео — нуль ваги, нічого не вантажиться ззовні.
+     Видно лише коли <body class="auth-mode">, тобто до входу. -->
+<div id="auth-bg" aria-hidden="true">
+  <div class="glow g1"></div><div class="glow g2"></div>
+  <div class="glow g3"></div><div class="glow g4"></div>
+  <div class="auth-backdrop"></div>
+</div>
 <div id="toast-container"></div>
 <!-- GRADE EDITOR POPUP -->
 <div id="grade-editor-popup" class="grade-editor-popup">
@@ -617,7 +712,9 @@
        JS-модуль не завантажився (кеш, збій CDN, стара версія файлу) — форма
        НЕ піде звичайним GET-запитом і пароль ніколи не потрапить в URL. -->
   <div id="login-screen" class="panel" style="display:block;">
+    <div class="auth-brand"><img src="logo.png" alt="Push School Warsaw" class="auth-logo"></div>
     <h2>Вхід до порталу</h2>
+    <p class="auth-sub">Для учнів, батьків та вчителів</p>
     <form id="login-form" novalidate
           onsubmit="event.preventDefault();if(window.submitLogin)window.submitLogin(event);return false;">
       <label for="email">Email</label>
@@ -640,7 +737,8 @@
   </div>
   <!-- ═══ ЕКРАН 2: ПЕРШИЙ ВХІД (окремий екран, не режим) ═══ -->
   <div id="first-login-screen" class="panel">
-    <h2>🔑 Перший вхід</h2>
+    <div class="auth-brand"><img src="logo.png" alt="Push School Warsaw" class="auth-logo"></div>
+    <h2>Перший вхід</h2>
     <p class="fl-intro">
       Якщо школа вже додала вашу електронну адресу, тут ви <b>створюєте власний пароль</b>.
       Надалі входитимете з ним на головному екрані.
@@ -671,7 +769,8 @@
        відновлення. Працює лише якщо у Firebase Console → Authentication →
        Templates задано "Customize action URL" на адресу цієї сторінки. -->
   <div id="reset-password-screen" class="panel">
-    <h2>🔐 Новий пароль</h2>
+    <div class="auth-brand"><img src="logo.png" alt="Push School Warsaw" class="auth-logo"></div>
+    <h2>Новий пароль</h2>
     <p id="rp-email" class="fl-intro">Встановлення нового пароля</p>
     <form id="reset-password-form" novalidate
           onsubmit="event.preventDefault();if(window.submitNewPassword)window.submitNewPassword(event);return false;">
