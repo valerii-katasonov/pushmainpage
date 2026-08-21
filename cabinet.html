@@ -215,11 +215,16 @@
     .staff-role-tag{display:inline-block;background:#eef2ff;color:#3949ab;border:1px solid #c5cae9;border-radius:12px;padding:1px 8px;font-size:.68rem;font-weight:700;}
     /* ── AI-ЧЕРНЕТКА ДЗ ── */
     .ai-hw-row{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:7px;}
-    #btn-ai-hw{width:auto;margin:0;padding:8px 14px;font-size:.82rem;font-weight:700;border:none;border-radius:9px;cursor:pointer;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;}
-    #btn-ai-hw:disabled{opacity:.6;cursor:wait;}
+    #btn-ai-hw,#btn-ai-comment{width:auto;margin:0;padding:8px 14px;font-size:.82rem;font-weight:700;border:none;border-radius:9px;cursor:pointer;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;}
+    #btn-ai-hw:disabled,#btn-ai-comment:disabled{opacity:.6;cursor:wait;}
     .ai-hw-note{font-size:.72rem;color:#999;font-style:italic;}
     .ai-hw-msg{margin:7px 0 0 0;font-size:.8rem;padding:8px 11px;border-radius:8px;background:#f3e5f5;color:#4a148c;border:1px solid #ce93d8;}
     .ai-hw-msg.err{background:#fdecea;color:#b71c1c;border-color:#f5c6cb;}
+    /* Блоки AI у кабінетах батьків та учня */
+    .ai-help-box{margin-top:11px;border-top:1px dashed #cfd8dc;padding-top:10px;}
+    #btn-ai-parent,#btn-ai-student,#btn-ai-ann{width:auto;margin:0;padding:8px 14px;font-size:.82rem;font-weight:700;border:none;border-radius:9px;cursor:pointer;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;white-space:nowrap;}
+    #btn-ai-parent:disabled,#btn-ai-student:disabled,#btn-ai-ann:disabled{opacity:.6;cursor:wait;}
+    .ai-out{margin-top:9px;background:#fff;border:1px solid #d1c4e9;border-left:4px solid var(--purple);border-radius:9px;padding:11px 13px;font-size:.85rem;line-height:1.55;color:#333;white-space:pre-wrap;}
     /* ── СПИСОК УЧНІВ У ДИРЕКТОРА ── */
     .ds-row{display:flex;align-items:center;gap:9px;padding:6px 8px;background:#fff;border:1px solid #e0e0e0;border-radius:8px;margin-bottom:4px;font-size:.85rem;}
     .ds-num{width:22px;text-align:center;color:#888;font-size:.75rem;flex-shrink:0;}
@@ -945,6 +950,24 @@
     </section>
 
     <section class="screen-section">
+      <!-- AI-чернетка оголошення для батьків -->
+      <details style="margin-bottom:12px;background:#fff8e1;padding:14px;border-radius:12px;border:1px solid #ffe0a3;">
+        <summary style="font-weight:700;cursor:pointer;color:#8a6d1f;font-size:.95rem;">📣 Оголошення для батьків (чернетка)</summary>
+        <div style="margin-top:13px;">
+          <p style="font-size:.8rem;color:#666;margin:0 0 7px 0;">
+            Напишіть коротко суть — система оформить це у зрозуміле повідомлення.
+            Дати, час і місце зберігаються точно; нічого зайвого не вигадується.
+          </p>
+          <textarea id="d-ann-note" rows="3" placeholder="Напр.: 12 грудня о 18:00 батьківські збори 5 класу, кабінет 24, просимо бути"></textarea>
+          <div class="ai-hw-row">
+            <button type="button" id="btn-ai-ann" onclick="announcementAI()">✨ Скласти оголошення</button>
+            <span class="ai-hw-note">чернетка — перевірте перед розсилкою</span>
+          </div>
+          <p id="ai-ann-msg" class="ai-hw-msg" style="display:none;"></p>
+          <textarea id="d-ann-out" rows="6" style="display:none;margin-top:8px;" placeholder="Тут з'явиться текст"></textarea>
+          <button type="button" id="btn-ann-copy" onclick="copyAnnouncement()" style="display:none;background:#8a6d1f;color:#fff;margin-top:7px;">📋 Скопіювати текст</button>
+        </div>
+      </details>
       <h3>🎓 Учні</h3>
       <!-- Директор може вести списки учнів БУДЬ-ЯКОГО класу (вчитель — лише своїх) -->
       <details style="margin-bottom:12px;background:#e8f5e9;padding:14px;border-radius:12px;border:1px solid #a5d6a7;" ontoggle="if(this.open)loadDirectorStudents()">
@@ -1299,7 +1322,14 @@
           <select id="t-student" style="flex:2;margin-top:0;border-color:#a1887f;"><option value="">Учень...</option></select>
           <select id="t-subject-for-comment" style="flex:1;margin-top:0;border-color:#a1887f;"></select>
         </div>
-        <textarea id="t-comment" rows="2" placeholder="Коментар для батьків..." style="margin-top:7px;border-color:#a1887f;font-size:.88rem;"></textarea>
+        <textarea id="t-comment" rows="2" placeholder="Напишіть своїми словами — напр. «не готовий до уроку, заважає»..." style="margin-top:7px;border-color:#a1887f;font-size:.88rem;"></textarea>
+        <!-- AI переформулює чернетку вчителя в коректне повідомлення батькам.
+             Ім'я учня в сервіс не передається — див. teacher.js -->
+        <div class="ai-hw-row">
+          <button type="button" id="btn-ai-comment" onclick="improveCommentAI()">✨ Допомогти сформулювати</button>
+          <span class="ai-hw-note">перепишу ввічливо й конструктивно</span>
+        </div>
+        <p id="ai-comment-msg" class="ai-hw-msg" style="display:none;"></p>
         <button onclick="saveComment()" style="background:#7b1fa2;color:#fff;padding:9px;margin-top:7px;border-radius:9px;font-size:.85rem;border:none;cursor:pointer;width:100%;font-weight:700;">💬 Зберегти коментар</button>
       </div>
     </section>
@@ -1372,6 +1402,16 @@
       <div class="data-card" style="border-left-color:#00b894;background:#f0fff4;">
         <h4 style="margin-top:0;color:#00b894;">📚 Задано:</h4>
         <ul id="p-daily-hw-list" class="list-dash"></ul>
+        <!-- AI-поради батькам за темою уроку / домашнім завданням.
+             У сервіс іде лише предмет, тема, ДЗ і номер класу. -->
+        <div class="ai-help-box">
+          <div class="ai-hw-row">
+            <select id="p-help-subject" style="flex:1;min-width:140px;margin-top:0;font-size:.82rem;"></select>
+            <button type="button" id="btn-ai-parent" onclick="parentHelpAI()">🏠 Як допомогти вдома</button>
+          </div>
+          <p id="ai-parent-msg" class="ai-hw-msg" style="display:none;"></p>
+          <div id="ai-parent-out" class="ai-out" style="display:none;"></div>
+        </div>
       </div>
       <!-- Журнал та коментарі -->
       <div class="data-card" style="border-left-color:#ff4757;background:#fff0f1;">
@@ -1459,6 +1499,16 @@
       <div class="data-card" style="border-left-color:#00b894;background:#f0fff4;">
         <h4 style="margin-top:0;color:#00b894;">📚 Завдання для мене:</h4>
         <ul id="s-daily-hw-list" class="list-dash"></ul>
+        <!-- Питання для самоперевірки. Свідомо НЕ «поясни тему» і не
+             «зроби ДЗ» — модель має підштовхнути до перевірки себе. -->
+        <div class="ai-help-box">
+          <div class="ai-hw-row">
+            <select id="s-help-subject" style="flex:1;min-width:140px;margin-top:0;font-size:.82rem;"></select>
+            <button type="button" id="btn-ai-student" onclick="selfCheckAI()">🧠 Перевір себе</button>
+          </div>
+          <p id="ai-student-msg" class="ai-hw-msg" style="display:none;"></p>
+          <div id="ai-student-out" class="ai-out" style="display:none;"></div>
+        </div>
       </div>
       <!-- Журнал та коментарі -->
       <div class="data-card" style="border-left-color:#ff4757;background:#fff0f1;">
