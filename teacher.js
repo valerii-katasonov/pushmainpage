@@ -5,8 +5,8 @@
 // review, class/attendance management, teacher dashboard counters,
 // exams calendar, and reactions/weekly-wrapped.
 // ═══════════════════════════════════════════════════════════════
-import { ref, set, get, child, push, remove, onValue } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, auth, CLOUDINARY_URL, UPLOAD_PRESET, getActiveClass, currentUserData, showToast, displayGrade, renderHwItem, dayKeys, formatAttendanceSlotLabel, STICKER_GOAL, escJs, escHtml, safeUrl } from './common.js';
+import { ref, set, get, child, push, remove, update, onValue } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+import { db, auth, CLOUDINARY_URL, UPLOAD_PRESET, getActiveClass, currentUserData, showToast, displayGrade, renderHwItem, dayKeys, formatAttendanceSlotLabel, STICKER_GOAL, escJs, escHtml, safeUrl, normalizeChildren } from './common.js';
 import { populateTopicSelector, availableTopicsCache } from './curriculum.js';
 
 let currentHwImages=[];
@@ -40,7 +40,7 @@ window.loadCurrentTopicAndHW=loadCurrentTopicAndHW;
 // hoursUsed inc/dec now compares prev vs new PER ARRAY POSITION (slot 1 vs
 // slot 1, slot 2 vs slot 2) instead of the old single prevTopicId/newTopicId pair.
 // ══════════ AI: ЧЕРНЕТКА ДОМАШНЬОГО ЗАВДАННЯ ══════════
-// Викликає нашу серверну функцію (netlify/functions/ai-homework.js), а не
+// Викликає нашу серверну функцію (netlify/functions/ai-assist.js), а не
 // Gemini напряму: ключ до AI не має потрапляти в браузер.
 // У запит іде ЛИШЕ предмет, тема і номер класу — жодних даних про учнів.
 function readCurrentTopicText(){
@@ -55,39 +55,67 @@ function readCurrentTopicText(){
   const custom=document.getElementById('t-topic-1');
   return custom?custom.value.trim():'';
 }
+// Спільний виклик серверної AI-функції. Усі AI-можливості ходять в один
+// endpoint із різним task — див. netlify/functions/ai-assist.js
+async function callAI(task,payload){
+  const r=await fetch('/.netlify/functions/ai-assist',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({task,...payload})
+  });
+  const data=await r.json().catch(()=>({}));
+  if(!r.ok)throw new Error(data.error||`Помилка ${r.status}`);
+  return data;
+}
+// Показ статусу під кнопкою (використовують обидві AI-кнопки)
+function aiMsg(id,text,isErr){
+  const el=document.getElementById(id);
+  if(!el)return;
+  el.textContent=text;el.className='ai-hw-msg'+(isErr?' err':'');
+  el.style.display=text?'block':'none';
+}
 window.generateHomeworkAI=async function(){
   const subject=document.getElementById('t-subject').value;
   const topic=readCurrentTopicText();
-  const cls=getActiveClass();
-  const classNum=parseInt(String(cls||'').replace('class_',''),10);
+  const classNum=parseInt(String(getActiveClass()||'').replace('class_',''),10);
   const btn=document.getElementById('btn-ai-hw');
-  const msg=document.getElementById('ai-hw-msg');
   const area=document.getElementById('t-hw');
-  const show=(text,isErr)=>{msg.textContent=text;msg.className='ai-hw-msg'+(isErr?' err':'');msg.style.display=text?'block':'none';};
-  if(!subject){show('Спочатку оберіть предмет.',true);return;}
-  if(!topic){show('Спочатку вкажіть тему уроку — з плану або вручну.',true);return;}
+  if(!subject)return aiMsg('ai-hw-msg','Спочатку оберіть предмет.',true);
+  if(!topic)return aiMsg('ai-hw-msg','Спочатку вкажіть тему уроку — з плану або вручну.',true);
   if(area.value.trim()&&!confirm('Поле ДЗ не порожнє. Замінити його згенерованою чернеткою?'))return;
   btn.disabled=true;const label=btn.textContent;btn.textContent='⏳ Генерую...';
-  show('');
+  aiMsg('ai-hw-msg','');
   try{
-    const r=await fetch('/.netlify/functions/ai-homework',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({subject,topic,classNum})
-    });
-    const data=await r.json().catch(()=>({}));
-    if(!r.ok)throw new Error(data.error||`Помилка ${r.status}`);
+    const data=await callAI('homework',{subject,topic,classNum});
     area.value=data.text||'';
     area.rows=Math.min(12,Math.max(3,String(data.text||'').split('\n').length+1));
-    show(data.truncated
+    aiMsg('ai-hw-msg',data.truncated
       ?'⚠️ Текст обірвався на середині (модель уперлася в ліміт). Допишіть вручну або згенеруйте ще раз.'
-      :'✨ Чернетку створено. Перевірте, за потреби відредагуйте — і збережіть.',
-      !!data.truncated);
-  }catch(e){
-    show('Не вдалося згенерувати: '+e.message,true);
-  }finally{
-    btn.disabled=false;btn.textContent=label;
-  }
+      :'✨ Чернетку створено. Перевірте, за потреби відредагуйте — і збережіть.',!!data.truncated);
+  }catch(e){aiMsg('ai-hw-msg','Не вдалося згенерувати: '+e.message,true);}
+  finally{btn.disabled=false;btn.textContent=label;}
+};
+// ══════════ AI: ДОПОМОГА З КОМЕНТАРЕМ ДЛЯ БАТЬКІВ ══════════
+// Учитель пише як думає («не готовий, заважає»), а отримує коректне
+// формулювання. ПРИВАТНІСТЬ: у сервіс іде лише текст, який написав сам
+// учитель, плюс предмет і номер класу. Ім'я учня не передається — і в
+// підказці окремо сказано моделі не вигадувати імен.
+window.improveCommentAI=async function(){
+  const area=document.getElementById('t-comment');
+  const note=area.value.trim();
+  const subject=document.getElementById('t-subject-for-comment')?.value||'';
+  const classNum=parseInt(String(getActiveClass()||'').replace('class_',''),10);
+  const btn=document.getElementById('btn-ai-comment');
+  if(!note)return aiMsg('ai-comment-msg','Спочатку напишіть кілька слів своїми словами — я допоможу сформулювати.',true);
+  btn.disabled=true;const label=btn.textContent;btn.textContent='⏳ Формулюю...';
+  aiMsg('ai-comment-msg','');
+  try{
+    const data=await callAI('comment',{note,subject,classNum});
+    area.value=data.text||'';
+    area.rows=Math.min(8,Math.max(2,String(data.text||'').split('\n').length+1));
+    aiMsg('ai-comment-msg','✨ Варіант готовий. Перевірте формулювання — і збережіть.');
+  }catch(e){aiMsg('ai-comment-msg','Не вдалося сформулювати: '+e.message,true);}
+  finally{btn.disabled=false;btn.textContent=label;}
 };
 window.saveTopicAndHW=async function(){
   const date=document.getElementById('global-date').value;
@@ -339,7 +367,38 @@ window.teacherMarkAbsent=function(){
   });
 };
 window.addStudent=function(){const name=document.getElementById('new-student-name').value.trim();const emailEl=document.getElementById('new-student-email');const email=emailEl?emailEl.value.trim().replace(/\./g,'_'):'';if(name){push(ref(db,`students_list/${getActiveClass()}`),name).then(()=>{if(email)set(ref(db,`student_links/${email}`),{studentName:name,class:getActiveClass()});alert("Учня додано!");loadStudentsList();document.getElementById('new-student-name').value='';if(emailEl)emailEl.value='';});}};
-window.linkParent=function(){const e=document.getElementById('parent-email').value.trim().replace(/\./g,'_');const st=document.getElementById('t-student-for-parent').value;const cls=getActiveClass();const role=document.getElementById('t-parent-role').value;if(e&&st){set(ref(db,`parent_links/${e}`),{studentName:st,class:cls,role}).then(()=>{alert(`✅ Email прив'язано!`);document.getElementById('parent-email').value='';});}else alert("Оберіть учня та Email");};
+// Прив'язка ДОДАЄ дитину до списку, а не замінює його: в одних батьків у школі
+// може вчитися кілька дітей. Раніше другий виклик мовчки затирав першу дитину.
+window.linkParent=async function(){
+  const raw=document.getElementById('parent-email').value.trim().toLowerCase();
+  const e=raw.replace(/\./g,'_');
+  const st=document.getElementById('t-student-for-parent').value;
+  const cls=getActiveClass();
+  const role=document.getElementById('t-parent-role').value;
+  if(!e||!st)return alert("Оберіть учня та Email");
+  try{
+    const snap=await get(child(ref(db),`parent_links/${e}`));
+    const kids=snap.exists()?normalizeChildren(snap.val()):[];
+    if(kids.some(k=>k.studentName===st&&k.class===cls))
+      return alert(`Ця дитина вже прив'язана до ${raw}.`);
+    kids.push({studentName:st,class:cls,role});
+    await set(ref(db,`parent_links/${e}`),{children:kids});
+    // Якщо батьки вже заходили — оновлюємо і їхній профіль
+    const us=await get(child(ref(db),'users'));
+    if(us.exists()){
+      const u=us.val();
+      for(const uid in u){
+        if((u[uid].email||'').toLowerCase()===raw&&u[uid].role==='parent'){
+          await update(ref(db,`users/${uid}`),{children:kids});
+        }
+      }
+    }
+    alert(kids.length>1
+      ? `✅ Додано. Тепер до ${raw} прив'язано дітей: ${kids.length}. Батьки зможуть перемикатися між ними у профілі.`
+      : `✅ Email прив'язано!`);
+    document.getElementById('parent-email').value='';
+  }catch(err){alert('Помилка: '+err.message);}
+};
 export function listenTeacherAttendance(){
   const date=document.getElementById('global-date').value;const list=document.getElementById('t-attendance-list');
   if(teacherAttendanceListener)teacherAttendanceListener();
