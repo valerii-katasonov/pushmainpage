@@ -536,6 +536,35 @@ async function repointStudentAccounts(name,fromCls,toCls){
   return changes;
 }
 // ── Single-student transfer ──
+// ══════════ AI: ЧЕРНЕТКА ОГОЛОШЕННЯ ДЛЯ БАТЬКІВ ══════════
+// У сервіс іде лише те, що директор написав сам. Жодних даних із бази.
+window.announcementAI=async function(){
+  const note=document.getElementById('d-ann-note').value.trim();
+  const btn=document.getElementById('btn-ai-ann');
+  const out=document.getElementById('d-ann-out');
+  const copyBtn=document.getElementById('btn-ann-copy');
+  const msg=(t,e)=>{const el=document.getElementById('ai-ann-msg');el.textContent=t||'';el.className='ai-hw-msg'+(e?' err':'');el.style.display=t?'block':'none';};
+  if(!note)return msg('Напишіть коротко, про що оголошення.',true);
+  btn.disabled=true;const label=btn.textContent;btn.textContent='⏳ Складаю...';
+  msg('');
+  try{
+    const r=await fetch('/.netlify/functions/ai-assist',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({task:'announcement',note})
+    });
+    const data=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(data.error||`Помилка ${r.status}`);
+    out.value=data.text||'';out.style.display='block';copyBtn.style.display='block';
+    msg('✨ Готово. Перевірте дати й деталі — і можна надсилати.');
+  }catch(e){msg('Не вдалося скласти: '+e.message,true);}
+  finally{btn.disabled=false;btn.textContent=label;}
+};
+window.copyAnnouncement=async function(){
+  const out=document.getElementById('d-ann-out');
+  if(!out||!out.value)return;
+  try{await navigator.clipboard.writeText(out.value);showToast('📋 Текст скопійовано');}
+  catch(e){out.select();showToast('Виділено — натисніть Ctrl+C');}
+};
 // ══════════ УЧНІ: ведення списків директором ══════════
 // Вчитель може додавати учнів лише у «свої» класи (ті, що є в його матриці
 // доступу). Директор — у будь-який, тому цей блок продубльовано тут із
