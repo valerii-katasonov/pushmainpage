@@ -74,6 +74,30 @@ export function getUserRoles(u){
   if(list.length>0)return list;
   return u.role?[u.role]:[];
 }
+// ══════════ КІЛЬКА ДІТЕЙ В ОДНИХ БАТЬКІВ ══════════
+// Історично parent_links/{email} = {studentName, class, role} — один запис,
+// тож прив'язка другої дитини мовчки затирала першу. Тепер запис може бути:
+//   {children:[{studentName,class,role}, ...]}   ← нова форма
+//   {studentName, class, role}                   ← стара (одна дитина)
+//   "Прізвище Ім'я"                              ← найдавніша (рядок)
+// normalizeChildren() зводить будь-яку з них до масиву, тому старі записи
+// продовжують працювати без міграції.
+export function normalizeChildren(raw){
+  if(!raw)return[];
+  if(typeof raw==='string')return[{studentName:raw,class:'class_2',role:'guardian'}];
+  if(Array.isArray(raw.children))return raw.children.filter(c=>c&&c.studentName);
+  if(raw.children&&typeof raw.children==='object')
+    return Object.values(raw.children).filter(c=>c&&c.studentName);
+  if(raw.studentName)return[{studentName:raw.studentName,class:raw.class||'class_2',role:raw.role||'guardian'}];
+  return[];
+}
+// Діти, прив'язані до профілю (children, інакше — активна дитина)
+export function getUserChildren(u){
+  if(!u)return[];
+  const list=normalizeChildren(u);
+  if(list.length>0)return list;
+  return u.studentName?[{studentName:u.studentName,class:u.class,role:u.parentRole}]:[];
+}
 
 // ══════════ STATE ══════════
 // currentUserData is reassigned only here (onAuthStateChanged); every
@@ -286,7 +310,38 @@ function updateProfileBar(){
   let r="";if(currentUserData.role==='teacher')r="Вчитель";if(currentUserData.role==='class_teacher')r="🎓 Класний керівник";if(currentUserData.role==='art_school_teacher'||currentUserData.role==='music_teacher')r="Вчитель школи мистецтв";if(currentUserData.role==='director')r="Директор";if(currentUserData.role==='administrator')r="🛡️ Секретар (Адміністратор)";if(currentUserData.role==='student')r="🎒 Учень";if(currentUserData.role==='parent'){if(currentUserData.parentRole==='mother')r="Мати";else if(currentUserData.parentRole==='father')r="Батько";else r="Опекун";}
   document.getElementById('pb-name').innerText=n;document.getElementById('pb-role').innerText=r;
   renderRoleSwitcher();
+  renderChildSwitcher();
 }
+// Перемикач дітей — показується батькам, у яких у школі більше однієї дитини.
+function renderChildSwitcher(){
+  const box=document.getElementById('pb-child-switcher');
+  if(!box)return;
+  const kids=currentUserData?.role==='parent'?getUserChildren(currentUserData):[];
+  if(kids.length<2){box.style.display='none';box.innerHTML='';return;}
+  box.style.display='block';
+  box.innerHTML=`<select id="pb-child-select" title="Переключити дитину">
+    ${kids.map((k,i)=>`<option value="${i}" ${k.studentName===currentUserData.studentName&&k.class===currentUserData.class?'selected':''}>👶 ${escHtml(k.studentName)} (${escHtml(String(k.class||'').replace('class_',''))} кл.)</option>`).join('')}
+  </select>`;
+  document.getElementById('pb-child-select').addEventListener('change',e=>window.switchChild(parseInt(e.target.value,10)));
+}
+// Активна дитина зберігається в users/{uid}, тож після перезаходу батьки
+// потрапляють до тієї самої дитини, яку дивилися востаннє.
+window.switchChild=async function(idx){
+  if(!currentUserData)return;
+  const kids=getUserChildren(currentUserData);
+  const k=kids[idx];
+  if(!k)return;
+  if(k.studentName===currentUserData.studentName&&k.class===currentUserData.class)return;
+  // Знімаємо таймер розкладу попередньої дитини
+  if(parentLessonInterval)clearInterval(parentLessonInterval);
+  currentUserData.studentName=k.studentName;
+  currentUserData.class=k.class;
+  currentUserData.parentRole=k.role||currentUserData.parentRole||'guardian';
+  try{await update(ref(db,`users/${auth.currentUser.uid}`),{studentName:k.studentName,class:k.class,parentRole:currentUserData.parentRole});}catch(e){console.error(e);}
+  // Розклад прив'язаний до класу — перечитуємо під нову дитину
+  loadScheduleScript(k.class,()=>{initUserSession();});
+  showToast(`👶 Дитина: ${k.studentName}`);
+};
 // Перемикач кабінетів — показується лише тим, у кого призначено >1 ролі.
 function renderRoleSwitcher(){
   const box=document.getElementById('pb-role-switcher');
@@ -412,6 +467,28 @@ onAuthStateChanged(auth,async user=>{
       //  Admin SDK, тому "видалення співробітника" = відкликання доступу.)
       if(currentUserData.disabled){alert("Ваш доступ до системи закрито. Зверніться до адміністрації.");signOut(auth);return;}
       if(!currentUserData.email){currentUserData.email=user.email;update(ref(db,`users/${user.uid}`),{email:user.email});}
+      // CHILD SYNC: список дітей веде вчитель у parent_links, тож звіряємо його
+      // при кожному вході — інакше друга дитина, прив'язана пізніше, не
+      // з'явилася б у батьків, які вже колись заходили.
+      if(currentUserData.role==='parent'){
+        try{
+          const pl=await get(child(ref(db),`parent_links/${se}`));
+          if(pl.exists()){
+            const kids=normalizeChildren(pl.val());
+            const known=getUserChildren(currentUserData);
+            const same=kids.length===known.length&&kids.every((k,i)=>k.studentName===known[i]?.studentName&&k.class===known[i]?.class);
+            if(kids.length>0&&!same){
+              currentUserData.children=kids;
+              // Активну дитину зберігаємо, якщо вона ще прив'язана
+              const still=kids.find(k=>k.studentName===currentUserData.studentName&&k.class===currentUserData.class);
+              const act=still||kids[0];
+              currentUserData.studentName=act.studentName;currentUserData.class=act.class;
+              currentUserData.parentRole=act.role||currentUserData.parentRole||'guardian';
+              await update(ref(db,`users/${user.uid}`),{children:kids,studentName:act.studentName,class:act.class,parentRole:currentUserData.parentRole});
+            }
+          }
+        }catch(e){console.warn('Child sync skipped:',e.message);}
+      }
       // ROLE SYNC: pre_approved_roles is the director-controlled source of truth for
       // STAFF roles, but it used to be read only when users/{uid} didn't exist yet
       // (i.e. on the very first login ever). That meant a later role change —
@@ -442,7 +519,13 @@ onAuthStateChanged(auth,async user=>{
       await loadGradeTypesCache();initUserSession();
     }
     else{const rs=await get(child(ref(db),`pre_approved_roles/${se}`));if(rs.exists()){const roles=normalizeRoles(rs.val());const primary=roles[0];const nd={role:primary,roles,email:user.email};if(isTeacherRole(primary))await fetchTeacherAccess(se);await set(ref(db,`users/${user.uid}`),nd);currentUserData=nd;await loadGradeTypesCache();initUserSession();}
-    else{const ls=await get(child(ref(db),`parent_links/${se}`));if(ls.exists()){const ld=ls.val();let sn,sc,pr='guardian';if(typeof ld==='string'){sn=ld;sc="class_2";}else{sn=ld.studentName;sc=ld.class;pr=ld.role||'guardian';}const nd={role:"parent",studentName:sn,class:sc,parentRole:pr,email:user.email};await set(ref(db,`users/${user.uid}`),nd);currentUserData=nd;await loadGradeTypesCache();initUserSession();}else{const sls=await get(child(ref(db),`student_links/${se}`));if(sls.exists()){const sd=sls.val();const nd={role:"student",studentName:sd.studentName,class:sd.class,email:user.email};await set(ref(db,`users/${user.uid}`),nd);currentUserData=nd;await loadGradeTypesCache();initUserSession();}else{alert("Ваш Email не зареєстровано.");signOut(auth);}}}}
+    else{const ls=await get(child(ref(db),`parent_links/${se}`));if(ls.exists()){
+      // Дітей може бути кілька; studentName/class зберігаємо як АКТИВНУ дитину,
+      // щоб уся наявна логіка (getActiveClass, дашборди) працювала без змін.
+      const kids=normalizeChildren(ls.val());
+      const first=kids[0]||{studentName:'',class:'class_2',role:'guardian'};
+      const nd={role:"parent",children:kids,studentName:first.studentName,class:first.class,parentRole:first.role||'guardian',email:user.email};
+      await set(ref(db,`users/${user.uid}`),nd);currentUserData=nd;await loadGradeTypesCache();initUserSession();}else{const sls=await get(child(ref(db),`student_links/${se}`));if(sls.exists()){const sd=sls.val();const nd={role:"student",studentName:sd.studentName,class:sd.class,email:user.email};await set(ref(db,`users/${user.uid}`),nd);currentUserData=nd;await loadGradeTypesCache();initUserSession();}else{alert("Ваш Email не зареєстровано.");signOut(auth);}}}}
   }else document.getElementById('login-screen').style.display='block';
 });
 async function fetchTeacherAccess(se){const s=await get(child(ref(db),`teacher_access/${se}`));teacherAccessMatrix=s.exists()?s.val():{};}
