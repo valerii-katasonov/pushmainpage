@@ -453,9 +453,11 @@ function updateSubjectList(){
 }
 // ══════════ AUTH ══════════
 onAuthStateChanged(auth,async user=>{
+  // Темна тема лише для екранів входу: після входу портал світлий, як і був.
+  document.body.classList.toggle('auth-mode',!user);
   // Людина перейшла за посиланням із листа відновлення пароля — показуємо
   // сторінку встановлення нового пароля і не чіпаємо звичайний вхід.
-  if(hasPendingAuthAction()){initPasswordResetScreen();return;}
+  if(hasPendingAuthAction()){document.body.classList.add('auth-mode');initPasswordResetScreen();return;}
   document.querySelectorAll('.panel').forEach(p=>p.style.display='none');document.getElementById('calendar-block').style.display='none';document.getElementById('profile-bar').style.display='none';
   if(user){
     const se=user.email.replace(/\./g,'_');
