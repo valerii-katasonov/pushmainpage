@@ -269,6 +269,7 @@ export function loadParentDashboard(){
   get(child(ref(db),`homeworks/${cls}/${date}`)).then(snap=>{const hl=document.getElementById('p-daily-hw-list');hl.innerHTML='';if(snap.exists()){const d=snap.val();for(let s in d)hl.innerHTML+=renderHwItem(s,d[s]);}else hl.innerHTML='<li class="empty-msg">ДЗ не задано.</li>';});
   // Textbooks
   loadTextbooksForParent();
+  loadAiDayContext('p');
   // Grades + comments + behavior
   const ym=date.substring(0,7);
   Promise.all([
@@ -304,6 +305,80 @@ export function loadParentDashboard(){
     else bEl.innerHTML='<p class="empty-msg" style="font-size:.82rem;">Оцінок поведінки немає.</p>';
   });
 }
+// ══════════ AI У КАБІНЕТАХ БАТЬКІВ ТА УЧНЯ ══════════
+// У сервіс іде ЛИШЕ предмет, тема уроку, текст ДЗ і номер класу — жодних
+// імен, оцінок чи інших персональних даних.
+// Кеш «предмет → {тема, ДЗ}» на обрану дату, щоб не читати базу двічі.
+let aiDayContext={};
+async function loadAiDayContext(prefix){
+  const cls=getActiveClass();
+  const date=document.getElementById('global-date').value;
+  const sel=document.getElementById(`${prefix}-help-subject`);
+  if(!sel)return;
+  aiDayContext={};
+  const [hwSnap,topSnap]=await Promise.all([
+    get(child(ref(db),`homeworks/${cls}/${date}`)),
+    get(child(ref(db),`lesson_topics/${cls}`))
+  ]);
+  // Домашні завдання за цей день
+  if(hwSnap.exists()){
+    const d=hwSnap.val();
+    for(const s in d){
+      const v=d[s];
+      aiDayContext[s]={homework:typeof v==='string'?v:(v.text||''),topic:''};
+    }
+  }
+  // Теми уроків: ключ предмета в lesson_topics «безпечний» (крапки замінені),
+  // тому зіставляємо за нормалізованою назвою.
+  if(topSnap.exists()){
+    const byKey=topSnap.val();
+    for(const s in aiDayContext){
+      const sk=String(s).replace(/[.#$[\]/]/g,'_').trim();
+      const rec=byKey[sk]&&byKey[sk][date];
+      if(!rec)continue;
+      let t='';
+      if(typeof rec==='string')t=rec;
+      else if(Array.isArray(rec.topics)&&rec.topics[0])t=rec.topics[0].customText||'';
+      else t=rec.customText||'';
+      if(t)aiDayContext[s].topic=t;
+    }
+  }
+  const subjects=Object.keys(aiDayContext);
+  sel.innerHTML=subjects.length
+    ? subjects.map(s=>`<option value="${escHtml(s)}">${escHtml(s)}</option>`).join('')
+    : '<option value="">Немає уроків на цей день</option>';
+}
+function aiOut(prefix,text,isErr){
+  const msg=document.getElementById(`ai-${prefix}-msg`);
+  if(msg){msg.textContent=text||'';msg.className='ai-hw-msg'+(isErr?' err':'');msg.style.display=text?'block':'none';}
+}
+async function runDayAI(task,prefix,btnId,outId){
+  const sel=document.getElementById(task==='parentHelp'?'p-help-subject':'s-help-subject');
+  const subject=sel?sel.value:'';
+  const ctx=aiDayContext[subject]||{};
+  const classNum=parseInt(String(getActiveClass()||'').replace('class_',''),10);
+  const btn=document.getElementById(btnId);
+  const out=document.getElementById(outId);
+  if(!subject)return aiOut(prefix,'На цей день уроків із завданнями немає.',true);
+  if(!ctx.topic&&!ctx.homework)return aiOut(prefix,'Учитель ще не вказав тему уроку чи завдання.',true);
+  btn.disabled=true;const label=btn.textContent;btn.textContent='⏳ Хвилинку...';
+  aiOut(prefix,'');out.style.display='none';
+  try{
+    const r=await fetch('/.netlify/functions/ai-assist',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({task,subject,topic:ctx.topic,homework:ctx.homework,classNum})
+    });
+    const data=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(data.error||`Помилка ${r.status}`);
+    out.textContent=data.text||'';out.style.display='block';
+    aiOut(prefix,task==='parentHelp'
+      ?'💡 Це загальні поради — орієнтуйтесь на свою дитину.'
+      :'💡 Спробуй відповісти сам(а), не підглядаючи в зошит.');
+  }catch(e){aiOut(prefix,'Не вдалося отримати відповідь: '+e.message,true);}
+  finally{btn.disabled=false;btn.textContent=label;}
+}
+window.parentHelpAI=()=>runDayAI('parentHelp','parent','btn-ai-parent','ai-parent-out');
+window.selfCheckAI=()=>runDayAI('selfCheck','student','btn-ai-student','ai-student-out');
 window.loadParentDashboard=loadParentDashboard;
 window.updateAttOptions=function(){const t=document.getElementById('p-att-type').value;const r=document.getElementById('p-att-reason');r.innerHTML='';if(t==='late')r.innerHTML='<option value="на 10 хвилин">на 10 хвилин</option><option value="на 15 хвилин">на 15 хвилин</option><option value="до 2-го уроку">до 2-го уроку</option><option value="до 3-го уроку">до 3-го уроку</option>';else r.innerHTML='<option value="за сімейними обставинами">За сімейними обставинами</option><option value="через хворобу">Через хворобу</option>';};
 window.submitAttendance=function(role='parent'){
@@ -330,6 +405,7 @@ export function loadStudentDashboard(){
   renderParentCalendar('student');loadParentBellSchedule('student');
   get(child(ref(db),`homeworks/${cls}/${date}`)).then(snap=>{const hl=document.getElementById('s-daily-hw-list');hl.innerHTML='';if(snap.exists()){const d=snap.val();for(let s in d)hl.innerHTML+=renderHwItem(s,d[s]);}else hl.innerHTML='<li class="empty-msg">ДЗ не задано.</li>';});
   loadTextbooksForParent('student');
+  loadAiDayContext('s');
   const ym=date.substring(0,7);
   Promise.all([get(child(ref(db),`comments/${cls}/${date}`)),get(child(ref(db),`grades/${cls}/${ym}`)),get(child(ref(db),`grade_types/${cls}/${ym}`)),get(child(ref(db),`behavior_grades/${cls}/${ym}`))]).then(([cmS,grS,gtS,bhS])=>{
     const list=document.getElementById('s-daily-comments-list');list.innerHTML=renderGradeFormulaInfo();let hasItems=false;
