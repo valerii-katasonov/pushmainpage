@@ -7,7 +7,7 @@
 // header for why.)
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, push, remove, update, query, orderByChild, limitToLast } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, showToast, getClassNum, displayGrade, gradeClass6, teacherAccessMatrix, getWeekDates, formatAttendanceSlotLabel, gradeTypesCache, loadGradeTypesCache, calculateStudentWeightedAvg, escJs, escHtml, localDateString, normalizeRoles, getUserRoles, ROLE_LABELS, currentUserData, dayNamesUA, sendPasswordReset, normalizeChildren, renderParentsBlock, logAction, AUDIT_LABELS } from './common.js';
+import { db, showToast, getClassNum, displayGrade, gradeClass6, teacherAccessMatrix, getWeekDates, formatAttendanceSlotLabel, gradeTypesCache, loadGradeTypesCache, calculateStudentWeightedAvg, escJs, escHtml, localDateString, normalizeRoles, getUserRoles, ROLE_LABELS, currentUserData, dayNamesUA, sendPasswordReset, normalizeChildren, renderParentsBlock, logAction, AUDIT_LABELS, getParentProfile, parentFullName } from './common.js';
 
 let directorSkillsTemp=[];
 
@@ -592,6 +592,142 @@ window.directorLinkParent=async function(){
     document.getElementById('pl-email').value='';
     window.loadParentsOverview();
   }catch(e){alert('Помилка: '+e.message);}
+};
+// ══════════ ГЛОБАЛЬНИЙ ПОШУК ══════════
+// На 165 учнях, щоб знайти людину, треба пам'ятати її клас. Тут шукаємо
+// по всій школі одразу — за ім'ям учня, ПІБ батьків, поштою чи телефоном.
+let searchIndex=null;
+async function buildSearchIndex(){
+  const [stSnap,plSnap,slSnap]=await Promise.all([
+    get(child(ref(db),'students_list')),
+    get(child(ref(db),'parent_links')),
+    get(child(ref(db),'student_links'))
+  ]);
+  const idx=[];
+  // Учні
+  if(stSnap.exists()){
+    const all=stSnap.val();
+    for(const cls in all)for(const k in all[cls])
+      idx.push({type:'student',cls,name:all[cls][k],hay:`${all[cls][k]}`.toLowerCase()});
+  }
+  // Власні входи учнів — щоб можна було шукати і за поштою дитини
+  if(slSnap.exists()){
+    const sl=slSnap.val();
+    for(const se in sl){
+      const v=sl[se];if(!v?.studentName)continue;
+      const email=se.replace(/_/g,'.');
+      const hit=idx.find(i=>i.type==='student'&&i.name===v.studentName&&i.cls===v.class);
+      if(hit){hit.email=email;hit.hay+=' '+email.toLowerCase();}
+    }
+  }
+  // Батьки — по кожній прив'язаній дитині окремим записом
+  if(plSnap.exists()){
+    const pl=plSnap.val();
+    for(const se in pl){
+      const rec=pl[se], email=se.replace(/_/g,'.'), pr=getParentProfile(rec);
+      const fio=parentFullName(pr,'');
+      normalizeChildren(rec).forEach(k=>{
+        idx.push({type:'parent',cls:k.class,name:fio||email,child:k.studentName,email,
+          phone:[pr.phonePL,pr.phoneUA].filter(Boolean).join(' '),tg:pr.telegram||'',
+          hay:`${fio} ${email} ${pr.phonePL} ${pr.phoneUA} ${pr.telegram} ${k.studentName}`.toLowerCase()});
+      });
+    }
+  }
+  return idx;
+}
+window.runGlobalSearch=async function(){
+  const q=document.getElementById('gs-query').value.trim().toLowerCase();
+  const box=document.getElementById('gs-results');
+  if(!box)return;
+  if(q.length<2){box.innerHTML='<p class="empty-msg">Введіть щонайменше 2 символи.</p>';return;}
+  box.innerHTML='<p class="empty-msg">Пошук...</p>';
+  try{
+    // Індекс будуємо один раз за сеанс — школа невелика, дані змінюються рідко
+    if(!searchIndex)searchIndex=await buildSearchIndex();
+    const hits=searchIndex.filter(i=>i.hay.includes(q)).slice(0,40);
+    if(hits.length===0){box.innerHTML='<p class="empty-msg">Нічого не знайдено.</p>';return;}
+    box.innerHTML=hits.map(h=>h.type==='student'
+      ? `<div class="gs-row" onclick="gsGoto('${escJs(h.cls)}')">
+           <span class="gs-tag st">Учень</span>
+           <span class="gs-main">${escHtml(h.name)}</span>
+           <span class="gs-sub">${escHtml(h.cls.replace('class_',''))} кл.${h.email?' · '+escHtml(h.email):''}</span>
+         </div>`
+      : `<div class="gs-row" onclick="gsGoto('${escJs(h.cls)}')">
+           <span class="gs-tag pa">Батьки</span>
+           <span class="gs-main">${escHtml(h.name)}</span>
+           <span class="gs-sub">дитина: ${escHtml(h.child)} · ${escHtml(h.cls.replace('class_',''))} кл.<br>
+             ${escHtml(h.email)}${h.phone?' · '+escHtml(h.phone):''}${h.tg?' · '+escHtml(h.tg):''}</span>
+         </div>`).join('');
+  }catch(e){box.innerHTML=`<p style="color:red;font-size:.8rem;">Помилка: ${escHtml(e.message)}</p>`;}
+};
+// Перехід до знайденого: відкриваємо список того класу
+window.gsGoto=function(cls){
+  const sel=document.getElementById('po-class');
+  if(sel){sel.value=cls;window.loadParentsOverview();window.loadParentLinkStudents();}
+  showToast(`Відкрито ${cls.replace('class_','')} клас нижче`);
+};
+window.resetSearchIndex=function(){searchIndex=null;showToast('Індекс оновлено');};
+// ══════════ СТАТИСТИКА ВІДВІДУВАНОСТІ ══════════
+// Відвідуваність досі було видно лише по днях — картини в цілому не було,
+// хоча школа зобов'язана її відстежувати. Рахуємо за місяць: по класах
+// і поіменно тих, хто пропускає найбільше.
+window.loadAttendanceStats=async function(){
+  const box=document.getElementById('att-stats');
+  if(!box)return;
+  const ym=document.getElementById('att-month').value||localDateString.slice(0,7);
+  box.innerHTML='<p class="empty-msg">Обчислення...</p>';
+  try{
+    const snap=await get(child(ref(db),'attendance'));
+    if(!snap.exists()){box.innerHTML='<p class="empty-msg">Даних немає.</p>';return;}
+    const all=snap.val();
+    const byClass={},byStudent={};
+    let totAbs=0,totLate=0;
+    for(let i=1;i<=11;i++){
+      const cls=`class_${i}`;
+      if(!all[cls])continue;
+      byClass[cls]={abs:0,late:0};
+      for(const date in all[cls]){
+        if(!date.startsWith(ym))continue;
+        for(const st in all[cls][date]){
+          const slots=all[cls][date][st];
+          if(!slots||typeof slots!=='object')continue;
+          // Кілька уроків одного дня рахуємо як один пропуск дня —
+          // інакше в учня з 6 уроками буде 6 «пропусків» замість одного
+          let dayAbs=false,dayLate=false;
+          for(const sk in slots){
+            const r=slots[sk];
+            if(r?.status==='absent')dayAbs=true;
+            else if(r?.status==='late')dayLate=true;
+          }
+          if(!dayAbs&&!dayLate)continue;
+          const key=`${cls}|${st}`;
+          byStudent[key]=byStudent[key]||{cls,st,abs:0,late:0};
+          if(dayAbs){byClass[cls].abs++;byStudent[key].abs++;totAbs++;}
+          if(dayLate){byClass[cls].late++;byStudent[key].late++;totLate++;}
+        }
+      }
+    }
+    const top=Object.values(byStudent).sort((a,b)=>(b.abs*2+b.late)-(a.abs*2+a.late)).slice(0,12);
+    let html=`<div class="as-sum">
+      <div><b>${totAbs}</b><span>днів пропусків</span></div>
+      <div><b>${totLate}</b><span>запізнень</span></div>
+    </div>`;
+    html+='<div class="as-title">По класах</div><div class="as-classes">';
+    for(let i=1;i<=11;i++){
+      const c=byClass[`class_${i}`];
+      const n=c?c.abs:0;
+      html+=`<span class="as-cls${n>0?'':' zero'}">${i} кл: <b>${n}</b>${c&&c.late?` +${c.late}з`:''}</span>`;
+    }
+    html+='</div>';
+    if(top.length>0){
+      html+='<div class="as-title">Найбільше пропусків</div>';
+      html+=top.map(t=>`<div class="as-row">
+        <span class="as-name">${escHtml(t.st)} <span class="as-c">${escHtml(t.cls.replace('class_',''))} кл.</span></span>
+        <span class="as-nums">${t.abs?`<b>${t.abs}</b> проп.`:''}${t.late?` · ${t.late} зап.`:''}</span>
+      </div>`).join('');
+    }
+    box.innerHTML=html;
+  }catch(e){box.innerHTML=`<p style="color:red;font-size:.8rem;">Помилка: ${escHtml(e.message)}</p>`;}
 };
 // ══════════ ЖУРНАЛ ДІЙ: перегляд ══════════
 // Читаємо лише обраний місяць і лише останні 300 записів — інакше з часом
