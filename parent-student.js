@@ -7,6 +7,7 @@
 import { ref, set, get, child } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { db, getActiveClass, currentUserData, STICKER_GOAL, getWeekDates, displayGrade, gradeClass6, showToast, renderHwItem, dayKeys, localDateString, formatAttendanceSlotLabel, renderGradeFormulaInfo, escJs, escHtml, safeUrl, renderBirthdays } from './common.js';
 import { ACADEMIC_YEAR_ID } from './director.js';
+import { renderParentMenu } from './kitchen.js';
 
 // parentLessonInterval is reassigned only here and read/cleared from
 // common.js's logoutUser — plain export/import.
@@ -286,6 +287,7 @@ export function loadParentDashboard(){
   renderFinalGrades('p-final-grades',cls,currentUserData.studentName);
   loadTodaySubstitutions(cls,date).then(()=>renderDynamicSchedule('parent'));
   renderConsents();
+  renderParentMenu(cls,currentUserData.studentName,date);
   // Grades + comments + behavior
   const ym=date.substring(0,7);
   Promise.all([
