@@ -321,6 +321,11 @@
     #btn-ai-hw,#btn-ai-comment{width:auto;margin:0;padding:8px 14px;font-size:.82rem;font-weight:700;border:none;border-radius:9px;cursor:pointer;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;}
     #btn-ai-hw:disabled,#btn-ai-comment:disabled{opacity:.6;cursor:wait;}
     .ai-hw-note{font-size:.72rem;color:#999;font-style:italic;}
+    #btn-hw-copy{width:auto;margin:0;padding:8px 14px;font-size:.82rem;font-weight:700;border:none;border-radius:9px;cursor:pointer;background:#e8f4fd;color:#0d47a1;border:1px solid #bbdefb;}
+    #btn-hw-copy:hover{background:#0d47a1;color:#fff;}
+    .hw-copy-opt{display:flex;align-items:center;gap:8px;padding:7px 9px;border:1px solid #e0e0e0;border-radius:8px;margin-bottom:5px;font-size:.86rem;cursor:pointer;}
+    .hw-copy-opt:hover{background:#f5f9ff;border-color:#bbdefb;}
+    .hw-copy-opt input{width:17px;height:17px;margin:0;cursor:pointer;}
     .ai-ctx{margin-top:8px;background:#faf7ff;border:1px solid #e2d6f0;border-radius:10px;padding:9px 11px;}
     .ai-ctx summary{cursor:pointer;font-size:.8rem;font-weight:700;color:#7b1fa2;}
     .ai-ctx label{margin-top:0;font-size:.76rem;color:#666;}
@@ -382,6 +387,12 @@
       .audit-det,.audit-who{grid-column:auto;}
       .audit-who{text-align:right;}
     }
+    .bd-box{background:#fff8f0;border:1px solid #ffd9b0;border-radius:10px;padding:9px 11px;margin-bottom:10px;}
+    .bd-title{font-size:.82rem;font-weight:800;color:#d35400;margin-bottom:5px;}
+    .bd-row{display:flex;justify-content:space-between;gap:9px;font-size:.83rem;padding:2px 0;}
+    .bd-row.me{font-weight:800;color:#d35400;}
+    .bd-name{color:#444;}
+    .bd-date{color:#999;white-space:nowrap;}
     /* ── Перемикач сповіщень ── */
     .push-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
     .push-label{flex:1;font-size:.85rem;font-weight:600;color:#555;}
@@ -1399,6 +1410,7 @@
       <!-- ДЗ зведення -->
       <div id="t-hw-list-wrapper" class="data-card" style="border-left-color:var(--blue);background:#f4f9fd;margin:14px 0 0 0;">
         <h4 style="margin-top:0;color:var(--blue);">📋 ДЗ класу сьогодні:</h4>
+        <div id="t-birthdays" class="bd-box" style="display:none;"></div>
         <ul id="t-daily-hw-list" class="list-dash"></ul>
       </div>
     </section>
@@ -1515,8 +1527,9 @@
         </details>
         <div class="ai-hw-row">
           <button type="button" id="btn-ai-hw" onclick="generateHomeworkAI()">✨ Згенерувати чернетку ДЗ</button>
-          <span class="ai-hw-note">чернетка — перевірте й відредагуйте перед збереженням</span>
+          <button type="button" id="btn-hw-copy" onclick="openHwCopy()">📋 Скопіювати в інші класи</button>
         </div>
+        <p class="ai-hw-note" style="margin:4px 0 0 0;">чернетка — перевірте й відредагуйте перед збереженням</p>
         <p id="ai-hw-msg" class="ai-hw-msg" style="display:none;"></p>
         <label>📸 Фото:</label>
         <input type="file" id="t-image" accept="image/*" multiple>
@@ -1644,6 +1657,7 @@
       <!-- ДЗ -->
       <div class="data-card" style="border-left-color:#00b894;background:#f0fff4;">
         <h4 style="margin-top:0;color:#00b894;">📚 Задано:</h4>
+        <div id="p-birthdays" class="bd-box" style="display:none;"></div>
         <ul id="p-daily-hw-list" class="list-dash"></ul>
         <!-- AI-поради батькам за темою уроку / домашнім завданням.
              У сервіс іде лише предмет, тема, ДЗ і номер класу. -->
@@ -1741,6 +1755,7 @@
       <!-- ДЗ -->
       <div class="data-card" style="border-left-color:#00b894;background:#f0fff4;">
         <h4 style="margin-top:0;color:#00b894;">📚 Завдання для мене:</h4>
+        <div id="s-birthdays" class="bd-box" style="display:none;"></div>
         <ul id="s-daily-hw-list" class="list-dash"></ul>
         <!-- Питання для самоперевірки. Свідомо НЕ «поясни тему» і не
              «зроби ДЗ» — модель має підштовхнути до перевірки себе. -->
@@ -1793,6 +1808,20 @@
   </div>
 </div>
 <!-- ══════════════════ MODALS ══════════════════ -->
+<!-- Копіювання ДЗ у паралельні класи -->
+<div id="hw-copy-modal" class="modal-overlay">
+  <div class="modal-content" style="max-width:400px;text-align:left;">
+    <h2 style="color:var(--blue);margin-top:0;text-align:center;">📋 Скопіювати ДЗ</h2>
+    <p style="font-size:.84rem;color:#555;margin:0 0 4px 0;">Предмет: <b id="hw-copy-subject">—</b></p>
+    <p style="font-size:.76rem;color:#888;margin:0 0 10px 0;">
+      Копіюється лише домашнє завдання. Теми уроків не переносяться —
+      у кожного класу свій прогрес за календарним планом.
+    </p>
+    <div id="hw-copy-classes"></div>
+    <button id="btn-hw-copy-do" onclick="doHwCopy()" style="background:var(--blue);color:#fff;margin-top:12px;">📋 Скопіювати</button>
+    <button onclick="closeHwCopy()" style="background:#f5f6fa;color:#333;margin-top:7px;border:1px solid #dcdde1;">Скасувати</button>
+  </div>
+</div>
 <!-- Картка учня. Медичні дані — особлива категорія за GDPR, тому редагування
      доступне лише директору, адміністратору й класному керівнику цього класу;
      решта відкриває картку в режимі перегляду. -->
