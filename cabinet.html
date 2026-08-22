@@ -315,7 +315,12 @@
     .ai-out{margin-top:9px;background:#fff;border:1px solid #d1c4e9;border-left:4px solid var(--purple);border-radius:9px;padding:11px 13px;font-size:.85rem;line-height:1.55;color:#333;white-space:pre-wrap;}
     /* ── БАТЬКИ УЧНІВ (зріз для директора) ── */
     .po-row{display:flex;gap:11px;align-items:flex-start;padding:8px;background:#fff;border:1px solid #e8e0f0;border-radius:9px;margin-bottom:5px;font-size:.83rem;}
-    .po-child{flex:0 0 40%;font-weight:700;color:#4a148c;word-break:break-word;}
+    .po-child{flex:0 0 40%;font-weight:700;color:#4a148c;word-break:break-word;display:flex;flex-direction:column;gap:3px;align-items:flex-start;}
+    .po-child-name{line-height:1.35;}
+    .po-child-acts{display:flex;gap:4px;}
+    .po-del{background:#fdecea!important;border-color:#f5c6cb!important;}
+    .po-del:hover{background:var(--red)!important;}
+    .ds-ok{width:auto;margin:0;padding:2px 9px;font-size:.75rem;background:var(--green);color:#fff;border:none;border-radius:7px;cursor:pointer;}
     .po-parents{flex:1;display:flex;flex-direction:column;gap:3px;}
     .po-parent{padding:5px 0;border-bottom:1px dashed #f0e8f6;}
     .po-parent:last-child{border-bottom:none;}
@@ -1099,30 +1104,11 @@
         </div>
       </details>
       <h3>🎓 Учні</h3>
-      <!-- Директор може вести списки учнів БУДЬ-ЯКОГО класу (вчитель — лише своїх) -->
-      <details style="margin-bottom:12px;background:#e8f5e9;padding:14px;border-radius:12px;border:1px solid #a5d6a7;" ontoggle="if(this.open)loadDirectorStudents()">
-        <summary style="font-weight:700;cursor:pointer;color:#1b5e20;font-size:.95rem;">👨‍🎓 Списки учнів по класах</summary>
-        <div style="margin-top:13px;">
-          <select id="ds-class" onchange="loadDirectorStudents()" style="border:2px solid #66bb6a;">
-            <option value="">-- Оберіть клас --</option>
-            <option value="class_1">1 Клас</option><option value="class_2">2 Клас</option><option value="class_3">3 Клас</option>
-            <option value="class_4">4 Клас</option><option value="class_5">5 Клас</option><option value="class_6">6 Клас</option>
-            <option value="class_7">7 Клас</option><option value="class_8">8 Клас</option><option value="class_9">9 Клас</option>
-            <option value="class_10">10 Клас</option><option value="class_11">11 Клас</option>
-          </select>
-          <div id="ds-list" style="margin-top:10px;"><p class="empty-msg">Оберіть клас.</p></div>
-          <div style="margin-top:12px;border-top:1px dashed #a5d6a7;padding-top:10px;">
-            <b style="font-size:.85rem;color:#1b5e20;">➕ Додати учня</b>
-            <input type="text" id="ds-new-name" placeholder="Прізвище та Ім'я" style="margin-top:6px;">
-            <input type="email" id="ds-new-email" placeholder="Email учня (необов'язково — для власного входу)" style="margin-top:5px;">
-            <button onclick="directorAddStudent()" style="background:#1b5e20;color:#fff;margin-top:8px;">➕ Додати до обраного класу</button>
-          </div>
-        </div>
-      </details>
-      <!-- Зріз «дитина → її батьки»: дані зберігаються навпаки (за поштою
-           батьків), тому директору показуємо перевернутий вигляд -->
-      <details style="margin-bottom:12px;background:#f9f4ff;padding:14px;border-radius:12px;border:1px solid #ce93d8;" ontoggle="if(this.open)loadParentsOverview()">
-        <summary style="font-weight:700;cursor:pointer;color:#7b1fa2;font-size:.95rem;">👪 Батьки учнів</summary>
+      <!-- Один список замість двох: учні класу, а навпроти кожного — його
+           батьки з контактами. Дані про батьків зберігаються «навпаки»
+           (ключ — їхня пошта), тому тут показуємо перевернутий вигляд. -->
+      <details style="margin-bottom:12px;background:#f9f4ff;padding:14px;border-radius:12px;border:1px solid #ce93d8;" ontoggle="if(this.open){loadParentsOverview();loadParentLinkStudents();}">
+        <summary style="font-weight:700;cursor:pointer;color:#7b1fa2;font-size:.95rem;">👨‍🎓 Учні класу та їхні батьки</summary>
         <div style="margin-top:13px;">
           <select id="po-class" onchange="loadParentsOverview();loadParentLinkStudents()" style="border:2px solid #ce93d8;">
             <option value="">-- Оберіть клас --</option>
@@ -1145,6 +1131,12 @@
             </select>
             <input type="email" id="pl-email" placeholder="Email батьків" style="margin-top:5px;" autocapitalize="none" spellcheck="false">
             <button onclick="directorLinkParent()" style="background:var(--purple);color:#fff;margin-top:8px;">🔗 Прив'язати</button>
+          </div>
+          <div style="margin-top:12px;border-top:1px dashed #ce93d8;padding-top:11px;">
+            <b style="font-size:.85rem;color:#1b5e20;">➕ Додати учня до класу</b>
+            <input type="text" id="ds-new-name" placeholder="Прізвище та Ім'я" style="margin-top:6px;">
+            <input type="email" id="ds-new-email" placeholder="Email учня (необов'язково — для власного входу)" style="margin-top:5px;" autocapitalize="none" spellcheck="false">
+            <button onclick="directorAddStudent()" style="background:#1b5e20;color:#fff;margin-top:8px;">➕ Додати</button>
           </div>
         </div>
       </details>
@@ -1734,8 +1726,18 @@
       <img id="modal-avatar-preview" src="https://cdn-icons-png.flaticon.com/512/149/149071.png" style="width:78px;height:78px;border-radius:50%;object-fit:cover;border:3px solid var(--teal);">
     </div>
     <label>Фото:</label><input type="file" id="profile-photo" accept="image/*" style="margin-bottom:13px;">
-    <label>Ім'я:</label><input type="text" id="profile-first-name" placeholder="Ім'я" style="margin-bottom:8px;">
-    <label>Прізвище:</label><input type="text" id="profile-last-name" placeholder="Прізвище" style="margin-bottom:8px;">
+    <!-- Для батьків ці два поля ховаються: у них ПІБ разом із контактами нижче -->
+    <div id="profile-name-block">
+      <label>Ім'я:</label><input type="text" id="profile-first-name" placeholder="Ім'я" style="margin-bottom:8px;">
+      <label>Прізвище:</label><input type="text" id="profile-last-name" placeholder="Прізвище" style="margin-bottom:8px;">
+    </div>
+    <!-- Контактні дані батьків: заповнює сам батько/мати, а бачать і можуть
+         виправити вчитель і директор. Зберігаються в parent_links, не в users. -->
+    <div id="p-contacts-section" style="display:none;margin-top:13px;padding-top:11px;border-top:1px dashed #ccc;text-align:left;">
+      <label style="color:var(--purple);margin-top:0;">👪 Мої контактні дані</label>
+      <p style="font-size:.76rem;color:#888;margin:3px 0 6px 0;">Ці дані бачать класний керівник і адміністрація школи.</p>
+      <div id="p-contacts-fields"></div>
+    </div>
     <div id="t-skills-section" style="display:none;margin-top:13px;padding-top:11px;border-top:1px dashed #ccc;text-align:left;">
       <label style="color:#0d47a1;margin-top:0;">🧠 Мої скіли (предмети для заміни):</label>
       <div id="t-my-skills-tags" style="margin-top:6px;min-height:28px;"></div>
