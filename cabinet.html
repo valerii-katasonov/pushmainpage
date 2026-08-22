@@ -323,6 +323,8 @@
     .po-child{flex:0 0 40%;font-weight:700;color:#4a148c;word-break:break-word;display:flex;flex-direction:column;gap:3px;align-items:flex-start;}
     .po-child-name{line-height:1.35;}
     .po-child-acts{display:flex;gap:4px;}
+    .po-login{font-size:.7rem;font-weight:600;color:#1b5e20;background:#e8f5e9;border:1px solid #a5d6a7;border-radius:10px;padding:1px 7px;word-break:break-all;}
+    .po-login.none{color:#8a6d1f;background:#fff8e1;border-color:#ffe0a3;}
     .po-del{background:#fdecea!important;border-color:#f5c6cb!important;}
     .po-del:hover{background:var(--red)!important;}
     .ds-ok{width:auto;margin:0;padding:2px 9px;font-size:.75rem;background:var(--green);color:#fff;border:none;border-radius:7px;cursor:pointer;}
@@ -1766,6 +1768,26 @@
   </div>
 </div>
 <!-- ══════════════════ MODALS ══════════════════ -->
+<!-- Вхід учня: додати, змінити або прибрати власну пошту для входу -->
+<div id="student-login-modal" class="modal-overlay">
+  <div class="modal-content" style="max-width:420px;text-align:left;">
+    <h2 style="color:var(--teal);margin-top:0;text-align:center;">🔑 Вхід учня</h2>
+    <p style="text-align:center;font-size:.85rem;color:#555;margin:0 0 4px 0;"><b id="sl-student">—</b></p>
+    <p style="font-size:.78rem;color:#888;margin:0 0 12px 0;">
+      Email потрібен лише тоді, коли учень заходить у портал <b>сам</b>.
+      Батьки бачать оцінки дитини незалежно від цього.
+    </p>
+    <label for="sl-email">Email для входу</label>
+    <input type="email" id="sl-email" placeholder="учень@пошта.com" autocapitalize="none" spellcheck="false">
+    <p style="font-size:.74rem;color:#8a6d1f;background:#fff8e1;border:1px solid #ffe0a3;border-radius:8px;padding:7px 9px;margin:9px 0 0 0;">
+      Після збереження учень заходить через «Перший вхід» і сам створює пароль.
+      Якщо змінюєте адресу вже наявному учню — вхід за старою перестане діяти.
+    </p>
+    <button onclick="saveStudentLogin()" style="background:var(--green);color:#fff;margin-top:14px;">💾 Зберегти</button>
+    <button id="sl-remove" onclick="removeStudentLogin()" style="background:#fdecea;color:var(--red);border:1px solid #f5c6cb;margin-top:7px;display:none;">🔒 Прибрати вхід</button>
+    <button onclick="closeStudentLogin()" style="background:#f5f6fa;color:#333;margin-top:7px;border:1px solid #dcdde1;">Скасувати</button>
+  </div>
+</div>
 <!-- Редактор контактів батьків. Спільний для кабінету вчителя і директора -->
 <div id="parent-edit-modal" class="modal-overlay">
   <div class="modal-content" style="max-width:460px;text-align:left;">
