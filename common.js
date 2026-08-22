@@ -703,12 +703,102 @@ window.openParentEditor=async function(safeEmail){
   body.innerHTML='<p class="empty-msg">Завантаження...</p>';
   modal.style.display='flex';
   const snap=await get(child(ref(db),`parent_links/${safeEmail}`));
-  const profile=getParentProfile(snap.exists()?snap.val():{});
+  const rec=snap.exists()?snap.val():{};
+  const profile=getParentProfile(rec);
+  const kids=normalizeChildren(rec);
   body.innerHTML=PARENT_FIELDS.map(f=>`
     <label for="pe-${f.k}">${f.label}</label>
     <input type="${f.type||'text'}" id="pe-${f.k}" value="${escHtml(profile[f.k])}" placeholder="${escHtml(f.ph)}">
-  `).join('');
+  `).join('')+renderParentKids(safeEmail,kids)+renderEmailChange(safeEmail);
 };
+// Прив'язані діти: можна змінити роль або відв'язати
+function renderParentKids(safeEmail,kids){
+  const opts=(sel)=>['mother','father','guardian']
+    .map(r=>`<option value="${r}" ${r===sel?'selected':''}>${PARENT_ROLE_LABELS[r]}</option>`).join('');
+  let h=`<div class="pe-section"><b>👶 Прив'язані діти</b>`;
+  if(kids.length===0)h+=`<p class="empty-msg" style="font-size:.8rem;">Дітей не прив'язано.</p>`;
+  else kids.forEach((k,i)=>{
+    h+=`<div class="pe-kid">
+      <span class="pe-kid-name">${escHtml(k.studentName)} <span style="color:#999;">(${escHtml(String(k.class||'').replace('class_',''))} кл.)</span></span>
+      <select onchange="setParentChildRole('${escJs(safeEmail)}',${i},this.value)">${opts(k.role||'guardian')}</select>
+      <button class="pe-unlink" onclick="unlinkParentChild('${escJs(safeEmail)}',${i},'${escJs(k.studentName)}')" title="Відв'язати">✖</button>
+    </div>`;
+  });
+  return h+'</div>';
+}
+// Пошта — це ключ запису, тож «зміна email» = перенесення запису.
+// ВАЖЛИВО: акаунт Firebase Auth так не переїжджає, тому попереджаємо.
+function renderEmailChange(safeEmail){
+  return `<div class="pe-section">
+    <b>✉️ Змінити email</b>
+    <p style="font-size:.75rem;color:#888;margin:4px 0 6px 0;">
+      Контакти й діти перенесуться на нову адресу. Але вхід у портал прив'язаний
+      до старої пошти — з новою людина заходить як «Перший вхід» і задає пароль наново.
+    </p>
+    <input type="email" id="pe-new-email" placeholder="нова@пошта.com" autocapitalize="none" spellcheck="false">
+    <button onclick="changeParentEmail('${escJs(safeEmail)}')" style="background:#e67e22;color:#fff;margin-top:6px;">✉️ Перенести на новий email</button>
+  </div>`;
+}
+async function refreshParentEditorAndList(safeEmail){
+  await window.openParentEditor(safeEmail);
+  const {containerId,cls}=parentEditorTarget;
+  if(containerId&&cls)renderParentsBlock(containerId,cls);
+}
+window.setParentChildRole=async function(safeEmail,idx,role){
+  const snap=await get(child(ref(db),`parent_links/${safeEmail}`));
+  const kids=normalizeChildren(snap.exists()?snap.val():{});
+  if(!kids[idx])return;
+  kids[idx].role=role;
+  await update(ref(db,`parent_links/${safeEmail}`),{children:kids});
+  await syncParentUserChildren(safeEmail,kids);
+  showToast('✅ Роль оновлено');
+  const {containerId,cls}=parentEditorTarget;
+  if(containerId&&cls)renderParentsBlock(containerId,cls);
+};
+window.unlinkParentChild=async function(safeEmail,idx,name){
+  if(!confirm(`Відв'язати ${name} від ${safeEmail.replace(/_/g,'.')}?\n\nОцінки та інші дані дитини залишаться недоторканими —\nзникне лише доступ цих батьків до неї.`))return;
+  const snap=await get(child(ref(db),`parent_links/${safeEmail}`));
+  const kids=normalizeChildren(snap.exists()?snap.val():{});
+  kids.splice(idx,1);
+  await update(ref(db,`parent_links/${safeEmail}`),{children:kids});
+  await syncParentUserChildren(safeEmail,kids);
+  showToast(`🔓 ${name} відв'язаний`);
+  refreshParentEditorAndList(safeEmail);
+};
+window.changeParentEmail=async function(oldSafe){
+  const raw=document.getElementById('pe-new-email').value.trim().toLowerCase();
+  if(!raw)return alert('Введіть нову адресу.');
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(raw))return alert('Схоже, це не email.');
+  const newSafe=raw.replace(/\./g,'_');
+  if(newSafe===oldSafe)return alert('Це та сама адреса.');
+  const exists=await get(child(ref(db),`parent_links/${newSafe}`));
+  if(exists.exists())return alert(`На ${raw} уже є запис. Об'єднання адрес робиться вручну.`);
+  if(!confirm(`Перенести запис на ${raw}?\n\nСтара адреса ${oldSafe.replace(/_/g,'.')} перестане бути прив'язаною.\nЯкщо людина вже заходила зі старої пошти — доступ по ній зникне,\nа з новою вона увійде через «Перший вхід».\n\nПродовжити?`))return;
+  try{
+    const snap=await get(child(ref(db),`parent_links/${oldSafe}`));
+    await set(ref(db,`parent_links/${newSafe}`),snap.exists()?snap.val():{});
+    await remove(ref(db,`parent_links/${oldSafe}`));
+    showToast('✉️ Запис перенесено на нову адресу');
+    window.closeParentEditor();
+    const {containerId,cls}=parentEditorTarget;
+    if(containerId&&cls)renderParentsBlock(containerId,cls);
+  }catch(e){alert('Помилка: '+e.message);}
+};
+// Якщо батьки вже заходили — тримаємо їхній профіль у синхроні
+async function syncParentUserChildren(safeEmail,kids){
+  const email=safeEmail.replace(/_/g,'.').toLowerCase();
+  const us=await get(child(ref(db),'users'));
+  if(!us.exists())return;
+  const u=us.val();
+  for(const uid in u){
+    if((u[uid].email||'').toLowerCase()!==email||u[uid].role!=='parent')continue;
+    const patch={children:kids};
+    // Активна дитина зникла зі списку — перемикаємо на першу доступну
+    const still=kids.find(k=>k.studentName===u[uid].studentName&&k.class===u[uid].class);
+    if(!still&&kids[0]){patch.studentName=kids[0].studentName;patch.class=kids[0].class;patch.parentRole=kids[0].role||'guardian';}
+    await update(ref(db,`users/${uid}`),patch);
+  }
+}
 window.closeParentEditor=function(){document.getElementById('parent-edit-modal').style.display='none';};
 window.saveParentProfile=async function(){
   const {safeEmail,containerId,cls}=parentEditorTarget;
