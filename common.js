@@ -702,7 +702,7 @@ window.logAction=logAction;
 // НАЛАШТУВАННЯ (один раз, у Firebase Console):
 //   Project settings → Cloud Messaging → Web Push certificates →
 //   Generate key pair → скопіювати ключ у VAPID_KEY нижче.
-const VAPID_KEY='ЗАМІНИТИ_НА_КЛЮЧ_З_FIREBASE_CONSOLE';
+const VAPID_KEY='BAifnPl3VcvDFpYuE7D2HAyfCzczsxAq3ktk72MgK6a4MY03Krvu4JI6k8pYOrasLdhwW0lLEAqDWs6iLGYEaCo';
 let swRegistration=null;
 // Реєструємо Service Worker одразу: без нього не працюють ані push,
 // ані встановлення застосунку на телефон. Раніше він не реєструвався
