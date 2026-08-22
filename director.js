@@ -618,34 +618,11 @@ window.copyAnnouncement=async function(){
   catch(e){out.select();showToast('Виділено — натисніть Ctrl+C');}
 };
 // ══════════ УЧНІ: ведення списків директором ══════════
-// Вчитель може додавати учнів лише у «свої» класи (ті, що є в його матриці
-// доступу). Директор — у будь-який, тому цей блок продубльовано тут із
-// вибором класу замість прив'язки до t-class-selector.
-window.loadDirectorStudents=async function(){
-  const cls=document.getElementById('ds-class')?.value;
-  const box=document.getElementById('ds-list');
-  if(!box)return;
-  if(!cls){box.innerHTML='<p class="empty-msg">Оберіть клас.</p>';return;}
-  box.innerHTML='<p class="empty-msg">Завантаження...</p>';
-  try{
-    const snap=await get(child(ref(db),`students_list/${cls}`));
-    if(!snap.exists()){box.innerHTML='<p class="empty-msg">У цьому класі ще немає учнів.</p>';return;}
-    const data=snap.val();
-    const rows=Object.keys(data).map(k=>({key:k,name:data[k]})).sort((a,b)=>String(a.name).localeCompare(String(b.name),'uk'));
-    let h=`<p style="font-size:.78rem;color:#666;margin:0 0 6px 0;">Усього: <b>${rows.length}</b></p>`;
-    rows.forEach((r,i)=>{
-      h+=`<div class="ds-row" id="ds-row-${escHtml(r.key)}">
-        <span class="ds-num">${i+1}</span>
-        <span class="ds-name">${escHtml(r.name)}</span>
-        <button class="ds-edit" title="Редагувати ім'я" onclick="directorEditStudent('${escJs(cls)}','${escJs(r.key)}','${escJs(r.name)}')">✏️</button>
-        <button class="staff-del" onclick="directorRemoveStudent('${escJs(cls)}','${escJs(r.key)}','${escJs(r.name)}')">🗑</button>
-      </div>`;
-    });
-    box.innerHTML=h;
-  }catch(e){box.innerHTML=`<p style="color:red;font-size:.8rem;">Помилка: ${escHtml(e.message)}</p>`;}
-};
+// Окремого «списку учнів» більше немає — учні показуються в об'єднаному
+// списку разом зі своїми батьками (renderParentsBlock у common.js).
+// Тут лишилася лише форма додавання; клас береться з того самого селектора.
 window.directorAddStudent=async function(){
-  const cls=document.getElementById('ds-class').value;
+  const cls=document.getElementById('po-class').value;
   const name=document.getElementById('ds-new-name').value.trim();
   const emailRaw=document.getElementById('ds-new-email').value.trim().toLowerCase();
   if(!cls)return alert('Спочатку оберіть клас.');
@@ -657,7 +634,7 @@ window.directorAddStudent=async function(){
     document.getElementById('ds-new-name').value='';
     document.getElementById('ds-new-email').value='';
     showToast(`✅ ${name} доданий до ${cls.replace('class_','')} класу`);
-    window.loadDirectorStudents();
+    refreshRoster(cls);
   }catch(e){alert('Помилка: '+e.message);}
 };
 // ══════════ УЧНІ: перейменування ══════════
@@ -743,25 +720,29 @@ async function renameStudentEverywhere(cls,oldName,newName){
   }
   return touched;
 }
-window.directorEditStudent=function(cls,key,name){
+// Редагуємо лише блок з іменем усередині рядка — самі батьки лишаються видимі
+window.editStudentName=function(cls,key,name){
   const row=document.getElementById(`ds-row-${key}`);
-  if(!row)return;
-  row.innerHTML=`<input type="text" id="ds-edit-${key}" value="${escHtml(name)}" style="flex:1;margin:0;padding:6px 9px;font-size:.85rem;">
-    <button class="ds-ok" onclick="directorSaveStudentName('${escJs(cls)}','${escJs(key)}','${escJs(name)}')">✔</button>
-    <button class="staff-del" onclick="loadDirectorStudents()">✖</button>`;
+  const cell=row&&row.querySelector('.po-child');
+  if(!cell)return;
+  cell.innerHTML=`<input type="text" id="ds-edit-${key}" value="${escHtml(name)}" style="width:100%;margin:0 0 5px 0;padding:6px 9px;font-size:.85rem;">
+    <span class="po-child-acts">
+      <button class="ds-ok" onclick="saveStudentName('${escJs(cls)}','${escJs(key)}','${escJs(name)}')">✔</button>
+      <button class="po-edit" onclick="refreshRoster('${escJs(cls)}')">✖</button>
+    </span>`;
   const inp=document.getElementById(`ds-edit-${key}`);
   if(inp){inp.focus();inp.select();
     inp.addEventListener('keydown',e=>{
-      if(e.key==='Enter'){e.preventDefault();window.directorSaveStudentName(cls,key,name);}
-      if(e.key==='Escape'){e.preventDefault();window.loadDirectorStudents();}
+      if(e.key==='Enter'){e.preventDefault();window.saveStudentName(cls,key,name);}
+      if(e.key==='Escape'){e.preventDefault();refreshRoster(cls);}
     });}
 };
-window.directorSaveStudentName=async function(cls,key,oldName){
+window.saveStudentName=async function(cls,key,oldName){
   const inp=document.getElementById(`ds-edit-${key}`);
   if(!inp)return;
   const newName=inp.value.trim().replace(/\s+/g,' ');
   if(!newName)return alert("Ім'я не може бути порожнім.");
-  if(newName===oldName)return window.loadDirectorStudents();
+  if(newName===oldName)return refreshRoster(cls);
   // Firebase забороняє ці символи в ключах, а ім'я стає ключем в оцінках
   if(/[.#$[\]/]/.test(newName))return alert('Ім\'я не може містити символи . # $ [ ] /');
   // Перевірка на дубль у цьому ж класі
@@ -780,15 +761,15 @@ window.directorSaveStudentName=async function(cls,key,oldName){
     showToast(touched.length
       ?`✅ Перейменовано. Оновлено: ${touched.length} розд.`
       :'✅ Перейменовано');
-    window.loadDirectorStudents();
-  }catch(e){alert('Помилка: '+e.message);window.loadDirectorStudents();}
+    refreshRoster(cls);
+  }catch(e){alert('Помилка: '+e.message);refreshRoster(cls);}
 };
-window.directorRemoveStudent=async function(cls,key,name){
+window.removeStudent=async function(cls,key,name){
   if(!confirm(`Прибрати ${name} зі списку ${cls.replace('class_','')} класу?\n\nВиставлені оцінки, відвідуваність і коментарі ЗАЛИШАТЬСЯ в журналі —\nвони зберігаються окремо і не видаляються.\n\nПродовжити?`))return;
   try{
     await remove(ref(db,`students_list/${cls}/${key}`));
     showToast(`🗑️ ${name} прибраний зі списку`);
-    window.loadDirectorStudents();
+    refreshRoster(cls);
   }catch(e){alert('Помилка: '+e.message);}
 };
 window.loadTransferClasses=function(){
