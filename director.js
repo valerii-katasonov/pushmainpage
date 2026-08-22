@@ -49,9 +49,16 @@ window.findSubstitute=async function(){
   });
   results.innerHTML=html;
 };
+// Пишемо в тому самому форматі, що й розділ «Відсутність і заміни»
+// (substitutions/{дата}/{клас}/{слот}) — інакше призначена звідси заміна
+// ніде б не показалася. Slot 'any': Smart Matching підбирає на предмет,
+// а не на конкретний урок у сітці.
 window.confirmSubstitute=async function(email,cls,subj,date){
-  await set(ref(db,`substitutions/${cls}/${date}`),{substituteTeacher:email,subject:subj,confirmedAt:date});
-  showToast(`✅ Заміну призначено: ${email} → ${subj} у ${cls.replace('class_','')} класі`);
+  const t=(window.globalTeachersList||[]).find(t=>t.email===email);
+  await set(ref(db,`substitutions/${date}/${cls}/any`),
+    {subject:subj,subEmail:email,subName:t?t.name:email,origName:'',by:currentUserData?.email||'',ts:Date.now()});
+  logAction('substitute',{cls,subject:subj,date,target:t?t.name:email});
+  showToast(`✅ Заміну призначено: ${t?t.name:email} → ${subj} у ${cls.replace('class_','')} класі`);
   document.getElementById('sm-results').innerHTML='<p style="color:var(--green);font-weight:700;">✅ Заміну підтверджено!</p>';
 };
 // ══════════ TEACHER SKILLS (matrix managed by director) ══════════
@@ -592,6 +599,235 @@ window.directorLinkParent=async function(){
     document.getElementById('pl-email').value='';
     window.loadParentsOverview();
   }catch(e){alert('Помилка: '+e.message);}
+};
+// ══════════════════════════════════════════════════════════════════
+//  ЗГОДИ БАТЬКІВ
+// ══════════════════════════════════════════════════════════════════
+// Екскурсія, фотозйомка, басейн — це збиралося паперами тижнями. Тут
+// батьки відповідають одним дотиком, а школа отримує зафіксовану дату
+// відповіді, що важливо і юридично.
+//   consents/{id} = {title, text, classes:[], deadline, createdAt}
+//   consent_responses/{id}/{клас}/{ІМ'Я} = {answer:'yes'|'no', by, ts}
+window.loadConsents=async function(){
+  const box=document.getElementById('cs-list');
+  if(!box)return;
+  box.innerHTML='<p class="empty-msg">Завантаження...</p>';
+  try{
+    const [cSnap,rSnap,stSnap]=await Promise.all([
+      get(child(ref(db),'consents')),
+      get(child(ref(db),'consent_responses')),
+      get(child(ref(db),'students_list'))
+    ]);
+    if(!cSnap.exists()){box.innerHTML='<p class="empty-msg">Запитів на згоду ще немає.</p>';return;}
+    const all=cSnap.val(), resp=rSnap.exists()?rSnap.val():{}, students=stSnap.exists()?stSnap.val():{};
+    const ids=Object.keys(all).sort((a,b)=>(all[b].createdAt||0)-(all[a].createdAt||0));
+    box.innerHTML=ids.map(id=>{
+      const c=all[id];
+      const classes=Array.isArray(c.classes)?c.classes:(c.classes==='all'?Object.keys(students):[]);
+      // Скільки всього мають відповісти і скільки вже відповіли
+      let total=0,yes=0,no=0;
+      classes.forEach(cls=>{
+        total+=students[cls]?Object.keys(students[cls]).length:0;
+        const r=resp[id]&&resp[id][cls];
+        if(r)for(const st in r){if(r[st].answer==='yes')yes++;else if(r[st].answer==='no')no++;}
+      });
+      const left=Math.max(0,total-yes-no);
+      const overdue=c.deadline&&c.deadline<localDateString&&left>0;
+      return `<div class="cs-card${overdue?' overdue':''}">
+        <div class="cs-head">
+          <b>${escHtml(c.title||'—')}</b>
+          <button class="staff-del" onclick="deleteConsent('${escJs(id)}')">🗑</button>
+        </div>
+        ${c.text?`<div class="cs-text">${escHtml(c.text)}</div>`:''}
+        <div class="cs-meta">
+          ${escHtml(classes.map(x=>x.replace('class_','')).join(', '))} кл.
+          ${c.deadline?` · до ${escHtml(c.deadline.split('-').reverse().join('.'))}`:''}
+          ${overdue?' · <b style="color:var(--red);">термін минув</b>':''}
+        </div>
+        <div class="cs-stats">
+          <span class="cs-yes">✓ ${yes}</span>
+          <span class="cs-no">✕ ${no}</span>
+          <span class="cs-wait">очікуємо ${left}</span>
+        </div>
+        <button class="cs-detail" onclick="showConsentDetail('${escJs(id)}')">Хто ще не відповів →</button>
+      </div>`;
+    }).join('');
+  }catch(e){box.innerHTML=`<p style="color:red;font-size:.8rem;">Помилка: ${escHtml(e.message)}</p>`;}
+};
+window.showConsentDetail=async function(id){
+  const box=document.getElementById('cs-list');
+  const [cSnap,rSnap,stSnap]=await Promise.all([
+    get(child(ref(db),`consents/${id}`)),
+    get(child(ref(db),`consent_responses/${id}`)),
+    get(child(ref(db),'students_list'))
+  ]);
+  if(!cSnap.exists())return;
+  const c=cSnap.val(), resp=rSnap.exists()?rSnap.val():{}, students=stSnap.exists()?stSnap.val():{};
+  const classes=Array.isArray(c.classes)?c.classes:Object.keys(students);
+  let html=`<button class="cs-detail" onclick="loadConsents()">← Назад до списку</button>
+    <div class="cs-card"><b>${escHtml(c.title||'')}</b>`;
+  classes.forEach(cls=>{
+    const names=students[cls]?Object.values(students[cls]).sort((a,b)=>String(a).localeCompare(String(b),'uk')):[];
+    const r=resp[cls]||{};
+    const pending=names.filter(n=>!r[n]);
+    html+=`<div class="cs-cls">${escHtml(cls.replace('class_',''))} клас</div>`;
+    html+=names.map(n=>{
+      const a=r[n]?.answer;
+      return `<div class="cs-row">
+        <span>${escHtml(n)}</span>
+        <span class="${a==='yes'?'cs-yes':a==='no'?'cs-no':'cs-wait'}">${a==='yes'?'✓ згода':a==='no'?'✕ відмова':'очікуємо'}</span>
+      </div>`;
+    }).join('');
+    if(pending.length===0)html+='<div class="cs-ok">усі відповіли</div>';
+  });
+  box.innerHTML=html+'</div>';
+};
+window.createConsent=async function(){
+  const title=document.getElementById('cs-title').value.trim();
+  const text=document.getElementById('cs-text').value.trim();
+  const deadline=document.getElementById('cs-deadline').value;
+  const allCls=document.getElementById('cs-all').checked;
+  const sel=document.getElementById('cs-classes');
+  const classes=allCls?Array.from({length:11},(_,i)=>`class_${i+1}`)
+                      :Array.from(sel.selectedOptions).map(o=>o.value);
+  if(!title)return alert('Введіть назву запиту.');
+  if(classes.length===0)return alert('Оберіть класи або позначте «Усі класи».');
+  await push(ref(db,'consents'),{title,text,classes,deadline,
+    createdBy:currentUserData?.email||'',createdAt:Date.now()});
+  logAction('consent_create',{target:title,value:classes.length+' кл.'});
+  ['cs-title','cs-text','cs-deadline'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('cs-all').checked=false;sel.disabled=false;
+  Array.from(sel.options).forEach(o=>o.selected=false);
+  showToast('✅ Запит на згоду створено');
+  window.loadConsents();
+};
+window.deleteConsent=async function(id){
+  if(!confirm('Видалити цей запит разом з усіма відповідями батьків?'))return;
+  await Promise.all([remove(ref(db,`consents/${id}`)),remove(ref(db,`consent_responses/${id}`))]);
+  showToast('🗑️ Видалено');window.loadConsents();
+};
+window.toggleConsentAll=function(){
+  const cb=document.getElementById('cs-all'), sel=document.getElementById('cs-classes');
+  sel.disabled=cb.checked;
+  if(cb.checked)Array.from(sel.options).forEach(o=>o.selected=false);
+};
+// ══════════════════════════════════════════════════════════════════
+//  ВІДСУТНІСТЬ ВЧИТЕЛІВ І ЗАМІНИ
+// ══════════════════════════════════════════════════════════════════
+// Відвідуваність у порталі велася лише для дітей. Для директора ж
+// щоранку головне питання інше: хто з учителів сьогодні не вийшов і хто
+// закриє його уроки.
+//   staff_absence/{дата}/{email_}       = {name, reason, note}
+//   substitutions/{дата}/{клас}/{слот}  = {subject, origName, subName, subEmail}
+// Раніше substitutions писалися у формі {клас}/{дата} і ніде не читалися —
+// структуру змінено на «за датою», бо саме так її переглядають.
+window.loadAbsenceDay=async function(){
+  const date=document.getElementById('sa-date').value;
+  const box=document.getElementById('sa-list');
+  if(!box||!date)return;
+  box.innerHTML='<p class="empty-msg">Завантаження...</p>';
+  try{
+    const [absSnap,subSnap,schedSnap]=await Promise.all([
+      get(child(ref(db),`staff_absence/${date}`)),
+      get(child(ref(db),`substitutions/${date}`)),
+      get(child(ref(db),'schedules'))
+    ]);
+    const abs=absSnap.exists()?absSnap.val():{};
+    const subs=subSnap.exists()?subSnap.val():{};
+    const scheds=schedSnap.exists()?schedSnap.val():{};
+    const keys=Object.keys(abs);
+    if(keys.length===0){box.innerHTML='<p class="empty-msg">Цього дня всі вчителі на місці.</p>';return;}
+    const dayName=dayKeys[new Date(date).getDay()];
+    let html='';
+    for(const se of keys){
+      const a=abs[se], email=se.replace(/_/g,'.');
+      // Уроки цього вчителя того дня — щоб було видно, що саме треба закрити
+      const lessons=[];
+      for(const cls in scheds){
+        const days=scheds[cls]?.lessons;if(!days||!days[dayName])continue;
+        (days[dayName]||[]).forEach((slot,idx)=>{
+          const items=Array.isArray(slot)?slot:(slot&&slot.subject?[slot]:[]);
+          items.forEach(l=>{
+            if(!l||l.type==='break')return;
+            const sn=typeof l.subject==='string'?l.subject:(l.subject?.ua||'');
+            let te=l.teacherEmail;
+            if(!te&&sn){const dt=window.getDefaultTeacher(cls,sn);if(dt)te=dt.email;}
+            if(!te||te.toLowerCase()!==email.toLowerCase())return;
+            const cover=subs[cls]&&subs[cls][idx];
+            lessons.push({cls,idx,sn,time:l.time||'',cover});
+          });
+        });
+      }
+      const open=lessons.filter(l=>!l.cover).length;
+      html+=`<div class="sa-card">
+        <div class="sa-head">
+          <div><b>${escHtml(a.name||email)}</b><div class="sa-mail">${escHtml(email)}</div></div>
+          <button class="staff-del" onclick="unmarkStaffAbsent('${escJs(se)}')">✖</button>
+        </div>
+        <div class="sa-reason">${escHtml(a.reason||'')}${a.note?' · '+escHtml(a.note):''}</div>
+        ${lessons.length===0
+          ? '<div class="sa-none">Уроків цього дня немає</div>'
+          : `<div class="sa-sub">${open>0?`⚠️ Без заміни: ${open} з ${lessons.length}`:`✓ Усі ${lessons.length} уроків закрито`}</div>`+
+            lessons.map(l=>`<div class="sa-lesson">
+              <span class="sa-l-info">${escHtml(l.cls.replace('class_',''))} кл · ${escHtml(l.sn)}${l.time?` · ${escHtml(l.time)}`:''}</span>
+              ${l.cover
+                ? `<span class="sa-cover">→ ${escHtml(l.cover.subName||l.cover.subEmail||'')}
+                     <button class="sa-x" onclick="clearSubstitute('${escJs(l.cls)}',${l.idx})">✖</button></span>`
+                : `<select class="sa-pick" onchange="assignSubstitute('${escJs(l.cls)}',${l.idx},'${escJs(l.sn)}','${escJs(a.name||email)}',this.value)">
+                     <option value="">— обрати заміну —</option>
+                     ${(window.globalTeachersList||[]).filter(t=>t.email.toLowerCase()!==email.toLowerCase())
+                        .map(t=>`<option value="${escHtml(t.email)}|${escHtml(t.name)}">${escHtml(t.name)}</option>`).join('')}
+                   </select>`}
+            </div>`).join('')}
+      </div>`;
+    }
+    box.innerHTML=html;
+  }catch(e){box.innerHTML=`<p style="color:red;font-size:.8rem;">Помилка: ${escHtml(e.message)}</p>`;}
+};
+window.markStaffAbsent=async function(){
+  const date=document.getElementById('sa-date').value;
+  const sel=document.getElementById('sa-teacher');
+  const reason=document.getElementById('sa-reason').value;
+  const note=document.getElementById('sa-note').value.trim();
+  if(!date||!sel.value)return alert('Оберіть дату та вчителя.');
+  const [email,name]=sel.value.split('|');
+  await set(ref(db,`staff_absence/${date}/${email.replace(/\./g,'_')}`),
+            {name,email,reason,note,by:currentUserData?.email||'',ts:Date.now()});
+  logAction('staff_absent',{target:name,date,value:reason});
+  document.getElementById('sa-note').value='';
+  showToast(`✅ ${name} відмічений відсутнім`);
+  window.loadAbsenceDay();
+};
+window.unmarkStaffAbsent=async function(se){
+  const date=document.getElementById('sa-date').value;
+  if(!confirm('Прибрати відмітку про відсутність?\n\nПризначені заміни залишаться — приберіть їх окремо, якщо потрібно.'))return;
+  await remove(ref(db,`staff_absence/${date}/${se}`));
+  showToast('Відмітку прибрано');
+  window.loadAbsenceDay();
+};
+window.assignSubstitute=async function(cls,idx,subject,origName,val){
+  if(!val)return;
+  const date=document.getElementById('sa-date').value;
+  const [subEmail,subName]=val.split('|');
+  await set(ref(db,`substitutions/${date}/${cls}/${idx}`),
+            {subject,origName,subEmail,subName,by:currentUserData?.email||'',ts:Date.now()});
+  logAction('substitute',{cls,subject,date,target:subName,from:origName});
+  showToast(`✅ Заміна: ${subName}`);
+  window.loadAbsenceDay();
+};
+window.clearSubstitute=async function(cls,idx){
+  const date=document.getElementById('sa-date').value;
+  await remove(ref(db,`substitutions/${date}/${cls}/${idx}`));
+  showToast('Заміну прибрано');
+  window.loadAbsenceDay();
+};
+window.fillAbsenceTeachers=function(){
+  const sel=document.getElementById('sa-teacher');
+  if(!sel)return;
+  sel.innerHTML='<option value="">— оберіть вчителя —</option>'+
+    (window.globalTeachersList||[]).map(t=>`<option value="${escHtml(t.email)}|${escHtml(t.name)}">${escHtml(t.name)}</option>`).join('');
+  const d=document.getElementById('sa-date');
+  if(d&&!d.value)d.value=localDateString;
 };
 // ══════════ ГЛОБАЛЬНИЙ ПОШУК ══════════
 // На 165 учнях, щоб знайти людину, треба пам'ятати її клас. Тут шукаємо
