@@ -91,6 +91,38 @@ export function normalizeChildren(raw){
   if(raw.studentName)return[{studentName:raw.studentName,class:raw.class||'class_2',role:raw.role||'guardian'}];
   return[];
 }
+// ══════════ КОНТАКТНІ ДАНІ БАТЬКІВ ══════════
+// Зберігаються поруч із дітьми: parent_links/{email} = {children:[...], profile:{...}}
+// normalizeChildren дивиться лише на children, тож додаткове поле profile
+// нічого не ламає і старі записи читаються як раніше.
+export const PARENT_FIELDS=[
+  {k:'lastName',   label:'Прізвище',        ph:'Іваненко'},
+  {k:'firstName',  label:"Ім'я",            ph:'Оксана'},
+  {k:'middleName', label:'По батькові',     ph:'Петрівна'},
+  {k:'phonePL',    label:'📞 Телефон (PL)', ph:'+48 600 000 000', type:'tel'},
+  {k:'phoneUA',    label:'📞 Телефон (UA)', ph:'+380 67 000 00 00', type:'tel'},
+  {k:'telegram',   label:'✈️ Telegram',      ph:'@nickname'},
+  {k:'address',    label:'🏠 Адреса',        ph:'вул. Маршалковська 1/2, Варшава'}
+];
+export function getParentProfile(raw){
+  const p=(raw&&typeof raw==='object'&&raw.profile)||{};
+  const out={};PARENT_FIELDS.forEach(f=>out[f.k]=p[f.k]||'');
+  return out;
+}
+// ПІБ одним рядком; якщо не заповнено — показуємо email як запасний варіант
+export function parentFullName(profile,fallback){
+  const s=[profile.lastName,profile.firstName,profile.middleName].filter(Boolean).join(' ').trim();
+  return s||fallback||'—';
+}
+// Telegram зберігаємо як завгодно, а показуємо однаково: @nick + посилання
+export function telegramHandle(v){
+  const s=String(v||'').trim().replace(/^https?:\/\/(t\.me|telegram\.me)\//i,'').replace(/^@/,'');
+  return s?{handle:'@'+s,url:'https://t.me/'+encodeURIComponent(s)}:null;
+}
+export function telHref(v){
+  const s=String(v||'').replace(/[^\d+]/g,'');
+  return s?'tel:'+s:'';
+}
 // Діти, прив'язані до профілю (children, інакше — активна дитина)
 export function getUserChildren(u){
   if(!u)return[];
@@ -582,6 +614,121 @@ function initUserSession(){
     renderPaymentsMockup();loadTextbooksForParent();
   }
 }
+// ══════════ БАТЬКИ КЛАСУ: спільний список + редактор ══════════
+// Один код для кабінету вчителя і директора — інакше довелося б підтримувати
+// дві копії. Дані лежать «навпаки» (ключ — пошта батьків), тому для показу
+// перевертаємо: дитина → її батьки.
+const PARENT_ROLE_LABELS={mother:'👩 Мати',father:'👨 Батько',guardian:'🛡️ Опікун'};
+export async function renderParentsBlock(containerId,cls){
+  const box=document.getElementById(containerId);
+  if(!box)return;
+  if(!cls){box.innerHTML='<p class="empty-msg">Оберіть клас.</p>';return;}
+  box.innerHTML='<p class="empty-msg">Завантаження...</p>';
+  try{
+    const [stSnap,plSnap,usersSnap]=await Promise.all([
+      get(child(ref(db),`students_list/${cls}`)),
+      get(child(ref(db),'parent_links')),
+      get(child(ref(db),'users'))
+    ]);
+    const students=stSnap.exists()?Object.values(stSnap.val()).sort((a,b)=>String(a).localeCompare(String(b),'uk')):[];
+    if(students.length===0){box.innerHTML='<p class="empty-msg">У цьому класі ще немає учнів.</p>';return;}
+    const loggedIn=new Set();
+    if(usersSnap.exists()){
+      const u=usersSnap.val();
+      for(const uid in u)if(u[uid].email&&u[uid].role==='parent')loggedIn.add(u[uid].email.toLowerCase());
+    }
+    const byChild={};
+    if(plSnap.exists()){
+      const pl=plSnap.val();
+      for(const safeEmail in pl){
+        const rec=pl[safeEmail];
+        const email=safeEmail.replace(/_/g,'.');
+        const profile=getParentProfile(rec);
+        normalizeChildren(rec).forEach(k=>{
+          if(k.class!==cls)return;
+          (byChild[k.studentName]=byChild[k.studentName]||[]).push({safeEmail,email,profile,role:k.role||'guardian'});
+        });
+      }
+    }
+    const orphans=students.filter(s=>!byChild[s]||byChild[s].length===0);
+    let html=orphans.length
+      ? `<div class="bell-missing">⚠️ Без прив'язаних батьків: ${escHtml(orphans.join(', '))}</div>`
+      : `<div class="po-ok">✓ У всіх учнів є прив'язані контакти</div>`;
+    students.forEach(st=>{
+      const list=byChild[st]||[];
+      html+=`<div class="po-row"><div class="po-child">${escHtml(st)}</div><div class="po-parents">`;
+      if(list.length===0)html+=`<span class="po-none">контактів немає</span>`;
+      else list.forEach(p=>{
+        const tg=telegramHandle(p.profile.telegram);
+        const nm=parentFullName(p.profile,p.email);
+        html+=`<div class="po-parent">
+          <div class="po-line">
+            <span class="po-role">${escHtml(PARENT_ROLE_LABELS[p.role]||p.role)}</span>
+            <b class="po-name">${escHtml(nm)}</b>
+            ${!loggedIn.has(p.email.toLowerCase())?'<span class="po-new">ще не входив</span>':''}
+            <button class="po-edit" onclick="openParentEditor('${escJs(p.safeEmail)}')" title="Редагувати контакти">✏️</button>
+          </div>
+          <div class="po-contacts">
+            <span class="po-email">${escHtml(p.email)}</span>
+            ${p.profile.phonePL?`<a href="${telHref(p.profile.phonePL)}">🇵🇱 ${escHtml(p.profile.phonePL)}</a>`:''}
+            ${p.profile.phoneUA?`<a href="${telHref(p.profile.phoneUA)}">🇺🇦 ${escHtml(p.profile.phoneUA)}</a>`:''}
+            ${tg?`<a href="${escHtml(tg.url)}" target="_blank" rel="noopener noreferrer">✈️ ${escHtml(tg.handle)}</a>`:''}
+            ${p.profile.address?`<span class="po-addr">🏠 ${escHtml(p.profile.address)}</span>`:''}
+          </div>
+        </div>`;
+      });
+      html+=`</div></div>`;
+    });
+    box.innerHTML=html;
+  }catch(e){box.innerHTML=`<p style="color:red;font-size:.8rem;">Помилка: ${escHtml(e.message)}</p>`;}
+}
+// Inline-атрибути в HTML (ontoggle/onclick) бачать лише глобальні функції,
+// а не експорти модуля — тому дублюємо у window.
+window.renderParentsBlock=renderParentsBlock;
+window.getActiveClass=getActiveClass;
+// Хто саме зараз відкрив редактор і куди повертатися після збереження
+let parentEditorTarget={safeEmail:'',containerId:'',cls:''};
+window.openParentEditor=async function(safeEmail){
+  // Запам'ятовуємо, який список оновити після збереження
+  const teacherBox=document.getElementById('t-parents-list');
+  const visibleTeacher=teacherBox&&teacherBox.offsetParent!==null;
+  parentEditorTarget={
+    safeEmail,
+    containerId:visibleTeacher?'t-parents-list':'po-list',
+    cls:visibleTeacher?getActiveClass():(document.getElementById('po-class')?.value||'')
+  };
+  const modal=document.getElementById('parent-edit-modal');
+  const body=document.getElementById('pe-fields');
+  document.getElementById('pe-email').textContent=safeEmail.replace(/_/g,'.');
+  body.innerHTML='<p class="empty-msg">Завантаження...</p>';
+  modal.style.display='flex';
+  const snap=await get(child(ref(db),`parent_links/${safeEmail}`));
+  const profile=getParentProfile(snap.exists()?snap.val():{});
+  body.innerHTML=PARENT_FIELDS.map(f=>`
+    <label for="pe-${f.k}">${f.label}</label>
+    <input type="${f.type||'text'}" id="pe-${f.k}" value="${escHtml(profile[f.k])}" placeholder="${escHtml(f.ph)}">
+  `).join('');
+};
+window.closeParentEditor=function(){document.getElementById('parent-edit-modal').style.display='none';};
+window.saveParentProfile=async function(){
+  const {safeEmail,containerId,cls}=parentEditorTarget;
+  if(!safeEmail)return;
+  const btn=document.getElementById('pe-save');
+  const profile={};
+  PARENT_FIELDS.forEach(f=>{
+    const el=document.getElementById('pe-'+f.k);
+    profile[f.k]=el?el.value.trim():'';
+  });
+  btn.disabled=true;btn.textContent='⏳ Збереження...';
+  try{
+    // update, а не set: children у цьому ж вузлі не можна зачепити
+    await update(ref(db,`parent_links/${safeEmail}`),{profile});
+    showToast('✅ Контакти збережено');
+    window.closeParentEditor();
+    if(containerId&&cls)renderParentsBlock(containerId,cls);
+  }catch(e){alert('Помилка: '+e.message);}
+  finally{btn.disabled=false;btn.textContent='💾 Зберегти';}
+};
 // ══════════ ЕКРАНИ ВХОДУ ══════════
 // Два ОКРЕМІ екрани, а не один з режимом:
 //   #login-screen        — звичайний вхід
