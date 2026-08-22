@@ -544,6 +544,50 @@ async function repointStudentAccounts(name,fromCls,toCls){
 window.loadParentsOverview=function(){
   renderParentsBlock('po-list',document.getElementById('po-class')?.value||'');
 };
+// Список учнів обраного класу для форми прив'язки
+window.loadParentLinkStudents=async function(){
+  const cls=document.getElementById('po-class')?.value;
+  const sel=document.getElementById('pl-student');
+  if(!sel)return;
+  if(!cls){sel.innerHTML='<option value="">Спочатку оберіть клас</option>';return;}
+  sel.innerHTML='<option value="">Завантаження...</option>';
+  const snap=await get(child(ref(db),`students_list/${cls}`));
+  const names=snap.exists()?Object.values(snap.val()).sort((a,b)=>String(a).localeCompare(String(b),'uk')):[];
+  sel.innerHTML=names.length
+    ? '<option value="">-- Оберіть учня --</option>'+names.map(n=>`<option value="${escHtml(n)}">${escHtml(n)}</option>`).join('')
+    : '<option value="">У класі немає учнів</option>';
+};
+// Прив'язка ДОДАЄ дитину до наявних, а не замінює (у батьків може бути
+// кілька дітей). Та сама логіка, що й у вчителя, але для будь-якого класу.
+window.directorLinkParent=async function(){
+  const cls=document.getElementById('po-class').value;
+  const st=document.getElementById('pl-student').value;
+  const role=document.getElementById('pl-role').value;
+  const raw=document.getElementById('pl-email').value.trim().toLowerCase();
+  if(!cls||!st)return alert('Оберіть клас та учня.');
+  if(!raw)return alert('Введіть email батьків.');
+  const se=raw.replace(/\./g,'_');
+  try{
+    const snap=await get(child(ref(db),`parent_links/${se}`));
+    const rec=snap.exists()?snap.val():{};
+    const kids=normalizeChildren(rec);
+    if(kids.some(k=>k.studentName===st&&k.class===cls))
+      return alert(`Ця дитина вже прив'язана до ${raw}.`);
+    kids.push({studentName:st,class:cls,role});
+    await update(ref(db,`parent_links/${se}`),{children:kids});
+    // Якщо батьки вже заходили — одразу оновлюємо їхній профіль
+    const us=await get(child(ref(db),'users'));
+    if(us.exists()){
+      const u=us.val();
+      for(const uid in u)
+        if((u[uid].email||'').toLowerCase()===raw&&u[uid].role==='parent')
+          await update(ref(db,`users/${uid}`),{children:kids});
+    }
+    showToast(kids.length>1?`✅ Прив'язано. Дітей у цих батьків: ${kids.length}`:'✅ Прив\'язано');
+    document.getElementById('pl-email').value='';
+    window.loadParentsOverview();
+  }catch(e){alert('Помилка: '+e.message);}
+};
 // ══════════ AI: ЧЕРНЕТКА ОГОЛОШЕННЯ ДЛЯ БАТЬКІВ ══════════
 // У сервіс іде лише те, що директор написав сам. Жодних даних із бази.
 window.announcementAI=async function(){
