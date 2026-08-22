@@ -46,6 +46,16 @@ function buildDynamicSchedule(schedule,dayName,isToday){
   (schedule[dayName]||[]).forEach(slot=>{const items=Array.isArray(slot)?slot:(slot&&slot.subject?[slot]:[]);items.forEach(l=>{if(l&&l.time&&l.subject){const sn=typeof l.subject==='string'?l.subject:(l.subject.ua||'');if(!sn.toLowerCase().includes('перерва'))flat.push(l);}});});
   return flat;
 }
+// Заміни на обрану дату: {індекс слота → дані}. Тримаємо окремо, щоб
+// renderDynamicSchedule лишався синхронним — він викликається щохвилини
+// з таймера, і читати базу звідти не можна.
+let todaySubs={};
+export async function loadTodaySubstitutions(cls,date){
+  try{
+    const snap=await get(child(ref(db),`substitutions/${date}/${cls}`));
+    todaySubs=snap.exists()?snap.val():{};
+  }catch(e){todaySubs={};}
+}
 function renderDynamicSchedule(role='parent'){
   if(!window.schedule)return;
   const prefix = role==='student'?'s':'p';
@@ -75,11 +85,13 @@ function renderDynamicSchedule(role='parent'){
       isCurrent=currentMins>=sMins&&currentMins<eMins;isPassed=currentMins>=eMins;
       if(isCurrent){const rem=eMins-currentMins;countdown=`${rem} хв`;progress=Math.round(((currentMins-sMins)/(eMins-sMins))*100);}
     }
+    // Заміни зіставляємо за індексом уроку в розкладі дня
+    const sub=todaySubs[i];
     html+=`<div class="lesson-row${isCurrent?' current':isPassed?' passed':''}">
       <div class="lesson-num">${i+1}</div>
       <div class="lesson-info">
-        <div class="lesson-subj">${escHtml(sn)}</div>
-        <div class="lesson-time">${l.time||'—'}</div>
+        <div class="lesson-subj">${escHtml(sn)}${sub?' <span class="sub-badge">заміна</span>':''}</div>
+        <div class="lesson-time">${l.time||'—'}${sub&&sub.subName?` · ${escHtml(sub.subName)}`:''}</div>
         ${isCurrent?`<div class="progress-thin"><div class="progress-thin-fill" style="width:${progress}%"></div></div>`:''}
       </div>
       ${isCurrent?`<div class="lesson-countdown">⏱ ${countdown}</div>`:''}
@@ -272,6 +284,8 @@ export function loadParentDashboard(){
   loadAiDayContext('p');
   renderBirthdays('p-birthdays',cls,date,currentUserData.studentName);
   renderFinalGrades('p-final-grades',cls,currentUserData.studentName);
+  loadTodaySubstitutions(cls,date).then(()=>renderDynamicSchedule('parent'));
+  renderConsents();
   // Grades + comments + behavior
   const ym=date.substring(0,7);
   Promise.all([
@@ -345,6 +359,59 @@ window.downloadMyReportCard=function(){
   if(!currentUserData?.class||!currentUserData?.studentName)
     return showToast('⚠️ Дитина не визначена');
   window.downloadReportCard(currentUserData.class,currentUserData.studentName);
+};
+// ══════════ ЗГОДИ БАТЬКІВ ══════════
+// Показуємо лише ті запити, що стосуються класу дитини. Уже відповіді
+// не ховаємо — батьки мають бачити, що саме вони підтвердили і коли.
+export async function renderConsents(){
+  const box=document.getElementById('p-consents');
+  if(!box||currentUserData?.role!=='parent')return;
+  const cls=currentUserData.class, name=currentUserData.studentName;
+  try{
+    const [cSnap,rSnap]=await Promise.all([
+      get(child(ref(db),'consents')),
+      get(child(ref(db),'consent_responses'))
+    ]);
+    if(!cSnap.exists()){box.style.display='none';return;}
+    const all=cSnap.val(), resp=rSnap.exists()?rSnap.val():{};
+    const mine=Object.keys(all).filter(id=>{
+      const c=all[id];
+      const list=Array.isArray(c.classes)?c.classes:[];
+      return list.includes(cls);
+    }).sort((a,b)=>(all[b].createdAt||0)-(all[a].createdAt||0));
+    if(mine.length===0){box.style.display='none';return;}
+    box.style.display='block';
+    box.innerHTML=mine.map(id=>{
+      const c=all[id];
+      const my=resp[id]&&resp[id][cls]&&resp[id][cls][name];
+      const over=c.deadline&&c.deadline<localDateString;
+      return `<div class="pc-card${my?' answered':''}">
+        <div class="pc-title">${escHtml(c.title||'')}</div>
+        ${c.text?`<div class="pc-text">${escHtml(c.text)}</div>`:''}
+        ${c.deadline?`<div class="pc-deadline">Відповісти до ${escHtml(c.deadline.split('-').reverse().join('.'))}${over&&!my?' · термін минув':''}</div>`:''}
+        ${my
+          ? `<div class="pc-done">${my.answer==='yes'?'✓ Ви погодились':'✕ Ви відмовились'}
+               <span class="pc-when">${new Date(my.ts).toLocaleDateString('uk-UA')}</span>
+               <button class="pc-change" onclick="answerConsent('${escJs(id)}','${my.answer==='yes'?'no':'yes'}')">змінити</button>
+             </div>`
+          : `<div class="pc-btns">
+               <button class="pc-yes" onclick="answerConsent('${escJs(id)}','yes')">✓ Погоджуюсь</button>
+               <button class="pc-no" onclick="answerConsent('${escJs(id)}','no')">✕ Не погоджуюсь</button>
+             </div>`}
+      </div>`;
+    }).join('');
+  }catch(e){box.style.display='none';}
+}
+window.answerConsent=async function(id,answer){
+  const cls=currentUserData?.class, name=currentUserData?.studentName;
+  if(!cls||!name)return;
+  if(answer==='no'&&!confirm('Підтвердити відмову?'))return;
+  try{
+    await set(ref(db,`consent_responses/${id}/${cls}/${name}`),
+      {answer,by:currentUserData.email||'',ts:Date.now()});
+    showToast(answer==='yes'?'✓ Згоду зафіксовано':'✕ Відмову зафіксовано');
+    renderConsents();
+  }catch(e){alert('Помилка: '+e.message);}
 };
 // Право батьків отримати всі дані про свою дитину (GDPR)
 window.exportMyChildData=function(){
@@ -455,6 +522,7 @@ export function loadStudentDashboard(){
   loadAiDayContext('s');
   renderBirthdays('s-birthdays',cls,date,currentUserData.studentName);
   renderFinalGrades('s-final-grades',cls,currentUserData.studentName);
+  loadTodaySubstitutions(cls,date).then(()=>renderDynamicSchedule('student'));
   const ym=date.substring(0,7);
   Promise.all([get(child(ref(db),`comments/${cls}/${date}`)),get(child(ref(db),`grades/${cls}/${ym}`)),get(child(ref(db),`grade_types/${cls}/${ym}`)),get(child(ref(db),`behavior_grades/${cls}/${ym}`))]).then(([cmS,grS,gtS,bhS])=>{
     const list=document.getElementById('s-daily-comments-list');list.innerHTML=renderGradeFormulaInfo();let hasItems=false;
