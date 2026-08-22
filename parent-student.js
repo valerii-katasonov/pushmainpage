@@ -5,7 +5,7 @@
 // lives in teacher.js).
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, getActiveClass, currentUserData, STICKER_GOAL, getWeekDates, displayGrade, gradeClass6, showToast, renderHwItem, dayKeys, localDateString, formatAttendanceSlotLabel, renderGradeFormulaInfo, escJs, escHtml, safeUrl } from './common.js';
+import { db, getActiveClass, currentUserData, STICKER_GOAL, getWeekDates, displayGrade, gradeClass6, showToast, renderHwItem, dayKeys, localDateString, formatAttendanceSlotLabel, renderGradeFormulaInfo, escJs, escHtml, safeUrl, renderBirthdays } from './common.js';
 import { ACADEMIC_YEAR_ID } from './director.js';
 
 // parentLessonInterval is reassigned only here and read/cleared from
@@ -270,6 +270,7 @@ export function loadParentDashboard(){
   // Textbooks
   loadTextbooksForParent();
   loadAiDayContext('p');
+  renderBirthdays('p-birthdays',cls,date,currentUserData.studentName);
   // Grades + comments + behavior
   const ym=date.substring(0,7);
   Promise.all([
@@ -406,6 +407,7 @@ export function loadStudentDashboard(){
   get(child(ref(db),`homeworks/${cls}/${date}`)).then(snap=>{const hl=document.getElementById('s-daily-hw-list');hl.innerHTML='';if(snap.exists()){const d=snap.val();for(let s in d)hl.innerHTML+=renderHwItem(s,d[s]);}else hl.innerHTML='<li class="empty-msg">ДЗ не задано.</li>';});
   loadTextbooksForParent('student');
   loadAiDayContext('s');
+  renderBirthdays('s-birthdays',cls,date,currentUserData.studentName);
   const ym=date.substring(0,7);
   Promise.all([get(child(ref(db),`comments/${cls}/${date}`)),get(child(ref(db),`grades/${cls}/${ym}`)),get(child(ref(db),`grade_types/${cls}/${ym}`)),get(child(ref(db),`behavior_grades/${cls}/${ym}`))]).then(([cmS,grS,gtS,bhS])=>{
     const list=document.getElementById('s-daily-comments-list');list.innerHTML=renderGradeFormulaInfo();let hasItems=false;
