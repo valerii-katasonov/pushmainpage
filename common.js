@@ -14,6 +14,7 @@
 // ═══════════════════════════════════════════════════════════════
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, updatePassword, sendPasswordResetEmail, verifyPasswordResetCode, confirmPasswordReset, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+import { getMessaging, getToken, onMessage, isSupported as messagingSupported } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-messaging.js";
 import { getDatabase, ref, set, get, child, push, onValue, remove, update } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 
 import { loadTeacherDashboard, loadCurrentTopicAndHW, listenTeacherAttendance, teacherAttendanceListener } from './teacher.js';
@@ -416,6 +417,7 @@ window.openProfileModal=async function(){
     const snap=await get(ref(db,`teacher_skills/${se}/subjects`));
     mySkillsTemp=snap.exists()?Object.values(snap.val()):[];renderMySkillsTags();
   }
+  renderPushButton();
   // Батьки заповнюють свої контакти самі — школі менше ручної роботи,
   // а дані свіжіші. Прізвище/ім'я показуємо тут же, щоб усе було в одному
   // місці, тому окремі поля зверху для батьків ховаємо.
@@ -650,6 +652,125 @@ function initUserSession(){
     renderPaymentsMockup();loadTextbooksForParent();
   }
 }
+// ══════════════════════════════════════════════════════════════════
+//  СПОВІЩЕННЯ (Push / Firebase Cloud Messaging)
+// ══════════════════════════════════════════════════════════════════
+// Портал був пасивним: оцінку виставили, дитину відмітили відсутньою —
+// батьки дізнавалися, лише якщо самі зайшли. Push це закриває.
+//
+// НАЛАШТУВАННЯ (один раз, у Firebase Console):
+//   Project settings → Cloud Messaging → Web Push certificates →
+//   Generate key pair → скопіювати ключ у VAPID_KEY нижче.
+const VAPID_KEY='ЗАМІНИТИ_НА_КЛЮЧ_З_FIREBASE_CONSOLE';
+let swRegistration=null;
+// Реєструємо Service Worker одразу: без нього не працюють ані push,
+// ані встановлення застосунку на телефон. Раніше він не реєструвався
+// взагалі, тож PWA фактично не працював.
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>{
+    navigator.serviceWorker.register('firebase-messaging-sw.js')
+      .then(r=>{swRegistration=r;})
+      .catch(e=>console.warn('SW не зареєстровано:',e.message));
+  });
+}
+export async function pushSupported(){
+  try{
+    return 'Notification' in window && 'serviceWorker' in navigator && await messagingSupported();
+  }catch(e){return false;}
+}
+// Стан для кнопки: 'unsupported' | 'denied' | 'on' | 'off'
+export async function pushState(){
+  if(!await pushSupported())return 'unsupported';
+  if(Notification.permission==='denied')return 'denied';
+  if(Notification.permission!=='granted')return 'off';
+  const uid=auth.currentUser?.uid;
+  if(!uid)return 'off';
+  const snap=await get(child(ref(db),`push_tokens/${uid}`));
+  return snap.exists()?'on':'off';
+}
+window.enablePush=async function(){
+  if(!await pushSupported())return showToast('⚠️ Ваш браузер не підтримує сповіщення');
+  if(VAPID_KEY.startsWith('ЗАМІНИТИ'))return showToast('⚠️ Сповіщення ще не налаштовані адміністратором');
+  try{
+    const perm=await Notification.requestPermission();
+    if(perm!=='granted'){
+      showToast(perm==='denied'
+        ?'🔕 Сповіщення заблоковані у налаштуваннях браузера'
+        :'🔕 Дозвіл не надано');
+      return renderPushButton();
+    }
+    // Чекаємо реєстрації SW — на першому заході вона може ще тривати
+    const reg=swRegistration||await navigator.serviceWorker.ready;
+    const messaging=getMessaging(app);
+    const token=await getToken(messaging,{vapidKey:VAPID_KEY,serviceWorkerRegistration:reg});
+    if(!token)return showToast('⚠️ Не вдалося отримати токен сповіщень');
+    const uid=auth.currentUser.uid;
+    // Зберігаємо разом із роллю і дитиною — щоб сервер знав, кому що слати
+    await set(ref(db,`push_tokens/${uid}`),{
+      token,
+      role:currentUserData?.role||'',
+      email:currentUserData?.email||'',
+      studentName:currentUserData?.studentName||'',
+      class:currentUserData?.class||'',
+      updatedAt:Date.now()
+    });
+    showToast('🔔 Сповіщення увімкнено');
+    renderPushButton();
+  }catch(e){
+    console.error(e);
+    showToast('Помилка: '+(e.message||e.code));
+  }
+};
+window.disablePush=async function(){
+  const uid=auth.currentUser?.uid;
+  if(uid)await remove(ref(db,`push_tokens/${uid}`));
+  // Відкликати дозвіл браузера з коду не можна — лише перестаємо слати
+  showToast('🔕 Сповіщення вимкнено');
+  renderPushButton();
+};
+export async function renderPushButton(){
+  const box=document.getElementById('push-toggle');
+  if(!box)return;
+  const st=await pushState();
+  const map={
+    unsupported:['','',''],
+    denied:['🔕 Сповіщення заблоковані','', 'Дозвольте сповіщення для цього сайту в налаштуваннях браузера'],
+    on:['🔔 Сповіщення увімкнено','disablePush()','Вимкнути'],
+    off:['🔕 Сповіщення вимкнено','enablePush()','Увімкнути']
+  };
+  if(st==='unsupported'){box.style.display='none';return;}
+  const [label,action,btn]=map[st];
+  box.style.display='block';
+  box.innerHTML=`<div class="push-row">
+    <span class="push-label">${label}</span>
+    ${action?`<button type="button" class="push-btn" onclick="${action}">${btn}</button>`
+             :`<span class="push-hint">${btn}</span>`}
+  </div>`;
+}
+window.renderPushButton=renderPushButton;
+// Надіслати сповіщення про подію. Свідомо «тихий» виклик: якщо сповіщення
+// не налаштовані або впали — основна дія (оцінка, відмітка) вже збережена
+// і не має зриватися через це.
+export function notifyEvent(type,payload){
+  try{
+    fetch('/.netlify/functions/notify',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({type,...payload})
+    }).catch(()=>{});
+  }catch(e){/* ignore */}
+}
+window.notifyEvent=notifyEvent;
+// Сповіщення, коли портал відкритий: системне вікно браузер не показує,
+// тому показуємо власний тост — інакше подія просто зникне непоміченою.
+(async()=>{
+  if(!await pushSupported())return;
+  try{
+    onMessage(getMessaging(app),(payload)=>{
+      const d=payload.data||{};
+      showToast(`${d.title||'Сповіщення'}: ${d.body||''}`);
+    });
+  }catch(e){/* messaging недоступний — не критично */}
+})();
 // ══════════ БАТЬКИ КЛАСУ: спільний список + редактор ══════════
 // Один код для кабінету вчителя і директора — інакше довелося б підтримувати
 // дві копії. Дані лежать «навпаки» (ключ — пошта батьків), тому для показу
