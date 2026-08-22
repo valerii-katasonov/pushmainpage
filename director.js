@@ -7,7 +7,7 @@
 // header for why.)
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, push, remove, update } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, showToast, getClassNum, displayGrade, gradeClass6, teacherAccessMatrix, getWeekDates, formatAttendanceSlotLabel, gradeTypesCache, loadGradeTypesCache, calculateStudentWeightedAvg, escJs, escHtml, localDateString, normalizeRoles, getUserRoles, ROLE_LABELS, currentUserData, dayNamesUA, sendPasswordReset, normalizeChildren } from './common.js';
+import { db, showToast, getClassNum, displayGrade, gradeClass6, teacherAccessMatrix, getWeekDates, formatAttendanceSlotLabel, gradeTypesCache, loadGradeTypesCache, calculateStudentWeightedAvg, escJs, escHtml, localDateString, normalizeRoles, getUserRoles, ROLE_LABELS, currentUserData, dayNamesUA, sendPasswordReset, normalizeChildren, renderParentsBlock } from './common.js';
 
 let directorSkillsTemp=[];
 
@@ -540,61 +540,9 @@ async function repointStudentAccounts(name,fromCls,toCls){
 // Дані лежать «навпаки» — parent_links ключується поштою батьків, а директору
 // зручніше бачити зріз по дітях. Тому перевертаємо: дитина → її батьки.
 // Заодно видно дітей БЕЗ жодного прив'язаного контакту — це найкорисніше.
-const PARENT_ROLE_LABEL={mother:'👩 Мати',father:'👨 Батько',guardian:'🛡️ Опікун'};
-window.loadParentsOverview=async function(){
-  const cls=document.getElementById('po-class')?.value;
-  const box=document.getElementById('po-list');
-  if(!box)return;
-  if(!cls){box.innerHTML='<p class="empty-msg">Оберіть клас.</p>';return;}
-  box.innerHTML='<p class="empty-msg">Завантаження...</p>';
-  try{
-    const [stSnap,plSnap,usersSnap]=await Promise.all([
-      get(child(ref(db),`students_list/${cls}`)),
-      get(child(ref(db),'parent_links')),
-      get(child(ref(db),'users'))
-    ]);
-    const students=stSnap.exists()?Object.values(stSnap.val()).sort((a,b)=>String(a).localeCompare(String(b),'uk')):[];
-    if(students.length===0){box.innerHTML='<p class="empty-msg">У цьому класі ще немає учнів.</p>';return;}
-    // Хто з батьків уже заходив у портал (щоб показати «ще не входив»)
-    const loggedIn=new Set();
-    if(usersSnap.exists()){
-      const u=usersSnap.val();
-      for(const uid in u)if(u[uid].email&&u[uid].role==='parent')loggedIn.add(u[uid].email.toLowerCase());
-    }
-    // Перевертаємо parent_links: дитина → [{email, role}]
-    const byChild={};
-    if(plSnap.exists()){
-      const pl=plSnap.val();
-      for(const safeEmail in pl){
-        const email=safeEmail.replace(/_/g,'.');
-        normalizeChildren(pl[safeEmail]).forEach(k=>{
-          if(k.class!==cls)return;
-          (byChild[k.studentName]=byChild[k.studentName]||[]).push({email,role:k.role||'guardian'});
-        });
-      }
-    }
-    const orphans=students.filter(s=>!byChild[s]||byChild[s].length===0);
-    let html=orphans.length
-      ? `<div class="bell-missing">⚠️ Без прив'язаних батьків: ${escHtml(orphans.join(', '))}</div>`
-      : `<div style="background:#e8f5e9;border:1px solid #a5d6a7;color:#1b5e20;border-radius:9px;padding:8px 11px;font-size:.8rem;font-weight:700;margin-bottom:8px;">✓ У всіх учнів є прив'язані контакти</div>`;
-    students.forEach(st=>{
-      const list=byChild[st]||[];
-      html+=`<div class="po-row">
-        <div class="po-child">${escHtml(st)}</div>
-        <div class="po-parents">`;
-      if(list.length===0)html+=`<span class="po-none">контактів немає</span>`;
-      else list.forEach(p=>{
-        const isNew=!loggedIn.has(p.email.toLowerCase());
-        html+=`<div class="po-parent">
-          <span class="po-role">${escHtml(PARENT_ROLE_LABEL[p.role]||p.role)}</span>
-          <span class="po-email">${escHtml(p.email)}</span>
-          ${isNew?'<span class="po-new">ще не входив</span>':''}
-        </div>`;
-      });
-      html+=`</div></div>`;
-    });
-    box.innerHTML=html;
-  }catch(e){box.innerHTML=`<p style="color:red;font-size:.8rem;">Помилка: ${escHtml(e.message)}</p>`;}
+// Рендер спільний із кабінетом вчителя — див. renderParentsBlock у common.js
+window.loadParentsOverview=function(){
+  renderParentsBlock('po-list',document.getElementById('po-class')?.value||'');
 };
 // ══════════ AI: ЧЕРНЕТКА ОГОЛОШЕННЯ ДЛЯ БАТЬКІВ ══════════
 // У сервіс іде лише те, що директор написав сам. Жодних даних із бази.
