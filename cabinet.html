@@ -317,11 +317,23 @@
     .po-row{display:flex;gap:11px;align-items:flex-start;padding:8px;background:#fff;border:1px solid #e8e0f0;border-radius:9px;margin-bottom:5px;font-size:.83rem;}
     .po-child{flex:0 0 40%;font-weight:700;color:#4a148c;word-break:break-word;}
     .po-parents{flex:1;display:flex;flex-direction:column;gap:3px;}
-    .po-parent{display:flex;gap:6px;align-items:baseline;flex-wrap:wrap;}
+    .po-parent{padding:5px 0;border-bottom:1px dashed #f0e8f6;}
+    .po-parent:last-child{border-bottom:none;}
+    .po-line{display:flex;gap:6px;align-items:baseline;flex-wrap:wrap;}
+    .po-name{color:#333;font-size:.83rem;}
     .po-role{font-size:.72rem;color:#7b1fa2;white-space:nowrap;}
-    .po-email{color:#555;word-break:break-all;font-size:.78rem;}
+    .po-email{color:#777;word-break:break-all;font-size:.75rem;}
     .po-new{font-size:.68rem;color:#f39c12;white-space:nowrap;}
     .po-none{font-size:.78rem;color:var(--red);font-style:italic;}
+    .po-ok{background:#e8f5e9;border:1px solid #a5d6a7;color:#1b5e20;border-radius:9px;padding:8px 11px;font-size:.8rem;font-weight:700;margin-bottom:8px;}
+    .po-contacts{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:2px;}
+    .po-contacts a{color:var(--blue);text-decoration:none;font-size:.76rem;white-space:nowrap;}
+    .po-contacts a:hover{text-decoration:underline;}
+    .po-addr{font-size:.75rem;color:#888;}
+    .po-edit{width:auto;margin:0;padding:2px 7px;font-size:.72rem;background:#fff8e1;border:1px solid #ffe0a3;border-radius:7px;cursor:pointer;line-height:1.5;}
+    .po-edit:hover{background:#f39c12;}
+    #pe-fields label{margin-top:11px;font-size:.79rem;color:#666;}
+    #pe-fields input{margin-top:3px;}
     /* ── СПИСОК УЧНІВ У ДИРЕКТОРА ── */
     .ds-row{display:flex;align-items:center;gap:9px;padding:6px 8px;background:#fff;border:1px solid #e0e0e0;border-radius:8px;margin-bottom:4px;font-size:.85rem;}
     .ds-num{width:22px;text-align:center;color:#888;font-size:.75rem;flex-shrink:0;}
@@ -1470,6 +1482,12 @@
           <input type="email" id="new-student-email" placeholder="Email учня (для входу)" style="margin-top:5px; border-color:#f1c40f;">
           <button style="background:#f1c40f;padding:8px;margin-top:5px;margin-bottom:13px;" onclick="addStudent()">Додати учня</button>
           <hr>
+          <!-- Список батьків свого класу: контакти можна дивитись і редагувати -->
+          <details style="margin-top:13px;background:#f9f4ff;padding:12px;border-radius:11px;border:1px solid #ce93d8;"
+                   ontoggle="if(this.open)renderParentsBlock('t-parents-list',getActiveClass())">
+            <summary style="font-weight:700;cursor:pointer;color:#7b1fa2;font-size:.88rem;">👪 Батьки мого класу</summary>
+            <div id="t-parents-list" style="margin-top:9px;"><p class="empty-msg">Завантаження...</p></div>
+          </details>
           <p style="font-size:.83rem;color:#555;margin-top:13px;font-weight:700;">Прив'язка батьків:</p>
           <select id="t-parent-role" style="margin-top:4px;border-color:#9b59b6;">
             <option value="mother">👩‍👧 Мати</option><option value="father">👨‍👦 Батько</option><option value="guardian">🛡️ Опекун</option>
@@ -1677,6 +1695,17 @@
   </div>
 </div>
 <!-- ══════════════════ MODALS ══════════════════ -->
+<!-- Редактор контактів батьків. Спільний для кабінету вчителя і директора -->
+<div id="parent-edit-modal" class="modal-overlay">
+  <div class="modal-content" style="max-width:460px;text-align:left;">
+    <h2 style="color:var(--purple);margin-top:0;text-align:center;">👪 Контакти батьків</h2>
+    <p style="text-align:center;font-size:.8rem;color:#888;margin:0 0 4px 0;" id="pe-email">—</p>
+    <p style="font-size:.76rem;color:#999;text-align:center;margin:0 0 12px 0;">Незаповнені поля просто не показуються у списку</p>
+    <div id="pe-fields"></div>
+    <button id="pe-save" onclick="saveParentProfile()" style="background:var(--green);color:#fff;margin-top:16px;">💾 Зберегти</button>
+    <button onclick="closeParentEditor()" style="background:#f5f6fa;color:#333;margin-top:8px;border:1px solid #dcdde1;">Скасувати</button>
+  </div>
+</div>
 <!-- Profile -->
 <div id="profile-modal" class="modal-overlay">
   <div class="modal-content">
