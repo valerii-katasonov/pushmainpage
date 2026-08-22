@@ -653,6 +653,47 @@ function initUserSession(){
   }
 }
 // ══════════════════════════════════════════════════════════════════
+//  ЖУРНАЛ ДІЙ (аудит)
+// ══════════════════════════════════════════════════════════════════
+// Хто, що і коли змінив. Найважливіше — правки оцінок: без такого журналу
+// неможливо розібрати спірну ситуацію «оцінка була інша».
+//
+// Розбивка по місяцях (audit_log/{РРРР-ММ}) навмисна: записів з часом
+// стануть десятки тисяч, і читати одну спільну гілку було б повільно.
+// Читаємо завжди лише потрібний місяць і лише останні N записів.
+export const AUDIT_LABELS={
+  grade_set:'📊 Оцінку виставлено', grade_del:'📊 Оцінку видалено',
+  attendance:'🚨 Відмітка відсутності', comment:'💬 Коментар учню',
+  homework:'📚 Домашнє завдання', behavior:'🤝 Оцінка поведінки',
+  student_add:'👨‍🎓 Учня додано', student_rename:'✏️ Учня перейменовано',
+  student_del:'🗑 Учня прибрано', student_transfer:'↔️ Учня переведено',
+  parent_link:'🔗 Батьків прив\'язано', parent_unlink:'🔓 Батьків відв\'язано',
+  parent_edit:'👪 Контакти батьків', parent_email:'✉️ Email батьків змінено',
+  staff_grant:'🛡️ Доступ співробітнику', staff_remove:'🗑 Доступ відкликано',
+  pass_reset:'🔑 Скидання пароля', schedule_publish:'🗓️ Розклад опубліковано',
+  bell_apply:'🔔 Розклад дзвінків', curriculum:'📅 Календарний план',
+  grade_type:'🎯 Типи оцінок', year_rollover:'🎓 Перехід на новий рік'
+};
+// Виклик навмисно «тихий» і без await: запис у журнал не має ані
+// сповільнювати основну дію, ані зривати її, якщо не вдався.
+export function logAction(action,details={}){
+  try{
+    const u=currentUserData||{};
+    const name=(u.firstName||u.lastName)
+      ? `${u.firstName||''} ${u.lastName||''}`.trim()
+      : (u.email||'—');
+    push(ref(db,`audit_log/${localDateString.slice(0,7)}`),{
+      ts:Date.now(),
+      uid:auth.currentUser?.uid||'',
+      actor:name,
+      role:u.role||'',
+      action,
+      ...details
+    }).catch(()=>{});
+  }catch(e){/* журнал не має ламати основну дію */}
+}
+window.logAction=logAction;
+// ══════════════════════════════════════════════════════════════════
 //  СПОВІЩЕННЯ (Push / Firebase Cloud Messaging)
 // ══════════════════════════════════════════════════════════════════
 // Портал був пасивним: оцінку виставили, дитину відмітили відсутньою —
@@ -661,7 +702,7 @@ function initUserSession(){
 // НАЛАШТУВАННЯ (один раз, у Firebase Console):
 //   Project settings → Cloud Messaging → Web Push certificates →
 //   Generate key pair → скопіювати ключ у VAPID_KEY нижче.
-const VAPID_KEY='BAifnPl3VcvDFpYuE7D2HAyfCzczsxAq3ktk72MgK6a4MY03Krvu4JI6k8pYOrasLdhwW0lLEAqDWs6iLGYEaCo';
+const VAPID_KEY='ЗАМІНИТИ_НА_КЛЮЧ_З_FIREBASE_CONSOLE';
 let swRegistration=null;
 // Реєструємо Service Worker одразу: без нього не працюють ані push,
 // ані встановлення застосунку на телефон. Раніше він не реєструвався
@@ -995,6 +1036,7 @@ window.unlinkParentChild=async function(safeEmail,idx,name){
   kids.splice(idx,1);
   await update(ref(db,`parent_links/${safeEmail}`),{children:kids});
   await syncParentUserChildren(safeEmail,kids);
+  logAction('parent_unlink',{target:name,value:safeEmail.replace(/_/g,'.')});
   showToast(`🔓 ${name} відв'язаний`);
   refreshParentEditorAndList(safeEmail);
 };
@@ -1011,6 +1053,7 @@ window.changeParentEmail=async function(oldSafe){
     const snap=await get(child(ref(db),`parent_links/${oldSafe}`));
     await set(ref(db,`parent_links/${newSafe}`),snap.exists()?snap.val():{});
     await remove(ref(db,`parent_links/${oldSafe}`));
+    logAction('parent_email',{from:oldSafe.replace(/_/g,'.'),target:raw});
     showToast('✉️ Запис перенесено на нову адресу');
     window.closeParentEditor();
     const {containerId,cls}=parentEditorTarget;
@@ -1047,6 +1090,7 @@ window.saveParentProfile=async function(){
     // update, а не set: children у цьому ж вузлі не можна зачепити
     await update(ref(db,`parent_links/${safeEmail}`),{profile});
     showToast('✅ Контакти збережено');
+    logAction('parent_edit',{target:safeEmail.replace(/_/g,'.')});
     window.closeParentEditor();
     if(containerId&&cls)renderParentsBlock(containerId,cls);
   }catch(e){alert('Помилка: '+e.message);}
