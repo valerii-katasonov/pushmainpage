@@ -6,7 +6,7 @@
 // exams calendar, and reactions/weekly-wrapped.
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, push, remove, update, onValue } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, auth, CLOUDINARY_URL, UPLOAD_PRESET, getActiveClass, currentUserData, showToast, displayGrade, renderHwItem, dayKeys, formatAttendanceSlotLabel, STICKER_GOAL, escJs, escHtml, safeUrl, normalizeChildren } from './common.js';
+import { db, auth, CLOUDINARY_URL, UPLOAD_PRESET, getActiveClass, currentUserData, showToast, displayGrade, renderHwItem, dayKeys, formatAttendanceSlotLabel, STICKER_GOAL, escJs, escHtml, safeUrl, normalizeChildren, notifyEvent, logAction } from './common.js';
 import { populateTopicSelector, availableTopicsCache } from './curriculum.js';
 
 let currentHwImages=[];
@@ -74,19 +74,39 @@ function aiMsg(id,text,isErr){
   el.textContent=text;el.className='ai-hw-msg'+(isErr?' err':'');
   el.style.display=text?'block':'none';
 }
+// Список підручників для цього предмета вже ведеться в порталі —
+// підставляємо його, щоб учитель не набирав назву вручну щоразу.
+window.fillHwTextbooks=async function(){
+  const sel=document.getElementById('hw-textbook');
+  const subj=document.getElementById('t-subject')?.value;
+  if(!sel)return;
+  if(!subj){sel.innerHTML='<option value="">— спочатку оберіть предмет —</option>';return;}
+  const snap=await get(ref(db,`textbooks/${getActiveClass()}/${subj.replace(/[.#$[\]]/g,'_')}`));
+  let html='<option value="">— не вказувати —</option>';
+  if(snap.exists()){
+    const d=snap.val();
+    for(const k in d)html+=`<option value="${escHtml(d[k].title||d[k].url)}">${escHtml(d[k].title||d[k].url)}</option>`;
+  }
+  sel.innerHTML=html;
+};
 window.generateHomeworkAI=async function(){
   const subject=document.getElementById('t-subject').value;
   const topic=readCurrentTopicText();
   const classNum=parseInt(String(getActiveClass()||'').replace('class_',''),10);
   const btn=document.getElementById('btn-ai-hw');
   const area=document.getElementById('t-hw');
+  // Контекст необов'язковий: якщо поля порожні — працює як раніше
+  const textbook=(document.getElementById('hw-textbook-custom')?.value.trim())
+                 ||(document.getElementById('hw-textbook')?.value||'');
+  const pages=document.getElementById('hw-pages')?.value.trim()||'';
+  const material=document.getElementById('hw-material')?.value.trim()||'';
   if(!subject)return aiMsg('ai-hw-msg','Спочатку оберіть предмет.',true);
   if(!topic)return aiMsg('ai-hw-msg','Спочатку вкажіть тему уроку — з плану або вручну.',true);
   if(area.value.trim()&&!confirm('Поле ДЗ не порожнє. Замінити його згенерованою чернеткою?'))return;
   btn.disabled=true;const label=btn.textContent;btn.textContent='⏳ Генерую...';
   aiMsg('ai-hw-msg','');
   try{
-    const data=await callAI('homework',{subject,topic,classNum});
+    const data=await callAI('homework',{subject,topic,classNum,textbook,pages,material});
     area.value=data.text||'';
     area.rows=Math.min(12,Math.max(3,String(data.text||'').split('\n').length+1));
     aiMsg('ai-hw-msg',data.truncated
@@ -363,6 +383,10 @@ window.teacherMarkAbsent=function(){
   const status=rs==='запізнення'?'late':'absent';
   set(ref(db,`attendance/${getActiveClass()}/${date}/${st}/${slotKey}`),{status,reason:rs,markedBy:'teacher'}).then(()=>{
     showToast(`✅ ${st} відмічений.`);
+    // Сповіщення батькам — саме заради цього випадку push і потрібен:
+    // дитина не дійшла до школи, а сім'я про це ще не знає
+    notifyEvent('absence',{class:getActiveClass(),studentName:st,subject:document.getElementById('t-subject')?.value||''});
+    logAction('attendance',{cls:getActiveClass(),target:st,date,value:status,reason:rs});
     document.getElementById('t-mark-absent-student').value='';
   });
 };
@@ -427,7 +451,11 @@ export function loadTeacherDashboard(){
 }
 window.loadTeacherDashboard=loadTeacherDashboard;
 window.giveStickerToStudent=async function(){const st=document.getElementById('t-sticker-student').value;const subj=document.getElementById('t-subject').value;const date=document.getElementById('global-date').value;const cls=getActiveClass();if(!st||!subj){showToast("⚠️ Оберіть учня та переконайтесь що обрано предмет!");return;}await set(ref(db,`stickers/${cls}/${st}/${date}_${subj}`),true);showToast(`🌟 Наліпка: ${st}!`);};
-window.saveComment=async function(){const st=document.getElementById('t-student').value;const subj=document.getElementById('t-subject-for-comment').value;const cm=document.getElementById('t-comment').value.trim();const date=document.getElementById('global-date').value;const cls=getActiveClass();if(!st||!subj){showToast("⚠️ Оберіть учня та предмет!");return;}if(!cm){showToast("⚠️ Введіть коментар!");return;}await set(ref(db,`comments/${cls}/${date}/${subj}/${st}`),cm);document.getElementById('t-comment').value='';showToast(`💬 Коментар збережено: ${st}`);};
+window.saveComment=async function(){const st=document.getElementById('t-student').value;const subj=document.getElementById('t-subject-for-comment').value;const cm=document.getElementById('t-comment').value.trim();const date=document.getElementById('global-date').value;const cls=getActiveClass();if(!st||!subj){showToast("⚠️ Оберіть учня та предмет!");return;}if(!cm){showToast("⚠️ Введіть коментар!");return;}await set(ref(db,`comments/${cls}/${date}/${subj}/${st}`),cm);document.getElementById('t-comment').value='';showToast(`💬 Коментар збережено: ${st}`);
+  // Сам текст коментаря в сповіщення не кладемо — воно видно на екрані
+  // блокування, а коментар може бути делікатним
+  notifyEvent('comment',{class:cls,studentName:st,subject:subj});
+  logAction('comment',{cls,target:st,subject:subj,date});};
 // ══════════ EXAMS ══════════
 window.openExamsCalendar=function(){document.getElementById('exams-modal').style.display='flex';document.getElementById('exam-class-label').innerText=document.getElementById('t-class-selector').options[document.getElementById('t-class-selector').selectedIndex].text;document.getElementById('exams-day-details').style.display='none';const mi=document.getElementById('exam-month-select');const dp=document.getElementById('global-date').value.split('-');mi.value=`${dp[0]}-${dp[1]}`;renderExamsCalendar();};
 window.closeExamsModal=function(){document.getElementById('exams-modal').style.display='none';};
