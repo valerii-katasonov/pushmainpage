@@ -334,6 +334,13 @@
     .po-edit:hover{background:#f39c12;}
     #pe-fields label{margin-top:11px;font-size:.79rem;color:#666;}
     #pe-fields input{margin-top:3px;}
+    .pe-section{margin-top:16px;border-top:1px dashed #ddd;padding-top:11px;}
+    .pe-section b{font-size:.84rem;color:var(--purple);}
+    .pe-kid{display:flex;gap:7px;align-items:center;margin-top:6px;}
+    .pe-kid-name{flex:1;font-size:.82rem;font-weight:600;color:#333;}
+    .pe-kid select{width:auto;flex:0 0 128px;margin:0;padding:5px 7px;font-size:.76rem;}
+    .pe-unlink{width:auto;flex-shrink:0;margin:0;padding:5px 9px;font-size:.78rem;background:#fdecea;color:var(--red);border:1px solid #f5c6cb;border-radius:7px;cursor:pointer;}
+    .pe-unlink:hover{background:var(--red);color:#fff;}
     /* ── СПИСОК УЧНІВ У ДИРЕКТОРА ── */
     .ds-row{display:flex;align-items:center;gap:9px;padding:6px 8px;background:#fff;border:1px solid #e0e0e0;border-radius:8px;margin-bottom:4px;font-size:.85rem;}
     .ds-num{width:22px;text-align:center;color:#888;font-size:.75rem;flex-shrink:0;}
@@ -1117,15 +1124,28 @@
       <details style="margin-bottom:12px;background:#f9f4ff;padding:14px;border-radius:12px;border:1px solid #ce93d8;" ontoggle="if(this.open)loadParentsOverview()">
         <summary style="font-weight:700;cursor:pointer;color:#7b1fa2;font-size:.95rem;">👪 Батьки учнів</summary>
         <div style="margin-top:13px;">
-          <select id="po-class" onchange="loadParentsOverview()" style="border:2px solid #ce93d8;">
+          <select id="po-class" onchange="loadParentsOverview();loadParentLinkStudents()" style="border:2px solid #ce93d8;">
             <option value="">-- Оберіть клас --</option>
             <option value="class_1">1 Клас</option><option value="class_2">2 Клас</option><option value="class_3">3 Клас</option>
             <option value="class_4">4 Клас</option><option value="class_5">5 Клас</option><option value="class_6">6 Клас</option>
             <option value="class_7">7 Клас</option><option value="class_8">8 Клас</option><option value="class_9">9 Клас</option>
             <option value="class_10">10 Клас</option><option value="class_11">11 Клас</option>
           </select>
-          <p style="font-size:.78rem;color:#666;margin:7px 0 0 0;">Прив'язує батьків учитель у своєму кабінеті: «⚙️ Управління класом» → «Прив'язка батьків».</p>
           <div id="po-list" style="margin-top:9px;"><p class="empty-msg">Оберіть клас.</p></div>
+          <!-- Директор може прив'язувати батьків у будь-якому класі -->
+          <div style="margin-top:13px;border-top:1px dashed #ce93d8;padding-top:11px;">
+            <b style="font-size:.85rem;color:#7b1fa2;">➕ Прив'язати батьків до учня</b>
+            <p style="font-size:.76rem;color:#888;margin:4px 0 7px 0;">
+              Якщо в цих батьків уже є діти в школі — новий запис додасться до наявних,
+              нічого не зітреться.
+            </p>
+            <select id="pl-student" style="margin-top:5px;border:1px solid #ce93d8;"><option value="">Спочатку оберіть клас</option></select>
+            <select id="pl-role" style="margin-top:5px;border:1px solid #ce93d8;">
+              <option value="mother">👩 Мати</option><option value="father">👨 Батько</option><option value="guardian">🛡️ Опікун</option>
+            </select>
+            <input type="email" id="pl-email" placeholder="Email батьків" style="margin-top:5px;" autocapitalize="none" spellcheck="false">
+            <button onclick="directorLinkParent()" style="background:var(--purple);color:#fff;margin-top:8px;">🔗 Прив'язати</button>
+          </div>
         </div>
       </details>
       <!-- Переведення одного учня (перехід у паралель / інший клас серед року) -->
