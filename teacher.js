@@ -115,6 +115,54 @@ window.generateHomeworkAI=async function(){
   }catch(e){aiMsg('ai-hw-msg','Не вдалося згенерувати: '+e.message,true);}
   finally{btn.disabled=false;btn.textContent=label;}
 };
+// ══════════ УЧНІ БЕЗ ОЦІНОК ══════════
+// Тихий учень, який не тягне руку, легко випадає з уваги на місяць —
+// і це спливає аж на батьківських зборах. Показуємо, кого давно не оцінювали
+// саме з цього предмета.
+window.showUngraded=async function(){
+  const cls=getActiveClass();
+  const subj=document.getElementById('t-subject').value;
+  const box=document.getElementById('ungraded-body');
+  if(!subj)return showToast('⚠️ Спочатку оберіть предмет');
+  document.getElementById('ungraded-subject').textContent=subj;
+  document.getElementById('ungraded-modal').style.display='flex';
+  box.innerHTML='<p class="empty-msg">Обчислення...</p>';
+  try{
+    const today=document.getElementById('global-date').value;
+    // Дивимось поточний і два попередні місяці — цього досить, щоб побачити
+    // «давно не оцінювали», і не читати весь рік
+    const months=[];let [y,m]=today.split('-').map(Number);
+    for(let i=0;i<3;i++){months.push(`${y}-${String(m).padStart(2,'0')}`);m--;if(m<1){m=12;y--;}}
+    const [stSnap,...gs]=await Promise.all([
+      get(child(ref(db),`students_list/${cls}`)),
+      ...months.map(ym=>get(child(ref(db),`grades/${cls}/${ym}/${subj}`)))
+    ]);
+    const students=stSnap.exists()?Object.values(stSnap.val()).sort((a,b)=>String(a).localeCompare(String(b),'uk')):[];
+    if(students.length===0){box.innerHTML='<p class="empty-msg">У класі немає учнів.</p>';return;}
+    const last={};
+    gs.forEach(sn=>{
+      if(!sn.exists())return;
+      const d=sn.val();
+      for(const date in d)for(const st in d[date])
+        if(!last[st]||date>last[st])last[st]=date;
+    });
+    const days=(a,b)=>Math.round((new Date(b)-new Date(a))/86400000);
+    const rows=students.map(st=>({st,date:last[st]||null,d:last[st]?days(last[st],today):null}))
+      .sort((a,b)=>(b.d===null?9999:b.d)-(a.d===null?9999:a.d));
+    const problem=rows.filter(r=>r.date===null||r.d>=14);
+    let html=problem.length===0
+      ? '<div class="po-ok">✓ Усіх оцінювали протягом останніх двох тижнів</div>'
+      : `<div class="bell-missing">⚠️ Давно без оцінок: ${problem.length} ${problem.length===1?'учень':'учнів'}</div>`;
+    html+=rows.map(r=>`<div class="ug-row${r.date===null||r.d>=14?' warn':''}">
+      <span class="ug-name">${escHtml(r.st)}</span>
+      <span class="ug-when">${r.date
+        ? `${escHtml(r.date.split('-').reverse().join('.'))} · ${r.d} дн. тому`
+        : 'жодної оцінки'}</span>
+    </div>`).join('');
+    box.innerHTML=html;
+  }catch(e){box.innerHTML=`<p style="color:red;font-size:.8rem;">Помилка: ${escHtml(e.message)}</p>`;}
+};
+window.closeUngraded=function(){document.getElementById('ungraded-modal').style.display='none';};
 // ══════════ КОПІЮВАННЯ ДЗ У ПАРАЛЕЛЬНІ КЛАСИ ══════════
 // Учитель веде той самий предмет у кількох класах і набирав те саме ДЗ
 // двічі-тричі. Копіюємо ЛИШЕ домашнє завдання, а не тему уроку: теми
