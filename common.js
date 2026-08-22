@@ -1145,6 +1145,50 @@ window.saveStudentCard=async function(){
   }catch(e){alert('Помилка: '+e.message);}
   finally{btn.disabled=false;btn.textContent='💾 Зберегти';}
 };
+// ══════════════════════════════════════════════════════════════════
+//  ДНІ НАРОДЖЕННЯ НА ТИЖНІ
+// ══════════════════════════════════════════════════════════════════
+// Беремо з карток учнів (birthDate). Свідомо показуємо лише день і місяць,
+// без року: однокласникам і чужим батькам вік дитини знати не потрібно.
+const MONTHS_UA=['січня','лютого','березня','квітня','травня','червня',
+                 'липня','серпня','вересня','жовтня','листопада','грудня'];
+export async function getWeekBirthdays(cls,dateStr){
+  const [stSnap,cardSnap]=await Promise.all([
+    get(child(ref(db),`students_list/${cls}`)),
+    get(child(ref(db),`student_cards/${cls}`))
+  ]);
+  if(!stSnap.exists()||!cardSnap.exists())return[];
+  const names=stSnap.val(), cards=cardSnap.val();
+  // Тиждень Пн–Нд, той самий, що і в решті звітів
+  const week=getWeekDates(dateStr).map(d=>d.slice(5)); // «MM-DD»
+  const out=[];
+  for(const key in names){
+    const bd=cards[key]&&cards[key].birthDate;
+    if(!bd||bd.length<10)continue;
+    const md=bd.slice(5);
+    const i=week.indexOf(md);
+    if(i===-1)continue;
+    const [,m,d]=bd.split('-');
+    out.push({name:names[key],md,idx:i,label:`${parseInt(d)} ${MONTHS_UA[parseInt(m)-1]}`});
+  }
+  return out.sort((a,b)=>a.idx-b.idx);
+}
+// Один рендер для всіх кабінетів — вчителя, батьків та учня
+export async function renderBirthdays(containerId,cls,dateStr,selfName){
+  const box=document.getElementById(containerId);
+  if(!box)return;
+  try{
+    const list=await getWeekBirthdays(cls,dateStr);
+    if(list.length===0){box.style.display='none';return;}
+    box.style.display='block';
+    box.innerHTML=`<div class="bd-title">🎂 Дні народження цього тижня</div>`+
+      list.map(b=>`<div class="bd-row${b.name===selfName?' me':''}">
+        <span class="bd-name">${escHtml(b.name)}${b.name===selfName?' — це ти!':''}</span>
+        <span class="bd-date">${escHtml(b.label)}</span>
+      </div>`).join('');
+  }catch(e){box.style.display='none';}
+}
+window.renderBirthdays=renderBirthdays;
 // ══════════ ВХІД УЧНЯ (власний email) ══════════
 // Раніше пошту учня можна було вказати ЛИШЕ під час створення. Якщо тоді її
 // не ввели — додати чи змінити було ніде, і в списку не було видно, у кого
