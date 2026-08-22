@@ -56,7 +56,7 @@ export const ROLE_LABELS={
   director:'👔 Директор', administrator:'🛡️ Секретар (Адміністратор)',
   teacher:'👨‍🏫 Вчитель', class_teacher:'🎓 Класний керівник',
   art_school_teacher:'🎨 Вчитель школи мистецтв', music_teacher:'🎵 Вчитель музики',
-  parent:'👪 Батьки', student:'🎒 Учень'
+  parent:'👪 Батьки', student:'🎒 Учень', kitchen:'🍽️ Кухня'
 };
 // Ролі, для яких потрібна матриця доступу до класів (teacherAccessMatrix)
 export const TEACHER_ROLES=['teacher','class_teacher','art_school_teacher','music_teacher'];
@@ -489,6 +489,7 @@ window.handleDateChange=function(){
   if(!currentUserData)return;
   if(currentUserData.role==='teacher'||currentUserData.role==='class_teacher'||currentUserData.role==='art_school_teacher'||currentUserData.role==='music_teacher'){updateSubjectList();loadTeacherDashboard();loadCurrentTopicAndHW();listenTeacherAttendance();}
   else if(currentUserData.role==='director'){loadDirectorDashboard();document.getElementById('d-detail-hw-class')&&(document.getElementById('d-detail-hw-class').value='');}
+  else if(currentUserData.role==='kitchen'){const d=document.getElementById('k-date');if(d)d.value=document.getElementById('global-date').value;if(window.refreshKitchen)window.refreshKitchen();}
   else if(currentUserData.role==='administrator'){loadAdminDashboard();}
   else if(currentUserData.role==='student'){loadStudentDashboard();}
   else{loadParentDashboard();}
@@ -614,6 +615,7 @@ function initUserSession(){
   document.getElementById('calendar-block').style.display='block';updateProfileBar();
   const r=currentUserData.role;
   if(r==='director'){document.getElementById('director-screen').style.display='block';document.getElementById('teacher-class-selector-box').style.display='none';loadTeachersListForDirector();loadDirectorTeacherSkillsList();handleDateChange();loadDrafts();if(window.loadBellCoverage)window.loadBellCoverage();}
+  else if(r==='kitchen'){document.getElementById('kitchen-screen').style.display='block';document.getElementById('teacher-class-selector-box').style.display='none';if(window.refreshKitchen){const d=document.getElementById('k-date');if(d&&!d.value)d.value=document.getElementById('global-date').value;window.refreshKitchen();}}
   else if(r==='administrator'){document.getElementById('admin-screen').style.display='block';document.getElementById('teacher-class-selector-box').style.display='none';handleDateChange();}
   else if(r==='teacher'||r==='class_teacher'||r==='art_school_teacher'||r==='music_teacher'){
     document.getElementById('teacher-screen').style.display='block';document.getElementById('teacher-class-selector-box').style.display='block';
@@ -673,7 +675,7 @@ export const AUDIT_LABELS={
   homework:'📚 Домашнє завдання', behavior:'🤝 Оцінка поведінки',
   student_add:'👨‍🎓 Учня додано', student_rename:'✏️ Учня перейменовано',
   student_del:'🗑 Учня прибрано', student_transfer:'↔️ Учня переведено',
-  card_edit:'📋 Картку учня змінено', data_export:'📦 Вивантаження даних дитини', staff_absent:'🧑‍🏫 Відсутність вчителя', consent_create:'✍️ Запит на згоду', quick_journal:'⚡ Швидкий журнал', broadcast:'✉️ Повідомлення класу', substitute:'🔄 Призначено заміну', semester_grade:'🎓 Підсумкові оцінки',
+  card_edit:'📋 Картку учня змінено', data_export:'📦 Вивантаження даних дитини', staff_absent:'🧑‍🏫 Відсутність вчителя', consent_create:'✍️ Запит на згоду', quick_journal:'⚡ Швидкий журнал', menu:'🍽️ Меню оновлено', broadcast:'✉️ Повідомлення класу', substitute:'🔄 Призначено заміну', semester_grade:'🎓 Підсумкові оцінки',
   student_login:'🔑 Вхід учня створено', student_email:'✉️ Email учня змінено',
   student_login_del:'🔒 Вхід учня прибрано',
   parent_link:'🔗 Батьків прив\'язано', parent_unlink:'🔓 Батьків відв\'язано',
@@ -711,7 +713,7 @@ window.logAction=logAction;
 // НАЛАШТУВАННЯ (один раз, у Firebase Console):
 //   Project settings → Cloud Messaging → Web Push certificates →
 //   Generate key pair → скопіювати ключ у VAPID_KEY нижче.
-const VAPID_KEY='BAifnPl3VcvDFpYuE7D2HAyfCzczsxAq3ktk72MgK6a4MY03Krvu4JI6k8pYOrasLdhwW0lLEAqDWs6iLGYEaCo';
+const VAPID_KEY='ЗАМІНИТИ_НА_КЛЮЧ_З_FIREBASE_CONSOLE';
 let swRegistration=null;
 // Реєструємо Service Worker одразу: без нього не працюють ані push,
 // ані встановлення застосунку на телефон. Раніше він не реєструвався
@@ -1023,6 +1025,9 @@ export const CARD_GROUPS=[
      ph:'Іваненко Оксана (мати) +48 600 000 000\nІваненко Сергій (батько) +48 601 000 000',area:true},
     {k:'pickupBan',label:'Кому забирати ЗАБОРОНЕНО',ph:'якщо є судові обмеження',area:true},
     {k:'emergency',label:'Екстрений контакт',ph:"ім'я, ким доводиться, телефон",area:true}
+  ]},
+  {title:'Харчування',fields:[
+    {k:'meals',label:'Чи харчується в школі',ph:'залиште порожнім = так; впишіть «no», якщо ні'}
   ]},
   {title:'Інше',fields:[{k:'notes',label:'Примітки',area:true}]}
 ];
