@@ -667,6 +667,8 @@ export const AUDIT_LABELS={
   homework:'📚 Домашнє завдання', behavior:'🤝 Оцінка поведінки',
   student_add:'👨‍🎓 Учня додано', student_rename:'✏️ Учня перейменовано',
   student_del:'🗑 Учня прибрано', student_transfer:'↔️ Учня переведено',
+  student_login:'🔑 Вхід учня створено', student_email:'✉️ Email учня змінено',
+  student_login_del:'🔒 Вхід учня прибрано',
   parent_link:'🔗 Батьків прив\'язано', parent_unlink:'🔓 Батьків відв\'язано',
   parent_edit:'👪 Контакти батьків', parent_email:'✉️ Email батьків змінено',
   staff_grant:'🛡️ Доступ співробітнику', staff_remove:'🗑 Доступ відкликано',
@@ -877,10 +879,11 @@ export async function renderParentsBlock(containerId,cls){
   if(!cls){box.innerHTML='<p class="empty-msg">Оберіть клас.</p>';return;}
   box.innerHTML='<p class="empty-msg">Завантаження...</p>';
   try{
-    const [stSnap,plSnap,usersSnap]=await Promise.all([
+    const [stSnap,plSnap,usersSnap,slSnap]=await Promise.all([
       get(child(ref(db),`students_list/${cls}`)),
       get(child(ref(db),'parent_links')),
-      get(child(ref(db),'users'))
+      get(child(ref(db),'users')),
+      get(child(ref(db),'student_links'))
     ]);
     const students=stSnap.exists()?Object.values(stSnap.val()).sort((a,b)=>String(a).localeCompare(String(b),'uk')):[];
     if(students.length===0){box.innerHTML='<p class="empty-msg">У цьому класі ще немає учнів.</p>';return;}
@@ -910,14 +913,26 @@ export async function renderParentsBlock(containerId,cls){
     // прямо звідси — окремий «список учнів» більше не потрібен.
     const keyByName={};
     if(stSnap.exists()){const d=stSnap.val();for(const k in d)keyByName[d[k]]=k;}
+    // Власний вхід учня: student_links ключується його поштою, тож
+    // перевертаємо в «ім'я → email», щоб показати, у кого вхід є, а в кого ні
+    const loginByStudent={};
+    if(slSnap.exists()){
+      const sl=slSnap.val();
+      for(const se in sl){
+        const v=sl[se];
+        if(v&&v.class===cls&&v.studentName)loginByStudent[v.studentName]=se.replace(/_/g,'.');
+      }
+    }
     students.forEach(st=>{
       const list=byChild[st]||[];
       const sk=keyByName[st]||'';
       html+=`<div class="po-row" id="ds-row-${escHtml(sk)}">
         <div class="po-child">
           <span class="po-child-name">${escHtml(st)}</span>
+          <span class="po-login ${loginByStudent[st]?'':'none'}">🔑 ${loginByStudent[st]?escHtml(loginByStudent[st]):'входу немає'}</span>
           <span class="po-child-acts">
             <button class="po-edit" title="Змінити ПІБ учня" onclick="editStudentName('${escJs(cls)}','${escJs(sk)}','${escJs(st)}')">✏️</button>
+            <button class="po-edit" title="Вхід учня (email)" onclick="openStudentLogin('${escJs(cls)}','${escJs(st)}','${escJs(loginByStudent[st]||'')}')">🔑</button>
             <button class="po-edit po-del" title="Прибрати зі списку" onclick="removeStudent('${escJs(cls)}','${escJs(sk)}','${escJs(st)}')">🗑</button>
           </span>
         </div>
@@ -960,6 +975,54 @@ export function refreshRoster(cls){
   }
 }
 window.refreshRoster=refreshRoster;
+// ══════════ ВХІД УЧНЯ (власний email) ══════════
+// Раніше пошту учня можна було вказати ЛИШЕ під час створення. Якщо тоді її
+// не ввели — додати чи змінити було ніде, і в списку не було видно, у кого
+// взагалі є доступ. Тепер це керується звідси.
+let studentLoginTarget={cls:'',name:'',oldEmail:''};
+window.openStudentLogin=function(cls,name,oldEmail){
+  studentLoginTarget={cls,name,oldEmail:oldEmail||''};
+  document.getElementById('sl-student').textContent=name;
+  document.getElementById('sl-email').value=oldEmail||'';
+  document.getElementById('sl-remove').style.display=oldEmail?'block':'none';
+  document.getElementById('student-login-modal').style.display='flex';
+  setTimeout(()=>document.getElementById('sl-email').focus(),60);
+};
+window.closeStudentLogin=function(){document.getElementById('student-login-modal').style.display='none';};
+window.saveStudentLogin=async function(){
+  const {cls,name,oldEmail}=studentLoginTarget;
+  const raw=document.getElementById('sl-email').value.trim().toLowerCase();
+  if(!raw)return alert('Введіть email або натисніть «Прибрати вхід».');
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(raw))return alert('Схоже, це не email.');
+  if(raw===oldEmail)return window.closeStudentLogin();
+  const newSafe=raw.replace(/\./g,'_');
+  try{
+    const busy=await get(child(ref(db),`student_links/${newSafe}`));
+    if(busy.exists()){
+      const v=busy.val();
+      return alert(`Ця адреса вже прив'язана до учня «${v.studentName}». Оберіть іншу.`);
+    }
+    await set(ref(db,`student_links/${newSafe}`),{studentName:name,class:cls});
+    // Стару прив'язку прибираємо, інакше учень зможе заходити з обох адрес
+    if(oldEmail)await remove(ref(db,`student_links/${oldEmail.replace(/\./g,'_')}`));
+    logAction(oldEmail?'student_email':'student_login',{cls,target:name,value:raw,from:oldEmail||''});
+    showToast(oldEmail?`✉️ Вхід змінено на ${raw}`:`🔑 Вхід створено: ${raw}`);
+    window.closeStudentLogin();
+    refreshRoster(cls);
+  }catch(e){alert('Помилка: '+e.message);}
+};
+window.removeStudentLogin=async function(){
+  const {cls,name,oldEmail}=studentLoginTarget;
+  if(!oldEmail)return;
+  if(!confirm(`Прибрати вхід для ${name}?\n\nУчень більше не зможе заходити у портал самостійно.\nОцінки та всі його дані залишаться недоторканими,\nбатьки бачитимуть їх як і раніше.\n\nПродовжити?`))return;
+  try{
+    await remove(ref(db,`student_links/${oldEmail.replace(/\./g,'_')}`));
+    logAction('student_login_del',{cls,target:name,value:oldEmail});
+    showToast('🔒 Вхід прибрано');
+    window.closeStudentLogin();
+    refreshRoster(cls);
+  }catch(e){alert('Помилка: '+e.message);}
+};
 // Хто саме зараз відкрив редактор і куди повертатися після збереження
 let parentEditorTarget={safeEmail:'',containerId:'',cls:''};
 window.openParentEditor=async function(safeEmail){
