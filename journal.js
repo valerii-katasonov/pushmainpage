@@ -4,7 +4,7 @@
 // schedule and director's drafts.
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, getActiveClass, currentUserData, displayGrade, gradeClass6, calculateStudentWeightedAvg, getClassNum, GRADE_WEIGHTS, dayKeys, dayNamesUA, showToast, localDateString, summarizeAttendanceSlots, gradeTypesCache, escJs, escHtml } from './common.js';
+import { db, getActiveClass, currentUserData, displayGrade, gradeClass6, calculateStudentWeightedAvg, getClassNum, GRADE_WEIGHTS, dayKeys, dayNamesUA, showToast, localDateString, summarizeAttendanceSlots, gradeTypesCache, escJs, escHtml, notifyEvent, logAction } from './common.js';
 
 // globalTeacherAccess is reassigned only in this file (openVisualMatrixModal)
 // and read from common.js (window.getDefaultTeacher) — plain export/import.
@@ -87,11 +87,16 @@ window.confirmGrade=async function(){
   await set(ref(db,`grades/${gepCls}/${gepYMonth}/${gepSubj}/${gepDate}/${gepStudent}`),val);
   await set(ref(db,`grade_types/${gepCls}/${gepYMonth}/${gepSubj}/${gepDate}/${gepStudent}`),gepType);
   closeGradeEditor();renderJournalTable();showToast(`✅ ${gepStudent}: ${displayGrade(val,gepCls)} (${gepType})`);
+  // Сповіщаємо батьків/учня. Оцінку показуємо у вигляді, який бачить сім'я
+  // (для 1-5 класів — літерою, а не цифрою).
+  notifyEvent('grade',{class:gepCls,studentName:gepStudent,subject:gepSubj,value:displayGrade(val,gepCls)});
+  logAction('grade_set',{cls:gepCls,target:gepStudent,subject:gepSubj,date:gepDate,value:val,gtype:gepType});
 };
 window.deleteGrade=async function(){
   await set(ref(db,`grades/${gepCls}/${gepYMonth}/${gepSubj}/${gepDate}/${gepStudent}`),null);
   await set(ref(db,`grade_types/${gepCls}/${gepYMonth}/${gepSubj}/${gepDate}/${gepStudent}`),null);
   closeGradeEditor();renderJournalTable();showToast('🗑️ Оцінку видалено');
+  logAction('grade_del',{cls:gepCls,target:gepStudent,subject:gepSubj,date:gepDate});
 };
 document.getElementById('gep-value').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();window.confirmGrade();}if(e.key==='Escape'){e.preventDefault();window.closeGradeEditor();}});
 document.addEventListener('click',function(e){const p=document.getElementById('grade-editor-popup');if(p.style.display==='block'&&!p.contains(e.target)&&!e.target.closest('.g-cell'))closeGradeEditor();});
