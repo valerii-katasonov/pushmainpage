@@ -115,6 +115,162 @@ window.generateHomeworkAI=async function(){
   }catch(e){aiMsg('ai-hw-msg','Не вдалося згенерувати: '+e.message,true);}
   finally{btn.disabled=false;btn.textContent=label;}
 };
+// ══════════════════════════════════════════════════════════════════
+//  ШВИДКИЙ ЖУРНАЛ НА УРОЦІ
+// ══════════════════════════════════════════════════════════════════
+// Повний журнал зручний за комп'ютером, але на уроці вчитель стоїть із
+// телефоном. Тут один екран: увесь клас списком, у кожного — присутність
+// і поле оцінки. Зберігається все разом, одним натисканням.
+window.openQuickJournal=async function(){
+  const cls=getActiveClass();
+  const subj=document.getElementById('t-subject').value;
+  const date=document.getElementById('global-date').value;
+  if(!subj)return showToast('⚠️ Спочатку оберіть предмет');
+  document.getElementById('qj-subject').textContent=subj;
+  document.getElementById('qj-date').textContent=date.split('-').reverse().join('.');
+  const box=document.getElementById('qj-body');
+  box.innerHTML='<p class="empty-msg">Завантаження...</p>';
+  document.getElementById('quick-journal-modal').style.display='flex';
+  try{
+    const ym=date.slice(0,7);
+    const [stSnap,gSnap,tSnap,aSnap,cardSnap]=await Promise.all([
+      get(child(ref(db),`students_list/${cls}`)),
+      get(child(ref(db),`grades/${cls}/${ym}/${subj}/${date}`)),
+      get(child(ref(db),`grade_types/${cls}/${ym}/${subj}/${date}`)),
+      get(child(ref(db),`attendance/${cls}/${date}`)),
+      get(child(ref(db),`student_cards/${cls}`))
+    ]);
+    const students=stSnap.exists()?Object.values(stSnap.val()).sort((a,b)=>String(a).localeCompare(String(b),'uk')):[];
+    if(students.length===0){box.innerHTML='<p class="empty-msg">У класі немає учнів.</p>';return;}
+    const g=gSnap.exists()?gSnap.val():{}, t=tSnap.exists()?tSnap.val():{}, a=aSnap.exists()?aSnap.val():{};
+    // Алергії показуємо і тут: на уроці це найпотрібніше місце
+    const allerg={};
+    if(cardSnap.exists()&&stSnap.exists()){
+      const cards=cardSnap.val(), names=stSnap.val();
+      for(const k in names)if(cards[k]&&cards[k].allergies)allerg[names[k]]=cards[k].allergies;
+    }
+    const slotKey=document.getElementById('t-mark-absent-lesson')?.value||'all';
+    box.innerHTML=students.map((st,i)=>{
+      // Поточний статус: беремо будь-яку відмітку на цей день
+      let status='';
+      const slots=a[st]||{};
+      for(const sk in slots){if(slots[sk]?.status){status=slots[sk].status;break;}}
+      return `<div class="qj-row" data-name="${escHtml(st)}">
+        <div class="qj-n">${i+1}</div>
+        <div class="qj-name">${escHtml(st)}${allerg[st]?` <span class="po-allergy" title="${escHtml(allerg[st])}">⚠️</span>`:''}</div>
+        <div class="qj-att">
+          <button type="button" class="qj-b ok${status===''?' on':''}"   onclick="qjSet(this,'')">✓</button>
+          <button type="button" class="qj-b lt${status==='late'?' on':''}" onclick="qjSet(this,'late')">З</button>
+          <button type="button" class="qj-b ab${status==='absent'?' on':''}" onclick="qjSet(this,'absent')">Н</button>
+        </div>
+        <input type="text" class="qj-g" maxlength="1" value="${escHtml(g[st]||'')}"
+               data-orig="${escHtml(g[st]||'')}" placeholder="—">
+      </div>`;
+    }).join('');
+    // Тип оцінки — один на весь урок, як зазвичай і буває
+    const ts=document.getElementById('qj-type');
+    const codes=Object.keys(gradeTypesCache).length?Object.keys(gradeTypesCache):['П','У','ДЗ','СР','К'];
+    ts.innerHTML=codes.map(c=>`<option value="${escHtml(c)}">${escHtml((gradeTypesCache[c]&&gradeTypesCache[c].label)||c)}</option>`).join('');
+    const firstType=Object.values(t)[0];
+    if(firstType&&codes.includes(firstType))ts.value=firstType;
+    box.dataset.slot=slotKey;
+  }catch(e){box.innerHTML=`<p style="color:red;font-size:.8rem;">Помилка: ${escHtml(e.message)}</p>`;}
+};
+window.qjSet=function(btn,val){
+  const row=btn.closest('.qj-row');
+  row.querySelectorAll('.qj-b').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  row.dataset.status=val;
+};
+window.closeQuickJournal=function(){document.getElementById('quick-journal-modal').style.display='none';};
+window.saveQuickJournal=async function(){
+  const cls=getActiveClass();
+  const subj=document.getElementById('t-subject').value;
+  const date=document.getElementById('global-date').value;
+  const ym=date.slice(0,7);
+  const gtype=document.getElementById('qj-type').value;
+  const slotKey=document.getElementById('qj-body').dataset.slot||'all';
+  const rows=Array.from(document.querySelectorAll('.qj-row'));
+  const bad=rows.find(r=>{const v=r.querySelector('.qj-g').value.trim();return v&&!/^[1-6]$/.test(v);});
+  if(bad)return alert('Оцінки мають бути від 1 до 6.');
+  const btn=document.getElementById('btn-qj-save');
+  btn.disabled=true;btn.textContent='⏳ Збереження...';
+  try{
+    const gPatch={},tPatch={};let nG=0,nA=0;
+    for(const r of rows){
+      const name=r.dataset.name;
+      const v=r.querySelector('.qj-g').value.trim();
+      const orig=r.querySelector('.qj-g').dataset.orig||'';
+      if(v!==orig){
+        gPatch[name]=v||null;
+        tPatch[name]=v?gtype:null;
+        if(v){nG++;notifyEvent('grade',{class:cls,studentName:name,subject:subj,value:displayGrade(v,cls)});}
+      }
+      // Відвідуваність пишемо лише там, де вчитель щось позначив
+      const status=r.dataset.status;
+      if(status===undefined)continue;
+      if(status===''){await remove(ref(db,`attendance/${cls}/${date}/${name}/${slotKey}`));}
+      else{
+        await set(ref(db,`attendance/${cls}/${date}/${name}/${slotKey}`),
+          {status,reason:status==='late'?'запізнення':'Відмічено вчителем',markedBy:'teacher'});
+        nA++;notifyEvent('absence',{class:cls,studentName:name,subject:subj});
+      }
+    }
+    if(Object.keys(gPatch).length){
+      await update(ref(db,`grades/${cls}/${ym}/${subj}/${date}`),gPatch);
+      await update(ref(db,`grade_types/${cls}/${ym}/${subj}/${date}`),tPatch);
+    }
+    logAction('quick_journal',{cls,subject:subj,date,value:`оцінок: ${nG}, відміток: ${nA}`});
+    showToast(`✅ Збережено — оцінок ${nG}, відміток ${nA}`);
+    window.closeQuickJournal();
+  }catch(e){alert('Помилка: '+e.message);}
+  finally{btn.disabled=false;btn.textContent='💾 Зберегти все';}
+};
+// ══════════════════════════════════════════════════════════════════
+//  ПОВІДОМЛЕННЯ ВСЬОМУ КЛАСУ
+// ══════════════════════════════════════════════════════════════════
+// Чат був лише один на один, і «завтра принести альбом» доводилося
+// копіювати двадцять разів. Тут одне повідомлення розходиться всім
+// батькам класу — кожному в його особистий чат, а не в спільну групу:
+// так батьки не бачать контактів одне одного.
+window.openClassBroadcast=function(){
+  document.getElementById('cb-class').textContent=getActiveClass().replace('class_','')+' клас';
+  document.getElementById('cb-text').value='';
+  document.getElementById('cb-status').textContent='';
+  document.getElementById('class-broadcast-modal').style.display='flex';
+};
+window.closeClassBroadcast=function(){document.getElementById('class-broadcast-modal').style.display='none';};
+window.sendClassBroadcast=async function(){
+  const cls=getActiveClass();
+  const text=document.getElementById('cb-text').value.trim();
+  if(!text)return alert('Введіть текст повідомлення.');
+  const btn=document.getElementById('btn-cb-send');
+  btn.disabled=true;btn.textContent='⏳ Надсилаю...';
+  try{
+    const plSnap=await get(child(ref(db),'parent_links'));
+    const targets=[];
+    if(plSnap.exists()){
+      const pl=plSnap.val();
+      for(const se in pl){
+        if(normalizeChildren(pl[se]).some(k=>k.class===cls))targets.push(se);
+      }
+    }
+    if(targets.length===0){alert('У цьому класі немає прив\'язаних батьків.');return;}
+    if(!confirm(`Надіслати повідомлення ${targets.length} отримувачам?\n\nКожен отримає його в особистий чат.`))return;
+    const mySafe=(currentUserData?.email||'').replace(/\./g,'_');
+    const myName=((currentUserData?.firstName||'')+' '+(currentUserData?.lastName||'')).trim()||currentUserData?.email||'Вчитель';
+    for(const se of targets){
+      const chatId=[mySafe,se].sort().join('___');
+      await push(ref(db,`chats/${chatId}/messages`),
+        {from:mySafe,fromName:`${myName} (Вчитель)`,text,time:Date.now(),read:false});
+    }
+    logAction('broadcast',{cls,value:`${targets.length} отримувачів`});
+    document.getElementById('cb-status').textContent=`✅ Надіслано ${targets.length} отримувачам`;
+    document.getElementById('cb-text').value='';
+    showToast(`✉️ Надіслано: ${targets.length}`);
+  }catch(e){alert('Помилка: '+e.message);}
+  finally{btn.disabled=false;btn.textContent='✉️ Надіслати всім';}
+};
 // ══════════ УЧНІ БЕЗ ОЦІНОК ══════════
 // Тихий учень, який не тягне руку, легко випадає з уваги на місяць —
 // і це спливає аж на батьківських зборах. Показуємо, кого давно не оцінювали
