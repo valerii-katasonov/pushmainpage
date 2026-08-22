@@ -1080,6 +1080,9 @@ window.closeStudentCard=function(){document.getElementById('student-card-modal')
 window.openMyChildCard=async function(){
   const cls=currentUserData?.class, name=currentUserData?.studentName;
   if(!cls||!name)return showToast('⚠️ Дитина не визначена');
+  // Картку відкривають із вікна профілю. Закриваємо його, інакше воно
+  // лишається поверх: у DOM профіль іде пізніше, а z-index у модалок однаковий.
+  window.closeProfileModal();
   const snap=await get(child(ref(db),`students_list/${cls}`));
   let key='';
   if(snap.exists()){const d=snap.val();for(const k in d)if(d[k]===name){key=k;break;}}
