@@ -271,6 +271,7 @@ export function loadParentDashboard(){
   loadTextbooksForParent();
   loadAiDayContext('p');
   renderBirthdays('p-birthdays',cls,date,currentUserData.studentName);
+  renderFinalGrades('p-final-grades',cls,currentUserData.studentName);
   // Grades + comments + behavior
   const ym=date.substring(0,7);
   Promise.all([
@@ -306,6 +307,51 @@ export function loadParentDashboard(){
     else bEl.innerHTML='<p class="empty-msg" style="font-size:.82rem;">Оцінок поведінки немає.</p>';
   });
 }
+// ══════════ ПІДСУМКОВІ ОЦІНКИ У БАТЬКІВ/УЧНЯ ══════════
+// Показуємо лише виставлені вчителем підсумкові — жодних «попередніх»
+// розрахунків: сім'я не має бачити прогноз, який учитель ще не підтвердив.
+export async function renderFinalGrades(containerId,cls,studentName){
+  const box=document.getElementById(containerId);
+  if(!box)return;
+  try{
+    const [semSnap,gradesSnap]=await Promise.all([
+      get(child(ref(db),`academic_year/${ACADEMIC_YEAR_ID}/semesters`)),
+      get(child(ref(db),`semester_grades/${cls}`))
+    ]);
+    if(!gradesSnap.exists()){box.style.display='none';return;}
+    const sems=semSnap.exists()?semSnap.val():{};
+    const all=gradesSnap.val();
+    let html='';
+    for(const semId in all){
+      const rows=[];
+      for(const subj in all[semId]){
+        const rec=all[semId][subj]&&all[semId][subj][studentName];
+        if(rec&&rec.value)rows.push({subj,v:rec.value});
+      }
+      if(rows.length===0)continue;
+      rows.sort((a,b)=>a.subj.localeCompare(b.subj,'uk'));
+      html+=`<div class="fin-title">🎓 ${escHtml(sems[semId]?.name||semId)}</div>`+
+        rows.map(r=>`<div class="fin-row">
+          <span>${escHtml(r.subj)}</span>
+          <span class="g-cell ${gradeClass6(r.v)}" style="padding:3px 9px;">${escHtml(displayGrade(r.v,cls))}</span>
+        </div>`).join('');
+    }
+    if(!html){box.style.display='none';return;}
+    box.style.display='block';box.innerHTML=html;
+  }catch(e){box.style.display='none';}
+}
+// Табель активної дитини (у батьків) або власний (в учня)
+window.downloadMyReportCard=function(){
+  if(!currentUserData?.class||!currentUserData?.studentName)
+    return showToast('⚠️ Дитина не визначена');
+  window.downloadReportCard(currentUserData.class,currentUserData.studentName);
+};
+// Право батьків отримати всі дані про свою дитину (GDPR)
+window.exportMyChildData=function(){
+  if(!currentUserData?.class||!currentUserData?.studentName)
+    return showToast('⚠️ Дитина не визначена');
+  window.exportChildData(currentUserData.class,currentUserData.studentName);
+};
 // ══════════ AI У КАБІНЕТАХ БАТЬКІВ ТА УЧНЯ ══════════
 // У сервіс іде ЛИШЕ предмет, тема уроку, текст ДЗ і номер класу — жодних
 // імен, оцінок чи інших персональних даних.
@@ -408,6 +454,7 @@ export function loadStudentDashboard(){
   loadTextbooksForParent('student');
   loadAiDayContext('s');
   renderBirthdays('s-birthdays',cls,date,currentUserData.studentName);
+  renderFinalGrades('s-final-grades',cls,currentUserData.studentName);
   const ym=date.substring(0,7);
   Promise.all([get(child(ref(db),`comments/${cls}/${date}`)),get(child(ref(db),`grades/${cls}/${ym}`)),get(child(ref(db),`grade_types/${cls}/${ym}`)),get(child(ref(db),`behavior_grades/${cls}/${ym}`))]).then(([cmS,grS,gtS,bhS])=>{
     const list=document.getElementById('s-daily-comments-list');list.innerHTML=renderGradeFormulaInfo();let hasItems=false;
