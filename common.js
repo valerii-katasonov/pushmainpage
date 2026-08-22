@@ -417,7 +417,7 @@ window.openProfileModal=async function(){
     const snap=await get(ref(db,`teacher_skills/${se}/subjects`));
     mySkillsTemp=snap.exists()?Object.values(snap.val()):[];renderMySkillsTags();
   }
-  renderPushButton();
+  renderInstallBlock();renderPushButton();
   // Батьки заповнюють свої контакти самі — школі менше ручної роботи,
   // а дані свіжіші. Прізвище/ім'я показуємо тут же, щоб усе було в одному
   // місці, тому окремі поля зверху для батьків ховаємо.
@@ -661,7 +661,7 @@ function initUserSession(){
 // НАЛАШТУВАННЯ (один раз, у Firebase Console):
 //   Project settings → Cloud Messaging → Web Push certificates →
 //   Generate key pair → скопіювати ключ у VAPID_KEY нижче.
-const VAPID_KEY='BAifnPl3VcvDFpYuE7D2HAyfCzczsxAq3ktk72MgK6a4MY03Krvu4JI6k8pYOrasLdhwW0lLEAqDWs6iLGYEaCo';
+const VAPID_KEY='ЗАМІНИТИ_НА_КЛЮЧ_З_FIREBASE_CONSOLE';
 let swRegistration=null;
 // Реєструємо Service Worker одразу: без нього не працюють ані push,
 // ані встановлення застосунку на телефон. Раніше він не реєструвався
@@ -673,6 +673,49 @@ if('serviceWorker' in navigator){
       .catch(e=>console.warn('SW не зареєстровано:',e.message));
   });
 }
+// ── Встановлення застосунку (PWA) ──
+// Більшість батьків не знає, що сайт можна «встановити», а на iPhone без
+// установки сповіщення взагалі не працюють. Тому показуємо кнопку в порталі.
+let deferredInstall=null;
+export const isStandalone=()=>window.matchMedia('(display-mode: standalone)').matches||window.navigator.standalone===true;
+export const isIOS=()=>/iphone|ipad|ipod/i.test(navigator.userAgent);
+// Chrome/Edge/Android дають цю подію — перехоплюємо, щоб показати свою кнопку
+window.addEventListener('beforeinstallprompt',(e)=>{
+  e.preventDefault();deferredInstall=e;renderInstallBlock();
+});
+window.addEventListener('appinstalled',()=>{deferredInstall=null;renderInstallBlock();renderPushButton();});
+window.installApp=async function(){
+  if(!deferredInstall)return;
+  deferredInstall.prompt();
+  await deferredInstall.userChoice;
+  deferredInstall=null;renderInstallBlock();
+};
+export function renderInstallBlock(){
+  const box=document.getElementById('install-block');
+  if(!box)return;
+  if(isStandalone()){box.style.display='none';return;}
+  if(deferredInstall){
+    box.style.display='block';
+    box.innerHTML=`<div class="push-row">
+      <span class="push-label">📲 Встановити застосунок на пристрій</span>
+      <button type="button" class="push-btn" onclick="installApp()">Встановити</button>
+    </div>
+    <p class="push-hint">Портал відкриватиметься як звичайний застосунок, з іконкою на екрані.</p>`;
+    return;
+  }
+  if(isIOS()){
+    // На iPhone програмної установки немає — лише інструкція
+    box.style.display='block';
+    box.innerHTML=`<div class="push-label" style="margin-bottom:5px;">📲 Встановити на iPhone</div>
+      <p class="push-hint" style="flex:auto;">
+        Внизу екрана натисніть <b>Поділитися</b> ⬆️ → <b>На екран «Домів»</b>.<br>
+        Без цього iPhone не показуватиме сповіщення від порталу.
+      </p>`;
+    return;
+  }
+  box.style.display='none';
+}
+window.renderInstallBlock=renderInstallBlock;
 export async function pushSupported(){
   try{
     return 'Notification' in window && 'serviceWorker' in navigator && await messagingSupported();
@@ -738,7 +781,18 @@ export async function renderPushButton(){
     on:['🔔 Сповіщення увімкнено','disablePush()','Вимкнути'],
     off:['🔕 Сповіщення вимкнено','enablePush()','Увімкнути']
   };
-  if(st==='unsupported'){box.style.display='none';return;}
+  if(st==='unsupported'){
+    // На iPhone сповіщення з'являються лише після встановлення на екран
+    // «Домів». Мовчки ховати кнопку не можна — людина не зрозуміє, чому в
+    // неї немає того, що є в інших.
+    if(isIOS()&&!isStandalone()){
+      box.style.display='block';
+      box.innerHTML=`<div class="push-row"><span class="push-label">🔔 Сповіщення</span></div>
+        <p class="push-hint">Щоб отримувати сповіщення на iPhone, спочатку встановіть застосунок (інструкція вище).</p>`;
+      return;
+    }
+    box.style.display='none';return;
+  }
   const [label,action,btn]=map[st];
   box.style.display='block';
   box.innerHTML=`<div class="push-row">
