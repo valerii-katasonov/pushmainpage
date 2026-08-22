@@ -344,6 +344,17 @@
     .po-edit:hover{background:#f39c12;}
     #pe-fields label{margin-top:11px;font-size:.79rem;color:#666;}
     #pe-fields input{margin-top:3px;}
+    /* ── Журнал дій ── */
+    .audit-row{display:grid;grid-template-columns:74px 1fr;gap:2px 9px;padding:7px 9px;background:#fff;border:1px solid #e4e8ea;border-radius:8px;margin-bottom:4px;font-size:.79rem;}
+    .audit-time{color:#90a4ae;font-size:.72rem;white-space:nowrap;}
+    .audit-act{font-weight:700;color:#37474f;}
+    .audit-det{grid-column:2;color:#546e7a;word-break:break-word;}
+    .audit-who{grid-column:2;color:#90a4ae;font-size:.72rem;}
+    @media(min-width:900px){
+      .audit-row{grid-template-columns:78px 210px 1fr 150px;align-items:baseline;}
+      .audit-det,.audit-who{grid-column:auto;}
+      .audit-who{text-align:right;}
+    }
     /* ── Перемикач сповіщень ── */
     .push-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
     .push-label{flex:1;font-size:.85rem;font-weight:600;color:#555;}
@@ -1095,6 +1106,23 @@
     </section>
 
     <section class="screen-section">
+      <!-- Журнал дій: хто, що і коли змінив -->
+      <details style="margin-bottom:12px;background:#eceff1;padding:14px;border-radius:12px;border:1px solid #b0bec5;" ontoggle="if(this.open){fillAuditActions();loadAuditLog();}">
+        <summary style="font-weight:700;cursor:pointer;color:#37474f;font-size:.95rem;">🕓 Журнал дій</summary>
+        <div style="margin-top:13px;">
+          <p style="font-size:.78rem;color:#666;margin:0 0 8px 0;">
+            Хто і коли змінював оцінки, відмітки, списки. Записи зберігаються помісячно.
+          </p>
+          <div style="display:flex;gap:7px;flex-wrap:wrap;">
+            <input type="month" id="audit-month" onchange="loadAuditLog()" style="flex:1;min-width:130px;margin-top:0;">
+            <select id="audit-action" onchange="loadAuditLog()" style="flex:1.4;min-width:150px;margin-top:0;">
+              <option value="">— усі дії —</option>
+            </select>
+          </div>
+          <input type="search" id="audit-search" placeholder="Пошук: учень, предмет, email..." oninput="loadAuditLog()" style="margin-top:6px;">
+          <div id="audit-list" style="margin-top:9px;max-height:52vh;overflow-y:auto;"><p class="empty-msg">Завантаження...</p></div>
+        </div>
+      </details>
       <!-- AI-чернетка оголошення для батьків -->
       <details style="margin-bottom:12px;background:#fff8e1;padding:14px;border-radius:12px;border:1px solid #ffe0a3;">
         <summary style="font-weight:700;cursor:pointer;color:#8a6d1f;font-size:.95rem;">📣 Оголошення для батьків (чернетка)</summary>
