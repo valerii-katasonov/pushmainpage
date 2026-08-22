@@ -673,7 +673,7 @@ export const AUDIT_LABELS={
   homework:'📚 Домашнє завдання', behavior:'🤝 Оцінка поведінки',
   student_add:'👨‍🎓 Учня додано', student_rename:'✏️ Учня перейменовано',
   student_del:'🗑 Учня прибрано', student_transfer:'↔️ Учня переведено',
-  card_edit:'📋 Картку учня змінено', data_export:'📦 Вивантаження даних дитини', semester_grade:'🎓 Підсумкові оцінки',
+  card_edit:'📋 Картку учня змінено', data_export:'📦 Вивантаження даних дитини', staff_absent:'🧑‍🏫 Відсутність вчителя', consent_create:'✍️ Запит на згоду', quick_journal:'⚡ Швидкий журнал', broadcast:'✉️ Повідомлення класу', substitute:'🔄 Призначено заміну', semester_grade:'🎓 Підсумкові оцінки',
   student_login:'🔑 Вхід учня створено', student_email:'✉️ Email учня змінено',
   student_login_del:'🔒 Вхід учня прибрано',
   parent_link:'🔗 Батьків прив\'язано', parent_unlink:'🔓 Батьків відв\'язано',
@@ -1341,6 +1341,67 @@ window.exportChildData=async function(cls,studentName){
     a.click();URL.revokeObjectURL(a.href);
     logAction('data_export',{cls,target:studentName});
     showToast('📦 Дані вивантажено');
+  }catch(e){alert('Помилка: '+e.message);}
+};
+// ══════════════════════════════════════════════════════════════════
+//  ДРУК РОЗКЛАДУ
+// ══════════════════════════════════════════════════════════════════
+// Розклад регулярно вішають на стіну. Матриця на екрані для цього не
+// годиться, тому будуємо окрему чисту таблицю «урок × день» і друкуємо
+// лише її — решту сторінки ховає правило @media print.
+window.printClassSchedule=async function(cls){
+  cls=cls||getActiveClass();
+  if(!cls)return showToast('⚠️ Клас не визначено');
+  const holder=document.getElementById('print-area');
+  try{
+    const [schedSnap,bellSnap]=await Promise.all([
+      get(child(ref(db),`schedules/${cls}/lessons`)),
+      get(child(ref(db),`bell_schedules/${cls}`))
+    ]);
+    if(!schedSnap.exists())return showToast('⚠️ Розклад цього класу не заповнено');
+    const sched=schedSnap.val();
+    const bells=bellSnap.exists()?bellSnap.val():{};
+    const days=['Monday','Tuesday','Wednesday','Thursday','Friday'];
+    // Скільки рядків потрібно — за найдовшим днем
+    let maxRows=0;
+    days.forEach(d=>{if(Array.isArray(sched[d]))maxRows=Math.max(maxRows,sched[d].length);});
+    if(maxRows===0)return showToast('⚠️ У розкладі немає уроків');
+    const cell=(d,i)=>{
+      const slot=(sched[d]||[])[i];
+      const items=Array.isArray(slot)?slot:(slot&&slot.subject?[slot]:[]);
+      return items.map(l=>{
+        const sn=typeof l.subject==='string'?l.subject:(l.subject?.ua||'');
+        if(!sn)return '';
+        const isBreak=sn.toLowerCase().includes('перерва')||sn.toLowerCase().includes('обід');
+        return `<div class="${isBreak?'ps-break':''}">${escHtml(sn)}</div>`;
+      }).join('');
+    };
+    const bellFor=(i)=>{
+      const b=bells[i+1]||bells[String(i+1)];
+      return b&&b.start?`${escHtml(b.start)}–${escHtml(b.end||'')}`:'';
+    };
+    let rows='';
+    for(let i=0;i<maxRows;i++){
+      const filled=days.some(d=>cell(d,i).trim());
+      if(!filled)continue;
+      rows+=`<tr><td class="ps-num">${i+1}<div class="ps-time">${bellFor(i)}</div></td>`+
+        days.map(d=>`<td>${cell(d,i)}</td>`).join('')+'</tr>';
+    }
+    holder.innerHTML=`<div class="ps-sheet">
+      <div class="ps-head">
+        <div class="ps-title">Розклад уроків</div>
+        <div class="ps-cls">${escHtml(cls.replace('class_',''))} клас · ${escHtml(ACADEMIC_YEAR_ID_LOCAL)} н.р.</div>
+      </div>
+      <table class="ps-table">
+        <thead><tr><th>№</th>${days.map(d=>`<th>${escHtml(dayNamesUA[d])}</th>`).join('')}</tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div class="ps-foot">Push School Warsaw · роздруковано ${new Date().toLocaleDateString('uk-UA')}</div>
+    </div>`;
+    document.body.classList.add('printing');
+    window.print();
+    // Прибираємо після діалогу друку — інакше вміст лишиться у DOM
+    setTimeout(()=>{document.body.classList.remove('printing');holder.innerHTML='';},600);
   }catch(e){alert('Помилка: '+e.message);}
 };
 // ══════════ ВХІД УЧНЯ (власний email) ══════════
