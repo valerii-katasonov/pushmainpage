@@ -416,6 +416,28 @@ window.openProfileModal=async function(){
     const snap=await get(ref(db,`teacher_skills/${se}/subjects`));
     mySkillsTemp=snap.exists()?Object.values(snap.val()):[];renderMySkillsTags();
   }
+  // Батьки заповнюють свої контакти самі — школі менше ручної роботи,
+  // а дані свіжіші. Прізвище/ім'я показуємо тут же, щоб усе було в одному
+  // місці, тому окремі поля зверху для батьків ховаємо.
+  const isParent=currentUserData.role==='parent';
+  const box=document.getElementById('p-contacts-section');
+  if(box){
+    box.style.display=isParent?'block':'none';
+    const nameBlock=document.getElementById('profile-name-block');
+    if(nameBlock)nameBlock.style.display=isParent?'none':'block';
+    if(isParent){
+      const se=(currentUserData.email||'').replace(/\./g,'_');
+      const snap=await get(child(ref(db),`parent_links/${se}`));
+      const profile=getParentProfile(snap.exists()?snap.val():{});
+      // Якщо контактів ще немає — підставляємо ім'я з профілю порталу
+      if(!profile.firstName)profile.firstName=currentUserData.firstName||'';
+      if(!profile.lastName)profile.lastName=currentUserData.lastName||'';
+      document.getElementById('p-contacts-fields').innerHTML=PARENT_FIELDS.map(f=>`
+        <label for="pc-${f.k}" style="margin-top:9px;">${f.label}</label>
+        <input type="${f.type||'text'}" id="pc-${f.k}" value="${escHtml(profile[f.k])}" placeholder="${escHtml(f.ph)}">
+      `).join('');
+    }
+  }
 };
 window.closeProfileModal=function(){document.getElementById('profile-modal').style.display='none';};
 document.getElementById('profile-photo').addEventListener('change',function(e){if(e.target.files&&e.target.files[0]){const r=new FileReader();r.onload=function(e){document.getElementById('modal-avatar-preview').src=e.target.result;};r.readAsDataURL(e.target.files[0]);}});
@@ -427,8 +449,22 @@ window.saveProfile=async function(){
   let photoURL=currentUserData.photoURL||"https://cdn-icons-png.flaticon.com/512/149/149071.png";
   if(fileInput.files.length>0){const fd=new FormData();fd.append('file',fileInput.files[0]);fd.append('upload_preset',UPLOAD_PRESET);try{const rs=await fetch(CLOUDINARY_URL,{method:'POST',body:fd});const dt=await rs.json();photoURL=dt.secure_url;}catch(e){alert("Помилка фото!");btn.disabled=false;btn.innerText="💾 Зберегти";return;}}
   try{
-    await update(ref(db,`users/${auth.currentUser.uid}`),{firstName:fName,lastName:lName,photoURL});
-    currentUserData.firstName=fName;currentUserData.lastName=lName;currentUserData.photoURL=photoURL;
+    // Батьки редагують ПІБ у блоці контактів, тому беремо звідти
+    let finalFirst=fName, finalLast=lName;
+    const isParent=currentUserData.role==='parent';
+    if(isParent&&document.getElementById('pc-firstName')){
+      const profile={};
+      PARENT_FIELDS.forEach(f=>{
+        const el=document.getElementById('pc-'+f.k);
+        profile[f.k]=el?el.value.trim():'';
+      });
+      const se=(currentUserData.email||'').replace(/\./g,'_');
+      // update, а не set: у цьому ж вузлі лежать children
+      await update(ref(db,`parent_links/${se}`),{profile});
+      finalFirst=profile.firstName;finalLast=profile.lastName;
+    }
+    await update(ref(db,`users/${auth.currentUser.uid}`),{firstName:finalFirst,lastName:finalLast,photoURL});
+    currentUserData.firstName=finalFirst;currentUserData.lastName=finalLast;currentUserData.photoURL=photoURL;
     // Save skills
     const isTeacher=currentUserData.role==='teacher'||currentUserData.role==='art_school_teacher';
     if(isTeacher){const se=currentUserData.email?.replace(/\./g,'_');await set(ref(db,`teacher_skills/${se}/subjects`),mySkillsTemp);}
@@ -654,9 +690,22 @@ export async function renderParentsBlock(containerId,cls){
     let html=orphans.length
       ? `<div class="bell-missing">⚠️ Без прив'язаних батьків: ${escHtml(orphans.join(', '))}</div>`
       : `<div class="po-ok">✓ У всіх учнів є прив'язані контакти</div>`;
+    // Ключі учнів потрібні, щоб можна було перейменувати/прибрати учня
+    // прямо звідси — окремий «список учнів» більше не потрібен.
+    const keyByName={};
+    if(stSnap.exists()){const d=stSnap.val();for(const k in d)keyByName[d[k]]=k;}
     students.forEach(st=>{
       const list=byChild[st]||[];
-      html+=`<div class="po-row"><div class="po-child">${escHtml(st)}</div><div class="po-parents">`;
+      const sk=keyByName[st]||'';
+      html+=`<div class="po-row" id="ds-row-${escHtml(sk)}">
+        <div class="po-child">
+          <span class="po-child-name">${escHtml(st)}</span>
+          <span class="po-child-acts">
+            <button class="po-edit" title="Змінити ПІБ учня" onclick="editStudentName('${escJs(cls)}','${escJs(sk)}','${escJs(st)}')">✏️</button>
+            <button class="po-edit po-del" title="Прибрати зі списку" onclick="removeStudent('${escJs(cls)}','${escJs(sk)}','${escJs(st)}')">🗑</button>
+          </span>
+        </div>
+        <div class="po-parents">`;
       if(list.length===0)html+=`<span class="po-none">контактів немає</span>`;
       else list.forEach(p=>{
         const tg=telegramHandle(p.profile.telegram);
@@ -686,6 +735,15 @@ export async function renderParentsBlock(containerId,cls){
 // а не експорти модуля — тому дублюємо у window.
 window.renderParentsBlock=renderParentsBlock;
 window.getActiveClass=getActiveClass;
+// Список показується у двох кабінетах під різними id — оновлюємо той,
+// що зараз на екрані, щоб функції редагування не знали про це нічого.
+export function refreshRoster(cls){
+  for(const id of ['t-parents-list','po-list']){
+    const el=document.getElementById(id);
+    if(el&&el.offsetParent!==null){renderParentsBlock(id,cls);return;}
+  }
+}
+window.refreshRoster=refreshRoster;
 // Хто саме зараз відкрив редактор і куди повертатися після збереження
 let parentEditorTarget={safeEmail:'',containerId:'',cls:''};
 window.openParentEditor=async function(safeEmail){
