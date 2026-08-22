@@ -284,8 +284,23 @@
     #login-screen.first-login-mode #login-title::after{content:' — перший раз';font-size:.75rem;color:var(--orange);font-weight:400;display:block;margin-top:2px;}
     .skill-tag{display:inline-block;background:#e0f2f1;color:var(--teal);border:1px solid #a5d6d1;border-radius:20px;padding:3px 10px;font-size:.75rem;font-weight:700;margin:2px;}
     /* ── ПЕРЕМИКАЧ КАБІНЕТІВ (для тих, у кого кілька ролей) ── */
-    #pb-role-switcher select{width:auto;max-width:220px;margin-top:0;padding:4px 8px;font-size:.78rem;font-weight:700;color:var(--teal);border:1px solid var(--teal);border-radius:7px;background:#f0f8ff;cursor:pointer;}
-    #pb-child-switcher select{width:auto;max-width:240px;margin-top:0;padding:4px 8px;font-size:.78rem;font-weight:700;color:var(--purple);border:1px solid var(--purple);border-radius:7px;background:#f9f4ff;cursor:pointer;}
+    /* Флекс-елемент за замовчуванням має min-width:auto і не стискається
+       вужче за свій вміст. Довге ім'я дитини в перемикачі через це розпирало
+       профіль-бар, з'являвся горизонтальний скрол і всю сторінку зсувало. */
+    #profile-bar > div{min-width:0;}
+    #profile-bar > button{flex-shrink:0;white-space:nowrap;}
+    #pb-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+    #pb-role-switcher,#pb-child-switcher{max-width:100%;}
+    #pb-role-switcher select,#pb-child-switcher select{
+      width:100%;max-width:100%;margin-top:0;padding:4px 8px;font-size:.78rem;
+      font-weight:700;border-radius:7px;cursor:pointer;
+      text-overflow:ellipsis;
+    }
+    #pb-role-switcher select{color:var(--teal);border:1px solid var(--teal);background:#f0f8ff;}
+    #pb-child-switcher select{color:var(--purple);border:1px solid var(--purple);background:#f9f4ff;}
+    /* Підстраховка: у порталі багато блоків, що генеруються з даних, і будь-який
+       довгий рядок не має ламати сторінку цілком */
+    html,body{max-width:100%;overflow-x:hidden;}
     /* ── РОЗКЛАД ДЗВІНКІВ ПО КЛАСАХ ── */
     .bell-missing{background:#ffebee;border:1px solid #ef9a9a;color:#b71c1c;border-radius:9px;padding:8px 11px;font-size:.8rem;font-weight:700;margin-bottom:8px;}
     .bell-row{display:flex;gap:9px;align-items:baseline;padding:6px 0;border-bottom:1px dashed #e0e0e0;font-size:.8rem;}
@@ -332,6 +347,7 @@
     #sc-fields label{margin-top:9px;font-size:.78rem;color:#666;}
     #sc-fields input,#sc-fields textarea{margin-top:3px;font-size:.88rem;}
     #sc-fields [readonly]{background:#f7f8fa;color:#666;}
+    .sc-lock{font-size:.68rem;color:#8a6d1f;background:#fff8e1;border:1px solid #ffe0a3;border-radius:8px;padding:0 6px;font-weight:600;}
     .po-login{font-size:.7rem;font-weight:600;color:#1b5e20;background:#e8f5e9;border:1px solid #a5d6a7;border-radius:10px;padding:1px 7px;word-break:break-all;}
     .po-login.none{color:#8a6d1f;background:#fff8e1;border-color:#ffe0a3;}
     .po-del{background:#fdecea!important;border-color:#f5c6cb!important;}
@@ -1841,6 +1857,16 @@
     <div id="install-block" style="display:none;margin-top:13px;padding-top:11px;border-top:1px dashed #ccc;text-align:left;"></div>
     <!-- Сповіщення: показується всім, у кого браузер їх підтримує -->
     <div id="push-toggle" style="display:none;margin-top:13px;padding-top:11px;border-top:1px dashed #ccc;text-align:left;"></div>
+    <!-- Дані дитини: доступно лише батькам -->
+    <div id="child-block" style="display:none;margin-top:13px;padding-top:11px;border-top:1px dashed #ccc;text-align:left;">
+      <label style="color:var(--purple);margin-top:0;">👶 Дані дитини</label>
+      <p style="font-size:.76rem;color:#888;margin:3px 0 7px 0;">
+        Тут ви можете оновити медичні відомості, контакти та список тих,
+        хто має право забирати дитину.
+      </p>
+      <button type="button" onclick="openMyChildCard()" style="background:var(--purple);color:#fff;margin-top:0;">📋 Відкрити картку дитини</button>
+      <div id="child-access" style="margin-top:10px;"></div>
+    </div>
     <!-- Контактні дані батьків: заповнює сам батько/мати, а бачать і можуть
          виправити вчитель і директор. Зберігаються в parent_links, не в users. -->
     <div id="p-contacts-section" style="display:none;margin-top:13px;padding-top:11px;border-top:1px dashed #ccc;text-align:left;">
