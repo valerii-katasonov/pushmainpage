@@ -306,6 +306,11 @@
     #btn-ai-hw,#btn-ai-comment{width:auto;margin:0;padding:8px 14px;font-size:.82rem;font-weight:700;border:none;border-radius:9px;cursor:pointer;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;}
     #btn-ai-hw:disabled,#btn-ai-comment:disabled{opacity:.6;cursor:wait;}
     .ai-hw-note{font-size:.72rem;color:#999;font-style:italic;}
+    .ai-ctx{margin-top:8px;background:#faf7ff;border:1px solid #e2d6f0;border-radius:10px;padding:9px 11px;}
+    .ai-ctx summary{cursor:pointer;font-size:.8rem;font-weight:700;color:#7b1fa2;}
+    .ai-ctx label{margin-top:0;font-size:.76rem;color:#666;}
+    .ai-ctx input,.ai-ctx select,.ai-ctx textarea{font-size:.85rem;}
+    .ai-ctx-note{font-size:.72rem;color:#8a6d1f;background:#fff8e1;border:1px solid #ffe0a3;border-radius:8px;padding:7px 9px;margin:9px 0 0 0;line-height:1.45;}
     .ai-hw-msg{margin:7px 0 0 0;font-size:.8rem;padding:8px 11px;border-radius:8px;background:#f3e5f5;color:#4a148c;border:1px solid #ce93d8;}
     .ai-hw-msg.err{background:#fdecea;color:#b71c1c;border-color:#f5c6cb;}
     /* Блоки AI у кабінетах батьків та учня */
@@ -339,6 +344,11 @@
     .po-edit:hover{background:#f39c12;}
     #pe-fields label{margin-top:11px;font-size:.79rem;color:#666;}
     #pe-fields input{margin-top:3px;}
+    /* ── Перемикач сповіщень ── */
+    .push-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+    .push-label{flex:1;font-size:.85rem;font-weight:600;color:#555;}
+    .push-btn{width:auto;margin:0;padding:7px 14px;font-size:.8rem;font-weight:700;border:none;border-radius:9px;cursor:pointer;background:linear-gradient(135deg,#00c6ff,#4facfe);color:#fff;}
+    .push-hint{font-size:.74rem;color:#999;flex:1 1 100%;}
     .pe-section{margin-top:16px;border-top:1px dashed #ddd;padding-top:11px;}
     .pe-section b{font-size:.84rem;color:var(--purple);}
     .pe-kid{display:flex;gap:7px;align-items:center;margin-top:6px;}
@@ -1427,6 +1437,27 @@
         <textarea id="t-hw" rows="2" placeholder="Введіть ДЗ..."></textarea>
         <!-- AI-чернетка ДЗ за темою уроку. Предмет, тему і клас система бере
              сама — вчителю не треба нічого формулювати. -->
+        <!-- Необов'язковий контекст для AI: підручник, сторінки, текст вправи -->
+        <details class="ai-ctx" ontoggle="if(this.open)fillHwTextbooks()">
+          <summary>➕ Додати контекст: підручник, сторінки, текст вправи</summary>
+          <div style="margin-top:9px;">
+            <label for="hw-textbook">📘 Підручник</label>
+            <select id="hw-textbook" style="margin-top:3px;">
+              <option value="">— не вказувати —</option>
+            </select>
+            <input type="text" id="hw-textbook-custom" placeholder="або впишіть назву вручну" style="margin-top:5px;">
+            <label for="hw-pages" style="margin-top:9px;">📄 Сторінки / вправи</label>
+            <input type="text" id="hw-pages" placeholder="напр. с. 45, вправи 3–5" style="margin-top:3px;">
+            <label for="hw-material" style="margin-top:9px;">📋 Текст вправи або матеріалу (за бажанням)</label>
+            <textarea id="hw-material" rows="3" placeholder="Вставте сюди текст із підручника — тоді завдання буде складено саме за ним" style="margin-top:3px;"></textarea>
+            <p class="ai-ctx-note">
+              ⚠️ Система <b>не бачить</b> вмісту підручника і не відкриває посилання.
+              Назва та сторінки підуть у завдання лише як посилання на джерело —
+              вигадувати номери вправ їй заборонено. Щоб ДЗ склалося саме за
+              матеріалом, вставте його текст у поле вище.
+            </p>
+          </div>
+        </details>
         <div class="ai-hw-row">
           <button type="button" id="btn-ai-hw" onclick="generateHomeworkAI()">✨ Згенерувати чернетку ДЗ</button>
           <span class="ai-hw-note">чернетка — перевірте й відредагуйте перед збереженням</span>
@@ -1731,6 +1762,11 @@
       <label>Ім'я:</label><input type="text" id="profile-first-name" placeholder="Ім'я" style="margin-bottom:8px;">
       <label>Прізвище:</label><input type="text" id="profile-last-name" placeholder="Прізвище" style="margin-bottom:8px;">
     </div>
+    <!-- Встановлення застосунку — має бути ВИЩЕ за сповіщення: на iPhone
+         вони працюють лише після встановлення на екран «Домів» -->
+    <div id="install-block" style="display:none;margin-top:13px;padding-top:11px;border-top:1px dashed #ccc;text-align:left;"></div>
+    <!-- Сповіщення: показується всім, у кого браузер їх підтримує -->
+    <div id="push-toggle" style="display:none;margin-top:13px;padding-top:11px;border-top:1px dashed #ccc;text-align:left;"></div>
     <!-- Контактні дані батьків: заповнює сам батько/мати, а бачать і можуть
          виправити вчитель і директор. Зберігаються в parent_links, не в users. -->
     <div id="p-contacts-section" style="display:none;margin-top:13px;padding-top:11px;border-top:1px dashed #ccc;text-align:left;">
