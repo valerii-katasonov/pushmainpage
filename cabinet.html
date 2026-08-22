@@ -1796,7 +1796,9 @@
 <!-- Картка учня. Медичні дані — особлива категорія за GDPR, тому редагування
      доступне лише директору, адміністратору й класному керівнику цього класу;
      решта відкриває картку в режимі перегляду. -->
-<div id="student-card-modal" class="modal-overlay">
+<!-- z-index вищий за решту модалок: картку можна відкрити поверх іншого
+     вікна (напр. із профілю батьків), а порядок у DOM цього не гарантує -->
+<div id="student-card-modal" class="modal-overlay" style="z-index:1010;">
   <div class="modal-content" style="max-width:560px;text-align:left;">
     <h2 style="color:var(--teal);margin-top:0;text-align:center;">📋 Картка учня</h2>
     <p style="text-align:center;font-size:.9rem;color:#333;margin:0 0 12px 0;"><b id="sc-student">—</b></p>
