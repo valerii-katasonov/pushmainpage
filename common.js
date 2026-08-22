@@ -667,6 +667,7 @@ export const AUDIT_LABELS={
   homework:'📚 Домашнє завдання', behavior:'🤝 Оцінка поведінки',
   student_add:'👨‍🎓 Учня додано', student_rename:'✏️ Учня перейменовано',
   student_del:'🗑 Учня прибрано', student_transfer:'↔️ Учня переведено',
+  card_edit:'📋 Картку учня змінено',
   student_login:'🔑 Вхід учня створено', student_email:'✉️ Email учня змінено',
   student_login_del:'🔒 Вхід учня прибрано',
   parent_link:'🔗 Батьків прив\'язано', parent_unlink:'🔓 Батьків відв\'язано',
@@ -879,12 +880,14 @@ export async function renderParentsBlock(containerId,cls){
   if(!cls){box.innerHTML='<p class="empty-msg">Оберіть клас.</p>';return;}
   box.innerHTML='<p class="empty-msg">Завантаження...</p>';
   try{
-    const [stSnap,plSnap,usersSnap,slSnap]=await Promise.all([
+    const [stSnap,plSnap,usersSnap,slSnap,cardSnap]=await Promise.all([
       get(child(ref(db),`students_list/${cls}`)),
       get(child(ref(db),'parent_links')),
       get(child(ref(db),'users')),
-      get(child(ref(db),'student_links'))
+      get(child(ref(db),'student_links')),
+      get(child(ref(db),`student_cards/${cls}`))
     ]);
+    const cards=cardSnap.exists()?cardSnap.val():{};
     const students=stSnap.exists()?Object.values(stSnap.val()).sort((a,b)=>String(a).localeCompare(String(b),'uk')):[];
     if(students.length===0){box.innerHTML='<p class="empty-msg">У цьому класі ще немає учнів.</p>';return;}
     const loggedIn=new Set();
@@ -930,7 +933,12 @@ export async function renderParentsBlock(containerId,cls){
         <div class="po-child">
           <span class="po-child-name">${escHtml(st)}</span>
           <span class="po-login ${loginByStudent[st]?'':'none'}">🔑 ${loginByStudent[st]?escHtml(loginByStudent[st]):'входу немає'}</span>
+          ${(cards[sk]&&cards[sk].allergies)
+            // Позначка про алергію видна всім, хто бачить список: на уроці це
+            // питання безпеки. Самі медичні деталі — лише в картці, під правами.
+            ? `<span class="po-allergy" title="${escHtml(cards[sk].allergies)}">⚠️ Алергія</span>`:''}
           <span class="po-child-acts">
+            <button class="po-edit" title="Картка учня" onclick="openStudentCard('${escJs(cls)}','${escJs(sk)}','${escJs(st)}')">📋</button>
             <button class="po-edit" title="Змінити ПІБ учня" onclick="editStudentName('${escJs(cls)}','${escJs(sk)}','${escJs(st)}')">✏️</button>
             <button class="po-edit" title="Вхід учня (email)" onclick="openStudentLogin('${escJs(cls)}','${escJs(st)}','${escJs(loginByStudent[st]||'')}')">🔑</button>
             <button class="po-edit po-del" title="Прибрати зі списку" onclick="removeStudent('${escJs(cls)}','${escJs(sk)}','${escJs(st)}')">🗑</button>
@@ -975,6 +983,100 @@ export function refreshRoster(cls){
   }
 }
 window.refreshRoster=refreshRoster;
+// ══════════════════════════════════════════════════════════════════
+//  КАРТКА УЧНЯ
+// ══════════════════════════════════════════════════════════════════
+// Раніше учень у системі був лише рядком з іменем — не було куди покласти
+// ні договір, ні дату народження, ні алергії.
+//
+// Ключ — pushKey зі students_list, а НЕ ім'я: тоді перейменування учня
+// не рве картку (на відміну від оцінок, які історично ключуються ім'ям).
+//
+// ЗАХИСТ ДАНИХ: медичні відомості за GDPR — особлива категорія. Тому
+// редагувати картку можуть лише директор, адміністратор і класний керівник
+// цього класу. Решта вчителів бачить у списку тільки позначку про алергію —
+// це потрібно для безпеки на уроці, але без доступу до PESEL, адреси й договору.
+export const CARD_GROUPS=[
+  {title:'Загальні дані',fields:[
+    {k:'birthDate',label:'Дата народження',type:'date'},
+    {k:'pesel',label:'PESEL',ph:'11 цифр'},
+    {k:'address',label:'Адреса проживання',ph:'вул., буд., місто'}
+  ]},
+  {title:'Договір',fields:[
+    {k:'contractNo',label:'Номер договору',ph:'напр. 2026/114'},
+    {k:'enrolledAt',label:'Дата зарахування',type:'date'}
+  ]},
+  {title:'Медичні відомості',danger:true,fields:[
+    {k:'allergies',label:'Алергії',ph:'напр. горіхи — анафілаксія',area:true},
+    {k:'conditions',label:'Хронічні захворювання',area:true},
+    {k:'meds',label:'Ліки, які приймає',area:true}
+  ]},
+  {title:'Безпека',fields:[
+    {k:'pickup',label:'Хто має право забирати дитину',
+     ph:'Іваненко Оксана (мати) +48 600 000 000\nІваненко Сергій (батько) +48 601 000 000',area:true},
+    {k:'pickupBan',label:'Кому забирати ЗАБОРОНЕНО',ph:'якщо є судові обмеження',area:true},
+    {k:'emergency',label:'Екстрений контакт',ph:"ім'я, ким доводиться, телефон",area:true}
+  ]},
+  {title:'Інше',fields:[{k:'notes',label:'Примітки',area:true}]}
+];
+export function canEditCard(cls){
+  const r=currentUserData?.role;
+  if(r==='director'||r==='administrator')return true;
+  // Класний керівник саме цього класу
+  return !!(classTeacherCache[cls]&&currentUserData?.email&&
+            classTeacherCache[cls].toLowerCase()===currentUserData.email.toLowerCase());
+}
+let classTeacherCache={};
+async function loadClassTeacherCache(){
+  const s=await get(child(ref(db),'class_teachers'));
+  classTeacherCache={};
+  if(s.exists()){const d=s.val();for(const c in d)if(d[c]?.teacherEmail)classTeacherCache[c]=d[c].teacherEmail;}
+}
+let cardTarget={cls:'',key:'',name:''};
+window.openStudentCard=async function(cls,key,name){
+  cardTarget={cls,key,name};
+  await loadClassTeacherCache();
+  const editable=canEditCard(cls);
+  document.getElementById('sc-student').textContent=name;
+  document.getElementById('sc-save').style.display=editable?'block':'none';
+  document.getElementById('sc-readonly').style.display=editable?'none':'block';
+  const box=document.getElementById('sc-fields');
+  box.innerHTML='<p class="empty-msg">Завантаження...</p>';
+  document.getElementById('student-card-modal').style.display='flex';
+  const snap=await get(child(ref(db),`student_cards/${cls}/${key}`));
+  const c=snap.exists()?snap.val():{};
+  box.innerHTML=CARD_GROUPS.map(g=>`
+    <div class="sc-group${g.danger?' danger':''}">
+      <b>${escHtml(g.title)}</b>
+      ${g.fields.map(f=>`
+        <label for="sc-${f.k}">${escHtml(f.label)}</label>
+        ${f.area
+          ? `<textarea id="sc-${f.k}" rows="2" placeholder="${escHtml(f.ph||'')}" ${editable?'':'readonly'}>${escHtml(c[f.k]||'')}</textarea>`
+          : `<input type="${f.type||'text'}" id="sc-${f.k}" value="${escHtml(c[f.k]||'')}" placeholder="${escHtml(f.ph||'')}" ${editable?'':'readonly'}>`}
+      `).join('')}
+    </div>`).join('');
+};
+window.closeStudentCard=function(){document.getElementById('student-card-modal').style.display='none';};
+window.saveStudentCard=async function(){
+  const {cls,key,name}=cardTarget;
+  if(!canEditCard(cls))return alert('У вас немає прав редагувати картку.');
+  const data={};
+  CARD_GROUPS.forEach(g=>g.fields.forEach(f=>{
+    const el=document.getElementById('sc-'+f.k);
+    if(el)data[f.k]=el.value.trim();
+  }));
+  const btn=document.getElementById('sc-save');
+  btn.disabled=true;btn.textContent='⏳ Збереження...';
+  try{
+    await set(ref(db,`student_cards/${cls}/${key}`),{...data,updatedAt:Date.now()});
+    // У журнал пишемо сам факт правки, БЕЗ вмісту: там медичні дані
+    logAction('card_edit',{cls,target:name});
+    showToast('✅ Картку збережено');
+    window.closeStudentCard();
+    refreshRoster(cls);
+  }catch(e){alert('Помилка: '+e.message);}
+  finally{btn.disabled=false;btn.textContent='💾 Зберегти';}
+};
 // ══════════ ВХІД УЧНЯ (власний email) ══════════
 // Раніше пошту учня можна було вказати ЛИШЕ під час створення. Якщо тоді її
 // не ввели — додати чи змінити було ніде, і в списку не було видно, у кого
