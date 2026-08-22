@@ -418,6 +418,12 @@ window.openProfileModal=async function(){
     mySkillsTemp=snap.exists()?Object.values(snap.val()):[];renderMySkillsTags();
   }
   renderInstallBlock();renderPushButton();
+  const childBlock=document.getElementById('child-block');
+  if(childBlock){
+    const isP=currentUserData?.role==='parent';
+    childBlock.style.display=isP?'block':'none';
+    if(isP)window.renderChildAccess();
+  }
   // Батьки заповнюють свої контакти самі — школі менше ручної роботи,
   // а дані свіжіші. Прізвище/ім'я показуємо тут же, щоб усе було в одному
   // місці, тому окремі поля зверху для батьків ховаємо.
@@ -1019,13 +1025,21 @@ export const CARD_GROUPS=[
   ]},
   {title:'Інше',fields:[{k:'notes',label:'Примітки',area:true}]}
 ];
+// Поля, які веде ШКОЛА і батьки не редагують: номер договору й дата
+// зарахування — адміністративні. Заборона забирати дитину — навмисно теж:
+// це поле про судові обмеження, і саме його зацікавлена сторона могла б
+// «підправити». Решту (медичне, контакти, адресу) батьки ведуть самі —
+// вони знають це краще за школу, та й дані будуть свіжіші.
+const SCHOOL_ONLY_FIELDS=['contractNo','enrolledAt','pickupBan'];
 export function canEditCard(cls){
   const r=currentUserData?.role;
   if(r==='director'||r==='administrator')return true;
+  if(r==='parent')return true; // з обмеженням по полях, див. SCHOOL_ONLY_FIELDS
   // Класний керівник саме цього класу
   return !!(classTeacherCache[cls]&&currentUserData?.email&&
             classTeacherCache[cls].toLowerCase()===currentUserData.email.toLowerCase());
 }
+const isFieldLocked=(k)=>currentUserData?.role==='parent'&&SCHOOL_ONLY_FIELDS.includes(k);
 let classTeacherCache={};
 async function loadClassTeacherCache(){
   const s=await get(child(ref(db),'class_teachers'));
@@ -1048,26 +1062,77 @@ window.openStudentCard=async function(cls,key,name){
   box.innerHTML=CARD_GROUPS.map(g=>`
     <div class="sc-group${g.danger?' danger':''}">
       <b>${escHtml(g.title)}</b>
-      ${g.fields.map(f=>`
-        <label for="sc-${f.k}">${escHtml(f.label)}</label>
+      ${g.fields.map(f=>{
+        const ro=!editable||isFieldLocked(f.k);
+        const hint=isFieldLocked(f.k)?' <span class="sc-lock">веде школа</span>':'';
+        return `
+        <label for="sc-${f.k}">${escHtml(f.label)}${hint}</label>
         ${f.area
-          ? `<textarea id="sc-${f.k}" rows="2" placeholder="${escHtml(f.ph||'')}" ${editable?'':'readonly'}>${escHtml(c[f.k]||'')}</textarea>`
-          : `<input type="${f.type||'text'}" id="sc-${f.k}" value="${escHtml(c[f.k]||'')}" placeholder="${escHtml(f.ph||'')}" ${editable?'':'readonly'}>`}
-      `).join('')}
+          ? `<textarea id="sc-${f.k}" rows="2" placeholder="${escHtml(f.ph||'')}" ${ro?'readonly':''}>${escHtml(c[f.k]||'')}</textarea>`
+          : `<input type="${f.type||'text'}" id="sc-${f.k}" value="${escHtml(c[f.k]||'')}" placeholder="${escHtml(f.ph||'')}" ${ro?'readonly':''}>`}`;
+      }).join('')}
     </div>`).join('');
 };
 window.closeStudentCard=function(){document.getElementById('student-card-modal').style.display='none';};
+// Батьки відкривають картку своєї активної дитини зі свого кабінету.
+// Ключ у students_list доводиться шукати за ім'ям — картка ключується
+// саме ним, щоб переживати перейменування.
+window.openMyChildCard=async function(){
+  const cls=currentUserData?.class, name=currentUserData?.studentName;
+  if(!cls||!name)return showToast('⚠️ Дитина не визначена');
+  const snap=await get(child(ref(db),`students_list/${cls}`));
+  let key='';
+  if(snap.exists()){const d=snap.val();for(const k in d)if(d[k]===name){key=k;break;}}
+  if(!key)return showToast('⚠️ Дитину не знайдено у списку класу');
+  window.openStudentCard(cls,key,name);
+};
+// Пароль дитини змінити напряму не можна — надсилаємо лист на її пошту.
+window.resetChildPassword=async function(){
+  const cls=currentUserData?.class, name=currentUserData?.studentName;
+  const snap=await get(child(ref(db),'student_links'));
+  let email='';
+  if(snap.exists()){
+    const d=snap.val();
+    for(const se in d)if(d[se]?.studentName===name&&d[se]?.class===cls){email=se.replace(/_/g,'.');break;}
+  }
+  if(!email)return alert('У дитини ще немає власного входу в портал.\nЗверніться до класного керівника, щоб його створити.');
+  if(!confirm(`Надіслати лист для зміни пароля на ${email}?\n\nЗа посиланням із листа можна задати новий пароль.\nСтарий перестане діяти.`))return;
+  try{await sendPasswordReset(email);showToast(`📧 Лист надіслано на ${email}`);}
+  catch(e){alert('Не вдалося надіслати: '+(e.message||e.code));}
+};
+// Показуємо, чи є в дитини власний вхід, і яка саме адреса
+window.renderChildAccess=async function(){
+  const box=document.getElementById('child-access');
+  if(!box||currentUserData?.role!=='parent')return;
+  const cls=currentUserData.class, name=currentUserData.studentName;
+  const snap=await get(child(ref(db),'student_links'));
+  let email='';
+  if(snap.exists()){
+    const d=snap.val();
+    for(const se in d)if(d[se]?.studentName===name&&d[se]?.class===cls){email=se.replace(/_/g,'.');break;}
+  }
+  box.innerHTML=`<div class="push-row">
+      <span class="push-label">${email?`🔑 Вхід дитини: <b>${escHtml(email)}</b>`:'🔑 У дитини немає власного входу'}</span>
+      ${email?'<button type="button" class="push-btn" onclick="resetChildPassword()">Змінити пароль</button>':''}
+    </div>
+    ${email?'':'<p class="push-hint">Щоб дитина заходила сама, зверніться до класного керівника — він додасть її email.</p>'}`;
+};
 window.saveStudentCard=async function(){
   const {cls,key,name}=cardTarget;
   if(!canEditCard(cls))return alert('У вас немає прав редагувати картку.');
-  const data={};
-  CARD_GROUPS.forEach(g=>g.fields.forEach(f=>{
-    const el=document.getElementById('sc-'+f.k);
-    if(el)data[f.k]=el.value.trim();
-  }));
   const btn=document.getElementById('sc-save');
   btn.disabled=true;btn.textContent='⏳ Збереження...';
   try{
+    // readonly у формі — лише підказка для ока. Тому поля, які веде школа,
+    // беремо з бази, а не з форми: інакше збереження від батьків їх затерло б.
+    const prevSnap=await get(child(ref(db),`student_cards/${cls}/${key}`));
+    const prev=prevSnap.exists()?prevSnap.val():{};
+    const data={};
+    CARD_GROUPS.forEach(g=>g.fields.forEach(f=>{
+      if(isFieldLocked(f.k)){data[f.k]=prev[f.k]||'';return;}
+      const el=document.getElementById('sc-'+f.k);
+      if(el)data[f.k]=el.value.trim();
+    }));
     await set(ref(db,`student_cards/${cls}/${key}`),{...data,updatedAt:Date.now()});
     // У журнал пишемо сам факт правки, БЕЗ вмісту: там медичні дані
     logAction('card_edit',{cls,target:name});
