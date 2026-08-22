@@ -6,7 +6,7 @@
 // exams calendar, and reactions/weekly-wrapped.
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, push, remove, update, onValue } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, auth, CLOUDINARY_URL, UPLOAD_PRESET, getActiveClass, currentUserData, showToast, displayGrade, renderHwItem, dayKeys, formatAttendanceSlotLabel, STICKER_GOAL, escJs, escHtml, safeUrl, normalizeChildren, notifyEvent, logAction } from './common.js';
+import { db, auth, CLOUDINARY_URL, UPLOAD_PRESET, getActiveClass, currentUserData, showToast, displayGrade, renderHwItem, dayKeys, formatAttendanceSlotLabel, STICKER_GOAL, escJs, escHtml, safeUrl, normalizeChildren, notifyEvent, logAction, renderBirthdays, teacherAccessMatrix } from './common.js';
 import { populateTopicSelector, availableTopicsCache } from './curriculum.js';
 
 let currentHwImages=[];
@@ -114,6 +114,49 @@ window.generateHomeworkAI=async function(){
       :'✨ Чернетку створено. Перевірте, за потреби відредагуйте — і збережіть.',!!data.truncated);
   }catch(e){aiMsg('ai-hw-msg','Не вдалося згенерувати: '+e.message,true);}
   finally{btn.disabled=false;btn.textContent=label;}
+};
+// ══════════ КОПІЮВАННЯ ДЗ У ПАРАЛЕЛЬНІ КЛАСИ ══════════
+// Учитель веде той самий предмет у кількох класах і набирав те саме ДЗ
+// двічі-тричі. Копіюємо ЛИШЕ домашнє завдання, а не тему уроку: теми
+// пов'язані з календарним планом і вичиткою годин, і в кожного класу
+// свій прогрес — копіювання їх зіпсувало б лічильники.
+window.openHwCopy=async function(){
+  const subject=document.getElementById('t-subject').value;
+  const box=document.getElementById('hw-copy-classes');
+  if(!subject)return showToast('⚠️ Спочатку оберіть предмет');
+  const cur=getActiveClass();
+  // Пропонуємо лише класи, до яких у вчителя є доступ саме з цього предмета
+  const mine=Object.keys(teacherAccessMatrix||{}).filter(c=>c!==cur&&window.isSubjectAllowed(c,subject));
+  if(mine.length===0)return showToast('ℹ️ Немає інших класів із цим предметом');
+  box.innerHTML=mine.map(c=>`<label class="hw-copy-opt">
+      <input type="checkbox" value="${escHtml(c)}"> ${escHtml(c.replace('class_',''))} клас
+    </label>`).join('');
+  document.getElementById('hw-copy-subject').textContent=subject;
+  document.getElementById('hw-copy-modal').style.display='flex';
+};
+window.closeHwCopy=function(){document.getElementById('hw-copy-modal').style.display='none';};
+window.doHwCopy=async function(){
+  const subject=document.getElementById('t-subject').value;
+  const date=document.getElementById('global-date').value;
+  const targets=Array.from(document.querySelectorAll('#hw-copy-classes input:checked')).map(i=>i.value);
+  if(targets.length===0)return alert('Оберіть хоча б один клас.');
+  const text=document.getElementById('t-hw').value.trim();
+  if(!text&&currentHwImages.length===0)return alert('Поле ДЗ порожнє — нічого копіювати.');
+  const names=targets.map(c=>c.replace('class_','')).join(', ');
+  if(!confirm(`Скопіювати це ДЗ у класи: ${names}?\n\nПредмет: ${subject}\nДата: ${date.split('-').reverse().join('.')}\n\nЯкщо в цих класах на цю дату вже є ДЗ — воно буде замінено.\nТеми уроків не копіюються.`))return;
+  const btn=document.getElementById('btn-hw-copy-do');
+  btn.disabled=true;btn.textContent='⏳ Копіюю...';
+  try{
+    const payload={text,images:currentHwImages};
+    for(const c of targets){
+      await set(ref(db,`homeworks/${c}/${date}/${subject}`),payload);
+      await set(ref(db,`authors/${c}/${date}/${subject}`),auth.currentUser.uid);
+      logAction('homework',{cls:c,subject,date,value:'копія'});
+    }
+    showToast(`✅ ДЗ скопійовано у ${targets.length} кл.`);
+    window.closeHwCopy();
+  }catch(e){alert('Помилка: '+e.message);}
+  finally{btn.disabled=false;btn.textContent='📋 Скопіювати';}
 };
 // ══════════ AI: ДОПОМОГА З КОМЕНТАРЕМ ДЛЯ БАТЬКІВ ══════════
 // Учитель пише як думає («не готовий, заважає»), а отримує коректне
@@ -447,6 +490,7 @@ export function loadTeacherDashboard(){
     document.getElementById('t-karma-counter').innerText=cnt;
   });
   if(currentUserData.role!=='art_school_teacher'){const date=document.getElementById('global-date').value;get(child(ref(db),`homeworks/${cls}/${date}`)).then(snap=>{const hl=document.getElementById('t-daily-hw-list');hl.innerHTML='';if(snap.exists()){const d=snap.val();for(let s in d)hl.innerHTML+=renderHwItem(s,d[s]);}else hl.innerHTML='<li class="empty-msg">ДЗ не задано.</li>';});}
+  renderBirthdays('t-birthdays',cls,document.getElementById('global-date').value,'');
   listenTeacherAttendance();
 }
 window.loadTeacherDashboard=loadTeacherDashboard;
