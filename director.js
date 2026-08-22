@@ -6,8 +6,8 @@
 // (Class Teacher Assignment lives in curriculum.js — see that file's
 // header for why.)
 // ═══════════════════════════════════════════════════════════════
-import { ref, set, get, child, push, remove, update } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, showToast, getClassNum, displayGrade, gradeClass6, teacherAccessMatrix, getWeekDates, formatAttendanceSlotLabel, gradeTypesCache, loadGradeTypesCache, calculateStudentWeightedAvg, escJs, escHtml, localDateString, normalizeRoles, getUserRoles, ROLE_LABELS, currentUserData, dayNamesUA, sendPasswordReset, normalizeChildren, renderParentsBlock } from './common.js';
+import { ref, set, get, child, push, remove, update, query, orderByChild, limitToLast } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+import { db, showToast, getClassNum, displayGrade, gradeClass6, teacherAccessMatrix, getWeekDates, formatAttendanceSlotLabel, gradeTypesCache, loadGradeTypesCache, calculateStudentWeightedAvg, escJs, escHtml, localDateString, normalizeRoles, getUserRoles, ROLE_LABELS, currentUserData, dayNamesUA, sendPasswordReset, normalizeChildren, renderParentsBlock, logAction, AUDIT_LABELS } from './common.js';
 
 let directorSkillsTemp=[];
 
@@ -171,6 +171,7 @@ window.grantStaffRole=async function(){
     }
     const names=roles.map(r=>ROLE_LABELS[r]||r).join(', ');
     showToast(`✅ Доступ надано: ${names}`);
+    logAction('staff_grant',{target:raw,value:roles.join(',')});
     document.getElementById('new-staff-email').value='';
     window.loadStaffList();
   }catch(e){alert('Помилка: '+e.message);}
@@ -227,6 +228,7 @@ window.resetStaffPassword=async function(email){
   try{
     await sendPasswordReset(email);
     showToast(`📧 Лист надіслано на ${email}`);
+    logAction('pass_reset',{target:email});
   }catch(e){
     alert('Не вдалося надіслати лист: '+(e.message||e.code)+
       '\n\nЯкщо ця адреса не є справжньою поштою, лист не дійде. Тоді пароль\nскидається вручну у Firebase Console → Authentication.');
@@ -310,6 +312,7 @@ window.removeStaffMember=async function(safeEmail){
         }
       }
     }
+    logAction('staff_remove',{target:readable});
     showToast(scheduleWarning
       ?`🗑️ Доступ відкликано: ${readable}. Не забудьте переназначити його уроки в розкладі!`
       :`🗑️ Доступ відкликано: ${readable}`);
@@ -396,6 +399,7 @@ window.applyBellToAllClasses=async function(){
     for(let i=1;i<=11;i++)patch[`class_${i}`]=obj;
     await update(ref(db,'bell_schedules'),patch);
     showToast('✅ Розклад дзвінків застосовано до всіх 11 класів');
+    logAction('bell_apply',{value:'усі 11 класів'});
     window.loadBellCoverage();
   }catch(e){alert('Помилка: '+e.message);}
 };
@@ -583,10 +587,57 @@ window.directorLinkParent=async function(){
         if((u[uid].email||'').toLowerCase()===raw&&u[uid].role==='parent')
           await update(ref(db,`users/${uid}`),{children:kids});
     }
+    logAction('parent_link',{cls,target:st,value:raw,role});
     showToast(kids.length>1?`✅ Прив'язано. Дітей у цих батьків: ${kids.length}`:'✅ Прив\'язано');
     document.getElementById('pl-email').value='';
     window.loadParentsOverview();
   }catch(e){alert('Помилка: '+e.message);}
+};
+// ══════════ ЖУРНАЛ ДІЙ: перегляд ══════════
+// Читаємо лише обраний місяць і лише останні 300 записів — інакше з часом
+// сторінка почне вантажити десятки тисяч рядків.
+const AUDIT_LIMIT=300;
+window.loadAuditLog=async function(){
+  const box=document.getElementById('audit-list');
+  if(!box)return;
+  const ym=document.getElementById('audit-month').value||localDateString.slice(0,7);
+  const fAction=document.getElementById('audit-action').value;
+  const fText=document.getElementById('audit-search').value.trim().toLowerCase();
+  box.innerHTML='<p class="empty-msg">Завантаження...</p>';
+  try{
+    const snap=await get(query(child(ref(db),`audit_log/${ym}`),orderByChild('ts'),limitToLast(AUDIT_LIMIT)));
+    if(!snap.exists()){box.innerHTML='<p class="empty-msg">За цей місяць записів немає.</p>';return;}
+    let rows=Object.values(snap.val()).sort((a,b)=>b.ts-a.ts);
+    if(fAction)rows=rows.filter(r=>r.action===fAction);
+    if(fText)rows=rows.filter(r=>JSON.stringify(r).toLowerCase().includes(fText));
+    if(rows.length===0){box.innerHTML='<p class="empty-msg">Нічого не знайдено за фільтром.</p>';return;}
+    const fmt=ts=>{const d=new Date(ts);return d.toLocaleString('uk-UA',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});};
+    box.innerHTML=`<p style="font-size:.75rem;color:#888;margin:0 0 6px 0;">Показано ${rows.length} з останніх ${AUDIT_LIMIT} за місяць</p>`+
+      rows.map(r=>{
+        // Деталі показуємо лише ті, що є — щоб рядок не рябів порожнечею
+        const bits=[];
+        if(r.cls)bits.push(`${escHtml(String(r.cls).replace('class_',''))} кл.`);
+        if(r.target)bits.push(escHtml(r.target));
+        if(r.subject)bits.push(escHtml(r.subject));
+        if(r.value)bits.push(`<b>${escHtml(r.value)}</b>`);
+        if(r.from)bits.push(`було: ${escHtml(r.from)}`);
+        if(r.date)bits.push(escHtml(String(r.date).split('-').reverse().join('.')));
+        return `<div class="audit-row">
+          <span class="audit-time">${fmt(r.ts)}</span>
+          <span class="audit-act">${escHtml(AUDIT_LABELS[r.action]||r.action)}</span>
+          <span class="audit-det">${bits.join(' · ')}</span>
+          <span class="audit-who">${escHtml(r.actor||'—')}</span>
+        </div>`;
+      }).join('');
+  }catch(e){box.innerHTML=`<p style="color:red;font-size:.8rem;">Помилка: ${escHtml(e.message)}</p>`;}
+};
+window.fillAuditActions=function(){
+  const sel=document.getElementById('audit-action');
+  if(!sel||sel.options.length>1)return;
+  sel.innerHTML='<option value="">— усі дії —</option>'+
+    Object.entries(AUDIT_LABELS).map(([k,v])=>`<option value="${k}">${escHtml(v)}</option>`).join('');
+  const m=document.getElementById('audit-month');
+  if(m&&!m.value)m.value=localDateString.slice(0,7);
 };
 // ══════════ AI: ЧЕРНЕТКА ОГОЛОШЕННЯ ДЛЯ БАТЬКІВ ══════════
 // У сервіс іде лише те, що директор написав сам. Жодних даних із бази.
@@ -634,6 +685,7 @@ window.directorAddStudent=async function(){
     document.getElementById('ds-new-name').value='';
     document.getElementById('ds-new-email').value='';
     showToast(`✅ ${name} доданий до ${cls.replace('class_','')} класу`);
+    logAction('student_add',{cls,target:name});
     refreshRoster(cls);
   }catch(e){alert('Помилка: '+e.message);}
 };
@@ -758,6 +810,7 @@ window.saveStudentName=async function(cls,key,oldName){
   try{
     await set(ref(db,`students_list/${cls}/${key}`),newName);
     const touched=await renameStudentEverywhere(cls,oldName,newName);
+    logAction('student_rename',{cls,target:newName,from:oldName,touched:touched.join(',')});
     showToast(touched.length
       ?`✅ Перейменовано. Оновлено: ${touched.length} розд.`
       :'✅ Перейменовано');
@@ -769,6 +822,7 @@ window.removeStudent=async function(cls,key,name){
   try{
     await remove(ref(db,`students_list/${cls}/${key}`));
     showToast(`🗑️ ${name} прибраний зі списку`);
+    logAction('student_del',{cls,target:name});
     refreshRoster(cls);
   }catch(e){alert('Помилка: '+e.message);}
 };
