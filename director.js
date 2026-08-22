@@ -6,7 +6,7 @@
 // (Class Teacher Assignment lives in curriculum.js — see that file's
 // header for why.)
 // ═══════════════════════════════════════════════════════════════
-import { ref, set, get, child, push, remove, update, query, orderByChild, limitToLast } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+import { ref, set, get, child, push, remove, update, query, limitToLast } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { db, showToast, getClassNum, displayGrade, gradeClass6, teacherAccessMatrix, getWeekDates, formatAttendanceSlotLabel, gradeTypesCache, loadGradeTypesCache, calculateStudentWeightedAvg, escJs, escHtml, localDateString, normalizeRoles, getUserRoles, ROLE_LABELS, currentUserData, dayNamesUA, sendPasswordReset, normalizeChildren, renderParentsBlock, logAction, AUDIT_LABELS, getParentProfile, parentFullName } from './common.js';
 
 let directorSkillsTemp=[];
@@ -741,7 +741,10 @@ window.loadAuditLog=async function(){
   const fText=document.getElementById('audit-search').value.trim().toLowerCase();
   box.innerHTML='<p class="empty-msg">Завантаження...</p>';
   try{
-    const snap=await get(query(child(ref(db),`audit_log/${ym}`),orderByChild('ts'),limitToLast(AUDIT_LIMIT)));
+    // Сортуємо за ключем, а не за полем ts: push-ключі Firebase генеруються
+    // хронологічно, тож limitToLast без orderByChild дає ті самі останні
+    // записи — і не потребує оголошення індексу ".indexOn" у правилах.
+    const snap=await get(query(child(ref(db),`audit_log/${ym}`),limitToLast(AUDIT_LIMIT)));
     if(!snap.exists()){box.innerHTML='<p class="empty-msg">За цей місяць записів немає.</p>';return;}
     let rows=Object.values(snap.val()).sort((a,b)=>b.ts-a.ts);
     if(fAction)rows=rows.filter(r=>r.action===fAction);
