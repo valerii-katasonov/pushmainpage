@@ -673,7 +673,7 @@ export const AUDIT_LABELS={
   homework:'📚 Домашнє завдання', behavior:'🤝 Оцінка поведінки',
   student_add:'👨‍🎓 Учня додано', student_rename:'✏️ Учня перейменовано',
   student_del:'🗑 Учня прибрано', student_transfer:'↔️ Учня переведено',
-  card_edit:'📋 Картку учня змінено',
+  card_edit:'📋 Картку учня змінено', data_export:'📦 Вивантаження даних дитини', semester_grade:'🎓 Підсумкові оцінки',
   student_login:'🔑 Вхід учня створено', student_email:'✉️ Email учня змінено',
   student_login_del:'🔒 Вхід учня прибрано',
   parent_link:'🔗 Батьків прив\'язано', parent_unlink:'🔓 Батьків відв\'язано',
@@ -945,6 +945,7 @@ export async function renderParentsBlock(containerId,cls){
             ? `<span class="po-allergy" title="${escHtml(cards[sk].allergies)}">⚠️ Алергія</span>`:''}
           <span class="po-child-acts">
             <button class="po-edit" title="Картка учня" onclick="openStudentCard('${escJs(cls)}','${escJs(sk)}','${escJs(st)}')">📋</button>
+            <button class="po-edit" title="Табель (PDF)" onclick="downloadReportCard('${escJs(cls)}','${escJs(st)}')">📄</button>
             <button class="po-edit" title="Змінити ПІБ учня" onclick="editStudentName('${escJs(cls)}','${escJs(sk)}','${escJs(st)}')">✏️</button>
             <button class="po-edit" title="Вхід учня (email)" onclick="openStudentLogin('${escJs(cls)}','${escJs(st)}','${escJs(loginByStudent[st]||'')}')">🔑</button>
             <button class="po-edit po-del" title="Прибрати зі списку" onclick="removeStudent('${escJs(cls)}','${escJs(sk)}','${escJs(st)}')">🗑</button>
@@ -1189,6 +1190,159 @@ export async function renderBirthdays(containerId,cls,dateStr,selfName){
   }catch(e){box.style.display='none';}
 }
 window.renderBirthdays=renderBirthdays;
+// ══════════════════════════════════════════════════════════════════
+//  ТАБЕЛЬ УЧНЯ (PDF)
+// ══════════════════════════════════════════════════════════════════
+// Рендеримо HTML і знімаємо його через html2canvas, а не малюємо текст
+// у jsPDF: вбудовані шрифти jsPDF не мають кирилиці, і текст вийшов би
+// «кракозябрами». Так само вже зроблено в експорті журналу.
+window.downloadReportCard=async function(cls,studentName){
+  if(!window.html2canvas||!window.jspdf)return alert('Бібліотеки експорту не завантажились. Оновіть сторінку.');
+  const holder=document.getElementById('report-card-render');
+  holder.innerHTML='<p style="padding:20px;">Готую табель...</p>';
+  try{
+    const [semSnap,gradesSnap,cardSnap,stSnap]=await Promise.all([
+      get(child(ref(db),`academic_year/${ACADEMIC_YEAR_ID_LOCAL}/semesters`)),
+      get(child(ref(db),`semester_grades/${cls}`)),
+      get(child(ref(db),`student_cards/${cls}`)),
+      get(child(ref(db),`students_list/${cls}`))
+    ]);
+    const sems=semSnap.exists()?semSnap.val():{};
+    const all=gradesSnap.exists()?gradesSnap.val():{};
+    // Картку шукаємо за ключем учня — вона ключується саме ним
+    let card={};
+    if(cardSnap.exists()&&stSnap.exists()){
+      const names=stSnap.val();
+      for(const k in names)if(names[k]===studentName){card=cardSnap.val()[k]||{};break;}
+    }
+    // Предмети — об'єднання по всіх семестрах, щоб таблиця була рівна
+    const semIds=Object.keys(all);
+    const subjects=[...new Set(semIds.flatMap(id=>Object.keys(all[id]||{})))]
+      .filter(s=>semIds.some(id=>all[id][s]&&all[id][s][studentName]))
+      .sort((a,b)=>a.localeCompare(b,'uk'));
+    if(subjects.length===0){holder.innerHTML='';return alert('Для цього учня ще немає підсумкових оцінок.');}
+    const head=semIds.map(id=>`<th>${escHtml(sems[id]?.name||id)}</th>`).join('');
+    const body=subjects.map(s=>`<tr><td class="rc-subj">${escHtml(s)}</td>`+
+      semIds.map(id=>{
+        const rec=all[id][s]&&all[id][s][studentName];
+        return `<td class="rc-val">${rec&&rec.value?escHtml(displayGrade(rec.value,cls)):'—'}</td>`;
+      }).join('')+'</tr>').join('');
+    holder.innerHTML=`<div class="rc-page">
+      <div class="rc-head">
+        <div class="rc-title">Табель успішності</div>
+        <div class="rc-school">Push School Warsaw · ${escHtml(ACADEMIC_YEAR_ID_LOCAL)} н.р.</div>
+      </div>
+      <div class="rc-meta">
+        <div><b>Учень:</b> ${escHtml(studentName)}</div>
+        <div><b>Клас:</b> ${escHtml(cls.replace('class_',''))}</div>
+        ${card.birthDate?`<div><b>Дата народження:</b> ${escHtml(card.birthDate.split('-').reverse().join('.'))}</div>`:''}
+      </div>
+      <table class="rc-table"><thead><tr><th>Предмет</th>${head}</tr></thead><tbody>${body}</tbody></table>
+      <div class="rc-foot">
+        <div>Сформовано: ${new Date().toLocaleDateString('uk-UA')}</div>
+        <div class="rc-sign">Класний керівник __________________</div>
+      </div>
+    </div>`;
+    const canvas=await html2canvas(holder.firstElementChild,{scale:2,backgroundColor:'#fff'});
+    const {jsPDF}=window.jspdf;
+    const pdf=new jsPDF('p','mm','a4');
+    const w=190, h=canvas.height*w/canvas.width;
+    pdf.addImage(canvas.toDataURL('image/png'),'PNG',10,10,w,Math.min(h,270));
+    pdf.save(`Табель_${studentName.replace(/\s+/g,'_')}_${cls.replace('class_','')}кл.pdf`);
+    showToast('📄 Табель завантажено');
+  }catch(e){alert('Помилка: '+e.message);}
+  finally{holder.innerHTML='';}
+};
+// ACADEMIC_YEAR_ID живе в director.js, але common.js імпортувати його не може
+// (director вже імпортує common — вийшов би цикл). Рахуємо ту саму формулу тут.
+const ACADEMIC_YEAR_ID_LOCAL=(()=>{
+  const d=new Date(), y=d.getFullYear();
+  return d.getMonth()+1>=9?`${y}-${y+1}`:`${y-1}-${y}`;
+})();
+// ══════════════════════════════════════════════════════════════════
+//  ВИВАНТАЖЕННЯ ДАНИХ ДИТИНИ
+// ══════════════════════════════════════════════════════════════════
+// За GDPR батьки мають право отримати всі дані про свою дитину. Без цієї
+// кнопки школі довелося б збирати їх вручну через консоль Firebase.
+// Формат JSON — повний і однозначний; він же годиться для перенесення
+// в іншу систему (право на переносимість даних).
+window.exportChildData=async function(cls,studentName){
+  if(!cls||!studentName)return showToast('⚠️ Дитина не визначена');
+  showToast('⏳ Збираю дані...');
+  try{
+    const ym=(o,pick)=>{const r={};for(const m in o)if(pick(m))r[m]=o[m];return r;};
+    const [stSnap,cardSnap,gradesSnap,typesSnap,attSnap,behSnap,stickSnap,
+           comSnap,semSnap,retSnap,plSnap,slSnap]=await Promise.all([
+      get(child(ref(db),`students_list/${cls}`)),
+      get(child(ref(db),`student_cards/${cls}`)),
+      get(child(ref(db),`grades/${cls}`)),
+      get(child(ref(db),`grade_types/${cls}`)),
+      get(child(ref(db),`attendance/${cls}`)),
+      get(child(ref(db),`behavior_grades/${cls}`)),
+      get(child(ref(db),`stickers/${cls}/${studentName}`)),
+      get(child(ref(db),`comments/${cls}`)),
+      get(child(ref(db),`semester_grades/${cls}`)),
+      get(child(ref(db),`retake_requests/${cls}`)),
+      get(child(ref(db),'parent_links')),
+      get(child(ref(db),'student_links'))
+    ]);
+    // Дані інших дітей у вивантаження потрапити не повинні — усюди
+    // фільтруємо строго по імені цієї дитини
+    const pick=(snap,depth)=>{
+      if(!snap.exists())return {};
+      const walk=(node,d)=>{
+        if(d===0)return node[studentName]!==undefined?node[studentName]:undefined;
+        const out={};
+        for(const k in node){const v=walk(node[k],d-1);if(v!==undefined&&(typeof v!=='object'||Object.keys(v).length))out[k]=v;}
+        return out;
+      };
+      return walk(snap.val(),depth);
+    };
+    let card={};
+    if(cardSnap.exists()&&stSnap.exists()){
+      const names=stSnap.val();
+      for(const k in names)if(names[k]===studentName){card=cardSnap.val()[k]||{};break;}
+    }
+    // Батьки, прив'язані саме до цієї дитини
+    const parents=[];
+    if(plSnap.exists()){
+      const pl=plSnap.val();
+      for(const se in pl){
+        const kids=normalizeChildren(pl[se]);
+        if(kids.some(k=>k.studentName===studentName&&k.class===cls))
+          parents.push({email:se.replace(/_/g,'.'),...getParentProfile(pl[se]),
+                        role:kids.find(k=>k.studentName===studentName)?.role||''});
+      }
+    }
+    let ownLogin='';
+    if(slSnap.exists()){
+      const sl=slSnap.val();
+      for(const se in sl)if(sl[se]?.studentName===studentName&&sl[se]?.class===cls){ownLogin=se.replace(/_/g,'.');break;}
+    }
+    const data={
+      _про_файл:'Усі дані, які портал Push School зберігає про цю дитину.',
+      _сформовано:new Date().toISOString(),
+      учень:{імʼя:studentName,клас:cls.replace('class_',''),власний_вхід:ownLogin||'немає'},
+      картка:card,
+      батьки:parents,
+      оцінки:pick(gradesSnap,3),
+      типи_оцінок:pick(typesSnap,3),
+      підсумкові:pick(semSnap,2),
+      відвідуваність:pick(attSnap,1),
+      поведінка:pick(behSnap,2),
+      коментарі:pick(comSnap,2),
+      заявки_на_перездачу:pick(retSnap,2),
+      наліпки:stickSnap.exists()?stickSnap.val():{}
+    };
+    const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json;charset=utf-8'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download=`Дані_${studentName.replace(/\s+/g,'_')}_${new Date().toISOString().slice(0,10)}.json`;
+    a.click();URL.revokeObjectURL(a.href);
+    logAction('data_export',{cls,target:studentName});
+    showToast('📦 Дані вивантажено');
+  }catch(e){alert('Помилка: '+e.message);}
+};
 // ══════════ ВХІД УЧНЯ (власний email) ══════════
 // Раніше пошту учня можна було вказати ЛИШЕ під час створення. Якщо тоді її
 // не ввели — додати чи змінити було ніде, і в списку не було видно, у кого
