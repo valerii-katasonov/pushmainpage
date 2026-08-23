@@ -24,7 +24,7 @@
 // тож пізня відмова нічого не змінює, лише псує облік.
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, update } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, currentUserData, showToast, escHtml, escJs, localDateString, logAction, notifyEvent, renderPushWarning } from './common.js';
+import { db, currentUserData, showToast, escHtml, escJs, localDateString, logAction, notifyEvent, pushConfigured, renderPushWarning } from './common.js';
 
 export const MEAL_CUTOFF_HOUR = 9;   // до 09:00 можна відмовитися від сьогоднішнього
 const DOW = ['Понеділок','Вівторок','Середа','Четвер','Пʼятниця'];
@@ -459,6 +459,47 @@ window.exportMealStats = function(){
   a.download = `harchuvannya_${s.from}_${s.to}.csv`;
   a.click();
   URL.revokeObjectURL(a.href);
+};
+
+// Перевірка налаштувань: показує, на якому саме кроці рветься ланцюжок,
+// замість того щоб мовчки надіслати нуль сповіщень.
+window.checkNotifySetup = async function(){
+  const box = document.getElementById('k-notify-info');
+  if(!box) return;
+  box.style.display = 'block';
+  box.className = 'k-notify';
+  box.textContent = 'Перевіряю...';
+  const steps = [];
+  // 1. Ключ у браузері
+  if(!pushConfigured){
+    box.className = 'k-notify bad';
+    box.textContent = '1️⃣ VAPID-ключ не вставлено у common.js — підписатися не може ніхто. Решту перевіряти немає сенсу.';
+    return;
+  }
+  steps.push('1️⃣ VAPID-ключ на місці');
+  // 2. Сервер, ключі Netlify і доступ до бази
+  let r;
+  try{
+    const res = await fetch('/.netlify/functions/notify',{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ type:'menu', probe:true })
+    });
+    r = await res.json();
+    if(!res.ok) throw new Error(r.error || `HTTP ${res.status}`);
+  }catch(e){
+    box.className = 'k-notify bad';
+    box.textContent = `${steps.join(' · ')}\n2️⃣ Сервер сповіщень: ${e.message}`;
+    return;
+  }
+  steps.push(`2️⃣ Сервер і база відповідають (проєкт ${r.project})`);
+  // 3. Чи є кому слати
+  if(!r.eligible){
+    box.className = 'k-notify bad';
+    box.textContent = `${steps.join(' · ')}\n3️⃣ Підписників немає: ${r.tokens} записів усього, з них батьків та учнів — 0. Хтось із батьків має зайти у свій кабінет і увімкнути сповіщення.`;
+    return;
+  }
+  box.className = 'k-notify ok';
+  box.textContent = `${steps.join(' · ')} · 3️⃣ Підписників: ${r.eligible}. Усе готове — сповіщення надсилатимуться.`;
 };
 
 // ═════════ БІК БАТЬКІВ ═════════
