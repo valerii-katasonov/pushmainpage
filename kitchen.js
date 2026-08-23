@@ -24,7 +24,7 @@
 // тож пізня відмова нічого не змінює, лише псує облік.
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, update } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, currentUserData, showToast, escHtml, escJs, localDateString, logAction, notifyEvent } from './common.js';
+import { db, currentUserData, showToast, escHtml, escJs, localDateString, logAction, notifyEvent, renderPushWarning } from './common.js';
 
 export const MEAL_CUTOFF_HOUR = 9;   // до 09:00 можна відмовитися від сьогоднішнього
 const DOW = ['Понеділок','Вівторок','Середа','Четвер','Пʼятниця'];
@@ -175,10 +175,25 @@ window.saveWeekMenu = async function(){
   if(!Object.keys(updates).length) return showToast('Змін немає');
   await update(ref(db), updates);
   logAction('menu',{ date:`${monday} (тиждень)`, value:`оновлено днів: ${changedNew.length+changedUpd.length}` });
-  // Розсилка: одна на кожен змінений день, а не на кожну дитину
-  changedNew.forEach(d=>notifyEvent('menu',{ class:'ALL', studentName:'ALL', subject:human(d), value:'new' }));
-  changedUpd.forEach(d=>notifyEvent('menu',{ class:'ALL', studentName:'ALL', subject:human(d), value:'upd' }));
-  showToast(`✅ Збережено днів: ${changedNew.length+changedUpd.length}`);
+  const savedCount = changedNew.length + changedUpd.length;
+  showToast(`✅ Збережено днів: ${savedCount}`);
+  // Розсилка: одна на кожен змінений день, а не на кожну дитину.
+  // Чекаємо на відповідь — інакше помилка розсилки лишиться непоміченою
+  // і кухня буде думати, що батьки повідомлені.
+  const results = await Promise.all([
+    ...changedNew.map(d=>notifyEvent('menu',{ class:'ALL', studentName:'ALL', subject:human(d), value:'new' })),
+    ...changedUpd.map(d=>notifyEvent('menu',{ class:'ALL', studentName:'ALL', subject:human(d), value:'upd' }))
+  ]);
+  const failed = results.find(r=>!r.ok);
+  const sent = results.reduce((a,r)=>a+(r.sent||0),0);
+  const info = document.getElementById('k-notify-info');
+  if(info){
+    info.style.display='block';
+    info.className = failed ? 'k-notify bad' : 'k-notify ok';
+    info.textContent = failed
+      ? `Меню збережено, але сповіщення не відправлені: ${failed.error}`
+      : (sent ? `Сповіщення надіслано: ${sent}` : 'Сповіщення нікому не надіслані — жоден з батьків ще не увімкнув їх у своєму кабінеті.');
+  }
   loadWeekMenu(); loadWeekCounts();
 };
 
@@ -274,6 +289,9 @@ export async function loadWeekCounts(){
 window.refreshKitchen = function(){
   const el = document.getElementById('k-week');
   if(el && !el.value) el.value = mondayOf(localDateString);
+  renderPushWarning('k-push-warn');
+  const info = document.getElementById('k-notify-info');
+  if(info) info.style.display='none';
   loadWeekMenu(); loadWeekCounts();
 };
 
