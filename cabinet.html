@@ -356,6 +356,10 @@
     .k-plan-lunch{font-size:.78rem;color:#555;display:flex;align-items:center;gap:4px;margin:0;}
     .k-plan-lunch input{width:auto;margin:0;}
     .k-plan-row select{width:auto;margin:0;padding:5px 7px;font-size:.76rem;}
+    .push-warn{background:#fff8e1;border:1px solid #ffe0a3;color:#7a5f14;border-radius:10px;padding:10px 13px;font-size:.79rem;line-height:1.45;margin-bottom:11px;}
+    .k-notify{margin-top:10px;border-radius:9px;padding:8px 11px;font-size:.78rem;line-height:1.4;}
+    .k-notify.ok{background:#e8f5e9;color:#1b5e20;border:1px solid #a5d6a7;}
+    .k-notify.bad{background:#ffebee;color:#b71c1c;border:1px solid #ef9a9a;}
     /* ── Харчування у батьків ── */
     .pm-box{background:#e0f7fa;border:1px solid #80deea;border-radius:11px;padding:12px 14px;margin-top:0;}
     .pm-title{font-size:.9rem;font-weight:800;color:#00838f;margin-bottom:7px;}
@@ -1192,6 +1196,8 @@
       </div>
     </section>
 
+    <div id="k-push-warn" style="display:none;"></div>
+
     <section class="screen-section">
       <h3>📋 Меню на тиждень</h3>
       <div class="data-card" style="border-left-color:#4dd0e1;margin-top:0;">
@@ -1199,6 +1205,7 @@
         <div id="k-menu-week"><p class="empty-msg">Завантаження...</p></div>
         <button onclick="saveWeekMenu()" style="background:#00838f;color:#fff;margin-top:12px;">📢 Опублікувати тиждень</button>
         <button onclick="copyMondayToWeek()" style="background:#e0f7fa;color:#00838f;border:1px solid #80deea;">📋 Понеділок → на весь тиждень</button>
+        <div id="k-notify-info" style="display:none;"></div>
       </div>
     </section>
 
