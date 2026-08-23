@@ -79,13 +79,39 @@ async function findTargets(token, cls, studentName) {
   return [...new Set(out)];
 }
 
+// Меню стосується всіх одразу, тому шлемо однією розсилкою: 165 окремих
+// викликів функції поклали б і ліміти Netlify, і квоту FCM.
+async function findMealTargets(token) {
+  const [rt, rp] = await Promise.all([
+    fetch(`${DB}/push_tokens.json?access_token=${encodeURIComponent(token)}`),
+    fetch(`${DB}/meal_plan.json?access_token=${encodeURIComponent(token)}`)
+  ]);
+  const all = await rt.json();
+  const plans = (await rp.json()) || {};
+  if (!all || typeof all !== 'object') return [];
+  const out = [];
+  for (const uid in all) {
+    const t = all[uid];
+    if (!t || !t.token) continue;
+    if (t.role !== 'parent' && t.role !== 'student') continue;
+    const plan = plans[t.class] && plans[t.class][t.studentName];
+    if (plan && plan.lunch === false) continue; // не харчується — не турбуємо
+    out.push(t.token);
+  }
+  return [...new Set(out)];
+}
+
 // Тексти подій. Імена дітей у сповіщення не пишемо: воно з'являється на
 // екрані блокування, де його може побачити хто завгодно.
 const EVENTS = {
   grade:      (p) => ({ title: '📊 Нова оцінка', body: `${p.subject || 'Предмет'}: ${p.value || ''}`.trim(), tag: 'grade' }),
   absence:    (p) => ({ title: '🚨 Відсутність на уроці', body: `Учитель відмітив відсутність${p.subject ? ' — ' + p.subject : ''}`, tag: 'absence' }),
   comment:    (p) => ({ title: '💬 Коментар учителя', body: p.subject ? `Новий коментар: ${p.subject}` : 'Новий коментар у щоденнику', tag: 'comment' }),
-  homework:   (p) => ({ title: '📚 Нове завдання', body: `${p.subject || 'Предмет'}: задано домашнє завдання`, tag: 'hw' })
+  homework:   (p) => ({ title: '📚 Нове завдання', body: `${p.subject || 'Предмет'}: задано домашнє завдання`, tag: 'hw' }),
+  menu:       (p) => ({ title: p.value === 'upd' ? '🍽️ Меню змінено' : '🍽️ Меню опубліковано',
+                        body: p.value === 'upd' ? `Кухня оновила меню${p.subject ? ' на ' + p.subject : ''}`
+                                                : `Меню${p.subject ? ' на ' + p.subject : ''} вже в кабінеті`,
+                        tag: 'menu' })
 };
 
 exports.handler = async (event) => {
@@ -105,9 +131,10 @@ exports.handler = async (event) => {
 
   const build = EVENTS[body.type];
   if (!build) return fail(400, 'Невідомий тип події', origin);
+  const isBroadcast = body.type === 'menu';
   const cls = String(body.class || '').slice(0, 20);
   const studentName = String(body.studentName || '').slice(0, 120);
-  if (!cls || !studentName) return fail(400, 'Не вказано клас або учня', origin);
+  if (!isBroadcast && (!cls || !studentName)) return fail(400, 'Не вказано клас або учня', origin);
 
   const msg = build({
     subject: String(body.subject || '').slice(0, 80),
@@ -116,7 +143,8 @@ exports.handler = async (event) => {
 
   try {
     const token = await getAccessToken(sa);
-    const targets = await findTargets(token, cls, studentName);
+    const targets = isBroadcast ? await findMealTargets(token)
+                                : await findTargets(token, cls, studentName);
     if (targets.length === 0)
       return { statusCode: 200, headers: cors(origin), body: JSON.stringify({ sent: 0, note: 'Немає підписників' }) };
 
