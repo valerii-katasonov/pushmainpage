@@ -55,6 +55,28 @@ function weekDates(monday){
   return out;                               // лише робочі дні: Пн–Пт
 }
 function weekdayIdx(dateStr){ return new Date(dateStr+'T12:00:00').getDay(); } // 1..5
+function nextWorkday(dateStr){
+  const d = new Date(dateStr+'T12:00:00');
+  do { d.setDate(d.getDate()+1); } while(d.getDay()===0 || d.getDay()===6);
+  return iso(d);
+}
+// У суботу й неділю «поточний тиждень» для кухні — це той, що починається
+// завтра-післязавтра. Інакше в неділю відкривався тиждень, який уже минув,
+// і меню публікувалося в нікуди.
+function planningMonday(){
+  const d = new Date(localDateString+'T12:00:00');
+  const wd = d.getDay();
+  if(wd === 0) d.setDate(d.getDate() + 1);        // неділя → завтрашній понеділок
+  else if(wd === 6) d.setDate(d.getDate() + 2);   // субота  → післязавтрашній
+  return mondayOf(iso(d));
+}
+// Підпис, щоб не було сумнівів, який саме тиждень зараз на екрані
+function weekHint(monday){
+  const cur = planningMonday();
+  if(monday === cur) return new Date(localDateString+'T12:00:00').getDay() % 6 === 0
+    ? 'найближчий робочий тиждень' : 'поточний тиждень';
+  return monday < cur ? 'минулий тиждень' : 'майбутній тиждень';
+}
 
 // Чи можна ще змінювати харчування на цю дату
 export function mealsEditable(dateStr){
@@ -99,7 +121,7 @@ function absentSet(attClassDay){
 function currentMonday(){
   const el = document.getElementById('k-week');
   if(el && el.value) return el.value;
-  return mondayOf(localDateString);
+  return planningMonday();
 }
 window.kitchenWeekShift = function(delta){
   const d = new Date(currentMonday()+'T12:00:00');
@@ -110,7 +132,7 @@ window.kitchenWeekShift = function(delta){
 };
 window.kitchenThisWeek = function(){
   const el = document.getElementById('k-week');
-  if(el) el.value = mondayOf(localDateString);
+  if(el) el.value = planningMonday();
   refreshKitchen();
 };
 
@@ -120,7 +142,7 @@ export async function loadWeekMenu(){
   if(!box) return;
   const monday = currentMonday(), dates = weekDates(monday);
   const lbl = document.getElementById('k-week-label');
-  if(lbl) lbl.textContent = `${human(dates[0])} — ${human(dates[4])}`;
+  if(lbl) lbl.innerHTML = `${human(dates[0])} — ${human(dates[4])}<br><small class="k-week-hint">${escHtml(weekHint(monday))}</small>`;
   box.innerHTML = '<p class="empty-msg">Завантаження...</p>';
   const snaps = await Promise.all(dates.map(d=>get(child(ref(db),`menu/${d}`))));
   box.innerHTML = dates.map((date,i)=>{
@@ -180,19 +202,30 @@ window.saveWeekMenu = async function(){
   // Розсилка: одна на кожен змінений день, а не на кожну дитину.
   // Чекаємо на відповідь — інакше помилка розсилки лишиться непоміченою
   // і кухня буде думати, що батьки повідомлені.
-  const results = await Promise.all([
-    ...changedNew.map(d=>notifyEvent('menu',{ class:'ALL', studentName:'ALL', subject:human(d), value:'new' })),
-    ...changedUpd.map(d=>notifyEvent('menu',{ class:'ALL', studentName:'ALL', subject:human(d), value:'upd' }))
-  ]);
+  // Про минулі дні не сповіщаємо: батькам це вже ні до чого, а виглядало б
+  // як помилка. Кухня іноді заповнює минулий тиждень заднім числом для обліку.
+  const future = d => d >= localDateString;
+  const toSend = [
+    ...changedNew.filter(future).map(d=>['new',d]),
+    ...changedUpd.filter(future).map(d=>['upd',d])
+  ];
+  const skippedPast = (changedNew.length + changedUpd.length) - toSend.length;
+  const results = await Promise.all(
+    toSend.map(([v,d])=>notifyEvent('menu',{ class:'ALL', studentName:'ALL', subject:human(d), value:v }))
+  );
   const failed = results.find(r=>!r.ok);
   const sent = results.reduce((a,r)=>a+(r.sent||0),0);
   const info = document.getElementById('k-notify-info');
   if(info){
     info.style.display='block';
     info.className = failed ? 'k-notify bad' : 'k-notify ok';
+    const past = skippedPast ? ` Днів у минулому (${skippedPast}) — без сповіщення.` : '';
     info.textContent = failed
       ? `Меню збережено, але сповіщення не відправлені: ${failed.error}`
-      : (sent ? `Сповіщення надіслано: ${sent}` : 'Сповіщення нікому не надіслані — жоден з батьків ще не увімкнув їх у своєму кабінеті.');
+      : !toSend.length
+        ? `Меню збережено.${past || ' Сповіщати нема про що.'}`
+        : (sent ? `Сповіщення надіслано: ${sent}.${past}`
+                : `Сповіщення нікому не надіслані — жоден з батьків ще не увімкнув їх у своєму кабінеті.${past}`);
   }
   loadWeekMenu(); loadWeekCounts();
 };
@@ -288,7 +321,7 @@ export async function loadWeekCounts(){
 
 window.refreshKitchen = function(){
   const el = document.getElementById('k-week');
-  if(el && !el.value) el.value = mondayOf(localDateString);
+  if(el && !el.value) el.value = planningMonday();
   renderPushWarning('k-push-warn');
   const info = document.getElementById('k-notify-info');
   if(info) info.style.display='none';
@@ -429,30 +462,62 @@ window.exportMealStats = function(){
 };
 
 // ═════════ БІК БАТЬКІВ ═════════
+// Батьки бачили лише обрану дату. У вихідний або в день без меню це давало
+// порожній блок і враження, що кухня нічого не опублікувала. Тепер показуємо
+// смужку робочих днів тижня і самі перемикаємось на найближчий день із меню.
+let pmDate = null;   // який день зараз відкритий у блоці харчування
+window.pmShowDay = function(d){ pmDate = d; renderParentMenu(); };
+
 export async function renderParentMenu(cls, studentName, date){
   const box = document.getElementById('p-menu');
   if(!box) return;
+  cls = cls || currentUserData?.class;
+  studentName = studentName || currentUserData?.studentName;
+  if(!cls || !studentName) return;
+
   try{
-    const [mSnap, planSnap, daySnap, attSnap] = await Promise.all([
-      get(child(ref(db),`menu/${date}`)),
+    // Явно передана дата (зміна дати в кабінеті) скидає ручний вибір дня
+    if(date) pmDate = null;
+    // Вихідний зсуваємо на найближчий робочий день, інакше тижня просто немає
+    const anchor = date || pmDate || localDateString;
+    const wda = weekdayIdx(anchor);
+    const monday = mondayOf(wda===0 || wda===6 ? nextWorkday(anchor) : anchor);
+    const week = weekDates(monday);
+    const menus = await Promise.all(week.map(d=>get(child(ref(db),`menu/${d}`))));
+    const has = week.map((d,i)=>menus[i].exists() && (menus[i].val().first || menus[i].val().second));
+
+    // Якщо день не обирали вручну — відкриваємо сьогоднішній, а як його
+    // немає в цьому тижні або він порожній, то перший день із меню.
+    let cur = pmDate && week.includes(pmDate) ? pmDate
+            : (week.includes(localDateString) && has[week.indexOf(localDateString)] ? localDateString
+            : (week.find((d,i)=>has[i] && d >= localDateString) || week.find((d,i)=>has[i]) || week[0]));
+    pmDate = cur;
+    const ci = week.indexOf(cur);
+    const m = menus[ci].exists() ? menus[ci].val() : null;
+
+    const [planSnap, daySnap, attSnap] = await Promise.all([
       get(child(ref(db),`meal_plan/${cls}/${studentName}`)),
-      get(child(ref(db),`meal_day/${date}/${cls}/${studentName}`)),
-      get(child(ref(db),`attendance/${cls}/${date}/${studentName}`))
+      get(child(ref(db),`meal_day/${cur}/${cls}/${studentName}`)),
+      get(child(ref(db),`attendance/${cls}/${cur}/${studentName}`))
     ]);
-    const m    = mSnap.exists()?mSnap.val():null;
     const plan = planSnap.exists()?planSnap.val():{};
     const ov   = daySnap.exists()?daySnap.val():null;
     const isAbsent = attSnap.exists() && Object.values(attSnap.val()||{}).some(r=>r && r.status==='absent');
-    const eff  = effectiveMeals(plan, ov, isAbsent, weekdayIdx(date));
-    const gate = mealsEditable(date);
+    const eff  = effectiveMeals(plan, ov, isAbsent, weekdayIdx(cur));
+    const gate = mealsEditable(cur);
     const notEating = plan.lunch === false;
+
+    const strip = week.map((d,i)=>`<button type="button" class="pm-tab${d===cur?' on':''}${has[i]?'':' empty'}"
+        onclick="pmShowDay('${escJs(d)}')">
+        <span>${DOW[i].slice(0,2)}</span><b>${escHtml(human(d).slice(0,5))}</b></button>`).join('');
 
     const dishes = ['first','second','side','drink','dessert']
       .filter(k=>m && m[k]).map(k=>`<div class="pm-dish">${escHtml(m[k])}</div>`).join('');
 
     box.innerHTML = `
-      <div class="pm-title">🍽️ Обід на ${escHtml(human(date))}</div>
-      ${dishes || '<div class="pm-none">Меню ще не опубліковане</div>'}
+      <div class="pm-tabs">${strip}</div>
+      <div class="pm-title">${escHtml(DOW[ci])}, ${escHtml(human(cur))}${cur===localDateString?' — сьогодні':''}</div>
+      ${dishes || '<div class="pm-none">Меню на цей день ще не опубліковане</div>'}
       ${m && m.snack ? `<div class="pm-snack"><b>🥪 Підвечірок:</b> ${escHtml(m.snack)}</div>` : ''}
       ${m && m.allergens ? `<div class="pm-allerg">⚠️ ${escHtml(m.allergens)}</div>` : ''}
       ${m && m.note ? `<div class="pm-note">${escHtml(m.note)}</div>` : ''}
@@ -467,9 +532,9 @@ export async function renderParentMenu(cls, studentName, date){
       ${isAbsent ? '' : `
         <div class="pm-act">
           ${gate.ok ? `
-            ${notEating ? '' : `<button class="pm-btn ${eff.lunch?'':'back'}" onclick="setMealDay('${escJs(date)}','lunch',${eff.lunch?0:1})">
+            ${notEating ? '' : `<button class="pm-btn ${eff.lunch?'':'back'}" onclick="setMealDay('${escJs(cur)}','lunch',${eff.lunch?0:1})">
               ${eff.lunch?'Не буде обідати':'Поверну обід'}</button>`}
-            <button class="pm-btn snack" onclick="setMealDay('${escJs(date)}','snack',${eff.snack?0:1})">
+            <button class="pm-btn snack" onclick="setMealDay('${escJs(cur)}','snack',${eff.snack?0:1})">
               ${eff.snack?'Без підвечірка':'+ Підвечірок'}</button>`
             : `<span class="pm-locked">🔒 ${escHtml(gate.msg)}</span>`}
         </div>`}
@@ -478,7 +543,7 @@ export async function renderParentMenu(cls, studentName, date){
         <a href="#" onclick="event.preventDefault();openMyMealStats();">📊 Моя статистика</a>
       </div>`;
   }catch(e){
-    box.innerHTML = `<div class="pm-none">Не вдалося завантажити меню</div>`;
+    box.innerHTML = `<div class="pm-none">Не вдалося завантажити меню: ${escHtml(e.message)}</div>`;
   }
 }
 
@@ -500,7 +565,7 @@ window.setMealDay = async function(date, field, value){
   cur.by = currentUserData.email || ''; cur.ts = Date.now();
   await set(ref(db, path), cur);
   showToast(value ? '✓ Записано' : '✕ Відмову зафіксовано');
-  renderParentMenu(cls, name, date);
+  renderParentMenu();
 };
 
 // Постійні налаштування дитини — тут батько може зняти її з харчування зовсім
@@ -549,7 +614,7 @@ window.saveMealSettings = async function(){
   await set(ref(db,`meal_plan/${cls}/${name}`), plan);
   document.getElementById('meal-settings-modal').style.display = 'none';
   showToast('✅ Налаштування збережено');
-  renderParentMenu(cls, name, document.getElementById('global-date').value);
+  renderParentMenu();
 };
 
 window.openMyMealStats = async function(){
