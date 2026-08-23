@@ -322,32 +322,71 @@
     #btn-ai-hw:disabled,#btn-ai-comment:disabled{opacity:.6;cursor:wait;}
     .ai-hw-note{font-size:.72rem;color:#999;font-style:italic;}
     /* ── Кухня ── */
+    .k-weeknav{display:flex;align-items:center;gap:10px;justify-content:space-between;background:#e0f7fa;border-radius:11px;padding:9px 11px;}
+    .k-weeknav button{width:auto;margin:0;padding:6px 15px;font-size:1.05rem;font-weight:800;background:#fff;color:#00838f;border:1px solid #80deea;border-radius:9px;cursor:pointer;}
+    .k-weeknav div{text-align:center;flex:1;min-width:0;font-size:.88rem;color:#00838f;}
+    .k-weeknav a{font-size:.72rem;color:#0097a7;}
     .k-total{text-align:center;padding:12px;background:#e0f7fa;border-radius:11px;}
     .k-total b{display:block;font-size:2.4rem;color:#00838f;line-height:1;}
     .k-total span{font-size:.8rem;color:#666;}
+    .k-total-snack{font-size:.85rem;font-weight:700;color:#6a1b9a;margin-top:5px;}
     .k-sub{text-align:center;font-size:.76rem;color:#888;margin-top:6px;}
     .k-table{width:100%;border-collapse:collapse;font-size:.83rem;margin-top:10px;}
     .k-table th{background:#e0f7fa;color:#00838f;padding:6px;font-size:.74rem;border-bottom:1px solid #b2ebf2;}
     .k-table td{padding:5px 6px;border-bottom:1px solid #f0f0f0;text-align:center;}
     .k-table td:first-child{text-align:left;font-weight:700;}
+    .k-table tr.k-now td{background:#fffde7;}
     .k-off{color:#bbb;}
-    .k-skip-title{font-size:.8rem;font-weight:800;color:#e65100;margin:12px 0 5px 0;}
+    .k-skip-title{font-size:.8rem;font-weight:800;color:#00838f;margin:14px 0 5px 0;}
     .k-skip{font-size:.8rem;padding:3px 0;border-bottom:1px dashed #eee;}
     .k-skip span{color:#999;font-size:.74rem;}
-    #k-menu-fields label{margin-top:9px;font-size:.78rem;color:#666;}
-    #k-menu-fields input{margin-top:3px;}
-    /* ── Меню у батьків ── */
-    .pm-box{background:#e0f7fa;border:1px solid #80deea;border-radius:11px;padding:11px 13px;margin-bottom:10px;}
-    .pm-title{font-size:.85rem;font-weight:800;color:#00838f;margin-bottom:6px;}
-    .pm-dish{font-size:.85rem;color:#333;padding:2px 0;}
+    .k-day{border:1px solid #b2ebf2;border-radius:10px;margin-bottom:7px;background:#fafeff;}
+    .k-day summary{cursor:pointer;padding:9px 11px;display:flex;align-items:center;gap:8px;font-size:.85rem;}
+    .k-day-name{font-weight:800;color:#00838f;}
+    .k-day-date{color:#999;font-size:.76rem;}
+    .k-day-flag{margin-left:auto;font-size:.7rem;padding:2px 7px;border-radius:20px;}
+    .k-day-flag.ok{background:#e8f5e9;color:#2e7d32;}
+    .k-day-flag.no{background:#f5f5f5;color:#aaa;}
+    .k-day-body{padding:2px 11px 11px 11px;}
+    .k-day-body label{margin-top:8px;font-size:.76rem;color:#666;display:block;}
+    .k-day-body input{margin-top:3px;}
+    .k-day-ts{font-size:.7rem;color:#bbb;margin:8px 0 0 0;}
+    .k-plan-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f0f0f0;flex-wrap:wrap;}
+    .k-plan-name{flex:1;min-width:110px;font-size:.83rem;font-weight:700;}
+    .k-plan-lunch{font-size:.78rem;color:#555;display:flex;align-items:center;gap:4px;margin:0;}
+    .k-plan-lunch input{width:auto;margin:0;}
+    .k-plan-row select{width:auto;margin:0;padding:5px 7px;font-size:.76rem;}
+    /* ── Харчування у батьків ── */
+    .pm-box{background:#e0f7fa;border:1px solid #80deea;border-radius:11px;padding:12px 14px;margin-top:0;}
+    .pm-title{font-size:.9rem;font-weight:800;color:#00838f;margin-bottom:7px;}
+    .pm-dish{font-size:.86rem;color:#333;padding:2px 0;}
     .pm-none{font-size:.8rem;color:#888;font-style:italic;}
-    .pm-allerg{font-size:.76rem;color:#b71c1c;background:#ffebee;border:1px solid #ef9a9a;border-radius:7px;padding:5px 8px;margin-top:7px;}
-    .pm-note{font-size:.76rem;color:#666;margin-top:5px;font-style:italic;}
-    .pm-act{margin-top:9px;display:flex;align-items:center;gap:9px;flex-wrap:wrap;}
-    .pm-btn{width:auto;margin:0;padding:7px 13px;font-size:.79rem;font-weight:700;border:1px solid #ef9a9a;background:#fff;color:var(--red);border-radius:8px;cursor:pointer;}
+    .pm-snack{font-size:.83rem;color:#4a148c;background:#f3e5f5;border-radius:8px;padding:6px 9px;margin-top:8px;}
+    .pm-allerg{font-size:.78rem;color:#b71c1c;background:#ffebee;border:1px solid #ef9a9a;border-radius:8px;padding:6px 9px;margin-top:8px;}
+    .pm-note{font-size:.76rem;color:#666;margin-top:6px;font-style:italic;}
+    .pm-status{margin-top:10px;display:flex;gap:9px;flex-wrap:wrap;}
+    .pm-on{font-size:.8rem;font-weight:700;color:#1b5e20;background:#e8f5e9;border-radius:20px;padding:3px 11px;}
+    .pm-off{font-size:.8rem;font-weight:700;color:var(--red);background:#ffebee;border-radius:20px;padding:3px 11px;}
+    .pm-dim{font-size:.8rem;color:#999;background:#f5f5f5;border-radius:20px;padding:3px 11px;}
+    .pm-act{margin-top:9px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+    .pm-btn{width:auto;margin:0;padding:7px 13px;font-size:.78rem;font-weight:700;border:1px solid #ef9a9a;background:#fff;color:var(--red);border-radius:8px;cursor:pointer;}
     .pm-btn.back{border-color:#a5d6a7;color:#1b5e20;}
-    .pm-off{font-size:.82rem;font-weight:700;color:var(--red);}
-    .pm-past{font-size:.78rem;color:#aaa;}
+    .pm-btn.snack{border-color:#ce93d8;color:#6a1b9a;}
+    .pm-locked{font-size:.77rem;color:#8d6e63;background:#fff8e1;border:1px solid #ffe0a3;border-radius:8px;padding:7px 10px;line-height:1.4;}
+    .pm-links{margin-top:11px;display:flex;gap:14px;flex-wrap:wrap;}
+    .pm-links a{font-size:.76rem;color:#00838f;text-decoration:none;font-weight:700;}
+    .ms-row{display:flex;align-items:flex-start;gap:9px;margin:4px 0 12px 0;font-size:.85rem;}
+    .ms-row input{width:auto;margin:2px 0 0 0;}
+    .ms-row small{color:#888;font-size:.74rem;}
+    #ms-days{display:flex;gap:6px;margin-top:8px;}
+    .ms-day{flex:1;text-align:center;background:#f5f5f5;border-radius:8px;padding:7px 2px;margin:0;font-size:.76rem;cursor:pointer;}
+    .ms-day input{width:auto;margin:0 0 3px 0;}
+    .ms-day span{display:block;font-weight:700;color:#555;}
+    .ms-note{font-size:.74rem;color:#888;margin-top:12px;line-height:1.45;}
+    .pms-grid{display:flex;gap:8px;margin-top:11px;}
+    .pms-cell{flex:1;text-align:center;background:#e0f7fa;border-radius:10px;padding:11px 4px;}
+    .pms-cell b{display:block;font-size:1.7rem;color:#00838f;line-height:1;}
+    .pms-cell span{font-size:.7rem;color:#666;}
     /* ── Швидкий журнал ── */
     .qj-legend{display:flex;gap:12px;font-size:.72rem;color:#888;margin-top:8px;}
     .qj-row{display:grid;grid-template-columns:24px 1fr auto 52px;gap:7px;align-items:center;padding:6px 4px;border-bottom:1px solid #f2f2f2;}
@@ -1046,7 +1085,7 @@
       <label style="margin-top:0;color:#d35400;font-size:.95rem;">🏫 Оберіть клас:</label>
       <select id="t-class-selector" onchange="handleClassChange()" style="margin-top:4px;border:2px solid #e67e22;color:#d35400;font-weight:700;text-align:center;"></select>
     </div>
-    <label style="margin-top:0;color:var(--teal);font-size:.95rem;">📅 Оберіть дату:</label>
+    <label id="global-date-label" style="margin-top:0;color:var(--teal);font-size:.95rem;">📅 Оберіть дату:</label>
     <input type="date" id="global-date" onchange="handleDateChange()" style="border:2px solid var(--teal);color:var(--teal);font-weight:700;text-align:center;">
   </div>
   <!-- ADMIN -->
@@ -1135,33 +1174,64 @@
   <!-- КУХНЯ -->
   <div id="kitchen-screen" class="panel">
     <h2 style="color:#00838f;">🍽️ Кухня</h2>
+
     <section class="screen-section">
-      <h3>📅 День</h3>
-      <input type="date" id="k-date" onchange="refreshKitchen()" style="border:2px solid #4dd0e1;font-weight:700;text-align:center;">
+      <h3>📅 Тиждень</h3>
+      <div class="k-weeknav">
+        <button type="button" onclick="kitchenWeekShift(-1)">←</button>
+        <div><b id="k-week-label">—</b><br><a href="#" onclick="event.preventDefault();kitchenThisWeek();">поточний тиждень</a></div>
+        <button type="button" onclick="kitchenWeekShift(1)">→</button>
+      </div>
+      <input type="hidden" id="k-week">
     </section>
+
     <section class="screen-section">
       <h3>🔢 Скільки готувати</h3>
       <div class="data-card" style="border-left-color:#00838f;margin-top:0;">
-        <div id="k-counts"><p class="empty-msg">Оберіть дату.</p></div>
+        <div id="k-counts"><p class="empty-msg">Завантаження...</p></div>
       </div>
     </section>
+
     <section class="screen-section">
-      <h3>📋 Меню на день</h3>
+      <h3>📋 Меню на тиждень</h3>
       <div class="data-card" style="border-left-color:#4dd0e1;margin-top:0;">
-        <p id="k-menu-info" style="font-size:.76rem;color:#888;margin:0 0 8px 0;"></p>
-        <div id="k-menu-fields"></div>
-        <button onclick="saveMenu()" style="background:#00838f;color:#fff;">💾 Зберегти меню</button>
-        <div style="margin-top:12px;border-top:1px dashed #b2ebf2;padding-top:11px;">
-          <b style="font-size:.85rem;color:#00838f;">Скопіювати це меню наперед</b>
-          <p style="font-size:.76rem;color:#888;margin:4px 0 6px 0;">Вихідні пропускаються автоматично.</p>
-          <div style="display:flex;gap:8px;align-items:center;">
-            <input type="number" id="k-copy-days" value="4" min="1" max="20" style="width:80px;margin:0;">
-            <span style="font-size:.82rem;color:#666;">робочих днів</span>
-            <button onclick="copyMenuForward()" style="width:auto;margin:0;padding:8px 14px;background:#e0f7fa;color:#00838f;border:1px solid #80deea;">📋 Скопіювати</button>
-          </div>
-        </div>
+        <p style="font-size:.76rem;color:#888;margin:0 0 9px 0;">Заповніть дні й натисніть «Опублікувати». Батьки отримають сповіщення лише про ті дні, що змінилися.</p>
+        <div id="k-menu-week"><p class="empty-msg">Завантаження...</p></div>
+        <button onclick="saveWeekMenu()" style="background:#00838f;color:#fff;margin-top:12px;">📢 Опублікувати тиждень</button>
+        <button onclick="copyMondayToWeek()" style="background:#e0f7fa;color:#00838f;border:1px solid #80deea;">📋 Понеділок → на весь тиждень</button>
       </div>
     </section>
+
+    <section class="screen-section">
+      <h3>👥 Хто харчується</h3>
+      <div class="data-card" style="border-left-color:#7e57c2;margin-top:0;">
+        <p style="font-size:.76rem;color:#888;margin:0 0 7px 0;">Зазвичай це налаштовують батьки. Тут можна виправити вручну — наприклад, якщо родина не користується порталом.</p>
+        <select id="k-plan-class" onchange="loadMealPlans()">
+          <option value="">Оберіть клас...</option>
+          <option value="class_1">1 клас</option><option value="class_2">2 клас</option>
+          <option value="class_3">3 клас</option><option value="class_4">4 клас</option>
+          <option value="class_5">5 клас</option><option value="class_6">6 клас</option>
+          <option value="class_7">7 клас</option><option value="class_8">8 клас</option>
+          <option value="class_9">9 клас</option><option value="class_10">10 клас</option>
+          <option value="class_11">11 клас</option>
+        </select>
+        <div id="k-plan-list"><p class="empty-msg">Оберіть клас.</p></div>
+      </div>
+    </section>
+
+    <section class="screen-section">
+      <h3>📊 Статистика за період</h3>
+      <div class="data-card" style="border-left-color:#26a69a;margin-top:0;">
+        <p style="font-size:.76rem;color:#888;margin:0 0 7px 0;">Людино-дні: скільки днів кожна дитина обідала і скільки брала підвечірок. Дні відсутності не рахуються.</p>
+        <div style="display:flex;gap:8px;">
+          <div style="flex:1;min-width:0;"><label for="k-stat-from" style="font-size:.74rem;">Від</label><input type="date" id="k-stat-from"></div>
+          <div style="flex:1;min-width:0;"><label for="k-stat-to" style="font-size:.74rem;">До</label><input type="date" id="k-stat-to"></div>
+        </div>
+        <button onclick="loadMealStats()" style="background:#26a69a;color:#fff;">Порахувати</button>
+        <div id="k-stats"></div>
+      </div>
+    </section>
+
     <button class="btn-logout" onclick="logoutUser()">Вийти</button>
   </div>
   <!-- DIRECTOR -->
@@ -1903,6 +1973,11 @@
     </section>
 
     <section class="screen-section">
+      <h3>🍽️ Харчування</h3>
+      <div id="p-menu" class="pm-box"><p class="empty-msg">Завантаження...</p></div>
+    </section>
+
+    <section class="screen-section">
       <h3>📚 Навчання</h3>
       <!-- Наліпки -->
       <div class="data-card" style="border-left-color:#f1c40f;background:#fffcf0;text-align:center;margin-top:0;">
@@ -1919,7 +1994,6 @@
       <!-- ДЗ -->
       <div class="data-card" style="border-left-color:#00b894;background:#f0fff4;">
         <h4 style="margin-top:0;color:#00b894;">📚 Задано:</h4>
-        <div id="p-menu" class="pm-box" style="display:none;"></div>
         <div id="p-consents" style="display:none;margin-bottom:10px;"></div>
         <div id="p-final-grades" class="fin-box" style="display:none;"></div>
         <button type="button" id="btn-report-card" onclick="downloadMyReportCard()" style="background:#00838f;color:#fff;margin-top:0;margin-bottom:10px;">📄 Завантажити табель</button>
@@ -2445,6 +2519,30 @@
   </div>
 </div>
 <!-- ═══════════════════════ APP MODULES (ES modules) ═══════════════════════ -->
+
+<!-- НАЛАШТУВАННЯ ХАРЧУВАННЯ (батьки) -->
+<div id="meal-settings-modal" class="modal-overlay" style="display:none;z-index:1010;">
+  <div class="modal-content">
+    <h3 style="color:#00838f;margin-top:0;">⚙️ Налаштування харчування</h3>
+    <div id="meal-settings-body"></div>
+    <button onclick="saveMealSettings()" style="background:#00838f;color:#fff;">💾 Зберегти</button>
+    <button onclick="document.getElementById('meal-settings-modal').style.display='none'" style="background:#eceff1;color:#37474f;">Закрити</button>
+  </div>
+</div>
+
+<!-- СТАТИСТИКА ХАРЧУВАННЯ (батьки) -->
+<div id="meal-stats-modal" class="modal-overlay" style="display:none;z-index:1010;">
+  <div class="modal-content">
+    <h3 style="color:#00838f;margin-top:0;">📊 Харчування дитини</h3>
+    <div style="display:flex;gap:8px;">
+      <div style="flex:1;min-width:0;"><label for="pms-from" style="font-size:.74rem;">Від</label><input type="date" id="pms-from" onchange="reloadMyMealStats()"></div>
+      <div style="flex:1;min-width:0;"><label for="pms-to" style="font-size:.74rem;">До</label><input type="date" id="pms-to" onchange="reloadMyMealStats()"></div>
+    </div>
+    <div id="meal-stats-body"></div>
+    <button onclick="document.getElementById('meal-stats-modal').style.display='none'" style="background:#eceff1;color:#37474f;">Закрити</button>
+  </div>
+</div>
+
 <script type="module" src="common.js"></script>
 <script type="module" src="curriculum.js"></script>
 <script type="module" src="director.js"></script>
