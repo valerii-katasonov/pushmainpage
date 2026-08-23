@@ -43,7 +43,11 @@ async function getAccessToken(sa) {
   const header = b64url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
   const claim = b64url(JSON.stringify({
     iss: sa.client_email,
-    scope: 'https://www.googleapis.com/auth/firebase.messaging',
+    scope: [
+      'https://www.googleapis.com/auth/firebase.messaging',
+      'https://www.googleapis.com/auth/firebase.database',
+      'https://www.googleapis.com/auth/userinfo.email'
+    ].join(' '),
     aud: 'https://oauth2.googleapis.com/token',
     iat: now, exp: now + 3600
   }));
@@ -63,9 +67,15 @@ async function getAccessToken(sa) {
 
 // Кому слати: усі, хто увімкнув сповіщення і кого стосується подія.
 // Батьки — за прив'язаною дитиною; учень — за власним іменем.
+async function readDb(token, path) {
+  const r = await fetch(`${DB}/${path}.json?access_token=${encodeURIComponent(token)}`);
+  const d = await r.json().catch(() => null);
+  if (!r.ok) throw new Error(`база недоступна (${path}): ${(d && d.error) || r.status}`);
+  return d;
+}
+
 async function findTargets(token, cls, studentName) {
-  const r = await fetch(`${DB}/push_tokens.json?access_token=${encodeURIComponent(token)}`);
-  const all = await r.json();
+  const all = await readDb(token, 'push_tokens');
   if (!all || typeof all !== 'object') return [];
   const out = [];
   for (const uid in all) {
@@ -82,12 +92,11 @@ async function findTargets(token, cls, studentName) {
 // Меню стосується всіх одразу, тому шлемо однією розсилкою: 165 окремих
 // викликів функції поклали б і ліміти Netlify, і квоту FCM.
 async function findMealTargets(token) {
-  const [rt, rp] = await Promise.all([
-    fetch(`${DB}/push_tokens.json?access_token=${encodeURIComponent(token)}`),
-    fetch(`${DB}/meal_plan.json?access_token=${encodeURIComponent(token)}`)
+  const [all, plansRaw] = await Promise.all([
+    readDb(token, 'push_tokens'),
+    readDb(token, 'meal_plan')
   ]);
-  const all = await rt.json();
-  const plans = (await rp.json()) || {};
+  const plans = plansRaw || {};
   if (!all || typeof all !== 'object') return [];
   const out = [];
   for (const uid in all) {
@@ -143,6 +152,16 @@ exports.handler = async (event) => {
 
   try {
     const token = await getAccessToken(sa);
+    // Діагностика: чи взагалі є кому слати. Без цього «0 надіслано» не
+    // відрізнити від зламаних ключів.
+    if (body.probe) {
+      const all = await readDb(token, 'push_tokens');
+      const list = all && typeof all === 'object' ? Object.values(all) : [];
+      const eligible = list.filter(t => t && t.token && (t.role === 'parent' || t.role === 'student'));
+      return { statusCode: 200, headers: cors(origin), body: JSON.stringify({
+        ok: true, project: sa.project_id, tokens: list.length, eligible: eligible.length
+      }) };
+    }
     const targets = isBroadcast ? await findMealTargets(token)
                                 : await findTargets(token, cls, studentName);
     if (targets.length === 0)
@@ -165,7 +184,19 @@ exports.handler = async (event) => {
       })
     ));
     const sent = results.filter(r => r.status === 'fulfilled' && r.value.ok).length;
-    return { statusCode: 200, headers: cors(origin), body: JSON.stringify({ sent, total: targets.length }) };
+    let firstError = '';
+    if (sent < targets.length) {
+      const bad = results.find(r => r.status === 'rejected' || !r.value.ok);
+      if (bad) {
+        if (bad.status === 'rejected') firstError = bad.reason && bad.reason.message || 'мережева помилка';
+        else {
+          const d = await bad.value.json().catch(() => null);
+          firstError = (d && d.error && (d.error.message || d.error.status)) || `HTTP ${bad.value.status}`;
+        }
+      }
+    }
+    return { statusCode: 200, headers: cors(origin),
+             body: JSON.stringify({ sent, total: targets.length, firstError }) };
   } catch (e) {
     return fail(500, 'Не вдалося надіслати: ' + e.message, origin);
   }
