@@ -323,6 +323,11 @@ window.refreshKitchen = function(){
   const el = document.getElementById('k-week');
   if(el && !el.value) el.value = planningMonday();
   renderPushWarning('k-push-warn');
+  const od = document.getElementById('k-order-date');
+  if(od && !od.value){
+    const wd = weekdayIdx(localDateString);
+    od.value = (wd===0||wd===6) ? nextWorkday(localDateString) : localDateString;
+  }
   const info = document.getElementById('k-notify-info');
   if(info) info.style.display='none';
   loadWeekMenu(); loadWeekCounts();
@@ -369,6 +374,73 @@ window.setMealPlan = async function(cls, name, field, value){
   showToast('✅ Збережено');
   loadWeekCounts();
   if(field==='snack' && value==='days') loadMealPlans();
+};
+
+// ── Хто що замовив: поіменний список по класу на конкретний день ──
+// Кухні потрібен не лише підсумок, а й список, з яким можна вийти на роздачу:
+// хто сьогодні обідає, хто бере підвечірок, кого немає і хто відмовився.
+window.loadClassOrders = async function(){
+  const cls  = document.getElementById('k-order-class')?.value;
+  const date = document.getElementById('k-order-date')?.value;
+  const box  = document.getElementById('k-orders');
+  if(!box) return;
+  if(!cls || !date){ box.innerHTML = '<p class="empty-msg">Оберіть клас і дату.</p>'; return; }
+  box.innerHTML = '<p class="empty-msg">Завантаження...</p>';
+  try{
+    const [stSnap, plSnap, daySnap, attSnap] = await Promise.all([
+      get(child(ref(db),`students_list/${cls}`)),
+      get(child(ref(db),`meal_plan/${cls}`)),
+      get(child(ref(db),`meal_day/${date}/${cls}`)),
+      get(child(ref(db),`attendance/${cls}/${date}`))
+    ]);
+    if(!stSnap.exists()){ box.innerHTML = '<p class="empty-msg">У класі немає учнів.</p>'; return; }
+    const plans = plSnap.exists()?plSnap.val():{};
+    const overrides = daySnap.exists()?daySnap.val():{};
+    const absent = absentSet(attSnap.exists()?attSnap.val():null);
+    const wd = weekdayIdx(date);
+
+    const rows = Object.values(stSnap.val()).sort((a,b)=>a.localeCompare(b,'uk')).map(name=>{
+      const plan = plans[name] || {};
+      const ov = overrides[name];
+      const e = effectiveMeals(plan, ov, !!absent[name], wd);
+      let note = '';
+      if(e.absent) note = 'відсутній';
+      else if(plan.lunch === false) note = 'не харчується';
+      else if(ov && ov.lunch === 0) note = ov.reason ? `відмова · ${ov.reason}` : 'відмова';
+      else if(ov && ov.snack !== undefined) note = ov.snack ? 'підвечірок разово' : 'без підвечірка сьогодні';
+      return { name, ...e, note };
+    });
+    const lunch = rows.filter(r=>r.lunch).length;
+    const snack = rows.filter(r=>r.snack).length;
+    window.__classOrders = { cls, date, rows };
+
+    box.innerHTML = `
+      <div class="k-ord-sum"><b>${lunch}</b> обідів · <b>${snack}</b> підвечірків
+        <span>${escHtml(cls.replace('class_',''))} клас, ${escHtml(human(date))}</span></div>
+      <table class="k-table k-ord"><thead><tr>
+        <th>Учень</th><th>Обід</th><th>Підвеч.</th><th>Примітка</th></tr></thead><tbody>
+        ${rows.map(r=>`<tr class="${r.absent?'k-ord-abs':''}">
+          <td>${escHtml(r.name)}</td>
+          <td>${r.lunch?'<span class="k-yes">✓</span>':'<span class="k-no">—</span>'}</td>
+          <td>${r.snack?'<span class="k-yes">✓</span>':'<span class="k-no">—</span>'}</td>
+          <td class="k-ord-note">${escHtml(r.note)}</td></tr>`).join('')}
+      </tbody></table>
+      <button onclick="exportClassOrders()" style="background:#e0f7fa;color:#00838f;border:1px solid #80deea;margin-top:11px;">📄 Вивантажити CSV</button>`;
+  }catch(e){
+    box.innerHTML = `<p style="color:red;font-size:.8rem;">Помилка: ${escHtml(e.message)}</p>`;
+  }
+};
+window.exportClassOrders = function(){
+  const o = window.__classOrders;
+  if(!o) return;
+  const csv = ['Учень;Обід;Підвечірок;Примітка',
+    ...o.rows.map(r=>`${r.name};${r.lunch?'так':'ні'};${r.snack?'так':'ні'};${r.note}`)].join('\n');
+  const blob = new Blob(['\ufeff'+csv], {type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `zamovlennya_${o.cls}_${o.date}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
 };
 
 // ── Статистика за період (людино-дні) ──
