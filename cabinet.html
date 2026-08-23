@@ -360,6 +360,15 @@
     .k-notify{margin-top:10px;white-space:pre-line;border-radius:9px;padding:8px 11px;font-size:.78rem;line-height:1.4;}
     .k-notify.ok{background:#e8f5e9;color:#1b5e20;border:1px solid #a5d6a7;}
     .k-notify.bad{background:#ffebee;color:#b71c1c;border:1px solid #ef9a9a;}
+    .k-ord-sum{background:#fff3e0;border:1px solid #ffcc80;border-radius:10px;padding:9px 12px;font-size:.86rem;color:#e65100;}
+    .k-ord-sum b{font-size:1.15rem;}
+    .k-ord-sum span{display:block;font-size:.72rem;color:#a1887f;margin-top:2px;}
+    .k-ord td{text-align:left;}
+    .k-ord td:nth-child(2),.k-ord td:nth-child(3){text-align:center;width:44px;}
+    .k-ord-abs td{opacity:.5;}
+    .k-ord-note{font-size:.72rem;color:#999;}
+    .k-yes{color:#2e7d32;font-weight:800;}
+    .k-no{color:#ccc;}
     /* ── Харчування у батьків ── */
     .pm-box{background:#e0f7fa;border:1px solid #80deea;border-radius:11px;padding:12px 14px;margin-top:0;}
     .pm-tabs{display:flex;gap:5px;margin-bottom:10px;}
@@ -1215,6 +1224,24 @@
         <button onclick="copyMondayToWeek()" style="background:#e0f7fa;color:#00838f;border:1px solid #80deea;">📋 Понеділок → на весь тиждень</button>
         <button onclick="checkNotifySetup()" style="background:#f5f5f5;color:#555;border:1px solid #ddd;">🔍 Перевірити, чи працюють сповіщення</button>
         <div id="k-notify-info" style="display:none;"></div>
+      </div>
+    </section>
+
+    <section class="screen-section">
+      <h3>📝 Хто що замовив</h3>
+      <div class="data-card" style="border-left-color:#ef6c00;margin-top:0;">
+        <p style="font-size:.76rem;color:#888;margin:0 0 7px 0;">Поіменний список на день — з ним можна виходити на роздачу.</p>
+        <div style="display:flex;gap:8px;">
+          <div style="flex:1;min-width:0;">
+            <label for="k-order-class" style="font-size:.74rem;">Клас</label>
+            <select id="k-order-class" onchange="loadClassOrders()"><option value="">Оберіть...</option><option value="class_1">1 клас</option><option value="class_2">2 клас</option><option value="class_3">3 клас</option><option value="class_4">4 клас</option><option value="class_5">5 клас</option><option value="class_6">6 клас</option><option value="class_7">7 клас</option><option value="class_8">8 клас</option><option value="class_9">9 клас</option><option value="class_10">10 клас</option><option value="class_11">11 клас</option></select>
+          </div>
+          <div style="flex:1;min-width:0;">
+            <label for="k-order-date" style="font-size:.74rem;">Дата</label>
+            <input type="date" id="k-order-date" onchange="loadClassOrders()">
+          </div>
+        </div>
+        <div id="k-orders"><p class="empty-msg">Оберіть клас і дату.</p></div>
       </div>
     </section>
 
