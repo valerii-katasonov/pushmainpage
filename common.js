@@ -714,6 +714,9 @@ window.logAction=logAction;
 //   Project settings → Cloud Messaging → Web Push certificates →
 //   Generate key pair → скопіювати ключ у VAPID_KEY нижче.
 const VAPID_KEY='BAifnPl3VcvDFpYuE7D2HAyfCzczsxAq3ktk72MgK6a4MY03Krvu4JI6k8pYOrasLdhwW0lLEAqDWs6iLGYEaCo';
+// Без цього ключа ніхто не може підписатися, тож і слати нема кому.
+// Виносимо назовні, щоб екрани могли чесно попередити, а не мовчати.
+export const pushConfigured = !VAPID_KEY.startsWith('ЗАМІНИТИ');
 let swRegistration=null;
 // Реєструємо Service Worker одразу: без нього не працюють ані push,
 // ані встановлення застосунку на телефон. Раніше він не реєструвався
@@ -785,7 +788,7 @@ export async function pushState(){
 }
 window.enablePush=async function(){
   if(!await pushSupported())return showToast('⚠️ Ваш браузер не підтримує сповіщення');
-  if(VAPID_KEY.startsWith('ЗАМІНИТИ'))return showToast('⚠️ Сповіщення ще не налаштовані адміністратором');
+  if(!pushConfigured)return showToast('⚠️ Сповіщення ще не налаштовані адміністратором');
   try{
     const perm=await Notification.requestPermission();
     if(perm!=='granted'){
@@ -858,13 +861,26 @@ window.renderPushButton=renderPushButton;
 // не налаштовані або впали — основна дія (оцінка, відмітка) вже збережена
 // і не має зриватися через це.
 export function notifyEvent(type,payload){
-  try{
-    fetch('/.netlify/functions/notify',{
-      method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({type,...payload})
-    }).catch(()=>{});
-  }catch(e){/* ignore */}
+  if(!pushConfigured) return Promise.resolve({ok:false,error:'Push не налаштовано: немає VAPID-ключа'});
+  return fetch('/.netlify/functions/notify',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({type,...payload})
+  }).then(async r=>{
+    let d={}; try{ d=await r.json(); }catch(e){}
+    if(!r.ok) return {ok:false,error:d.error||`HTTP ${r.status}`};
+    return {ok:true,sent:d.sent||0,note:d.note||''};
+  }).catch(e=>({ok:false,error:e.message||'Немає звʼязку з сервером'}));
 }
+// Попередження на екрані замість мовчазної тиші, коли push не налаштований
+export function renderPushWarning(containerId){
+  const box=document.getElementById(containerId);
+  if(!box)return;
+  if(pushConfigured){box.style.display='none';return;}
+  box.style.display='block';
+  box.className='push-warn';
+  box.textContent='⚠️ Сповіщення поки не працюють: адміністратор ще не додав ключ Firebase. Меню збережеться, але батьки повідомлення не отримають.';
+}
+window.renderPushWarning=renderPushWarning;
 window.notifyEvent=notifyEvent;
 // Сповіщення, коли портал відкритий: системне вікно браузер не показує,
 // тому показуємо власний тост — інакше подія просто зникне непоміченою.
