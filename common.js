@@ -742,7 +742,12 @@ onAuthStateChanged(auth,async user=>{
       const kids=normalizeChildren(ls.val());
       const first=kids[0]||{studentName:'',class:'class_2',role:'guardian'};
       const nd={role:"parent",children:kids,studentName:first.studentName,studentId:first.studentId||null,class:first.class,parentRole:first.role||'guardian',email:user.email};
-      await set(ref(db,`users/${user.uid}`),nd);currentUserData=nd;await loadGradeTypesCache();initUserSession();}else{const sls=await get(child(ref(db),`student_links/${se}`));if(sls.exists()){const sd=sls.val();const nd={role:"student",studentName:sd.studentName,studentId:sd.studentId||null,class:sd.class,email:user.email};await set(ref(db,`users/${user.uid}`),nd);currentUserData=nd;await loadGradeTypesCache();initUserSession();}else{alert("Ваш Email не зареєстровано.");signOut(auth);}}}}
+      await set(ref(db,`users/${user.uid}`),nd);currentUserData=nd;await loadGradeTypesCache();initUserSession();}else{const sls=await get(child(ref(db),`student_links/${se}`));if(sls.exists()){const sd=sls.val();const nd={role:"student",studentName:sd.studentName,studentId:sd.studentId||null,class:sd.class,email:user.email};await set(ref(db,`users/${user.uid}`),nd);currentUserData=nd;await loadGradeTypesCache();initUserSession();}else{signOut(auth).then(()=>{
+      if(window.showFirstLoginScreen){
+        window.showFirstLoginScreen();
+        setMsg('fl-error','Цей email ще не додано школою. Зверніться до класного керівника або директора.','login-err');
+      } else alert('Цей email ще не додано школою. Зверніться до класного керівника або директора.');
+    });}}}}
   }else document.getElementById('login-screen').style.display='block';
 });
 async function fetchTeacherAccess(se){const s=await get(child(ref(db),`teacher_access/${se}`));teacherAccessMatrix=s.exists()?s.val():{};}
@@ -1811,15 +1816,20 @@ window.togglePassVisibility=function(inputId,btnId){
   if(b){b.innerText=show?'🙈':'👁';b.setAttribute('aria-label',show?'Сховати пароль':'Показати пароль');}
 };
 // Чи додала школа цей email (три можливі джерела дозволу)
+// Повертає true / false / null. null означає «не змогли перевірити» —
+// саме так буває до входу, коли правила ще не дають читати базу.
+// Тоді підказку показуємо нейтральну, а не стверджуємо неправду.
 async function isEmailApproved(rawEmail){
   const se=emailKey(rawEmail);
   if(!se)return false;
-  const [rs,ls,sls]=await Promise.all([
-    get(child(ref(db),`pre_approved_roles/${se}`)),
-    get(child(ref(db),`parent_links/${se}`)),
-    get(child(ref(db),`student_links/${se}`))
-  ]);
-  return rs.exists()||ls.exists()||sls.exists();
+  try{
+    const [rs,ls,sls]=await Promise.all([
+      get(child(ref(db),`pre_approved_roles/${se}`)),
+      get(child(ref(db),`parent_links/${se}`)),
+      get(child(ref(db),`student_links/${se}`))
+    ]);
+    return rs.exists()||ls.exists()||sls.exists();
+  }catch(e){ return null; }
 }
 const AUTH_ERRORS={
   'auth/invalid-email':'Невірний формат email.',
@@ -1843,7 +1853,8 @@ window.submitLogin=async function(ev){
     setBusy('btn-login-submit',false,'Увійти');
     const code=err&&err.code||'';
     if(code==='auth/user-not-found'){
-      if(await isEmailApproved(email))
+      const approved=await isEmailApproved(email);
+      if(approved!==false)
         window.showFirstLoginScreen(email,'Схоже, це ваш <b>перший вхід</b> — акаунта ще немає. Придумайте пароль нижче.');
       else
         setMsg('login-error','Цей email не зареєстровано у школі.','login-err');
@@ -1853,7 +1864,7 @@ window.submitLogin=async function(ev){
       // Firebase із захистом від перебору не розрізняє "немає акаунта" і
       // "невірний пароль", тому підказуємо обидва варіанти.
       setMsg('login-error','Невірний email або пароль.','login-err');
-      if(await isEmailApproved(email))
+      if(await isEmailApproved(email)!==false)
         setMsg('login-hint','Якщо ви входите <b>вперше</b> — натисніть «Перший вхід? Встановити пароль» внизу.','login-hint warn');
       return false;
     }
@@ -1873,11 +1884,9 @@ window.submitFirstLogin=async function(ev){
   if(p1!==p2){setMsg('fl-error','Паролі не збігаються.','login-err');return false;}
   setBusy('btn-fl-submit',true);
   try{
-    if(!await isEmailApproved(email)){
-      setBusy('btn-fl-submit',false,'Встановити пароль і увійти');
-      setMsg('fl-error','Цей email ще не додано школою. Зверніться до класного керівника або директора.','login-err');
-      return false;
-    }
+    // Список дозволених пошт лежить у базі, а читати її можна лише після
+    // входу. Тому спершу створюємо акаунт, а перевірку робить обробник
+    // входу — він побачить, що пошти немає, і коректно завершить сеанс.
     await createUserWithEmailAndPassword(auth,email,p1);
   }catch(err){
     setBusy('btn-fl-submit',false,'Встановити пароль і увійти');
