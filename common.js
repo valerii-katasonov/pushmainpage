@@ -2283,3 +2283,24 @@ window.sendInboxMessage = async function() {
     list.scrollTop = list.scrollHeight;
   } catch (e) { alert("Помилка: " + e.message); }
 };
+
+// Поле вводу поводиться як у месенджері: росте під текст, Enter надсилає,
+// Shift+Enter переносить рядок. Без цього доводиться цілитися в кнопку.
+(function(){
+  const bind = () => {
+    const ta = document.getElementById('msg-text-input');
+    if(!ta || ta.dataset.bound) return;
+    ta.dataset.bound = '1';
+    const grow = () => { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 110) + 'px'; };
+    ta.addEventListener('input', grow);
+    ta.addEventListener('keydown', e=>{
+      if(e.key === 'Enter' && !e.shiftKey){
+        e.preventDefault();
+        if(window.sendInboxMessage) window.sendInboxMessage();
+        setTimeout(()=>{ ta.style.height='auto'; }, 0);
+      }
+    });
+  };
+  document.addEventListener('DOMContentLoaded', bind);
+  bind();
+})();
