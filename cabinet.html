@@ -342,9 +342,10 @@
                 backdrop-filter:blur(6px);padding-top:8px;}
     }
     @media (min-width:1024px){
-      .dtab-bar{gap:8px;overflow:visible;flex-wrap:wrap;justify-content:flex-start;
+      .dtab-bar{gap:6px;overflow:visible;flex-wrap:nowrap;justify-content:stretch;
                 border-bottom:none;background:#f1f5f7;border-radius:14px;padding:6px;margin-bottom:22px;}
-      .dtab{flex:1 1 0;text-align:center;padding:10px 12px;font-size:.86rem;border-radius:10px;
+      .dtab{flex:1 1 0;min-width:0;text-align:center;padding:10px 8px;font-size:.84rem;border-radius:10px;
+            overflow:hidden;text-overflow:ellipsis;
             background:transparent;border-color:transparent;}
       .dtab:hover{background:rgba(255,255,255,.7);border-color:transparent;}
       .dtab.on{background:#fff;border-color:transparent;color:var(--teal);
@@ -952,6 +953,7 @@
       #admin-screen[style*="display: block"], #admin-screen[style*="display:block"] {
         max-width: 800px; margin: 0 auto;
       }
+      #director-screen > .dtab-bar,
       #admin-screen > h2, #admin-screen > .btn-logout,
       #director-screen > h2, #director-screen > .btn-logout,
       #teacher-screen > h2, #teacher-screen > .btn-logout,
