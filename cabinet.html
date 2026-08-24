@@ -322,15 +322,34 @@
     #btn-ai-hw:disabled,#btn-ai-comment:disabled{opacity:.6;cursor:wait;}
     .ai-hw-note{font-size:.72rem;color:#999;font-style:italic;}
     /* ── Вкладки кабінету директора ── */
-    .dtab-bar{display:flex;gap:6px;overflow-x:auto;padding:0 0 10px 0;margin-bottom:6px;border-bottom:1px solid #e0e0e0;
-              -webkit-overflow-scrolling:touch;scrollbar-width:none;position:sticky;top:0;background:var(--bg,#f4f7f9);z-index:5;}
+    /* На телефоні це стрічка, яку гортають пальцем. На ПК місця вистачає
+       всім семи, тож розтягуємо їх рівним рядом — інакше купка кнопок
+       ліворуч виглядає як недороблений макет. */
+    .dtab-bar{display:flex;gap:6px;width:100%;overflow-x:auto;padding:4px 0 10px 0;margin:0 0 16px 0;
+              border-bottom:1px solid #e3e8ea;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
     .dtab-bar::-webkit-scrollbar{display:none;}
-    .dtab{flex:none;width:auto;margin:0;padding:7px 14px;font-size:.82rem;font-weight:600;white-space:nowrap;
-          background:#fff;color:#546e7a;border:1px solid #dfe6e9;border-radius:20px;cursor:pointer;transition:all .12s;}
-    .dtab:hover{border-color:#b0bec5;}
+    .dtab{flex:0 0 auto;width:auto;margin:0;padding:8px 15px;font-size:.82rem;font-weight:600;white-space:nowrap;
+          background:#fff;color:#5a6b74;border:1px solid #dfe6e9;border-radius:20px;cursor:pointer;
+          transition:background .12s,border-color .12s,color .12s;}
+    .dtab:hover{border-color:#9fb3bd;color:#37474f;}
     .dtab.on{background:var(--teal);border-color:var(--teal);color:#fff;}
-    .dtab-badge{display:none;margin-left:5px;background:var(--red);color:#fff;font-size:.65rem;padding:1px 6px;border-radius:10px;}
+    .dtab-badge{display:none;margin-left:6px;background:var(--red);color:#fff;font-size:.65rem;
+                padding:1px 6px;border-radius:10px;font-weight:700;}
     .dtab-badge.show{display:inline-block;}
+    @media (max-width:1023px){
+      /* Липне до верху лише там, де довгий сувій і вузький екран */
+      .dtab-bar{position:sticky;top:0;z-index:5;background:rgba(255,255,255,.97);
+                backdrop-filter:blur(6px);padding-top:8px;}
+    }
+    @media (min-width:1024px){
+      .dtab-bar{gap:8px;overflow:visible;flex-wrap:wrap;justify-content:flex-start;
+                border-bottom:none;background:#f1f5f7;border-radius:14px;padding:6px;margin-bottom:22px;}
+      .dtab{flex:1 1 0;text-align:center;padding:10px 12px;font-size:.86rem;border-radius:10px;
+            background:transparent;border-color:transparent;}
+      .dtab:hover{background:rgba(255,255,255,.7);border-color:transparent;}
+      .dtab.on{background:#fff;border-color:transparent;color:var(--teal);
+               box-shadow:0 1px 3px rgba(0,0,0,.08);}
+    }
     /* ── Чат: список ── */
     .ch-row{display:flex;align-items:center;gap:12px;padding:11px 14px;cursor:pointer;border-bottom:1px solid #f0f0f0;background:#fff;transition:background .12s;}
     .ch-row:hover{background:#fafafa;}
@@ -1339,6 +1358,8 @@
   </div>
   <!-- DIRECTOR -->
   <div id="director-screen" class="panel">
+    <h2 style="color:#2c3e50;">👔 Кабінет Директора</h2>
+
     <div class="dtab-bar" id="dtab-bar">
       <button class="dtab on" data-t="ogl"    onclick="switchDirTab('ogl',this)">Огляд</button>
       <button class="dtab"    data-t="news"   onclick="switchDirTab('news',this)">Новини<span class="dtab-badge" id="dtab-news-badge"></span></button>
@@ -1348,8 +1369,6 @@
       <button class="dtab"    data-t="stat"   onclick="switchDirTab('stat',this)">Аналітика</button>
       <button class="dtab"    data-t="nalash" onclick="switchDirTab('nalash',this)">Налаштування</button>
     </div>
-
-    <h2 style="color:#2c3e50;">👔 Кабінет Директора</h2>
 
     <section class="screen-section" data-dtab="ogl">
       <h3>🚀 Швидкі дії</h3>
