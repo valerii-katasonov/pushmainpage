@@ -377,6 +377,8 @@
     @media (max-width:600px){
       .chat-win{max-width:100%;height:100%;max-height:none;border-radius:0;}
     }
+    .chat-readonly{padding:12px 14px;background:#f7f9fa;border-top:1px solid #ececec;color:#8b9aa2;
+                   font-size:.8rem;text-align:center;flex-shrink:0;}
     /* ── Чат: список ── */
     .ch-row{display:flex;align-items:center;gap:12px;padding:11px 14px;cursor:pointer;border-bottom:1px solid #f0f0f0;background:#fff;transition:background .12s;}
     .ch-row:hover{background:#fafafa;}
@@ -2673,7 +2675,8 @@
         <button class="chat-x" onclick="closeInboxModal()" aria-label="Закрити">&times;</button>
       </header>
       <div id="inbox-messages-list" class="chat-scroll msgs"></div>
-      <div class="chat-compose">
+      <div id="chat-readonly" class="chat-readonly" style="display:none;">Ви переглядаєте чужу переписку. Писати в неї не можна.</div>
+      <div class="chat-compose" id="chat-compose">
         <textarea id="msg-text-input" rows="1" placeholder="Повідомлення..."></textarea>
         <button class="chat-send" onclick="sendInboxMessage()" aria-label="Надіслати">&#10148;</button>
       </div>
