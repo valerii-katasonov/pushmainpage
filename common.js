@@ -771,7 +771,7 @@ async function initUserSession(){
   document.querySelectorAll('.panel').forEach(p=>p.style.display='none');
   document.getElementById('calendar-block').style.display='block';updateProfileBar();
   const r=currentUserData.role;
-  if(r==='director'){document.getElementById('director-screen').style.display='block';document.getElementById('teacher-class-selector-box').style.display='none';loadTeachersListForDirector();loadDirectorTeacherSkillsList();handleDateChange();loadDrafts();if(window.loadBellCoverage)window.loadBellCoverage();}
+  if(r==='director'){document.getElementById('director-screen').style.display='block';setTimeout(()=>{if(window.initDirTabs)window.initDirTabs();},0);document.getElementById('teacher-class-selector-box').style.display='none';loadTeachersListForDirector();loadDirectorTeacherSkillsList();handleDateChange();loadDrafts();if(window.loadBellCoverage)window.loadBellCoverage();}
   else if(r==='kitchen'){document.getElementById('kitchen-screen').style.display='block';document.getElementById('teacher-class-selector-box').style.display='none';const gd=document.getElementById('global-date'),gl=document.getElementById('global-date-label');if(gd)gd.style.display='none';if(gl)gl.style.display='none';if(window.refreshKitchen)window.refreshKitchen();}
   else if(r==='administrator'){document.getElementById('admin-screen').style.display='block';document.getElementById('teacher-class-selector-box').style.display='none';handleDateChange();}
   else if(r==='teacher'||r==='class_teacher'||r==='art_school_teacher'||r==='music_teacher'){
@@ -832,7 +832,7 @@ export const AUDIT_LABELS={
   homework:'📚 Домашнє завдання', behavior:'🤝 Оцінка поведінки',
   student_add:'👨‍🎓 Учня додано', student_rename:'✏️ Учня перейменовано',
   student_del:'🗑 Учня прибрано', student_transfer:'↔️ Учня переведено',
-  card_edit:'📋 Картку учня змінено', data_export:'📦 Вивантаження даних дитини', staff_absent:'🧑‍🏫 Відсутність вчителя', consent_create:'✍️ Запит на згоду', quick_journal:'⚡ Швидкий журнал', menu:'🍽️ Меню оновлено', meal_plan:'🥪 Харчування учня', migration:'🆔 Перехід на ідентифікатори', broadcast:'✉️ Повідомлення класу', substitute:'🔄 Призначено заміну', semester_grade:'🎓 Підсумкові оцінки',
+  card_edit:'📋 Картку учня змінено', data_export:'📦 Вивантаження даних дитини', staff_absent:'🧑‍🏫 Відсутність вчителя', consent_create:'✍️ Запит на згоду', quick_journal:'⚡ Швидкий журнал', menu:'🍽️ Меню оновлено', announcement:'📣 Оголошення', meal_plan:'🥪 Харчування учня', migration:'🆔 Перехід на ідентифікатори', broadcast:'✉️ Повідомлення класу', substitute:'🔄 Призначено заміну', semester_grade:'🎓 Підсумкові оцінки',
   student_login:'🔑 Вхід учня створено', student_email:'✉️ Email учня змінено',
   student_login_del:'🔒 Вхід учня прибрано',
   parent_link:'🔗 Батьків прив\'язано', parent_unlink:'🔓 Батьків відв\'язано',
@@ -1051,6 +1051,37 @@ window.notifyEvent=notifyEvent;
     });
   }catch(e){/* messaging недоступний — не критично */}
 })();
+
+// ── Дрібниці оформлення чату ──
+// Ініціали й колір аватара рахуємо з імені: однакова людина завжди
+// того самого кольору, і список читається швидше за текст.
+function initials(name){
+  const p = String(name||'').trim().split(/\s+/);
+  return ((p[0]||'')[0] || '?').toUpperCase() + ((p[1]||'')[0] || '').toUpperCase();
+}
+const AV_COLORS = ['#5c6bc0','#26a69a','#ef6c00','#8e24aa','#00838f','#c2185b','#558b2f','#4527a0'];
+function avatarColor(name){
+  let h = 0; const s = String(name||'');
+  for(let i=0;i<s.length;i++) h = (h*31 + s.charCodeAt(i)) >>> 0;
+  return AV_COLORS[h % AV_COLORS.length];
+}
+function chatTime(ts){
+  if(!ts) return '';
+  const d = new Date(ts), now = new Date();
+  if(d.toDateString() === now.toDateString())
+    return d.toLocaleTimeString('uk-UA',{hour:'2-digit',minute:'2-digit'});
+  const y = new Date(now); y.setDate(y.getDate()-1);
+  if(d.toDateString() === y.toDateString()) return 'вчора';
+  return d.toLocaleDateString('uk-UA',{day:'numeric',month:'short'});
+}
+function chatDayLabel(ts){
+  const d = new Date(ts), now = new Date();
+  if(d.toDateString() === now.toDateString()) return 'Сьогодні';
+  const y = new Date(now); y.setDate(y.getDate()-1);
+  if(d.toDateString() === y.toDateString()) return 'Вчора';
+  return d.toLocaleDateString('uk-UA',{day:'numeric',month:'long',year:
+    d.getFullYear()===now.getFullYear()?undefined:'numeric'});
+}
 // ══════════ БАТЬКИ КЛАСУ: спільний список + редактор ══════════
 // Один код для кабінету вчителя і директора — інакше довелося б підтримувати
 // дві копії. Дані лежать «навпаки» (ключ — пошта батьків), тому для показу
@@ -2139,14 +2170,14 @@ async function renderChatList(role) {
         const unreadCount = messages.filter(m => m.from !== myEmailSafe && !m.read).length;
         if (isDirector) {
           let n1 = getFormattedName(parts[0]), n2 = getFormattedName(parts[1]);
-          html += `<div class="chat-list-item" onclick="selectChatThread('${chatId}', '💬 ${escJs(n1)} ↔ ${escJs(n2)}')" style="padding:15px; border-bottom:1px solid #eee; cursor:pointer; background:#fff;">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-              <b style="font-size:.95rem; color:var(--purple);">${escHtml(n1)} ↔ ${escHtml(n2)}</b>
-              ${unreadCount > 0 ? `<span style="background:var(--red); color:#fff; font-size:.7rem; padding:2px 7px; border-radius:10px;">${unreadCount}</span>` : ''}
+          html += `<div class="ch-row" onclick="selectChatThread('${chatId}', '${escJs(n1)} ↔ ${escJs(n2)}')">
+            <div class="ch-av dir">↔</div>
+            <div class="ch-mid">
+              <div class="ch-top"><span class="ch-name">${escHtml(n1)} ↔ ${escHtml(n2)}</span>
+                ${lastMsg ? `<span class="ch-time">${chatTime(lastMsg.time)}</span>` : ''}</div>
+              <div class="ch-prev">${lastMsg ? `<b>${escHtml(String(lastMsg.fromName||'').split(' ')[0])}:</b> ${escHtml(lastMsg.text)}` : 'Переписки ще немає'}</div>
             </div>
-            <div style="font-size:.8rem; color:#888; margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-              ${lastMsg ? `<b>${escHtml(lastMsg.fromName.split(' ')[0])}:</b> ${escHtml(lastMsg.text)}` : 'Почніть переписку...'}
-            </div>
+            ${unreadCount > 0 ? `<span class="ch-badge">${unreadCount}</span>` : ''}
           </div>`;
         } else {
           const otherEmail = parts[0] === myEmailSafe ? parts[1] : parts[0];
@@ -2163,21 +2194,18 @@ async function renderChatList(role) {
       const sorted = Array.from(activeContacts.entries()).sort((a, b) => b[1].time - a[1].time);
       sorted.forEach(([email, data]) => {
         const cid = getChatId(myEmailSafe, email);
-        html += `<div class="chat-list-item" onclick="selectChatThread('${cid}', '${escJs(data.name)}', '${email}')" style="padding:15px; border-bottom:1px solid #eee; cursor:pointer; background:#fff; display:flex; gap:12px; align-items:center;">
-          <div style="width:45px; height:45px; border-radius:50%; background:var(--purple); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:1.2rem; flex-shrink:0;">${escHtml(data.name.charAt(0))}</div>
-          <div style="flex:1; overflow:hidden;">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-              <b style="font-size:.95rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:80%;">${escHtml(data.name)}</b>
-              ${data.unread > 0 ? `<span style="background:var(--red); color:#fff; font-size:.7rem; padding:2px 7px; border-radius:10px; font-weight:700;">${data.unread}</span>` : ''}
-            </div>
-            <div style="font-size:.82rem; color:#888; margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-              ${escHtml(data.lastMsg) || 'Повідомлень ще немає'}
-            </div>
+        html += `<div class="ch-row" onclick="selectChatThread('${cid}', '${escJs(data.name)}', '${email}')">
+          <div class="ch-av" style="background:${avatarColor(data.name)};">${escHtml(initials(data.name))}</div>
+          <div class="ch-mid">
+            <div class="ch-top"><span class="ch-name">${escHtml(data.name)}</span>
+              ${data.time ? `<span class="ch-time">${chatTime(data.time)}</span>` : ''}</div>
+            <div class="ch-prev">${escHtml(data.lastMsg) || 'Повідомлень ще немає'}</div>
           </div>
+          ${data.unread > 0 ? `<span class="ch-badge">${data.unread}</span>` : ''}
         </div>`;
       });
     }
-    container.innerHTML = html || '<p class="empty-msg" style="padding:20px; text-align:center;">У вас ще немає активних чатів.</p>';
+    container.innerHTML = html || '<div class="ch-empty">💬<span>Тут зʼявляться ваші переписки</span></div>';
   });
 }
 window.selectChatThread = function(chatId, title, otherEmailSafe = null) {
@@ -2196,19 +2224,30 @@ function loadChatMessages(chatId) {
     if (snap.exists()) {
       const data = snap.val();
       const msgs = Object.keys(data).map(k => ({ id: k, ...data[k] })).sort((a, b) => a.time - b.time);
-      msgs.forEach(m => {
+      // Підряд ідучі повідомлення від однієї людини збираємо в групу:
+      // імʼя й час показуємо раз, а не над кожним рядком.
+      let prevFrom = null, prevDay = null, html = '';
+      msgs.forEach((m, i) => {
         const isMe = m.from === myEmailSafe;
-        const align = isMe ? 'flex-end' : 'flex-start';
-        const bg = isMe ? 'var(--purple)' : '#fff';
-        const color = isMe ? '#fff' : '#333';
-        list.innerHTML += `<div style="align-self:${align}; max-width:85%; background:${bg}; color:${color}; padding:10px 14px; border-radius:15px; box-shadow:0 2px 5px rgba(0,0,0,0.05); margin-bottom:5px;">
-          <div style="font-size:.65rem; opacity:.8; margin-bottom:3px; font-weight:700;">${isMe ? 'Я' : escHtml(m.fromName)} • ${new Date(m.time).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' })}</div>
-          <div style="font-size:.92rem; word-break:break-word; line-height:1.4;">${escHtml(m.text)}</div>
+        const day = new Date(m.time).toDateString();
+        if (day !== prevDay) {
+          html += `<div class="ms-day"><span>${escHtml(chatDayLabel(m.time))}</span></div>`;
+          prevDay = day; prevFrom = null;
+        }
+        const grouped = m.from === prevFrom;
+        const next = msgs[i+1];
+        const last = !next || next.from !== m.from || new Date(next.time).toDateString() !== day;
+        html += `<div class="ms ${isMe?'me':'they'}${grouped?' grp':''}${last?' last':''}">
+          ${(!grouped && !isMe) ? `<div class="ms-from">${escHtml(m.fromName||'')}</div>` : ''}
+          <div class="ms-text">${escHtml(m.text)}</div>
+          ${last ? `<div class="ms-time">${new Date(m.time).toLocaleTimeString('uk-UA',{hour:'2-digit',minute:'2-digit'})}</div>` : ''}
         </div>`;
+        prevFrom = m.from;
         if (!isMe && !m.read) update(ref(db, `chats/${chatId}/messages/${m.id}`), { read: true });
       });
+      list.innerHTML = html;
       list.scrollTop = list.scrollHeight;
-    } else list.innerHTML = '<p class="empty-msg">Немає повідомлень. Напишіть що-небудь!</p>';
+    } else list.innerHTML = '<div class="ch-empty">✉️<span>Повідомлень ще немає — напишіть перше</span></div>';
   });
 }
 window.backToChatList = function() {
