@@ -1438,3 +1438,44 @@ window.wipeLegacyStudentKeys = async function(){
     box.innerHTML = `<p style="color:red;font-size:.8rem;">Помилка: ${escHtml(e.message)}</p>`;
   }
 };
+
+// ══════════ ВКЛАДКИ КАБІНЕТУ ДИРЕКТОРА ══════════
+// У кабінеті сімнадцять блоків. Одним сувоєм до журналу дій треба гортати
+// через увесь розклад і персонал. Розкладати HTML наново було б ризиковано,
+// тому кожен блок позначено атрибутом data-dtab, а перемикач просто ховає
+// зайве. Секцію без жодного видимого блоку ховаємо теж — інакше лишався б
+// самотній заголовок.
+const DTAB_KEY = 'push_school_dir_tab';
+window.switchDirTab = function(tab, btn){
+  document.querySelectorAll('#dtab-bar .dtab').forEach(b=>b.classList.toggle('on', b===btn || b.dataset.t===tab));
+  const scr = document.getElementById('director-screen');
+  if(!scr) return;
+  scr.querySelectorAll('[data-dtab]').forEach(el=>{
+    el.style.display = (el.dataset.dtab === tab) ? '' : 'none';
+  });
+  // Секції-обгортки: ховаємо ті, де все всередині приховано
+  scr.querySelectorAll('section.screen-section').forEach(sec=>{
+    if(sec.dataset.dtab) return;
+    const kids = sec.querySelectorAll('[data-dtab]');
+    if(!kids.length) return;
+    const anyVisible = Array.from(kids).some(k=>k.style.display !== 'none');
+    sec.style.display = anyVisible ? '' : 'none';
+  });
+  try{ localStorage.setItem(DTAB_KEY, tab); }catch(e){}
+  if(tab === 'news' && window.renderNewsFeed) window.renderNewsFeed('d-news-feed');
+  window.scrollTo({ top:0, behavior:'smooth' });
+};
+// Відновлюємо останню відкриту вкладку: директор зазвичай повертається
+// в те саме місце, де працював.
+window.initDirTabs = function(){
+  let tab = 'ogl';
+  try{ tab = localStorage.getItem(DTAB_KEY) || 'ogl'; }catch(e){}
+  const btn = document.querySelector(`#dtab-bar .dtab[data-t="${tab}"]`) 
+           || document.querySelector('#dtab-bar .dtab');
+  if(btn) window.switchDirTab(btn.dataset.t, btn);
+  // Значок непрочитаних новин
+  if(window.countUnreadNews) window.countUnreadNews().then(n=>{
+    const b = document.getElementById('dtab-news-badge');
+    if(b){ b.textContent = n>0 ? n : ''; b.classList.toggle('show', n>0); }
+  });
+};
