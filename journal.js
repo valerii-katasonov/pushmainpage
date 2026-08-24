@@ -3,8 +3,9 @@
 // and the Visual (schedule) Matrix modal used for both the live
 // schedule and director's drafts.
 // ═══════════════════════════════════════════════════════════════
-import { ref, set, get, child } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, getActiveClass, currentUserData, displayGrade, gradeClass6, calculateStudentWeightedAvg, getClassNum, GRADE_WEIGHTS, dayKeys, dayNamesUA, showToast, localDateString, summarizeAttendanceSlots, gradeTypesCache, escJs, escHtml, notifyEvent, logAction } from './common.js';
+import { ref, set, get, child, update } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+import { ACADEMIC_YEAR_ID } from './director.js';
+import { db, getActiveClass, currentUserData, displayGrade, gradeClass6, calculateStudentWeightedAvg, getClassNum, GRADE_WEIGHTS, dayKeys, dayNamesUA, showToast, localDateString, summarizeAttendanceSlots, gradeTypesCache, escJs, escHtml, notifyEvent, logAction, getUserRoles, getUsersSnap, stuName } from './common.js';
 
 // globalTeacherAccess is reassigned only in this file (openVisualMatrixModal)
 // and read from common.js (window.getDefaultTeacher) — plain export/import.
@@ -67,7 +68,7 @@ function renderGradeTypeButtons(){
 // of always defaulting to 'П'.
 function openGradeEditor(cls,subj,dateStr,student,yMonth,cellEl,existingVal,existingType,presetType){
   gepCls=cls;gepSubj=subj;gepDate=dateStr;gepStudent=student;gepYMonth=yMonth;gepCellEl=cellEl;gepType=existingType||presetType||'П';
-  document.getElementById('gep-label').textContent=`${student} | ${subj} | ${dateStr.split('-').reverse().join('.')}`;
+  document.getElementById('gep-label').textContent=`${stuName(cls,student)} | ${subj} | ${dateStr.split('-').reverse().join('.')}`;
   document.getElementById('gep-value').value=existingVal||'';
   renderGradeTypeButtons();
   selectGradeType(gepType);
@@ -86,20 +87,155 @@ window.confirmGrade=async function(){
   if(!isNaN(n)&&(n<1||n>6)){showToast('⚠️ Оцінка має бути від 1 до 6!');return;}
   await set(ref(db,`grades/${gepCls}/${gepYMonth}/${gepSubj}/${gepDate}/${gepStudent}`),val);
   await set(ref(db,`grade_types/${gepCls}/${gepYMonth}/${gepSubj}/${gepDate}/${gepStudent}`),gepType);
-  closeGradeEditor();renderJournalTable();showToast(`✅ ${gepStudent}: ${displayGrade(val,gepCls)} (${gepType})`);
+  closeGradeEditor();renderJournalTable();showToast(`✅ ${stuName(gepCls,gepStudent)}: ${displayGrade(val,gepCls)} (${gepType})`);
   // Сповіщаємо батьків/учня. Оцінку показуємо у вигляді, який бачить сім'я
   // (для 1-5 класів — літерою, а не цифрою).
-  notifyEvent('grade',{class:gepCls,studentName:gepStudent,subject:gepSubj,value:displayGrade(val,gepCls)});
-  logAction('grade_set',{cls:gepCls,target:gepStudent,subject:gepSubj,date:gepDate,value:val,gtype:gepType});
+  notifyEvent('grade',{class:gepCls,studentName:stuName(gepCls,gepStudent),subject:gepSubj,value:displayGrade(val,gepCls)});
+  logAction('grade_set',{cls:gepCls,target:stuName(gepCls,gepStudent),subject:gepSubj,date:gepDate,value:val,gtype:gepType});
 };
 window.deleteGrade=async function(){
   await set(ref(db,`grades/${gepCls}/${gepYMonth}/${gepSubj}/${gepDate}/${gepStudent}`),null);
   await set(ref(db,`grade_types/${gepCls}/${gepYMonth}/${gepSubj}/${gepDate}/${gepStudent}`),null);
   closeGradeEditor();renderJournalTable();showToast('🗑️ Оцінку видалено');
-  logAction('grade_del',{cls:gepCls,target:gepStudent,subject:gepSubj,date:gepDate});
+  logAction('grade_del',{cls:gepCls,target:stuName(gepCls,gepStudent),subject:gepSubj,date:gepDate});
 };
 document.getElementById('gep-value').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();window.confirmGrade();}if(e.key==='Escape'){e.preventDefault();window.closeGradeEditor();}});
 document.addEventListener('click',function(e){const p=document.getElementById('grade-editor-popup');if(p.style.display==='block'&&!p.contains(e.target)&&!e.target.closest('.g-cell'))closeGradeEditor();});
+// ══════════════════════════════════════════════════════════════════
+//  ПІДСУМКОВІ (СЕМЕСТРОВІ) ОЦІНКИ
+// ══════════════════════════════════════════════════════════════════
+// Система рахує середньозважений бал за період семестру і ПРОПОНУЄ оцінку,
+// але останнє слово завжди за вчителем: пропозицію видно окремо від
+// підсумкової, і будь-яку правку видно в журналі дій.
+// Зберігаємо і те, що запропонувала система, і те, що поставив учитель —
+// інакше потім не розібрати, чи оцінку змінювали вручну.
+// semester_grades/{cls}/{semId}/{subject}/{ІМ'Я} = {value, auto, by, ts}
+let semCache={};
+window.openSemesterGrades=async function(){
+  const cls=document.getElementById('j-class-select').value;
+  const subj=document.getElementById('j-subj-select').value;
+  if(!cls||!subj)return showToast('⚠️ Спочатку оберіть клас і предмет');
+  document.getElementById('sem-class').textContent=cls.replace('class_','')+' клас';
+  document.getElementById('sem-subject').textContent=subj;
+  const sel=document.getElementById('sem-period');
+  sel.innerHTML='<option value="">Завантаження...</option>';
+  document.getElementById('semester-modal').style.display='flex';
+  const snap=await get(child(ref(db),`academic_year/${ACADEMIC_YEAR_ID}/semesters`));
+  semCache=snap.exists()?snap.val():{};
+  const ids=Object.keys(semCache);
+  sel.innerHTML=ids.length
+    ? ids.map(id=>`<option value="${escHtml(id)}">${escHtml(semCache[id].name||id)}</option>`).join('')
+    : '<option value="">Семестри не задані</option>';
+  if(ids.length===0){
+    document.getElementById('sem-body').innerHTML=
+      '<p class="empty-msg">Директор ще не створив семестри — розділ «Навчальний рік».</p>';
+    return;
+  }
+  window.renderSemesterTable();
+};
+window.closeSemesterGrades=function(){document.getElementById('semester-modal').style.display='none';};
+// Місяці «yyyy-MM», що потрапляють у діапазон семестру
+function monthsBetween(a,b){
+  const out=[];let [y,m]=a.split('-').map(Number);
+  const [ey,em]=b.split('-').map(Number);
+  while(y<ey||(y===ey&&m<=em)){out.push(`${y}-${String(m).padStart(2,'0')}`);m++;if(m>12){m=1;y++;}}
+  return out;
+}
+window.renderSemesterTable=async function(){
+  const cls=document.getElementById('j-class-select').value;
+  const subj=document.getElementById('j-subj-select').value;
+  const semId=document.getElementById('sem-period').value;
+  const box=document.getElementById('sem-body');
+  if(!semId)return;
+  const sem=semCache[semId]||{};
+  if(!sem.startDate||!sem.endDate){box.innerHTML='<p class="empty-msg">У семестру не вказані дати.</p>';return;}
+  box.innerHTML='<p class="empty-msg">Обчислення...</p>';
+  try{
+    const months=monthsBetween(sem.startDate.slice(0,7),sem.endDate.slice(0,7));
+    const [stSnap,savedSnap,...monthSnaps]=await Promise.all([
+      get(child(ref(db),`students_list/${cls}`)),
+      get(child(ref(db),`semester_grades/${cls}/${semId}/${subj}`)),
+      ...months.flatMap(ym=>[
+        get(child(ref(db),`grades/${cls}/${ym}/${subj}`)),
+        get(child(ref(db),`grade_types/${cls}/${ym}/${subj}`))
+      ])
+    ]);
+    const students=stSnap.exists()
+      ?Object.entries(stSnap.val()).map(([sid,nm])=>({sid,nm:String(nm)}))
+        .sort((a,b)=>a.nm.localeCompare(b.nm,'uk')):[];
+    if(students.length===0){box.innerHTML='<p class="empty-msg">У класі немає учнів.</p>';return;}
+    const saved=savedSnap.exists()?savedSnap.val():{};
+    // Збираємо всі оцінки учня за період (дати поза межами семестру відкидаємо)
+    const per={};students.forEach(s=>per[s.sid]={g:{},t:{}});
+    for(let i=0;i<months.length;i++){
+      const gSnap=monthSnaps[i*2], tSnap=monthSnaps[i*2+1];
+      if(!gSnap.exists())continue;
+      const gd=gSnap.val(), td=tSnap.exists()?tSnap.val():{};
+      for(const date in gd){
+        if(date<sem.startDate||date>sem.endDate)continue;
+        for(const st in gd[date]){
+          if(!per[st])continue;
+          per[st].g[date]=gd[date][st];
+          if(td[date]&&td[date][st])per[st].t[date]=td[date][st];
+        }
+      }
+    }
+    let rows='';let filled=0;
+    students.forEach(st=>{
+      const avg=calculateStudentWeightedAvg(per[st.sid].g,per[st.sid].t);
+      const cnt=Object.keys(per[st.sid].g).length;
+      const auto=avg!==null?String(Math.round(avg)):'';
+      const cur=saved[st.sid]?String(saved[st.sid].value):'';
+      if(cur)filled++;
+      const changed=saved[st.sid]&&saved[st.sid].auto&&String(saved[st.sid].auto)!==String(saved[st.sid].value);
+      rows+=`<tr>
+        <td class="sem-name">${escHtml(st.nm)}</td>
+        <td class="sem-avg">${avg!==null?avg.toFixed(2):'—'}<br><span class="sem-cnt">${cnt} оц.</span></td>
+        <td class="sem-auto">${auto?escHtml(displayGrade(auto,cls)):'—'}</td>
+        <td><input type="text" class="sem-in" id="sem-${escHtml(st.sid)}" value="${escHtml(cur||auto)}"
+             data-auto="${escHtml(auto)}" data-sid="${escHtml(st.sid)}" data-name="${escHtml(st.nm)}" maxlength="1"></td>
+        <td class="sem-flag">${changed?'<span title="Відрізняється від запропонованої">✎</span>':''}</td>
+      </tr>`;
+    });
+    box.innerHTML=`<p class="sem-info">Період: ${escHtml(sem.startDate.split('-').reverse().join('.'))} — ${escHtml(sem.endDate.split('-').reverse().join('.'))} · виставлено: <b>${filled} з ${students.length}</b></p>
+      <div class="sem-wrap"><table class="sem-table">
+        <thead><tr><th>Учень</th><th>Серед.<br>зваж.</th><th>Пропо-<br>новано</th><th>Підсум-<br>кова</th><th></th></tr></thead>
+        <tbody>${rows}</tbody></table></div>`;
+  }catch(e){box.innerHTML=`<p style="color:red;font-size:.8rem;">Помилка: ${escHtml(e.message)}</p>`;}
+};
+window.saveSemesterGrades=async function(){
+  const cls=document.getElementById('j-class-select').value;
+  const subj=document.getElementById('j-subj-select').value;
+  const semId=document.getElementById('sem-period').value;
+  if(!semId)return;
+  const inputs=Array.from(document.querySelectorAll('.sem-in'));
+  const bad=inputs.find(i=>i.value.trim()&&!/^[1-6]$/.test(i.value.trim()));
+  if(bad)return alert(`Оцінка «${bad.value}» некоректна. Допустимі значення — від 1 до 6.`);
+  const btn=document.getElementById('btn-sem-save');
+  btn.disabled=true;btn.textContent='⏳ Збереження...';
+  try{
+    const patch={};let n=0,manual=0;
+    inputs.forEach(i=>{
+      const v=i.value.trim(), sid=i.dataset.sid, auto=i.dataset.auto||'';
+      if(!v){patch[sid]=null;return;}
+      patch[sid]={value:v,auto,by:currentUserData?.email||'',ts:Date.now()};
+      n++;if(auto&&auto!==v)manual++;
+    });
+    await update(ref(db,`semester_grades/${cls}/${semId}/${subj}`),patch);
+    logAction('semester_grade',{cls,subject:subj,value:`${semCache[semId]?.name||semId}: ${n} оц.`+(manual?`, змінено вручну: ${manual}`:'')});
+    showToast(`✅ Підсумкові збережено (${n})`);
+    window.renderSemesterTable();
+  }catch(e){alert('Помилка: '+e.message);}
+  finally{btn.disabled=false;btn.textContent='💾 Зберегти підсумкові';}
+};
+// Кнопка «підставити запропоновані всім, у кого поле порожнє»
+window.semesterFillAuto=function(){
+  let n=0;
+  document.querySelectorAll('.sem-in').forEach(i=>{
+    if(!i.value.trim()&&i.dataset.auto){i.value=i.dataset.auto;n++;}
+  });
+  showToast(n?`Підставлено: ${n}`:'Порожніх немає');
+};
 // ══════════ JOURNAL MODE ══════════
 window.setJournalMode=function(mode){journalMode=mode;document.getElementById('j-mode-view').classList.toggle('active',mode==='view');document.getElementById('j-mode-edit').classList.toggle('active',mode==='edit');document.getElementById('j-edit-hint').style.display=mode==='edit'?'block':'none';renderJournalTable();};
 // ══════════ JOURNAL MODAL ══════════
@@ -209,7 +345,11 @@ window.renderJournalTable=async function(){
         get(child(ref(db),`journal_column_types/${cls}/${ym}/${subj}`))
       ])
     ]);
-    let students=[];if(studSnap.exists())students=Object.values(studSnap.val()).sort();
+    // [{sid, nm}] — дані ключуються ідентифікатором, у таблиці показуємо імʼя
+    let students=[];
+    if(studSnap.exists())students=Object.entries(studSnap.val())
+      .map(([sid,nm])=>({sid,nm:String(nm)}))
+      .sort((a,b)=>a.nm.localeCompare(b.nm,'uk'));
     if(students.length===0){table.innerHTML='<tr><td style="padding:20px;">Учнів немає.</td></tr>';return;}
     // Merge each month's grades/types/column-types into one flat, date-keyed object.
     const gradesData={};const typesData={};const journalColumnTypes={};
@@ -299,19 +439,19 @@ window.renderJournalTable=async function(){
     students.forEach((st)=>{
       let stGrades={};let stTypes={};
       dateCols.forEach(({ds})=>{
-        const v=(gradesData[ds]&&gradesData[ds][st])?gradesData[ds][st]:'';
-        const tp=(typesData[ds]&&typesData[ds][st])?typesData[ds][st]:'П';
+        const v=(gradesData[ds]&&gradesData[ds][st.sid])?gradesData[ds][st.sid]:'';
+        const tp=(typesData[ds]&&typesData[ds][st.sid])?typesData[ds][st.sid]:'П';
         if(v){stGrades[ds]=v;stTypes[ds]=tp;}
       });
       const avg=calculateStudentWeightedAvg(stGrades,stTypes);
       if(avg!==null){classWeightedAvg+=avg;classCount++;}
       const avgStr=avg!==null?avg.toFixed(2):'-';
-      let rowHtml=`<tr><td class="sn" title="${escHtml(st)}">${escHtml(st)}</td>`;
+      let rowHtml=`<tr><td class="sn" title="${escHtml(st.nm)}">${escHtml(st.nm)}</td>`;
       dateCols.forEach(({ds,ym})=>{
         const isToday=ds===localDateString;
-        const attInfo=summarizeAttendanceSlots(attData[ds]&&attData[ds][st]);
-        const gradeVal=(gradesData[ds]&&gradesData[ds][st])?gradesData[ds][st]:'';
-        const gradeType=(typesData[ds]&&typesData[ds][st])?typesData[ds][st]:'';
+        const attInfo=summarizeAttendanceSlots(attData[ds]&&attData[ds][st.sid]);
+        const gradeVal=(gradesData[ds]&&gradesData[ds][st.sid])?gradesData[ds][st.sid]:'';
+        const gradeType=(typesData[ds]&&typesData[ds][st.sid])?typesData[ds][st.sid]:'';
         const dispVal=displayGrade(gradeVal,cls);
         const presetType=journalColumnTypes[ds]||'';
         let cell='';
@@ -320,9 +460,9 @@ window.renderJournalTable=async function(){
         // the onclick's string literal early and kill the handler.
         if(gradeVal){
           const gc=gradeClass6(gradeVal);
-          cell+=`<span class="g-cell ${gc}" onclick="handleGradeClick(event,'${cls}','${escJs(subj)}','${ds}','${escJs(st)}','${ym}','${gradeVal}','${gradeType}','${presetType}')"><span class="g-val">${dispVal}</span>${gradeType?`<span class="g-type">${gradeType}</span>`:''}</span>`;
+          cell+=`<span class="g-cell ${gc}" onclick="handleGradeClick(event,'${cls}','${escJs(subj)}','${ds}','${escJs(st.sid)}','${ym}','${gradeVal}','${gradeType}','${presetType}')"><span class="g-val">${dispVal}</span>${gradeType?`<span class="g-type">${gradeType}</span>`:''}</span>`;
         } else if(canEdit){
-          cell+=`<span class="g-cell g-empty" onclick="handleGradeClick(event,'${cls}','${escJs(subj)}','${ds}','${escJs(st)}','${ym}','','','${presetType}')">＋</span>`;
+          cell+=`<span class="g-cell g-empty" onclick="handleGradeClick(event,'${cls}','${escJs(subj)}','${ds}','${escJs(st.sid)}','${ym}','','','${presetType}')">＋</span>`;
         }
         if(attInfo){const ac=attInfo.status==='absent'?'att-absent':'att-late';const al=attInfo.status==='absent'?'н':'з';cell+=`<span class="${ac}" title="${attInfo.reason}">${al}</span>`;}
         rowHtml+=`<td class="${isToday?'today-col':''}">${cell}</td>`;
@@ -477,8 +617,8 @@ window.openVisualMatrixModal=async function(mode){
   let dbPath=mode==='live'?'schedules':`schedule_drafts/${mode}`;
   const [snap,accSnap,stSnap]=await Promise.all([get(ref(db,dbPath)),get(ref(db,'teacher_access')),get(ref(db,'students_list'))]);
   globalAllSchedules=snap.exists()?snap.val():{};globalTeacherAccess=accSnap.exists()?accSnap.val():{};globalAllStudents=stSnap.exists()?stSnap.val():{};
-  const uSnap=await get(ref(db,'users'));window.globalTeachersList=[];
-  if(uSnap.exists()){const u=uSnap.val();for(let uid in u){const us=u[uid];if((us.role==='teacher'||us.role==='art_school_teacher'||us.role==='music_teacher')&&us.email){const n=(us.firstName||us.lastName)?`${us.firstName||''} ${us.lastName||''}`.trim():"Ім'я";const se=us.email.replace(/\./g,'_');window.globalTeachersList.push({email:us.email,name:n,safeEmail:se});}}}
+  const uSnap=await getUsersSnap();window.globalTeachersList=[];
+  if(uSnap.exists()){const u=uSnap.val();for(let uid in u){const us=u[uid];const rs=getUserRoles(us);if(rs.some(r=>r==='teacher'||r==='class_teacher'||r==='art_school_teacher'||r==='music_teacher')&&us.email&&!us.disabled){const n=(us.firstName||us.lastName)?`${us.firstName||''} ${us.lastName||''}`.trim():"Ім'я";const se=us.email.replace(/\./g,'_');window.globalTeachersList.push({email:us.email,name:n,safeEmail:se});}}}
   const title=document.getElementById('matrix-modal-title');const wb=document.getElementById('constructor-warnings');
   if(mode!=='live'){title.innerHTML=`🛠️ Конструктор: <span style="color:#e67e22">${mode}</span>`;wb.style.display='block';}
   else{title.innerHTML='🗓️ Матриця розкладу';wb.style.display='none';}
@@ -493,7 +633,7 @@ window.toggleCellType=function(){const t=document.getElementById('cell-type-sele
 window.toggleExtraFormat=function(){const f=document.getElementById('cell-extra-format').value;document.getElementById('extra-individual-wrap').style.display=f==='individual'?'block':'none';document.getElementById('extra-group-wrap').style.display=f==='group'?'block':'none';if(f==='group')toggleExtraGroupType();};
 window.toggleExtraGroupType=function(){const gt=document.getElementById('extra-group-type').value;document.getElementById('extra-group-classes-wrap').style.display=gt==='classes'?'block':'none';document.getElementById('extra-group-students-wrap').style.display=gt==='students'?'block':'none';};
 window.handleSubjInput=function(){const c=document.getElementById('cell-edit-class').value;const s=document.getElementById('cell-subj-ua').value.trim();const ts=document.getElementById('cell-teacher-select');window.updateCellEditorTeacherOptions(c,s,ts.value);window.triggerSmartCheck();};
-window.updateCellEditorTeacherOptions=function(clsId,sName,curE){const ts=document.getElementById('cell-teacher-select');const dt=window.getDefaultTeacher(clsId,sName);ts.innerHTML=`<option value="">-- Авто (${dt?dt.name:'—'}) --</option>`;window.globalTeachersList.forEach(t=>ts.innerHTML+=`<option value="${t.email}">${t.name} (${t.email})</option>`);if(curE&&Array.from(ts.options).some(o=>o.value===curE))ts.value=curE;else ts.value='';};
+window.updateCellEditorTeacherOptions=function(clsId,sName,curE){const ts=document.getElementById('cell-teacher-select');const dt=window.getDefaultTeacher(clsId,sName);ts.innerHTML=`<option value="">-- Авто (${escHtml(dt?dt.name:'—')}) --</option>`;window.globalTeachersList.forEach(t=>ts.innerHTML+=`<option value="${escHtml(t.email)}">${escHtml(t.name)} (${escHtml(t.email)})</option>`);if(curE&&Array.from(ts.options).some(o=>o.value===curE))ts.value=curE;else ts.value='';};
 window.triggerSmartCheck=function(){if(currentMatrixMode==='live')return;const te=document.getElementById('cell-teacher-select').value;const wb=document.getElementById('cell-live-warnings');if(!te){wb.style.display='none';return;}const day=document.getElementById('matrix-day-select').value;const clsId=document.getElementById('cell-edit-class').value;const tB=parseInt(clsId.replace('class_',''))<=5?1:2;const row=parseInt(document.getElementById('cell-edit-row').value);let conf=[];let trav=[];for(let c=1;c<=11;c++){let cc=`class_${c}`;if(cc===clsId)continue;let b=c<=5?1:2;let da=globalAllSchedules[cc]?.lessons?.[day]||[];let ss=da[row];let si=Array.isArray(ss)?ss:(ss?[ss]:[]);si.forEach(item=>{if(item.type!=='break'&&item.teacherEmail===te)conf.push(`Накладка: ${c} клас!`);});[row-1,row+1].forEach(nr=>{if(nr<0)return;let ns=da[nr];let ni=Array.isArray(ns)?ns:(ns?[ns]:[]);ni.forEach(item=>{if(item.type!=='break'&&item.teacherEmail===te&&b!==tB)trav.push(`Переїзд: ${c} клас`);});});}if(conf.length>0||trav.length>0){let h=conf.length>0?`<div style="color:#c0392b;font-weight:700;">❌ ${conf[0]}</div>`:'';if(trav.length>0)h+=`<div style="color:#e67e22;font-weight:700;">⚠️ ${trav[0]}</div>`;wb.innerHTML=h;wb.style.display='block';wb.style.background=conf.length>0?'#fdedec':'#fdf2e9';wb.style.border=`1px solid ${conf.length>0?'var(--red)':'#e67e22'}`;}else{wb.innerHTML='<div style="color:#27ae60;font-weight:700;">✅ Вільний, переїзд не потрібен.</div>';wb.style.display='block';wb.style.background='#eafaf1';wb.style.border='1px solid #2ecc71';}};
 window.openCellEditor=async function(clsId,rowIdx,subIdx,lessonObj){
   const isArt=currentUserData?.role==='art_school_teacher';

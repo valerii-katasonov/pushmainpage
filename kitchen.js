@@ -7,24 +7,26 @@
 //        ts  — коли востаннє змінено;  pub — коли вперше опубліковано.
 //        Різниця потрібна, щоб відрізнити «меню опубліковано» від «меню змінено».
 //
-//   meal_plan/{клас}/{ІМʼЯ}    = {lunch:bool, snack:'no'|'all'|'days',
+//   meal_plan/{клас}/{ID}      = {lunch:bool, snack:'no'|'all'|'days',
 //                                 snackDays:{1..5:true}, by, ts}
 //        Постійні налаштування. Відсутність запису = обідає, підвечірок ні.
 //        Такий default обраний свідомо: обід — норма, підвечірок — доплата.
 //
-//   meal_day/{дата}/{клас}/{ІМʼЯ} = {lunch:0|1, snack:0|1, reason, by, ts}
+//   meal_day/{дата}/{клас}/{ID}   = {lunch:0|1, snack:0|1, reason, by, ts}
 //        Виняток на конкретний день. Пишеться, тільки коли відрізняється
 //        від плану, тому в базі десятки записів на місяць, а не тисячі.
 //
-//   attendance/{клас}/{дата}/{ІМʼЯ}/{слот}.status==='absent'
+//   attendance/{клас}/{дата}/{ID}/{слот}.status==='absent'
 //        Дитини немає в школі → вона не харчується. Рахуємо автоматично,
 //        батькам не треба відмовлятися окремо.
 //
 // ЧОМУ ДЕДЛАЙН 09:00: після нього кухня вже закупила і почала готувати,
 // тож пізня відмова нічого не змінює, лише псує облік.
+//   {ID} — постійний ключ учня зі students_list, а не імʼя. Імʼя показуємо
+//   через stuName(): воно може змінитися, ключ — ні.
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, update } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, currentUserData, showToast, escHtml, escJs, localDateString, logAction, notifyEvent, pushConfigured, renderPushWarning } from './common.js';
+import { db, currentUserData, showToast, escHtml, escJs, localDateString, logAction, notifyEvent, pushConfigured, renderPushWarning, getSchoolRange, getDateRange, stuName } from './common.js';
 
 export const MEAL_CUTOFF_HOUR = 9;   // до 09:00 можна відмовитися від сьогоднішнього
 const DOW = ['Понеділок','Вівторок','Середа','Четвер','Пʼятниця'];
@@ -109,10 +111,10 @@ export function effectiveMeals(plan, dayOverride, isAbsent, wd){
 function absentSet(attClassDay){
   const out = {};
   if(!attClassDay) return out;
-  for(const name in attClassDay){
-    const slots = attClassDay[name];
+  for(const sid in attClassDay){
+    const slots = attClassDay[sid];
     if(!slots || typeof slots!=='object') continue;
-    if(Object.values(slots).some(r=>r && r.status==='absent')) out[name]=true;
+    if(Object.values(slots).some(r=>r && r.status==='absent')) out[sid]=true;
   }
   return out;
 }
@@ -252,15 +254,15 @@ export async function loadWeekCounts(){
   const dates = weekDates(currentMonday());
   box.innerHTML = '<p class="empty-msg">Обчислення...</p>';
   try{
-    const [stSnap, planSnap, attSnap, ...daySnaps] = await Promise.all([
+    // Відвідуваність беремо лише за цей тиждень, а не за весь рік
+    const [stSnap, planSnap, att, ...daySnaps] = await Promise.all([
       get(child(ref(db),'students_list')),
       get(child(ref(db),'meal_plan')),
-      get(child(ref(db),'attendance')),
+      getSchoolRange('attendance', dates[0], dates[4]),
       ...dates.map(d=>get(child(ref(db),`meal_day/${d}`)))
     ]);
     const students = stSnap.exists()?stSnap.val():{};
     const plans    = planSnap.exists()?planSnap.val():{};
-    const att      = attSnap.exists()?attSnap.val():{};
 
     const perDay = dates.map((date,di)=>{
       const overrides = daySnaps[di].exists()?daySnaps[di].val():{};
@@ -274,9 +276,9 @@ export async function loadWeekCounts(){
         let cl=0, cs=0;
         for(const key in students[cls]){
           const name = students[cls][key];
-          const plan = plans[cls] && plans[cls][name];
-          const isAbsent = !!absentToday[name];
-          const ov = overrides[cls] && overrides[cls][name];
+          const plan = plans[cls] && plans[cls][key];
+          const isAbsent = !!absentToday[key];
+          const ov = overrides[cls] && overrides[cls][key];
           const e = effectiveMeals(plan, ov, isAbsent, wd);
           if(e.absent){ absent++; continue; }
           const permanentlyOff = plan && plan.lunch === false;
@@ -346,15 +348,15 @@ export async function loadMealPlans(){
   ]);
   if(!stSnap.exists()){ box.innerHTML = '<p class="empty-msg">У класі немає учнів.</p>'; return; }
   const plans = plSnap.exists()?plSnap.val():{};
-  box.innerHTML = Object.values(stSnap.val()).sort().map(name=>{
-    const p = plans[name] || {};
+  box.innerHTML = Object.entries(stSnap.val()).sort((a,b)=>String(a[1]).localeCompare(String(b[1]),'uk')).map(([sid,name])=>{
+    const p = plans[sid] || {};
     const lunch = p.lunch !== false;
     const snack = p.snack || 'no';
     return `<div class="k-plan-row">
       <span class="k-plan-name">${escHtml(name)}</span>
       <label class="k-plan-lunch"><input type="checkbox" ${lunch?'checked':''}
-        onchange="setMealPlan('${escJs(cls)}','${escJs(name)}','lunch',this.checked)"> обід</label>
-      <select onchange="setMealPlan('${escJs(cls)}','${escJs(name)}','snack',this.value)">
+        onchange="setMealPlan('${escJs(cls)}','${escJs(sid)}','lunch',this.checked)"> обід</label>
+      <select onchange="setMealPlan('${escJs(cls)}','${escJs(sid)}','snack',this.value)">
         <option value="no"${snack==='no'?' selected':''}>без підвечірка</option>
         <option value="all"${snack==='all'?' selected':''}>підвечірок щодня</option>
         <option value="days"${snack==='days'?' selected':''}>підвечірок — обрані дні</option>
@@ -363,14 +365,14 @@ export async function loadMealPlans(){
   }).join('');
 }
 window.loadMealPlans = loadMealPlans;
-window.setMealPlan = async function(cls, name, field, value){
-  const snap = await get(child(ref(db),`meal_plan/${cls}/${name}`));
+window.setMealPlan = async function(cls, sid, field, value){
+  const snap = await get(child(ref(db),`meal_plan/${cls}/${sid}`));
   const plan = snap.exists()?snap.val():{};
   plan[field] = value;
   if(field==='snack' && value!=='days') delete plan.snackDays;
   plan.by = currentUserData?.email || ''; plan.ts = Date.now();
-  await set(ref(db,`meal_plan/${cls}/${name}`), plan);
-  logAction('meal_plan',{ date:name, value:`${field}=${value}` });
+  await set(ref(db,`meal_plan/${cls}/${sid}`), plan);
+  logAction('meal_plan',{ date:stuName(cls,sid), value:`${field}=${value}` });
   showToast('✅ Збережено');
   loadWeekCounts();
   if(field==='snack' && value==='days') loadMealPlans();
@@ -399,10 +401,10 @@ window.loadClassOrders = async function(){
     const absent = absentSet(attSnap.exists()?attSnap.val():null);
     const wd = weekdayIdx(date);
 
-    const rows = Object.values(stSnap.val()).sort((a,b)=>a.localeCompare(b,'uk')).map(name=>{
-      const plan = plans[name] || {};
-      const ov = overrides[name];
-      const e = effectiveMeals(plan, ov, !!absent[name], wd);
+    const rows = Object.entries(stSnap.val()).sort((a,b)=>String(a[1]).localeCompare(String(b[1]),'uk')).map(([sid,name])=>{
+      const plan = plans[sid] || {};
+      const ov = overrides[sid];
+      const e = effectiveMeals(plan, ov, !!absent[sid], wd);
       let note = '';
       if(e.absent) note = 'відсутній';
       else if(plan.lunch === false) note = 'не харчується';
@@ -478,16 +480,16 @@ window.loadMealStats = async function(){
 
 // Спільний рахунок для кухні і для батьків. onlyCls/onlyName звужують вибірку.
 export async function computeMealStats(from, to, onlyCls, onlyName){
-  const [stSnap, planSnap, attSnap, daySnap] = await Promise.all([
+  // Обидва вузли ключуються датою, тож просимо лише обраний період.
+  // Раніше статистика за тиждень качала весь навчальний рік.
+  const [stSnap, planSnap, att, days] = await Promise.all([
     get(child(ref(db),'students_list')),
     get(child(ref(db),'meal_plan')),
-    get(child(ref(db),'attendance')),
-    get(child(ref(db),'meal_day'))
+    getSchoolRange('attendance', from, to),
+    getDateRange('meal_day', from, to)
   ]);
   const students = stSnap.exists()?stSnap.val():{};
   const plans    = planSnap.exists()?planSnap.val():{};
-  const att      = attSnap.exists()?attSnap.val():{};
-  const days     = daySnap.exists()?daySnap.val():{};
 
   const dateList = [];
   const d = new Date(from+'T12:00:00'), end = new Date(to+'T12:00:00');
@@ -503,12 +505,12 @@ export async function computeMealStats(from, to, onlyCls, onlyName){
     if(onlyCls && cls !== onlyCls) continue;
     for(const key in students[cls]){
       const name = students[cls][key];
-      if(onlyName && name !== onlyName) continue;
-      const plan = plans[cls] && plans[cls][name];
+      if(onlyName && name !== onlyName && key !== onlyName) continue;
+      const plan = plans[cls] && plans[cls][key];
       let lunch=0, snack=0, absent=0;
       dateList.forEach(date=>{
-        const isAbsent = !!absentSet(att[cls] && att[cls][date])[name];
-        const ov = days[date] && days[date][cls] && days[date][cls][name];
+        const isAbsent = !!absentSet(att[cls] && att[cls][date])[key];
+        const ov = days[date] && days[date][cls] && days[date][cls][key];
         const e = effectiveMeals(plan, ov, isAbsent, weekdayIdx(date));
         if(e.absent){ absent++; return; }
         if(e.lunch) lunch++;
@@ -581,12 +583,13 @@ window.checkNotifySetup = async function(){
 let pmDate = null;   // який день зараз відкритий у блоці харчування
 window.pmShowDay = function(d){ pmDate = d; renderParentMenu(); };
 
-export async function renderParentMenu(cls, studentName, date){
+// Другий аргумент — КЛЮЧ учня (постійний ідентифікатор), а не імʼя
+export async function renderParentMenu(cls, studentKey, date){
   const box = document.getElementById('p-menu');
   if(!box) return;
   cls = cls || currentUserData?.class;
-  studentName = studentName || currentUserData?.studentName;
-  if(!cls || !studentName) return;
+  studentKey = studentKey || currentUserData?.studentId || currentUserData?.studentName;
+  if(!cls || !studentKey) return;
 
   try{
     // Явно передана дата (зміна дати в кабінеті) скидає ручний вибір дня
@@ -609,9 +612,9 @@ export async function renderParentMenu(cls, studentName, date){
     const m = menus[ci].exists() ? menus[ci].val() : null;
 
     const [planSnap, daySnap, attSnap] = await Promise.all([
-      get(child(ref(db),`meal_plan/${cls}/${studentName}`)),
-      get(child(ref(db),`meal_day/${cur}/${cls}/${studentName}`)),
-      get(child(ref(db),`attendance/${cls}/${cur}/${studentName}`))
+      get(child(ref(db),`meal_plan/${cls}/${studentKey}`)),
+      get(child(ref(db),`meal_day/${cur}/${cls}/${studentKey}`)),
+      get(child(ref(db),`attendance/${cls}/${cur}/${studentKey}`))
     ]);
     const plan = planSnap.exists()?planSnap.val():{};
     const ov   = daySnap.exists()?daySnap.val():null;
@@ -661,8 +664,8 @@ export async function renderParentMenu(cls, studentName, date){
 }
 
 window.setMealDay = async function(date, field, value){
-  const cls = currentUserData?.class, name = currentUserData?.studentName;
-  if(!cls || !name) return;
+  const cls = currentUserData?.class, sid = currentUserData?.studentId || currentUserData?.studentName;
+  if(!cls || !sid) return;
   const gate = mealsEditable(date);
   if(!gate.ok) return alert(gate.msg);
   let reason = '';
@@ -670,7 +673,7 @@ window.setMealDay = async function(date, field, value){
     reason = prompt('Причина (необовʼязково):','') || '';
     if(reason === null) return;
   }
-  const path = `meal_day/${date}/${cls}/${name}`;
+  const path = `meal_day/${date}/${cls}/${sid}`;
   const snap = await get(child(ref(db), path));
   const cur = snap.exists()?snap.val():{};
   cur[field] = value ? 1 : 0;
@@ -683,9 +686,9 @@ window.setMealDay = async function(date, field, value){
 
 // Постійні налаштування дитини — тут батько може зняти її з харчування зовсім
 window.openMealSettings = async function(){
-  const cls = currentUserData?.class, name = currentUserData?.studentName;
-  if(!cls || !name) return;
-  const snap = await get(child(ref(db),`meal_plan/${cls}/${name}`));
+  const cls = currentUserData?.class, sid = currentUserData?.studentId || currentUserData?.studentName;
+  if(!cls || !sid) return;
+  const snap = await get(child(ref(db),`meal_plan/${cls}/${sid}`));
   const p = snap.exists()?snap.val():{};
   const lunch = p.lunch !== false, snack = p.snack || 'no';
   const sd = p.snackDays || {};
@@ -711,8 +714,8 @@ window.msToggleDays = function(){
   document.getElementById('ms-days').style.display = v==='days' ? 'flex' : 'none';
 };
 window.saveMealSettings = async function(){
-  const cls = currentUserData?.class, name = currentUserData?.studentName;
-  if(!cls || !name) return;
+  const cls = currentUserData?.class, sid = currentUserData?.studentId || currentUserData?.studentName;
+  if(!cls || !sid) return;
   const snack = document.getElementById('ms-snack').value;
   const plan = {
     lunch: document.getElementById('ms-lunch').checked,
@@ -724,15 +727,15 @@ window.saveMealSettings = async function(){
     for(let i=1;i<=5;i++) if(document.getElementById('ms-d'+i).checked) d[i] = true;
     plan.snackDays = d;
   }
-  await set(ref(db,`meal_plan/${cls}/${name}`), plan);
+  await set(ref(db,`meal_plan/${cls}/${sid}`), plan);
   document.getElementById('meal-settings-modal').style.display = 'none';
   showToast('✅ Налаштування збережено');
   renderParentMenu();
 };
 
 window.openMyMealStats = async function(){
-  const cls = currentUserData?.class, name = currentUserData?.studentName;
-  if(!cls || !name) return;
+  const cls = currentUserData?.class, sid = currentUserData?.studentId || currentUserData?.studentName;
+  if(!cls || !sid) return;
   const modal = document.getElementById('meal-stats-modal');
   const body  = document.getElementById('meal-stats-body');
   if(!modal || !body) return;
@@ -744,13 +747,13 @@ window.openMyMealStats = async function(){
   window.reloadMyMealStats();
 };
 window.reloadMyMealStats = async function(){
-  const cls = currentUserData?.class, name = currentUserData?.studentName;
+  const cls = currentUserData?.class, sid = currentUserData?.studentId || currentUserData?.studentName;
   const body = document.getElementById('meal-stats-body');
   const from = document.getElementById('pms-from').value;
   const to   = document.getElementById('pms-to').value;
   if(!body || !from || !to) return;
   body.innerHTML = '<p class="empty-msg">Рахуємо...</p>';
-  const rows = await computeMealStats(from, to, cls, name);
+  const rows = await computeMealStats(from, to, cls, sid);
   const r = rows[0] || { lunch:0, snack:0, absent:0, days:0 };
   body.innerHTML = `
     <div class="pms-grid">

@@ -1583,6 +1583,20 @@
             <button onclick="directorAddStudent()" style="background:#1b5e20;color:#fff;margin-top:8px;">➕ Додати</button>
           </div>
         </div>
+          <div style="margin-top:12px;border-top:1px dashed #ce93d8;padding-top:11px;">
+            <b style="font-size:.85rem;color:#b71c1c;">🔍 Перевірка на тезок</b>
+            <p style="font-size:.76rem;color:#888;margin:4px 0 6px 0;">Оцінки й відвідуваність зберігаються за іменем учня. Двоє з однаковим іменем в одному класі — це один спільний запис.</p>
+            <button onclick="findDuplicateStudents()" style="background:#fff;color:#b71c1c;border:1px solid #ef9a9a;">Перевірити всі класи</button>
+            <div id="d-dup-result" style="display:none;margin-top:8px;"></div>
+          </div>
+          <div style="margin-top:12px;border-top:1px dashed #ce93d8;padding-top:11px;">
+            <b style="font-size:.85rem;color:#00838f;">🆔 Перехід на постійні ідентифікатори</b>
+            <p style="font-size:.76rem;color:#888;margin:4px 0 6px 0;">Показує, скільки записів прив'язано до імені учня і чи всі імена збігаються зі списками класів. Нічого не змінює — це підготовка до переходу.</p>
+            <button onclick="auditStudentKeys()" style="background:#fff;color:#00838f;border:1px solid #80deea;">Порахувати</button>
+            <button onclick="wipeLegacyStudentKeys()" style="background:#fff;color:#b71c1c;border:1px solid #ef9a9a;">🗑️ Стерти старі записи за іменем</button>
+            <div id="d-idmig-result" style="display:none;margin-top:8px;"></div>
+          </div>
+
       </details>
       <!-- Переведення одного учня (перехід у паралель / інший клас серед року) -->
       <details style="margin-bottom:12px;background:#f9f4ff;padding:14px;border-radius:12px;border:1px solid #ce93d8;" ontoggle="if(this.open)loadTransferClasses()">

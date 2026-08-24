@@ -15,7 +15,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, updatePassword, sendPasswordResetEmail, verifyPasswordResetCode, confirmPasswordReset, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
 import { getMessaging, getToken, onMessage, isSupported as messagingSupported } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-messaging.js";
-import { getDatabase, ref, set, get, child, push, onValue, remove, update } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+import { getDatabase, ref, set, get, child, push, onValue, remove, update, query, orderByKey, startAt, endAt } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 
 import { loadTeacherDashboard, loadCurrentTopicAndHW, listenTeacherAttendance, teacherAttendanceListener } from './teacher.js';
 import { loadDirectorDashboard, loadTeachersListForDirector, loadDirectorTeacherSkillsList, loadDrafts } from './director.js';
@@ -26,6 +26,143 @@ import { checkCurriculumUploadAccess } from './curriculum.js';
 export const CLOUD_NAME='duy1qwsqv'; export const UPLOAD_PRESET='ml_default'; export const CLOUDINARY_URL=`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`;
 const firebaseConfig={apiKey:"AIzaSyA3OA9pcR1zscUtEPWD8LEKTKonAN5Y90c",authDomain:"test-4eb3e.firebaseapp.com",databaseURL:"https://test-4eb3e-default-rtdb.europe-west1.firebasedatabase.app",projectId:"test-4eb3e",storageBucket:"test-4eb3e.firebasestorage.app",messagingSenderId:"933339787450",appId:"1:933339787450:web:cc87b850ed3b4903f41283"};
 export const app=initializeApp(firebaseConfig); export const auth=getAuth(app); export const db=getDatabase(app);
+
+// ══════════ ЧИТАННЯ ДІАПАЗОНУ ДАТ ══════════
+// Ключі дат мають вигляд YYYY-MM-DD, тому лексикографічний порядок збігається
+// з хронологічним. Це дозволяє попросити Firebase віддати лише потрібний
+// відрізок замість усього вузла. Раніше дашборди тягнули ВСЮ відвідуваність
+// школи за весь рік, щоб показати один день.
+export async function getDateRange(path, from, to){
+  try{
+    const snap = await get(query(ref(db, path), orderByKey(), startAt(from), endAt(to)));
+    return snap.exists() ? snap.val() : {};
+  }catch(e){ console.warn('getDateRange', path, e.message); return {}; }
+}
+// Той самий діапазон, але одразу по всіх класах: {class_1:{дата:{...}}, ...}
+export async function getSchoolRange(node, from, to){
+  const classes = [];
+  for(let i=1;i<=11;i++) classes.push(`class_${i}`);
+  const parts = await Promise.all(classes.map(c=>getDateRange(`${node}/${c}`, from, to)));
+  const out = {};
+  classes.forEach((c,i)=>{ if(parts[i] && Object.keys(parts[i]).length) out[c]=parts[i]; });
+  return out;
+}
+
+// ══════════ КЕШ КОРИСТУВАЧІВ ══════════
+// users читався 15 разів за сеанс. Вузол невеликий і майже не змінюється,
+// тож тримаємо копію. Після будь-якого запису список скидається явно —
+// інакше директор додасть учителя і не побачить його у списках.
+let _usersCache = null, _usersCacheAt = 0;
+const USERS_TTL = 30000;
+export async function getAllUsers(force){
+  const now = Date.now();
+  if(!force && _usersCache && now - _usersCacheAt < USERS_TTL) return _usersCache;
+  const s = await get(ref(db,'users'));
+  _usersCache = s.exists() ? s.val() : {};
+  _usersCacheAt = now;
+  return _usersCache;
+}
+// Обгортка з інтерфейсом snapshot: підміняє get(ref(db,'users')) без
+// переписування місць виклику.
+export async function getUsersSnap(){
+  const v = await getAllUsers();
+  return { exists: () => !!v && Object.keys(v).length > 0, val: () => v };
+}
+export function invalidateUsersCache(){ _usersCache = null; }
+
+// ══════════ ДОВІДНИК УЧНІВ: ІДЕНТИФІКАТОР ↔ ІМʼЯ ══════════
+// Історично оцінки, відвідуваність і коментарі ключуються ІМЕНЕМ учня.
+// Це крихко: двоє тезок зливаються в один запис, а перейменування вимагає
+// переносу всієї історії. Постійний ідентифікатор у нас уже є — це ключ
+// запису в students_list. Довідник нижче дає переклад в обидва боки й
+// готує ґрунт для переходу на ідентифікатори.
+const _stuDir = {};            // cls -> {byId:{sid:name}, byName:{nameLower:sid}}
+export async function getStudentDir(cls, force){
+  if(!force && _stuDir[cls]) return _stuDir[cls];
+  const snap = await get(child(ref(db), `students_list/${cls}`));
+  const byId = {}, byName = {};
+  if(snap.exists()){
+    const v = snap.val();
+    for(const sid in v){
+      const nm = String(v[sid]);
+      byId[sid] = nm;
+      byName[nm.replace(/\s+/g,' ').trim().toLowerCase()] = sid;
+    }
+  }
+  _stuDir[cls] = { byId, byName };
+  return _stuDir[cls];
+}
+export function invalidateStudentDir(cls){ if(cls) delete _stuDir[cls]; else Object.keys(_stuDir).forEach(k=>delete _stuDir[k]); }
+window.invalidateStudentDir = invalidateStudentDir;
+
+
+// Довідник усіх класів одним читанням на сеанс. students_list маленький
+// (кілька сотень рядків), тож тримати його цілком дешевше, ніж ходити
+// в базу з кожного місця відображення.
+export async function preloadStudentDirs(){
+  const snap = await get(child(ref(db), 'students_list'));
+  const all = snap.exists() ? snap.val() : {};
+  for(const cls in all){
+    const byId = {}, byName = {};
+    for(const sid in all[cls]){
+      const nm = String(all[cls][sid]);
+      byId[sid] = nm;
+      byName[nm.replace(/\s+/g,' ').trim().toLowerCase()] = sid;
+    }
+    _stuDir[cls] = { byId, byName };
+  }
+  return _stuDir;
+}
+// Синхронний переклад ідентифікатора в імʼя для відображення.
+// Якщо ключ невідомий — повертаємо як є: це або старий запис за іменем,
+// або учень, якого вже немає в списку. Краще показати, ніж приховати.
+window.preloadStudentDirs = preloadStudentDirs;
+export function stuName(cls, key){
+  const d = _stuDir[cls];
+  return (d && d.byId[key]) || key;
+}
+// Синхронний зворотний переклад — для побудови шляхів
+export function stuId(cls, name){
+  const d = _stuDir[cls];
+  if(!d) return null;
+  return d.byName[String(name).replace(/\s+/g,' ').trim().toLowerCase()] || null;
+}
+window.stuName = stuName;
+window.stuId = stuId;
+
+export async function sidOf(cls, name){
+  if(!cls || !name) return null;
+  const d = await getStudentDir(cls);
+  return d.byName[String(name).replace(/\s+/g,' ').trim().toLowerCase()] || null;
+}
+export async function nameOf(cls, sid){
+  if(!cls || !sid) return null;
+  const d = await getStudentDir(cls);
+  return d.byId[sid] || null;
+}
+// Ключ може бути як ідентифікатором, так і старим іменем — під час переходу
+// в базі трапляється і те, й інше. Повертає завжди відображуване імʼя.
+export async function displayStudentKey(cls, key){
+  const d = await getStudentDir(cls);
+  return d.byId[key] || key;
+}
+
+// Дописуємо постійний ідентифікатор у запис користувача. Імʼя лишається
+// на місці: код і правила доступу поки спираються на нього.
+export async function backfillStudentId(){
+  try{
+    const u = currentUserData;
+    if(!u || !u.class || !u.studentName) return;
+    if(u.studentId) return;
+    const sid = await sidOf(u.class, u.studentName);
+    if(!sid) return;
+    u.studentId = sid;
+    await update(ref(db, `users/${auth.currentUser.uid}`), { studentId: sid });
+  }catch(e){ /* не критично: це підготовка, а не робочий шлях */ }
+}
+
+window.invalidateUsersCache = invalidateUsersCache;
+
 
 // ══════════ CONSTANTS ══════════
 // Phase 5: GRADE_WEIGHTS stays as the fallback/default and as the one-time
@@ -368,9 +505,10 @@ window.switchChild=async function(idx){
   // Знімаємо таймер розкладу попередньої дитини
   if(parentLessonInterval)clearInterval(parentLessonInterval);
   currentUserData.studentName=k.studentName;
+  currentUserData.studentId=k.studentId||stuId(k.class,k.studentName)||null;
   currentUserData.class=k.class;
   currentUserData.parentRole=k.role||currentUserData.parentRole||'guardian';
-  try{await update(ref(db,`users/${auth.currentUser.uid}`),{studentName:k.studentName,class:k.class,parentRole:currentUserData.parentRole});}catch(e){console.error(e);}
+  try{await update(ref(db,`users/${auth.currentUser.uid}`),{studentName:k.studentName,studentId:currentUserData.studentId,class:k.class,parentRole:currentUserData.parentRole});}catch(e){console.error(e);}
   // Розклад прив'язаний до класу — перечитуємо під нову дитину
   loadScheduleScript(k.class,()=>{initUserSession();});
   showToast(`👶 Дитина: ${k.studentName}`);
@@ -603,12 +741,26 @@ onAuthStateChanged(auth,async user=>{
       // щоб уся наявна логіка (getActiveClass, дашборди) працювала без змін.
       const kids=normalizeChildren(ls.val());
       const first=kids[0]||{studentName:'',class:'class_2',role:'guardian'};
-      const nd={role:"parent",children:kids,studentName:first.studentName,class:first.class,parentRole:first.role||'guardian',email:user.email};
-      await set(ref(db,`users/${user.uid}`),nd);currentUserData=nd;await loadGradeTypesCache();initUserSession();}else{const sls=await get(child(ref(db),`student_links/${se}`));if(sls.exists()){const sd=sls.val();const nd={role:"student",studentName:sd.studentName,class:sd.class,email:user.email};await set(ref(db,`users/${user.uid}`),nd);currentUserData=nd;await loadGradeTypesCache();initUserSession();}else{alert("Ваш Email не зареєстровано.");signOut(auth);}}}}
+      const nd={role:"parent",children:kids,studentName:first.studentName,studentId:first.studentId||null,class:first.class,parentRole:first.role||'guardian',email:user.email};
+      await set(ref(db,`users/${user.uid}`),nd);currentUserData=nd;await loadGradeTypesCache();initUserSession();}else{const sls=await get(child(ref(db),`student_links/${se}`));if(sls.exists()){const sd=sls.val();const nd={role:"student",studentName:sd.studentName,studentId:sd.studentId||null,class:sd.class,email:user.email};await set(ref(db,`users/${user.uid}`),nd);currentUserData=nd;await loadGradeTypesCache();initUserSession();}else{alert("Ваш Email не зареєстровано.");signOut(auth);}}}}
   }else document.getElementById('login-screen').style.display='block';
 });
 async function fetchTeacherAccess(se){const s=await get(child(ref(db),`teacher_access/${se}`));teacherAccessMatrix=s.exists()?s.val():{};}
-function initUserSession(){
+async function initUserSession(){
+  try{
+    let dirs = await preloadStudentDirs();
+    // Порожній довідник = усі імена на екрані перетворяться на ключі.
+    // Одна повторна спроба дешевша за незрозумілий інтерфейс.
+    if(!Object.keys(dirs||{}).length){
+      await new Promise(r=>setTimeout(r,700));
+      dirs = await preloadStudentDirs();
+      if(!Object.keys(dirs||{}).length)
+        console.error('Довідник учнів порожній — імена показуватимуться як ключі');
+    }
+    // Дочекатися обовʼязково: кабінет одразу читає дані за цим ключем
+    if(currentUserData && (currentUserData.role==='parent'||currentUserData.role==='student'))
+      await backfillStudentId();
+  }catch(e){ console.warn('Довідник учнів не завантажено:', e.message); }
   // Приховуємо всі кабінети перед відкриттям потрібного — обов'язково для
   // switchRole(), інакше попередній кабінет залишиться на екрані поверх нового.
   document.querySelectorAll('.panel').forEach(p=>p.style.display='none');
@@ -675,7 +827,7 @@ export const AUDIT_LABELS={
   homework:'📚 Домашнє завдання', behavior:'🤝 Оцінка поведінки',
   student_add:'👨‍🎓 Учня додано', student_rename:'✏️ Учня перейменовано',
   student_del:'🗑 Учня прибрано', student_transfer:'↔️ Учня переведено',
-  card_edit:'📋 Картку учня змінено', data_export:'📦 Вивантаження даних дитини', staff_absent:'🧑‍🏫 Відсутність вчителя', consent_create:'✍️ Запит на згоду', quick_journal:'⚡ Швидкий журнал', menu:'🍽️ Меню оновлено', meal_plan:'🥪 Харчування учня', broadcast:'✉️ Повідомлення класу', substitute:'🔄 Призначено заміну', semester_grade:'🎓 Підсумкові оцінки',
+  card_edit:'📋 Картку учня змінено', data_export:'📦 Вивантаження даних дитини', staff_absent:'🧑‍🏫 Відсутність вчителя', consent_create:'✍️ Запит на згоду', quick_journal:'⚡ Швидкий журнал', menu:'🍽️ Меню оновлено', meal_plan:'🥪 Харчування учня', migration:'🆔 Перехід на ідентифікатори', broadcast:'✉️ Повідомлення класу', substitute:'🔄 Призначено заміну', semester_grade:'🎓 Підсумкові оцінки',
   student_login:'🔑 Вхід учня створено', student_email:'✉️ Email учня змінено',
   student_login_del:'🔒 Вхід учня прибрано',
   parent_link:'🔗 Батьків прив\'язано', parent_unlink:'🔓 Батьків відв\'язано',
@@ -713,7 +865,7 @@ window.logAction=logAction;
 // НАЛАШТУВАННЯ (один раз, у Firebase Console):
 //   Project settings → Cloud Messaging → Web Push certificates →
 //   Generate key pair → скопіювати ключ у VAPID_KEY нижче.
-const VAPID_KEY='BAifnPl3VcvDFpYuE7D2HAyfCzczsxAq3ktk72MgK6a4MY03Krvu4JI6k8pYOrasLdhwW0lLEAqDWs6iLGYEaCo';
+const VAPID_KEY='ЗАМІНИТИ_НА_КЛЮЧ_З_FIREBASE_CONSOLE';
 // Без цього ключа ніхто не може підписатися, тож і слати нема кому.
 // Виносимо назовні, щоб екрани могли чесно попередити, а не мовчати.
 export const pushConfigured = !VAPID_KEY.startsWith('ЗАМІНИТИ');
@@ -809,6 +961,7 @@ window.enablePush=async function(){
       role:currentUserData?.role||'',
       email:currentUserData?.email||'',
       studentName:currentUserData?.studentName||'',
+      studentId:currentUserData?.studentId||'',
       class:currentUserData?.class||'',
       updatedAt:Date.now()
     });
@@ -907,7 +1060,7 @@ export async function renderParentsBlock(containerId,cls){
     const [stSnap,plSnap,usersSnap,slSnap,cardSnap]=await Promise.all([
       get(child(ref(db),`students_list/${cls}`)),
       get(child(ref(db),'parent_links')),
-      get(child(ref(db),'users')),
+      getUsersSnap(),
       get(child(ref(db),'student_links')),
       get(child(ref(db),`student_cards/${cls}`))
     ]);
@@ -1215,6 +1368,8 @@ window.renderBirthdays=renderBirthdays;
 // у jsPDF: вбудовані шрифти jsPDF не мають кирилиці, і текст вийшов би
 // «кракозябрами». Так само вже зроблено в експорті журналу.
 window.downloadReportCard=async function(cls,studentName){
+  // Дані лежать під постійним ідентифікатором; імʼя потрібне лише для шапки
+  const sid = stuId(cls, studentName) || studentName;
   if(!window.html2canvas||!window.jspdf)return alert('Бібліотеки експорту не завантажились. Оновіть сторінку.');
   const holder=document.getElementById('report-card-render');
   holder.innerHTML='<p style="padding:20px;">Готую табель...</p>';
@@ -1231,18 +1386,18 @@ window.downloadReportCard=async function(cls,studentName){
     let card={};
     if(cardSnap.exists()&&stSnap.exists()){
       const names=stSnap.val();
-      for(const k in names)if(names[k]===studentName){card=cardSnap.val()[k]||{};break;}
+      card = cardSnap.val()[sid] || {};
     }
     // Предмети — об'єднання по всіх семестрах, щоб таблиця була рівна
     const semIds=Object.keys(all);
     const subjects=[...new Set(semIds.flatMap(id=>Object.keys(all[id]||{})))]
-      .filter(s=>semIds.some(id=>all[id][s]&&all[id][s][studentName]))
+      .filter(s=>semIds.some(id=>all[id][s]&&all[id][s][sid]))
       .sort((a,b)=>a.localeCompare(b,'uk'));
     if(subjects.length===0){holder.innerHTML='';return alert('Для цього учня ще немає підсумкових оцінок.');}
     const head=semIds.map(id=>`<th>${escHtml(sems[id]?.name||id)}</th>`).join('');
     const body=subjects.map(s=>`<tr><td class="rc-subj">${escHtml(s)}</td>`+
       semIds.map(id=>{
-        const rec=all[id][s]&&all[id][s][studentName];
+        const rec=all[id][s]&&all[id][s][sid];
         return `<td class="rc-val">${rec&&rec.value?escHtml(displayGrade(rec.value,cls)):'—'}</td>`;
       }).join('')+'</tr>').join('');
     holder.innerHTML=`<div class="rc-page">
@@ -1285,6 +1440,7 @@ const ACADEMIC_YEAR_ID_LOCAL=(()=>{
 // Формат JSON — повний і однозначний; він же годиться для перенесення
 // в іншу систему (право на переносимість даних).
 window.exportChildData=async function(cls,studentName){
+  const sid = stuId(cls, studentName) || studentName;
   if(!cls||!studentName)return showToast('⚠️ Дитина не визначена');
   showToast('⏳ Збираю дані...');
   try{
@@ -1297,7 +1453,7 @@ window.exportChildData=async function(cls,studentName){
       get(child(ref(db),`grade_types/${cls}`)),
       get(child(ref(db),`attendance/${cls}`)),
       get(child(ref(db),`behavior_grades/${cls}`)),
-      get(child(ref(db),`stickers/${cls}/${studentName}`)),
+      get(child(ref(db),`stickers/${cls}/${sid}`)),
       get(child(ref(db),`comments/${cls}`)),
       get(child(ref(db),`semester_grades/${cls}`)),
       get(child(ref(db),`retake_requests/${cls}`)),
@@ -1309,18 +1465,14 @@ window.exportChildData=async function(cls,studentName){
     const pick=(snap,depth)=>{
       if(!snap.exists())return {};
       const walk=(node,d)=>{
-        if(d===0)return node[studentName]!==undefined?node[studentName]:undefined;
+        if(d===0)return node[sid]!==undefined?node[sid]:undefined;
         const out={};
         for(const k in node){const v=walk(node[k],d-1);if(v!==undefined&&(typeof v!=='object'||Object.keys(v).length))out[k]=v;}
         return out;
       };
       return walk(snap.val(),depth);
     };
-    let card={};
-    if(cardSnap.exists()&&stSnap.exists()){
-      const names=stSnap.val();
-      for(const k in names)if(names[k]===studentName){card=cardSnap.val()[k]||{};break;}
-    }
+    const card = cardSnap.exists() ? (cardSnap.val()[sid] || {}) : {};
     // Батьки, прив'язані саме до цієї дитини
     const parents=[];
     if(plSnap.exists()){
@@ -1573,7 +1725,7 @@ window.changeParentEmail=async function(oldSafe){
 // Якщо батьки вже заходили — тримаємо їхній профіль у синхроні
 async function syncParentUserChildren(safeEmail,kids){
   const email=safeEmail.replace(/_/g,'.').toLowerCase();
-  const us=await get(child(ref(db),'users'));
+  const us=await getUsersSnap();
   if(!us.exists())return;
   const u=us.val();
   for(const uid in u){
@@ -1843,7 +1995,7 @@ window.loginUser=()=>window.submitLogin();
 window.registerUser=()=>window.showFirstLoginScreen();
 window.logoutUser=function(){if(teacherAttendanceListener)teacherAttendanceListener();if(parentLessonInterval)clearInterval(parentLessonInterval);document.getElementById('profile-bar').style.display='none';signOut(auth);};
 // ══════════ ADMIN DASHBOARD ══════════
-window.loadAdminDashboard=async function(){try{const date=document.getElementById('global-date').value;document.getElementById('a-att-header').innerText=`🚨 Відсутні (${date.split('-').reverse().slice(0,2).join('.')})`;const wd=getWeekDates(date);let wl=0,wa=0,hw=0,com=0;const[s,hwS,comS]=await Promise.all([get(child(ref(db),'attendance')),get(child(ref(db),'homeworks')),get(child(ref(db),'comments'))]);let h='';if(s.exists()){const d=s.val();for(let i=1;i<=11;i++){const c=`class_${i}`;if(d[c]&&d[c][date])for(let st in d[c][date]){const slots=d[c][date][st];for(let sk in slots){const r=slots[sk];if(r?.status){const bc=r.status==='late'?'badge-late':'badge-absent';const markerIcon=r.markedBy==='teacher'?'👨‍🏫':(r.markedBy==='student'?'🎒':(r.markedBy==='administrator'?'🛡️':'👪'));h+=`<li style="margin-bottom:9px;border-bottom:1px solid #eee;padding-bottom:4px;"><span style="font-size:.72rem;background:var(--teal);color:#fff;padding:2px 5px;border-radius:4px;margin-right:4px;">${i} Кл</span> <b>${escHtml(st)}</b> <span class="badge ${bc}">${r.status==='late'?'Запізнення':'Відсутність'}</span> <span style="font-size:.72rem;color:#888;">${escHtml(formatAttendanceSlotLabel(sk))} ${markerIcon}</span></li>`;}}}
+window.loadAdminDashboard=async function(){try{const date=document.getElementById('global-date').value;document.getElementById('a-att-header').innerText=`🚨 Відсутні (${date.split('-').reverse().slice(0,2).join('.')})`;const wd=getWeekDates(date);let wl=0,wa=0,hw=0,com=0;const _lo=wd[0]<date?wd[0]:date, _hi=wd[wd.length-1]>date?wd[wd.length-1]:date;const[_ad,_hd,_cd]=await Promise.all([getSchoolRange('attendance',_lo,_hi),getSchoolRange('homeworks',_lo,_hi),getSchoolRange('comments',_lo,_hi)]);const s={exists:()=>true,val:()=>_ad},hwS={exists:()=>true,val:()=>_hd},comS={exists:()=>true,val:()=>_cd};let h='';if(s.exists()){const d=s.val();for(let i=1;i<=11;i++){const c=`class_${i}`;if(d[c]&&d[c][date])for(let st in d[c][date]){const slots=d[c][date][st];for(let sk in slots){const r=slots[sk];if(r?.status){const bc=r.status==='late'?'badge-late':'badge-absent';const markerIcon=r.markedBy==='teacher'?'👨‍🏫':(r.markedBy==='student'?'🎒':(r.markedBy==='administrator'?'🛡️':'👪'));h+=`<li style="margin-bottom:9px;border-bottom:1px solid #eee;padding-bottom:4px;"><span style="font-size:.72rem;background:var(--teal);color:#fff;padding:2px 5px;border-radius:4px;margin-right:4px;">${i} Кл</span> <b>${escHtml(stuName(c, st))}</b> <span class="badge ${bc}">${r.status==='late'?'Запізнення':'Відсутність'}</span> <span style="font-size:.72rem;color:#888;">${escHtml(formatAttendanceSlotLabel(sk))} ${markerIcon}</span></li>`;}}}
     // Week counters (same aggregation the director dashboard does)
     if(d[c])wd.forEach(w=>{if(d[c][w]&&typeof d[c][w]==='object')Object.values(d[c][w]).forEach(slots=>{if(slots&&typeof slots==='object')Object.values(slots).forEach(r=>{if(r?.status==='late')wl++;else if(r?.status==='absent')wa++;});});});
   }}
@@ -1864,7 +2016,7 @@ window.loadAdminStudentsForClass=async function(){
   sel.innerHTML='<option value="">Завантаження...</option>';
   const snap=await get(child(ref(db),`students_list/${cls}`));
   sel.innerHTML='<option value="">Учень...</option>';
-  if(snap.exists())Object.values(snap.val()).sort().forEach(st=>{const o=document.createElement('option');o.value=st;o.innerText=st;sel.appendChild(o);});
+  if(snap.exists())Object.entries(snap.val()).sort((a,b)=>String(a[1]).localeCompare(String(b[1]),'uk')).forEach(([sid,nm])=>{const o=document.createElement('option');o.value=sid;o.innerText=nm;sel.appendChild(o);});
   else sel.innerHTML='<option value="" disabled>Учнів немає</option>';
 };
 window.adminMarkAbsent=async function(){
@@ -1875,7 +2027,7 @@ window.adminMarkAbsent=async function(){
   const date=document.getElementById('global-date').value;
   const status=reason==='запізнення'?'late':'absent';
   await set(ref(db,`attendance/${cls}/${date}/${st}/all`),{status,reason,markedBy:'administrator'});
-  showToast(`✅ ${st}: ${status==='late'?'запізнення':'відсутність'} (${reason})`);
+  showToast(`✅ ${stuName(cls, st)}: ${status==='late'?'запізнення':'відсутність'} (${reason})`);
   loadAdminDashboard();
 };
 // ══════════ ADMIN — read-only reference views ══════════

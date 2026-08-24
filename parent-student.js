@@ -5,7 +5,7 @@
 // lives in teacher.js).
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, getActiveClass, currentUserData, STICKER_GOAL, getWeekDates, displayGrade, gradeClass6, showToast, renderHwItem, dayKeys, localDateString, formatAttendanceSlotLabel, renderGradeFormulaInfo, escJs, escHtml, safeUrl, renderBirthdays } from './common.js';
+import { db, getActiveClass, currentUserData, STICKER_GOAL, getWeekDates, displayGrade, gradeClass6, showToast, renderHwItem, dayKeys, localDateString, formatAttendanceSlotLabel, renderGradeFormulaInfo, escJs, escHtml, safeUrl, renderBirthdays, stuName } from './common.js';
 import { ACADEMIC_YEAR_ID } from './director.js';
 import { renderParentMenu } from './kitchen.js';
 
@@ -27,7 +27,7 @@ async function checkTeacherAttendanceAlert(role='parent'){
   if(!banner||!currentUserData)return;
   const date=document.getElementById('global-date').value;
   const cls=getActiveClass();
-  const snap=await get(child(ref(db),`attendance/${cls}/${date}/${currentUserData.studentName}`));
+  const snap=await get(child(ref(db),`attendance/${cls}/${date}/${currentUserData.studentId||currentUserData.studentName}`));
   if(!snap.exists()){banner.style.display='none';return;}
   const slots=snap.val();
   const selfSlotKeys=new Set(Object.entries(slots).filter(([,r])=>r&&(r.markedBy==='parent'||r.markedBy==='student')).map(([k])=>k));
@@ -271,9 +271,9 @@ export function loadParentDashboard(){
   // Dynamic schedule
   if(window.schedule){renderDynamicSchedule();if(parentLessonInterval)clearInterval(parentLessonInterval);parentLessonInterval=setInterval(renderDynamicSchedule,30000);}
   // Stickers
-  get(child(ref(db),`stickers/${cls}/${currentUserData.studentName}`)).then(snap=>{const cnt=snap.exists()?Object.keys(snap.val()).length:0;const pct=Math.min((cnt/STICKER_GOAL)*100,100);document.getElementById('p-ribbon-progress').style.width=pct+'%';document.getElementById('p-ribbon-count').innerText=`${cnt} / ${STICKER_GOAL} наліпок до призу`;const me=document.getElementById('p-ribbon-msg');if(me){if(cnt>=STICKER_GOAL){me.innerText="🎉 Ура! Ти досяг мети!";confetti({particleCount:150,spread:80,origin:{y:0.5}});}else me.innerText='';}}).catch(()=>document.getElementById('p-ribbon-count').innerText="Помилка");
+  get(child(ref(db),`stickers/${cls}/${currentUserData.studentId||currentUserData.studentName}`)).then(snap=>{const cnt=snap.exists()?Object.keys(snap.val()).length:0;const pct=Math.min((cnt/STICKER_GOAL)*100,100);document.getElementById('p-ribbon-progress').style.width=pct+'%';document.getElementById('p-ribbon-count').innerText=`${cnt} / ${STICKER_GOAL} наліпок до призу`;const me=document.getElementById('p-ribbon-msg');if(me){if(cnt>=STICKER_GOAL){me.innerText="🎉 Ура! Ти досяг мети!";confetti({particleCount:150,spread:80,origin:{y:0.5}});}else me.innerText='';}}).catch(()=>document.getElementById('p-ribbon-count').innerText="Помилка");
   // Att status (self-report confirmation lives under the "all" slot)
-  get(child(ref(db),`attendance/${cls}/${date}/${currentUserData.studentName}/${SELF_REPORT_SLOT}`)).then(snap=>{const se=document.getElementById('p-att-status');if(snap.exists()){const d=snap.val();se.innerText=`✅ Ви повідомили: ${d.status==='late'?'Запізнення':'Відсутність'} (${d.reason})`;se.style.display='block';}else se.style.display='none';});
+  get(child(ref(db),`attendance/${cls}/${date}/${currentUserData.studentId||currentUserData.studentName}/${SELF_REPORT_SLOT}`)).then(snap=>{const se=document.getElementById('p-att-status');if(snap.exists()){const d=snap.val();se.innerText=`✅ Ви повідомили: ${d.status==='late'?'Запізнення':'Відсутність'} (${d.reason})`;se.style.display='block';}else se.style.display='none';});
   // Persistent alert if the teacher marked something the parent hasn't acknowledged
   checkTeacherAttendanceAlert('parent');
   // Calendar (holidays/breaks/exams) + bell schedule — Phase 3
@@ -287,7 +287,7 @@ export function loadParentDashboard(){
   renderFinalGrades('p-final-grades',cls,currentUserData.studentName);
   loadTodaySubstitutions(cls,date).then(()=>renderDynamicSchedule('parent'));
   renderConsents();
-  renderParentMenu(cls,currentUserData.studentName,date);
+  renderParentMenu(cls,currentUserData.studentId||currentUserData.studentName,date);
   // Grades + comments + behavior
   const ym=date.substring(0,7);
   Promise.all([
@@ -311,7 +311,7 @@ export function loadParentDashboard(){
         hasItems=true;const cr=rx[s]?.[sn]||null;const gc=gradeClass6(gv);const dispVal=displayGrade(gv,cls);
         let gHtml=gv?`<span class="g-cell ${gc}" style="display:inline-flex;padding:4px 9px;border-radius:8px;gap:5px;margin-bottom:3px;"><span class="g-val">${dispVal}</span>${gtp?`<span class="g-type">${gtp}</span>`:''}</span>`:'';
         // Retake button
-        let retakeBtn='';if(gv){const n=parseInt(gv);if(!isNaN(n)&&n<=3)retakeBtn=`<button class="retake-btn" onclick="sendRetakeRequest('${cls}','${escJs(s)}','${date}','${escJs(sn)}',${n})" style="margin-left:6px;">🔄 Покращити</button>`;}
+        let retakeBtn='';if(gv){const n=parseInt(gv);if(!isNaN(n)&&n<=3)retakeBtn=`<button class="retake-btn" onclick="sendRetakeRequest('${cls}','${escJs(s)}','${date}','${escJs(currentUserData.studentId||sn)}',${n})" style="margin-left:6px;">🔄 Покращити</button>`;}
         const rxHtml=`<div style="display:flex;gap:8px;margin-top:8px;padding-top:7px;border-top:1px dashed #eee;align-items:center;"><button style="background:none;border:none;font-size:1.3rem;cursor:pointer;filter:${cr==='👍'?'none':'grayscale(100%)'};opacity:${cr==='👍'?'1':'.5'};padding:4px;width:auto;margin:0;" onclick="sendReaction('${date}','${escJs(s)}','👍')">👍</button><button style="background:none;border:none;font-size:1.3rem;cursor:pointer;filter:${cr==='❤️'?'none':'grayscale(100%)'};opacity:${cr==='❤️'?'1':'.5'};padding:4px;width:auto;margin:0;" onclick="sendReaction('${date}','${escJs(s)}','❤️')">❤️</button><button style="background:none;border:none;font-size:1.3rem;cursor:pointer;filter:${cr==='🔥'?'none':'grayscale(100%)'};opacity:${cr==='🔥'?'1':'.5'};padding:4px;width:auto;margin:0;" onclick="sendReaction('${date}','${escJs(s)}','🔥')">🔥</button></div>`;
         list.innerHTML+=`<li><b>${escHtml(s)}:</b><br>${gHtml}${retakeBtn}${cm?`<div style="background:#f0f8ff;padding:5px 9px;border-radius:6px;font-style:italic;font-size:.88rem;margin-top:3px;">${escHtml(cm)}</div>`:''}${rxHtml}</li>`;
       }
@@ -368,7 +368,7 @@ window.downloadMyReportCard=function(){
 export async function renderConsents(){
   const box=document.getElementById('p-consents');
   if(!box||currentUserData?.role!=='parent')return;
-  const cls=currentUserData.class, name=currentUserData.studentName;
+  const cls=currentUserData.class, sid=currentUserData.studentId||currentUserData.studentName;
   try{
     const [cSnap,rSnap]=await Promise.all([
       get(child(ref(db),'consents')),
@@ -385,7 +385,7 @@ export async function renderConsents(){
     box.style.display='block';
     box.innerHTML=mine.map(id=>{
       const c=all[id];
-      const my=resp[id]&&resp[id][cls]&&resp[id][cls][name];
+      const my=resp[id]&&resp[id][cls]&&resp[id][cls][sid];
       const over=c.deadline&&c.deadline<localDateString;
       return `<div class="pc-card${my?' answered':''}">
         <div class="pc-title">${escHtml(c.title||'')}</div>
@@ -405,11 +405,11 @@ export async function renderConsents(){
   }catch(e){box.style.display='none';}
 }
 window.answerConsent=async function(id,answer){
-  const cls=currentUserData?.class, name=currentUserData?.studentName;
-  if(!cls||!name)return;
+  const cls=currentUserData?.class, sid=currentUserData?.studentId||currentUserData?.studentName;
+  if(!cls||!sid)return;
   if(answer==='no'&&!confirm('Підтвердити відмову?'))return;
   try{
-    await set(ref(db,`consent_responses/${id}/${cls}/${name}`),
+    await set(ref(db,`consent_responses/${id}/${cls}/${sid}`),
       {answer,by:currentUserData.email||'',ts:Date.now()});
     showToast(answer==='yes'?'✓ Згоду зафіксовано':'✕ Відмову зафіксовано');
     renderConsents();
@@ -503,20 +503,20 @@ window.submitAttendance=function(role='parent'){
   const type=document.getElementById(`${prefix}-att-type`).value;
   const reason=document.getElementById(`${prefix}-att-reason`).value;
   const markedBy=role==='student'?'student':'parent';
-  set(ref(db,`attendance/${getActiveClass()}/${date}/${currentUserData.studentName}/${SELF_REPORT_SLOT}`),{status:type,reason,markedBy}).then(()=>{
+  set(ref(db,`attendance/${getActiveClass()}/${date}/${currentUserData.studentId||currentUserData.studentName}/${SELF_REPORT_SLOT}`),{status:type,reason,markedBy}).then(()=>{
     document.getElementById(`${prefix}-att-status`).innerText=`✅ ${type==='late'?'Запізнення':'Відсутність'} (${reason})`;
     document.getElementById(`${prefix}-att-status`).style.display='block';
     checkTeacherAttendanceAlert(role);
   });
 };
 window.updateAttOptionsStudent=function(){const t=document.getElementById('s-att-type').value;const r=document.getElementById('s-att-reason');r.innerHTML='';if(t==='late')r.innerHTML='<option value="на 10 хвилин">на 10 хвилин</option><option value="на 15 хвилин">на 15 хвилин</option><option value="до 2-го уроку">до 2-го уроку</option><option value="до 3-го уроку">до 3-го уроку</option>';else r.innerHTML='<option value="за сімейними обставинами">За сімейними обставинами</option><option value="через хворобу">Через хворобу</option>';};
-window.sendReaction=function(date,subject,emoji){if(!currentUserData)return;set(ref(db,`reactions/${getActiveClass()}/${date}/${subject}/${currentUserData.studentName}`),emoji).then(()=>loadParentDashboard());};
+window.sendReaction=function(date,subject,emoji){if(!currentUserData)return;set(ref(db,`reactions/${getActiveClass()}/${date}/${subject}/${currentUserData.studentId||currentUserData.studentName}`),emoji).then(()=>loadParentDashboard());};
 // ══════════ STUDENT DASHBOARD ══════════
 export function loadStudentDashboard(){
   if(!currentUserData)return;const date=document.getElementById('global-date').value;const cls=getActiveClass();
   if(window.schedule){renderDynamicSchedule('student');if(parentLessonInterval)clearInterval(parentLessonInterval);parentLessonInterval=setInterval(()=>renderDynamicSchedule('student'),30000);}
-  get(child(ref(db),`stickers/${cls}/${currentUserData.studentName}`)).then(snap=>{const cnt=snap.exists()?Object.keys(snap.val()).length:0;const pct=Math.min((cnt/STICKER_GOAL)*100,100);document.getElementById('s-ribbon-progress').style.width=pct+'%';document.getElementById('s-ribbon-count').innerText=`${cnt} / ${STICKER_GOAL} наліпок до призу`;});
-  get(child(ref(db),`attendance/${cls}/${date}/${currentUserData.studentName}/${SELF_REPORT_SLOT}`)).then(snap=>{const se=document.getElementById('s-att-status');if(snap.exists()){const d=snap.val();se.innerText=`✅ Повідомлено: ${d.status==='late'?'Запізнення':'Відсутність'} (${d.reason})`;se.style.display='block';}else se.style.display='none';});
+  get(child(ref(db),`stickers/${cls}/${currentUserData.studentId||currentUserData.studentName}`)).then(snap=>{const cnt=snap.exists()?Object.keys(snap.val()).length:0;const pct=Math.min((cnt/STICKER_GOAL)*100,100);document.getElementById('s-ribbon-progress').style.width=pct+'%';document.getElementById('s-ribbon-count').innerText=`${cnt} / ${STICKER_GOAL} наліпок до призу`;});
+  get(child(ref(db),`attendance/${cls}/${date}/${currentUserData.studentId||currentUserData.studentName}/${SELF_REPORT_SLOT}`)).then(snap=>{const se=document.getElementById('s-att-status');if(snap.exists()){const d=snap.val();se.innerText=`✅ Повідомлено: ${d.status==='late'?'Запізнення':'Відсутність'} (${d.reason})`;se.style.display='block';}else se.style.display='none';});
   checkTeacherAttendanceAlert('student');
   renderParentCalendar('student');loadParentBellSchedule('student');
   get(child(ref(db),`homeworks/${cls}/${date}`)).then(snap=>{const hl=document.getElementById('s-daily-hw-list');hl.innerHTML='';if(snap.exists()){const d=snap.val();for(let s in d)hl.innerHTML+=renderHwItem(s,d[s]);}else hl.innerHTML='<li class="empty-msg">ДЗ не задано.</li>';});
@@ -539,7 +539,7 @@ export function loadStudentDashboard(){
       if(cm||gv){
         hasItems=true;const gc=gradeClass6(gv);const dispVal=displayGrade(gv,cls);
         let gHtml=gv?`<span class="g-cell ${gc}" style="display:inline-flex;padding:4px 9px;border-radius:8px;gap:5px;margin-bottom:3px;"><span class="g-val">${dispVal}</span>${gtp?`<span class="g-type">${gtp}</span>`:''}</span>`:'';
-        let retakeBtn='';if(gv){const n=parseInt(gv);if(!isNaN(n)&&n<=3)retakeBtn=`<button class="retake-btn" onclick="sendRetakeRequest('${cls}','${escJs(s)}','${date}','${escJs(sn)}',${n})" style="margin-left:6px;">🔄 Покращити</button>`;}
+        let retakeBtn='';if(gv){const n=parseInt(gv);if(!isNaN(n)&&n<=3)retakeBtn=`<button class="retake-btn" onclick="sendRetakeRequest('${cls}','${escJs(s)}','${date}','${escJs(currentUserData.studentId||sn)}',${n})" style="margin-left:6px;">🔄 Покращити</button>`;}
         list.innerHTML+=`<li><b>${escHtml(s)}:</b><br>${gHtml}${retakeBtn}${cm?`<div style="background:#f0f8ff;padding:5px 9px;border-radius:6px;font-style:italic;font-size:.88rem;margin-top:3px;">${escHtml(cm)}</div>`:''}</li>`;
       }
     });

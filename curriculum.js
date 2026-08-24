@@ -8,7 +8,7 @@
 // XLSX comes from the CDN <script> tag already in <head> (global).
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, update } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, auth, getActiveClass, currentUserData, showToast, localDateString, escHtml } from './common.js';
+import { db, auth, getActiveClass, currentUserData, showToast, localDateString, escHtml, getUsersSnap } from './common.js';
 
 let parsedCurriculum=null;        // після парсингу xlsx
 // availableTopicsCache is reassigned only here (populateTopicSelector)
@@ -360,7 +360,7 @@ window.assignClassTeacher=async function(){
   // already-registered account actually reads). Specialist roles
   // (art_school_teacher / music_teacher / director) are left untouched.
   await set(ref(db,`pre_approved_roles/${teacherSE}`),'class_teacher');
-  const usersSnap=await get(ref(db,'users'));
+  const usersSnap=await getUsersSnap();
   if(usersSnap.exists()){
     const u=usersSnap.val();
     for(let uid in u){
@@ -390,7 +390,7 @@ window.loadClassTeacherInfo=async function(){
   if(!info||!tSel)return;
   // Заповнюємо вчителів
   tSel.innerHTML='<option value="">-- Оберіть вчителя --</option>';
-  window.globalTeachersList.forEach(t=>tSel.innerHTML+=`<option value="${t.safeEmail}">${t.name} (${t.email})</option>`);
+  window.globalTeachersList.forEach(t=>tSel.innerHTML+=`<option value="${escHtml(t.safeEmail)}">${escHtml(t.name)} (${escHtml(t.email)})</option>`);
   if(!cls){info.style.display='none';return;}
   const snap=await get(ref(db,`class_teachers/${cls}`));
   if(snap.exists()){
