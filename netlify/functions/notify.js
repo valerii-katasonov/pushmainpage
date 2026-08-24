@@ -103,7 +103,10 @@ async function findMealTargets(token) {
     const t = all[uid];
     if (!t || !t.token) continue;
     if (t.role !== 'parent' && t.role !== 'student') continue;
-    const plan = plans[t.class] && plans[t.class][t.studentName];
+    // meal_plan ключується постійним ідентифікатором учня. Імʼя лишаємо
+    // як запасний варіант для токенів, збережених до переходу.
+    const byClass = plans[t.class] || {};
+    const plan = (t.studentId && byClass[t.studentId]) || byClass[t.studentName];
     if (plan && plan.lunch === false) continue; // не харчується — не турбуємо
     out.push(t.token);
   }
