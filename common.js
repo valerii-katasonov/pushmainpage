@@ -870,7 +870,7 @@ window.logAction=logAction;
 // НАЛАШТУВАННЯ (один раз, у Firebase Console):
 //   Project settings → Cloud Messaging → Web Push certificates →
 //   Generate key pair → скопіювати ключ у VAPID_KEY нижче.
-const VAPID_KEY='BAifnPl3VcvDFpYuE7D2HAyfCzczsxAq3ktk72MgK6a4MY03Krvu4JI6k8pYOrasLdhwW0lLEAqDWs6iLGYEaCo';
+const VAPID_KEY='ЗBAifnPl3VcvDFpYuE7D2HAyfCzczsxAq3ktk72MgK6a4MY03Krvu4JI6k8pYOrasLdhwW0lLEAqDWs6iLGYEaCo';
 // Без цього ключа ніхто не може підписатися, тож і слати нема кому.
 // Виносимо назовні, щоб екрани могли чесно попередити, а не мовчати.
 export const pushConfigured = !VAPID_KEY.startsWith('ЗАМІНИТИ');
@@ -2106,7 +2106,14 @@ window.loadAdminAcademicYear=async function(){
 // Used by director-screen, teacher-screen and parent/student-screen alike,
 // so it lives here rather than in any single role file.
 function getChatId(email1, email2) {
-  return [email1, email2].sort().join('___');
+  return [String(email1||'').toLowerCase(), String(email2||'').toLowerCase()].sort().join('___');
+}
+// Чи є поточний користувач учасником цієї переписки. Директор бачить усі
+// чати школи, але писати в чужий не може — і не повинен.
+function amIinChat(chatId){
+  const me = String(auth.currentUser?.email || '').toLowerCase().replace(/\./g,'_');
+  const id = String(chatId||'').toLowerCase();
+  return id.startsWith(me + '___') || id.endsWith('___' + me);
 }
 window.openChatModal = async function(role) {
   document.getElementById('inbox-modal').style.display = 'flex';
@@ -2213,12 +2220,19 @@ window.selectChatThread = function(chatId, title, otherEmailSafe = null) {
   document.getElementById('chat-detail-title').innerText = title;
   document.getElementById('chat-list-view').style.display = 'none';
   document.getElementById('chat-detail-view').style.display = 'flex';
+  // Директор бачить чужі переписки, але не бере в них участі. Показувати
+  // йому поле вводу було б обманом: запис відхилять правила доступу.
+  const mine = amIinChat(chatId);
+  const compose = document.getElementById('chat-compose');
+  const note = document.getElementById('chat-readonly');
+  if(compose) compose.style.display = mine ? '' : 'none';
+  if(note) note.style.display = mine ? 'none' : 'block';
   loadChatMessages(chatId);
 };
 function loadChatMessages(chatId) {
   const list = document.getElementById('inbox-messages-list');
   if (inboxMessagesListener) inboxMessagesListener();
-  const myEmailSafe = auth.currentUser.email.replace(/\./g, '_');
+  const myEmailSafe = auth.currentUser.email.toLowerCase().replace(/\./g, '_');
   inboxMessagesListener = onValue(ref(db, `chats/${chatId}/messages`), snap => {
     list.innerHTML = '';
     if (snap.exists()) {
@@ -2243,7 +2257,8 @@ function loadChatMessages(chatId) {
           ${last ? `<div class="ms-time">${new Date(m.time).toLocaleTimeString('uk-UA',{hour:'2-digit',minute:'2-digit'})}</div>` : ''}
         </div>`;
         prevFrom = m.from;
-        if (!isMe && !m.read) update(ref(db, `chats/${chatId}/messages/${m.id}`), { read: true });
+        if (!isMe && !m.read && amIinChat(chatId))
+          update(ref(db, `chats/${chatId}/messages/${m.id}`), { read: true }).catch(()=>{});
       });
       list.innerHTML = html;
       list.scrollTop = list.scrollHeight;
@@ -2266,7 +2281,7 @@ window.sendInboxMessage = async function() {
   const input = document.getElementById('msg-text-input');
   const text = input.value.trim();
   if (!text) return;
-  const myEmailSafe = auth.currentUser.email.replace(/\./g, '_');
+  const myEmailSafe = auth.currentUser.email.toLowerCase().replace(/\./g, '_');
   let roleLabel = '';
   if (currentUserData.role === 'teacher' || currentUserData.role === 'class_teacher') roleLabel = '(Вчитель)';
   else if (currentUserData.role === 'director') roleLabel = '(Директор)';
@@ -2281,7 +2296,12 @@ window.sendInboxMessage = async function() {
     input.value = '';
     const list = document.getElementById('inbox-messages-list');
     list.scrollTop = list.scrollHeight;
-  } catch (e) { alert("Помилка: " + e.message); }
+  } catch (e) {
+    const denied = /permission|denied/i.test(e.message || '');
+    alert(denied
+      ? 'Ви не учасник цієї переписки — писати в неї не можна.'
+      : 'Не вдалося надіслати: ' + e.message);
+  }
 };
 
 // Поле вводу поводиться як у месенджері: росте під текст, Enter надсилає,
