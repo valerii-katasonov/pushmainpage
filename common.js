@@ -865,7 +865,7 @@ window.logAction=logAction;
 // НАЛАШТУВАННЯ (один раз, у Firebase Console):
 //   Project settings → Cloud Messaging → Web Push certificates →
 //   Generate key pair → скопіювати ключ у VAPID_KEY нижче.
-const VAPID_KEY='ЗАМІНИТИ_НА_КЛЮЧ_З_FIREBASE_CONSOLE';
+const VAPID_KEY='BAifnPl3VcvDFpYuE7D2HAyfCzczsxAq3ktk72MgK6a4MY03Krvu4JI6k8pYOrasLdhwW0lLEAqDWs6iLGYEaCo';
 // Без цього ключа ніхто не може підписатися, тож і слати нема кому.
 // Виносимо назовні, щоб екрани могли чесно попередити, а не мовчати.
 export const pushConfigured = !VAPID_KEY.startsWith('ЗАМІНИТИ');
