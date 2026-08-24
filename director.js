@@ -1447,23 +1447,38 @@ window.wipeLegacyStudentKeys = async function(){
 // самотній заголовок.
 const DTAB_KEY = 'push_school_dir_tab';
 window.switchDirTab = function(tab, btn){
-  document.querySelectorAll('#dtab-bar .dtab').forEach(b=>b.classList.toggle('on', b===btn || b.dataset.t===tab));
+  document.querySelectorAll('#dtab-bar .dtab').forEach(b=>b.classList.toggle('on', b.dataset.t === tab));
   const scr = document.getElementById('director-screen');
   if(!scr) return;
-  scr.querySelectorAll('[data-dtab]').forEach(el=>{
+
+  // Дві секції — просто обгортки: усередині лежать блоки з РІЗНИХ вкладок
+  // (наприклад «Матриця доступу» — це персонал, хоча живе в секції розкладу).
+  // Тому вирішує не секція, а її вміст. Заголовок такої секції ховаємо
+  // назавжди: «Учні» над журналом дій збивав з пантелику.
+  scr.querySelectorAll('section.screen-section').forEach(sec=>{
+    const kids = Array.from(sec.querySelectorAll(':scope [data-dtab]'));
+    if(kids.length){
+      let anyVisible = false;
+      kids.forEach(k=>{
+        const on = k.dataset.dtab === tab;
+        k.style.display = on ? '' : 'none';
+        if(on) anyVisible = true;
+      });
+      const mixed = new Set(kids.map(k=>k.dataset.dtab)).size > 1;
+      const h3 = sec.querySelector(':scope > h3');
+      if(h3) h3.style.display = mixed ? 'none' : '';
+      sec.style.display = anyVisible ? '' : 'none';
+    } else {
+      sec.style.display = (sec.dataset.dtab === tab) ? '' : 'none';
+    }
+  });
+  // Блоки поза секціями (наприклад стрічка новин)
+  scr.querySelectorAll(':scope > [data-dtab]').forEach(el=>{
     el.style.display = (el.dataset.dtab === tab) ? '' : 'none';
   });
-  // Секції-обгортки: ховаємо ті, де все всередині приховано
-  scr.querySelectorAll('section.screen-section').forEach(sec=>{
-    if(sec.dataset.dtab) return;
-    const kids = sec.querySelectorAll('[data-dtab]');
-    if(!kids.length) return;
-    const anyVisible = Array.from(kids).some(k=>k.style.display !== 'none');
-    sec.style.display = anyVisible ? '' : 'none';
-  });
+
   try{ localStorage.setItem(DTAB_KEY, tab); }catch(e){}
   if(tab === 'news' && window.renderNewsFeed) window.renderNewsFeed('d-news-feed');
-  window.scrollTo({ top:0, behavior:'smooth' });
 };
 // Відновлюємо останню відкриту вкладку: директор зазвичай повертається
 // в те саме місце, де працював.
