@@ -351,6 +351,32 @@
       .dtab.on{background:#fff;border-color:transparent;color:var(--teal);
                box-shadow:0 1px 3px rgba(0,0,0,.08);}
     }
+    /* ── Вікно чату ── */
+    .chat-win{background:#fff;width:100%;max-width:520px;height:85vh;max-height:760px;display:flex;
+              flex-direction:column;border-radius:16px;overflow:hidden;box-shadow:0 18px 50px rgba(0,0,0,.22);}
+    .chat-pane{display:flex;flex-direction:column;height:100%;min-height:0;}
+    .chat-bar{display:flex;align-items:center;gap:6px;padding:12px 14px;background:#fff;
+              border-bottom:1px solid #ececec;flex-shrink:0;}
+    .chat-bar-title{flex:1;min-width:0;font-size:1rem;font-weight:600;color:#1f2d33;text-align:left;
+                    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .chat-back,.chat-x{width:32px;height:32px;flex:none;margin:0;padding:0;background:transparent;border:none;
+                       color:#7a8b93;font-size:1.4rem;line-height:1;cursor:pointer;border-radius:8px;}
+    .chat-back:hover,.chat-x:hover{background:#f2f5f6;color:#37474f;}
+    .chat-back{font-size:1.9rem;}
+    .chat-scroll{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;}
+    .chat-scroll.list{background:#fff;}
+    .chat-scroll.msgs{background:#f6f8f9;padding:8px 14px 14px;display:flex;flex-direction:column;}
+    .chat-compose{display:flex;align-items:flex-end;gap:8px;padding:10px 12px;background:#fff;
+                  border-top:1px solid #ececec;flex-shrink:0;}
+    .chat-compose textarea{flex:1;margin:0;padding:10px 14px;border:1px solid #dfe6e9;border-radius:20px;
+                           resize:none;max-height:110px;font-size:.9rem;line-height:1.4;font-family:inherit;}
+    .chat-compose textarea:focus{border-color:var(--teal);outline:none;}
+    .chat-send{width:40px;height:40px;flex:none;margin:0;padding:0;border:none;border-radius:50%;
+               background:var(--teal);color:#fff;font-size:1.05rem;cursor:pointer;line-height:1;}
+    .chat-send:hover{filter:brightness(1.08);}
+    @media (max-width:600px){
+      .chat-win{max-width:100%;height:100%;max-height:none;border-radius:0;}
+    }
     /* ── Чат: список ── */
     .ch-row{display:flex;align-items:center;gap:12px;padding:11px 14px;cursor:pointer;border-bottom:1px solid #f0f0f0;background:#fff;transition:background .12s;}
     .ch-row:hover{background:#fafafa;}
@@ -2626,32 +2652,36 @@
 </div>
 <!-- Inbox / Chat Modal -->
 <div id="inbox-modal" class="modal-overlay">
-  <div class="modal-content" style="max-width:500px; height:85vh; display:flex; flex-direction:column; padding:0; overflow:hidden;">
-    <!-- View 1: Chat List -->
-    <div id="chat-list-view" style="display:flex; flex-direction:column; height:100%;">
-      <div style="background:var(--purple); color:#fff; padding:15px; display:flex; justify-content:space-between; align-items:center;">
-        <h2 style="margin:0; font-size:1.2rem;">💬 Чати</h2>
-        <button onclick="closeInboxModal()" style="background:none; border:none; color:#fff; font-size:1.5rem; cursor:pointer; width:auto; padding:0;">✖</button>
-      </div>
-      <div id="inbox-contacts-list" style="flex:1; overflow-y:auto; background:#f4f4f9; padding:0;">
-        <p class="empty-msg" style="padding:15px;">Завантаження...</p>
-      </div>
-    </div>
-    <!-- View 2: Active Chat -->
-    <div id="chat-detail-view" style="display:none; flex-direction:column; height:100%;">
-      <div style="background:var(--purple); color:#fff; padding:10px 15px; display:flex; align-items:center; gap:10px;">
-        <button onclick="backToChatList()" style="background:none; border:none; color:#fff; font-size:1.5rem; cursor:pointer; padding:0; width:auto;">⬅</button>
-        <h2 id="chat-detail-title" style="margin:0; font-size:1.1rem; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Чат</h2>
-      </div>
-      <div id="inbox-messages-list" style="flex:1; overflow-y:auto; padding:15px; display:flex; flex-direction:column; gap:10px; background:#f4f4f9;"></div>
-      <div style="padding:15px; border-top:1px solid #eee; display:flex; gap:10px; background:#fff; align-items:flex-end;">
-        <textarea id="msg-text-input" placeholder="Напишіть повідомлення..." rows="2" style="flex:1; margin:0; border-color:var(--purple); border-radius:10px; padding:10px;"></textarea>
-        <button onclick="sendInboxMessage()" style="background:var(--purple); color:#fff; width:auto; padding:12px 18px; margin:0; border-radius:12px; border:none; cursor:pointer; font-weight:700;">➔</button>
+  <div class="chat-win">
+
+    <!-- Список переписок -->
+    <div id="chat-list-view" class="chat-pane">
+      <header class="chat-bar">
+        <span class="chat-bar-title">Повідомлення</span>
+        <button class="chat-x" onclick="closeInboxModal()" aria-label="Закрити">&times;</button>
+      </header>
+      <div id="inbox-contacts-list" class="chat-scroll list">
+        <p class="empty-msg" style="padding:20px;">Завантаження...</p>
       </div>
     </div>
+
+    <!-- Одна переписка -->
+    <div id="chat-detail-view" class="chat-pane" style="display:none;">
+      <header class="chat-bar">
+        <button class="chat-back" onclick="backToChatList()" aria-label="Назад">&#8249;</button>
+        <span class="chat-bar-title" id="chat-detail-title">Чат</span>
+        <button class="chat-x" onclick="closeInboxModal()" aria-label="Закрити">&times;</button>
+      </header>
+      <div id="inbox-messages-list" class="chat-scroll msgs"></div>
+      <div class="chat-compose">
+        <textarea id="msg-text-input" rows="1" placeholder="Повідомлення..."></textarea>
+        <button class="chat-send" onclick="sendInboxMessage()" aria-label="Надіслати">&#10148;</button>
+      </div>
+    </div>
+
   </div>
 </div>
-<!-- Wrapped Modal -->
+
 <div id="wrapped-modal" class="modal-overlay">
   <div class="modal-content">
     <h2 style="color:var(--green);margin-top:0;">🎉 Ваші підсумки!</h2>
