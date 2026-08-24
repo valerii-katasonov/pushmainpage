@@ -321,6 +321,66 @@
     #btn-ai-hw,#btn-ai-comment{width:auto;margin:0;padding:8px 14px;font-size:.82rem;font-weight:700;border:none;border-radius:9px;cursor:pointer;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;}
     #btn-ai-hw:disabled,#btn-ai-comment:disabled{opacity:.6;cursor:wait;}
     .ai-hw-note{font-size:.72rem;color:#999;font-style:italic;}
+    /* ── Вкладки кабінету директора ── */
+    .dtab-bar{display:flex;gap:6px;overflow-x:auto;padding:0 0 10px 0;margin-bottom:6px;border-bottom:1px solid #e0e0e0;
+              -webkit-overflow-scrolling:touch;scrollbar-width:none;position:sticky;top:0;background:var(--bg,#f4f7f9);z-index:5;}
+    .dtab-bar::-webkit-scrollbar{display:none;}
+    .dtab{flex:none;width:auto;margin:0;padding:7px 14px;font-size:.82rem;font-weight:600;white-space:nowrap;
+          background:#fff;color:#546e7a;border:1px solid #dfe6e9;border-radius:20px;cursor:pointer;transition:all .12s;}
+    .dtab:hover{border-color:#b0bec5;}
+    .dtab.on{background:var(--teal);border-color:var(--teal);color:#fff;}
+    .dtab-badge{display:none;margin-left:5px;background:var(--red);color:#fff;font-size:.65rem;padding:1px 6px;border-radius:10px;}
+    .dtab-badge.show{display:inline-block;}
+    /* ── Чат: список ── */
+    .ch-row{display:flex;align-items:center;gap:12px;padding:11px 14px;cursor:pointer;border-bottom:1px solid #f0f0f0;background:#fff;transition:background .12s;}
+    .ch-row:hover{background:#fafafa;}
+    .ch-row:active{background:#f0f0f0;}
+    .ch-av{width:42px;height:42px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:.88rem;letter-spacing:.02em;}
+    .ch-av.dir{background:#78909c;font-size:1.05rem;}
+    .ch-mid{flex:1;min-width:0;}
+    .ch-top{display:flex;align-items:baseline;gap:8px;}
+    .ch-name{font-size:.92rem;font-weight:600;color:#222;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0;}
+    .ch-time{font-size:.7rem;color:#aaa;flex-shrink:0;}
+    .ch-prev{font-size:.81rem;color:#888;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .ch-prev b{color:#666;font-weight:600;}
+    .ch-badge{flex-shrink:0;min-width:20px;height:20px;padding:0 6px;border-radius:10px;background:var(--teal);color:#fff;font-size:.7rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+    .ch-empty{padding:40px 20px;text-align:center;color:#bbb;font-size:2rem;line-height:1.6;}
+    .ch-empty span{display:block;font-size:.85rem;color:#999;margin-top:6px;}
+    /* ── Чат: повідомлення ── */
+    .ms-day{text-align:center;margin:14px 0 10px;}
+    .ms-day span{background:rgba(0,0,0,.06);color:#777;font-size:.7rem;padding:3px 11px;border-radius:20px;}
+    .ms{max-width:78%;padding:8px 12px;margin-bottom:2px;font-size:.9rem;line-height:1.45;word-break:break-word;position:relative;}
+    .ms.they{align-self:flex-start;background:#fff;color:#222;border-radius:14px 14px 14px 4px;border:1px solid #eee;}
+    .ms.me{align-self:flex-end;background:var(--teal);color:#fff;border-radius:14px 14px 4px 14px;}
+    .ms.grp.they{border-radius:4px 14px 14px 4px;}
+    .ms.grp.me{border-radius:14px 4px 4px 14px;}
+    .ms.last{margin-bottom:10px;}
+    .ms.last.they{border-radius:14px 14px 14px 4px;}
+    .ms.last.me{border-radius:14px 14px 4px 14px;}
+    .ms.grp.last.they{border-radius:4px 14px 14px 4px;}
+    .ms.grp.last.me{border-radius:14px 4px 4px 14px;}
+    .ms-from{font-size:.7rem;font-weight:700;color:var(--purple);margin-bottom:3px;}
+    .ms-time{font-size:.65rem;opacity:.55;text-align:right;margin-top:3px;}
+    /* ── Новинна стрічка ── */
+    .nw-feed{display:flex;flex-direction:column;gap:10px;}
+    .nw-item{background:#fff;border:1px solid #eee;border-radius:12px;padding:12px 14px;}
+    .nw-item.imp{border-color:#ffcc80;background:#fffdf7;}
+    .nw-item.new{box-shadow:inset 3px 0 0 var(--teal);}
+    .nw-head{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px;}
+    .nw-tag{font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:20px;text-transform:uppercase;letter-spacing:.02em;}
+    .nw-tag.school{background:#e0f7fa;color:#00838f;}
+    .nw-tag.cls{background:#ede7f6;color:#5e35b1;}
+    .nw-tag.imp{background:#fff3e0;color:#e65100;}
+    .nw-dot{width:7px;height:7px;border-radius:50%;background:var(--teal);}
+    .nw-time{margin-left:auto;font-size:.72rem;color:#aaa;}
+    .nw-title{margin:0 0 5px 0;font-size:.95rem;color:#222;font-weight:700;}
+    .nw-text{font-size:.87rem;line-height:1.5;color:#444;}
+    .nw-foot{display:flex;align-items:center;gap:10px;margin-top:9px;padding-top:8px;border-top:1px dashed #f0f0f0;}
+    .nw-author{font-size:.75rem;color:#999;}
+    .nw-del{width:auto;margin:0 0 0 auto;padding:3px 10px;font-size:.72rem;background:transparent;color:#c62828;border:1px solid #ffcdd2;border-radius:7px;cursor:pointer;}
+    .nw-imp-row{display:flex;align-items:flex-start;gap:9px;margin:12px 0 4px;font-size:.85rem;}
+    .nw-imp-row input{width:auto;margin:2px 0 0 0;}
+    .nw-imp-row small{color:#888;font-size:.74rem;line-height:1.4;}
     /* ── Кухня ── */
     .k-weeknav{display:flex;align-items:center;gap:10px;justify-content:space-between;background:#e0f7fa;border-radius:11px;padding:9px 11px;}
     .k-weeknav button{width:auto;margin:0;padding:6px 15px;font-size:1.05rem;font-weight:800;background:#fff;color:#00838f;border:1px solid #80deea;border-radius:9px;cursor:pointer;}
@@ -1279,9 +1339,19 @@
   </div>
   <!-- DIRECTOR -->
   <div id="director-screen" class="panel">
+    <div class="dtab-bar" id="dtab-bar">
+      <button class="dtab on" data-t="ogl"    onclick="switchDirTab('ogl',this)">Огляд</button>
+      <button class="dtab"    data-t="news"   onclick="switchDirTab('news',this)">Новини<span class="dtab-badge" id="dtab-news-badge"></span></button>
+      <button class="dtab"    data-t="uchni"  onclick="switchDirTab('uchni',this)">Учні та батьки</button>
+      <button class="dtab"    data-t="staff"  onclick="switchDirTab('staff',this)">Персонал</button>
+      <button class="dtab"    data-t="rozklad" onclick="switchDirTab('rozklad',this)">Розклад</button>
+      <button class="dtab"    data-t="stat"   onclick="switchDirTab('stat',this)">Аналітика</button>
+      <button class="dtab"    data-t="nalash" onclick="switchDirTab('nalash',this)">Налаштування</button>
+    </div>
+
     <h2 style="color:#2c3e50;">👔 Кабінет Директора</h2>
 
-    <section class="screen-section">
+    <section class="screen-section" data-dtab="ogl">
       <h3>🚀 Швидкі дії</h3>
       <div style="display:flex;gap:9px;flex-wrap:wrap;">
         <button onclick="openVisualMatrixModal('live')" style="flex:1;min-width:170px;background:linear-gradient(135deg,#1abc9c,#16a085);color:#fff;margin-top:0;font-size:.95rem;padding:11px;">🗓️ Розклад</button>
@@ -1290,7 +1360,7 @@
       </div>
     </section>
 
-    <section class="screen-section">
+    <section class="screen-section" data-dtab="ogl">
       <h3>📊 Огляд</h3>
       <!-- Статистика -->
       <div class="data-card" style="border-left-color:var(--purple);background:#fdfafc;margin-top:0;">
@@ -1331,10 +1401,10 @@
       </div>
     </section>
 
-    <section class="screen-section">
+    <section class="screen-section" data-dtab="rozklad">
       <h3>🗓️ Розклад та заміни</h3>
       <!-- SMART MATCHING -->
-      <details style="margin-bottom:12px;background:#e8f5e9;padding:14px;border-radius:12px;border:1px solid #a5d6a7;" open>
+      <details data-dtab="rozklad" style="margin-bottom:12px;background:#e8f5e9;padding:14px;border-radius:12px;border:1px solid #a5d6a7;" open>
         <summary style="font-weight:700;cursor:pointer;color:#1b5e20;font-size:1rem;">🔄 Smart Matching — Підбір на Заміну</summary>
         <div style="margin-top:13px;">
           <p style="font-size:.83rem;color:#555;">Система автоматично знаходить вільних учителів з потрібним скілом.</p>
@@ -1355,7 +1425,7 @@
         </div>
       </details>
       <!-- Скіли вчителів -->
-      <details style="margin-bottom:12px;background:#e3f2fd;padding:14px;border-radius:12px;border:1px solid #90caf9;">
+      <details data-dtab="staff" style="margin-bottom:12px;background:#e3f2fd;padding:14px;border-radius:12px;border:1px solid #90caf9;">
         <summary style="font-weight:700;cursor:pointer;color:#0d47a1;font-size:1rem;">🧠 Матриця скілів вчителів</summary>
         <div style="margin-top:13px;">
           <p style="font-size:.83rem;color:#555;">Призначайте компетенції (скіли) вчителям — які предмети вони можуть вести на заміні.</p>
@@ -1369,7 +1439,7 @@
         </div>
       </details>
       <!-- Конструктор -->
-      <details style="margin-bottom:12px;background:#e0f2f1;padding:14px;border-radius:12px;border:1px solid #1abc9c;" open>
+      <details data-dtab="rozklad" style="margin-bottom:12px;background:#e0f2f1;padding:14px;border-radius:12px;border:1px solid #1abc9c;" open>
         <summary style="font-weight:700;cursor:pointer;color:var(--teal);font-size:1rem;">🛠️ Конструктор Розкладу (Чернетки)</summary>
         <div style="margin-top:13px;">
           <div id="drafts-list-container"><p class="empty-msg">Завантаження...</p></div>
@@ -1380,7 +1450,7 @@
         </div>
       </details>
       <!-- Access Matrix -->
-      <details style="background:#e0f7fa;padding:14px;border-radius:12px;border:1px solid #00acc1;">
+      <details data-dtab="staff" style="background:#e0f7fa;padding:14px;border-radius:12px;border:1px solid #00acc1;">
         <summary style="font-weight:700;cursor:pointer;color:#00838f;">🔐 Матриця доступу вчителів</summary>
         <div style="margin-top:13px;">
           <select id="d-acc-email-select" style="margin-top:8px;border:2px solid #00acc1;"><option value="">-- Оберіть вчителя --</option></select>
@@ -1401,7 +1471,7 @@
     <section class="screen-section half">
       <h3>👥 Персонал</h3>
       <!-- Staff Management -->
-      <details style="margin-bottom:12px;background:#fff;padding:14px;border-radius:12px;border:1px solid #ddd;">
+      <details data-dtab="staff" style="margin-bottom:12px;background:#fff;padding:14px;border-radius:12px;border:1px solid #ddd;">
         <summary style="font-weight:700;cursor:pointer;color:#c0392b;">⚙️ Управління персоналом</summary>
         <div style="margin-top:13px;">
           <input type="email" id="new-staff-email" placeholder="Email співробітника">
@@ -1422,7 +1492,7 @@
         </div>
       </details>
       <!-- Class Teacher Assignment -->
-      <details style="background:#fff3e0;padding:14px;border-radius:12px;border:1px solid #ffb74d;">
+      <details data-dtab="staff" style="background:#fff3e0;padding:14px;border-radius:12px;border:1px solid #ffb74d;">
         <summary style="font-weight:700;cursor:pointer;color:#e65100;font-size:.95rem;">🎓 Призначення класних керівників</summary>
         <div style="margin-top:13px;">
           <p style="font-size:.83rem;color:#555;">Кл. керівник може завантажувати календарне планування для свого класу.</p>
@@ -1446,7 +1516,7 @@
 
     <section class="screen-section">
       <!-- Згоди батьків: екскурсії, фотозйомка тощо -->
-      <details style="margin-bottom:12px;background:#f1f8e9;padding:14px;border-radius:12px;border:1px solid #c5e1a5;" ontoggle="if(this.open)loadConsents()">
+      <details data-dtab="uchni" style="margin-bottom:12px;background:#f1f8e9;padding:14px;border-radius:12px;border:1px solid #c5e1a5;" ontoggle="if(this.open)loadConsents()">
         <summary style="font-weight:700;cursor:pointer;color:#33691e;font-size:.95rem;">✍️ Згоди батьків</summary>
         <div style="margin-top:13px;">
           <div id="cs-list"><p class="empty-msg">Завантаження...</p></div>
@@ -1470,7 +1540,7 @@
         </div>
       </details>
       <!-- Відсутність вчителів і заміни на день -->
-      <details style="margin-bottom:12px;background:#fff4e5;padding:14px;border-radius:12px;border:1px solid #ffcc80;" ontoggle="if(this.open){fillAbsenceTeachers();loadAbsenceDay();}">
+      <details data-dtab="staff" style="margin-bottom:12px;background:#fff4e5;padding:14px;border-radius:12px;border:1px solid #ffcc80;" ontoggle="if(this.open){fillAbsenceTeachers();loadAbsenceDay();}">
         <summary style="font-weight:700;cursor:pointer;color:#e65100;font-size:.95rem;">🧑‍🏫 Відсутність вчителів і заміни</summary>
         <div style="margin-top:13px;">
           <input type="date" id="sa-date" onchange="loadAbsenceDay()" style="border:2px solid #ffb74d;margin-top:0;">
@@ -1491,7 +1561,7 @@
         </div>
       </details>
       <!-- Пошук по всій школі: учні та батьки -->
-      <details style="margin-bottom:12px;background:#eef7ff;padding:14px;border-radius:12px;border:1px solid #b3d9f2;">
+      <details data-dtab="uchni" style="margin-bottom:12px;background:#eef7ff;padding:14px;border-radius:12px;border:1px solid #b3d9f2;">
         <summary style="font-weight:700;cursor:pointer;color:#0d47a1;font-size:.95rem;">🔎 Пошук по школі</summary>
         <div style="margin-top:13px;">
           <input type="search" id="gs-query" placeholder="Прізвище учня, ПІБ батьків, email або телефон" oninput="runGlobalSearch()">
@@ -1502,7 +1572,7 @@
         </div>
       </details>
       <!-- Статистика відвідуваності за місяць -->
-      <details style="margin-bottom:12px;background:#fdf3f2;padding:14px;border-radius:12px;border:1px solid #f5c6cb;" ontoggle="if(this.open){document.getElementById('att-month').value=document.getElementById('att-month').value||new Date().toISOString().slice(0,7);loadAttendanceStats();}">
+      <details data-dtab="stat" style="margin-bottom:12px;background:#fdf3f2;padding:14px;border-radius:12px;border:1px solid #f5c6cb;" ontoggle="if(this.open){document.getElementById('att-month').value=document.getElementById('att-month').value||new Date().toISOString().slice(0,7);loadAttendanceStats();}">
         <summary style="font-weight:700;cursor:pointer;color:#b71c1c;font-size:.95rem;">📉 Статистика відвідуваності</summary>
         <div style="margin-top:13px;">
           <input type="month" id="att-month" onchange="loadAttendanceStats()" style="margin-top:0;">
@@ -1513,7 +1583,7 @@
         </div>
       </details>
       <!-- Журнал дій: хто, що і коли змінив -->
-      <details style="margin-bottom:12px;background:#eceff1;padding:14px;border-radius:12px;border:1px solid #b0bec5;" ontoggle="if(this.open){fillAuditActions();loadAuditLog();}">
+      <details data-dtab="stat" style="margin-bottom:12px;background:#eceff1;padding:14px;border-radius:12px;border:1px solid #b0bec5;" ontoggle="if(this.open){fillAuditActions();loadAuditLog();}">
         <summary style="font-weight:700;cursor:pointer;color:#37474f;font-size:.95rem;">🕓 Журнал дій</summary>
         <div style="margin-top:13px;">
           <p style="font-size:.78rem;color:#666;margin:0 0 8px 0;">
@@ -1530,7 +1600,11 @@
         </div>
       </details>
       <!-- AI-чернетка оголошення для батьків -->
-      <details style="margin-bottom:12px;background:#fff8e1;padding:14px;border-radius:12px;border:1px solid #ffe0a3;">
+      <div data-dtab="news" style="margin-bottom:12px;">
+        <button onclick="openNewsComposer()" style="background:#00838f;color:#fff;margin:0 0 10px 0;">➕ Нове оголошення</button>
+        <div id="d-news-feed" class="nw-feed"><p class="empty-msg">Завантаження...</p></div>
+      </div>
+      <details data-dtab="news" style="margin-bottom:12px;background:#fff8e1;padding:14px;border-radius:12px;border:1px solid #ffe0a3;">
         <summary style="font-weight:700;cursor:pointer;color:#8a6d1f;font-size:.95rem;">📣 Оголошення для батьків (чернетка)</summary>
         <div style="margin-top:13px;">
           <p style="font-size:.8rem;color:#666;margin:0 0 7px 0;">
@@ -1551,7 +1625,7 @@
       <!-- Один список замість двох: учні класу, а навпроти кожного — його
            батьки з контактами. Дані про батьків зберігаються «навпаки»
            (ключ — їхня пошта), тому тут показуємо перевернутий вигляд. -->
-      <details style="margin-bottom:12px;background:#f9f4ff;padding:14px;border-radius:12px;border:1px solid #ce93d8;" ontoggle="if(this.open){loadParentsOverview();loadParentLinkStudents();}">
+      <details data-dtab="uchni" style="margin-bottom:12px;background:#f9f4ff;padding:14px;border-radius:12px;border:1px solid #ce93d8;" ontoggle="if(this.open){loadParentsOverview();loadParentLinkStudents();}">
         <summary style="font-weight:700;cursor:pointer;color:#7b1fa2;font-size:.95rem;">👨‍🎓 Учні класу та їхні батьки</summary>
         <div style="margin-top:13px;">
           <select id="po-class" onchange="loadParentsOverview();loadParentLinkStudents()" style="border:2px solid #ce93d8;">
@@ -1599,7 +1673,7 @@
 
       </details>
       <!-- Переведення одного учня (перехід у паралель / інший клас серед року) -->
-      <details style="margin-bottom:12px;background:#f9f4ff;padding:14px;border-radius:12px;border:1px solid #ce93d8;" ontoggle="if(this.open)loadTransferClasses()">
+      <details data-dtab="uchni" style="margin-bottom:12px;background:#f9f4ff;padding:14px;border-radius:12px;border:1px solid #ce93d8;" ontoggle="if(this.open)loadTransferClasses()">
         <summary style="font-weight:700;cursor:pointer;color:#7b1fa2;font-size:.95rem;">↔️ Перевести учня в інший клас</summary>
         <div style="margin-top:13px;">
           <p style="font-size:.83rem;color:#555;">Оцінки та відвідуваність за попередній клас залишаються в архіві того класу — переноситься лише сам учень і прив'язки батьків.</p>
@@ -1625,7 +1699,7 @@
         </div>
       </details>
       <!-- Річний перехід усієї школи -->
-      <details style="background:#e8f5e9;padding:14px;border-radius:12px;border:1px solid #a5d6a7;">
+      <details data-dtab="nalash" style="background:#e8f5e9;padding:14px;border-radius:12px;border:1px solid #a5d6a7;">
         <summary style="font-weight:700;cursor:pointer;color:#1b5e20;font-size:.95rem;">🎓 Перевести школу на наступний навчальний рік</summary>
         <div style="margin-top:13px;">
           <div style="background:#fff3cd;border:1px solid #ffc107;border-radius:10px;padding:10px 14px;font-size:.83rem;color:#856404;">
@@ -1640,7 +1714,7 @@
     <section class="screen-section half">
       <h3>📅 Навчальний рік</h3>
       <!-- PHASE 1: Академічний рік -->
-      <details style="margin-bottom:12px;background:#fff8e1;padding:14px;border-radius:12px;border:1px solid #ffe0b2;" ontoggle="if(this.open)loadAcademicYear()">
+      <details data-dtab="nalash" style="margin-bottom:12px;background:#fff8e1;padding:14px;border-radius:12px;border:1px solid #ffe0b2;" ontoggle="if(this.open)loadAcademicYear()">
         <summary style="font-weight:700;cursor:pointer;color:#e65100;font-size:.95rem;">📅 Навчальний рік <span id="ay-year-label" style="font-weight:400;color:#888;font-size:.8rem;"></span></summary>
         <div style="margin-top:13px;">
           <h4 style="margin:0 0 7px 0;color:#e65100;font-size:.86rem;">Семестри</h4>
@@ -1689,7 +1763,7 @@
         </div>
       </details>
       <!-- PHASE 2: Розклад дзвінків -->
-      <details style="margin-bottom:12px;background:#e8eaf6;padding:14px;border-radius:12px;border:1px solid #9fa8da;">
+      <details data-dtab="nalash" style="margin-bottom:12px;background:#e8eaf6;padding:14px;border-radius:12px;border:1px solid #9fa8da;">
         <summary style="font-weight:700;cursor:pointer;color:#283593;font-size:.95rem;">🔔 Розклад дзвінків</summary>
         <div style="margin-top:13px;">
           <select id="bell-class-select" onchange="loadBellSchedule()" style="border:2px solid #7986cb;">
@@ -1715,7 +1789,7 @@
         </div>
       </details>
       <!-- PHASE 5: Типи оцінок -->
-      <details style="background:#fdf2e9;padding:14px;border-radius:12px;border:1px solid #f5cba7;" ontoggle="if(this.open)loadGradeTypesAdmin()">
+      <details data-dtab="nalash" style="background:#fdf2e9;padding:14px;border-radius:12px;border:1px solid #f5cba7;" ontoggle="if(this.open)loadGradeTypesAdmin()">
         <summary style="font-weight:700;cursor:pointer;color:#d35400;font-size:.95rem;">🎯 Типи оцінок</summary>
         <div style="margin-top:13px;">
           <div id="gt-types-table"><p class="empty-msg">Відкрийте блок для завантаження...</p></div>
@@ -1801,6 +1875,12 @@
         <div id="t-birthdays" class="bd-box" style="display:none;"></div>
         <ul id="t-daily-hw-list" class="list-dash"></ul>
       </div>
+    </section>
+
+    <section class="screen-section">
+      <h3>📣 Новини школи</h3>
+      <button onclick="openNewsComposer()" style="background:#00838f;color:#fff;margin-bottom:10px;">➕ Нове оголошення</button>
+      <div id="t-news-feed" class="nw-feed"><p class="empty-msg">Завантаження...</p></div>
     </section>
 
     <section class="screen-section">
@@ -2030,6 +2110,12 @@
     </section>
 
     <section class="screen-section">
+      <h3>📣 Новини школи</h3>
+      
+      <div id="p-news-feed" class="nw-feed"><p class="empty-msg">Завантаження...</p></div>
+    </section>
+
+    <section class="screen-section">
       <h3>🍽️ Харчування</h3>
       <div id="p-menu" class="pm-box"><p class="empty-msg">Завантаження...</p></div>
     </section>
@@ -2135,6 +2221,12 @@
         <h4 style="margin-top:0;color:#283593;">🔔 Розклад дзвінків</h4>
         <div id="s-bell-schedule-container"><p class="empty-msg">Завантаження...</p></div>
       </div>
+    </section>
+
+    <section class="screen-section">
+      <h3>📣 Новини школи</h3>
+      
+      <div id="s-news-feed" class="nw-feed"><p class="empty-msg">Завантаження...</p></div>
     </section>
 
     <section class="screen-section">
@@ -2600,6 +2692,38 @@
   </div>
 </div>
 
+
+<!-- ОГОЛОШЕННЯ -->
+<div id="news-modal" class="modal-overlay" style="display:none;z-index:1010;">
+  <div class="modal-content">
+    <h3 style="color:#00838f;margin-top:0;">📣 Нове оголошення</h3>
+    <div id="nw-scope-row">
+      <label for="nw-scope">Кому</label>
+      <select id="nw-scope" onchange="nwScopeChanged()">
+        <option value="school">Усій школі</option>
+        <option value="class">Окремому класу</option>
+      </select>
+    </div>
+    <div id="nw-class-row" style="display:none;">
+      <label for="nw-class">Клас</label>
+      <select id="nw-class"><option value="">Оберіть...</option><option value="class_1">1 клас</option><option value="class_2">2 клас</option><option value="class_3">3 клас</option><option value="class_4">4 клас</option><option value="class_5">5 клас</option><option value="class_6">6 клас</option><option value="class_7">7 клас</option><option value="class_8">8 клас</option><option value="class_9">9 клас</option><option value="class_10">10 клас</option><option value="class_11">11 клас</option></select>
+    </div>
+    <p id="nw-scope-note" style="font-size:.78rem;color:#888;margin:6px 0 0 0;"></p>
+    <label for="nw-title">Заголовок <span style="color:#aaa;font-weight:400;">(необовʼязково)</span></label>
+    <input type="text" id="nw-title" placeholder="напр. Батьківські збори">
+    <label for="nw-text">Текст</label>
+    <textarea id="nw-text" rows="5" placeholder="Напишіть коротко суть — або натисніть «Скласти чернетку», і AI розгорне її у текст."></textarea>
+    <button id="nw-ai" onclick="newsDraftAI()" style="background:#f3e5f5;color:#6a1b9a;border:1px solid #ce93d8;">✨ Скласти чернетку</button>
+    <label class="nw-imp-row">
+      <input type="checkbox" id="nw-important">
+      <span><b>Важливе</b> — надіслати сповіщення<br>
+        <small>Без галочки оголошення просто зʼявиться у стрічці. Не позначайте важливим усе підряд — інакше сповіщення вимкнуть.</small></span>
+    </label>
+    <button id="nw-publish" onclick="publishNews()" style="background:#00838f;color:#fff;">📢 Опублікувати</button>
+    <button onclick="document.getElementById('news-modal').style.display='none'" style="background:#eceff1;color:#37474f;">Скасувати</button>
+  </div>
+</div>
+
 <script type="module" src="common.js"></script>
 <script type="module" src="curriculum.js"></script>
 <script type="module" src="director.js"></script>
@@ -2607,5 +2731,6 @@
 <script type="module" src="parent-student.js"></script>
 <script type="module" src="teacher.js"></script>
 <script type="module" src="kitchen.js"></script>
+<script type="module" src="news.js"></script>
 </body>
 </html>
