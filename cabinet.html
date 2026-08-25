@@ -379,6 +379,22 @@
     }
     .chat-readonly{padding:12px 14px;background:#f7f9fa;border-top:1px solid #ececec;color:#8b9aa2;
                    font-size:.8rem;text-align:center;flex-shrink:0;}
+    .chat-icon{width:32px;height:32px;flex:none;margin:0;padding:0;background:transparent;border:none;
+               color:#00838f;font-size:1.15rem;line-height:1;cursor:pointer;border-radius:8px;}
+    .chat-icon:hover{background:#e0f7fa;}
+    .chat-bar-titles{flex:1;min-width:0;text-align:left;}
+    .chat-bar-sub{display:block;font-size:.7rem;color:#93a4ac;font-weight:400;}
+    .cp-list{max-height:46vh;overflow-y:auto;border:1px solid #eee;border-radius:10px;margin-bottom:12px;}
+    .cp-row{display:flex;align-items:center;gap:10px;padding:9px 11px;border-bottom:1px solid #f4f4f4;
+            cursor:pointer;margin:0;font-size:.86rem;}
+    .cp-row:last-child{border-bottom:none;}
+    .cp-row:hover{background:#fafafa;}
+    .cp-row input{width:auto;margin:0;flex:none;}
+    .cp-av{width:32px;height:32px;border-radius:50%;flex:none;display:flex;align-items:center;
+           justify-content:center;color:#fff;font-size:.72rem;font-weight:700;}
+    .cp-mid{flex:1;min-width:0;display:flex;flex-direction:column;}
+    .cp-mid b{font-weight:600;color:#222;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .cp-mid small{font-size:.72rem;color:#999;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
     /* ── Чат: список ── */
     .ch-row{display:flex;align-items:center;gap:12px;padding:11px 14px;cursor:pointer;border-bottom:1px solid #f0f0f0;background:#fff;transition:background .12s;}
     .ch-row:hover{background:#fafafa;}
@@ -2660,6 +2676,7 @@
     <div id="chat-list-view" class="chat-pane">
       <header class="chat-bar">
         <span class="chat-bar-title">Повідомлення</span>
+        <button class="chat-icon" onclick="openChatPicker('new')" aria-label="Нова переписка" title="Нова переписка">+</button>
         <button class="chat-x" onclick="closeInboxModal()" aria-label="Закрити">&times;</button>
       </header>
       <div id="inbox-contacts-list" class="chat-scroll list">
@@ -2671,7 +2688,11 @@
     <div id="chat-detail-view" class="chat-pane" style="display:none;">
       <header class="chat-bar">
         <button class="chat-back" onclick="backToChatList()" aria-label="Назад">&#8249;</button>
-        <span class="chat-bar-title" id="chat-detail-title">Чат</span>
+        <span class="chat-bar-titles">
+          <span class="chat-bar-title" id="chat-detail-title">Чат</span>
+          <small class="chat-bar-sub" id="chat-detail-sub" style="display:none;"></small>
+        </span>
+        <button class="chat-icon" onclick="openChatPicker('add')" aria-label="Додати до розмови" title="Додати до розмови">&#43;&#128100;</button>
         <button class="chat-x" onclick="closeInboxModal()" aria-label="Закрити">&times;</button>
       </header>
       <div id="inbox-messages-list" class="chat-scroll msgs"></div>
@@ -2778,6 +2799,18 @@
   </div>
 </div>
 
+
+<!-- ВИБІР СПІВРОЗМОВНИКІВ -->
+<div id="chat-picker" class="modal-overlay" style="display:none;z-index:1020;">
+  <div class="modal-content" style="text-align:left;">
+    <h3 id="cp-title" style="color:#00838f;margin-top:0;">Нова переписка</h3>
+    <p id="cp-note" style="font-size:.78rem;color:#888;margin:0 0 10px 0;"></p>
+    <div id="cp-list" class="cp-list"><p class="empty-msg">Завантаження...</p></div>
+    <button onclick="createChatFromPicker()" style="background:#00838f;color:#fff;">Почати розмову</button>
+    <button onclick="closeChatPicker()" style="background:#eceff1;color:#37474f;">Скасувати</button>
+  </div>
+</div>
+
 <script type="module" src="common.js"></script>
 <script type="module" src="curriculum.js"></script>
 <script type="module" src="director.js"></script>
@@ -2786,5 +2819,6 @@
 <script type="module" src="teacher.js"></script>
 <script type="module" src="kitchen.js"></script>
 <script type="module" src="news.js"></script>
+<script type="module" src="chat.js"></script>
 </body>
 </html>
