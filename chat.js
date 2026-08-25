@@ -50,66 +50,80 @@ export async function chatCandidates(){
     if(!k || k === myKey() || out.has(k)) return;
     out.set(k, { key:k, email:String(email).toLowerCase(), name: name || unsafe(k), tag });
   };
-
-  const [usersSnap, plSnap, taSnap, ctSnap] = await Promise.all([
-    getUsersSnap(),
-    get(child(ref(db),'parent_links')),
-    get(child(ref(db),'teacher_access')),
-    get(child(ref(db),'class_teachers'))
-  ]);
-  const users = usersSnap.exists() ? usersSnap.val() : {};
-  const pls   = plSnap.exists() ? plSnap.val() : {};
-  const ta    = taSnap.exists() ? taSnap.val() : {};
-  const ct    = ctSnap.exists() ? ctSnap.val() : {};
-
   const nameOfUser = u => [u.firstName,u.lastName].filter(Boolean).join(' ') || u.email || '';
-  const staffList = [];
-  for(const uid in users){
-    const u = users[uid];
-    if(!u || !u.email || u.disabled) continue;
-    if(u.role === 'parent' || u.role === 'student') continue;
-    staffList.push({ email:u.email, name:nameOfUser(u), role:u.role });
-  }
 
+  // ── Директор і адміністратор: читають усе напряму ──
   if(isAdmin){
-    staffList.forEach(s => add(s.email, s.name, 'Персонал'));
+    const [usersSnap, plSnap] = await Promise.all([
+      getUsersSnap(), get(child(ref(db),'parent_links'))
+    ]);
+    const users = usersSnap.exists() ? usersSnap.val() : {};
+    const pls   = plSnap.exists()   ? plSnap.val()   : {};
+    for(const uid in users){
+      const u = users[uid];
+      if(!u || !u.email || u.disabled) continue;
+      if(u.role === 'parent' || u.role === 'student') continue;
+      add(u.email, nameOfUser(u), 'Персонал');
+    }
     for(const se in pls){
       const kids = pls[se].children || [];
       const list = Array.isArray(kids) ? kids : Object.values(kids);
       const who = list.map(k=>k && k.studentName).filter(Boolean).join(', ');
-      add(unsafe(se), (pls[se].profile && [pls[se].profile.lastName,pls[se].profile.firstName].filter(Boolean).join(' ')) || unsafe(se),
+      const prof = pls[se].profile;
+      add(unsafe(se), (prof && [prof.lastName,prof.firstName].filter(Boolean).join(' ')) || unsafe(se),
           who ? `Батьки · ${who}` : 'Батьки');
     }
     return [...out.values()];
   }
 
+  // ── Решта: тільки довідники, відкриті для читання ──
+  // `users`, `parent_links` і `teacher_access` тут закриті правилами —
+  // у них медичні дані й контакти всіх родин. Список співрозмовників
+  // збирається з `staff_directory` та `class_parents`, куди кожен
+  // публікує сам про себе рівно потрібний мінімум.
+  const sdSnap = await get(child(ref(db),'staff_directory'));
+  const sd = sdSnap.exists() ? sdSnap.val() : {};
+
   // Адміністрація доступна всім
-  staffList.filter(s=>s.role==='director'||s.role==='administrator')
-           .forEach(s=>add(s.email, s.name, 'Адміністрація'));
+  for(const se in sd){
+    const r = sd[se] && sd[se].role;
+    if(r === 'director' || r === 'administrator') add(unsafe(se), sd[se].name, 'Адміністрація');
+  }
 
   if(isTeacherRole(role)){
-    const myClasses = Object.keys(ta[myKey()] || {});
-    for(const se in pls){
-      const kids = pls[se].children || [];
-      const list = Array.isArray(kids) ? kids : Object.values(kids);
-      const mine = list.filter(k=>k && myClasses.includes(k.class));
-      if(!mine.length) continue;
-      add(unsafe(se),
-          (pls[se].profile && [pls[se].profile.lastName,pls[se].profile.firstName].filter(Boolean).join(' ')) || unsafe(se),
-          'Батьки · ' + mine.map(k=>k.studentName).join(', '));
-    }
+    // Свої класи — з власного рядка доступів
+    let myClasses = [];
+    try{
+      const ts = await get(child(ref(db),`teacher_access/${myKey()}`));
+      if(ts.exists()) myClasses = Object.keys(ts.val() || {});
+    }catch(e){ console.warn('teacher_access', e.message); }
+    const rosters = await Promise.all(myClasses.map(async c => {
+      try{ const s = await get(child(ref(db),`class_parents/${c}`)); return s.exists() ? s.val() : {}; }
+      catch(e){ console.warn('class_parents', c, e.message); return {}; }
+    }));
+    rosters.forEach(rst => {
+      for(const se in rst){
+        const p = rst[se] || {};
+        add(unsafe(se), p.name, p.children ? `Батьки · ${p.children}` : 'Батьки');
+      }
+    });
     return [...out.values()];
   }
 
   // Батьки та учні — вчителі свого класу
   const myClass = currentUserData?.class;
   if(myClass){
-    const ctEmail = ct[myClass];
-    for(const se in ta){
-      if(!ta[se][myClass]) continue;
-      const u = staffList.find(s=>safe(s.email) === se);
-      add(unsafe(se), u ? u.name : unsafe(se),
-          safe(ctEmail) === se ? 'Класний керівник' : 'Учитель');
+    let ct = {};
+    try{
+      const cs = await get(child(ref(db),'class_teachers'));
+      if(cs.exists()) ct = cs.val();
+    }catch(e){ console.warn('class_teachers', e.message); }
+    const ctKey = safe(ct[myClass] || '');
+    for(const se in sd){
+      const rec = sd[se] || {};
+      if(rec.role === 'director' || rec.role === 'administrator') continue;
+      if(!(rec.classes && rec.classes[myClass])) continue;
+      add(unsafe(se), rec.name, se === ctKey ? 'Класний керівник' : 'Учитель');
     }
   }
   return [...out.values()];
@@ -324,7 +338,13 @@ window.createChatFromPicker = async function(){
     staffKey = s ? s.key : null;
   }
   if(!staffKey) return alert('У розмові має бути хтось зі школи — учитель або адміністрація.');
-  const staffOk = await get(child(ref(db), `pre_approved_roles/${staffKey}`)).catch(()=>null);
+  // Звірка зі списком персоналу — лише для адміністрації: читати
+  // pre_approved_roles більше нікому не можна. Для решти перевірку робить
+  // саме правило при записі, а помилку ми покажемо зрозумілим текстом.
+  const canCheckStaff = role === 'director' || role === 'administrator';
+  const staffOk = canCheckStaff
+    ? await get(child(ref(db), `pre_approved_roles/${staffKey}`)).catch(()=>null)
+    : { exists: () => true };
   if(!staffOk || !staffOk.exists()){
     return alert(`Співробітника ${unsafe(staffKey)} немає у списку персоналу школи.\n\n`
       + 'Директор має додати цю пошту в «Управління персоналом» — інакше правила доступу не дозволять створити розмову.');
@@ -361,6 +381,11 @@ window.createChatFromPicker = async function(){
     window.closeChatPicker();
     window.selectChatThread(id);
   }catch(e){
+    if(String(e.message||'').includes('permission')){
+      return alert('Не вдалося створити розмову: немає прав.\n\n'
+        + 'Найчастіша причина — співробітника ' + unsafe(staffKey) + ' немає у списку\n'
+        + 'персоналу школи. Директор додає його в «Управління персоналом».');
+    }
     const denied = /permission|denied/i.test(e.message||'');
     alert(denied
       ? 'Немає дозволу створити цю розмову. У ній має бути хтось зі школи — учитель або адміністрація.'
