@@ -41,92 +41,127 @@ let listListener = null, msgListener = null, currentChatId = null, currentMember
 // адміністрації. Батьки й учні — адміністрації та вчителям свого класу.
 // Це обмеження інтерфейсу; правила доступу стежать лише за тим, щоб у
 // розмові був хтось зі школи.
+// ── Довідник контактів ──
+// Один прохід по базі, з якого беруться і підписи в списку розмов, і
+// список, з кого обирати співрозмовника. Раніше в списку світилася пошта:
+// імена лежать у вузлах, які родині читати не можна, тож підставляти було
+// нічого. Тепер є `staff_directory` і `class_parents` — рівно імʼя, роль
+// і клас, без контактів та медичних даних.
+const ROLE_LABEL = {
+  director:'Директор', administrator:'Адміністрація', kitchen:'Кухня',
+  teacher:'Учитель', class_teacher:'Класний керівник',
+  art_school_teacher:'Учитель мистецтв', music_teacher:'Учитель музики',
+  psychologist:'Психолог', nurse:'Медсестра', secretary:'Секретар'
+};
+const roleLabel = r => ROLE_LABEL[r] || (r ? String(r) : '');
+const clsLabel  = c => c ? String(c).replace('class_','') + ' клас' : '';
+
+let _dirCache = null, _dirAt = 0;
+export function invalidateContactDir(){ _dirCache = null; }
+
+// Map: safeEmail → { name, sub, kind:'staff'|'parent' }
+export async function contactDirectory(){
+  if(_dirCache && Date.now() - _dirAt < 60000) return _dirCache;
+  const map = new Map();
+  const role = currentUserData?.role || '';
+  const isAdmin = role === 'director' || role === 'administrator';
+  const put = (key, name, sub, kind, extra) => {
+    if(!key) return;
+    const prev = map.get(key);
+    // Не затираємо повніший запис порожнішим
+    if(prev && prev.name && !name) return;
+    map.set(key, { key, name: name || (prev && prev.name) || unsafe(key),
+                   sub: sub || (prev && prev.sub) || '', kind: kind || (prev && prev.kind),
+                   role: (extra && extra.role) || (prev && prev.role) || '',
+                   classes: (extra && extra.classes) || (prev && prev.classes) || [] });
+  };
+
+  // Персонал бачать усі
+  try{
+    const sd = await get(child(ref(db),'staff_directory'));
+    if(sd.exists()){
+      const v = sd.val();
+      for(const se in v){
+        const r = v[se] || {};
+        const cls = r.classes ? Object.keys(r.classes).map(c=>c.replace('class_','')).join(', ') : '';
+        put(se, r.name, [roleLabel(r.role), cls && cls + ' кл.'].filter(Boolean).join(' · '), 'staff',
+            { role: r.role, classes: r.classes ? Object.keys(r.classes) : [] });
+      }
+    }
+  }catch(e){ console.warn('staff_directory', e.message); }
+
+  if(isAdmin){
+    // Директор читає першоджерела — там дані свіжіші за довідник
+    try{
+      const [usersSnap, plSnap] = await Promise.all([
+        getUsersSnap(), get(child(ref(db),'parent_links'))
+      ]);
+      const users = usersSnap.exists() ? usersSnap.val() : {};
+      for(const uid in users){
+        const u = users[uid];
+        if(!u || !u.email || u.disabled) continue;
+        if(u.role === 'parent' || u.role === 'student') continue;
+        put(safe(u.email), [u.firstName,u.lastName].filter(Boolean).join(' '), roleLabel(u.role), 'staff', { role: u.role });
+      }
+      const pls = plSnap.exists() ? plSnap.val() : {};
+      for(const se in pls){
+        const p = pls[se] || {};
+        const kids = p.children || [];
+        const list = Array.isArray(kids) ? kids : Object.values(kids);
+        const who = list.map(k => k && k.studentName ? k.studentName + (k.class ? ` (${clsLabel(k.class)})` : '') : '')
+                        .filter(Boolean).join(', ');
+        const prof = p.profile;
+        put(se, (prof && [prof.lastName,prof.firstName].filter(Boolean).join(' ')) || '',
+            who ? 'Батьки · ' + who : 'Батьки', 'parent');
+      }
+    }catch(e){ console.warn('directory/admin', e.message); }
+  } else if(isTeacherRole(role)){
+    // Учитель — батьки своїх класів
+    try{
+      const ts = await get(child(ref(db),`teacher_access/${myKey()}`));
+      const myClasses = ts.exists() ? Object.keys(ts.val() || {}) : [];
+      const rosters = await Promise.all(myClasses.map(async c => {
+        try{ const r = await get(child(ref(db),`class_parents/${c}`)); return [c, r.exists()?r.val():{}]; }
+        catch(e){ return [c, {}]; }
+      }));
+      rosters.forEach(([c, rst]) => {
+        for(const se in rst){
+          const p = rst[se] || {};
+          put(se, p.name, 'Батьки · ' + [p.children, clsLabel(c)].filter(Boolean).join(', '), 'parent');
+        }
+      });
+    }catch(e){ console.warn('directory/teacher', e.message); }
+  }
+
+  _dirCache = map; _dirAt = Date.now();
+  return map;
+}
+
+// Кого САМЕ цей користувач має право писати першим
 export async function chatCandidates(){
   const role = currentUserData?.role || '';
   const isAdmin = role === 'director' || role === 'administrator';
-  const out = new Map();
-  const add = (email, name, tag) => {
-    const k = safe(email);
-    if(!k || k === myKey() || out.has(k)) return;
-    out.set(k, { key:k, email:String(email).toLowerCase(), name: name || unsafe(k), tag });
-  };
-  const nameOfUser = u => [u.firstName,u.lastName].filter(Boolean).join(' ') || u.email || '';
+  const dir = await contactDirectory();
+  const mine = myKey();
+  const asItem = c => ({ key:c.key, email:unsafe(c.key), name:c.name, kind:c.kind,
+                         tag:c.sub || (c.kind==='parent'?'Батьки':'Персонал') });
+  const isAdminRec = c => c.role === 'director' || c.role === 'administrator';
 
-  // ── Директор і адміністратор: читають усе напряму ──
-  if(isAdmin){
-    const [usersSnap, plSnap] = await Promise.all([
-      getUsersSnap(), get(child(ref(db),'parent_links'))
-    ]);
-    const users = usersSnap.exists() ? usersSnap.val() : {};
-    const pls   = plSnap.exists()   ? plSnap.val()   : {};
-    for(const uid in users){
-      const u = users[uid];
-      if(!u || !u.email || u.disabled) continue;
-      if(u.role === 'parent' || u.role === 'student') continue;
-      add(u.email, nameOfUser(u), 'Персонал');
-    }
-    for(const se in pls){
-      const kids = pls[se].children || [];
-      const list = Array.isArray(kids) ? kids : Object.values(kids);
-      const who = list.map(k=>k && k.studentName).filter(Boolean).join(', ');
-      const prof = pls[se].profile;
-      add(unsafe(se), (prof && [prof.lastName,prof.firstName].filter(Boolean).join(' ')) || unsafe(se),
-          who ? `Батьки · ${who}` : 'Батьки');
-    }
-    return [...out.values()];
-  }
-
-  // ── Решта: тільки довідники, відкриті для читання ──
-  // `users`, `parent_links` і `teacher_access` тут закриті правилами —
-  // у них медичні дані й контакти всіх родин. Список співрозмовників
-  // збирається з `staff_directory` та `class_parents`, куди кожен
-  // публікує сам про себе рівно потрібний мінімум.
-  const sdSnap = await get(child(ref(db),'staff_directory'));
-  const sd = sdSnap.exists() ? sdSnap.val() : {};
-
-  // Адміністрація доступна всім
-  for(const se in sd){
-    const r = sd[se] && sd[se].role;
-    if(r === 'director' || r === 'administrator') add(unsafe(se), sd[se].name, 'Адміністрація');
-  }
+  const all = [...dir.values()].filter(c => c.key !== mine);
+  if(isAdmin) return all.map(asItem);                       // директор пише будь-кому
 
   if(isTeacherRole(role)){
-    // Свої класи — з власного рядка доступів
-    let myClasses = [];
-    try{
-      const ts = await get(child(ref(db),`teacher_access/${myKey()}`));
-      if(ts.exists()) myClasses = Object.keys(ts.val() || {});
-    }catch(e){ console.warn('teacher_access', e.message); }
-    const rosters = await Promise.all(myClasses.map(async c => {
-      try{ const s = await get(child(ref(db),`class_parents/${c}`)); return s.exists() ? s.val() : {}; }
-      catch(e){ console.warn('class_parents', c, e.message); return {}; }
-    }));
-    rosters.forEach(rst => {
-      for(const se in rst){
-        const p = rst[se] || {};
-        add(unsafe(se), p.name, p.children ? `Батьки · ${p.children}` : 'Батьки');
-      }
-    });
-    return [...out.values()];
+    // Свої батьки + адміністрація
+    return all.filter(c => c.kind === 'parent' || isAdminRec(c)).map(asItem);
   }
 
-  // Батьки та учні — вчителі свого класу
-  const myClass = currentUserData?.class;
-  if(myClass){
-    let ct = {};
-    try{
-      const cs = await get(child(ref(db),'class_teachers'));
-      if(cs.exists()) ct = cs.val();
-    }catch(e){ console.warn('class_teachers', e.message); }
-    const ctKey = safe(ct[myClass] || '');
-    for(const se in sd){
-      const rec = sd[se] || {};
-      if(rec.role === 'director' || rec.role === 'administrator') continue;
-      if(!(rec.classes && rec.classes[myClass])) continue;
-      add(unsafe(se), rec.name, se === ctKey ? 'Класний керівник' : 'Учитель');
-    }
-  }
-  return [...out.values()];
+  // Батьки та учні — адміністрація і вчителі свого класу
+  const myClass = currentUserData?.class || '';
+  return all.filter(c => {
+    if(c.kind !== 'staff') return false;
+    if(isAdminRec(c)) return true;
+    return myClass && (c.classes || []).includes(myClass);
+  }).map(asItem);
 }
 
 // ── СПИСОК ПЕРЕПИСОК ──
@@ -137,6 +172,7 @@ window.openChatModal = async function(){
   box.innerHTML = '<p class="empty-msg" style="padding:20px;">Завантаження...</p>';
 
   if(listListener) listListener();
+  const dir = await contactDirectory().catch(()=>new Map());
   listListener = onValue(ref(db, `user_chats/${myKey()}`), async snap => {
     const ids = snap.exists() ? Object.keys(snap.val()) : [];
     if(!ids.length){
@@ -151,7 +187,8 @@ window.openChatModal = async function(){
       const msgs = c.messages ? Object.values(c.messages) : [];
       const last = msgs.length ? msgs[msgs.length-1] : null;
       const unread = msgs.filter(m=>m.from !== myKey() && !m.read).length;
-      rows.push({ id, title: chatTitle(c), members:Object.keys(c.members||{}).length,
+      rows.push({ id, title: chatTitle(c, dir), sub: chatSubtitle(c, dir),
+                  members:Object.keys(c.members||{}).length,
                   last, unread, time: last ? last.time : (c.createdAt||0) });
     });
     rows.sort((a,b)=>b.time-a.time);
@@ -161,6 +198,7 @@ window.openChatModal = async function(){
         <div class="ch-mid">
           <div class="ch-top"><span class="ch-name">${escHtml(r.title)}</span>
             ${r.time ? `<span class="ch-time">${chatTime(r.time)}</span>` : ''}</div>
+          ${r.sub ? `<div class="ch-sub">${escHtml(r.sub)}</div>` : ''}
           <div class="ch-prev">${r.members>2?`<b>${r.members} учасники · </b>`:''}${
             r.last ? escHtml(String(r.last.fromName||'').split(' ')[0]) + ': ' + escHtml(r.last.text) : 'Повідомлень ще немає'}</div>
         </div>
@@ -173,10 +211,18 @@ window.openChatModal = async function(){
   });
 };
 
-function chatTitle(c){
+function chatTitle(c, dir){
   if(c.title) return c.title;
   const others = Object.keys(c.members||{}).filter(k=>k!==myKey());
-  return others.map(unsafe).join(', ') || 'Переписка';
+  if(!others.length) return 'Переписка';
+  return others.map(k => (dir && dir.get(k) && dir.get(k).name) || unsafe(k)).join(', ');
+}
+// Другий рядок підпису: посада або клас дитини
+function chatSubtitle(c, dir){
+  const others = Object.keys(c.members||{}).filter(k=>k!==myKey());
+  if(others.length !== 1 || !dir) return '';
+  const r = dir.get(others[0]);
+  return r && r.sub ? r.sub : '';
 }
 
 // ── ОДНА ПЕРЕПИСКА ──
@@ -196,11 +242,16 @@ window.selectChatThread = async function(chatId){
     return;
   }
   currentMembers = Object.keys(c.members || {});
-  document.getElementById('chat-detail-title').innerText = chatTitle(c);
+  const dir = await contactDirectory().catch(()=>new Map());
+  document.getElementById('chat-detail-title').innerText = chatTitle(c, dir);
   const sub = document.getElementById('chat-detail-sub');
   if(sub){
-    sub.textContent = currentMembers.length > 2 ? `${currentMembers.length} учасники` : '';
-    sub.style.display = currentMembers.length > 2 ? 'block' : 'none';
+    // Для групи — скільки учасників, для розмови двох — посада або клас
+    const t = currentMembers.length > 2
+      ? `${currentMembers.length} учасники`
+      : chatSubtitle(c, dir);
+    sub.textContent = t;
+    sub.style.display = t ? 'block' : 'none';
   }
   loadChatMessages(chatId);
 };
@@ -282,7 +333,7 @@ window.sendInboxMessage = async function(){
     // екрані блокування, а в школі листування буває про дітей.
     const others = currentMembers.filter(k => k !== myKey()).map(unsafe);
     if(others.length) notifyEvent('chat', { to: others, subject: nm || 'Школа',
-                                            value: 'нове повідомлення у порталі' });
+                                            value: 'нове повідомлення' });
   }catch(e){
     alert(/permission|denied/i.test(e.message||'')
       ? 'Ви не учасник цієї переписки.' : 'Не вдалося надіслати: ' + e.message);
@@ -291,6 +342,7 @@ window.sendInboxMessage = async function(){
 
 // ── НОВА ПЕРЕПИСКА / ДОДАТИ УЧАСНИКА ──
 window.openChatPicker = async function(mode){
+  invalidateContactDir();
   const modal = document.getElementById('chat-picker');
   const box   = document.getElementById('cp-list');
   if(!modal || !box) return;
@@ -334,7 +386,7 @@ window.createChatFromPicker = async function(){
   let staffKey = iAmStaff ? me : null;
   if(!staffKey){
     const cands = await chatCandidates();
-    const s = picked.find(p => cands.find(c=>c.key===p.key && c.tag !== 'Батьки' && !String(c.tag||'').startsWith('Батьки')));
+    const s = picked.find(p => cands.find(c => c.key === p.key && c.kind === 'staff'));
     staffKey = s ? s.key : null;
   }
   if(!staffKey) return alert('У розмові має бути хтось зі школи — учитель або адміністрація.');
