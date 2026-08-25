@@ -789,17 +789,24 @@ export async function publishContactCard(){
     if(role === 'parent' || role === 'student'){
       if(!u.class) return;                      // без класу нема куди писати
       const kids = u.studentName || '';
-      await update(ref(db, `class_parents/${u.class}/${se}`), { name, children: kids, ts: Date.now() });
+      await update(ref(db, `class_parents/${u.class}/${se}`),
+                   { name: String(name).slice(0,120), children: String(kids).slice(0,200), ts: Date.now() });
       return;
     }
     if(!role) return;
-    // Класи вчителя беремо з його власного рядка teacher_access
+    // Класи вчителя беремо з його власного рядка teacher_access.
+    // Там лежить СПИСОК ПРЕДМЕТІВ на клас, а довіднику треба лише факт
+    // «має цей клас» — кладемо true, інакше перевірка типу відхилить запис.
     let classes = null;
     try{
       const ts = await get(child(ref(db), `teacher_access/${se}`));
-      if(ts.exists()) classes = ts.val();
+      if(ts.exists()){
+        classes = {};
+        Object.keys(ts.val() || {}).forEach(c => { classes[c] = true; });
+        if(!Object.keys(classes).length) classes = null;
+      }
     }catch(e){ /* не всі ролі мають доступ — не біда */ }
-    const rec = { name, role, ts: Date.now() };
+    const rec = { name: String(name).slice(0,120), role: String(role), ts: Date.now() };
     if(classes) rec.classes = classes;
     await update(ref(db, `staff_directory/${se}`), rec);
   }catch(e){
