@@ -89,6 +89,21 @@ async function findTargets(token, cls, studentName) {
   return [...new Set(out)];
 }
 
+// Повідомлення адресоване конкретним людям за поштою, а не класом:
+// у розмові можуть бути і вчитель, і директор, і кілька батьків.
+async function findByEmails(token, emails) {
+  const all = await readDb(token, 'push_tokens');
+  if (!all || typeof all !== 'object') return [];
+  const want = new Set(emails.map(e => String(e).toLowerCase()));
+  const out = [];
+  for (const uid in all) {
+    const t = all[uid];
+    if (!t || !t.token || !t.email) continue;
+    if (want.has(String(t.email).toLowerCase())) out.push(t.token);
+  }
+  return [...new Set(out)];
+}
+
 // Меню стосується всіх одразу, тому шлемо однією розсилкою: 165 окремих
 // викликів функції поклали б і ліміти Netlify, і квоту FCM.
 async function findMealTargets(token) {
@@ -120,6 +135,12 @@ const EVENTS = {
   absence:    (p) => ({ title: '🚨 Відсутність на уроці', body: `Учитель відмітив відсутність${p.subject ? ' — ' + p.subject : ''}`, tag: 'absence' }),
   comment:    (p) => ({ title: '💬 Коментар учителя', body: p.subject ? `Новий коментар: ${p.subject}` : 'Новий коментар у щоденнику', tag: 'comment' }),
   homework:   (p) => ({ title: '📚 Нове завдання', body: `${p.subject || 'Предмет'}: задано домашнє завдання`, tag: 'hw' }),
+  chat:       (p) => ({ title: '💬 Нове повідомлення',
+                        body: `${p.subject || 'Школа'}: ${p.value || 'Відкрийте портал, щоб прочитати'}`,
+                        tag: 'chat' }),
+  news:       (p) => ({ title: '📣 Оголошення школи',
+                        body: `${p.subject ? p.subject + ': ' : ''}${p.value || 'Нове оголошення в кабінеті'}`,
+                        tag: 'news' }),
   menu:       (p) => ({ title: p.value === 'upd' ? '🍽️ Меню змінено' : '🍽️ Меню опубліковано',
                         body: p.value === 'upd' ? `Кухня оновила меню${p.subject ? ' на ' + p.subject : ''}`
                                                 : `Меню${p.subject ? ' на ' + p.subject : ''} вже в кабінеті`,
@@ -143,7 +164,7 @@ exports.handler = async (event) => {
 
   const build = EVENTS[body.type];
   if (!build) return fail(400, 'Невідомий тип події', origin);
-  const isBroadcast = body.type === 'menu';
+  const isBroadcast = body.type === 'menu' || body.type === 'news';
   const cls = String(body.class || '').slice(0, 20);
   const studentName = String(body.studentName || '').slice(0, 120);
   if (!isBroadcast && (!cls || !studentName)) return fail(400, 'Не вказано клас або учня', origin);
@@ -165,8 +186,10 @@ exports.handler = async (event) => {
         ok: true, project: sa.project_id, tokens: list.length, eligible: eligible.length
       }) };
     }
-    const targets = isBroadcast ? await findMealTargets(token)
-                                : await findTargets(token, cls, studentName);
+    const targets = body.type === 'chat'
+      ? await findByEmails(token, Array.isArray(body.to) ? body.to.slice(0, 30) : [])
+      : (isBroadcast ? await findMealTargets(token)
+                     : await findTargets(token, cls, studentName));
     if (targets.length === 0)
       return { statusCode: 200, headers: cors(origin), body: JSON.stringify({ sent: 0, note: 'Немає підписників' }) };
 
