@@ -1548,53 +1548,92 @@ window.initTabs = initTabs;
 // одразу. Персональних даних сюди не потрапляє: імʼя, роль, класи.
 window.rebuildContactDirs = async function(){
   const info = document.getElementById('d-dirs-info');
-  const say = (t, bad) => { if(info){ info.style.display='block'; info.style.color = bad?'var(--red)':'#2e7d32'; info.textContent = t; } };
+  const say = (t, bad) => { if(info){ info.style.display='block'; info.style.color = bad?'var(--red)':'#2e7d32'; info.innerText = t; } };
   say('Заповнюю...');
   try{
-    const [usersSnap, plSnap, taSnap] = await Promise.all([
+    const [usersSnap, plSnap, taSnap, prSnap] = await Promise.all([
       getUsersSnap(),
       get(child(ref(db),'parent_links')),
-      get(child(ref(db),'teacher_access'))
+      get(child(ref(db),'teacher_access')),
+      get(child(ref(db),'pre_approved_roles'))
     ]);
     const users = usersSnap.exists() ? usersSnap.val() : {};
     const pls   = plSnap.exists()   ? plSnap.val()   : {};
     const ta    = taSnap.exists()   ? taSnap.val()   : {};
-    const upd = {};
-    let staff = 0, parents = 0;
+    // Ключі в списку персоналу історично бувають і з великими літерами —
+    // звіряємо в нижньому регістрі, інакше людину дарма пропустимо.
+    const preRaw = prSnap.exists() ? prSnap.val() : {};
+    const pre = {};
+    Object.keys(preRaw).forEach(k => { pre[k.toLowerCase()] = preRaw[k]; });
 
+    // ── Персонал ──
+    const staffUpd = {};
+    const skipped = [];
+    let staff = 0;
     for(const uid in users){
       const u = users[uid];
       if(!u || !u.email || u.disabled) continue;
-      if(u.role === 'parent' || u.role === 'student') continue;
+      const rawRole = Array.isArray(u.role) ? u.role[0] : u.role;
+      if(rawRole === 'parent' || rawRole === 'student' || !rawRole) continue;
       const se = u.email.toLowerCase().replace(/\./g,'_');
+      // Правило вимагає, щоб людина була у списку персоналу — інакше через
+      // довідник можна було б приписати собі будь-яку посаду.
+      if(!pre[se]){ skipped.push(u.email); continue; }
       const rec = {
         name: [u.firstName,u.lastName].filter(Boolean).join(' ') || u.email,
-        role: u.role || '', ts: Date.now()
+        role: String(rawRole),
+        ts: Date.now()
       };
-      if(ta[se]) rec.classes = ta[se];
-      upd[`staff_directory/${se}`] = rec; staff++;
+      // teacher_access зберігає СПИСОК ПРЕДМЕТІВ, а довіднику потрібен лише
+      // факт «має цей клас». Кладемо true, інакше перевірка типу відхилить запис.
+      if(ta[se]){
+        const cls = {};
+        Object.keys(ta[se]).forEach(c => { cls[c] = true; });
+        if(Object.keys(cls).length) rec.classes = cls;
+      }
+      staffUpd[`staff_directory/${se}`] = rec; staff++;
     }
 
+    // ── Батьки ──
+    const parUpd = {};
+    let parents = 0;
     for(const se in pls){
       const p = pls[se] || {};
       const kids = p.children || [];
       const list = Array.isArray(kids) ? kids : Object.values(kids);
-      // Батько потрапляє в довідник кожного класу, де в нього дитина
       const byClass = {};
       list.forEach(k => { if(k && k.class) (byClass[k.class] ||= []).push(k.studentName || ''); });
-      const nm = (p.profile && [p.profile.lastName,p.profile.firstName].filter(Boolean).join(' ')) || se.replace(/_([^_]*)$/, '.$1');
+      const prof = p.profile;
+      const nm = (prof && [prof.lastName,prof.firstName].filter(Boolean).join(' ')) || se.replace(/_([^_]*)$/, '.$1');
       for(const cls in byClass){
-        upd[`class_parents/${cls}/${se}`] = {
-          name: nm, children: byClass[cls].filter(Boolean).join(', '), ts: Date.now()
+        parUpd[`class_parents/${cls}/${se}`] = {
+          name: String(nm).slice(0,120),
+          children: byClass[cls].filter(Boolean).join(', ').slice(0,200),
+          ts: Date.now()
         };
         parents++;
       }
     }
 
-    if(!staff && !parents) return say('Нічого заповнювати: немає ні персоналу, ні привʼязаних батьків.', true);
-    await update(ref(db), upd);
+    if(!staff && !parents){
+      return say('Нічого заповнювати: немає ні персоналу зі списку ролей, ні привʼязаних батьків.'
+        + (skipped.length ? '\n\nПропущено (немає в «Управлінні персоналом»): ' + skipped.join(', ') : ''), true);
+    }
+
+    // Пишемо двома частинами, а не однією: запис у Firebase атомарний, тож
+    // один невдалий рядок відхиляв би геть усе — і без підказки, який саме.
+    const errs = [];
+    if(staff)   { try{ await update(ref(db), staffUpd); }catch(e){ errs.push('персонал: ' + e.message); staff = 0; } }
+    if(parents) { try{ await update(ref(db), parUpd);   }catch(e){ errs.push('батьки: ' + e.message); parents = 0; } }
+
+    if(errs.length){
+      return say('Частина не записалася.\n' + errs.join('\n')
+        + '\n\nЗаписано: персоналу ' + staff + ', батьків ' + parents, true);
+    }
     logAction('settings', { value: `довідники контактів: ${staff} персоналу, ${parents} записів батьків` });
-    say(`✅ Готово: персоналу ${staff}, записів батьків ${parents}. Тепер у батьків і вчителів є з кого обирати в чаті.`);
+    say(`✅ Готово: персоналу ${staff}, записів батьків ${parents}.`
+      + (skipped.length ? `\n\n⚠️ Пропущено, бо немає в «Управлінні персоналом»: ${skipped.join(', ')}` : '')
+      + '\n\nТепер у батьків і вчителів є з кого обирати в чаті.');
   }catch(e){
     say('Не вдалося: ' + e.message, true);
   }
