@@ -356,6 +356,13 @@
               text-align:center;vertical-align:middle;box-shadow:0 0 0 2px rgba(255,255,255,.6);}
     .chat-dot.show{display:inline-block;animation:dotPop .25s ease;}
     @keyframes dotPop{from{transform:scale(.5);opacity:0}to{transform:scale(1);opacity:1}}
+    .push-invite{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#e0f7fa;
+                 border:1px solid #80deea;border-radius:12px;padding:11px 14px;margin-bottom:14px;
+                 font-size:.84rem;color:#00646e;line-height:1.45;}
+    .push-invite span{flex:1;min-width:180px;}
+    .pi-go,.pi-x{width:auto;margin:0;padding:7px 14px;font-size:.79rem;font-weight:700;border-radius:9px;cursor:pointer;}
+    .pi-go{background:var(--teal);color:#fff;border:none;}
+    .pi-x{background:transparent;color:#5c8a90;border:1px solid #a5dde3;}
     /* ── Вікно чату ── */
     .chat-win{background:#fff;width:100%;max-width:520px;height:85vh;max-height:760px;display:flex;
               flex-direction:column;border-radius:16px;overflow:hidden;box-shadow:0 18px 50px rgba(0,0,0,.22);}
@@ -1772,7 +1779,13 @@
         </div>
       </details>
       <!-- Річний перехід усієї школи -->
-      <details data-dtab="nalash" style="background:#e8f5e9;padding:14px;border-radius:12px;border:1px solid #a5d6a7;">
+            <div data-dtab="nalash" style="margin-bottom:12px;background:#f7f9fa;padding:14px;border-radius:12px;border:1px solid #e0e6e8;">
+        <b style="font-size:.9rem;color:#37474f;">🔔 Сповіщення</b>
+        <p style="font-size:.76rem;color:#888;margin:5px 0 8px 0;">Перевіряє ланцюжок по кроках і надсилає тестове сповіщення вам. Нічого не розсилає іншим.</p>
+        <button onclick="checkNotifySetup()" style="background:#fff;color:#00838f;border:1px solid #80deea;">🔍 Перевірити сповіщення</button>
+        <div id="k-notify-info-2" style="display:none;"></div>
+      </div>
+<details data-dtab="nalash" style="background:#e8f5e9;padding:14px;border-radius:12px;border:1px solid #a5d6a7;">
         <summary style="font-weight:700;cursor:pointer;color:#1b5e20;font-size:.95rem;">🎓 Перевести школу на наступний навчальний рік</summary>
         <div style="margin-top:13px;">
           <div style="background:#fff3cd;border:1px solid #ffc107;border-radius:10px;padding:10px 14px;font-size:.83rem;color:#856404;">
@@ -1888,6 +1901,7 @@
       <button class="dtab" data-t="journal" onclick="switchTab('teacher-screen','journal',this)">Журнал</button>
       <button class="dtab" data-t="news" onclick="switchTab('teacher-screen','news',this)">Новини<span class="chat-dot"></span></button>
     </div>
+    <div id="t-push-invite" style="display:none;"></div>
 
 
     <section class="screen-section" data-dtab="day">
@@ -2168,6 +2182,7 @@
       <button class="dtab" data-t="news" onclick="switchTab('parent-screen','news',this)">Новини<span class="chat-dot"></span></button>
       <button class="dtab" data-t="study" onclick="switchTab('parent-screen','study',this)">Навчання</button>
     </div>
+    <div id="p-push-invite" style="display:none;"></div>
 
 
     <section class="screen-section" data-dtab="day">
@@ -2288,6 +2303,7 @@
       <button class="dtab" data-t="news" onclick="switchTab('student-screen','news',this)">Новини<span class="chat-dot"></span></button>
       <button class="dtab" data-t="study" onclick="switchTab('student-screen','study',this)">Навчання</button>
     </div>
+    <div id="s-push-invite" style="display:none;"></div>
 
 
     <section class="screen-section" data-dtab="day">
@@ -2531,6 +2547,7 @@
          вони працюють лише після встановлення на екран «Домів» -->
     <div id="install-block" style="display:none;margin-top:13px;padding-top:11px;border-top:1px dashed #ccc;text-align:left;"></div>
     <!-- Сповіщення: показується всім, у кого браузер їх підтримує -->
+    <button type="button" onclick="checkPush()" style="background:#eceff1;color:#455a64;margin-top:10px;font-size:.8rem;">🔍 Перевірити сповіщення</button>
     <div id="push-toggle" style="display:none;margin-top:13px;padding-top:11px;border-top:1px dashed #ccc;text-align:left;"></div>
     <!-- Дані дитини: доступно лише батькам -->
     <div id="child-block" style="display:none;margin-top:13px;padding-top:11px;border-top:1px dashed #ccc;text-align:left;">
@@ -2851,6 +2868,7 @@ document.addEventListener('DOMContentLoaded', function(){
 });
 </script>
 
+<script src="push-config.js"></script>
 <script type="module" src="common.js"></script>
 <script type="module" src="curriculum.js"></script>
 <script type="module" src="director.js"></script>
