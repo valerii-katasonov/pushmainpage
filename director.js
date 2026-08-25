@@ -1494,3 +1494,49 @@ window.initDirTabs = function(){
     if(b){ b.textContent = n>0 ? n : ''; b.classList.toggle('show', n>0); }
   });
 };
+
+// ══════════ ВКЛАДКИ КАБІНЕТІВ ══════════
+// Один перемикач на всі кабінети: директора, вчителя, батьків, учня.
+// Секція показується, якщо позначена цією вкладкою АБО якщо всередині є
+// блок цієї вкладки — деякі секції історично змішують різне.
+export function switchTab(screenId, tab, btn){
+  const scr = document.getElementById(screenId);
+  if(!scr) return;
+  const bar = document.getElementById(screenId + '-tabs') || document.getElementById('dtab-bar');
+  if(bar) bar.querySelectorAll('.dtab').forEach(b=>b.classList.toggle('on', b.dataset.t === tab));
+
+  scr.querySelectorAll('section.screen-section').forEach(sec=>{
+    const kids = Array.from(sec.querySelectorAll(':scope [data-dtab]'));
+    if(kids.length){
+      let any = false;
+      kids.forEach(k=>{ const on = k.dataset.dtab === tab; k.style.display = on ? '' : 'none'; if(on) any = true; });
+      const mixed = new Set(kids.map(k=>k.dataset.dtab)).size > 1;
+      const h3 = sec.querySelector(':scope > h3');
+      if(h3) h3.style.display = mixed ? 'none' : '';
+      sec.style.display = (any || sec.dataset.dtab === tab) ? '' : 'none';
+    } else {
+      sec.style.display = (!sec.dataset.dtab || sec.dataset.dtab === tab) ? '' : 'none';
+    }
+  });
+  scr.querySelectorAll(':scope > [data-dtab]').forEach(el=>{
+    if(el.tagName === 'SECTION') return;
+    el.style.display = (el.dataset.dtab === tab) ? '' : 'none';
+  });
+  try{ localStorage.setItem('push_school_tab_' + screenId, tab); }catch(e){}
+  if(tab === 'news' && window.renderNewsFeed){
+    const feed = scr.querySelector('.nw-feed');
+    if(feed && feed.id) window.renderNewsFeed(feed.id);
+  }
+}
+window.switchTab = switchTab;
+
+// Відновлюємо останню відкриту вкладку кабінету
+export function initTabs(screenId){
+  const bar = document.getElementById(screenId + '-tabs');
+  if(!bar) return;
+  let tab = null;
+  try{ tab = localStorage.getItem('push_school_tab_' + screenId); }catch(e){}
+  const btn = (tab && bar.querySelector(`.dtab[data-t="${tab}"]`)) || bar.querySelector('.dtab');
+  if(btn) switchTab(screenId, btn.dataset.t, btn);
+}
+window.initTabs = initTabs;
