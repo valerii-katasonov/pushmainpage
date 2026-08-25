@@ -538,7 +538,10 @@ window.exportMealStats = function(){
 // Перевірка налаштувань: показує, на якому саме кроці рветься ланцюжок,
 // замість того щоб мовчки надіслати нуль сповіщень.
 window.checkNotifySetup = async function(){
-  const box = document.getElementById('k-notify-info');
+  // Кнопка є і в кухні, і в кабінеті директора — беремо той блок,
+  // який зараз на екрані
+  const box = [document.getElementById('k-notify-info'), document.getElementById('k-notify-info-2')]
+    .find(el => el && el.offsetParent !== null) || document.getElementById('k-notify-info');
   if(!box) return;
   box.style.display = 'block';
   box.className = 'k-notify';
@@ -572,8 +575,31 @@ window.checkNotifySetup = async function(){
     box.textContent = `${steps.join(' · ')}\n3️⃣ Підписників немає: ${r.tokens} записів усього, з них батьків та учнів — 0. Хтось із батьків має зайти у свій кабінет і увімкнути сповіщення.`;
     return;
   }
-  box.className = 'k-notify ok';
-  box.textContent = `${steps.join(' · ')} · 3️⃣ Підписників: ${r.eligible}. Усе готове — сповіщення надсилатимуться.`;
+  steps.push(`3️⃣ Підписників: ${r.eligible}`);
+
+  // 4. Найголовніше — реальна відправка собі. Усі попередні кроки можуть
+  //    бути зеленими, а сповіщення не дійти: наприклад, ключ не той, або
+  //    цей браузер не підписаний.
+  const mine = currentUserData?.email;
+  if(!mine){
+    box.className='k-notify ok'; box.textContent = steps.join(' · '); return;
+  }
+  const t = await notifyEvent('chat', { to:[mine], subject:'Перевірка', value:'тестове сповіщення' });
+  if(!t || !t.ok){
+    box.className='k-notify bad';
+    box.textContent = `${steps.join(' · ')}\n4️⃣ Тестове сповіщення не надіслане: ${t && t.error || 'невідома помилка'}`;
+    return;
+  }
+  if(!t.sent){
+    box.className='k-notify bad';
+    box.textContent = `${steps.join(' · ')}\n4️⃣ Сервер прийняв запит, але жоден пристрій не підписаний саме на цю пошту.\n`
+      + 'Натисніть у своєму кабінеті кнопку увімкнення сповіщень і дозвольте їх у браузері.'
+      + (t.firstError ? `\nВідповідь FCM: ${t.firstError}` : '');
+    return;
+  }
+  box.className='k-notify ok';
+  box.textContent = `${steps.join(' · ')}\n4️⃣ Тестове надіслано на ${t.sent} пристр. `
+    + 'Якщо воно не зʼявилося — згорніть портал: коли вкладка відкрита, браузер показує не системне вікно, а спливаючу підказку всередині сторінки.';
 };
 
 // ═════════ БІК БАТЬКІВ ═════════
