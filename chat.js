@@ -28,7 +28,7 @@
 import { ref, set, get, child, push, update, onValue }
   from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { db, auth, currentUserData, showToast, escHtml, escJs,
-         isTeacherRole, getUsersSnap, logAction } from './common.js';
+         isTeacherRole, getUsersSnap, logAction, notifyEvent } from './common.js';
 
 const safe  = e => String(e||'').toLowerCase().replace(/\./g,'_');
 const unsafe = se => String(se||'').replace(/_/g,'.');
@@ -168,6 +168,8 @@ function chatTitle(c){
 // ── ОДНА ПЕРЕПИСКА ──
 window.selectChatThread = async function(chatId){
   currentChatId = chatId;
+  markChatSeen(chatId);
+  setTimeout(()=>{ if(window.watchUnread) window.watchUnread(); }, 0);
   document.getElementById('chat-list-view').style.display = 'none';
   document.getElementById('chat-detail-view').style.display = 'flex';
   let c = {};
@@ -251,10 +253,22 @@ window.sendInboxMessage = async function(){
   const nm = [currentUserData?.firstName, currentUserData?.lastName].filter(Boolean).join(' ')
              || currentUserData?.studentName || currentUserData?.email || '';
   try{
+    const ts = Date.now();
     await push(ref(db, `chats/${currentChatId}/messages`), {
-      from: myKey(), fromName: `${nm} ${label}`.trim(), text, time: Date.now(), read: false
+      from: myKey(), fromName: `${nm} ${label}`.trim(), text, time: ts, read: false
     });
+    // Короткий зліпок останнього повідомлення: за ним рахується значок
+    // непрочитаних, не читаючи всю переписку.
+    await update(ref(db, `chats/${currentChatId}`), {
+      lastMsg: { from: myKey(), text: text.slice(0,120), ts }
+    }).catch(()=>{});
     input.value = ''; input.style.height = 'auto';
+
+    // Сповіщення решті учасників. Тексту в пуш не кладемо: він видно на
+    // екрані блокування, а в школі листування буває про дітей.
+    const others = currentMembers.filter(k => k !== myKey()).map(unsafe);
+    if(others.length) notifyEvent('chat', { to: others, subject: nm || 'Школа',
+                                            value: 'нове повідомлення у порталі' });
   }catch(e){
     alert(/permission|denied/i.test(e.message||'')
       ? 'Ви не учасник цієї переписки.' : 'Не вдалося надіслати: ' + e.message);
@@ -381,3 +395,59 @@ function chatDayLabel(ts){
   if(d.toDateString() === y.toDateString()) return 'Вчора';
   return d.toLocaleDateString('uk-UA',{day:'numeric',month:'long'});
 }
+
+// ══════════ ЗНАЧОК НЕПРОЧИТАНИХ ══════════
+// Рахуємо не за повідомленнями, а за зліпком lastMsg: інакше довелося б
+// тримати відкритими слухачі на всі переписки одразу.
+// Позначку «прочитано» тримаємо локально — значок має бути миттєвим,
+// а зайвий запис у базу на кожне відкриття чату того не вартий.
+const SEEN_KEY = 'push_school_chat_seen';
+const seenMap = () => { try{ return JSON.parse(localStorage.getItem(SEEN_KEY)||'{}'); }catch(e){ return {}; } };
+const markChatSeen = id => {
+  try{ const m = seenMap(); m[id] = Date.now(); localStorage.setItem(SEEN_KEY, JSON.stringify(m)); }catch(e){}
+};
+
+let badgeUnsub = [], badgeListUnsub = null;
+function paintBadge(n){
+  document.querySelectorAll('.chat-dot').forEach(el=>{
+    el.textContent = n > 99 ? '99+' : String(n);
+    el.classList.toggle('show', n > 0);
+  });
+  // Значок у заголовку вкладки браузера — щоб було видно з іншої вкладки
+  const base = document.title.replace(/^\(\d+\+?\)\s*/, '');
+  document.title = n > 0 ? `(${n > 99 ? '99+' : n}) ${base}` : base;
+}
+export function watchUnread(){
+  if(!auth.currentUser) return;
+  if(badgeListUnsub) badgeListUnsub();
+  badgeUnsub.forEach(u=>u()); badgeUnsub = [];
+  const last = {};
+  const recount = () => {
+    const seen = seenMap();
+    let n = 0;
+    for(const id in last){
+      const lm = last[id];
+      if(!lm || lm.from === myKey()) continue;
+      if((lm.ts||0) > (seen[id]||0)) n++;
+    }
+    paintBadge(n);
+  };
+  badgeListUnsub = onValue(ref(db, `user_chats/${myKey()}`), snap => {
+    badgeUnsub.forEach(u=>u()); badgeUnsub = [];
+    const ids = snap.exists() ? Object.keys(snap.val()) : [];
+    ids.forEach(id => {
+      badgeUnsub.push(onValue(ref(db, `chats/${id}/lastMsg`), s2 => {
+        last[id] = s2.exists() ? s2.val() : null;
+        recount();
+      }, ()=>{}));
+    });
+    if(!ids.length) paintBadge(0);
+  }, ()=>{});
+}
+window.watchUnread = watchUnread;
+export function stopWatchUnread(){
+  if(badgeListUnsub) badgeListUnsub();
+  badgeUnsub.forEach(u=>u()); badgeUnsub = [];
+  badgeListUnsub = null; paintBadge(0);
+}
+window.stopWatchUnread = stopWatchUnread;
