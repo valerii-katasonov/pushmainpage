@@ -30,6 +30,8 @@ import { db, currentUserData, showToast, escHtml, escJs, localDateString, logAct
 
 export const MEAL_CUTOFF_HOUR = 9;   // до 09:00 можна відмовитися від сьогоднішнього
 const DOW = ['Понеділок','Вівторок','Середа','Четвер','Пʼятниця'];
+// Не slice(0,2) від повної назви: так виходило «По», «Ві», «Пʼ».
+const DOW_SHORT = ['Пн','Вт','Ср','Чт','Пт'];
 
 export const MENU_FIELDS = [
   { k:'first',     label:'Перша страва',  ph:'напр. Борщ український' },
@@ -303,7 +305,7 @@ export async function loadWeekCounts(){
 
       <table class="k-table"><thead><tr><th>День</th><th>Обіди</th><th>Підвеч.</th><th>Відсутні</th></tr></thead><tbody>
         ${perDay.map((d,i)=>`<tr class="${d.date===localDateString?'k-now':''}">
-          <td>${DOW[i].slice(0,2)} ${escHtml(human(d.date).slice(0,5))}</td>
+          <td>${DOW_SHORT[i]} ${escHtml(human(d.date).slice(0,5))}</td>
           <td><b>${d.lunch}</b></td><td>${d.snack||''}</td><td class="k-off">${d.absent||''}</td></tr>`).join('')}
       </tbody></table>
 
@@ -653,7 +655,7 @@ export async function renderParentMenu(cls, studentKey, date){
 
     const strip = week.map((d,i)=>`<button type="button" class="pm-tab${d===cur?' on':''}${has[i]?'':' empty'}"
         onclick="pmShowDay('${escJs(d)}')">
-        <span>${DOW[i].slice(0,2)}</span><b>${escHtml(human(d).slice(0,5))}</b></button>`).join('');
+        <span>${DOW_SHORT[i]}</span><b>${escHtml(human(d).slice(0,5))}</b></button>`).join('');
 
     const dishes = ['first','second','side','drink','dessert']
       .filter(k=>m && m[k]).map(k=>`<div class="pm-dish">${escHtml(m[k])}</div>`).join('');
