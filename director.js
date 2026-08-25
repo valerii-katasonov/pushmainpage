@@ -1540,3 +1540,62 @@ export function initTabs(screenId){
   if(btn) switchTab(screenId, btn.dataset.t, btn);
 }
 window.initTabs = initTabs;
+
+// ── Разове заповнення довідників контактів ──
+// staff_directory і class_parents кожен заповнює про себе при вході. Але
+// поки люди не зайшли, у батька список співрозмовників порожній. Директор
+// читає `users` і `parent_links`, тож може заповнити довідники за всіх
+// одразу. Персональних даних сюди не потрапляє: імʼя, роль, класи.
+window.rebuildContactDirs = async function(){
+  const info = document.getElementById('d-dirs-info');
+  const say = (t, bad) => { if(info){ info.style.display='block'; info.style.color = bad?'var(--red)':'#2e7d32'; info.textContent = t; } };
+  say('Заповнюю...');
+  try{
+    const [usersSnap, plSnap, taSnap] = await Promise.all([
+      getUsersSnap(),
+      get(child(ref(db),'parent_links')),
+      get(child(ref(db),'teacher_access'))
+    ]);
+    const users = usersSnap.exists() ? usersSnap.val() : {};
+    const pls   = plSnap.exists()   ? plSnap.val()   : {};
+    const ta    = taSnap.exists()   ? taSnap.val()   : {};
+    const upd = {};
+    let staff = 0, parents = 0;
+
+    for(const uid in users){
+      const u = users[uid];
+      if(!u || !u.email || u.disabled) continue;
+      if(u.role === 'parent' || u.role === 'student') continue;
+      const se = u.email.toLowerCase().replace(/\./g,'_');
+      const rec = {
+        name: [u.firstName,u.lastName].filter(Boolean).join(' ') || u.email,
+        role: u.role || '', ts: Date.now()
+      };
+      if(ta[se]) rec.classes = ta[se];
+      upd[`staff_directory/${se}`] = rec; staff++;
+    }
+
+    for(const se in pls){
+      const p = pls[se] || {};
+      const kids = p.children || [];
+      const list = Array.isArray(kids) ? kids : Object.values(kids);
+      // Батько потрапляє в довідник кожного класу, де в нього дитина
+      const byClass = {};
+      list.forEach(k => { if(k && k.class) (byClass[k.class] ||= []).push(k.studentName || ''); });
+      const nm = (p.profile && [p.profile.lastName,p.profile.firstName].filter(Boolean).join(' ')) || se.replace(/_([^_]*)$/, '.$1');
+      for(const cls in byClass){
+        upd[`class_parents/${cls}/${se}`] = {
+          name: nm, children: byClass[cls].filter(Boolean).join(', '), ts: Date.now()
+        };
+        parents++;
+      }
+    }
+
+    if(!staff && !parents) return say('Нічого заповнювати: немає ні персоналу, ні привʼязаних батьків.', true);
+    await update(ref(db), upd);
+    logAction('settings', { value: `довідники контактів: ${staff} персоналу, ${parents} записів батьків` });
+    say(`✅ Готово: персоналу ${staff}, записів батьків ${parents}. Тепер у батьків і вчителів є з кого обирати в чаті.`);
+  }catch(e){
+    say('Не вдалося: ' + e.message, true);
+  }
+};
