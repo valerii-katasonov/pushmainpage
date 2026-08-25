@@ -749,7 +749,31 @@ onAuthStateChanged(auth,async user=>{
   }else document.getElementById('login-screen').style.display='block';
 });
 async function fetchTeacherAccess(se){const s=await get(child(ref(db),`teacher_access/${se}`));teacherAccessMatrix=s.exists()?s.val():{};}
+
+// ══════════ САМОВІДНОВЛЕННЯ ЗАПИСУ В pre_approved_roles ══════════
+// Акаунти, створені до появи правил доступу, є в users, але їх немає у
+// списку персоналу. Правила ж звіряються саме зі списком — і така людина
+// не може ані створити розмову, ані підтвердити свою роль при перезаписі.
+// Директор і секретар мають право писати в цей вузол, тож дописуємо тихо.
+// Нових прав це не дає: роль береться з наявного запису, а не вигадується.
+async function healStaffRegistry(){
+  try{
+    const u = currentUserData;
+    if(!u || !u.email) return;
+    const roles = getUserRoles(u);
+    if(!roles.length) return;
+    const isAdmin = roles.includes('director') || roles.includes('administrator');
+    if(!isAdmin) return;                       // тільки адміністрація має право запису
+    const se = u.email.toLowerCase().replace(/\./g,'_');
+    const snap = await get(child(ref(db), `pre_approved_roles/${se}`));
+    if(snap.exists()) return;
+    await set(ref(db, `pre_approved_roles/${se}`), roles.length > 1 ? roles : roles[0]);
+    console.info('Запис у списку персоналу відновлено:', se);
+  }catch(e){ /* не критично: підкаже перевірка при створенні розмови */ }
+}
+
 async function initUserSession(){
+  healStaffRegistry();   // тихо відновлюємо запис у списку персоналу, якщо його немає
   try{
     let dirs = await preloadStudentDirs();
     // Порожній довідник = усі імена на екрані перетворяться на ключі.
