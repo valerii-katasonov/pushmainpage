@@ -540,8 +540,10 @@ window.exportMealStats = function(){
 window.checkNotifySetup = async function(){
   // Кнопка є і в кухні, і в кабінеті директора — беремо той блок,
   // який зараз на екрані
-  const box = [document.getElementById('k-notify-info'), document.getElementById('k-notify-info-2')]
-    .find(el => el && el.offsetParent !== null) || document.getElementById('k-notify-info');
+  const box = ['k-notify-info-2','k-notify-info']
+    .map(id => document.getElementById(id))
+    .find(el => el && el.closest('.panel') && el.closest('.panel').style.display !== 'none')
+    || document.getElementById('k-notify-info');
   if(!box) return;
   box.style.display = 'block';
   box.className = 'k-notify';
