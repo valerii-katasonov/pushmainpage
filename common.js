@@ -772,8 +772,46 @@ async function healStaffRegistry(){
   }catch(e){ /* не критично: підкаже перевірка при створенні розмови */ }
 }
 
+// ── Довідник контактів ──
+// Кожен пише сам про себе рівно те, що потрібно для вибору співрозмовника
+// в чаті. Без цього батько не бачив би, кому писати: `users`,
+// `parent_links` і `teacher_access` для нього закриті — і правильно,
+// там медичні дані й контакти всіх родин.
+export async function publishContactCard(){
+  try{
+    const u = currentUserData;
+    if(!u || !u.email) return;
+    const se = u.email.toLowerCase().replace(/\./g,'_');
+    const name = [u.firstName, u.lastName].filter(Boolean).join(' ') || u.email;
+    const roles = getUserRoles(u);
+    const role = roles[0] || u.role || '';
+
+    if(role === 'parent' || role === 'student'){
+      if(!u.class) return;                      // без класу нема куди писати
+      const kids = u.studentName || '';
+      await update(ref(db, `class_parents/${u.class}/${se}`), { name, children: kids, ts: Date.now() });
+      return;
+    }
+    if(!role) return;
+    // Класи вчителя беремо з його власного рядка teacher_access
+    let classes = null;
+    try{
+      const ts = await get(child(ref(db), `teacher_access/${se}`));
+      if(ts.exists()) classes = ts.val();
+    }catch(e){ /* не всі ролі мають доступ — не біда */ }
+    const rec = { name, role, ts: Date.now() };
+    if(classes) rec.classes = classes;
+    await update(ref(db, `staff_directory/${se}`), rec);
+  }catch(e){
+    // Мовчки: довідник — зручність, а не умова роботи кабінету.
+    console.warn('publishContactCard', e.message);
+  }
+}
+
 async function initUserSession(){
-  healStaffRegistry();   // тихо відновлюємо запис у списку персоналу, якщо його немає
+  healStaffRegistry();
+  publishContactCard();
+  // тихо відновлюємо запис у списку персоналу, якщо його немає
   setTimeout(()=>{ if(window.watchUnread) window.watchUnread(); }, 300);
   try{
     let dirs = await preloadStudentDirs();
