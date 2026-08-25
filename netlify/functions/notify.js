@@ -175,7 +175,9 @@ exports.handler = async (event) => {
 
   const msg = build({
     subject: String(body.subject || '').slice(0, 80),
-    value: String(body.value || '').slice(0, 20)
+    // 120, а не 20: ліміт ставився під оцінку («12»), але сюди приходить
+    // і текст на кшталт «нове повідомлення» — його різало на півслові.
+    value: String(body.value || '').slice(0, 120)
   });
 
   try {
