@@ -164,10 +164,14 @@ exports.handler = async (event) => {
 
   const build = EVENTS[body.type];
   if (!build) return fail(400, 'Невідомий тип події', origin);
-  const isBroadcast = body.type === 'menu' || body.type === 'news';
+  // Чат адресується поштами (body.to), меню й новини — усій школі.
+  // Ні тим, ні тим клас та імʼя учня не потрібні.
+  const isBroadcast = body.type === 'menu' || body.type === 'news' || body.type === 'chat';
   const cls = String(body.class || '').slice(0, 20);
   const studentName = String(body.studentName || '').slice(0, 120);
   if (!isBroadcast && (!cls || !studentName)) return fail(400, 'Не вказано клас або учня', origin);
+  if (body.type === 'chat' && !(Array.isArray(body.to) && body.to.length))
+    return fail(400, 'Не вказано, кому надсилати', origin);
 
   const msg = build({
     subject: String(body.subject || '').slice(0, 80),
