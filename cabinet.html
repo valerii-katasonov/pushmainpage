@@ -351,6 +351,11 @@
       .dtab.on{background:#fff;border-color:transparent;color:var(--teal);
                box-shadow:0 1px 3px rgba(0,0,0,.08);}
     }
+    .chat-dot{display:none;margin-left:7px;min-width:19px;height:19px;padding:0 6px;border-radius:10px;
+              background:var(--red);color:#fff;font-size:.68rem;font-weight:800;line-height:19px;
+              text-align:center;vertical-align:middle;box-shadow:0 0 0 2px rgba(255,255,255,.6);}
+    .chat-dot.show{display:inline-block;animation:dotPop .25s ease;}
+    @keyframes dotPop{from{transform:scale(.5);opacity:0}to{transform:scale(1);opacity:1}}
     /* ── Вікно чату ── */
     .chat-win{background:#fff;width:100%;max-width:520px;height:85vh;max-height:760px;display:flex;
               flex-direction:column;border-radius:16px;overflow:hidden;box-shadow:0 18px 50px rgba(0,0,0,.22);}
@@ -998,6 +1003,9 @@
         max-width: 800px; margin: 0 auto;
       }
       #director-screen > .dtab-bar,
+      #teacher-screen > .dtab-bar,
+      #parent-screen > .dtab-bar,
+      #student-screen > .dtab-bar,
       #admin-screen > h2, #admin-screen > .btn-logout,
       #director-screen > h2, #director-screen > .btn-logout,
       #teacher-screen > h2, #teacher-screen > .btn-logout,
@@ -1245,7 +1253,7 @@
       <div style="display:flex;gap:9px;flex-wrap:wrap;">
         <button onclick="openVisualMatrixModal('live')" style="flex:1;min-width:160px;background:linear-gradient(135deg,#1abc9c,#16a085);color:#fff;margin-top:0;font-size:.95rem;padding:11px;">🗓️ Розклад</button>
         <button onclick="openJournalModal('administrator')" style="flex:1;min-width:160px;background:linear-gradient(135deg,var(--purple),#9b59b6);color:#fff;margin-top:0;font-size:.95rem;padding:11px;">📖 Журнал</button>
-        <button onclick="openChatModal('administrator')" style="flex:1;min-width:160px;background:linear-gradient(135deg,#9b59b6,#8e44ad);color:#fff;margin-top:0;font-size:.95rem;padding:11px;">💬 Чат з батьками</button>
+        <button onclick="openChatModal('administrator')" data-chatbtn="1" style="flex:1;min-width:160px;background:linear-gradient(135deg,#9b59b6,#8e44ad);color:#fff;margin-top:0;font-size:.95rem;padding:11px;">💬 Чат з батьками</button>
       </div>
     </section>
 
@@ -1421,7 +1429,7 @@
       <div style="display:flex;gap:9px;flex-wrap:wrap;">
         <button onclick="openVisualMatrixModal('live')" style="flex:1;min-width:170px;background:linear-gradient(135deg,#1abc9c,#16a085);color:#fff;margin-top:0;font-size:.95rem;padding:11px;">🗓️ Розклад</button>
         <button onclick="openJournalModal('director')" style="flex:1;min-width:170px;background:linear-gradient(135deg,var(--purple),#9b59b6);color:#fff;margin-top:0;font-size:.95rem;padding:11px;">📖 Журнал</button>
-        <button onclick="openChatModal('director')" style="flex:1;min-width:170px;background:linear-gradient(135deg,#9b59b6,#8e44ad);color:#fff;margin-top:0;font-size:.95rem;padding:11px;">💬 Чат з батьками</button>
+        <button onclick="openChatModal('director')" data-chatbtn="1" style="flex:1;min-width:170px;background:linear-gradient(135deg,#9b59b6,#8e44ad);color:#fff;margin-top:0;font-size:.95rem;padding:11px;">💬 Чат з батьками</button>
       </div>
     </section>
 
@@ -1875,8 +1883,14 @@
        ══════════════════════════════ -->
   <div id="teacher-screen" class="panel">
     <h2 id="teacher-dashboard-title">👨‍🏫 Журнал</h2>
+    <div class="dtab-bar" id="teacher-screen-tabs">
+      <button class="dtab on" data-t="day" onclick="switchTab('teacher-screen','day',this)">Сьогодні</button>
+      <button class="dtab" data-t="journal" onclick="switchTab('teacher-screen','journal',this)">Журнал</button>
+      <button class="dtab" data-t="news" onclick="switchTab('teacher-screen','news',this)">Новини<span class="chat-dot"></span></button>
+    </div>
 
-    <section class="screen-section">
+
+    <section class="screen-section" data-dtab="day">
       <h3>🚀 Швидкі дії</h3>
       <div id="t-exams-journal-btns" style="display:flex;gap:9px;">
         <button onclick="openExamsCalendar()" class="qa-btn qa-exams" style="flex:1;min-width:0;">📅 Контрольні</button>
@@ -1893,7 +1907,7 @@
       </div>
     </section>
 
-    <section class="screen-section">
+    <section class="screen-section" data-dtab="day">
       <h3>📋 Сьогодні</h3>
       <!-- Відвідуваність -->
       <div class="data-card" style="border-left-color:var(--red);background:#fdfbfb;margin-top:0;">
@@ -1929,7 +1943,7 @@
         <button onclick="openStickerStatsModal()" style="flex:1;min-width:130px;background:linear-gradient(135deg,#f39c12,#f1c40f);color:#fff;">🌟 Статистика наліпок</button>
       </div>
       <div style="display:flex;gap:9px;margin:14px 0 0 0;" id="t-chat-row">
-        <div id="t-chat-btn" style="flex:1;background:#f3e5f5;padding:13px;border-radius:12px;text-align:center;cursor:pointer;" onclick="openChatModal('teacher')">
+        <div id="t-chat-btn" style="flex:1;background:#f3e5f5;padding:13px;border-radius:12px;text-align:center;cursor:pointer;" onclick="openChatModal('teacher')" data-chatbtn="1">
           <h4 style="margin:0;color:#7b1fa2;font-size:.82rem;">💬 Чат з батьками</h4>
           <p style="font-size:1.6rem;margin:4px 0;">✉️</p>
         </div>
@@ -1942,13 +1956,13 @@
       </div>
     </section>
 
-    <section class="screen-section">
+    <section class="screen-section" data-dtab="news">
       <h3>📣 Новини школи</h3>
       <button onclick="openNewsComposer()" style="background:#00838f;color:#fff;margin-bottom:10px;">➕ Нове оголошення</button>
       <div id="t-news-feed" class="nw-feed"><p class="empty-msg">Завантаження...</p></div>
     </section>
 
-    <section class="screen-section">
+    <section class="screen-section" data-dtab="journal">
       <h3>✏️ Заповнення журналу</h3>
       <label>Предмет:</label>
       <select id="t-subject" onchange="handleSubjectChange()"></select>
@@ -2149,8 +2163,14 @@
        PARENT / STUDENT SCREEN
        ══════════════════════════════ -->
   <div id="parent-screen" class="panel">
+    <div class="dtab-bar" id="parent-screen-tabs">
+      <button class="dtab on" data-t="day" onclick="switchTab('parent-screen','day',this)">Сьогодні</button>
+      <button class="dtab" data-t="news" onclick="switchTab('parent-screen','news',this)">Новини<span class="chat-dot"></span></button>
+      <button class="dtab" data-t="study" onclick="switchTab('parent-screen','study',this)">Навчання</button>
+    </div>
 
-    <section class="screen-section">
+
+    <section class="screen-section" data-dtab="day">
       <h3>🗓️ Розклад</h3>
       <!-- ДИНАМІЧНЕ РОЗКЛАД -->
       <div class="schedule-box" style="margin-top:0;">
@@ -2174,18 +2194,18 @@
       </div>
     </section>
 
-    <section class="screen-section">
+    <section class="screen-section" data-dtab="news">
       <h3>📣 Новини школи</h3>
       
       <div id="p-news-feed" class="nw-feed"><p class="empty-msg">Завантаження...</p></div>
     </section>
 
-    <section class="screen-section">
+    <section class="screen-section" data-dtab="day">
       <h3>🍽️ Харчування</h3>
       <div id="p-menu" class="pm-box"><p class="empty-msg">Завантаження...</p></div>
     </section>
 
-    <section class="screen-section">
+    <section class="screen-section" data-dtab="study">
       <h3>📚 Навчання</h3>
       <!-- Наліпки -->
       <div class="data-card" style="border-left-color:#f1c40f;background:#fffcf0;text-align:center;margin-top:0;">
@@ -2250,7 +2270,7 @@
       <h3>💬 Комунікація та оплата</h3>
       <!-- Чат -->
       <div class="data-card" style="border-left-color:var(--purple);background:#f9f4ff; text-align:center;margin-top:0;">
-        <button onclick="openChatModal('parent')" style="background:var(--purple); color:#fff; padding:12px; border-radius:12px; font-weight:700; width:100%;">💬 Написати вчителю / директору</button>
+        <button onclick="openChatModal('parent')" data-chatbtn="1" style="background:var(--purple); color:#fff; padding:12px; border-radius:12px; font-weight:700; width:100%;">💬 Написати вчителю / директору</button>
       </div>
       <!-- ПЛАТЕЖІ (ЗАГЛУШКА) -->
       <h4 style="margin:16px 0 8px 0;color:#333;">💳 Платежі</h4>
@@ -2263,8 +2283,14 @@
        STUDENT SCREEN
        ══════════════════════════════ -->
   <div id="student-screen" class="panel">
+    <div class="dtab-bar" id="student-screen-tabs">
+      <button class="dtab on" data-t="day" onclick="switchTab('student-screen','day',this)">Сьогодні</button>
+      <button class="dtab" data-t="news" onclick="switchTab('student-screen','news',this)">Новини<span class="chat-dot"></span></button>
+      <button class="dtab" data-t="study" onclick="switchTab('student-screen','study',this)">Навчання</button>
+    </div>
 
-    <section class="screen-section">
+
+    <section class="screen-section" data-dtab="day">
       <h3>🗓️ Розклад</h3>
       <!-- ДИНАМІЧНИЙ РОЗКЛАД -->
       <div class="schedule-box" style="margin-top:0;">
@@ -2288,13 +2314,13 @@
       </div>
     </section>
 
-    <section class="screen-section">
+    <section class="screen-section" data-dtab="news">
       <h3>📣 Новини школи</h3>
       
       <div id="s-news-feed" class="nw-feed"><p class="empty-msg">Завантаження...</p></div>
     </section>
 
-    <section class="screen-section">
+    <section class="screen-section" data-dtab="study">
       <h3>📚 Навчання</h3>
       <!-- Наліпки -->
       <div class="data-card" style="border-left-color:#f1c40f;background:#fffcf0;text-align:center;margin-top:0;">
@@ -2356,7 +2382,7 @@
       <h3>💬 Комунікація</h3>
       <!-- Чат -->
       <div class="data-card" style="border-left-color:var(--purple);background:#f9f4ff; text-align:center;margin-top:0;">
-        <button onclick="openChatModal('student')" style="background:var(--purple); color:#fff; padding:12px; border-radius:12px; font-weight:700; width:100%;">💬 Написати вчителю / директору</button>
+        <button onclick="openChatModal('student')" data-chatbtn="1" style="background:var(--purple); color:#fff; padding:12px; border-radius:12px; font-weight:700; width:100%;">💬 Написати вчителю / директору</button>
       </div>
     </section>
 
@@ -2810,6 +2836,20 @@
     <button onclick="closeChatPicker()" style="background:#eceff1;color:#37474f;">Скасувати</button>
   </div>
 </div>
+
+
+<script>
+// Значок непрочитаних чіпляємо до всіх кнопок чату одним проходом.
+// Розмітка кнопок різна (де button, де div), тому додаємо програмно.
+document.addEventListener('DOMContentLoaded', function(){
+  document.querySelectorAll('[data-chatbtn]').forEach(function(b){
+    if(b.querySelector('.chat-dot')) return;
+    var s = document.createElement('span');
+    s.className = 'chat-dot';
+    b.appendChild(s);
+  });
+});
+</script>
 
 <script type="module" src="common.js"></script>
 <script type="module" src="curriculum.js"></script>
