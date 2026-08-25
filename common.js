@@ -827,9 +827,11 @@ async function initUserSession(){
     }
     window.handleClassChange();
     setTimeout(()=>{if(window.initTabs)window.initTabs('teacher-screen');},0);
+    setTimeout(()=>{if(window.renderPushInvite)window.renderPushInvite('t-push-invite');},600);
   }
   else if(r==='student'){
     setTimeout(()=>{if(window.initTabs)window.initTabs('student-screen');},0);
+    setTimeout(()=>{if(window.renderPushInvite)window.renderPushInvite('s-push-invite');},600);
     document.getElementById('student-screen').style.display='block';
     const cn=currentUserData.class.replace('class_','');document.getElementById('s-schedule-link').href=`https://planlekcjipush.netlify.app/class-${cn}`;
     loadScheduleScript(currentUserData.class,()=>handleDateChange());
@@ -837,6 +839,7 @@ async function initUserSession(){
   }
   else{
     setTimeout(()=>{if(window.initTabs)window.initTabs('parent-screen');},0);
+    setTimeout(()=>{if(window.renderPushInvite)window.renderPushInvite('p-push-invite');},600);
     document.getElementById('parent-screen').style.display='block';
     const cn=currentUserData.class.replace('class_','');document.getElementById('p-schedule-link').href=`https://planlekcjipush.netlify.app/class-${cn}`;
     loadScheduleScript(currentUserData.class,()=>handleDateChange());
@@ -896,7 +899,10 @@ window.logAction=logAction;
 // НАЛАШТУВАННЯ (один раз, у Firebase Console):
 //   Project settings → Cloud Messaging → Web Push certificates →
 //   Generate key pair → скопіювати ключ у VAPID_KEY нижче.
-const VAPID_KEY='BAifnPl3VcvDFpYuE7D2HAyfCzczsxAq3ktk72MgK6a4MY03Krvu4JI6k8pYOrasLdhwW0lLEAqDWs6iLGYEaCo';
+// Ключ живе в push-config.js — файлі, який оновлення коду не чіпають.
+// Раніше він лежав тут, і кожне оновлення common.js стирало вставлене.
+const VAPID_KEY = (typeof window !== 'undefined' && window.PUSH_VAPID_KEY)
+  || 'ЗАМІНИТИ_НА_КЛЮЧ_З_FIREBASE_CONSOLE';
 // Без цього ключа ніхто не може підписатися, тож і слати нема кому.
 // Виносимо назовні, щоб екрани могли чесно попередити, а не мовчати.
 export const pushConfigured = !VAPID_KEY.startsWith('ЗАМІНИТИ');
@@ -1010,6 +1016,98 @@ window.disablePush=async function(){
   showToast('🔕 Сповіщення вимкнено');
   renderPushButton();
 };
+
+// ══════════ ЗАПРОШЕННЯ УВІМКНУТИ СПОВІЩЕННЯ ══════════
+// Кнопка вмикання жила лише всередині модалки «Профіль» — туди майже
+// ніхто не заходить, тому батьки просто не підписувалися, і пуші не
+// приходили нікому. Показуємо помітну смужку прямо в кабінеті, поки
+// сповіщення не увімкнені. Один раз відхилили — не нагадуємо тиждень.
+const PUSH_NAG_KEY = 'push_school_push_nag';
+export async function renderPushInvite(containerId){
+  const box = document.getElementById(containerId);
+  if(!box) return;
+  box.style.display = 'none';
+  if(!pushConfigured) return;
+  try{
+    const st = await pushState();
+    if(st === 'on') return;
+    if(st === 'unsupported'){
+      if(!(isIOS() && !isStandalone())) return;
+      box.style.display = 'block';
+      box.className = 'push-invite';
+      box.innerHTML = `<span>🔔 Щоб отримувати сповіщення на iPhone, додайте портал на початковий екран
+        — кнопка «Поділитися» → «Додати на початковий екран».</span>
+        <button type="button" class="pi-x" onclick="dismissPushInvite('${containerId}')">Пізніше</button>`;
+      return;
+    }
+    let snoozed = 0;
+    try{ snoozed = Number(localStorage.getItem(PUSH_NAG_KEY)) || 0; }catch(e){}
+    if(Date.now() - snoozed < 7*24*3600*1000) return;
+    box.style.display = 'block';
+    box.className = 'push-invite';
+    box.innerHTML = st === 'denied'
+      ? `<span>🔕 Сповіщення заблоковані у браузері. Дозвольте їх у налаштуваннях сайту, щоб не пропустити повідомлення від школи.</span>
+         <button type="button" class="pi-x" onclick="dismissPushInvite('${containerId}')">Зрозуміло</button>`
+      : `<span>🔔 Увімкніть сповіщення — і не пропустите повідомлення вчителя, оголошення та зміни в меню.</span>
+         <button type="button" class="pi-go" onclick="enablePush().then(()=>renderPushInvite('${containerId}'))">Увімкнути</button>
+         <button type="button" class="pi-x" onclick="dismissPushInvite('${containerId}')">Пізніше</button>`;
+  }catch(e){ /* не критично */ }
+}
+window.renderPushInvite = renderPushInvite;
+window.dismissPushInvite = function(containerId){
+  try{ localStorage.setItem(PUSH_NAG_KEY, String(Date.now())); }catch(e){}
+  const b = document.getElementById(containerId);
+  if(b) b.style.display = 'none';
+};
+
+
+// ══════════ ДІАГНОСТИКА СПОВІЩЕНЬ ══════════
+// Проходить ланцюжок по кроках і каже, де саме обрив. Раніше така
+// перевірка була лише в кабінеті кухні — а не працювало здебільшого
+// в батьків, які до неї не мають доступу.
+window.checkPush = async function(){
+  const out = [];
+  const line = (ok, txt) => out.push(`${ok ? '✅' : '❌'} ${txt}`);
+
+  line(pushConfigured, pushConfigured
+    ? 'Ключ VAPID вставлено в код'
+    : 'У common.js досі заглушка замість ключа VAPID');
+
+  const sup = await pushSupported();
+  line(sup, sup ? 'Браузер підтримує сповіщення'
+                : (isIOS() && !isStandalone()
+                   ? 'iPhone: спочатку додайте портал на початковий екран'
+                   : 'Браузер не підтримує web push'));
+
+  const perm = (typeof Notification !== 'undefined') ? Notification.permission : 'unsupported';
+  line(perm === 'granted', perm === 'granted' ? 'Дозвіл на сповіщення надано'
+      : perm === 'denied' ? 'Дозвіл заблоковано — зніміть блокування в налаштуваннях сайту'
+      : 'Дозвіл ще не запитували — натисніть «Увімкнути»');
+
+  let hasToken = false;
+  try{
+    const uid = auth.currentUser?.uid;
+    if(uid){ const sn = await get(child(ref(db), `push_tokens/${uid}`)); hasToken = sn.exists(); }
+  }catch(e){}
+  line(hasToken, hasToken ? 'Пристрій підписано, токен збережено'
+                          : 'Токена немає — підписка не відбулася');
+
+  let server = '—';
+  try{
+    const r = await fetch('/.netlify/functions/notify', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ type:'menu', probe:true })
+    });
+    const d = await r.json();
+    if(!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+    server = `підписників усього: ${d.eligible ?? '?'} (проєкт ${d.project || '?'})`;
+    line(true, 'Сервер сповіщень відповідає · ' + server);
+  }catch(e){
+    line(false, 'Сервер сповіщень: ' + (e.message || 'немає відповіді'));
+  }
+  alert('Стан сповіщень\n\n' + out.join('\n'));
+};
+
 export async function renderPushButton(){
   const box=document.getElementById('push-toggle');
   if(!box)return;
