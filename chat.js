@@ -152,6 +152,10 @@ window.openChatModal = async function(){
         </div>
         ${r.unread ? `<span class="ch-badge">${r.unread}</span>` : ''}
       </div>`).join('') || '<div class="ch-empty">💬<span>Тут зʼявляться ваші переписки</span></div>';
+  }, err => {
+    // Мовчазна відмова — найгірший варіант: людина дивиться на спінер
+    // і не знає, що робити. Кажемо прямо.
+    box.innerHTML = `<div class="ch-empty">⚠️<span>Не вдалося завантажити список: ${escHtml(err.message||'немає доступу')}</span></div>`;
   });
 };
 
@@ -166,8 +170,15 @@ window.selectChatThread = async function(chatId){
   currentChatId = chatId;
   document.getElementById('chat-list-view').style.display = 'none';
   document.getElementById('chat-detail-view').style.display = 'flex';
-  const snap = await get(child(ref(db), `chats/${chatId}`));
-  const c = snap.exists() ? snap.val() : {};
+  let c = {};
+  try{
+    const snap = await get(child(ref(db), `chats/${chatId}`));
+    c = snap.exists() ? snap.val() : {};
+  }catch(e){
+    document.getElementById('inbox-messages-list').innerHTML =
+      `<div class="ch-empty">⚠️<span>Немає доступу до цієї розмови</span></div>`;
+    return;
+  }
   currentMembers = Object.keys(c.members || {});
   document.getElementById('chat-detail-title').innerText = chatTitle(c);
   const sub = document.getElementById('chat-detail-sub');
@@ -209,6 +220,8 @@ function loadChatMessages(chatId){
     });
     list.innerHTML = html;
     list.scrollTop = list.scrollHeight;
+  }, err => {
+    list.innerHTML = `<div class="ch-empty">⚠️<span>Не вдалося відкрити переписку: ${escHtml(err.message||'немає доступу')}</span></div>`;
   });
 }
 
@@ -297,6 +310,11 @@ window.createChatFromPicker = async function(){
     staffKey = s ? s.key : null;
   }
   if(!staffKey) return alert('У розмові має бути хтось зі школи — учитель або адміністрація.');
+  const staffOk = await get(child(ref(db), `pre_approved_roles/${staffKey}`)).catch(()=>null);
+  if(!staffOk || !staffOk.exists()){
+    return alert(`Співробітника ${unsafe(staffKey)} немає у списку персоналу школи.\n\n`
+      + 'Директор має додати цю пошту в «Управління персоналом» — інакше правила доступу не дозволять створити розмову.');
+  }
 
   // Для розмови двох ключ детермінований, щоб не плодити дублікати.
   // Для групи — новий ключ: додавання людини завжди створює окрему розмову.
@@ -307,10 +325,15 @@ window.createChatFromPicker = async function(){
   const myName = [currentUserData?.firstName, currentUserData?.lastName].filter(Boolean).join(' ')
                  || currentUserData?.email || '';
   try{
-    const existing = await get(child(ref(db), `chats/${id}`));
-    if(!existing.exists()){
+    // Чи є вже така розмова — питаємо у ВЛАСНОГО покажчика, а не в самого
+    // чату. Читати chats/{id} можна лише учаснику, тож перевірка існування
+    // неіснуючого чату сама падала б із «Permission denied».
+    const known = await get(child(ref(db), `user_chats/${me}/${id}`));
+    if(!known.exists()){
       const mem = {}; members.forEach(k=>mem[k]=true);
-      await set(ref(db, `chats/${id}`), {
+      // update, а не set: якщо розмова вже існує (наприклад покажчик
+      // загубився), set стер би всі повідомлення.
+      await update(ref(db, `chats/${id}`), {
         members: mem, staff: staffKey,
         title: members.length > 2
           ? [myName, ...picked.map(p=>p.name)].join(', ')
@@ -324,7 +347,10 @@ window.createChatFromPicker = async function(){
     window.closeChatPicker();
     window.selectChatThread(id);
   }catch(e){
-    alert('Не вдалося створити розмову: ' + e.message);
+    const denied = /permission|denied/i.test(e.message||'');
+    alert(denied
+      ? 'Немає дозволу створити цю розмову. У ній має бути хтось зі школи — учитель або адміністрація.'
+      : 'Не вдалося створити розмову: ' + e.message);
   }
 };
 
