@@ -275,41 +275,55 @@ exports.handler = async (event) => {
       const rec = await readDb(token, `child_access/${parentSe}/${sid}`);
       if (rec && rec.login) return rec;
 
-      // Підбираємо вже наявний акаунт: шукаємо в student_links запис саме
-      // цієї дитини й перевіряємо, чи існує для нього вхід.
-      const links = await readDb(token, 'student_links');
+      // Підбираємо вже наявний акаунт: у дитини міг бути вхід, заведений
+      // школою ще до появи цього розділу.
+      //
+      // ЧОМУ ОБЕРЕЖНО З ЧАСОМ: Netlify обриває функцію на 10 секунді. Раніше
+      // тут перебирався весь student_links і на кожен збіг ішло до трьох
+      // послідовних запитів у Google — на 165 учнів це впиралося в ліміт, і
+      // назовні виглядало як вічне «Завантаження...». Тепер спершу шукаємо
+      // потрібний запис без жодного мережевого виклику, а вже тоді робимо
+      // рівно один.
+      let links;
+      try { links = await readDb(token, 'student_links'); }
+      catch (e) { return null; }
       if (!links) return null;
+
+      let hitKey = null, hitVal = null;
       for (const key of Object.keys(links)) {
         const L = links[key] || {};
         const same = (sid && L.studentId === sid) ||
                      (!L.studentId && L.studentName === studentName && L.class === cls);
-        if (!same) continue;
-        // Ключ у базі — це пошта, де крапки замінені підкресленнями, тож
-        // зворотне перетворення неоднозначне: адреса могла містити
-        // підкреслення й сама. Пробуємо кілька варіантів по черзі.
-        const candidates = [L.email, key.replace(/_/g, '.'), key].filter(Boolean);
-        let user = null;
-        for (const c of candidates) {
-          user = await findUserByEmail(token, String(c).toLowerCase());
-          if (user) break;
-        }
-        if (!user) continue;
-        const isPupil = String(user.email).endsWith('@' + PUPIL_DOMAIN);
-        const adopted = {
-          nick: isPupil ? String(user.email).split('@')[0] : '',
-          email: isPupil ? '' : user.email,
-          login: user.email, uid: user.localId,
-          studentName, class: cls,
-          disabled: !!user.disabled, adopted: true, ts: Date.now()
-        };
-        await patchDb(token, `child_access/${parentSe}/${sid}`, adopted);
-        return adopted;
+        if (same) { hitKey = key; hitVal = L; break; }
       }
-      return null;
+      if (!hitKey) return null;
+
+      // Ключ у базі — це пошта, де крапки замінені підкресленнями. Зворотне
+      // перетворення неоднозначне, тож беремо найкращий варіант: збережену
+      // пошту, інакше ключ із крапками.
+      const guess = String(hitVal.email || hitKey.replace(/_/g, '.')).toLowerCase();
+      let user = null;
+      try { user = await findUserByEmail(token, guess); }
+      catch (e) { return null; }
+      if (!user) return null;
+
+      const isPupil = String(user.email).endsWith('@' + PUPIL_DOMAIN);
+      const adopted = {
+        nick: isPupil ? String(user.email).split('@')[0] : '',
+        email: isPupil ? '' : user.email,
+        login: user.email, uid: user.localId,
+        studentName, class: cls,
+        disabled: !!user.disabled, adopted: true, ts: Date.now()
+      };
+      try { await patchDb(token, `child_access/${parentSe}/${sid}`, adopted); }
+      catch (e) { /* не змогли запамʼятати — не привід ховати результат */ }
+      return adopted;
     }
 
     if (action === 'status') {
-      const rec = await currentAccess();
+      let rec = null;
+      try { rec = await currentAccess(); }
+      catch (e) { /* не змогли перевірити — покажемо форму створення */ }
       return ok({ access: rec || null, studentName, class: cls }, origin);
     }
 
