@@ -601,12 +601,13 @@ export async function initChildAccess(){
   const kids = caChildren();
   if(!kids.length){
     const box = document.getElementById('ca-body');
-    if(box) box.innerHTML = '<p class="empty-msg">Школа ще не привʼязала дитину до вашого акаунта.</p>';
+    if(box) box.innerHTML = '<p class="empty-msg">Школа ще не привʼязала дитину до вашого акаунта.<br>'
+      + '<span style="font-size:.75rem;color:#b0bec5;">Якщо дитина видна в кабінеті — оновіть сторінку через Ctrl+Shift+R.</span></p>';
     sel.innerHTML = '<option value="">Дітей не привʼязано</option>';
     return;
   }
   sel.innerHTML = kids.map((k,i)=>
-    `<option value="${escHtml(k.studentId || ('#' + i))}">${escHtml(k.studentName)}${
+    `<option value="${i}">${escHtml(k.studentName)}${
       k.class ? ' · ' + escHtml(String(k.class).replace('class_','')) + ' клас' : ''}</option>`
   ).join('');
   renderChildAccess();
@@ -632,12 +633,17 @@ document.addEventListener('toggle', (e) => {
 window.renderChildAccess = async function(){
   const box = document.getElementById('ca-body');
   if(!box) return;
-  const sid = document.getElementById('ca-child')?.value || '';
-  const kid = sid.startsWith('#')
-    ? caChildren()[Number(sid.slice(1))]
-    : caChildren().find(k => (k.studentId || '') === sid);
+  const sel = document.getElementById('ca-child');
+  const kids = caChildren();
+  // Беремо дитину за позицією у випадайці, а не за розібраним значенням:
+  // список і пошук тоді не можуть розійтися в принципі.
+  const kid = kids[Math.max(0, sel ? sel.selectedIndex : 0)] || kids[0];
   if(!kid){
-    box.innerHTML = '<p class="empty-msg">Школа ще не привʼязала дитину до вашого акаунта.</p>';
+    const seen = currentUserData
+      ? `роль: ${currentUserData.role || '—'}, дитина в профілі: ${currentUserData.studentName || 'немає'}`
+      : 'профіль ще не завантажився';
+    box.innerHTML = `<p class="empty-msg">Не вдалося визначити дитину.<br>`
+      + `<span style="font-size:.75rem;color:#b0bec5;">Портал бачить: ${escHtml(seen)}</span></p>`;
     return;
   }
   box.innerHTML = '<p class="empty-msg">Завантаження...</p>';
@@ -646,7 +652,7 @@ window.renderChildAccess = async function(){
   // Імʼя і клас — запасні ключі: у старих записах постійного
   // ідентифікатора може не бути зовсім.
   window._caTarget = {
-    studentId: sid.startsWith('#') ? '' : sid,
+    studentId: kid.studentId || '',
     class: kid.class || '',
     studentName: kid.studentName || ''
   };
@@ -662,7 +668,6 @@ window.renderChildAccess = async function(){
     return;
   }
 
-  const j = escJs(sid);
   if(!acc || !acc.login){
     box.innerHTML = `
       <label for="ca-nick" style="margin-top:0;">Нікнейм</label>
@@ -673,7 +678,7 @@ window.renderChildAccess = async function(){
       <label for="ca-pass">Пароль</label>
       <input type="text" id="ca-pass" placeholder="мінімум 6 символів" autocapitalize="none">
       <p style="font-size:.75rem;color:#90a4ae;margin:3px 0 0 0;">Пароль видно навмисне — ви маєте продиктувати його дитині.</p>
-      <button onclick="createChildAccess('${j}')" id="ca-create"
+      <button onclick="createChildAccess()" id="ca-create"
               style="background:var(--teal);color:#fff;padding:11px;margin-top:13px;width:100%;">Створити доступ</button>
       <div id="ca-msg" style="display:none;font-size:.82rem;margin-top:9px;"></div>`;
     return;
@@ -690,9 +695,9 @@ window.renderChildAccess = async function(){
     </div>
     <label for="ca-newpass" style="margin-top:13px;">Новий пароль</label>
     <input type="text" id="ca-newpass" placeholder="мінімум 6 символів" autocapitalize="none">
-    <button onclick="changeChildPassword('${j}')" id="ca-pwd"
+    <button onclick="changeChildPassword()" id="ca-pwd"
             style="background:#00838f;color:#fff;padding:11px;margin-top:9px;width:100%;">Змінити пароль</button>
-    <button onclick="toggleChildAccess('${j}', ${off ? 'false' : 'true'})" id="ca-toggle"
+    <button onclick="toggleChildAccess(${off ? 'false' : 'true'})" id="ca-toggle"
             style="background:${off ? 'var(--green)' : '#eceff1'};color:${off ? '#fff' : '#546e7a'};padding:10px;margin-top:7px;width:100%;">
       ${off ? 'Увімкнути доступ' : 'Вимкнути доступ'}</button>
     <div id="ca-msg" style="display:none;font-size:.82rem;margin-top:9px;"></div>`;
@@ -712,7 +717,7 @@ function caBusy(id, on, label){
   if(label) b.textContent = label;
 }
 
-window.createChildAccess = async function(sid){
+window.createChildAccess = async function(){
   const nick = document.getElementById('ca-nick').value.trim();
   const email = document.getElementById('ca-mail').value.trim();
   const password = document.getElementById('ca-pass').value;
@@ -731,7 +736,7 @@ window.createChildAccess = async function(sid){
   }
 };
 
-window.changeChildPassword = async function(sid){
+window.changeChildPassword = async function(){
   const password = document.getElementById('ca-newpass').value;
   if(password.length < 6) return caMsg('Пароль — щонайменше 6 символів.', true);
   caBusy('ca-pwd', true, 'Змінюю...');
@@ -747,7 +752,7 @@ window.changeChildPassword = async function(sid){
   }
 };
 
-window.toggleChildAccess = async function(sid, off){
+window.toggleChildAccess = async function(off){
   if(off && !confirm('Вимкнути доступ? Дитина не зможе увійти, поки ви не увімкнете його знову.')) return;
   caBusy('ca-toggle', true, '...');
   try{
