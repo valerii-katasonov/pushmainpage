@@ -2313,11 +2313,11 @@
             Пароль ви завжди можете змінити тут.
           </p>
           <label for="ca-child" style="margin-top:0;">Дитина</label>
-          <select id="ca-child" onchange="renderChildAccess()"></select>
+          <select id="ca-child" onchange="caRender()"></select>
           <div id="ca-body" style="margin-top:12px;">
             <p class="empty-msg">Натисніть «Оновити», щоб завантажити.</p>
           </div>
-          <button onclick="initChildAccess()"
+          <button onclick="caInit()"
                   style="background:#eceff1;color:#546e7a;padding:9px;margin-top:9px;width:100%;font-size:.85rem;">
             Оновити</button>
           <pre id="ca-trail" style="display:none;font-size:.66rem;line-height:1.5;color:#78909c;
@@ -2596,7 +2596,6 @@
       <button type="button" onclick="openMyChildCard()" style="background:var(--purple);color:#fff;margin-top:0;">📋 Відкрити картку дитини</button>
       <button type="button" onclick="exportMyChildData()" style="background:#eceff1;color:#37474f;border:1px solid #cfd8dc;margin-top:7px;">📦 Завантажити всі дані про дитину</button>
       <p style="font-size:.72rem;color:#999;margin:4px 0 0 0;">Файл у форматі JSON — усе, що портал зберігає про вашу дитину.</p>
-      <div id="child-access" style="margin-top:10px;"></div>
     </div>
     <!-- Контактні дані батьків: заповнює сам батько/мати, а бачать і можуть
          виправити вчитель і директор. Зберігаються в parent_links, не в users. -->
