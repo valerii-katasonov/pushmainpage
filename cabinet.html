@@ -2314,7 +2314,14 @@
           </p>
           <label for="ca-child" style="margin-top:0;">Дитина</label>
           <select id="ca-child" onchange="renderChildAccess()"></select>
-          <div id="ca-body" style="margin-top:12px;"><p class="empty-msg">Завантаження...</p></div>
+          <div id="ca-body" style="margin-top:12px;">
+            <p class="empty-msg">Натисніть «Оновити», щоб завантажити.</p>
+          </div>
+          <button onclick="initChildAccess()"
+                  style="background:#eceff1;color:#546e7a;padding:9px;margin-top:9px;width:100%;font-size:.85rem;">
+            Оновити</button>
+          <div id="ca-ver" style="font-size:.68rem;color:#cfd8dc;margin-top:6px;text-align:right;">
+            розділ не завантажився</div>
         </div>
       </details>
     </section>
