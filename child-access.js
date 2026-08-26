@@ -168,14 +168,43 @@ function idtMessage(code) {
 // ── Чи справді ця дитина належить цьому батькові ──
 // Джерело істини — parent_links, який веде школа. Те, що прислав
 // браузер, тут не враховується взагалі.
-function findChild(links, studentId, cls) {
-  if (!links) return null;
-  const raw = links.children || [];
-  const list = Array.isArray(raw) ? raw : Object.values(raw);
-  return list.find(k => k && (
-    (studentId && k.studentId === studentId) ||
-    (!studentId && cls && k.class === cls)
-  )) || null;
+function childList(links) {
+  if (!links) return [];
+  const raw = links.children;
+  if (Array.isArray(raw)) return raw.filter(Boolean);
+  if (raw && typeof raw === 'object') return Object.values(raw).filter(Boolean);
+  // Старий формат: одна дитина лежить полями просто в parent_links.
+  // Саме через нього розділ казав «дитина не привʼязана» тим батькам,
+  // чий запис заводили ще до підтримки кількох дітей.
+  if (links.studentName) {
+    return [{ studentName: links.studentName, studentId: links.studentId || null,
+              class: links.class, role: links.role || 'guardian' }];
+  }
+  return [];
+}
+
+function findChild(links, studentId, cls, studentName) {
+  const list = childList(links);
+  if (!list.length) return null;
+  // Ідентифікатор — найнадійніше
+  if (studentId) {
+    const byId = list.find(k => k.studentId === studentId);
+    if (byId) return byId;
+  }
+  // Далі імʼя з класом: у старих записах ідентифікатора може не бути зовсім
+  if (studentName) {
+    const byName = list.find(k => k.studentName === studentName && (!cls || k.class === cls));
+    if (byName) return byName;
+  }
+  if (cls) {
+    const byClass = list.filter(k => k.class === cls);
+    if (byClass.length === 1) return byClass[0];
+  }
+  // Одна дитина й запит без прикмет — сумнівів немає. Але якщо прикмети
+  // прислали і жодна не збіглася, це не «та сама дитина»: краще чесно
+  // сказати, що не знайшли, ніж мовчки підставити іншу.
+  const asked = studentId || studentName || cls;
+  return (!asked && list.length === 1) ? list[0] : null;
 }
 
 exports.handler = async (event) => {
@@ -212,8 +241,13 @@ exports.handler = async (event) => {
     if (!links) return fail(403, 'Ваша пошта не позначена як батьківська. Зверніться до школи.', origin);
 
     const studentId = String(body.studentId || '');
-    const child = findChild(links, studentId, body.class);
-    if (!child) return fail(403, 'Ця дитина не привʼязана до вашого акаунта.', origin);
+    const child = findChild(links, studentId, body.class, body.studentName);
+    if (!child) {
+      const names = childList(links).map(k => k.studentName).filter(Boolean);
+      return fail(403, names.length
+        ? `Цю дитину не знайдено серед ваших: ${names.join(', ')}. Оновіть сторінку або зверніться до школи.`
+        : 'До вашого акаунта не привʼязано жодної дитини. Зверніться до класного керівника.', origin);
+    }
 
     const cls = child.class;
     const studentName = child.studentName || '';
