@@ -568,7 +568,7 @@ window.loadStudentDashboard=loadStudentDashboard;
 const CA_FN = '/.netlify/functions/child-access';
 // Мітка збірки. Якщо в кабінеті під розділом стоїть інша дата — на сайті
 // лежить стара версія файлу, і шукати помилку в коді немає сенсу.
-const CA_BUILD = '2026-08-26 · v4';
+const CA_BUILD = '2026-08-26 · v5';
 
 // Список дітей приходить із сервера — з того самого parent_links, за яким
 // перевіряється право міняти дитині пароль. Локальний профіль сюди більше
@@ -577,7 +577,31 @@ const CA_BUILD = '2026-08-26 · v4';
 let caKids = null;
 let caKidsLoading = false;   // щоб два виклики поспіль не били сервер двічі
 
+// Показує, який саме запит зараз іде і скільки секунд. Без цього
+// «Завантаження...» не відрізняється від «зависло назавжди».
+function caProgress(action){
+  const box = document.getElementById('ca-body');
+  if(!box) return () => {};
+  const t0 = Date.now();
+  const paint = () => {
+    const sec = Math.round((Date.now() - t0) / 1000);
+    box.innerHTML = `<p class="empty-msg">Запит «${escHtml(action)}»… ${sec} с</p>`;
+  };
+  paint();
+  const id = setInterval(paint, 1000);
+  return () => clearInterval(id);
+}
+
 async function caCall(action, payload){
+  const stop = caProgress(action);
+  try{
+    return await caCallInner(action, payload);
+  }finally{
+    stop();
+  }
+}
+
+async function caCallInner(action, payload){
   const user = auth.currentUser;
   if(!user) throw new Error('Ви не увійшли в портал.');
   // getIdToken може піти оновлювати токен у Google — теж під наглядом,
