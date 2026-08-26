@@ -226,7 +226,7 @@ export function normalizeChildren(raw){
   if(Array.isArray(raw.children))return raw.children.filter(c=>c&&c.studentName);
   if(raw.children&&typeof raw.children==='object')
     return Object.values(raw.children).filter(c=>c&&c.studentName);
-  if(raw.studentName)return[{studentName:raw.studentName,class:raw.class||'class_2',role:raw.role||'guardian'}];
+  if(raw.studentName)return[{studentName:raw.studentName,studentId:raw.studentId||null,class:raw.class||'class_2',role:raw.role||'guardian'}];
   return[];
 }
 // ══════════ КОНТАКТНІ ДАНІ БАТЬКІВ ══════════
