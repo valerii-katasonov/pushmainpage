@@ -590,13 +590,35 @@ export async function initChildAccess(){
   const sel = document.getElementById('ca-child');
   if(!sel) return;
   const kids = caChildren();
+  if(!kids.length){
+    const box = document.getElementById('ca-body');
+    if(box) box.innerHTML = '<p class="empty-msg">Школа ще не привʼязала дитину до вашого акаунта.</p>';
+    sel.innerHTML = '<option value="">Дітей не привʼязано</option>';
+    return;
+  }
   sel.innerHTML = kids.map((k,i)=>
     `<option value="${escHtml(k.studentId || ('#' + i))}">${escHtml(k.studentName)}${
       k.class ? ' · ' + escHtml(String(k.class).replace('class_','')) + ' клас' : ''}</option>`
-  ).join('') || '<option value="">Дітей не привʼязано</option>';
+  ).join('');
   renderChildAccess();
 }
 window.initChildAccess = initChildAccess;
+
+// Кабінет батьків відкриває common.js, а цей файл браузер міг ще не встигнути
+// виконати — тоді виклик просто нікуди не потрапляв, і в розділі назавжди
+// лишалося «Завантаження...». Тому підстраховуємося двома шляхами.
+function caAutoInit(){
+  const scr = document.getElementById('parent-screen');
+  if(scr && scr.style.display !== 'none' && document.getElementById('ca-child')) initChildAccess();
+}
+if(document.readyState === 'loading')
+  document.addEventListener('DOMContentLoaded', () => setTimeout(caAutoInit, 400));
+else setTimeout(caAutoInit, 400);
+// Розділ згорнутий: відкриття — надійний момент, щоб оновити стан
+document.addEventListener('toggle', (e) => {
+  if(e.target && e.target.tagName === 'DETAILS' && e.target.open
+     && e.target.querySelector('#ca-child')) initChildAccess();
+}, true);
 
 window.renderChildAccess = async function(){
   const box = document.getElementById('ca-body');
@@ -611,24 +633,23 @@ window.renderChildAccess = async function(){
   }
   box.innerHTML = '<p class="empty-msg">Завантаження...</p>';
 
+  // Що саме надсилати серверу, щоб він упізнав дитину
+  window._caTarget = sid.startsWith('#')
+    ? { studentId:'', class: kid.class }
+    : { studentId: sid };
+
   let acc = null;
   try{
-    const se = (currentUserData?.email || '').toLowerCase().replace(/\./g,'_');
-    // Ключ рядка — постійний ідентифікатор учня; для старих записів без
-    // нього беремо клас, як це робить і серверна функція.
-    const key = sid.startsWith('#') ? ('cls_' + kid.class) : sid;
-    const snap = await get(child(ref(db), `child_access/${se}/${key}`));
-    if(snap.exists()) acc = snap.val();
+    // Питаємо сервер, а не базу: він бачить і акаунти, заведені школою
+    // раніше, і сам підбирає їх до дитини.
+    const d = await caCall('status', window._caTarget);
+    acc = d.access;
   }catch(e){
     box.innerHTML = `<p class="empty-msg" style="color:var(--red);">Не вдалося перевірити: ${escHtml(e.message)}</p>`;
     return;
   }
 
   const j = escJs(sid);
-  // Що саме надсилати серверу, щоб він упізнав дитину
-  window._caTarget = sid.startsWith('#')
-    ? { studentId:'', class: kid.class }
-    : { studentId: sid };
   if(!acc || !acc.login){
     box.innerHTML = `
       <label for="ca-nick" style="margin-top:0;">Нікнейм</label>
@@ -650,7 +671,7 @@ window.renderChildAccess = async function(){
     <div class="data-card" style="border-left-color:${off ? '#b0bec5' : 'var(--green)'};margin-top:0;">
       <div style="font-size:.8rem;color:#78909c;">Логін дитини</div>
       <div style="font-weight:700;font-size:.98rem;word-break:break-all;">${escHtml(acc.nick || acc.login)}</div>
-      ${acc.email ? `<div style="font-size:.78rem;color:#78909c;margin-top:3px;">Пошта: ${escHtml(acc.email)}</div>` : ''}
+      ${acc.email ? `<div style="font-size:.78rem;color:#78909c;margin-top:3px;">Вхід за поштою — пароль можна відновити листом</div>` : ''}
       <div style="font-size:.78rem;color:${off ? 'var(--red)' : 'var(--green)'};font-weight:700;margin-top:5px;">
         ${off ? 'Доступ вимкнено' : 'Доступ активний'}</div>
     </div>
