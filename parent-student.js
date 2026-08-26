@@ -567,20 +567,12 @@ window.loadStudentDashboard=loadStudentDashboard;
 // Firebase це звичайна пошта, для дитини просто логін.
 const CA_FN = '/.netlify/functions/child-access';
 
-function caChildren(){
-  // normalizeChildren, а не currentUserData.children напряму: у батьків,
-  // чий запис створювався до появи кількох дітей, масиву children немає —
-  // дитина лежить окремими полями studentName/class. Кабінет її показує,
-  // а цей розділ не бачив і казав «школа не привʼязала дитину».
-  if(!currentUserData) return [];
-  const list = normalizeChildren(currentUserData);
-  if(list.length) return list;
-  return currentUserData.studentName
-    ? [{ studentName: currentUserData.studentName,
-         studentId: currentUserData.studentId || null,
-         class: currentUserData.class }]
-    : [];
-}
+// Список дітей приходить із сервера — з того самого parent_links, за яким
+// перевіряється право міняти дитині пароль. Локальний профіль сюди більше
+// не втручається: у старих акаунтів він буває неповним, і розділ казав
+// «дитину не привʼязано» на дитині, яка видно в меню поруч.
+let caKids = null;
+let caKidsLoading = false;   // щоб два виклики поспіль не били сервер двічі
 
 async function caCall(action, payload){
   const user = auth.currentUser;
@@ -597,16 +589,28 @@ async function caCall(action, payload){
 
 export async function initChildAccess(){
   const sel = document.getElementById('ca-child');
-  if(!sel) return;
-  const kids = caChildren();
-  if(!kids.length){
-    const box = document.getElementById('ca-body');
-    if(box) box.innerHTML = '<p class="empty-msg">Школа ще не привʼязала дитину до вашого акаунта.<br>'
-      + '<span style="font-size:.75rem;color:#b0bec5;">Якщо дитина видна в кабінеті — оновіть сторінку через Ctrl+Shift+R.</span></p>';
+  const box = document.getElementById('ca-body');
+  if(!sel || !box) return;
+  if(caKidsLoading) return;
+  caKidsLoading = true;
+  box.innerHTML = '<p class="empty-msg">Завантаження...</p>';
+  try{
+    const d = await caCall('children', {});
+    caKids = (d.children || []).filter(k => k && k.studentName);
+  }catch(e){
+    caKids = null;
+    sel.innerHTML = '<option value="">—</option>';
+    box.innerHTML = `<p class="empty-msg" style="color:var(--red);">Не вдалося отримати список дітей: ${escHtml(e.message)}</p>`;
+    return;
+  }finally{
+    caKidsLoading = false;
+  }
+  if(!caKids.length){
     sel.innerHTML = '<option value="">Дітей не привʼязано</option>';
+    box.innerHTML = '<p class="empty-msg">До вашого акаунта не привʼязано жодної дитини. Зверніться до класного керівника.</p>';
     return;
   }
-  sel.innerHTML = kids.map((k,i)=>
+  sel.innerHTML = caKids.map((k,i)=>
     `<option value="${i}">${escHtml(k.studentName)}${
       k.class ? ' · ' + escHtml(String(k.class).replace('class_','')) + ' клас' : ''}</option>`
   ).join('');
@@ -622,30 +626,22 @@ function caAutoInit(){
   if(scr && scr.style.display !== 'none' && document.getElementById('ca-child')) initChildAccess();
 }
 if(document.readyState === 'loading')
-  document.addEventListener('DOMContentLoaded', () => setTimeout(caAutoInit, 400));
-else setTimeout(caAutoInit, 400);
+  document.addEventListener('DOMContentLoaded', () => setTimeout(caAutoInit, 600));
+else setTimeout(caAutoInit, 600);
 // Розділ згорнутий: відкриття — надійний момент, щоб оновити стан
 document.addEventListener('toggle', (e) => {
   if(e.target && e.target.tagName === 'DETAILS' && e.target.open
-     && e.target.querySelector('#ca-child')) initChildAccess();
+     && e.target.querySelector('#ca-child') && !caKids) initChildAccess();
 }, true);
 
 window.renderChildAccess = async function(){
   const box = document.getElementById('ca-body');
   if(!box) return;
   const sel = document.getElementById('ca-child');
-  const kids = caChildren();
-  // Беремо дитину за позицією у випадайці, а не за розібраним значенням:
-  // список і пошук тоді не можуть розійтися в принципі.
-  const kid = kids[Math.max(0, sel ? sel.selectedIndex : 0)] || kids[0];
-  if(!kid){
-    const seen = currentUserData
-      ? `роль: ${currentUserData.role || '—'}, дитина в профілі: ${currentUserData.studentName || 'немає'}`
-      : 'профіль ще не завантажився';
-    box.innerHTML = `<p class="empty-msg">Не вдалося визначити дитину.<br>`
-      + `<span style="font-size:.75rem;color:#b0bec5;">Портал бачить: ${escHtml(seen)}</span></p>`;
-    return;
-  }
+  if(!caKids || !caKids.length) return initChildAccess();
+  // Дитину беремо за позицією у випадайці — список будувався з цього ж
+  // масиву, тож розійтися вони не можуть.
+  const kid = caKids[Math.max(0, sel ? sel.selectedIndex : 0)] || caKids[0];
   box.innerHTML = '<p class="empty-msg">Завантаження...</p>';
 
   // Що саме надсилати серверу, щоб він упізнав дитину
