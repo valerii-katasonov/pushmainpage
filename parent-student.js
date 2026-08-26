@@ -568,7 +568,7 @@ window.loadStudentDashboard=loadStudentDashboard;
 const CA_FN = '/.netlify/functions/child-access';
 // Мітка збірки. Якщо в кабінеті під розділом стоїть інша дата — на сайті
 // лежить стара версія файлу, і шукати помилку в коді немає сенсу.
-const CA_BUILD = '2026-08-26 · v5';
+const CA_BUILD = '2026-08-26 · v6';
 
 // Список дітей приходить із сервера — з того самого parent_links, за яким
 // перевіряється право міняти дитині пароль. Локальний профіль сюди більше
@@ -577,27 +577,32 @@ const CA_BUILD = '2026-08-26 · v5';
 let caKids = null;
 let caKidsLoading = false;   // щоб два виклики поспіль не били сервер двічі
 
-// Показує, який саме запит зараз іде і скільки секунд. Без цього
-// «Завантаження...» не відрізняється від «зависло назавжди».
-function caProgress(action){
-  const box = document.getElementById('ca-body');
-  if(!box) return () => {};
-  const t0 = Date.now();
-  const paint = () => {
-    const sec = Math.round((Date.now() - t0) / 1000);
-    box.innerHTML = `<p class="empty-msg">Запит «${escHtml(action)}»… ${sec} с</p>`;
-  };
-  paint();
-  const id = setInterval(paint, 1000);
-  return () => clearInterval(id);
+// ── Слід виконання ──
+// Один рядок «Завантаження...» не розрізняє «повільно» і «зупинилося
+// назавжди», а показ лише останнього кроку ховає те, що було до нього.
+// Тому ведемо список кроків: зі знімка екрана одразу видно весь шлях.
+const caTrail = [];
+const caT0 = Date.now();
+function caStep(text){
+  caTrail.push(`${((Date.now() - caT0) / 1000).toFixed(1)}s  ${text}`);
+  if(caTrail.length > 12) caTrail.shift();
+  const el = document.getElementById('ca-trail');
+  if(el){
+    el.style.display = 'block';
+    el.textContent = caTrail.join('\n');
+  }
 }
+window.caStep = caStep;
 
 async function caCall(action, payload){
-  const stop = caProgress(action);
+  caStep(`→ ${action}`);
   try{
-    return await caCallInner(action, payload);
-  }finally{
-    stop();
+    const d = await caCallInner(action, payload);
+    caStep(`✓ ${action}`);
+    return d;
+  }catch(e){
+    caStep(`✗ ${action}: ${e.message}`);
+    throw e;
   }
 }
 
@@ -684,10 +689,12 @@ async function caLoadChildren(sel, box){
     box.innerHTML = '<p class="empty-msg">До вашого акаунта не привʼязано жодної дитини. Зверніться до класного керівника.</p>';
     return;
   }
+  caStep(`список: ${caKids.length} дит.`);
   sel.innerHTML = caKids.map((k,i)=>
     `<option value="${i}">${escHtml(k.studentName)}${
       k.class ? ' · ' + escHtml(String(k.class).replace('class_','')) + ' клас' : ''}</option>`
   ).join('');
+  caStep('малюю картку');
   renderChildAccess();
 }
 window.initChildAccess = initChildAccess;
@@ -716,7 +723,8 @@ window.renderChildAccess = async function(){
   // Дитину беремо за позицією у випадайці — список будувався з цього ж
   // масиву, тож розійтися вони не можуть.
   const kid = caKids[Math.max(0, sel ? sel.selectedIndex : 0)] || caKids[0];
-  box.innerHTML = '<p class="empty-msg">Завантаження...</p>';
+  caStep(`обрано: ${kid.studentName}`);
+  box.innerHTML = '<p class="empty-msg">Перевіряю доступ...</p>';
 
   // Що саме надсилати серверу, щоб він упізнав дитину
   // Імʼя і клас — запасні ключі: у старих записах постійного
@@ -738,6 +746,7 @@ window.renderChildAccess = async function(){
     return;
   }
 
+  caStep(acc && acc.login ? 'доступ є' : 'доступу немає');
   if(!acc || !acc.login){
     box.innerHTML = `
       <label for="ca-nick" style="margin-top:0;">Нікнейм</label>
