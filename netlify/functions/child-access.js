@@ -271,6 +271,31 @@ exports.handler = async (event) => {
     // Кабінет питає сервер, а не читає базу: у дитини міг бути акаунт ще
     // до появи цього розділу — школа заводила його через student_links.
     // Такий вхід треба знайти й показати, а не пропонувати створити другий.
+    // Пошта, яку школа вже вписала дитині. Акаунта за нею може ще не бути:
+    // адресу заводять наперед, а перший вхід дитина робить колись потім.
+    // Батькові її треба показати — інакше він вигадає другу адресу, і в
+    // однієї дитини стане два різні входи.
+    async function knownEmail() {
+      // 1. Картка звʼязку, яку веде школа
+      const fromLink = child.email || child.studentEmail || '';
+      if (fromLink) return String(fromLink).toLowerCase();
+      // 2. student_links — там ключем є сама адреса
+      let links;
+      try { links = await readDb(token, 'student_links'); }
+      catch (e) { return ''; }
+      if (!links) return '';
+      for (const key of Object.keys(links)) {
+        const L = links[key] || {};
+        const same = (sid && L.studentId === sid) ||
+                     (L.studentName === studentName && L.class === cls);
+        if (!same) continue;
+        const mail = String(L.email || key.replace(/_/g, '.')).toLowerCase();
+        // Технічна адреса нікнейма — не пошта, показувати її як пошту не треба
+        return mail.endsWith('@' + PUPIL_DOMAIN) ? '' : mail;
+      }
+      return '';
+    }
+
     async function currentAccess() {
       const rec = await readDb(token, `child_access/${parentSe}/${sid}`);
       if (rec && rec.login) return rec;
@@ -324,7 +349,9 @@ exports.handler = async (event) => {
       let rec = null;
       try { rec = await currentAccess(); }
       catch (e) { /* не змогли перевірити — покажемо форму створення */ }
-      return ok({ access: rec || null, studentName, class: cls }, origin);
+      let known = '';
+      if (!rec) { try { known = await knownEmail(); } catch (e) { /* необовʼязкове */ } }
+      return ok({ access: rec || null, known, studentName, class: cls }, origin);
     }
 
     // ── СТВОРЕННЯ ДОСТУПУ ──
