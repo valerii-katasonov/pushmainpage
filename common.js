@@ -558,7 +558,8 @@ window.openProfileModal=async function(){
   if(childBlock){
     const isP=currentUserData?.role==='parent';
     childBlock.style.display=isP?'block':'none';
-    if(isP)window.renderChildAccess();
+    // Старий блок «Вхід дитини» замінив розділ «Доступ дитини»
+    //  у кабінеті батьків (parent-student.js).
   }
   // Батьки заповнюють свої контакти самі — школі менше ручної роботи,
   // а дані свіжіші. Прізвище/ім'я показуємо тут же, щоб усе було в одному
@@ -889,7 +890,7 @@ async function initUserSession(){
     const cn=currentUserData.class.replace('class_','');document.getElementById('p-schedule-link').href=`https://planlekcjipush.netlify.app/class-${cn}`;
     loadScheduleScript(currentUserData.class,()=>handleDateChange());
     renderPaymentsMockup();loadTextbooksForParent();
-    if(window.initChildAccess)window.initChildAccess();
+    if(window.caInit)window.caInit();
   }
 }
 // ══════════════════════════════════════════════════════════════════
@@ -1468,36 +1469,8 @@ window.openMyChildCard=async function(){
   window.openStudentCard(cls,key,name);
 };
 // Пароль дитини змінити напряму не можна — надсилаємо лист на її пошту.
-window.resetChildPassword=async function(){
-  const cls=currentUserData?.class, name=currentUserData?.studentName;
-  const snap=await get(child(ref(db),'student_links'));
-  let email='';
-  if(snap.exists()){
-    const d=snap.val();
-    for(const se in d)if(d[se]?.studentName===name&&d[se]?.class===cls){email=se.replace(/_/g,'.');break;}
-  }
-  if(!email)return alert('У дитини ще немає власного входу в портал.\nЗверніться до класного керівника, щоб його створити.');
-  if(!confirm(`Надіслати лист для зміни пароля на ${email}?\n\nЗа посиланням із листа можна задати новий пароль.\nСтарий перестане діяти.`))return;
-  try{await sendPasswordReset(email);showToast(`📧 Лист надіслано на ${email}`);}
-  catch(e){alert('Не вдалося надіслати: '+(e.message||e.code));}
-};
-// Показуємо, чи є в дитини власний вхід, і яка саме адреса
-window.renderChildAccess=async function(){
-  const box=document.getElementById('child-access');
-  if(!box||currentUserData?.role!=='parent')return;
-  const cls=currentUserData.class, name=currentUserData.studentName;
-  const snap=await get(child(ref(db),'student_links'));
-  let email='';
-  if(snap.exists()){
-    const d=snap.val();
-    for(const se in d)if(d[se]?.studentName===name&&d[se]?.class===cls){email=se.replace(/_/g,'.');break;}
-  }
-  box.innerHTML=`<div class="push-row">
-      <span class="push-label">${email?`🔑 Вхід дитини: <b>${escHtml(email)}</b>`:'🔑 У дитини немає власного входу'}</span>
-      ${email?'<button type="button" class="push-btn" onclick="resetChildPassword()">Змінити пароль</button>':''}
-    </div>
-    ${email?'':'<p class="push-hint">Щоб дитина заходила сама, зверніться до класного керівника — він додасть її email.</p>'}`;
-};
+// Блок «Вхід дитини» переїхав у parent-student.js: там і показ, і
+// зміна пароля, і вимкнення доступу — через серверну функцію.
 window.saveStudentCard=async function(){
   const {cls,key,name}=cardTarget;
   if(!canEditCard(cls))return alert('У вас немає прав редагувати картку.');
