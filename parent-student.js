@@ -578,11 +578,29 @@ async function caCall(action, payload){
   const user = auth.currentUser;
   if(!user) throw new Error('Ви не увійшли в портал.');
   const idToken = await user.getIdToken();
-  const r = await fetch(CA_FN, {
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify(Object.assign({ action, idToken }, payload))
-  });
-  const d = await r.json().catch(()=>({ error:'Сервер відповів не тим, що очікувалося' }));
+  let r;
+  try{
+    r = await fetch(CA_FN, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(Object.assign({ action, idToken }, payload))
+    });
+  }catch(e){
+    throw new Error('Немає звʼязку із сервером: ' + e.message);
+  }
+  // Читаємо текстом, а не одразу JSON: коли щось не так, Netlify віддає
+  // HTML-сторінку помилки, і .json() падає. Раніше через це назовні йшло
+  // безпорадне «сервер відповів не тим, що очікувалося» — без коду
+  // відповіді, за яким видно причину.
+  const raw = await r.text();
+  let d = null;
+  try{ d = JSON.parse(raw); }catch(e){ /* не JSON — розберемо нижче */ }
+
+  if(!d){
+    if(r.status === 404) throw new Error(
+      'Серверна функція child-access не знайдена (404). Її ще не викладено на Netlify.');
+    const snippet = raw.replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim().slice(0,160);
+    throw new Error(`Сервер відповів кодом ${r.status}` + (snippet ? `: ${snippet}` : '.'));
+  }
   if(!r.ok || d.error) throw new Error(d.error || `Помилка ${r.status}`);
   return d;
 }
