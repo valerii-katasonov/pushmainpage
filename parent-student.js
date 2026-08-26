@@ -566,6 +566,9 @@ window.loadStudentDashboard=loadStudentDashboard;
 // Нікнейм усередині системи стає адресою nick@pupil.push.local — для
 // Firebase це звичайна пошта, для дитини просто логін.
 const CA_FN = '/.netlify/functions/child-access';
+// Мітка збірки. Якщо в кабінеті під розділом стоїть інша дата — на сайті
+// лежить стара версія файлу, і шукати помилку в коді немає сенсу.
+const CA_BUILD = '2026-08-26 · v4';
 
 // Список дітей приходить із сервера — з того самого parent_links, за яким
 // перевіряється право міняти дитині пароль. Локальний профіль сюди більше
@@ -625,6 +628,19 @@ export async function initChildAccess(){
   const sel = document.getElementById('ca-child');
   const box = document.getElementById('ca-body');
   if(!sel || !box) return;
+  const ver = document.getElementById('ca-ver');
+  if(ver) ver.textContent = CA_BUILD;
+  try{
+    await caLoadChildren(sel, box);
+  }catch(e){
+    // Остання лінія оборони: що б не сталося, людина бачить причину,
+    // а не нескінченне «Завантаження...».
+    box.innerHTML = `<p class="empty-msg" style="color:var(--red);">Збій розділу: ${escHtml(e && e.message || String(e))}</p>`;
+    caKidsLoading = false;
+  }
+}
+
+async function caLoadChildren(sel, box){
   if(caKidsLoading) return;
   caKidsLoading = true;
   box.innerHTML = '<p class="empty-msg">Завантаження...</p>';
