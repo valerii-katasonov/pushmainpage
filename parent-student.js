@@ -568,7 +568,7 @@ window.loadStudentDashboard=loadStudentDashboard;
 const CA_FN = '/.netlify/functions/child-access';
 // Мітка збірки. Якщо в кабінеті під розділом стоїть інша дата — на сайті
 // лежить стара версія файлу, і шукати помилку в коді немає сенсу.
-const CA_BUILD = '2026-08-26 · v6';
+const CA_BUILD = '2026-08-26 · v7';
 
 // Список дітей приходить із сервера — з того самого parent_links, за яким
 // перевіряється право міняти дитині пароль. Локальний профіль сюди більше
@@ -695,9 +695,9 @@ async function caLoadChildren(sel, box){
       k.class ? ' · ' + escHtml(String(k.class).replace('class_','')) + ' клас' : ''}</option>`
   ).join('');
   caStep('малюю картку');
-  renderChildAccess();
+  caRenderLocal();
 }
-window.initChildAccess = initChildAccess;
+window.caInit = initChildAccess;
 
 // Кабінет батьків відкриває common.js, а цей файл браузер міг ще не встигнути
 // виконати — тоді виклик просто нікуди не потрапляв, і в розділі назавжди
@@ -715,7 +715,7 @@ document.addEventListener('toggle', (e) => {
      && e.target.querySelector('#ca-child')) initChildAccess();
 }, true);
 
-window.renderChildAccess = async function(){
+async function caRenderLocal(){
   const box = document.getElementById('ca-body');
   if(!box) return;
   const sel = document.getElementById('ca-child');
@@ -757,7 +757,7 @@ window.renderChildAccess = async function(){
       <label for="ca-pass">Пароль</label>
       <input type="text" id="ca-pass" placeholder="мінімум 6 символів" autocapitalize="none">
       <p style="font-size:.75rem;color:#90a4ae;margin:3px 0 0 0;">Пароль видно навмисне — ви маєте продиктувати його дитині.</p>
-      <button onclick="createChildAccess()" id="ca-create"
+      <button onclick="caCreate()" id="ca-create"
               style="background:var(--teal);color:#fff;padding:11px;margin-top:13px;width:100%;">Створити доступ</button>
       <div id="ca-msg" style="display:none;font-size:.82rem;margin-top:9px;"></div>`;
     return;
@@ -774,9 +774,9 @@ window.renderChildAccess = async function(){
     </div>
     <label for="ca-newpass" style="margin-top:13px;">Новий пароль</label>
     <input type="text" id="ca-newpass" placeholder="мінімум 6 символів" autocapitalize="none">
-    <button onclick="changeChildPassword()" id="ca-pwd"
+    <button onclick="caPassword()" id="ca-pwd"
             style="background:#00838f;color:#fff;padding:11px;margin-top:9px;width:100%;">Змінити пароль</button>
-    <button onclick="toggleChildAccess(${off ? 'false' : 'true'})" id="ca-toggle"
+    <button onclick="caDisable(${off ? 'false' : 'true'})" id="ca-toggle"
             style="background:${off ? 'var(--green)' : '#eceff1'};color:${off ? '#fff' : '#546e7a'};padding:10px;margin-top:7px;width:100%;">
       ${off ? 'Увімкнути доступ' : 'Вимкнути доступ'}</button>
     <div id="ca-msg" style="display:none;font-size:.82rem;margin-top:9px;"></div>`;
@@ -796,7 +796,7 @@ function caBusy(id, on, label){
   if(label) b.textContent = label;
 }
 
-window.createChildAccess = async function(){
+window.caCreate = async function(){
   const nick = document.getElementById('ca-nick').value.trim();
   const email = document.getElementById('ca-mail').value.trim();
   const password = document.getElementById('ca-pass').value;
@@ -807,7 +807,7 @@ window.createChildAccess = async function(){
     const d = await caCall('create', Object.assign({}, window._caTarget, { nick, email, password }));
     showToast('Доступ створено');
     caMsg(`Готово. Логін: ${d.nick || d.login}`);
-    renderChildAccess();
+    caRenderLocal();
   }catch(e){
     caMsg(e.message, true);
   }finally{
@@ -815,7 +815,7 @@ window.createChildAccess = async function(){
   }
 };
 
-window.changeChildPassword = async function(){
+window.caPassword = async function(){
   const password = document.getElementById('ca-newpass').value;
   if(password.length < 6) return caMsg('Пароль — щонайменше 6 символів.', true);
   caBusy('ca-pwd', true, 'Змінюю...');
@@ -831,15 +831,16 @@ window.changeChildPassword = async function(){
   }
 };
 
-window.toggleChildAccess = async function(off){
+window.caDisable = async function(off){
   if(off && !confirm('Вимкнути доступ? Дитина не зможе увійти, поки ви не увімкнете його знову.')) return;
   caBusy('ca-toggle', true, '...');
   try{
     await caCall(off ? 'disable' : 'enable', Object.assign({}, window._caTarget));
     showToast(off ? 'Доступ вимкнено' : 'Доступ увімкнено');
-    renderChildAccess();
+    caRenderLocal();
   }catch(e){
     caMsg(e.message, true);
     caBusy('ca-toggle', false, off ? 'Вимкнути доступ' : 'Увімкнути доступ');
   }
 };
+window.caRender = caRenderLocal;
