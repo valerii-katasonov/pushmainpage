@@ -889,6 +889,7 @@ async function initUserSession(){
     const cn=currentUserData.class.replace('class_','');document.getElementById('p-schedule-link').href=`https://planlekcjipush.netlify.app/class-${cn}`;
     loadScheduleScript(currentUserData.class,()=>handleDateChange());
     renderPaymentsMockup();loadTextbooksForParent();
+    if(window.initChildAccess)window.initChildAccess();
   }
 }
 // ══════════════════════════════════════════════════════════════════
@@ -2038,13 +2039,44 @@ const AUTH_ERRORS={
   'auth/user-disabled':'Цей акаунт відключено. Зверніться до адміністрації.',
   'auth/weak-password':'Пароль занадто простий (мінімум 6 символів).'
 };
+// ── ВХІД ЗА НІКНЕЙМОМ ──
+// Firebase Authentication уміє входити лише за поштою. Але в молодших
+// класах у дитини пошти немає, а вигадувати її батькам — зайвий крок і
+// ще одна скринька, яку ніхто не читає.
+//
+// Тому нікнейм перетворюється на технічну адресу виду nick@pupil.push.local.
+// Домен існує тільки всередині системи: листи на нього не ходять і не
+// мають ходити. Для Firebase це звичайна пошта, для дитини — просто логін.
+//
+// Унікальність нікнеймів окремо стежити не треба: Firebase не дасть
+// створити другий акаунт з тією самою адресою.
+export const PUPIL_DOMAIN = 'pupil.push.local';
+
+// Дозволяємо тільки те, що переживе перетворення на адресу і не зіпсує
+// ключ у базі: латиниця, цифри, крапка, дефіс, підкреслення.
+export function normalizeNick(v){
+  return String(v || '').trim().toLowerCase().replace(/[^a-z0-9._-]/g, '');
+}
+export function nickToEmail(nick){ return normalizeNick(nick) + '@' + PUPIL_DOMAIN; }
+export function isPupilEmail(email){ return String(email||'').endsWith('@' + PUPIL_DOMAIN); }
+export function emailToNick(email){
+  return isPupilEmail(email) ? String(email).split('@')[0] : '';
+}
+// Що ввели у полі входу — пошту чи нікнейм
+export function loginIdToEmail(raw){
+  const v = String(raw || '').trim();
+  return v.includes('@') ? v.toLowerCase() : nickToEmail(v);
+}
+
 // ── ЗВИЧАЙНИЙ ВХІД ──
 window.submitLogin=async function(ev){
   if(ev&&ev.preventDefault)ev.preventDefault();
-  const email=document.getElementById('email').value.trim().toLowerCase();
+  const raw=document.getElementById('email').value.trim();
+  const email=loginIdToEmail(raw);
+  const byNick=!raw.includes('@');
   const pass=document.getElementById('pass').value;
   setMsg('login-error','');setMsg('login-hint','','login-hint');
-  if(!email||!pass){setMsg('login-error','Введіть email і пароль.','login-err');return false;}
+  if(!raw||!pass){setMsg('login-error','Введіть email або нікнейм і пароль.','login-err');return false;}
   setBusy('btn-login-submit',true);
   try{
     await signInWithEmailAndPassword(auth,email,pass);
@@ -2053,6 +2085,12 @@ window.submitLogin=async function(ev){
     setBusy('btn-login-submit',false,'Увійти');
     const code=err&&err.code||'';
     if(code==='auth/user-not-found'){
+      // Акаунт учня створює хтось із батьків — самостійного «першого входу»
+      // за нікнеймом не буває, тож не пропонуємо його.
+      if(byNick){
+        setMsg('login-error','Такого нікнейма немає. Перевірте написання або попросіть батьків.','login-err');
+        return false;
+      }
       const approved=await isEmailApproved(email);
       if(approved!==false)
         window.showFirstLoginScreen(email,'Схоже, це ваш <b>перший вхід</b> — акаунта ще немає. Придумайте пароль нижче.');
@@ -2063,7 +2101,11 @@ window.submitLogin=async function(ev){
     if(code==='auth/invalid-credential'||code==='auth/wrong-password'){
       // Firebase із захистом від перебору не розрізняє "немає акаунта" і
       // "невірний пароль", тому підказуємо обидва варіанти.
-      setMsg('login-error','Невірний email або пароль.','login-err');
+      setMsg('login-error', byNick ? 'Невірний нікнейм або пароль.' : 'Невірний email або пароль.','login-err');
+      if(byNick){
+        setMsg('login-hint','Пароль можна змінити в кабінеті батьків.','login-hint');
+        return false;
+      }
       if(await isEmailApproved(email)!==false)
         setMsg('login-hint','Якщо ви входите <b>вперше</b> — натисніть «Перший вхід? Встановити пароль» внизу.','login-hint warn');
       return false;
@@ -2187,6 +2229,12 @@ window.requestPasswordReset=async function(){
   if(!email){
     setMsg('login-hint','Спочатку введіть свій email у поле вище — і натисніть «Забули пароль?» ще раз.','login-hint warn');
     document.getElementById('email').focus();
+    return;
+  }
+  // Нікнейм не має пошти, тож і листа надсилати нікуди. Пароль дитині
+  // змінює хтось із батьків у своєму кабінеті.
+  if(!email.includes('@') || isPupilEmail(email)){
+    setMsg('login-hint','Це вхід за нікнеймом — листа надсилати нікуди. Пароль змінюють батьки у своєму кабінеті, розділ «Доступ дитини».','login-hint');
     return;
   }
   try{
