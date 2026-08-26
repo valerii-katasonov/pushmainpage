@@ -192,7 +192,7 @@ exports.handler = async (event) => {
   catch (e) { return fail(400, 'Пошкоджений запит', origin); }
 
   const action = body.action;
-  if (!['create', 'password', 'disable', 'enable'].includes(action))
+  if (!['status', 'create', 'password', 'disable', 'enable'].includes(action))
     return fail(400, 'Невідома дія', origin);
   if (!body.idToken) return fail(401, 'Немає підтвердження входу', origin);
 
@@ -222,6 +222,52 @@ exports.handler = async (event) => {
     const sid = child.studentId || studentId || ('cls_' + cls);
     if (!cls || !studentName) return fail(400, 'У картці дитини бракує класу або імені.', origin);
 
+    // ── СТАН ДОСТУПУ ──
+    // Кабінет питає сервер, а не читає базу: у дитини міг бути акаунт ще
+    // до появи цього розділу — школа заводила його через student_links.
+    // Такий вхід треба знайти й показати, а не пропонувати створити другий.
+    async function currentAccess() {
+      const rec = await readDb(token, `child_access/${parentSe}/${sid}`);
+      if (rec && rec.login) return rec;
+
+      // Підбираємо вже наявний акаунт: шукаємо в student_links запис саме
+      // цієї дитини й перевіряємо, чи існує для нього вхід.
+      const links = await readDb(token, 'student_links');
+      if (!links) return null;
+      for (const key of Object.keys(links)) {
+        const L = links[key] || {};
+        const same = (sid && L.studentId === sid) ||
+                     (!L.studentId && L.studentName === studentName && L.class === cls);
+        if (!same) continue;
+        // Ключ у базі — це пошта, де крапки замінені підкресленнями, тож
+        // зворотне перетворення неоднозначне: адреса могла містити
+        // підкреслення й сама. Пробуємо кілька варіантів по черзі.
+        const candidates = [L.email, key.replace(/_/g, '.'), key].filter(Boolean);
+        let user = null;
+        for (const c of candidates) {
+          user = await findUserByEmail(token, String(c).toLowerCase());
+          if (user) break;
+        }
+        if (!user) continue;
+        const isPupil = String(user.email).endsWith('@' + PUPIL_DOMAIN);
+        const adopted = {
+          nick: isPupil ? String(user.email).split('@')[0] : '',
+          email: isPupil ? '' : user.email,
+          login: user.email, uid: user.localId,
+          studentName, class: cls,
+          disabled: !!user.disabled, adopted: true, ts: Date.now()
+        };
+        await patchDb(token, `child_access/${parentSe}/${sid}`, adopted);
+        return adopted;
+      }
+      return null;
+    }
+
+    if (action === 'status') {
+      const rec = await currentAccess();
+      return ok({ access: rec || null, studentName, class: cls }, origin);
+    }
+
     // ── СТВОРЕННЯ ДОСТУПУ ──
     if (action === 'create') {
       const nick = normalizeNick(body.nick);
@@ -237,6 +283,10 @@ exports.handler = async (event) => {
       // Пошта, якщо вказана, головніша: за нею працює відновлення пароля.
       // Нікнейм лишається як зручний логін.
       const loginEmail = realEmail || (nick + '@' + PUPIL_DOMAIN);
+
+      const already = await currentAccess();
+      if (already) return fail(409,
+        `У дитини вже є вхід: ${already.nick || already.login}. Тут можна лише змінити пароль.`, origin);
 
       const existing = await findUserByEmail(token, loginEmail);
       if (existing) return fail(409, 'Такий нікнейм або пошта вже зайняті — придумайте інші.', origin);
@@ -255,7 +305,7 @@ exports.handler = async (event) => {
     }
 
     // Далі — дії над уже створеним доступом
-    const acc = await readDb(token, `child_access/${parentSe}/${sid}`);
+    const acc = await currentAccess();
     if (!acc || !acc.login) return fail(404, 'У цієї дитини ще немає доступу до порталу.', origin);
     const user = await findUserByEmail(token, acc.login);
     if (!user) return fail(404, 'Акаунт дитини не знайдено — можливо, його видалили.', origin);
