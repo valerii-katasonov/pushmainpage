@@ -577,15 +577,31 @@ let caKidsLoading = false;   // щоб два виклики поспіль не
 async function caCall(action, payload){
   const user = auth.currentUser;
   if(!user) throw new Error('Ви не увійшли в портал.');
-  const idToken = await user.getIdToken();
+  // getIdToken може піти оновлювати токен у Google — теж під наглядом,
+  // інакше зависання тут виглядало б так само, як зависання запиту.
+  const idToken = await Promise.race([
+    user.getIdToken(),
+    new Promise((_, rej) => setTimeout(
+      () => rej(new Error('Не вдалося оновити вхідний токен. Вийдіть і зайдіть у портал заново.')), 10000))
+  ]);
+  // Тайм-аут обовʼязковий: якщо серверна функція впаде або застрягне,
+  // fetch чекатиме мовчки, а людина дивитиметься на «Завантаження...»
+  // і не знатиме, зламалося чи просто повільно.
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 20000);
   let r;
   try{
     r = await fetch(CA_FN, {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify(Object.assign({ action, idToken }, payload))
+      body: JSON.stringify(Object.assign({ action, idToken }, payload)),
+      signal: ctl.signal
     });
   }catch(e){
+    if(e.name === 'AbortError')
+      throw new Error('Сервер не відповів за 20 секунд. Перевірте журнал функції child-access у Netlify.');
     throw new Error('Немає звʼязку із сервером: ' + e.message);
+  }finally{
+    clearTimeout(timer);
   }
   // Читаємо текстом, а не одразу JSON: коли щось не так, Netlify віддає
   // HTML-сторінку помилки, і .json() падає. Раніше через це назовні йшло
@@ -649,7 +665,7 @@ else setTimeout(caAutoInit, 600);
 // Розділ згорнутий: відкриття — надійний момент, щоб оновити стан
 document.addEventListener('toggle', (e) => {
   if(e.target && e.target.tagName === 'DETAILS' && e.target.open
-     && e.target.querySelector('#ca-child') && !caKids) initChildAccess();
+     && e.target.querySelector('#ca-child')) initChildAccess();
 }, true);
 
 window.renderChildAccess = async function(){
