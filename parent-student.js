@@ -568,7 +568,7 @@ window.loadStudentDashboard=loadStudentDashboard;
 const CA_FN = '/.netlify/functions/child-access';
 // Мітка збірки. Якщо в кабінеті під розділом стоїть інша дата — на сайті
 // лежить стара версія файлу, і шукати помилку в коді немає сенсу.
-const CA_BUILD = '2026-08-26 · v7';
+const CA_BUILD = '2026-08-26 · v8';
 
 // Список дітей приходить із сервера — з того самого parent_links, за яким
 // перевіряється право міняти дитині пароль. Локальний профіль сюди більше
@@ -735,25 +735,28 @@ async function caRenderLocal(){
     studentName: kid.studentName || ''
   };
 
-  let acc = null;
+  let acc = null, known = '';
   try{
     // Питаємо сервер, а не базу: він бачить і акаунти, заведені школою
     // раніше, і сам підбирає їх до дитини.
     const d = await caCall('status', window._caTarget);
     acc = d.access;
+    known = d.known || '';
   }catch(e){
     box.innerHTML = `<p class="empty-msg" style="color:var(--red);">Не вдалося перевірити: ${escHtml(e.message)}</p>`;
     return;
   }
 
-  caStep(acc && acc.login ? 'доступ є' : 'доступу немає');
+  caStep(acc && acc.login ? 'доступ є' : ('доступу немає' + (known ? ', відома пошта: ' + known : '')));
   if(!acc || !acc.login){
     box.innerHTML = `
       <label for="ca-nick" style="margin-top:0;">Нікнейм</label>
       <input type="text" id="ca-nick" placeholder="напр. olya2015" autocapitalize="none" spellcheck="false">
       <p style="font-size:.75rem;color:#90a4ae;margin:3px 0 0 0;">Латинські літери, цифри, крапка або дефіс. Це і буде логін.</p>
       <label for="ca-mail">Пошта дитини <span style="font-weight:400;color:#90a4ae;">— за бажанням</span></label>
-      <input type="email" id="ca-mail" placeholder="можна залишити порожнім" autocapitalize="none" spellcheck="false">
+      <input type="email" id="ca-mail" value="${escHtml(known)}"
+             placeholder="можна залишити порожнім" autocapitalize="none" spellcheck="false">
+      ${known ? `<p style="font-size:.75rem;color:#00838f;margin:3px 0 0 0;">Цю адресу школа вже записала дитині. Входу за нею ще немає — залиште її, щоб не заводити другу.</p>` : ''}
       <label for="ca-pass">Пароль</label>
       <input type="text" id="ca-pass" placeholder="мінімум 6 символів" autocapitalize="none">
       <p style="font-size:.75rem;color:#90a4ae;margin:3px 0 0 0;">Пароль видно навмисне — ви маєте продиктувати його дитині.</p>
