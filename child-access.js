@@ -221,7 +221,7 @@ exports.handler = async (event) => {
   catch (e) { return fail(400, 'Пошкоджений запит', origin); }
 
   const action = body.action;
-  if (!['status', 'create', 'password', 'disable', 'enable'].includes(action))
+  if (!['children', 'status', 'create', 'password', 'disable', 'enable'].includes(action))
     return fail(400, 'Невідома дія', origin);
   if (!body.idToken) return fail(401, 'Немає підтвердження входу', origin);
 
@@ -239,6 +239,17 @@ exports.handler = async (event) => {
     // 1. Чи це взагалі батько і чи його це дитина
     const links = await readDb(token, `parent_links/${parentSe}`);
     if (!links) return fail(403, 'Ваша пошта не позначена як батьківська. Зверніться до школи.', origin);
+
+    // ── СПИСОК ДІТЕЙ ──
+    // Кабінет питає його тут, а не бере з локального профілю. Профіль
+    // збирається при вході і в старих акаунтів буває неповним — саме через
+    // це розділ казав «дитину не привʼязано», хоча в меню вона була.
+    // Тут джерело те саме, що й для дозволу на операцію: parent_links.
+    if (action === 'children') {
+      return ok({ children: childList(links).map((k, i) => ({
+        i, studentName: k.studentName || '', studentId: k.studentId || '', class: k.class || ''
+      })) }, origin);
+    }
 
     const studentId = String(body.studentId || '');
     const child = findChild(links, studentId, body.class, body.studentName);
