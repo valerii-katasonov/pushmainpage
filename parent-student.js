@@ -5,9 +5,10 @@
 // lives in teacher.js).
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, getActiveClass, currentUserData, STICKER_GOAL, getWeekDates, displayGrade, gradeClass6, showToast, renderHwItem, dayKeys, localDateString, formatAttendanceSlotLabel, renderGradeFormulaInfo, escJs, escHtml, safeUrl, renderBirthdays, stuName } from './common.js';
+import { db, getActiveClass, currentUserData, STICKER_GOAL, getWeekDates, displayGrade, gradeClass6, showToast, renderHwItem, dayKeys, localDateString, formatAttendanceSlotLabel, renderGradeFormulaInfo, escJs, escHtml, safeUrl, renderBirthdays, stuName, auth} from './common.js';
 import { ACADEMIC_YEAR_ID } from './director.js';
 import { renderParentMenu } from './kitchen.js';
+import { renderNewsFeed } from './news.js';
 
 // parentLessonInterval is reassigned only here and read/cleared from
 // common.js's logoutUser — plain export/import.
@@ -287,6 +288,7 @@ export function loadParentDashboard(){
   renderFinalGrades('p-final-grades',cls,currentUserData.studentName);
   loadTodaySubstitutions(cls,date).then(()=>renderDynamicSchedule('parent'));
   renderConsents();
+  renderNewsFeed('p-news-feed');
   renderParentMenu(cls,currentUserData.studentId||currentUserData.studentName,date);
   // Grades + comments + behavior
   const ym=date.substring(0,7);
@@ -513,6 +515,7 @@ window.updateAttOptionsStudent=function(){const t=document.getElementById('s-att
 window.sendReaction=function(date,subject,emoji){if(!currentUserData)return;set(ref(db,`reactions/${getActiveClass()}/${date}/${subject}/${currentUserData.studentId||currentUserData.studentName}`),emoji).then(()=>loadParentDashboard());};
 // ══════════ STUDENT DASHBOARD ══════════
 export function loadStudentDashboard(){
+  renderNewsFeed('s-news-feed');
   if(!currentUserData)return;const date=document.getElementById('global-date').value;const cls=getActiveClass();
   if(window.schedule){renderDynamicSchedule('student');if(parentLessonInterval)clearInterval(parentLessonInterval);parentLessonInterval=setInterval(()=>renderDynamicSchedule('student'),30000);}
   get(child(ref(db),`stickers/${cls}/${currentUserData.studentId||currentUserData.studentName}`)).then(snap=>{const cnt=snap.exists()?Object.keys(snap.val()).length:0;const pct=Math.min((cnt/STICKER_GOAL)*100,100);document.getElementById('s-ribbon-progress').style.width=pct+'%';document.getElementById('s-ribbon-count').innerText=`${cnt} / ${STICKER_GOAL} наліпок до призу`;});
@@ -550,3 +553,175 @@ export function loadStudentDashboard(){
   });
 }
 window.loadStudentDashboard=loadStudentDashboard;
+
+// ═══════════ ДОСТУП ДИТИНИ ДО ПОРТАЛУ ═══════════
+// Батько створює дитині вхід, змінює пароль і вимикає доступ.
+//
+// ЧОМУ ЧЕРЕЗ СЕРВЕРНУ ФУНКЦІЮ: створення чужого акаунта і зміна чужого
+// пароля — операції адміністратора Firebase. З браузера їх зробити не
+// можна, і добре: інакше ключ адміністратора лежав би у коді сторінки.
+// Тут ми лише збираємо форму й показуємо відповідь.
+//
+// ЧОМУ НІКНЕЙМ, А НЕ ПОШТА: у молодших класах пошти в дитини немає.
+// Нікнейм усередині системи стає адресою nick@pupil.push.local — для
+// Firebase це звичайна пошта, для дитини просто логін.
+const CA_FN = '/.netlify/functions/child-access';
+
+function caChildren(){
+  const kids = currentUserData?.children;
+  const list = Array.isArray(kids) ? kids : (kids ? Object.values(kids) : []);
+  return list.filter(k => k && k.studentName);
+}
+
+async function caCall(action, payload){
+  const user = auth.currentUser;
+  if(!user) throw new Error('Ви не увійшли в портал.');
+  const idToken = await user.getIdToken();
+  const r = await fetch(CA_FN, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(Object.assign({ action, idToken }, payload))
+  });
+  const d = await r.json().catch(()=>({ error:'Сервер відповів не тим, що очікувалося' }));
+  if(!r.ok || d.error) throw new Error(d.error || `Помилка ${r.status}`);
+  return d;
+}
+
+export async function initChildAccess(){
+  const sel = document.getElementById('ca-child');
+  if(!sel) return;
+  const kids = caChildren();
+  sel.innerHTML = kids.map((k,i)=>
+    `<option value="${escHtml(k.studentId || ('#' + i))}">${escHtml(k.studentName)}${
+      k.class ? ' · ' + escHtml(String(k.class).replace('class_','')) + ' клас' : ''}</option>`
+  ).join('') || '<option value="">Дітей не привʼязано</option>';
+  renderChildAccess();
+}
+window.initChildAccess = initChildAccess;
+
+window.renderChildAccess = async function(){
+  const box = document.getElementById('ca-body');
+  if(!box) return;
+  const sid = document.getElementById('ca-child')?.value || '';
+  const kid = sid.startsWith('#')
+    ? caChildren()[Number(sid.slice(1))]
+    : caChildren().find(k => (k.studentId || '') === sid);
+  if(!kid){
+    box.innerHTML = '<p class="empty-msg">Школа ще не привʼязала дитину до вашого акаунта.</p>';
+    return;
+  }
+  box.innerHTML = '<p class="empty-msg">Завантаження...</p>';
+
+  let acc = null;
+  try{
+    const se = (currentUserData?.email || '').toLowerCase().replace(/\./g,'_');
+    // Ключ рядка — постійний ідентифікатор учня; для старих записів без
+    // нього беремо клас, як це робить і серверна функція.
+    const key = sid.startsWith('#') ? ('cls_' + kid.class) : sid;
+    const snap = await get(child(ref(db), `child_access/${se}/${key}`));
+    if(snap.exists()) acc = snap.val();
+  }catch(e){
+    box.innerHTML = `<p class="empty-msg" style="color:var(--red);">Не вдалося перевірити: ${escHtml(e.message)}</p>`;
+    return;
+  }
+
+  const j = escJs(sid);
+  // Що саме надсилати серверу, щоб він упізнав дитину
+  window._caTarget = sid.startsWith('#')
+    ? { studentId:'', class: kid.class }
+    : { studentId: sid };
+  if(!acc || !acc.login){
+    box.innerHTML = `
+      <label for="ca-nick" style="margin-top:0;">Нікнейм</label>
+      <input type="text" id="ca-nick" placeholder="напр. olya2015" autocapitalize="none" spellcheck="false">
+      <p style="font-size:.75rem;color:#90a4ae;margin:3px 0 0 0;">Латинські літери, цифри, крапка або дефіс. Це і буде логін.</p>
+      <label for="ca-mail">Пошта дитини <span style="font-weight:400;color:#90a4ae;">— за бажанням</span></label>
+      <input type="email" id="ca-mail" placeholder="можна залишити порожнім" autocapitalize="none" spellcheck="false">
+      <label for="ca-pass">Пароль</label>
+      <input type="text" id="ca-pass" placeholder="мінімум 6 символів" autocapitalize="none">
+      <p style="font-size:.75rem;color:#90a4ae;margin:3px 0 0 0;">Пароль видно навмисне — ви маєте продиктувати його дитині.</p>
+      <button onclick="createChildAccess('${j}')" id="ca-create"
+              style="background:var(--teal);color:#fff;padding:11px;margin-top:13px;width:100%;">Створити доступ</button>
+      <div id="ca-msg" style="display:none;font-size:.82rem;margin-top:9px;"></div>`;
+    return;
+  }
+
+  const off = !!acc.disabled;
+  box.innerHTML = `
+    <div class="data-card" style="border-left-color:${off ? '#b0bec5' : 'var(--green)'};margin-top:0;">
+      <div style="font-size:.8rem;color:#78909c;">Логін дитини</div>
+      <div style="font-weight:700;font-size:.98rem;word-break:break-all;">${escHtml(acc.nick || acc.login)}</div>
+      ${acc.email ? `<div style="font-size:.78rem;color:#78909c;margin-top:3px;">Пошта: ${escHtml(acc.email)}</div>` : ''}
+      <div style="font-size:.78rem;color:${off ? 'var(--red)' : 'var(--green)'};font-weight:700;margin-top:5px;">
+        ${off ? 'Доступ вимкнено' : 'Доступ активний'}</div>
+    </div>
+    <label for="ca-newpass" style="margin-top:13px;">Новий пароль</label>
+    <input type="text" id="ca-newpass" placeholder="мінімум 6 символів" autocapitalize="none">
+    <button onclick="changeChildPassword('${j}')" id="ca-pwd"
+            style="background:#00838f;color:#fff;padding:11px;margin-top:9px;width:100%;">Змінити пароль</button>
+    <button onclick="toggleChildAccess('${j}', ${off ? 'false' : 'true'})" id="ca-toggle"
+            style="background:${off ? 'var(--green)' : '#eceff1'};color:${off ? '#fff' : '#546e7a'};padding:10px;margin-top:7px;width:100%;">
+      ${off ? 'Увімкнути доступ' : 'Вимкнути доступ'}</button>
+    <div id="ca-msg" style="display:none;font-size:.82rem;margin-top:9px;"></div>`;
+};
+
+function caMsg(text, bad){
+  const m = document.getElementById('ca-msg');
+  if(!m) return;
+  m.style.display = 'block';
+  m.style.color = bad ? 'var(--red)' : 'var(--green)';
+  m.innerText = text;
+}
+function caBusy(id, on, label){
+  const b = document.getElementById(id);
+  if(!b) return;
+  b.disabled = on;
+  if(label) b.textContent = label;
+}
+
+window.createChildAccess = async function(sid){
+  const nick = document.getElementById('ca-nick').value.trim();
+  const email = document.getElementById('ca-mail').value.trim();
+  const password = document.getElementById('ca-pass').value;
+  if(!nick && !email) return caMsg('Вкажіть нікнейм або пошту дитини.', true);
+  if(password.length < 6) return caMsg('Пароль — щонайменше 6 символів.', true);
+  caBusy('ca-create', true, 'Створюю...');
+  try{
+    const d = await caCall('create', Object.assign({}, window._caTarget, { nick, email, password }));
+    showToast('Доступ створено');
+    caMsg(`Готово. Логін: ${d.nick || d.login}`);
+    renderChildAccess();
+  }catch(e){
+    caMsg(e.message, true);
+  }finally{
+    caBusy('ca-create', false, 'Створити доступ');
+  }
+};
+
+window.changeChildPassword = async function(sid){
+  const password = document.getElementById('ca-newpass').value;
+  if(password.length < 6) return caMsg('Пароль — щонайменше 6 символів.', true);
+  caBusy('ca-pwd', true, 'Змінюю...');
+  try{
+    await caCall('password', Object.assign({}, window._caTarget, { password }));
+    showToast('Пароль змінено');
+    caMsg('Пароль змінено. Продиктуйте його дитині.');
+    document.getElementById('ca-newpass').value = '';
+  }catch(e){
+    caMsg(e.message, true);
+  }finally{
+    caBusy('ca-pwd', false, 'Змінити пароль');
+  }
+};
+
+window.toggleChildAccess = async function(sid, off){
+  if(off && !confirm('Вимкнути доступ? Дитина не зможе увійти, поки ви не увімкнете його знову.')) return;
+  caBusy('ca-toggle', true, '...');
+  try{
+    await caCall(off ? 'disable' : 'enable', Object.assign({}, window._caTarget));
+    showToast(off ? 'Доступ вимкнено' : 'Доступ увімкнено');
+    renderChildAccess();
+  }catch(e){
+    caMsg(e.message, true);
+    caBusy('ca-toggle', false, off ? 'Вимкнути доступ' : 'Увімкнути доступ');
+  }
+};
