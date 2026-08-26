@@ -5,7 +5,7 @@
 // lives in teacher.js).
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, getActiveClass, currentUserData, STICKER_GOAL, getWeekDates, displayGrade, gradeClass6, showToast, renderHwItem, dayKeys, localDateString, formatAttendanceSlotLabel, renderGradeFormulaInfo, escJs, escHtml, safeUrl, renderBirthdays, stuName, auth} from './common.js';
+import { db, getActiveClass, currentUserData, STICKER_GOAL, getWeekDates, displayGrade, gradeClass6, showToast, renderHwItem, dayKeys, localDateString, formatAttendanceSlotLabel, renderGradeFormulaInfo, escJs, escHtml, safeUrl, renderBirthdays, stuName, auth, normalizeChildren} from './common.js';
 import { ACADEMIC_YEAR_ID } from './director.js';
 import { renderParentMenu } from './kitchen.js';
 import { renderNewsFeed } from './news.js';
@@ -568,9 +568,18 @@ window.loadStudentDashboard=loadStudentDashboard;
 const CA_FN = '/.netlify/functions/child-access';
 
 function caChildren(){
-  const kids = currentUserData?.children;
-  const list = Array.isArray(kids) ? kids : (kids ? Object.values(kids) : []);
-  return list.filter(k => k && k.studentName);
+  // normalizeChildren, а не currentUserData.children напряму: у батьків,
+  // чий запис створювався до появи кількох дітей, масиву children немає —
+  // дитина лежить окремими полями studentName/class. Кабінет її показує,
+  // а цей розділ не бачив і казав «школа не привʼязала дитину».
+  if(!currentUserData) return [];
+  const list = normalizeChildren(currentUserData);
+  if(list.length) return list;
+  return currentUserData.studentName
+    ? [{ studentName: currentUserData.studentName,
+         studentId: currentUserData.studentId || null,
+         class: currentUserData.class }]
+    : [];
 }
 
 async function caCall(action, payload){
@@ -634,9 +643,13 @@ window.renderChildAccess = async function(){
   box.innerHTML = '<p class="empty-msg">Завантаження...</p>';
 
   // Що саме надсилати серверу, щоб він упізнав дитину
-  window._caTarget = sid.startsWith('#')
-    ? { studentId:'', class: kid.class }
-    : { studentId: sid };
+  // Імʼя і клас — запасні ключі: у старих записах постійного
+  // ідентифікатора може не бути зовсім.
+  window._caTarget = {
+    studentId: sid.startsWith('#') ? '' : sid,
+    class: kid.class || '',
+    studentName: kid.studentName || ''
+  };
 
   let acc = null;
   try{
