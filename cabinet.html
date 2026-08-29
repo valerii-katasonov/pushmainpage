@@ -1150,6 +1150,17 @@
 .att-quick .att-hint{margin:0 0 9px 0;font-size:.8rem;color:#8d9ba3;}
 .att-row{display:flex;gap:9px;flex-wrap:wrap;}
 .att-row select{flex:1 1 150px;margin-top:0;}
+
+/* Перерви між уроками */
+.wk-break{display:flex;justify-content:space-between;align-items:baseline;
+  padding:3px 0 3px 27px;font-size:.72rem;color:#b0bec5;}
+.wk-break-label{font-style:italic;}
+.wk-break-time{white-space:nowrap;}
+.lesson-break{display:flex;justify-content:space-between;align-items:center;
+  margin:3px 0;padding:5px 12px;border-radius:9px;background:#f7f9fa;
+  font-size:.75rem;color:#90a4ae;}
+.lesson-break.now{background:#fff8e1;color:#8a6d1f;font-weight:700;}
+.lesson-break .lb-time{white-space:nowrap;font-variant-numeric:tabular-nums;}
 </style>
 </head>
 <body>
@@ -2259,9 +2270,6 @@
       <button type="button" id="p-week-btn" onclick="toggleWeekSchedule('p')"
               style="width:100%;background:var(--blue);color:#fff;padding:10px;border-radius:10px;font-weight:700;margin-top:10px;font-size:.88rem;">📅 Показати весь тиждень</button>
       <div id="p-week-schedule" class="wk-box" style="display:none;"></div>
-      <!-- Посилання лишається прихованим: common.js досі проставляє йому href,
-           а комусь може знадобитися сторінка класу окремою вкладкою. -->
-      <a id="p-schedule-link" href="#" target="_blank" class="wk-full-link">Відкрити сторінку класу ↗</a>
       </div>
       <div class="data-card" style="border-left-color:var(--orange);background:#fffcf0;">
         <h4 style="margin-top:0;color:var(--orange);">📅 Календар класу</h4>
@@ -2407,9 +2415,6 @@
       <button type="button" id="s-week-btn" onclick="toggleWeekSchedule('s')"
               style="width:100%;background:var(--blue);color:#fff;padding:10px;border-radius:10px;font-weight:700;margin-top:10px;font-size:.88rem;">📅 Показати весь тиждень</button>
       <div id="s-week-schedule" class="wk-box" style="display:none;"></div>
-      <!-- Посилання лишається прихованим: common.js досі проставляє йому href,
-           а комусь може знадобитися сторінка класу окремою вкладкою. -->
-      <a id="s-schedule-link" href="#" target="_blank" class="wk-full-link">Відкрити сторінку класу ↗</a>
       </div>
       <!-- PHASE 3: Календар -->
       <div class="data-card" style="border-left-color:var(--orange);background:#fffcf0;">
