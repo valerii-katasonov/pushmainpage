@@ -924,7 +924,7 @@ async function initUserSession(){
     setTimeout(()=>{if(window.initTabs)window.initTabs('student-screen');},0);
     setTimeout(()=>{if(window.renderPushInvite)window.renderPushInvite('s-push-invite');},600);
     document.getElementById('student-screen').style.display='block';
-    const cn=currentUserData.class.replace('class_','');document.getElementById('s-schedule-link').href=`https://planlekcjipush.netlify.app/class-${cn}`;
+    
     loadScheduleScript(currentUserData.class,()=>handleDateChange());
     loadTextbooksForParent('student');
   }
@@ -932,7 +932,7 @@ async function initUserSession(){
     setTimeout(()=>{if(window.initTabs)window.initTabs('parent-screen');},0);
     setTimeout(()=>{if(window.renderPushInvite)window.renderPushInvite('p-push-invite');},600);
     document.getElementById('parent-screen').style.display='block';
-    const cn=currentUserData.class.replace('class_','');document.getElementById('p-schedule-link').href=`https://planlekcjipush.netlify.app/class-${cn}`;
+    
     loadScheduleScript(currentUserData.class,()=>handleDateChange());
     renderPaymentsMockup();loadTextbooksForParent();
     if(window.caInit)window.caInit();
