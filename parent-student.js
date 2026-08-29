@@ -848,3 +848,59 @@ window.caDisable = async function(off){
   }
 };
 window.caRender = caRenderLocal;
+
+// ══════════ ПОВНИЙ РОЗКЛАД НА ТИЖДЕНЬ ══════════
+// РАНІШЕ: кнопка «Відкрити повний розклад» вела на окрему сторінку сайту.
+// Людина виходила з кабінету, дивилася розклад і поверталася назад руками —
+// а на телефоні ще й втрачала місце, де була. Тепер тиждень розгортається
+// тут же, з тих самих даних, які вже завантажені для сьогоднішнього дня:
+// window.schedule приходить одним запитом на вході і містить усі дні.
+const WEEK_DAYS = [
+  { key:'Monday',    label:'Понеділок' },
+  { key:'Tuesday',   label:'Вівторок'  },
+  { key:'Wednesday', label:'Середа'    },
+  { key:'Thursday',  label:'Четвер'    },
+  { key:'Friday',    label:'Пʼятниця'  }
+];
+
+function renderWeekSchedule(prefix){
+  const box = document.getElementById(`${prefix}-week-schedule`);
+  if(!box) return;
+  if(!window.schedule || !Object.keys(window.schedule).length){
+    box.innerHTML = '<p class="empty-msg">Розклад ще не заповнено школою.</p>';
+    return;
+  }
+  const todayKey = dayKeys[new Date().getDay()];
+  let html = '';
+  let anyLesson = false;
+  WEEK_DAYS.forEach(d => {
+    // isToday=false: у тижневому огляді не потрібні заміни й підсвітка уроку,
+    // це довідка «що коли», а не годинник
+    const lessons = buildDynamicSchedule(window.schedule, d.key, false) || [];
+    if(lessons.length) anyLesson = true;
+    html += `<div class="wk-day${d.key===todayKey?' today':''}">
+      <div class="wk-day-name">${escHtml(d.label)}${d.key===todayKey?' <span class="wk-today">сьогодні</span>':''}</div>
+      ${lessons.length
+        ? lessons.map((l,i)=>{
+            const sn = typeof l.subject==='string' ? l.subject : (l.subject?.ua || '');
+            return `<div class="wk-row">
+              <span class="wk-num">${i+1}</span>
+              <span class="wk-subj">${escHtml(sn)}</span>
+              <span class="wk-time">${escHtml(l.time||'—')}</span>
+            </div>`;
+          }).join('')
+        : '<div class="wk-empty">Уроків немає</div>'}
+    </div>`;
+  });
+  box.innerHTML = anyLesson ? html : '<p class="empty-msg">Розклад ще не заповнено школою.</p>';
+}
+
+window.toggleWeekSchedule = function(prefix){
+  const box = document.getElementById(`${prefix}-week-schedule`);
+  const btn = document.getElementById(`${prefix}-week-btn`);
+  if(!box) return;
+  const opening = box.style.display === 'none' || !box.style.display;
+  if(opening) renderWeekSchedule(prefix);   // перемальовуємо щоразу: розклад міг оновитися
+  box.style.display = opening ? 'block' : 'none';
+  if(btn) btn.textContent = opening ? '▲ Згорнути тиждень' : '📅 Показати весь тиждень';
+};
