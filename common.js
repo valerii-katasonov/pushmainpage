@@ -927,6 +927,7 @@ async function initUserSession(){
     
     loadScheduleScript(currentUserData.class,()=>handleDateChange());
     loadTextbooksForParent('student');
+    renderInstallBlock();
   }
   else{
     setTimeout(()=>{if(window.initTabs)window.initTabs('parent-screen');},0);
@@ -936,6 +937,7 @@ async function initUserSession(){
     loadScheduleScript(currentUserData.class,()=>handleDateChange());
     renderPaymentsMockup();loadTextbooksForParent();
     if(window.caInit)window.caInit();
+    renderInstallBlock();
   }
 }
 // ══════════════════════════════════════════════════════════════════
@@ -1014,7 +1016,10 @@ if('serviceWorker' in navigator){
 // установки сповіщення взагалі не працюють. Тому показуємо кнопку в порталі.
 let deferredInstall=null;
 export const isStandalone=()=>window.matchMedia('(display-mode: standalone)').matches||window.navigator.standalone===true;
-export const isIOS=()=>/iphone|ipad|ipod/i.test(navigator.userAgent);
+// iPad з iPadOS 13+ представляється як Macintosh, тому самої лише перевірки
+// назви пристрою мало — дивимося ще й на дотики.
+export const isIOS=()=>/iphone|ipad|ipod/i.test(navigator.userAgent)
+  || (/macintosh/i.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
 // Chrome/Edge/Android дають цю подію — перехоплюємо, щоб показати свою кнопку
 window.addEventListener('beforeinstallprompt',(e)=>{
   e.preventDefault();deferredInstall=e;renderInstallBlock();
@@ -1026,30 +1031,60 @@ window.installApp=async function(){
   await deferredInstall.userChoice;
   deferredInstall=null;renderInstallBlock();
 };
-export function renderInstallBlock(){
-  const box=document.getElementById('install-block');
-  if(!box)return;
-  if(isStandalone()){box.style.display='none';return;}
+
+// ЧОМУ ЧОТИРИ СТАНИ, А НЕ ДВА. Раніше блок ховався скрізь, крім Android
+// і iPhone: на решті браузерів людина бачила порожнє місце й не знала, що
+// застосунок узагалі можна поставити. Тепер мовчазного стану немає —
+// у найгіршому разі показуємо, де шукати пункт у меню браузера.
+function installMarkup(){
+  if(isStandalone()){
+    return `<div class="inst ok">
+      <b>Застосунок уже встановлено</b>
+      <p>Ви відкрили портал з іконки на екрані — усе гаразд.</p>
+    </div>`;
+  }
   if(deferredInstall){
-    box.style.display='block';
-    box.innerHTML=`<div class="push-row">
-      <span class="push-label">📲 Встановити застосунок на пристрій</span>
-      <button type="button" class="push-btn" onclick="installApp()">Встановити</button>
-    </div>
-    <p class="push-hint">Портал відкриватиметься як звичайний застосунок, з іконкою на екрані.</p>`;
-    return;
+    return `<div class="inst">
+      <b>📲 Встановити застосунок</b>
+      <p>Портал відкриватиметься з іконки на екрані, без адресного рядка.</p>
+      <button type="button" class="inst-btn" onclick="installApp()">Встановити</button>
+    </div>`;
   }
   if(isIOS()){
-    // На iPhone програмної установки немає — лише інструкція
-    box.style.display='block';
-    box.innerHTML=`<div class="push-label" style="margin-bottom:5px;">📲 Встановити на iPhone</div>
-      <p class="push-hint" style="flex:auto;">
-        Внизу екрана натисніть <b>Поділитися</b> ⬆️ → <b>На екран «Домів»</b>.<br>
-        Без цього iPhone не показуватиме сповіщення від порталу.
-      </p>`;
-    return;
+    return `<div class="inst">
+      <b>📲 Встановити на iPhone або iPad</b>
+      <p>Apple не дозволяє встановлювати з кнопки — але це три дотики:</p>
+      <ol class="inst-steps">
+        <li>Відкрийте портал у <b>Safari</b> (у Chrome цього пункту немає).</li>
+        <li>Внизу екрана натисніть <b>Поділитися</b> — квадрат зі стрілкою вгору.</li>
+        <li>Прогорніть список і оберіть <b>На екран «Домів»</b>, потім <b>Додати</b>.</li>
+      </ol>
+      <p class="inst-note">На iPhone це обовʼязково: сповіщення від порталу
+         працюють лише після додавання на екран «Домів».</p>
+    </div>`;
   }
-  box.style.display='none';
+  return `<div class="inst">
+    <b>📲 Встановити застосунок</b>
+    <p>У вашому браузері це робиться через меню:</p>
+    <ol class="inst-steps">
+      <li>Відкрийте меню браузера — три крапки або три смужки.</li>
+      <li>Оберіть <b>«Встановити застосунок»</b> або <b>«Додати на головний екран»</b>.</li>
+    </ol>
+    <p class="inst-note">Якщо такого пункту немає, спробуйте Chrome на Android
+       або Safari на iPhone.</p>
+  </div>`;
+}
+
+export function renderInstallBlock(){
+  const html = installMarkup();
+  // Блоків може бути кілька: старий у профілі та розділи в кабінетах
+  document.querySelectorAll('#install-block, .install-box').forEach(box=>{
+    // Старий блок у профілі ховаємо, коли застосунок уже встановлено:
+    // він там технічний. Окремі розділи лишаємо — вони мають заголовок.
+    if(box.id === 'install-block' && isStandalone()){ box.style.display='none'; return; }
+    box.style.display='block';
+    box.innerHTML = html;
+  });
 }
 window.renderInstallBlock=renderInstallBlock;
 export async function pushSupported(){
