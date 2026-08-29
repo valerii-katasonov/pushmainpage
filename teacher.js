@@ -6,7 +6,8 @@
 // exams calendar, and reactions/weekly-wrapped.
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, push, remove, update, onValue } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, auth, CLOUDINARY_URL, UPLOAD_PRESET, getActiveClass, currentUserData, showToast, displayGrade, renderHwItem, dayKeys, formatAttendanceSlotLabel, STICKER_GOAL, escJs, escHtml, safeUrl, normalizeChildren, notifyEvent, logAction, renderBirthdays, teacherAccessMatrix, getUsersSnap, stuName } from './common.js';
+import { renderNewsFeed } from './news.js';
+import { db, auth, CLOUDINARY_URL, UPLOAD_PRESET, getActiveClass, currentUserData, showToast, displayGrade, renderHwItem, dayKeys, formatAttendanceSlotLabel, STICKER_GOAL, escJs, escHtml, safeUrl, normalizeChildren, notifyEvent, logAction, renderBirthdays, teacherAccessMatrix, getUsersSnap, stuName, gradeWritePaths} from './common.js';
 import { populateTopicSelector, availableTopicsCache } from './curriculum.js';
 
 let currentHwImages=[];
@@ -220,8 +221,11 @@ window.saveQuickJournal=async function(){
       }
     }
     if(Object.keys(gPatch).length){
-      await update(ref(db,`grades/${cls}/${ym}/${subj}/${date}`),gPatch);
-      await update(ref(db,`grade_types/${cls}/${ym}/${subj}/${date}`),tPatch);
+      // Один запис від кореня на всіх учнів: основа і дзеркало разом
+      const upd = {};
+      for(const sid in gPatch)
+        Object.assign(upd, gradeWritePaths(cls,ym,subj,date,sid,gPatch[sid],tPatch[sid]));
+      await update(ref(db), upd);
     }
     logAction('quick_journal',{cls,subject:subj,date,value:`оцінок: ${nG}, відміток: ${nA}`});
     showToast(`✅ Збережено — оцінок ${nG}, відміток ${nA}`);
@@ -711,17 +715,20 @@ export function listenTeacherAttendance(){
       unsubs.push(onValue(ref(db,`attendance/${c}/${date}`), snap=>{
         allDay[c] = snap.exists() ? snap.val() : null;
         renderAll();
+      }, err=>{
+        list.innerHTML = `<li class="empty-msg" style="color:var(--red);">Не вдалося прочитати відвідуваність: ${escHtml(err.message||'')}</li>`;
       }));
     }
     teacherAttendanceListener = () => unsubs.forEach(u=>u());
   }else{
     const cls=getActiveClass();document.getElementById('t-att-header').innerText="🚨 Відвідуваність сьогодні:";
-    teacherAttendanceListener=onValue(ref(db,`attendance/${cls}/${date}`),snap=>{list.innerHTML='';if(snap.exists()){const d=snap.val();let h='';for(let st in d){const slots=d[st];for(let sk in slots){const r=slots[sk];if(!r?.status)continue;const bc=r.status==='late'?'badge-late':'badge-absent';const lb=r.status==='late'?'Запізнення':'Відсутність';const markerIcon=r.markedBy==='teacher'?'👨‍🏫':(r.markedBy==='student'?'🎒':'👪');h+=`<li style="margin-bottom:7px;border-bottom:1px dashed #eee;padding-bottom:4px;"><b>${escHtml(stuName(cls, st))}</b> <span class="badge ${bc}">${lb}</span> <span style="font-size:.72rem;color:#888;">${escHtml(formatAttendanceSlotLabel(sk))} ${markerIcon}</span> <i style="font-size:.78rem;color:#666;">(${escHtml(r.reason)})</i></li>`;}}list.innerHTML=h||'<li class="empty-msg">Усі на місці.</li>';}else list.innerHTML='<li class="empty-msg">Усі на місці.</li>';});
+    teacherAttendanceListener=onValue(ref(db,`attendance/${cls}/${date}`),snap=>{list.innerHTML='';if(snap.exists()){const d=snap.val();let h='';for(let st in d){const slots=d[st];for(let sk in slots){const r=slots[sk];if(!r?.status)continue;const bc=r.status==='late'?'badge-late':'badge-absent';const lb=r.status==='late'?'Запізнення':'Відсутність';const markerIcon=r.markedBy==='teacher'?'👨‍🏫':(r.markedBy==='student'?'🎒':'👪');h+=`<li style="margin-bottom:7px;border-bottom:1px dashed #eee;padding-bottom:4px;"><b>${escHtml(stuName(cls, st))}</b> <span class="badge ${bc}">${lb}</span> <span style="font-size:.72rem;color:#888;">${escHtml(formatAttendanceSlotLabel(sk))} ${markerIcon}</span> <i style="font-size:.78rem;color:#666;">(${escHtml(r.reason)})</i></li>`;}}list.innerHTML=h||'<li class="empty-msg">Усі на місці.</li>';}else list.innerHTML='<li class="empty-msg">Усі на місці.</li>';}, err=>{list.innerHTML=`<li class="empty-msg" style="color:var(--red);">Не вдалося прочитати відвідуваність: ${escHtml(err.message||'')}</li>`;});
   }
 }
 window.listenTeacherAttendance=listenTeacherAttendance;
 // ══════════ TEACHER DASHBOARD ══════════
 export function loadTeacherDashboard(){
+  renderNewsFeed('t-news-feed');
   const cls=getActiveClass();const uid=auth.currentUser.uid;
   // Retake counter
   get(ref(db,`retake_requests/${cls}`)).then(snap=>{if(snap.exists()){const d=snap.val();let cnt=0;for(let s in d)for(let dt in d[s])for(let st in d[s][dt])if(d[s][dt][st].status==='pending')cnt++;document.getElementById('t-retake-counter').innerText=cnt;}else document.getElementById('t-retake-counter').innerText=0;});
