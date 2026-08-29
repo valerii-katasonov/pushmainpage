@@ -5,7 +5,7 @@
 // lives in teacher.js).
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, getActiveClass, currentUserData, STICKER_GOAL, getWeekDates, displayGrade, gradeClass6, showToast, renderHwItem, dayKeys, localDateString, formatAttendanceSlotLabel, renderGradeFormulaInfo, escJs, escHtml, safeUrl, renderBirthdays, stuName, auth, normalizeChildren} from './common.js';
+import { db, getActiveClass, currentUserData, STICKER_GOAL, getWeekDates, displayGrade, gradeClass6, showToast, renderHwItem, dayKeys, localDateString, formatAttendanceSlotLabel, renderGradeFormulaInfo, escJs, escHtml, safeUrl, renderBirthdays, stuName, auth, normalizeChildren, gradesFromMirror} from './common.js';
 import { ACADEMIC_YEAR_ID } from './director.js';
 import { renderParentMenu } from './kitchen.js';
 import { renderNewsFeed } from './news.js';
@@ -253,9 +253,16 @@ window.loadParentBellSchedule=async function(role='parent'){
   h+='</table>';
   container.innerHTML=h;
 };
+// Ключ дитини в дзеркалі — той самий, яким пише вчитель
+function mySid(){ return currentUserData?.studentId || currentUserData?.studentName || ''; }
+
 // ══════════ RETAKE REQUEST (parent/student submit side) ══════════
 async function sendRetakeRequest(cls,subj,date,student,grade){
-  const yearSnap=await get(ref(db,`grades/${cls}`));
+  // Рахуємо по дзеркалу своєї дитини, а не по всьому класу.
+  // Зміна сенсу: раніше це були всі уроки предмета в класі, тепер — ті,
+  // де оцінку має саме ця дитина. Число виходить не більшим, тож ліміт
+  // на перездачі стає не м'якшим, а трохи суворішим.
+  const yearSnap=await get(ref(db,`student_grades/${cls}/${mySid()}`));
   let totalLessons=0;let subjLessons=0;
   if(yearSnap.exists()){const d=yearSnap.val();for(let m in d)if(d[m][subj])for(let dt in d[m][subj])subjLessons++;}
   const limit=Math.max(1,Math.floor(subjLessons*0.1));
@@ -295,16 +302,19 @@ export function loadParentDashboard(){
   Promise.all([
     get(child(ref(db),`comments/${cls}/${date}`)),
     get(child(ref(db),`reactions/${cls}/${date}`)),
-    get(child(ref(db),`grades/${cls}/${ym}`)),
-    get(child(ref(db),`grade_types/${cls}/${ym}`)),
+    // Дзеркало: лише своя дитина, а не весь клас
+    get(child(ref(db),`student_grades/${cls}/${mySid()}/${ym}`)),
     get(child(ref(db),`behavior_grades/${cls}/${ym}`))
-  ]).then(([cmS,rxS,grS,gtS,bhS])=>{
+  ]).then(([cmS,rxS,mirS,bhS])=>{
     const list=document.getElementById('p-daily-comments-list');list.innerHTML=renderGradeFormulaInfo();let hasItems=false;
-    const rx=rxS.exists()?rxS.val():{};const gr=grS.exists()?grS.val():{};const gt=gtS.exists()?gtS.val():{};
+    const rx=rxS.exists()?rxS.val():{};
     const sn=currentUserData.studentName;
+    // Дзеркало розгортаємо у звичну форму gr[предмет][дата][імʼя],
+    // щоб малювання нижче лишилося без змін
+    const {gr,gt}=gradesFromMirror(mirS.exists()?mirS.val():{}, sn);
     const subjs=new Set();
     if(cmS.exists())Object.keys(cmS.val()).forEach(s=>subjs.add(s));
-    if(grS.exists())Object.keys(gr).forEach(s=>{if(gr[s][date]&&gr[s][date][sn])subjs.add(s);});
+    Object.keys(gr).forEach(s=>{if(gr[s][date]&&gr[s][date][sn])subjs.add(s);});
     subjs.forEach(s=>{
       const cm=cmS.exists()&&cmS.val()[s]&&cmS.val()[s][sn]?cmS.val()[s][sn]:'';
       const gv=gr[s]&&gr[s][date]&&gr[s][date][sn]?gr[s][date][sn]:'';
@@ -529,12 +539,13 @@ export function loadStudentDashboard(){
   renderFinalGrades('s-final-grades',cls,currentUserData.studentName);
   loadTodaySubstitutions(cls,date).then(()=>renderDynamicSchedule('student'));
   const ym=date.substring(0,7);
-  Promise.all([get(child(ref(db),`comments/${cls}/${date}`)),get(child(ref(db),`grades/${cls}/${ym}`)),get(child(ref(db),`grade_types/${cls}/${ym}`)),get(child(ref(db),`behavior_grades/${cls}/${ym}`))]).then(([cmS,grS,gtS,bhS])=>{
+  Promise.all([get(child(ref(db),`comments/${cls}/${date}`)),get(child(ref(db),`student_grades/${cls}/${mySid()}/${ym}`)),get(child(ref(db),`behavior_grades/${cls}/${ym}`))]).then(([cmS,mirS,bhS])=>{
     const list=document.getElementById('s-daily-comments-list');list.innerHTML=renderGradeFormulaInfo();let hasItems=false;
-    const gr=grS.exists()?grS.val():{};const gt=gtS.exists()?gtS.val():{};const sn=currentUserData.studentName;
+    const sn=currentUserData.studentName;
+    const {gr,gt}=gradesFromMirror(mirS.exists()?mirS.val():{}, sn);
     const subjs=new Set();
     if(cmS.exists())Object.keys(cmS.val()).forEach(s=>subjs.add(s));
-    if(grS.exists())Object.keys(gr).forEach(s=>{if(gr[s][date]&&gr[s][date][sn])subjs.add(s);});
+    Object.keys(gr).forEach(s=>{if(gr[s][date]&&gr[s][date][sn])subjs.add(s);});
     subjs.forEach(s=>{
       const cm=cmS.exists()&&cmS.val()[s]&&cmS.val()[s][sn]?cmS.val()[s][sn]:'';
       const gv=gr[s]&&gr[s][date]&&gr[s][date][sn]?gr[s][date][sn]:'';
