@@ -153,6 +153,9 @@ export async function loadTextbooksForParent(role='parent'){
 // ever added (e.g. at registration/linking time) this immediately starts
 // filtering "art_school" holidays correctly; until then every family sees
 // the "general" school calendar, per the task's explicit fallback.
+// Дата → «РРРР-ММ-ДД» локальним часом. toISOString() тут не годиться:
+// він переводить у UTC і на вечірніх годинах зсуває день назад.
+const iso=(d)=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 window.renderParentCalendar=async function(role='parent'){
   const prefix=role==='student'?'s':'p';
   const monthInput=document.getElementById(`${prefix}-cal-month-select`);
@@ -185,12 +188,15 @@ window.renderParentCalendar=async function(role='parent'){
   allHolidays.forEach(h=>{if(h.date&&h.date.startsWith(ym)&&(!h.calendarType||h.calendarType===myCalendarType)&&classMatches(h.classes))(holidaysInMonth[h.date]=holidaysInMonth[h.date]||[]).push(h);});
   const breaksInMonth={};
   const monthStart=new Date(y,parseInt(m)-1,1);const monthEnd=new Date(y,parseInt(m),0);
+  const breakSpans=[];   // цілі періоди — для списку під календарем
   allBreaks.forEach(b=>{
     if(!b.startDate||!b.endDate||!classMatches(b.classes))return;
     const s=new Date(b.startDate)<monthStart?monthStart:new Date(b.startDate);
     const e=new Date(b.endDate)>monthEnd?monthEnd:new Date(b.endDate);
+    if(s>e)return;
+    breakSpans.push({ title:b.title||'Канікули', from:b.startDate, to:b.endDate, sort:iso(s) });
     for(let cur=new Date(s);cur<=e;cur.setDate(cur.getDate()+1)){
-      const ds=`${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2,'0')}-${String(cur.getDate()).padStart(2,'0')}`;
+      const ds=iso(cur);
       (breaksInMonth[ds]=breaksInMonth[ds]||[]).push(b);
     }
   });
@@ -213,9 +219,46 @@ window.renderParentCalendar=async function(role='parent'){
     h+=`<div class="cal-day ${cc}"${clickable}>${i}</div>`;
   }
   h+='</div>';
+
+  // ЧОМУ СПИСОК, А НЕ ЛИШЕ ПІДСВІТКА. Розфарбовані клітинки кажуть «тут
+  // щось є», але не кажуть що. Дізнатися можна було тільки натиснувши на
+  // кожен день по черзі — а дані вже завантажені, ховати їх нема сенсу.
+  const events=[];
+  Object.keys(holidaysInMonth).forEach(ds=>{
+    holidaysInMonth[ds].forEach(x=>events.push({
+      kind:'holiday', sort:ds, when:humanDay(ds), title:x.title||'Свято'
+    }));
+  });
+  breakSpans.forEach(b=>events.push({
+    kind:'brk', sort:b.sort, when:`${humanDay(b.from)} – ${humanDay(b.to)}`, title:b.title
+  }));
+  Object.keys(examsData).forEach(ds=>{
+    const subjects=Object.keys(examsData[ds]||{});
+    if(subjects.length) events.push({
+      kind:'exam', sort:ds, when:humanDay(ds), title:'Контрольна: '+subjects.join(', ')
+    });
+  });
+  events.sort((a,b)=>a.sort.localeCompare(b.sort));
+
+  h += events.length
+    ? `<ul class="cal-list">${events.map(e=>`
+        <li class="ev ${e.kind}">
+          <span class="ev-when">${escHtml(e.when)}</span>
+          <span class="ev-title">${escHtml(e.title)}</span>
+        </li>`).join('')}</ul>`
+    : '<p class="cal-none">Цього місяця подій немає.</p>';
+
   grid.innerHTML=h;
   document.getElementById(`${prefix}-cal-day-details`).style.display='none';
 };
+// «2026-12-23» → «23 груд.»
+function humanDay(ds){
+  const [,m,d]=String(ds||'').split('-');
+  if(!m||!d)return ds||'';
+  return `${parseInt(d)} ${MONTHS_SHORT_UA[parseInt(m)-1]||''}`.trim();
+}
+const MONTHS_SHORT_UA=['січ.','лют.','бер.','квіт.','трав.','черв.',
+                       'лип.','серп.','вер.','жовт.','лист.','груд.'];
 window.showParentCalDayDetails=async function(role,ds){
   const prefix=role==='student'?'s':'p';
   const dd=document.getElementById(`${prefix}-cal-day-details`);
