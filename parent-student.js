@@ -163,11 +163,19 @@ window.renderParentCalendar=async function(role='parent'){
   const grid=document.getElementById(`${prefix}-cal-grid`);
   if(!grid)return;
   grid.innerHTML='<p class="empty-msg">⏳ Завантаження...</p>';
-  const [examsSnap,holidaysSnap,breaksSnap]=await Promise.all([
-    get(ref(db,`exams/${cls}/${ym}`)),
-    get(ref(db,`academic_year/${ACADEMIC_YEAR_ID}/holidays`)),
-    get(ref(db,`academic_year/${ACADEMIC_YEAR_ID}/breaks`))
-  ]);
+  // Без перехоплення відмова лишала б вічне «Завантаження...» — людина
+  // дивилася б на спінер і не знала, зламалося щось чи просто повільно.
+  let examsSnap,holidaysSnap,breaksSnap;
+  try{
+    [examsSnap,holidaysSnap,breaksSnap]=await Promise.all([
+      get(ref(db,`exams/${cls}/${ym}`)),
+      get(ref(db,`academic_year/${ACADEMIC_YEAR_ID}/holidays`)),
+      get(ref(db,`academic_year/${ACADEMIC_YEAR_ID}/breaks`))
+    ]);
+  }catch(e){
+    grid.innerHTML=`<p class="empty-msg" style="color:var(--red);">Не вдалося завантажити календар: ${escHtml(e.message||e.code||'відмова')}</p>`;
+    return;
+  }
   const examsData=examsSnap.exists()?examsSnap.val():{};
   const allHolidays=holidaysSnap.exists()?Object.values(holidaysSnap.val()):[];
   const allBreaks=breaksSnap.exists()?Object.values(breaksSnap.val()):[];
@@ -216,11 +224,17 @@ window.showParentCalDayDetails=async function(role,ds){
   const cls=getActiveClass();const ym=ds.substring(0,7);
   const myCalendarType=currentUserData?.isArtSchool?'art_school':'general';
   const classMatches=cs=>cs==='all'||(Array.isArray(cs)&&cs.includes(cls));
-  const [examsSnap,holidaysSnap,breaksSnap]=await Promise.all([
-    get(ref(db,`exams/${cls}/${ym}/${ds}`)),
-    get(ref(db,`academic_year/${ACADEMIC_YEAR_ID}/holidays`)),
-    get(ref(db,`academic_year/${ACADEMIC_YEAR_ID}/breaks`))
-  ]);
+  let examsSnap,holidaysSnap,breaksSnap;
+  try{
+    [examsSnap,holidaysSnap,breaksSnap]=await Promise.all([
+      get(ref(db,`exams/${cls}/${ym}/${ds}`)),
+      get(ref(db,`academic_year/${ACADEMIC_YEAR_ID}/holidays`)),
+      get(ref(db,`academic_year/${ACADEMIC_YEAR_ID}/breaks`))
+    ]);
+  }catch(e){
+    dd.innerHTML=`<p class="empty-msg" style="color:var(--red);">Не вдалося завантажити подробиці: ${escHtml(e.message||e.code||'відмова')}</p>`;
+    return;
+  }
   let h=`<h4 style="margin-top:0;color:#8e44ad;border-bottom:1px dashed #ce93d8;padding-bottom:9px;">${ds.split('-').reverse().join('.')}</h4>`;
   let hasAny=false;
   if(examsSnap.exists()){
