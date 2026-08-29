@@ -1170,6 +1170,21 @@
 .cal-legend i.holiday{background:#f8d7da;border-color:#f5c6cb;}
 .cal-legend i.brk{background:#d4edda;border-color:#c3e6cb;}
 .cal-legend i.exam{background:#fff3cd;border-color:#ffeeba;}
+
+/* Список подій місяця під календарем */
+.cal-list{list-style:none;padding:0;margin:14px 0 0 0;}
+.cal-list .ev{display:flex;gap:10px;align-items:baseline;padding:7px 0;
+  border-top:1px solid #f0f2f3;}
+.cal-list .ev:first-child{border-top:none;}
+.cal-list .ev-when{flex:0 0 auto;font-size:.74rem;font-weight:700;color:#78909c;
+  white-space:nowrap;min-width:74px;}
+.cal-list .ev-title{font-size:.85rem;color:#263238;}
+.cal-list .ev::before{content:'';flex:0 0 9px;height:9px;border-radius:3px;
+  border:1px solid;margin-top:4px;}
+.cal-list .ev.holiday::before{background:#f8d7da;border-color:#f5c6cb;}
+.cal-list .ev.brk::before{background:#d4edda;border-color:#c3e6cb;}
+.cal-list .ev.exam::before{background:#fff3cd;border-color:#ffeeba;}
+.cal-none{font-size:.8rem;color:#b0bec5;margin:14px 0 0 0;}
 </style>
 </head>
 <body>
@@ -2282,15 +2297,11 @@
       </div>
       <div class="data-card" style="border-left-color:var(--orange);background:#fffcf0;">
         <h4 style="margin-top:0;color:var(--orange);">📅 Календар класу</h4>
-        <p class="cal-hint">Свята, канікули та контрольні. Натисніть на позначений день — покажемо, що саме.</p>
+        <p class="cal-hint">Свята, канікули та контрольні цього місяця — списком нижче.</p>
         <input type="month" id="p-cal-month-select" onchange="renderParentCalendar('parent')"
                style="margin-top:0;font-size:.85rem;">
         <div id="p-cal-grid"><p class="empty-msg">⏳ Завантаження...</p></div>
-        <div class="cal-legend">
-          <span><i class="lg holiday"></i>свято</span>
-          <span><i class="lg brk"></i>канікули</span>
-          <span><i class="lg exam"></i>контрольна</span>
-        </div>
+
         <div id="p-cal-day-details" style="display:none;margin-top:10px;background:#fff;border-radius:8px;padding:9px;border:1px dashed var(--orange);font-size:.82rem;"></div>
       </div>
       <div class="data-card" style="border-left-color:#7986cb;background:#f5f6ff;">
@@ -2436,15 +2447,11 @@
       <!-- PHASE 3: Календар -->
       <div class="data-card" style="border-left-color:var(--orange);background:#fffcf0;">
         <h4 style="margin-top:0;color:var(--orange);">📅 Календар класу</h4>
-        <p class="cal-hint">Свята, канікули та контрольні. Натисніть на позначений день — покажемо, що саме.</p>
+        <p class="cal-hint">Свята, канікули та контрольні цього місяця — списком нижче.</p>
         <input type="month" id="s-cal-month-select" onchange="renderParentCalendar('student')"
                style="margin-top:0;font-size:.85rem;">
         <div id="s-cal-grid"><p class="empty-msg">⏳ Завантаження...</p></div>
-        <div class="cal-legend">
-          <span><i class="lg holiday"></i>свято</span>
-          <span><i class="lg brk"></i>канікули</span>
-          <span><i class="lg exam"></i>контрольна</span>
-        </div>
+
         <div id="s-cal-day-details" style="display:none;margin-top:10px;background:#fff;border-radius:8px;padding:9px;border:1px dashed var(--orange);font-size:.82rem;"></div>
       </div>
       <!-- PHASE 3: Розклад дзвінків -->
