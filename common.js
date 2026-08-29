@@ -1,2975 +1,2377 @@
-<!DOCTYPE html>
-<html lang="uk">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Push School — Кабінет v2</title>
-  <link rel="manifest" href="manifest-cabinet.json">
-  <meta name="theme-color" content="#fff">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/330/330996.png">
-  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;800&display=swap" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <style>
-    :root {
-      --teal:#00796b; --teal-l:#e0f2f1; --accent:#00f2fe;
-      --red:#e74c3c; --green:#27ae60; --orange:#f39c12; --purple:#8e44ad; --blue:#2980b9;
-      /* 6-бальна шкала — окрема семантика (зелений=добре, червоний=погано), не змішувати з палітрою карток вище */
-      --g6:#0d47a1; --g5:#1565c0; --g4:#2e7d32; --g3:#f57f17; --g2:#bf360c; --g1:#b71c1c;
-      /* ── DESIGN SYSTEM (Крок B): spacing scale ── */
-      --space-1:4px; --space-2:8px; --space-3:12px; --space-4:16px; --space-5:24px; --space-6:32px;
-      /* ── typography scale ── */
-      --text-xs:.72rem; --text-sm:.82rem; --text-base:.92rem; --text-lg:1.15rem; --text-xl:1.6rem;
-      /* ── shared card tokens (unifies .data-card/.payment-card/.schedule-box) ── */
-      --card-radius:12px; --card-shadow:0 2px 10px rgba(0,0,0,.07);
-      /* ── shared badge tokens ── */
-      --badge-radius:8px;
+// ═══════════════════════════════════════════════════════════════
+// common.js — Firebase init, constants, auth, shared grade/date
+// utilities, Profile modal, unified Chat/Inbox, Admin dashboard,
+// and date/class-change orchestration (dispatches to role dashboards
+// defined in the other modules).
+//
+// NOTE on shared mutable state across modules:
+// A few variables are written to from more than one file (e.g. the
+// list of teachers, or teacher access rules loaded while building the
+// visual schedule matrix). For those we keep the existing window.*
+// pattern the app already used (window.schedule, window.clubSchedule,
+// window.myDetailedReactions) instead of fighting ES-module live
+// bindings. Everything else uses normal export/import.
+// ═══════════════════════════════════════════════════════════════
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, updatePassword, sendPasswordResetEmail, verifyPasswordResetCode, confirmPasswordReset, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+import { getMessaging, getToken, onMessage, isSupported as messagingSupported } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-messaging.js";
+import { getDatabase, ref, set, get, child, push, onValue, remove, update, query, orderByKey, startAt, endAt } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+
+import { loadTeacherDashboard, loadCurrentTopicAndHW, listenTeacherAttendance, teacherAttendanceListener } from './teacher.js';
+import { loadDirectorDashboard, loadTeachersListForDirector, loadDirectorTeacherSkillsList, loadDrafts } from './director.js';
+import { loadParentDashboard, loadStudentDashboard, loadTextbooksForParent, renderPaymentsMockup, parentLessonInterval } from './parent-student.js';
+import { globalTeacherAccess } from './journal.js';
+import { checkCurriculumUploadAccess } from './curriculum.js';
+
+export const CLOUD_NAME='duy1qwsqv'; export const UPLOAD_PRESET='ml_default'; export const CLOUDINARY_URL=`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`;
+const firebaseConfig={apiKey:"AIzaSyA3OA9pcR1zscUtEPWD8LEKTKonAN5Y90c",authDomain:"test-4eb3e.firebaseapp.com",databaseURL:"https://test-4eb3e-default-rtdb.europe-west1.firebasedatabase.app",projectId:"test-4eb3e",storageBucket:"test-4eb3e.firebasestorage.app",messagingSenderId:"933339787450",appId:"1:933339787450:web:cc87b850ed3b4903f41283"};
+export const app=initializeApp(firebaseConfig); export const auth=getAuth(app); export const db=getDatabase(app);
+
+// ══════════ ЧИТАННЯ ДІАПАЗОНУ ДАТ ══════════
+// Ключі дат мають вигляд YYYY-MM-DD, тому лексикографічний порядок збігається
+// з хронологічним. Це дозволяє попросити Firebase віддати лише потрібний
+// відрізок замість усього вузла. Раніше дашборди тягнули ВСЮ відвідуваність
+// школи за весь рік, щоб показати один день.
+export async function getDateRange(path, from, to){
+  try{
+    const snap = await get(query(ref(db, path), orderByKey(), startAt(from), endAt(to)));
+    return snap.exists() ? snap.val() : {};
+  }catch(e){ console.warn('getDateRange', path, e.message); return {}; }
+}
+// Той самий діапазон, але одразу по всіх класах: {class_1:{дата:{...}}, ...}
+export async function getSchoolRange(node, from, to){
+  const classes = [];
+  for(let i=1;i<=11;i++) classes.push(`class_${i}`);
+  const parts = await Promise.all(classes.map(c=>getDateRange(`${node}/${c}`, from, to)));
+  const out = {};
+  classes.forEach((c,i)=>{ if(parts[i] && Object.keys(parts[i]).length) out[c]=parts[i]; });
+  return out;
+}
+
+// ══════════ КЕШ КОРИСТУВАЧІВ ══════════
+// users читався 15 разів за сеанс. Вузол невеликий і майже не змінюється,
+// тож тримаємо копію. Після будь-якого запису список скидається явно —
+// інакше директор додасть учителя і не побачить його у списках.
+let _usersCache = null, _usersCacheAt = 0;
+const USERS_TTL = 30000;
+export async function getAllUsers(force){
+  const now = Date.now();
+  if(!force && _usersCache && now - _usersCacheAt < USERS_TTL) return _usersCache;
+  const s = await get(ref(db,'users'));
+  _usersCache = s.exists() ? s.val() : {};
+  _usersCacheAt = now;
+  return _usersCache;
+}
+// Обгортка з інтерфейсом snapshot: підміняє get(ref(db,'users')) без
+// переписування місць виклику.
+export async function getUsersSnap(){
+  const v = await getAllUsers();
+  return { exists: () => !!v && Object.keys(v).length > 0, val: () => v };
+}
+export function invalidateUsersCache(){ _usersCache = null; }
+
+// ══════════ ДОВІДНИК УЧНІВ: ІДЕНТИФІКАТОР ↔ ІМʼЯ ══════════
+// Історично оцінки, відвідуваність і коментарі ключуються ІМЕНЕМ учня.
+// Це крихко: двоє тезок зливаються в один запис, а перейменування вимагає
+// переносу всієї історії. Постійний ідентифікатор у нас уже є — це ключ
+// запису в students_list. Довідник нижче дає переклад в обидва боки й
+// готує ґрунт для переходу на ідентифікатори.
+const _stuDir = {};            // cls -> {byId:{sid:name}, byName:{nameLower:sid}}
+export async function getStudentDir(cls, force){
+  if(!force && _stuDir[cls]) return _stuDir[cls];
+  const snap = await get(child(ref(db), `students_list/${cls}`));
+  const byId = {}, byName = {};
+  if(snap.exists()){
+    const v = snap.val();
+    for(const sid in v){
+      const nm = String(v[sid]);
+      byId[sid] = nm;
+      byName[nm.replace(/\s+/g,' ').trim().toLowerCase()] = sid;
     }
-    *{box-sizing:border-box;}
-    body{font-family:'Montserrat',sans-serif;background:linear-gradient(135deg,#f0f8ff,#e6e6fa);min-height:100vh;margin:0;display:flex;justify-content:center;align-items:flex-start;padding:20px;}
-    .container{background:rgba(255,255,255,.95);backdrop-filter:blur(10px);max-width:560px;width:100%;padding:28px;border-radius:20px;box-shadow:0 10px 30px rgba(0,0,0,.1);margin-bottom:40px;}
-    h2{color:var(--teal);text-align:center;margin-top:0;font-size:var(--text-xl);}
-    h3{color:#333;border-bottom:2px solid #eee;padding-bottom:var(--space-2);margin-top:var(--space-5);font-size:var(--text-lg);}
-    label{display:block;margin-top:var(--space-4);font-weight:600;color:#555;font-size:var(--text-base);}
-    input[type=email],input[type=password],input[type=text],input[type=date],input[type=month],select,textarea{width:100%;padding:11px;margin-top:4px;border:1px solid #ccc;border-radius:11px;font-family:inherit;font-size:.95rem;}
-    input[type=file]{margin-top:4px;font-size:.88rem;border:1px dashed var(--teal);padding:9px;border-radius:11px;width:100%;background:#fafafa;cursor:pointer;}
-    button{width:100%;padding:14px;border:none;border-radius:11px;cursor:pointer;font-weight:700;font-size:var(--text-base);transition:.25s;margin-top:var(--space-4);font-family:inherit;}
-    /* ── DESIGN SYSTEM: primary/save/danger(logout) share the `button` base above, only color differs ── */
-    .btn-login{background:linear-gradient(135deg,#00f2fe,#4facfe);color:#fff;}
-    .btn-logout{background:var(--red);color:#fff;margin-top:var(--space-5);}
-    .btn-save{background:linear-gradient(135deg,#43e97b,#38f9d7);color:#1a1a1a;box-shadow:0 4px 14px rgba(67,233,123,.3);}
-    .panel{display:none;}
-    /* ── DESIGN SYSTEM: .screen-section groups related cards/details under one
-       heading on every role screen (admin/director/teacher/parent/student).
-       On mobile it's just spacing; on desktop (see @media 1024px) it becomes
-       the actual grid unit, replacing the old brittle inline-style selectors. */
-    .screen-section{margin-bottom:var(--space-6);}
-    .screen-section:last-of-type{margin-bottom:var(--space-4);}
-    .screen-section>h3:first-child{margin-top:0;}
-    /* ── DESIGN SYSTEM: unified card pattern (was 3 near-duplicate rules) ── */
-    .data-card,.payment-card,.schedule-box{background:#fff;border-radius:var(--card-radius);padding:var(--space-4);box-shadow:var(--card-shadow);}
-    .data-card{border-left:4px solid var(--teal);margin-top:var(--space-4);}
-    .empty-msg{color:#999;font-style:italic;margin:var(--space-1) 0;}
-    /* ── unified badge base (colors stay per-variant/semantic) ── */
-    .badge{display:inline-block;padding:3px 7px;border-radius:7px;font-size:var(--text-xs);font-weight:700;margin-left:4px;}
-    .badge-late{background:#fff3cd;color:#856404;border:1px solid #ffeeba;}
-    .badge-absent{background:#f8d7da;color:#721c24;border:1px solid #f5c6cb;}
-    .list-dash{margin:0;padding-left:18px;color:#444;line-height:1.6;}
-    .list-dash li{margin-bottom:10px;}
-    /* ── TOAST ── */
-    #toast-container{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:9999;display:flex;flex-direction:column;gap:8px;width:90%;max-width:400px;pointer-events:none;}
-    .toast{background:rgba(0,0,0,.86);color:#fff;padding:14px 18px;border-radius:11px;box-shadow:0 5px 15px rgba(0,0,0,.3);font-size:.92rem;animation:slideUp .3s ease-out;}
-    @keyframes slideUp{from{transform:translateY(80px);opacity:0}to{transform:translateY(0);opacity:1}}
-    /* ── MODAL ── */
-    .modal-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.8);z-index:1000;justify-content:center;align-items:center;backdrop-filter:blur(5px);padding:10px;}
-    .modal-content{background:#fff;padding:28px;border-radius:18px;text-align:center;max-width:460px;width:100%;box-shadow:0 15px 30px rgba(0,0,0,.3);animation:popIn .3s ease-out;max-height:92vh;overflow-y:auto;}
-    @keyframes popIn{0%{transform:scale(.8);opacity:0}100%{transform:scale(1);opacity:1}}
-    /* ── GRADE CELLS — 6-БАЛЬНА ── */
-    .g-cell{display:inline-flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;border-radius:7px;padding:3px 5px;cursor:pointer;transition:.15s;min-width:32px;}
-    .g-cell:hover{transform:scale(1.12);box-shadow:0 2px 8px rgba(0,0,0,.18);}
-    .g-val{font-weight:800;font-size:.95rem;line-height:1;}
-    .g-type{font-size:.55rem;font-weight:700;opacity:.8;letter-spacing:.4px;text-transform:uppercase;}
-    .g6{background:#e3f2fd;color:var(--g6);}
-    .g5{background:#e8f5e9;color:var(--g5);}
-    .g4{background:#f1f8e9;color:var(--g4);}
-    .g3{background:#fff8e1;color:#a04a02;}
-    .g2{background:#fbe9e7;color:var(--g2);}
-    .g1{background:#ffebee;color:var(--g1);}
-    .g-letter{background:#f3e5f5;color:var(--purple);}
-    .g-behavior{background:#e8eaf6;color:#3949ab;}
-    .g-empty{color:#ccc;font-size:.7rem;}
-    .att-absent{background:#ffebee;color:var(--g1);font-weight:800;border-radius:4px;padding:1px 4px;}
-    .att-late{background:#fff8e1;color:#a04a02;font-weight:800;border-radius:4px;padding:1px 4px;}
-    /* ── JOURNAL TABLE ── */
-    .journal-wrap{overflow-x:auto;background:#fff;border-radius:11px;border:1px solid #ddd;max-height:58vh;}
-    #journal-scale-inner{ /* plain wrapper; zoom is metric-based now (see .journal-table note below), no JS sizing needed */ }
-    /* ── PHASE 9/10: ZOOM ARCHITECTURE — metric scaling, NOT transform:scale().
-       The zoom used to be transform:scale(var(--journal-scale)) on the whole
-       table. That fundamentally breaks position:sticky: the browser resolves
-       sticky left/right/top offsets in UNSCALED layout coordinates and only then
-       applies the visual transform, so at e.g. 54% the "right:0"-stuck average
-       column visually landed at 54% of the viewport — the middle of the screen.
-       Instead, the table's font-size is what scales (calc(base * --journal-scale))
-       and every internal metric (paddings, heights, min-widths) is in em, so the
-       entire grid grows/shrinks with the zoom level natively — the same way real
-       spreadsheet apps implement zoom — and sticky columns/headers keep working
-       because there is no transform at all.
-       (Also deliberately no table-level min-width: column-level em minimums below
-       are the real floor, so fit-to-width measures true content width.) */
-    .journal-table{border-collapse:collapse;font-size:calc(.8rem*var(--journal-scale,1));text-align:center;}
-    .journal-table th{background:#e8f4fd;color:#154360;font-weight:800;position:sticky;top:0;z-index:3;border:1px solid #ddd;padding:.55em .31em;white-space:nowrap;}
-    .journal-table td{border:1px solid #eee;padding:.16em;vertical-align:middle;height:2.66em;min-width:2.5em;max-width:3.75em;}
-    .journal-table td.sn{text-align:left;font-weight:700;background:#fffcf0;position:sticky;left:0;z-index:2;border-right:2px solid #ccc;padding-left:.63em;min-width:10.9em;font-size:1.03em;white-space:nowrap;}
-    .journal-table th.sn{background:#e8f4fd;z-index:6;border-right:2px solid #ccc;left:0;top:0;vertical-align:middle;}
-    .journal-table td.avg-col{background:#f4ecf7;font-weight:800;color:var(--purple);position:sticky;right:0;border-left:2px solid #d1c4e9;min-width:3.6em;}
-    .journal-table th.avg-col{background:#f4ecf7;color:var(--purple);position:sticky;right:0;border-left:2px solid #d1c4e9;z-index:6;top:0;vertical-align:middle;}
-    .journal-table td.today-col{background:#fffde7;}
-    .journal-table th.today-col{background:#fff3cd!important;color:#d35400!important;border-bottom:3px solid var(--orange)!important;}
-    .journal-table tr:hover td{background:#e0f7fa!important;}
-    .journal-table tr:nth-child(even) td{background:#fafbfc;}
-    /* Frozen-pane affordance (à la Sheets): soft shadow off the pinned edges so
-       it reads as "these columns float above the scrolling grid". */
-    .journal-table td.sn,.journal-table th.sn{box-shadow:2px 0 4px rgba(0,0,0,.05);}
-    .journal-table td.avg-col,.journal-table th.avg-col{box-shadow:-2px 0 4px rgba(0,0,0,.05);}
-    /* Grade cells / attendance marks inside the journal scale with the table font
-       (em) — same visual size at 100% as their global rem-based defaults. */
-    .journal-table .g-cell{min-width:2.5em;padding:.23em .39em;}
-    .journal-table .g-val{font-size:1.19em;}
-    .journal-table .g-type{font-size:.69em;}
-    .journal-table .att-absent,.journal-table .att-late{padding:.08em .31em;}
-    /* ── PHASE 9: month-group header row — without this, a multi-month range just
-       shows repeating bare day numbers with no indication of which month they're
-       in. jt-month-row (rowspan-2 "Учень"/avg-col corners + one <th> per month,
-       colspan = days shown that month) sits above jt-day-row (the existing day/
-       weekday/тип cells). Both rows are sticky; the day row's top offset (1.8em,
-       in table-font ems) equals the month row's height (2em × .9em font) at every
-       zoom level, so the two rows stack instead of overlapping — px offsets would
-       drift the moment the zoom changed. ── */
-    .journal-table thead tr.jt-month-row th{position:sticky;top:0;z-index:5;height:2em;line-height:2em;padding:0 .4em;font-size:.9em;letter-spacing:.2px;}
-    /* Corner cells (Учень / Зважений сер. бал) are rowspan=2 — they span both
-       header rows, so the month-band row's compact height/line-height must not
-       squash their multi-line labels. */
-    .journal-table thead tr.jt-month-row th.sn,
-    .journal-table thead tr.jt-month-row th.avg-col{height:auto;line-height:normal;font-size:1em;padding:.55em .31em;}
-    .journal-table thead tr.jt-day-row th{position:sticky;top:calc(1.8em - 1px);z-index:4;}
-    .jct-type-select{font-size:.69em;width:100%;margin-top:2px;padding:0 1px;border:1px solid #bbdefb;border-radius:4px;background:#fff;color:#154360;}
-    /* ── GRADE EDITOR POPUP ── */
-    .grade-editor-popup{position:fixed;z-index:5000;background:#fff;border-radius:13px;box-shadow:0 8px 30px rgba(0,0,0,.25);padding:13px;display:none;min-width:210px;border:2px solid var(--teal);animation:popIn .15s ease-out;}
-    .grade-editor-popup input[type=text]{width:100%;padding:8px 12px;border:2px solid var(--teal);border-radius:8px;font-size:1.1rem;font-weight:800;text-align:center;color:var(--teal);margin-top:0;}
-    .type-btns{display:flex;gap:4px;margin-top:8px;flex-wrap:wrap;}
-    .type-btn{flex:1;min-width:38px;padding:6px 3px;border:2px solid #ddd;border-radius:7px;background:#f8f9fa;cursor:pointer;font-size:.7rem;font-weight:800;transition:.15s;margin:0;}
-    .type-btn.active{border-color:var(--teal);background:#e0f2f1;color:var(--teal);}
-    .editor-actions{display:flex;gap:5px;margin-top:8px;}
-    .editor-actions button{flex:1;padding:8px;margin:0;font-size:.82rem;border-radius:8px;}
-    .btn-confirm{background:var(--green);color:#fff;}
-    .btn-delete{background:var(--red);color:#fff;}
-    .btn-cancel{background:#ecf0f1;color:#333;}
-    /* ── MODE TOGGLE ── */
-    .mode-toggle{display:flex;gap:4px;background:#f0f2f5;border-radius:10px;padding:4px;margin-bottom:10px;}
-    .mode-toggle button{flex:1;padding:7px;margin:0;border-radius:7px;background:transparent;color:#666;font-size:.82rem;border:none;transition:.2s;cursor:pointer;}
-    .mode-toggle button.active{background:#fff;color:var(--teal);box-shadow:0 2px 6px rgba(0,0,0,.1);font-weight:700;}
-    /* ── DYNAMIC SCHEDULE (Parent) ── */
-    .schedule-box{margin-bottom:var(--space-3);}
-    .schedule-day-label{font-size:.78rem;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--purple);margin-bottom:8px;text-align:center;}
-    .lesson-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:9px;margin-bottom:5px;border:1px solid #eee;background:#fafafa;transition:.2s;}
-    .lesson-row.current{background:linear-gradient(135deg,#e0f7fa,#e8f5e9);border-color:var(--green);box-shadow:0 2px 10px rgba(39,174,96,.2);}
-    .lesson-row.passed{opacity:.45;}
-    .lesson-num{width:24px;height:24px;border-radius:50%;background:var(--teal);color:#fff;font-size:.72rem;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
-    .lesson-row.current .lesson-num{background:var(--green);animation:pulse 2s infinite;}
-    @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(39,174,96,.4)}50%{box-shadow:0 0 0 8px rgba(39,174,96,0)}}
-    .lesson-info{flex:1;}
-    .lesson-subj{font-weight:700;font-size:.88rem;color:#222;}
-    .lesson-time{font-size:.72rem;color:#888;}
-    .lesson-countdown{font-size:.75rem;font-weight:700;color:var(--green);background:#e8f5e9;padding:2px 8px;border-radius:12px;white-space:nowrap;}
-    .progress-thin{width:100%;height:4px;background:#eee;border-radius:2px;margin-top:4px;overflow:hidden;}
-    .progress-thin-fill{height:100%;background:linear-gradient(90deg,var(--green),var(--accent));border-radius:2px;transition:width 1s linear;}
-    .no-lessons-msg{text-align:center;padding:15px;color:#aaa;font-style:italic;font-size:.9rem;}
-    /* ── PAYMENTS MOCKUP ── */
-    .payment-card{border:1px solid #eee;margin-bottom:var(--space-3);}
-    .payment-card h4{margin:0 0 10px 0;font-size:.9rem;display:flex;align-items:center;gap:7px;}
-    .payment-row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px dashed #eee;font-size:.88rem;}
-    .payment-row:last-child{border-bottom:none;}
-    .pay-amount{font-weight:800;font-size:1rem;}
-    .pay-paid{color:var(--green);}
-    .pay-due{color:var(--red);}
-    .pay-btn{width:auto;padding:7px var(--space-4);margin:0;font-size:var(--text-sm);border-radius:var(--badge-radius);background:linear-gradient(135deg,#00f2fe,#4facfe);color:#fff;}
-    /* ── DESIGN SYSTEM: unified badge base (was 3 near-duplicate declarations) ── */
-    .debt-badge,.paid-badge{padding:4px 10px;border-radius:var(--badge-radius);font-size:var(--text-xs);font-weight:700;}
-    .debt-badge{background:#fdecea;border:1px solid #f5c6cb;color:var(--red);}
-    .paid-badge{background:#d4edda;border:1px solid #c3e6cb;color:var(--green);}
-    /* ── SKILLS ── */
-    /* ══════════════════════════════════════════════════════════
-       ЕКРАНИ ВХОДУ — темна тема у кольорах логотипа
-       Вмикається класом body.auth-mode (ставиться в common.js,
-       поки користувач не увійшов). Після входу портал лишається
-       світлим, як і був.
-       ══════════════════════════════════════════════════════════ */
-    :root{
-      --logo-teal:#22b8cf; --logo-cyan:#4dd0e1; --logo-mint:#a7f3d0;
-      --logo-yellow:#ffd54f; --logo-pink:#f48fb1; --logo-bird:#4a90d9;
-      --auth-bg:#041b22; --auth-fg:#f2fbfc; --auth-sub:#9fc4cb;
+  }
+  _stuDir[cls] = { byId, byName };
+  return _stuDir[cls];
+}
+export function invalidateStudentDir(cls){ if(cls) delete _stuDir[cls]; else Object.keys(_stuDir).forEach(k=>delete _stuDir[k]); }
+window.invalidateStudentDir = invalidateStudentDir;
+
+
+// Довідник усіх класів одним читанням на сеанс. students_list маленький
+// (кілька сотень рядків), тож тримати його цілком дешевше, ніж ходити
+// в базу з кожного місця відображення.
+export async function preloadStudentDirs(){
+  const snap = await get(child(ref(db), 'students_list'));
+  const all = snap.exists() ? snap.val() : {};
+  for(const cls in all){
+    const byId = {}, byName = {};
+    for(const sid in all[cls]){
+      const nm = String(all[cls][sid]);
+      byId[sid] = nm;
+      byName[nm.replace(/\s+/g,' ').trim().toLowerCase()] = sid;
     }
-    #auth-bg{display:none;}
-    body.auth-mode{background:var(--auth-bg);align-items:center;}
-    body.auth-mode #auth-bg{display:block;}
-    #auth-bg .glow{position:fixed;border-radius:50%;filter:blur(90px);pointer-events:none;z-index:0;}
-    #auth-bg .g1{width:580px;height:470px;background:var(--logo-teal);opacity:.42;top:-150px;left:-130px;animation:authFloat1 22s ease-in-out infinite alternate;}
-    #auth-bg .g2{width:520px;height:430px;background:var(--logo-bird);opacity:.32;bottom:-170px;right:-110px;animation:authFloat2 26s ease-in-out infinite alternate;}
-    /* Теплі акценти — відсилка до метелика й квітів на логотипі */
-    #auth-bg .g3{width:300px;height:260px;background:var(--logo-yellow);opacity:.13;top:16%;right:18%;animation:authFloat1 30s ease-in-out infinite alternate-reverse;}
-    #auth-bg .g4{width:260px;height:230px;background:var(--logo-pink);opacity:.11;bottom:18%;left:12%;animation:authFloat2 34s ease-in-out infinite alternate;}
-    #auth-bg .auth-backdrop{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:min(900px,94vw);height:520px;background:#01121a;opacity:.82;filter:blur(82px);pointer-events:none;z-index:0;}
-    @keyframes authFloat1{0%{transform:translate(0,0) scale(1);}100%{transform:translate(60px,50px) scale(1.12);}}
-    @keyframes authFloat2{0%{transform:translate(0,0) scale(1);}100%{transform:translate(-50px,-40px) scale(1.08);}}
-    /* Контейнер порталу на екранах входу «розчиняється» — карткою стає сам екран */
-    body.auth-mode .container{background:transparent;box-shadow:none;backdrop-filter:none;padding:0;max-width:440px;margin-bottom:0;position:relative;z-index:1;}
-    /* Liquid glass — техніка з референсу, кант підфарбований у бірюзу */
-    body.auth-mode .panel[style*="block"],
-    body.auth-mode #login-screen,body.auth-mode #first-login-screen,body.auth-mode #reset-password-screen{
-      background:rgba(255,255,255,.04);
-      backdrop-filter:blur(18px) saturate(135%);
-      -webkit-backdrop-filter:blur(18px) saturate(135%);
-      border-radius:26px;padding:36px 32px 28px;position:relative;overflow:hidden;
-      box-shadow:inset 0 1px 1px rgba(255,255,255,.12),0 30px 70px rgba(0,0,0,.5);
-      color:var(--auth-fg);
+    _stuDir[cls] = { byId, byName };
+  }
+  return _stuDir;
+}
+// Синхронний переклад ідентифікатора в імʼя для відображення.
+// Якщо ключ невідомий — повертаємо як є: це або старий запис за іменем,
+// або учень, якого вже немає в списку. Краще показати, ніж приховати.
+window.preloadStudentDirs = preloadStudentDirs;
+export function stuName(cls, key){
+  const d = _stuDir[cls];
+  return (d && d.byId[key]) || key;
+}
+// Синхронний зворотний переклад — для побудови шляхів
+export function stuId(cls, name){
+  const d = _stuDir[cls];
+  if(!d) return null;
+  return d.byName[String(name).replace(/\s+/g,' ').trim().toLowerCase()] || null;
+}
+window.stuName = stuName;
+window.stuId = stuId;
+
+export async function sidOf(cls, name){
+  if(!cls || !name) return null;
+  const d = await getStudentDir(cls);
+  return d.byName[String(name).replace(/\s+/g,' ').trim().toLowerCase()] || null;
+}
+export async function nameOf(cls, sid){
+  if(!cls || !sid) return null;
+  const d = await getStudentDir(cls);
+  return d.byId[sid] || null;
+}
+// Ключ може бути як ідентифікатором, так і старим іменем — під час переходу
+// в базі трапляється і те, й інше. Повертає завжди відображуване імʼя.
+export async function displayStudentKey(cls, key){
+  const d = await getStudentDir(cls);
+  return d.byId[key] || key;
+}
+
+// Дописуємо постійний ідентифікатор у запис користувача. Імʼя лишається
+// на місці: код і правила доступу поки спираються на нього.
+export async function backfillStudentId(){
+  try{
+    const u = currentUserData;
+    if(!u || !u.class || !u.studentName) return;
+    if(u.studentId) return;
+    const sid = await sidOf(u.class, u.studentName);
+    if(!sid) return;
+    u.studentId = sid;
+    await update(ref(db, `users/${auth.currentUser.uid}`), { studentId: sid });
+  }catch(e){ /* не критично: це підготовка, а не робочий шлях */ }
+}
+
+window.invalidateUsersCache = invalidateUsersCache;
+
+
+// ══════════ CONSTANTS ══════════
+// Phase 5: GRADE_WEIGHTS stays as the fallback/default and as the one-time
+// migration seed source — the actual source of truth is now Firebase
+// (grade_type_defs/{code}={label,shortLabel,weight}), cached in gradeTypesCache
+// below. NOTE: deliberately NOT called "grade_types" — that name is already used
+// by a separate, pre-existing collection (per-cell grade type values,
+// grade_types/{cls}/{yMonth}/{subj}/{date}/{student}) written by journal.js's
+// confirmGrade()/deleteGrade(). Naming them the same caused real data to
+// collide (see loadGradeTypesCache below for the incident this fixed).
+export const GRADE_WEIGHTS={'П':1.0,'У':1.0,'ДЗ':0.5,'СР':1.5,'ДК':1.5,'ПР':1.5,'ПЗ':1.5,'К':2.0};
+// Best-guess full Ukrainian labels used only to seed grade_type_defs on first run —
+// director can rename via delete+recreate in the new "🎯 Типи оцінок" panel if wrong.
+const GRADE_TYPE_LABELS={'П':'Поточна','У':'Усна відповідь','ДЗ':'Домашнє завдання','СР':'Самостійна робота','ДК':'Диктант','ПР':'Практична робота','ПЗ':'Проектне завдання','К':'Контрольна робота'};
+export const STICKER_GOAL=30;
+export const dayKeys=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+export const dayNamesUA={Monday:"Понеділок",Tuesday:"Вівторок",Wednesday:"Середа",Thursday:"Четвер",Friday:"П'ятниця"};
+// ══════════ MULTI-ROLE SUPPORT ══════════
+// Історично роль була одним рядком: users/{uid}/role = "teacher".
+// Тепер одна особа може мати кілька ролей (напр. вчитель + адміністратор):
+//   users/{uid}/roles = ["teacher","administrator"]   ← повний список
+//   users/{uid}/role  = "teacher"                     ← АКТИВНА роль (та, в якій
+//                                                        людина працює зараз)
+// Поле role залишається, щоб уся наявна логіка (getActiveClass, initUserSession,
+// підписи в чаті тощо) працювала без змін. pre_approved_roles/{email} тепер може
+// містити або рядок (як раніше), або масив ролей — normalizeRoles() розбирає обидва.
+export const ROLE_LABELS={
+  director:'👔 Директор', administrator:'🛡️ Секретар (Адміністратор)',
+  teacher:'👨‍🏫 Вчитель', class_teacher:'🎓 Класний керівник',
+  art_school_teacher:'🎨 Вчитель школи мистецтв', music_teacher:'🎵 Вчитель музики',
+  parent:'👪 Батьки', student:'🎒 Учень', kitchen:'🍽️ Кухня'
+};
+// Ролі, для яких потрібна матриця доступу до класів (teacherAccessMatrix)
+export const TEACHER_ROLES=['teacher','class_teacher','art_school_teacher','music_teacher'];
+export function isTeacherRole(r){return TEACHER_ROLES.includes(r);}
+// Приводить будь-яке представлення (рядок / масив / об'єкт з Firebase) до масиву
+export function normalizeRoles(raw){
+  if(!raw)return[];
+  if(typeof raw==='string')return[raw];
+  if(Array.isArray(raw))return raw.filter(Boolean);
+  return Object.values(raw).filter(v=>typeof v==='string');
+}
+// Усі ролі користувача (roles, а якщо його ще немає — одиночний role)
+export function getUserRoles(u){
+  if(!u)return[];
+  const list=normalizeRoles(u.roles);
+  if(list.length>0)return list;
+  return u.role?[u.role]:[];
+}
+// ══════════ КІЛЬКА ДІТЕЙ В ОДНИХ БАТЬКІВ ══════════
+// Історично parent_links/{email} = {studentName, class, role} — один запис,
+// тож прив'язка другої дитини мовчки затирала першу. Тепер запис може бути:
+//   {children:[{studentName,class,role}, ...]}   ← нова форма
+//   {studentName, class, role}                   ← стара (одна дитина)
+//   "Прізвище Ім'я"                              ← найдавніша (рядок)
+// normalizeChildren() зводить будь-яку з них до масиву, тому старі записи
+// продовжують працювати без міграції.
+// ══════════ ДЗЕРКАЛО ОЦІНОК ПО УЧНЯХ ══════════
+// НАВІЩО. Оцінки лежать як grades/{клас}/{місяць}/{предмет}/{дата}/{учень} —
+// учень останнім сегментом. Прочитати «лише свою дитину» за такої форми
+// неможливо: доводиться тягнути весь клас і фільтрувати вже в браузері.
+// На екрані видно одну дитину, але в пам'яті вкладки лежить увесь клас, і
+// будь-хто з консоллю бачить оцінки однокласників.
+//
+// РІШЕННЯ. Поруч ведемо дзеркало, де учень стоїть ДРУГИМ сегментом:
+//   student_grades/{клас}/{учень}/{місяць}/{предмет}/{дата} = {v, t}
+// Батько читає лише свою гілку, і заборона стає властивістю бази, а не
+// ввічливістю інтерфейсу.
+//
+// ЧОМУ ДЗЕРКАЛО, А НЕ ПЕРЕВЕРТАННЯ ОСНОВНОГО ВУЗЛА. Журнал учителя —
+// сітка «клас × предмет × дата». За основної форми це вузьке читання
+// одного дня; якби учень став другим сегментом, довелося б тягнути весь
+// клас за рік. Ми цього тижня саме прибирали такі читання.
+//
+// ЧОМУ ОДИН update ВІД КОРЕНЯ. Багатошляховий запис у Firebase атомарний:
+// або лягають обидва шляхи, або жоден. Розійтися основі й дзеркалу нема як.
+export function gradeWritePaths(cls, ym, subj, date, sid, value, type){
+  const out = {};
+  const del = (value === null || value === undefined || value === '');
+  out[`grades/${cls}/${ym}/${subj}/${date}/${sid}`]      = del ? null : value;
+  out[`grade_types/${cls}/${ym}/${subj}/${date}/${sid}`] = del ? null : (type || null);
+  out[`student_grades/${cls}/${sid}/${ym}/${subj}/${date}`] =
+    del ? null : { v: value, t: type || '' };
+  return out;
+}
+
+// Дзеркало → форма, яку очікує наявний код відображення: gr[предмет][дата][імʼя].
+// Так кабінет читає вузько, а малювання лишається недоторканим.
+export function gradesFromMirror(mirror, name){
+  const gr = {}, gt = {};
+  for(const subj in (mirror || {})){
+    for(const date in mirror[subj]){
+      const cell = mirror[subj][date] || {};
+      if(!gr[subj]) gr[subj] = {};
+      if(!gt[subj]) gt[subj] = {};
+      gr[subj][date] = { [name]: cell.v };
+      gt[subj][date] = { [name]: cell.t || '' };
     }
-    body.auth-mode #login-screen::before,body.auth-mode #first-login-screen::before,body.auth-mode #reset-password-screen::before{
-      content:"";position:absolute;inset:0;border-radius:inherit;padding:1.4px;
-      background:linear-gradient(180deg,rgba(180,245,255,.5) 0%,rgba(180,245,255,.16) 20%,rgba(255,255,255,0) 40%,rgba(255,255,255,0) 60%,rgba(180,245,255,.16) 80%,rgba(180,245,255,.5) 100%);
-      -webkit-mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);
-      -webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none;
+  }
+  return { gr, gt };
+}
+
+export function normalizeChildren(raw){
+  if(!raw)return[];
+  if(typeof raw==='string')return[{studentName:raw,class:'class_2',role:'guardian'}];
+  if(Array.isArray(raw.children))return raw.children.filter(c=>c&&c.studentName);
+  if(raw.children&&typeof raw.children==='object')
+    return Object.values(raw.children).filter(c=>c&&c.studentName);
+  if(raw.studentName)return[{studentName:raw.studentName,studentId:raw.studentId||null,class:raw.class||'class_2',role:raw.role||'guardian'}];
+  return[];
+}
+// ══════════ КОНТАКТНІ ДАНІ БАТЬКІВ ══════════
+// Зберігаються поруч із дітьми: parent_links/{email} = {children:[...], profile:{...}}
+// normalizeChildren дивиться лише на children, тож додаткове поле profile
+// нічого не ламає і старі записи читаються як раніше.
+export const PARENT_FIELDS=[
+  {k:'lastName',   label:'Прізвище',        ph:'Іваненко'},
+  {k:'firstName',  label:"Ім'я",            ph:'Оксана'},
+  {k:'middleName', label:'По батькові',     ph:'Петрівна'},
+  {k:'phonePL',    label:'📞 Телефон (PL)', ph:'+48 600 000 000', type:'tel'},
+  {k:'phoneUA',    label:'📞 Телефон (UA)', ph:'+380 67 000 00 00', type:'tel'},
+  {k:'telegram',   label:'✈️ Telegram',      ph:'@nickname'},
+  {k:'address',    label:'🏠 Адреса',        ph:'вул. Маршалковська 1/2, Варшава'}
+];
+export function getParentProfile(raw){
+  const p=(raw&&typeof raw==='object'&&raw.profile)||{};
+  const out={};PARENT_FIELDS.forEach(f=>out[f.k]=p[f.k]||'');
+  return out;
+}
+// ПІБ одним рядком; якщо не заповнено — показуємо email як запасний варіант
+export function parentFullName(profile,fallback){
+  const s=[profile.lastName,profile.firstName,profile.middleName].filter(Boolean).join(' ').trim();
+  return s||fallback||'—';
+}
+// Telegram зберігаємо як завгодно, а показуємо однаково: @nick + посилання
+export function telegramHandle(v){
+  const s=String(v||'').trim().replace(/^https?:\/\/(t\.me|telegram\.me)\//i,'').replace(/^@/,'');
+  return s?{handle:'@'+s,url:'https://t.me/'+encodeURIComponent(s)}:null;
+}
+export function telHref(v){
+  const s=String(v||'').replace(/[^\d+]/g,'');
+  return s?'tel:'+s:'';
+}
+// Діти, прив'язані до профілю (children, інакше — активна дитина)
+export function getUserChildren(u){
+  if(!u)return[];
+  const list=normalizeChildren(u);
+  if(list.length>0)return list;
+  return u.studentName?[{studentName:u.studentName,class:u.class,role:u.parentRole}]:[];
+}
+
+// ══════════ STATE ══════════
+// currentUserData is reassigned only here (onAuthStateChanged); every
+// other module imports it read-only (they may still mutate its
+// properties, e.g. saveProfile() below, which is fine with live bindings).
+export let currentUserData=null;
+// teacherAccessMatrix is reassigned only here (fetchTeacherAccess) and
+// read here + in director.js (findSubstitute) — plain export/import.
+export let teacherAccessMatrix={};
+// Phase 5: gradeTypesCache is reassigned only here (loadGradeTypesCache) and
+// read from director.js (types management panel) + journal.js (dynamic grade-
+// type buttons/legend) + parent-student.js (formula info block) — same
+// single-owner export/import pattern as teacherAccessMatrix above.
+export let gradeTypesCache={};
+let mySkillsTemp=[]; // for profile modal
+// Chat/Inbox local state
+let currentChatId = null;
+
+const today=new Date();
+export const localDateString=today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-'+String(today.getDate()).padStart(2,'0');
+document.getElementById('global-date').value=localDateString;
+
+// ══════════ GRADE SYSTEM ══════════
+// 6-бальна шкала. Маскування для 1-5 класу
+export function getClassNum(clsId){return parseInt((clsId||'class_1').replace('class_',''));}
+export function displayGrade(val,clsId){
+  if(!val&&val!==0) return '';
+  const n=parseInt(val);
+  const cn=getClassNum(clsId||getActiveClass());
+  if(cn<=5){
+    // маскуємо цифри літерами
+    if(n>=5) return 'В';
+    if(n===4) return 'Д';
+    if(n===3) return 'С';
+    return 'П';
+  }
+  return String(val);
+}
+export function gradeClass6(val){
+  const n=parseInt(val);
+  if(isNaN(n)) return 'g-letter';
+  if(n>=6) return 'g6';
+  if(n===5) return 'g5';
+  if(n===4) return 'g4';
+  if(n===3) return 'g3';
+  if(n===2) return 'g2';
+  return 'g1';
+}
+export function gradeColorInline(val){
+  const n=parseInt(val);
+  if(isNaN(n)) return '#8e44ad';
+  if(n>=5) return '#1565c0';
+  if(n===4) return '#2e7d32';
+  if(n===3) return '#f57f17';
+  return '#b71c1c';
+}
+// Phase 5: weight now comes from the Firebase-backed grade_types cache
+// (getGradeWeight below), with GRADE_WEIGHTS only as a fallback default for
+// codes missing from — or before — that cache loads.
+export function getGradeWeight(code){
+  if(gradeTypesCache&&gradeTypesCache[code]&&typeof gradeTypesCache[code].weight==='number')return gradeTypesCache[code].weight;
+  return GRADE_WEIGHTS[code]||1.0;
+}
+// One-time load (+ one-time migration seed) of grade type CONFIG from Firebase
+// into gradeTypesCache. Called during auth/session init (see onAuthStateChanged
+// below) for every role, since parent/student also need it (formula info
+// block) and teacher/director need it for calculations + the type buttons.
+//
+// IMPORTANT: this lives at `grade_type_defs/{code}` (config: {label,shortLabel,
+// weight}) — NOT at `grade_types`. `grade_types/{cls}/{yMonth}/{subj}/{date}/
+// {student}` is a *different*, pre-existing collection (the actual per-cell
+// grade-type VALUE a teacher picks for one student's one grade, written by
+// confirmGrade()/deleteGrade() in journal.js — this predates Phase 5 entirely).
+// An earlier version of this function read/wrote the config at `grade_types`
+// directly, which collided with that collection: e.g. grading any student in
+// class_2 creates `grade_types/class_2/...`, which then got misread as a bogus
+// "class_2" grade-type code (label "class_2", weight defaulting to 1) by every
+// function that iterates Object.keys(gradeTypesCache) — that's the "class_2 —
+// class_2 (×1)" line that showed up in the journal legend. Renamed to a
+// separate root to make the two collections structurally impossible to collide.
+export async function loadGradeTypesCache(){
+  const snap=await get(ref(db,'grade_type_defs'));
+  if(snap.exists()){gradeTypesCache=snap.val();return;}
+  gradeTypesCache={};
+  // Only the director performs the one-time seed write, so concurrently
+  // logging-in teachers/parents/students don't race to create the node —
+  // they just fall back to GRADE_WEIGHTS via getGradeWeight() until the
+  // director's next login seeds grade_type_defs for everyone.
+  if(currentUserData?.role==='director'){
+    const seed={};
+    for(let code in GRADE_WEIGHTS)seed[code]={label:GRADE_TYPE_LABELS[code]||code,shortLabel:code,weight:GRADE_WEIGHTS[code]};
+    await set(ref(db,'grade_type_defs'),seed);
+    gradeTypesCache=seed;
+  }
+}
+export function calculateWeightedAverage(grades,types){
+  // grades: {date: {student: val}}, types: {date: {student: type}}
+  let totalWeight=0; let totalScore=0;
+  for(let date in grades){
+    for(let student in grades[date]){
+      const val=parseFloat(grades[date][student]);
+      if(isNaN(val)) continue;
+      const type=(types&&types[date]&&types[date][student])||'П';
+      const weight=getGradeWeight(type);
+      totalScore+=val*weight; totalWeight+=weight;
     }
-    .auth-brand{display:flex;justify-content:center;margin-bottom:16px;}
-    .auth-logo{
-      width:112px;height:112px;border-radius:50%;display:block;object-fit:cover;
-      box-shadow:0 14px 40px rgba(34,184,207,.45),0 0 0 1px rgba(180,245,255,.22),0 0 60px rgba(34,184,207,.28);
-      animation:logoIn .7s cubic-bezier(.2,.8,.3,1) both;
+  }
+  if(totalWeight===0) return null;
+  return totalScore/totalWeight;
+}
+export function calculateStudentWeightedAvg(studentGrades,studentTypes){
+  let totalW=0; let totalS=0;
+  for(let key in studentGrades){
+    const val=parseFloat(studentGrades[key]); if(isNaN(val)) continue;
+    const type=studentTypes?.[key]||'П'; const w=getGradeWeight(type);
+    totalS+=val*w; totalW+=w;
+  }
+  return totalW>0?totalS/totalW:null;
+}
+// Phase 5: compact "how the average is calculated" info block for parent/student
+// grade cards (#p-daily-comments-list / #s-daily-comments-list). Returned as a
+// <li style="list-style:none"> so it's valid to prepend inside those <ul> lists.
+export function renderGradeFormulaInfo(){
+  const codes=Object.keys(gradeTypesCache).length>0?Object.keys(gradeTypesCache):Object.keys(GRADE_WEIGHTS);
+  const items=codes.map(code=>{
+    const w=getGradeWeight(code);
+    const label=(gradeTypesCache[code]&&gradeTypesCache[code].label)||code;
+    return `<span style="display:inline-block;background:#fff;border:1px solid #d1c4e9;border-radius:6px;padding:2px 7px;margin:2px 3px 2px 0;font-size:.72rem;"><b>${code}</b> ${label} ×${w}</span>`;
+  }).join('');
+  return `<li style="list-style:none;background:#f4ecf7;border:1px solid #d2b4de;border-radius:8px;padding:8px 10px;margin-bottom:9px;font-size:.78rem;color:#555;">
+    <b style="color:var(--purple);">ℹ️ Як рахується середній бал:</b> Σ(оцінка × коефіцієнт) / Σ(коефіцієнт)
+    <div style="margin-top:5px;">${items}</div>
+  </li>`;
+}
+// ══════════ UTILITIES ══════════
+// Toast messages routinely embed user-sourced values (student names, subjects),
+// so the whole message is escaped — no caller passes intentional HTML.
+export function showToast(msg){const c=document.getElementById('toast-container');const t=document.createElement('div');t.className='toast';t.innerHTML=`<span>🔔 ${escHtml(msg)}</span>`;c.appendChild(t);setTimeout(()=>{t.style.opacity='0';setTimeout(()=>t.remove(),300);},4000);}
+// Escapes a value for interpolation into a single-quoted JS string inside an
+// inline onclick="fn('...')" attribute. Ukrainian names and subjects routinely
+// contain apostrophes (Дем'яненко, Комп'ютерні науки, Мар'яна) — unescaped,
+// one of those breaks the inline handler's string literal and the whole
+// onclick dies with a SyntaxError. Backslashes escaped first, then quotes.
+export function escJs(s){return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');}
+// Escapes a value for interpolation into HTML BODY content (innerHTML template
+// strings). Complements — does not replace — escJs above: escJs protects a JS
+// string literal inside an onclick attribute, escHtml protects the HTML text
+// itself. User/Firebase-sourced text (chat messages, comments, names, topics,
+// HW text...) rendered via innerHTML without this is an XSS hole: a message like
+// <img src=x onerror=alert(document.cookie)> would execute for everyone.
+// Безпечне посилання: escHtml сам по собі НЕ рятує від href="javascript:...",
+// бо там немає символів < > " '. Тому окремо перевіряємо протокол і повертаємо
+// '#' для всього, що не http(s). Використовувати скрізь, де url від користувача.
+export function safeUrl(u){
+  const s=String(u??'').trim();
+  return /^https?:\/\//i.test(s)?escHtml(s):'#';
+}
+export function escHtml(s){
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+// Only http(s) URLs are allowed to be rendered as href targets — same principle
+// as the save-side check in saveTextbook(), applied at RENDER time too so a
+// javascript:-URL already sitting in Firebase can't become a live link.
+export function safeHttpUrl(u){
+  const s=String(u ?? '').trim();
+  return /^https?:\/\//i.test(s)?s:'';
+}
+export function getActiveClass(){if(currentUserData&&(currentUserData.role==='teacher'||currentUserData.role==='class_teacher'||currentUserData.role==='art_school_teacher'||currentUserData.role==='music_teacher'))return document.getElementById('t-class-selector').value;return currentUserData?currentUserData.class:'class_2';}
+window.getTodayLessonsFlattened=function(dayName){if(!window.schedule||!window.schedule[dayName])return[];let flat=[];window.schedule[dayName].forEach(slot=>{if(Array.isArray(slot))flat.push(...slot);else if(slot&&Object.keys(slot).length>0)flat.push(slot);});return flat;};
+window.getValidSubjectName=function(item){if(!item)return null;let sName=item.subject&&item.subject.ua?item.subject.ua:item.subject;if(sName&&typeof sName==='string'&&sName.trim()!=="Перерва"&&item.number!==" ")return sName.trim();return null;};
+window.isSubjectAllowed=function(cls,subjectName){if(!subjectName)return false;let raw=teacherAccessMatrix[cls]||[];let allowed=Array.isArray(raw)?raw:Object.values(raw);let normAllowed=allowed.map(s=>typeof s==='string'?s.trim():'');if(normAllowed.includes("Всі предмети"))return true;return normAllowed.includes(subjectName.trim());};
+window.getDefaultTeacher=function(clsId,subjName){if(!subjName||!globalTeacherAccess)return null;let nt=subjName.trim().toLowerCase();for(let se in globalTeacherAccess){if(globalTeacherAccess[se][clsId]){let a=globalTeacherAccess[se][clsId];let ok=false;if(Array.isArray(a))ok=a.some(s=>s.trim().toLowerCase()==="всі предмети"||s.trim().toLowerCase()===nt);else ok=Object.values(a).some(s=>s.trim().toLowerCase()==="всі предмети"||s.trim().toLowerCase()===nt);if(ok){let t=window.globalTeachersList.find(t=>t.safeEmail===se);if(t)return{email:t.email,name:t.name};}}}return null;};
+window.loadScheduleScript=function(classId,callback){if(!classId)return;get(child(ref(db),`schedules/${classId}`)).then(snap=>{if(snap.exists()){window.schedule=snap.val().lessons||{};window.clubSchedule=snap.val().clubs||{};}else{window.schedule={};window.clubSchedule={};}if(callback)callback();}).catch(()=>{window.schedule={};window.clubSchedule={};if(callback)callback();});};
+// Pure helper shared by director stats/dashboard and parent/student weekly behavior view
+export function getWeekDates(ds){if(!ds)return[];let[y,m,d]=ds.split('-');let dt=new Date(y,m-1,d);let day=dt.getDay()||7;dt.setDate(dt.getDate()-day+1);let dates=[];for(let i=0;i<7;i++){const yy=dt.getFullYear(),mm=String(dt.getMonth()+1).padStart(2,'0'),dd=String(dt.getDate()).padStart(2,'0');dates.push(`${yy}-${mm}-${dd}`);dt.setDate(dt.getDate()+1);}return dates;}
+// Pure helper shared by teacher daily HW list and parent/student daily HW lists
+export function renderHwItem(subject,data){let text=typeof data==='string'?data:data.text;let img='';if(typeof data==='object'){img+='<div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:7px;">';const addImg=u=>{const su=safeHttpUrl(u);if(su)img+=`<a href="${escHtml(su)}" target="_blank"><img src="${escHtml(su)}" style="width:90px;height:90px;object-fit:cover;border-radius:7px;"></a>`;};if(data.image)addImg(data.image);if(data.images&&Array.isArray(data.images))data.images.forEach(addImg);img+='</div>';}return `<li><b>${escHtml(subject)}:</b> ${escHtml(text)} ${img}</li>`;}
+// ══════════ ATTENDANCE (per-lesson schema) ══════════
+// Since attendance/{cls}/{date}/{student} is now {slotKey:{status,reason,markedBy}}
+// instead of a single flat {status,reason} record, these two helpers are shared
+// by every screen that reads attendance (journal, admin/director dashboards,
+// teacher live list, parent/student dashboards).
+// "all" is the reserved slotKey parent/student self-reports are written under
+// (submitAttendance() in parent-student.js) — it represents "the whole day".
+export function formatAttendanceSlotLabel(slotKey){
+  if(slotKey==='all')return 'Увесь день';
+  if(/^\d+$/.test(String(slotKey)))return `Урок ${slotKey}`;
+  return slotKey;
+}
+// Collapses a student's slot-map for one day into a single {status,reason}
+// summary (absent takes priority over late) — used where UI space only
+// allows one badge per day (e.g. the journal table cell).
+export function summarizeAttendanceSlots(slotsObj){
+  if(!slotsObj)return null;
+  const entries=Object.values(slotsObj).filter(r=>r&&r.status);
+  if(entries.length===0)return null;
+  const chosen=entries.find(r=>r.status==='absent')||entries[0];
+  const reasons=[...new Set(entries.map(r=>r.reason).filter(Boolean))];
+  return {status:chosen.status,reason:reasons.join('; ')};
+}
+// ══════════ PROFILE ══════════
+function updateProfileBar(){
+  if(!currentUserData)return;document.getElementById('profile-bar').style.display='flex';
+  const src=currentUserData.photoURL||"https://cdn-icons-png.flaticon.com/512/149/149071.png";
+  document.getElementById('pb-avatar').src=src;document.getElementById('modal-avatar-preview').src=src;
+  let n="Користувач";if(currentUserData.firstName||currentUserData.lastName)n=`${currentUserData.firstName||''} ${currentUserData.lastName||''}`.trim();else if(currentUserData.studentName)n=`Батьки (${currentUserData.studentName})`;else if(currentUserData.email)n=currentUserData.email;
+  let r="";if(currentUserData.role==='teacher')r="Вчитель";if(currentUserData.role==='class_teacher')r="🎓 Класний керівник";if(currentUserData.role==='art_school_teacher'||currentUserData.role==='music_teacher')r="Вчитель школи мистецтв";if(currentUserData.role==='director')r="Директор";if(currentUserData.role==='administrator')r="🛡️ Секретар (Адміністратор)";if(currentUserData.role==='student')r="🎒 Учень";if(currentUserData.role==='parent'){if(currentUserData.parentRole==='mother')r="Мати";else if(currentUserData.parentRole==='father')r="Батько";else r="Опекун";}
+  document.getElementById('pb-name').innerText=n;document.getElementById('pb-role').innerText=r;
+  renderRoleSwitcher();
+  renderChildSwitcher();
+}
+// Перемикач дітей — показується батькам, у яких у школі більше однієї дитини.
+function renderChildSwitcher(){
+  const box=document.getElementById('pb-child-switcher');
+  if(!box)return;
+  const kids=currentUserData?.role==='parent'?getUserChildren(currentUserData):[];
+  if(kids.length<2){box.style.display='none';box.innerHTML='';return;}
+  box.style.display='block';
+  box.innerHTML=`<select id="pb-child-select" title="Переключити дитину">
+    ${kids.map((k,i)=>`<option value="${i}" ${k.studentName===currentUserData.studentName&&k.class===currentUserData.class?'selected':''}>👶 ${escHtml(k.studentName)} (${escHtml(String(k.class||'').replace('class_',''))} кл.)</option>`).join('')}
+  </select>`;
+  document.getElementById('pb-child-select').addEventListener('change',e=>window.switchChild(parseInt(e.target.value,10)));
+}
+// Активна дитина зберігається в users/{uid}, тож після перезаходу батьки
+// потрапляють до тієї самої дитини, яку дивилися востаннє.
+window.switchChild=async function(idx){
+  if(!currentUserData)return;
+  const kids=getUserChildren(currentUserData);
+  const k=kids[idx];
+  if(!k)return;
+  if(k.studentName===currentUserData.studentName&&k.class===currentUserData.class)return;
+  // Знімаємо таймер розкладу попередньої дитини
+  if(parentLessonInterval)clearInterval(parentLessonInterval);
+  currentUserData.studentName=k.studentName;
+  currentUserData.studentId=k.studentId||stuId(k.class,k.studentName)||null;
+  currentUserData.class=k.class;
+  currentUserData.parentRole=k.role||currentUserData.parentRole||'guardian';
+  try{await update(ref(db,`users/${auth.currentUser.uid}`),{studentName:k.studentName,studentId:currentUserData.studentId,class:k.class,parentRole:currentUserData.parentRole});}catch(e){console.error(e);}
+  // Розклад прив'язаний до класу — перечитуємо під нову дитину
+  loadScheduleScript(k.class,()=>{initUserSession();});
+  showToast(`👶 Дитина: ${k.studentName}`);
+};
+// Перемикач кабінетів — показується лише тим, у кого призначено >1 ролі.
+function renderRoleSwitcher(){
+  const box=document.getElementById('pb-role-switcher');
+  if(!box)return;
+  const roles=getUserRoles(currentUserData);
+  if(roles.length<2){box.style.display='none';box.innerHTML='';return;}
+  box.style.display='block';
+  box.innerHTML=`<select id="pb-role-select" title="Переключити кабінет">
+    ${roles.map(r=>`<option value="${escHtml(r)}" ${r===currentUserData.role?'selected':''}>${escHtml(ROLE_LABELS[r]||r)}</option>`).join('')}
+  </select>`;
+  document.getElementById('pb-role-select').addEventListener('change',e=>window.switchRole(e.target.value));
+}
+// ══════════ ПЕРЕКЛЮЧЕННЯ РОЛІ ══════════
+// Активна роль зберігається в users/{uid}/role, тому після перезаходу людина
+// опиняється в тому ж кабінеті, де працювала останній раз.
+window.switchRole=async function(newRole){
+  if(!currentUserData)return;
+  const roles=getUserRoles(currentUserData);
+  if(!roles.includes(newRole)){showToast('⚠️ Ця роль вам не призначена');return;}
+  if(newRole===currentUserData.role)return;
+  // Знімаємо слухачі/таймери попереднього кабінету, щоб вони не продовжували
+  // писати у DOM, якого вже немає на екрані.
+  if(teacherAttendanceListener)teacherAttendanceListener();
+  if(parentLessonInterval)clearInterval(parentLessonInterval);
+  currentUserData.role=newRole;
+  try{await update(ref(db,`users/${auth.currentUser.uid}`),{role:newRole});}catch(e){console.error(e);}
+  if(isTeacherRole(newRole))await fetchTeacherAccess(currentUserData.email.replace(/\./g,'_'));
+  initUserSession();
+  showToast(`🔄 Кабінет: ${ROLE_LABELS[newRole]||newRole}`);
+};
+window.openProfileModal=async function(){
+  document.getElementById('profile-modal').style.display='flex';
+  document.getElementById('profile-first-name').value=currentUserData.firstName||'';
+  document.getElementById('profile-last-name').value=currentUserData.lastName||'';
+  document.getElementById('profile-photo').value='';document.getElementById('profile-new-pass').value='';
+  const isTeacher=currentUserData.role==='teacher'||currentUserData.role==='art_school_teacher';
+  document.getElementById('t-skills-section').style.display=isTeacher?'block':'none';
+  if(isTeacher){
+    const se=currentUserData.email?.replace(/\./g,'_');
+    const snap=await get(ref(db,`teacher_skills/${se}/subjects`));
+    mySkillsTemp=snap.exists()?Object.values(snap.val()):[];renderMySkillsTags();
+  }
+  renderInstallBlock();renderPushButton();
+  const childBlock=document.getElementById('child-block');
+  if(childBlock){
+    const isP=currentUserData?.role==='parent';
+    childBlock.style.display=isP?'block':'none';
+    // Старий блок «Вхід дитини» замінив розділ «Доступ дитини»
+    //  у кабінеті батьків (parent-student.js).
+  }
+  // Батьки заповнюють свої контакти самі — школі менше ручної роботи,
+  // а дані свіжіші. Прізвище/ім'я показуємо тут же, щоб усе було в одному
+  // місці, тому окремі поля зверху для батьків ховаємо.
+  const isParent=currentUserData.role==='parent';
+  const box=document.getElementById('p-contacts-section');
+  if(box){
+    box.style.display=isParent?'block':'none';
+    const nameBlock=document.getElementById('profile-name-block');
+    if(nameBlock)nameBlock.style.display=isParent?'none':'block';
+    if(isParent){
+      const se=(currentUserData.email||'').replace(/\./g,'_');
+      const snap=await get(child(ref(db),`parent_links/${se}`));
+      const profile=getParentProfile(snap.exists()?snap.val():{});
+      // Якщо контактів ще немає — підставляємо ім'я з профілю порталу
+      if(!profile.firstName)profile.firstName=currentUserData.firstName||'';
+      if(!profile.lastName)profile.lastName=currentUserData.lastName||'';
+      document.getElementById('p-contacts-fields').innerHTML=PARENT_FIELDS.map(f=>`
+        <label for="pc-${f.k}" style="margin-top:9px;">${f.label}</label>
+        <input type="${f.type||'text'}" id="pc-${f.k}" value="${escHtml(profile[f.k])}" placeholder="${escHtml(f.ph)}">
+      `).join('');
     }
-    @keyframes logoIn{from{opacity:0;transform:translateY(-8px) scale(.94);}to{opacity:1;transform:none;}}
-    /* Заголовок не дублює назву школи — вона вже є на логотипі */
-    body.auth-mode #login-screen h2,body.auth-mode #first-login-screen h2,body.auth-mode #reset-password-screen h2{
-      font-size:1.75rem;font-weight:800;letter-spacing:-.02em;margin:0;
-      background-image:linear-gradient(100deg,var(--logo-cyan),var(--logo-mint) 48%,var(--logo-yellow));
-      -webkit-background-clip:text;background-clip:text;color:transparent;
+  }
+};
+window.closeProfileModal=function(){document.getElementById('profile-modal').style.display='none';};
+document.getElementById('profile-photo').addEventListener('change',function(e){if(e.target.files&&e.target.files[0]){const r=new FileReader();r.onload=function(e){document.getElementById('modal-avatar-preview').src=e.target.result;};r.readAsDataURL(e.target.files[0]);}});
+window.saveProfile=async function(){
+  const fName=document.getElementById('profile-first-name').value.trim();const lName=document.getElementById('profile-last-name').value.trim();
+  const fileInput=document.getElementById('profile-photo');const newPass=document.getElementById('profile-new-pass').value.trim();
+  const btn=document.getElementById('btn-save-profile');btn.disabled=true;btn.innerText="⏳ Збереження...";
+  if(newPass){if(newPass.length<6){alert("Пароль мінімум 6 символів!");btn.disabled=false;btn.innerText="💾 Зберегти";return;}try{await updatePassword(auth.currentUser,newPass);document.getElementById('profile-new-pass').value='';}catch(e){if(e.code==='auth/requires-recent-login')alert("Для зміни пароля потрібно переввійти.");else alert("Помилка: "+e.message);btn.disabled=false;btn.innerText="💾 Зберегти";return;}}
+  let photoURL=currentUserData.photoURL||"https://cdn-icons-png.flaticon.com/512/149/149071.png";
+  if(fileInput.files.length>0){const fd=new FormData();fd.append('file',fileInput.files[0]);fd.append('upload_preset',UPLOAD_PRESET);try{const rs=await fetch(CLOUDINARY_URL,{method:'POST',body:fd});const dt=await rs.json();photoURL=dt.secure_url;}catch(e){alert("Помилка фото!");btn.disabled=false;btn.innerText="💾 Зберегти";return;}}
+  try{
+    // Батьки редагують ПІБ у блоці контактів, тому беремо звідти
+    let finalFirst=fName, finalLast=lName;
+    const isParent=currentUserData.role==='parent';
+    if(isParent&&document.getElementById('pc-firstName')){
+      const profile={};
+      PARENT_FIELDS.forEach(f=>{
+        const el=document.getElementById('pc-'+f.k);
+        profile[f.k]=el?el.value.trim():'';
+      });
+      const se=(currentUserData.email||'').replace(/\./g,'_');
+      // update, а не set: у цьому ж вузлі лежать children
+      await update(ref(db,`parent_links/${se}`),{profile});
+      finalFirst=profile.firstName;finalLast=profile.lastName;
     }
-    .auth-sub{margin:9px 0 20px;text-align:center;color:var(--auth-sub);font-size:.88rem;line-height:1.55;}
-    body.auth-mode #login-screen label,body.auth-mode #first-login-screen label,body.auth-mode #reset-password-screen label{
-      color:var(--auth-sub);margin-top:13px;font-size:.78rem;
-    }
-    body.auth-mode #login-screen input,body.auth-mode #first-login-screen input,body.auth-mode #reset-password-screen input{
-      background:rgba(255,255,255,.055);border:1px solid rgba(160,230,240,.18);color:var(--auth-fg);
-      border-radius:13px;padding:13px 15px;
-    }
-    body.auth-mode input::placeholder{color:rgba(214,240,245,.34);}
-    body.auth-mode #login-screen input:focus,body.auth-mode #first-login-screen input:focus,body.auth-mode #reset-password-screen input:focus{
-      outline:none;border-color:var(--logo-cyan);background:rgba(255,255,255,.09);
-      box-shadow:0 0 0 4px rgba(77,208,225,.18);
-    }
-    body.auth-mode .btn-login{
-      background:linear-gradient(100deg,var(--logo-cyan),var(--logo-teal) 70%);
-      color:#032b33;border-radius:13px;padding:15px;
-      box-shadow:0 12px 30px rgba(34,184,207,.4);
-      transition:transform .16s,box-shadow .16s,filter .16s;
-    }
-    body.auth-mode .btn-login:hover{transform:translateY(-1px);box-shadow:0 16px 38px rgba(34,184,207,.5);filter:brightness(1.07);}
-    body.auth-mode .link-btn{color:var(--logo-mint);}
-    body.auth-mode .link-btn:hover{color:#fff;}
-    body.auth-mode .pass-toggle{color:var(--auth-fg);}
-    body.auth-mode .pass-toggle:hover{background:rgba(255,255,255,.08);}
-    body.auth-mode .fl-intro{background:rgba(255,255,255,.05);border-color:rgba(160,230,240,.18);color:var(--auth-sub);}
-    body.auth-mode .login-hint{background:rgba(77,208,225,.10);border-color:rgba(77,208,225,.3);color:#c9f2f8;}
-    body.auth-mode .login-hint.warn{background:rgba(255,213,79,.12);border-color:rgba(255,213,79,.35);color:#ffe9a8;}
-    body.auth-mode .login-err{color:#ff8f8f;}
-    @media(max-width:480px){
-      body.auth-mode #login-screen,body.auth-mode #first-login-screen,body.auth-mode #reset-password-screen{padding:28px 20px 22px;border-radius:20px;}
-      body.auth-mode #login-screen h2,body.auth-mode #first-login-screen h2,body.auth-mode #reset-password-screen h2{font-size:1.45rem;}
-      .auth-logo{width:88px;height:88px;}
-    }
-    /* ── поля екранів входу (світла тема, коли auth-mode не активний) ── */
-    #login-screen label,#first-login-screen label{margin-top:12px;font-size:.82rem;color:#666;}
-    #login-screen input,#first-login-screen input{margin-top:4px;}
-    .fl-intro{font-size:.86rem;color:#555;line-height:1.5;background:#f0f8ff;border:1px solid #d0e8f2;border-radius:10px;padding:11px 13px;margin:0 0 4px 0;}
-    .login-err{color:var(--red);text-align:center;margin:10px 0 0 0;font-size:.85rem;font-weight:600;}
-    .pass-wrap{position:relative;}
-    .pass-wrap input{padding-right:44px;}
-    .pass-toggle{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:34px;height:34px;padding:0;margin:0;border:none;background:transparent;cursor:pointer;font-size:1.05rem;opacity:.55;border-radius:8px;}
-    .pass-toggle:hover{opacity:1;background:#f0f0f0;}
-    .login-hint{margin:10px 0 0 0;padding:9px 12px;border-radius:9px;font-size:.82rem;line-height:1.45;background:#e8f4fd;color:#154360;border:1px solid #bbdefb;}
-    .login-hint.warn{background:#fff8e1;color:#8a6d1f;border-color:#ffe0a3;}
-    .link-btn{width:auto;display:block;margin:12px auto 0 auto;padding:6px 10px;background:none;border:none;color:var(--teal);font-size:.84rem;font-weight:700;text-decoration:underline;cursor:pointer;}
-    .link-btn:hover{color:#004d40;}
-    #login-screen.first-login-mode #login-title::after{content:' — перший раз';font-size:.75rem;color:var(--orange);font-weight:400;display:block;margin-top:2px;}
-    .skill-tag{display:inline-block;background:#e0f2f1;color:var(--teal);border:1px solid #a5d6d1;border-radius:20px;padding:3px 10px;font-size:.75rem;font-weight:700;margin:2px;}
-    /* ── ПЕРЕМИКАЧ КАБІНЕТІВ (для тих, у кого кілька ролей) ── */
-    /* Флекс-елемент за замовчуванням має min-width:auto і не стискається
-       вужче за свій вміст. Довге ім'я дитини в перемикачі через це розпирало
-       профіль-бар, з'являвся горизонтальний скрол і всю сторінку зсувало. */
-    #profile-bar > div{min-width:0;}
-    #profile-bar > button{flex-shrink:0;white-space:nowrap;}
-    #pb-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-    #pb-role-switcher,#pb-child-switcher{max-width:100%;}
-    #pb-role-switcher select,#pb-child-switcher select{
-      width:100%;max-width:100%;margin-top:0;padding:4px 8px;font-size:.78rem;
-      font-weight:700;border-radius:7px;cursor:pointer;
-      text-overflow:ellipsis;
-    }
-    #pb-role-switcher select{color:var(--teal);border:1px solid var(--teal);background:#f0f8ff;}
-    #pb-child-switcher select{color:var(--purple);border:1px solid var(--purple);background:#f9f4ff;}
-    /* Підстраховка: у порталі багато блоків, що генеруються з даних, і будь-який
-       довгий рядок не має ламати сторінку цілком */
-    html,body{max-width:100%;overflow-x:hidden;}
-    /* ── РОЗКЛАД ДЗВІНКІВ ПО КЛАСАХ ── */
-    .bell-missing{background:#ffebee;border:1px solid #ef9a9a;color:#b71c1c;border-radius:9px;padding:8px 11px;font-size:.8rem;font-weight:700;margin-bottom:8px;}
-    .bell-row{display:flex;gap:9px;align-items:baseline;padding:6px 0;border-bottom:1px dashed #e0e0e0;font-size:.8rem;}
-    .bell-row:last-child{border-bottom:none;}
-    .bell-row .cls{flex-shrink:0;width:58px;font-weight:800;color:#283593;}
-    .bell-row .times{flex:1;color:#444;line-height:1.5;word-break:break-word;}
-    .bell-row.empty .cls{color:var(--red);}
-    .bell-row.empty .times{color:var(--red);font-style:italic;}
-    /* ── СПИСОК ПЕРСОНАЛУ ── */
-    .staff-row{display:flex;align-items:center;gap:10px;padding:9px 11px;border:1px solid #e8e8e8;border-radius:9px;margin-bottom:6px;background:#fff;}
-    .staff-row.is-disabled{opacity:.5;background:#fafafa;}
-    .staff-main{flex:1;min-width:0;}
-    .staff-email{font-size:.75rem;color:#888;word-break:break-all;}
-    .staff-roles{margin-top:4px;display:flex;flex-wrap:wrap;gap:3px;}
-    .staff-role-tag{display:inline-block;background:#eef2ff;color:#3949ab;border:1px solid #c5cae9;border-radius:12px;padding:1px 8px;font-size:.68rem;font-weight:700;}
-    /* ── AI-ЧЕРНЕТКА ДЗ ── */
-    .ai-hw-row{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:7px;}
-    #btn-ai-hw,#btn-ai-comment{width:auto;margin:0;padding:8px 14px;font-size:.82rem;font-weight:700;border:none;border-radius:9px;cursor:pointer;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;}
-    #btn-ai-hw:disabled,#btn-ai-comment:disabled{opacity:.6;cursor:wait;}
-    .ai-hw-note{font-size:.72rem;color:#999;font-style:italic;}
-    /* ── Вкладки кабінету директора ── */
-    /* На телефоні це стрічка, яку гортають пальцем. На ПК місця вистачає
-       всім семи, тож розтягуємо їх рівним рядом — інакше купка кнопок
-       ліворуч виглядає як недороблений макет. */
-    .dtab-bar{display:flex;gap:6px;width:100%;overflow-x:auto;padding:4px 0 10px 0;margin:0 0 16px 0;
-              border-bottom:1px solid #e3e8ea;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
-    .dtab-bar::-webkit-scrollbar{display:none;}
-    .dtab{flex:0 0 auto;width:auto;margin:0;padding:8px 15px;font-size:.82rem;font-weight:600;white-space:nowrap;
-          background:#fff;color:#5a6b74;border:1px solid #dfe6e9;border-radius:20px;cursor:pointer;
-          transition:background .12s,border-color .12s,color .12s;}
-    .dtab:hover{border-color:#9fb3bd;color:#37474f;}
-    .dtab.on{background:var(--teal);border-color:var(--teal);color:#fff;}
-    .dtab-badge{display:none;margin-left:6px;background:var(--red);color:#fff;font-size:.65rem;
-                padding:1px 6px;border-radius:10px;font-weight:700;}
-    .dtab-badge.show{display:inline-block;}
-    @media (max-width:1023px){
-      /* Липне до верху лише там, де довгий сувій і вузький екран */
-      .dtab-bar{position:sticky;top:0;z-index:5;background:rgba(255,255,255,.97);
-                backdrop-filter:blur(6px);padding-top:8px;}
-    }
-    @media (min-width:1024px){
-      .dtab-bar{gap:6px;overflow:visible;flex-wrap:nowrap;justify-content:stretch;
-                border-bottom:none;background:#f1f5f7;border-radius:14px;padding:6px;margin-bottom:22px;}
-      .dtab{flex:1 1 0;min-width:0;text-align:center;padding:10px 8px;font-size:.84rem;border-radius:10px;
-            overflow:hidden;text-overflow:ellipsis;
-            background:transparent;border-color:transparent;}
-      .dtab:hover{background:rgba(255,255,255,.7);border-color:transparent;}
-      .dtab.on{background:#fff;border-color:transparent;color:var(--teal);
-               box-shadow:0 1px 3px rgba(0,0,0,.08);}
-    }
-    .chat-dot{display:none;margin-left:7px;min-width:19px;height:19px;padding:0 6px;border-radius:10px;
-              background:var(--red);color:#fff;font-size:.68rem;font-weight:800;line-height:19px;
-              text-align:center;vertical-align:middle;box-shadow:0 0 0 2px rgba(255,255,255,.6);}
-    .chat-dot.show{display:inline-block;animation:dotPop .25s ease;}
-    @keyframes dotPop{from{transform:scale(.5);opacity:0}to{transform:scale(1);opacity:1}}
-    .push-invite{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#e0f7fa;
-                 border:1px solid #80deea;border-radius:12px;padding:11px 14px;margin-bottom:14px;
-                 font-size:.84rem;color:#00646e;line-height:1.45;}
-    .push-invite span{flex:1;min-width:180px;}
-    .pi-go,.pi-x{width:auto;margin:0;padding:7px 14px;font-size:.79rem;font-weight:700;border-radius:9px;cursor:pointer;}
-    .pi-go{background:var(--teal);color:#fff;border:none;}
-    .pi-x{background:transparent;color:#5c8a90;border:1px solid #a5dde3;}
-    /* ── Вікно чату ── */
-    .chat-win{background:#fff;width:100%;max-width:520px;height:85vh;max-height:760px;display:flex;
-              flex-direction:column;border-radius:16px;overflow:hidden;box-shadow:0 18px 50px rgba(0,0,0,.22);}
-    .chat-pane{display:flex;flex-direction:column;height:100%;min-height:0;}
-    .chat-bar{display:flex;align-items:center;gap:6px;padding:12px 14px;background:#fff;
-              border-bottom:1px solid #ececec;flex-shrink:0;}
-    .chat-bar-title{flex:1;min-width:0;font-size:1rem;font-weight:600;color:#1f2d33;text-align:left;
-                    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-    .chat-back,.chat-x{width:32px;height:32px;flex:none;margin:0;padding:0;background:transparent;border:none;
-                       color:#7a8b93;font-size:1.4rem;line-height:1;cursor:pointer;border-radius:8px;}
-    .chat-back:hover,.chat-x:hover{background:#f2f5f6;color:#37474f;}
-    .chat-back{font-size:1.9rem;}
-    .chat-scroll{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;}
-    .chat-scroll.list{background:#fff;}
-    .chat-scroll.msgs{background:#f6f8f9;padding:8px 14px 14px;display:flex;flex-direction:column;}
-    .chat-compose{display:flex;align-items:flex-end;gap:8px;padding:10px 12px;background:#fff;
-                  border-top:1px solid #ececec;flex-shrink:0;}
-    .chat-compose textarea{flex:1;margin:0;padding:10px 14px;border:1px solid #dfe6e9;border-radius:20px;
-                           resize:none;max-height:110px;font-size:.9rem;line-height:1.4;font-family:inherit;}
-    .chat-compose textarea:focus{border-color:var(--teal);outline:none;}
-    .chat-send{width:40px;height:40px;flex:none;margin:0;padding:0;border:none;border-radius:50%;
-               background:var(--teal);color:#fff;font-size:1.05rem;cursor:pointer;line-height:1;}
-    .chat-send:hover{filter:brightness(1.08);}
-    @media (max-width:600px){
-      .chat-win{max-width:100%;height:100%;max-height:none;border-radius:0;}
-    }
-    .chat-readonly{padding:12px 14px;background:#f7f9fa;border-top:1px solid #ececec;color:#8b9aa2;
-                   font-size:.8rem;text-align:center;flex-shrink:0;}
-    .chat-icon{width:32px;height:32px;flex:none;margin:0;padding:0;background:transparent;border:none;
-               color:#00838f;font-size:1.15rem;line-height:1;cursor:pointer;border-radius:8px;}
-    .chat-icon:hover{background:#e0f7fa;}
-    .chat-bar-titles{flex:1;min-width:0;text-align:left;}
-    .chat-bar-sub{display:block;font-size:.7rem;color:#93a4ac;font-weight:400;}
-    .cp-list{max-height:46vh;overflow-y:auto;border:1px solid #eee;border-radius:10px;margin-bottom:12px;}
-    .cp-row{display:flex;align-items:center;gap:10px;padding:9px 11px;border-bottom:1px solid #f4f4f4;
-            cursor:pointer;margin:0;font-size:.86rem;}
-    .cp-row:last-child{border-bottom:none;}
-    .cp-row:hover{background:#fafafa;}
-    .cp-row input{width:auto;margin:0;flex:none;}
-    .cp-av{width:32px;height:32px;border-radius:50%;flex:none;display:flex;align-items:center;
-           justify-content:center;color:#fff;font-size:.72rem;font-weight:700;}
-    .cp-mid{flex:1;min-width:0;display:flex;flex-direction:column;}
-    .cp-mid b{font-weight:600;color:#222;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-    .cp-mid small{font-size:.72rem;color:#999;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-    /* ── Чат: список ── */
-    .ch-row{display:flex;align-items:center;gap:12px;padding:11px 14px;cursor:pointer;border-bottom:1px solid #f0f0f0;background:#fff;transition:background .12s;}
-    .ch-row:hover{background:#fafafa;}
-    .ch-row:active{background:#f0f0f0;}
-    .ch-av{width:42px;height:42px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:.88rem;letter-spacing:.02em;}
-    .ch-av.dir{background:#78909c;font-size:1.05rem;}
-    .ch-mid{flex:1;min-width:0;}
-    .ch-top{display:flex;align-items:baseline;gap:8px;}
-    .ch-name{font-size:.92rem;font-weight:600;color:#222;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0;}
-    .ch-sub{font-size:.72rem;color:#90a4ae;margin-top:1px;line-height:1.2;}
-.ch-time{font-size:.7rem;color:#aaa;flex-shrink:0;}
-    .ch-prev{font-size:.81rem;color:#888;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-    .ch-prev b{color:#666;font-weight:600;}
-    .ch-badge{flex-shrink:0;min-width:20px;height:20px;padding:0 6px;border-radius:10px;background:var(--teal);color:#fff;font-size:.7rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
-    .ch-empty{padding:40px 20px;text-align:center;color:#bbb;font-size:2rem;line-height:1.6;}
-    .ch-empty span{display:block;font-size:.85rem;color:#999;margin-top:6px;}
-    /* ── Чат: повідомлення ── */
-    .ms-day{text-align:center;margin:14px 0 10px;}
-    .ms-day span{background:rgba(0,0,0,.06);color:#777;font-size:.7rem;padding:3px 11px;border-radius:20px;}
-    .ms{max-width:78%;padding:8px 12px;margin-bottom:2px;font-size:.9rem;line-height:1.45;word-break:break-word;position:relative;}
-    .ms.they{align-self:flex-start;background:#fff;color:#222;border-radius:14px 14px 14px 4px;border:1px solid #eee;}
-    .ms.me{align-self:flex-end;background:var(--teal);color:#fff;border-radius:14px 14px 4px 14px;}
-    .ms.grp.they{border-radius:4px 14px 14px 4px;}
-    .ms.grp.me{border-radius:14px 4px 4px 14px;}
-    .ms.last{margin-bottom:10px;}
-    .ms.last.they{border-radius:14px 14px 14px 4px;}
-    .ms.last.me{border-radius:14px 14px 4px 14px;}
-    .ms.grp.last.they{border-radius:4px 14px 14px 4px;}
-    .ms.grp.last.me{border-radius:14px 4px 4px 14px;}
-    .ms-from{font-size:.7rem;font-weight:700;color:var(--purple);margin-bottom:3px;}
-    .ms-time{font-size:.65rem;opacity:.55;text-align:right;margin-top:3px;}
-    /* ── Новинна стрічка ── */
-    .nw-feed{display:flex;flex-direction:column;gap:10px;}
-    .nw-item{background:#fff;border:1px solid #eee;border-radius:12px;padding:12px 14px;}
-    .nw-item.imp{border-color:#ffcc80;background:#fffdf7;}
-    .nw-item.new{box-shadow:inset 3px 0 0 var(--teal);}
-    .nw-head{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px;}
-    .nw-tag{font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:20px;text-transform:uppercase;letter-spacing:.02em;}
-    .nw-tag.school{background:#e0f7fa;color:#00838f;}
-    .nw-tag.cls{background:#ede7f6;color:#5e35b1;}
-    .nw-tag.imp{background:#fff3e0;color:#e65100;}
-    .nw-dot{width:7px;height:7px;border-radius:50%;background:var(--teal);}
-    .nw-time{margin-left:auto;font-size:.72rem;color:#aaa;}
-    .nw-title{margin:0 0 5px 0;font-size:.95rem;color:#222;font-weight:700;}
-    .nw-text{font-size:.87rem;line-height:1.5;color:#444;}
-    .nw-foot{display:flex;align-items:center;gap:10px;margin-top:9px;padding-top:8px;border-top:1px dashed #f0f0f0;}
-    .nw-author{font-size:.75rem;color:#999;}
-    .nw-del{width:auto;margin:0 0 0 auto;padding:3px 10px;font-size:.72rem;background:transparent;color:#c62828;border:1px solid #ffcdd2;border-radius:7px;cursor:pointer;}
-    .nw-imp-row{display:flex;align-items:flex-start;gap:9px;margin:12px 0 4px;font-size:.85rem;}
-    .nw-imp-row input{width:auto;margin:2px 0 0 0;}
-    .nw-imp-row small{color:#888;font-size:.74rem;line-height:1.4;}
-    /* ── Кухня ── */
-    .k-weeknav{display:flex;align-items:center;gap:10px;justify-content:space-between;background:#e0f7fa;border-radius:11px;padding:9px 11px;}
-    .k-weeknav button{width:auto;margin:0;padding:6px 15px;font-size:1.05rem;font-weight:800;background:#fff;color:#00838f;border:1px solid #80deea;border-radius:9px;cursor:pointer;}
-    .k-weeknav div{text-align:center;flex:1;min-width:0;font-size:.88rem;color:#00838f;}
-    .k-weeknav a{font-size:.72rem;color:#0097a7;}
-    .k-total{text-align:center;padding:12px;background:#e0f7fa;border-radius:11px;}
-    .k-total b{display:block;font-size:2.4rem;color:#00838f;line-height:1;}
-    .k-total span{font-size:.8rem;color:#666;}
-    .k-total-snack{font-size:.85rem;font-weight:700;color:#6a1b9a;margin-top:5px;}
-    .k-sub{text-align:center;font-size:.76rem;color:#888;margin-top:6px;}
-    .k-table{width:100%;border-collapse:collapse;font-size:.83rem;margin-top:10px;}
-    .k-table th{background:#e0f7fa;color:#00838f;padding:6px;font-size:.74rem;border-bottom:1px solid #b2ebf2;}
-    .k-table td{padding:5px 6px;border-bottom:1px solid #f0f0f0;text-align:center;}
-    .k-table td:first-child{text-align:left;font-weight:700;}
-    .k-table tr.k-now td{background:#fffde7;}
-    .k-off{color:#bbb;}
-    .k-skip-title{font-size:.8rem;font-weight:800;color:#00838f;margin:14px 0 5px 0;}
-    .k-skip{font-size:.8rem;padding:3px 0;border-bottom:1px dashed #eee;}
-    .k-skip span{color:#999;font-size:.74rem;}
-    .k-day{border:1px solid #b2ebf2;border-radius:10px;margin-bottom:7px;background:#fafeff;}
-    .k-day summary{cursor:pointer;padding:9px 11px;display:flex;align-items:center;gap:8px;font-size:.85rem;}
-    .k-day-name{font-weight:800;color:#00838f;}
-    .k-day-date{color:#999;font-size:.76rem;}
-    .k-day-flag{margin-left:auto;font-size:.7rem;padding:2px 7px;border-radius:20px;}
-    .k-day-flag.ok{background:#e8f5e9;color:#2e7d32;}
-    .k-day-flag.no{background:#f5f5f5;color:#aaa;}
-    .k-day-body{padding:2px 11px 11px 11px;}
-    .k-day-body label{margin-top:8px;font-size:.76rem;color:#666;display:block;}
-    .k-day-body input{margin-top:3px;}
-    .k-day-ts{font-size:.7rem;color:#bbb;margin:8px 0 0 0;}
-    .k-plan-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f0f0f0;flex-wrap:wrap;}
-    .k-plan-name{flex:1;min-width:110px;font-size:.83rem;font-weight:700;}
-    .k-plan-lunch{font-size:.78rem;color:#555;display:flex;align-items:center;gap:4px;margin:0;}
-    .k-plan-lunch input{width:auto;margin:0;}
-    .k-plan-row select{width:auto;margin:0;padding:5px 7px;font-size:.76rem;}
-    .push-warn{background:#fff8e1;border:1px solid #ffe0a3;color:#7a5f14;border-radius:10px;padding:10px 13px;font-size:.79rem;line-height:1.45;margin-bottom:11px;}
-    .k-notify{margin-top:10px;white-space:pre-line;border-radius:9px;padding:8px 11px;font-size:.78rem;line-height:1.4;}
-    .k-notify.ok{background:#e8f5e9;color:#1b5e20;border:1px solid #a5d6a7;}
-    .k-notify.bad{background:#ffebee;color:#b71c1c;border:1px solid #ef9a9a;}
-    .k-ord-sum{background:#fff3e0;border:1px solid #ffcc80;border-radius:10px;padding:9px 12px;font-size:.86rem;color:#e65100;}
-    .k-ord-sum b{font-size:1.15rem;}
-    .k-ord-sum span{display:block;font-size:.72rem;color:#a1887f;margin-top:2px;}
-    .k-ord td{text-align:left;}
-    .k-ord td:nth-child(2),.k-ord td:nth-child(3){text-align:center;width:44px;}
-    .k-ord-abs td{opacity:.5;}
-    .k-ord-note{font-size:.72rem;color:#999;}
-    .k-yes{color:#2e7d32;font-weight:800;}
-    .k-no{color:#ccc;}
-    /* ── Харчування у батьків ── */
-    .pm-box{background:#e0f7fa;border:1px solid #80deea;border-radius:11px;padding:12px 14px;margin-top:0;}
-    .pm-tabs{display:flex;gap:5px;margin-bottom:10px;}
-    .pm-tab{flex:1;min-width:0;margin:0;padding:6px 2px;border:1px solid #b2ebf2;background:#fff;border-radius:9px;cursor:pointer;line-height:1.25;}
-    .pm-tab span{display:block;font-size:.68rem;color:#888;text-transform:uppercase;}
-    .pm-tab b{display:block;font-size:.72rem;color:#00838f;}
-    .pm-tab.on{background:#00838f;border-color:#00838f;}
-    .pm-tab.on span,.pm-tab.on b{color:#fff;}
-    .pm-tab.empty{opacity:.45;}
-    .k-week-hint{display:block;font-size:.68rem;color:#4dd0e1;font-weight:600;text-transform:uppercase;letter-spacing:.03em;}
-    .pm-title{font-size:.9rem;font-weight:800;color:#00838f;margin-bottom:7px;}
-    .pm-dish{font-size:.86rem;color:#333;padding:2px 0;}
-    .pm-none{font-size:.8rem;color:#888;font-style:italic;}
-    .pm-snack{font-size:.83rem;color:#4a148c;background:#f3e5f5;border-radius:8px;padding:6px 9px;margin-top:8px;}
-    .pm-allerg{font-size:.78rem;color:#b71c1c;background:#ffebee;border:1px solid #ef9a9a;border-radius:8px;padding:6px 9px;margin-top:8px;}
-    .pm-note{font-size:.76rem;color:#666;margin-top:6px;font-style:italic;}
-    .pm-status{margin-top:10px;display:flex;gap:9px;flex-wrap:wrap;}
-    .pm-on{font-size:.8rem;font-weight:700;color:#1b5e20;background:#e8f5e9;border-radius:20px;padding:3px 11px;}
-    .pm-off{font-size:.8rem;font-weight:700;color:var(--red);background:#ffebee;border-radius:20px;padding:3px 11px;}
-    .pm-dim{font-size:.8rem;color:#999;background:#f5f5f5;border-radius:20px;padding:3px 11px;}
-    .pm-act{margin-top:9px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
-    .pm-btn{width:auto;margin:0;padding:7px 13px;font-size:.78rem;font-weight:700;border:1px solid #ef9a9a;background:#fff;color:var(--red);border-radius:8px;cursor:pointer;}
-    .pm-btn.back{border-color:#a5d6a7;color:#1b5e20;}
-    .pm-btn.snack{border-color:#ce93d8;color:#6a1b9a;}
-    .pm-locked{font-size:.77rem;color:#8d6e63;background:#fff8e1;border:1px solid #ffe0a3;border-radius:8px;padding:7px 10px;line-height:1.4;}
-    .pm-links{margin-top:11px;display:flex;gap:14px;flex-wrap:wrap;}
-    .pm-links a{font-size:.76rem;color:#00838f;text-decoration:none;font-weight:700;}
-    .ms-row{display:flex;align-items:flex-start;gap:9px;margin:4px 0 12px 0;font-size:.85rem;}
-    .ms-row input{width:auto;margin:2px 0 0 0;}
-    .ms-row small{color:#888;font-size:.74rem;}
-    #ms-days{display:flex;gap:6px;margin-top:8px;}
-    .ms-day{flex:1;text-align:center;background:#f5f5f5;border-radius:8px;padding:7px 2px;margin:0;font-size:.76rem;cursor:pointer;}
-    .ms-day input{width:auto;margin:0 0 3px 0;}
-    .ms-day span{display:block;font-weight:700;color:#555;}
-    .ms-note{font-size:.74rem;color:#888;margin-top:12px;line-height:1.45;}
-    .pms-grid{display:flex;gap:8px;margin-top:11px;}
-    .pms-cell{flex:1;text-align:center;background:#e0f7fa;border-radius:10px;padding:11px 4px;}
-    .pms-cell b{display:block;font-size:1.7rem;color:#00838f;line-height:1;}
-    .pms-cell span{font-size:.7rem;color:#666;}
-    /* ── Швидкий журнал ── */
-    .qj-legend{display:flex;gap:12px;font-size:.72rem;color:#888;margin-top:8px;}
-    .qj-row{display:grid;grid-template-columns:24px 1fr auto 52px;gap:7px;align-items:center;padding:6px 4px;border-bottom:1px solid #f2f2f2;}
-    .qj-n{font-size:.7rem;color:#bbb;text-align:center;}
-    .qj-name{font-size:.85rem;color:#333;word-break:break-word;}
-    .qj-att{display:flex;gap:3px;}
-    .qj-b{width:30px;height:30px;margin:0;padding:0;border:1px solid #ddd;background:#fafafa;border-radius:7px;cursor:pointer;font-size:.78rem;font-weight:800;color:#999;}
-    .qj-b.ok.on{background:#e8f5e9;border-color:#66bb6a;color:#1b5e20;}
-    .qj-b.lt.on{background:#fff8e1;border-color:#ffb74d;color:#e65100;}
-    .qj-b.ab.on{background:#ffebee;border-color:#ef5350;color:#b71c1c;}
-    .qj-g{width:46px;margin:0;padding:5px;text-align:center;font-weight:800;font-size:.95rem;border:2px solid #e0e0e0;border-radius:7px;}
-    .qj-g:focus{border-color:#0072ff;outline:none;}
-    /* ── Друк розкладу ── */
-    #print-area{display:none;}
-    .ps-sheet{font-family:'Montserrat',sans-serif;color:#000;}
-    .ps-head{text-align:center;margin-bottom:12px;}
-    .ps-title{font-size:20px;font-weight:800;}
-    .ps-cls{font-size:13px;color:#444;margin-top:2px;}
-    .ps-table{width:100%;border-collapse:collapse;font-size:12px;}
-    .ps-table th{background:#eee;border:1px solid #999;padding:6px;font-weight:800;}
-    .ps-table td{border:1px solid #bbb;padding:6px;vertical-align:top;height:34px;}
-    .ps-num{text-align:center;font-weight:800;width:52px;background:#f7f7f7;}
-    .ps-time{font-size:9px;font-weight:400;color:#666;}
-    .ps-break{color:#888;font-style:italic;}
-    .ps-foot{margin-top:14px;font-size:10px;color:#777;text-align:right;}
-    @media print{
-      body.printing>*{display:none!important;}
-      body.printing #print-area{display:block!important;}
-      body.printing{background:#fff!important;padding:0;}
-      @page{size:A4 landscape;margin:12mm;}
-    }
-    /* ── Згоди: директор ── */
-    .cs-card{background:#fff;border:1px solid #c5e1a5;border-radius:10px;padding:10px;margin-bottom:8px;}
-    .cs-card.overdue{border-color:#ef9a9a;background:#fff8f8;}
-    .cs-head{display:flex;justify-content:space-between;align-items:flex-start;gap:9px;}
-    .cs-text{font-size:.79rem;color:#555;margin-top:4px;}
-    .cs-meta{font-size:.74rem;color:#888;margin-top:5px;}
-    .cs-stats{display:flex;gap:10px;margin-top:7px;font-size:.8rem;font-weight:700;}
-    .cs-yes{color:#1b5e20;} .cs-no{color:var(--red);} .cs-wait{color:#f39c12;}
-    .cs-detail{width:auto;margin:7px 0 0 0;padding:4px 10px;font-size:.74rem;background:#eceff1;color:#37474f;border:none;border-radius:7px;cursor:pointer;}
-    .cs-cls{font-size:.8rem;font-weight:800;color:#33691e;margin:9px 0 4px 0;}
-    .cs-row{display:flex;justify-content:space-between;gap:9px;font-size:.8rem;padding:3px 0;border-bottom:1px dashed #f0f0f0;}
-    .cs-ok{font-size:.75rem;color:#1b5e20;font-style:italic;}
-    /* ── Згоди: батьки ── */
-    .pc-card{background:#f1f8e9;border:1px solid #c5e1a5;border-radius:11px;padding:12px;margin-bottom:8px;}
-    .pc-card.answered{background:#fff;border-color:#e0e0e0;}
-    .pc-title{font-weight:800;font-size:.9rem;color:#33691e;}
-    .pc-text{font-size:.82rem;color:#555;margin-top:4px;line-height:1.45;}
-    .pc-deadline{font-size:.74rem;color:#888;margin-top:5px;}
-    .pc-btns{display:flex;gap:8px;margin-top:10px;}
-    .pc-yes,.pc-no{flex:1;margin:0;padding:10px;font-size:.85rem;font-weight:700;border:none;border-radius:9px;cursor:pointer;}
-    .pc-yes{background:#43a047;color:#fff;}
-    .pc-no{background:#fff;color:var(--red);border:1px solid #f5c6cb;}
-    .pc-done{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:.83rem;font-weight:700;color:#33691e;flex-wrap:wrap;}
-    .pc-when{font-size:.72rem;color:#999;font-weight:400;}
-    .pc-change{width:auto;margin:0;padding:3px 9px;font-size:.72rem;background:#eceff1;color:#555;border:none;border-radius:7px;cursor:pointer;}
-    /* ── Відсутність вчителів і заміни ── */
-    .sa-card{background:#fff;border:1px solid #ffcc80;border-radius:10px;padding:10px;margin-bottom:8px;}
-    .sa-head{display:flex;justify-content:space-between;align-items:flex-start;gap:9px;}
-    .sa-mail{font-size:.72rem;color:#999;}
-    .sa-reason{font-size:.78rem;color:#e65100;margin-top:3px;}
-    .sa-sub{font-size:.76rem;font-weight:700;margin:7px 0 4px 0;color:#555;}
-    .sa-none{font-size:.76rem;color:#aaa;font-style:italic;margin-top:6px;}
-    .sa-lesson{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:4px 0;border-top:1px dashed #f0e2cc;font-size:.79rem;flex-wrap:wrap;}
-    .sa-l-info{color:#444;}
-    .sa-cover{color:#1b5e20;font-weight:700;white-space:nowrap;}
-    .sa-x{width:auto;margin:0 0 0 4px;padding:0 5px;background:none;border:none;color:var(--red);cursor:pointer;font-size:.85rem;}
-    .sa-pick{width:auto;max-width:190px;margin:0;padding:3px 6px;font-size:.75rem;}
-    .sub-badge{font-size:.64rem;font-weight:800;background:#fff3e0;color:#e65100;border:1px solid #ffcc80;border-radius:8px;padding:0 6px;vertical-align:middle;}
-    /* ── Глобальний пошук ── */
-    .gs-row{display:grid;grid-template-columns:auto 1fr;gap:2px 8px;padding:7px 9px;background:#fff;border:1px solid #e0e8ef;border-radius:8px;margin-bottom:4px;cursor:pointer;}
-    .gs-row:hover{border-color:#90caf9;background:#f5faff;}
-    .gs-tag{font-size:.66rem;font-weight:800;padding:1px 7px;border-radius:9px;align-self:start;white-space:nowrap;}
-    .gs-tag.st{background:#e8f5e9;color:#1b5e20;}
-    .gs-tag.pa{background:#f3e5f5;color:#7b1fa2;}
-    .gs-main{font-size:.85rem;font-weight:700;color:#333;}
-    .gs-sub{grid-column:2;font-size:.74rem;color:#888;line-height:1.4;}
-    /* ── Статистика відвідуваності ── */
-    .as-sum{display:flex;gap:10px;margin-bottom:10px;}
-    .as-sum>div{flex:1;background:#fff;border:1px solid #f5c6cb;border-radius:9px;padding:9px;text-align:center;}
-    .as-sum b{display:block;font-size:1.5rem;color:#b71c1c;}
-    .as-sum span{font-size:.7rem;color:#888;}
-    .as-title{font-size:.8rem;font-weight:800;color:#b71c1c;margin:10px 0 5px 0;}
-    .as-classes{display:flex;flex-wrap:wrap;gap:4px;}
-    .as-cls{font-size:.74rem;background:#fff;border:1px solid #f5c6cb;border-radius:10px;padding:2px 8px;}
-    .as-cls.zero{opacity:.45;border-color:#e0e0e0;}
-    .as-row{display:flex;justify-content:space-between;gap:9px;padding:5px 8px;background:#fff;border:1px solid #eee;border-radius:8px;margin-bottom:4px;font-size:.82rem;}
-    .as-name{color:#333;}
-    .as-c{color:#aaa;font-size:.72rem;}
-    .as-nums{color:#b71c1c;white-space:nowrap;font-size:.78rem;}
-    /* ── Учні без оцінок ── */
-    .ug-row{display:flex;justify-content:space-between;gap:9px;padding:6px 9px;border-bottom:1px dashed #eee;font-size:.83rem;}
-    .ug-row.warn{background:#fff8e1;border-radius:7px;border-bottom-color:transparent;}
-    .ug-name{color:#333;font-weight:600;}
-    .ug-when{color:#888;font-size:.76rem;white-space:nowrap;}
-    /* ── Табель (рендер для PDF) ── */
-    .rc-page{font-family:'Montserrat',sans-serif;padding:26px 30px;background:#fff;color:#222;width:760px;box-sizing:border-box;}
-    .rc-head{text-align:center;border-bottom:3px solid #22b8cf;padding-bottom:11px;margin-bottom:16px;}
-    .rc-title{font-size:24px;font-weight:800;color:#00796b;}
-    .rc-school{font-size:13px;color:#777;margin-top:3px;}
-    .rc-meta{display:flex;gap:26px;flex-wrap:wrap;font-size:14px;margin-bottom:16px;}
-    .rc-table{width:100%;border-collapse:collapse;font-size:14px;}
-    .rc-table th{background:#e0f7fa;color:#00838f;padding:9px 7px;border:1px solid #b2ebf2;font-weight:800;}
-    .rc-table td{padding:8px 7px;border:1px solid #e0e0e0;}
-    .rc-subj{font-weight:600;}
-    .rc-val{text-align:center;font-weight:800;font-size:16px;color:#00796b;}
-    .rc-foot{display:flex;justify-content:space-between;margin-top:26px;font-size:12px;color:#777;}
-    .rc-sign{color:#444;}
-    /* ── Підсумкові оцінки ── */
-    .sem-info{font-size:.78rem;color:#666;margin:0 0 7px 0;}
-    .sem-wrap{max-height:48vh;overflow-y:auto;border:1px solid #e0e0e0;border-radius:9px;}
-    .sem-table{width:100%;border-collapse:collapse;font-size:.82rem;}
-    .sem-table th{position:sticky;top:0;background:#e0f7fa;color:#00838f;font-size:.72rem;padding:6px 5px;border-bottom:1px solid #b2ebf2;z-index:1;}
-    .sem-table td{padding:5px;border-bottom:1px solid #f0f0f0;text-align:center;}
-    .sem-name{text-align:left!important;font-weight:600;color:#333;}
-    .sem-avg{color:#777;font-size:.8rem;}
-    .sem-cnt{font-size:.66rem;color:#aaa;}
-    .sem-auto{color:#00838f;font-weight:800;}
-    .sem-in{width:46px;margin:0;padding:5px;text-align:center;font-weight:800;font-size:.95rem;border:2px solid #b2ebf2;border-radius:7px;}
-    .sem-in:focus{border-color:#00838f;outline:none;}
-    .sem-flag{color:var(--orange);font-weight:800;width:22px;}
-    /* Підсумкові в кабінеті батьків/учня */
-    .fin-box{background:#e0f7fa;border:1px solid #80deea;border-radius:10px;padding:10px 12px;margin-bottom:10px;}
-    .fin-title{font-size:.82rem;font-weight:800;color:#00838f;margin-bottom:6px;}
-    .fin-row{display:flex;justify-content:space-between;align-items:center;gap:9px;padding:3px 0;font-size:.85rem;}
-    #btn-hw-copy{width:auto;margin:0;padding:8px 14px;font-size:.82rem;font-weight:700;border:none;border-radius:9px;cursor:pointer;background:#e8f4fd;color:#0d47a1;border:1px solid #bbdefb;}
-    #btn-hw-copy:hover{background:#0d47a1;color:#fff;}
-    .hw-copy-opt{display:flex;align-items:center;gap:8px;padding:7px 9px;border:1px solid #e0e0e0;border-radius:8px;margin-bottom:5px;font-size:.86rem;cursor:pointer;}
-    .hw-copy-opt:hover{background:#f5f9ff;border-color:#bbdefb;}
-    .hw-copy-opt input{width:17px;height:17px;margin:0;cursor:pointer;}
-    .ai-ctx{margin-top:8px;background:#faf7ff;border:1px solid #e2d6f0;border-radius:10px;padding:9px 11px;}
-    .ai-ctx summary{cursor:pointer;font-size:.8rem;font-weight:700;color:#7b1fa2;}
-    .ai-ctx label{margin-top:0;font-size:.76rem;color:#666;}
-    .ai-ctx input,.ai-ctx select,.ai-ctx textarea{font-size:.85rem;}
-    .ai-ctx-note{font-size:.72rem;color:#8a6d1f;background:#fff8e1;border:1px solid #ffe0a3;border-radius:8px;padding:7px 9px;margin:9px 0 0 0;line-height:1.45;}
-    .ai-hw-msg{margin:7px 0 0 0;font-size:.8rem;padding:8px 11px;border-radius:8px;background:#f3e5f5;color:#4a148c;border:1px solid #ce93d8;}
-    .ai-hw-msg.err{background:#fdecea;color:#b71c1c;border-color:#f5c6cb;}
-    /* Блоки AI у кабінетах батьків та учня */
-    .ai-help-box{margin-top:11px;border-top:1px dashed #cfd8dc;padding-top:10px;}
-    #btn-ai-parent,#btn-ai-student,#btn-ai-ann{width:auto;margin:0;padding:8px 14px;font-size:.82rem;font-weight:700;border:none;border-radius:9px;cursor:pointer;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;white-space:nowrap;}
-    #btn-ai-parent:disabled,#btn-ai-student:disabled,#btn-ai-ann:disabled{opacity:.6;cursor:wait;}
-    .ai-out{margin-top:9px;background:#fff;border:1px solid #d1c4e9;border-left:4px solid var(--purple);border-radius:9px;padding:11px 13px;font-size:.85rem;line-height:1.55;color:#333;white-space:pre-wrap;}
-    /* ── БАТЬКИ УЧНІВ (зріз для директора) ── */
-    .po-row{display:flex;gap:11px;align-items:flex-start;padding:8px;background:#fff;border:1px solid #e8e0f0;border-radius:9px;margin-bottom:5px;font-size:.83rem;}
-    .po-child{flex:0 0 40%;font-weight:700;color:#4a148c;word-break:break-word;display:flex;flex-direction:column;gap:3px;align-items:flex-start;}
-    .po-child-name{line-height:1.35;}
-    .po-child-acts{display:flex;gap:4px;}
-    .po-allergy{font-size:.7rem;font-weight:800;color:#b71c1c;background:#ffebee;border:1px solid #ef9a9a;border-radius:10px;padding:1px 7px;cursor:help;}
-    .sc-group{margin-top:14px;padding-top:11px;border-top:1px dashed #ddd;}
-    .sc-group:first-child{margin-top:0;padding-top:0;border-top:none;}
-    .sc-group>b{font-size:.86rem;color:var(--teal);}
-    .sc-group.danger>b{color:var(--red);}
-    .sc-group.danger{background:#fff5f5;border-radius:10px;padding:11px;border:1px solid #f5c6cb;border-top:1px solid #f5c6cb;}
-    #sc-fields label{margin-top:9px;font-size:.78rem;color:#666;}
-    #sc-fields input,#sc-fields textarea{margin-top:3px;font-size:.88rem;}
-    #sc-fields [readonly]{background:#f7f8fa;color:#666;}
-    .sc-lock{font-size:.68rem;color:#8a6d1f;background:#fff8e1;border:1px solid #ffe0a3;border-radius:8px;padding:0 6px;font-weight:600;}
-    .po-login{font-size:.7rem;font-weight:600;color:#1b5e20;background:#e8f5e9;border:1px solid #a5d6a7;border-radius:10px;padding:1px 7px;word-break:break-all;}
-    .po-login.none{color:#8a6d1f;background:#fff8e1;border-color:#ffe0a3;}
-    .po-del{background:#fdecea!important;border-color:#f5c6cb!important;}
-    .po-del:hover{background:var(--red)!important;}
-    .ds-ok{width:auto;margin:0;padding:2px 9px;font-size:.75rem;background:var(--green);color:#fff;border:none;border-radius:7px;cursor:pointer;}
-    .po-parents{flex:1;display:flex;flex-direction:column;gap:3px;}
-    .po-parent{padding:5px 0;border-bottom:1px dashed #f0e8f6;}
-    .po-parent:last-child{border-bottom:none;}
-    .po-line{display:flex;gap:6px;align-items:baseline;flex-wrap:wrap;}
-    .po-name{color:#333;font-size:.83rem;}
-    .po-role{font-size:.72rem;color:#7b1fa2;white-space:nowrap;}
-    .po-email{color:#777;word-break:break-all;font-size:.75rem;}
-    .po-new{font-size:.68rem;color:#f39c12;white-space:nowrap;}
-    .po-none{font-size:.78rem;color:var(--red);font-style:italic;}
-    .po-ok{background:#e8f5e9;border:1px solid #a5d6a7;color:#1b5e20;border-radius:9px;padding:8px 11px;font-size:.8rem;font-weight:700;margin-bottom:8px;}
-    .po-contacts{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:2px;}
-    .po-contacts a{color:var(--blue);text-decoration:none;font-size:.76rem;white-space:nowrap;}
-    .po-contacts a:hover{text-decoration:underline;}
-    .po-addr{font-size:.75rem;color:#888;}
-    .po-edit{width:auto;margin:0;padding:2px 7px;font-size:.72rem;background:#fff8e1;border:1px solid #ffe0a3;border-radius:7px;cursor:pointer;line-height:1.5;}
-    .po-edit:hover{background:#f39c12;}
-    #pe-fields label{margin-top:11px;font-size:.79rem;color:#666;}
-    #pe-fields input{margin-top:3px;}
-    /* ── Журнал дій ── */
-    .audit-row{display:grid;grid-template-columns:74px 1fr;gap:2px 9px;padding:7px 9px;background:#fff;border:1px solid #e4e8ea;border-radius:8px;margin-bottom:4px;font-size:.79rem;}
-    .audit-time{color:#90a4ae;font-size:.72rem;white-space:nowrap;}
-    .audit-act{font-weight:700;color:#37474f;}
-    .audit-det{grid-column:2;color:#546e7a;word-break:break-word;}
-    .audit-who{grid-column:2;color:#90a4ae;font-size:.72rem;}
-    @media(min-width:900px){
-      .audit-row{grid-template-columns:78px 210px 1fr 150px;align-items:baseline;}
-      .audit-det,.audit-who{grid-column:auto;}
-      .audit-who{text-align:right;}
-    }
-    .bd-box{background:#fff8f0;border:1px solid #ffd9b0;border-radius:10px;padding:9px 11px;margin-bottom:10px;}
-    .bd-title{font-size:.82rem;font-weight:800;color:#d35400;margin-bottom:5px;}
-    .bd-row{display:flex;justify-content:space-between;gap:9px;font-size:.83rem;padding:2px 0;}
-    .bd-row.me{font-weight:800;color:#d35400;}
-    .bd-name{color:#444;}
-    .bd-date{color:#999;white-space:nowrap;}
-    /* ── Перемикач сповіщень ── */
-    .push-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
-    .push-label{flex:1;font-size:.85rem;font-weight:600;color:#555;}
-    .push-btn{width:auto;margin:0;padding:7px 14px;font-size:.8rem;font-weight:700;border:none;border-radius:9px;cursor:pointer;background:linear-gradient(135deg,#00c6ff,#4facfe);color:#fff;}
-    .push-hint{font-size:.74rem;color:#999;flex:1 1 100%;}
-    .pe-section{margin-top:16px;border-top:1px dashed #ddd;padding-top:11px;}
-    .pe-section b{font-size:.84rem;color:var(--purple);}
-    .pe-kid{display:flex;gap:7px;align-items:center;margin-top:6px;}
-    .pe-kid-name{flex:1;font-size:.82rem;font-weight:600;color:#333;}
-    .pe-kid select{width:auto;flex:0 0 128px;margin:0;padding:5px 7px;font-size:.76rem;}
-    .pe-unlink{width:auto;flex-shrink:0;margin:0;padding:5px 9px;font-size:.78rem;background:#fdecea;color:var(--red);border:1px solid #f5c6cb;border-radius:7px;cursor:pointer;}
-    .pe-unlink:hover{background:var(--red);color:#fff;}
-    /* ── СПИСОК УЧНІВ У ДИРЕКТОРА ── */
-    .ds-row{display:flex;align-items:center;gap:9px;padding:6px 8px;background:#fff;border:1px solid #e0e0e0;border-radius:8px;margin-bottom:4px;font-size:.85rem;}
-    .ds-num{width:22px;text-align:center;color:#888;font-size:.75rem;flex-shrink:0;}
-    .ds-name{flex:1;font-weight:600;color:#333;word-break:break-word;}
-    .ds-edit{width:auto;flex-shrink:0;margin:0;padding:6px 9px;font-size:.8rem;background:#fff8e1;border:1px solid #ffe0a3;border-radius:8px;cursor:pointer;}
-    .ds-edit:hover{background:#f39c12;}
-    .ds-ok{width:auto;flex-shrink:0;margin:0;padding:6px 11px;font-size:.8rem;background:var(--green);color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:700;}
-    .staff-actions{display:flex;flex-direction:column;gap:4px;flex-shrink:0;}
-    .staff-reset{width:auto;margin:0;padding:6px 11px;font-size:.75rem;background:#e8f4fd;color:#0d47a1;border:1px solid #bbdefb;border-radius:8px;cursor:pointer;font-weight:700;white-space:nowrap;}
-    .staff-reset:hover{background:#0d47a1;color:#fff;}
-    .staff-del{width:auto;flex-shrink:0;margin:0;padding:6px 11px;font-size:.75rem;background:#fdecea;color:var(--red);border:1px solid #f5c6cb;border-radius:8px;cursor:pointer;font-weight:700;white-space:nowrap;}
-    .staff-del:hover{background:var(--red);color:#fff;}
-    .skill-tag.remove{cursor:pointer;background:#fdecea;color:var(--red);border-color:#f5c6cb;}
-    .skill-tag.remove:hover{background:var(--red);color:#fff;}
-    /* ── RETAKE ── */
-    .retake-btn{width:auto;padding:4px 10px;margin:0;font-size:var(--text-xs);background:#fff3cd;color:#856404;border:1px solid #ffeeba;border-radius:var(--badge-radius);cursor:pointer;font-weight:700;}
-    .retake-btn:hover{background:#f39c12;color:#fff;}
-    .retake-btn:disabled{opacity:.4;cursor:not-allowed;}
-    /* ── CURRICULUM ── */
-    .topic-row{display:flex;align-items:center;gap:8px;padding:6px;border-bottom:1px dashed #eee;font-size:.85rem;}
-    .topic-row input[type=checkbox]{width:18px;height:18px;cursor:pointer;margin:0;}
-    .topic-row.covered span{text-decoration:line-through;color:#aaa;}
-    .smart-alert{background:#fff3cd;border:1px solid #ffc107;border-radius:10px;padding:10px 14px;font-size:.85rem;color:#856404;margin-top:10px;display:none;}
-    /* ── TEXTBOOKS ── */
-    .textbook-item{display:flex;align-items:center;gap:8px;padding:8px;background:#f0f8ff;border-radius:9px;border:1px solid #d0e8f2;margin-bottom:6px;font-size:.85rem;}
-    .textbook-item a{color:var(--blue);font-weight:700;text-decoration:none;flex:1;}
-    .textbook-item a:hover{text-decoration:underline;}
-    /* ── BEHAVIOR ── */
-    .behavior-row{display:flex;gap:8px;align-items:center;margin-top:8px;}
-    .behavior-grade-btn{flex:1;padding:9px 4px;border-radius:9px;font-weight:800;font-size:.9rem;border:2px solid #ddd;background:#f8f9fa;cursor:pointer;margin:0;transition:.2s;}
-    .behavior-grade-btn.sel-6{background:#e3f2fd;border-color:var(--g6);color:var(--g6);}
-    .behavior-grade-btn.sel-5{background:#e8f5e9;border-color:var(--g5);color:var(--g5);}
-    .behavior-grade-btn.sel-4{background:#f1f8e9;border-color:var(--g4);color:var(--g4);}
-    .behavior-grade-btn.sel-3{background:#fff8e1;border-color:var(--g3);color:var(--g3);}
-    .behavior-grade-btn.sel-2{background:#fbe9e7;border-color:var(--g2);color:var(--g2);}
-    .behavior-grade-btn.sel-1{background:#ffebee;border-color:var(--g1);color:var(--g1);}
-    /* ── MATRIX ── */
-    .matrix-wrapper{overflow-x:auto;overflow-y:auto;max-height:65vh;background:#fff;border-radius:12px;border:1px solid #eee;margin-top:14px;}
-    .matrix-table{width:100%;border-collapse:collapse;min-width:1400px;}
-    .matrix-table th{background:#f8f9fa;position:sticky;top:0;padding:11px 9px;z-index:2;border-bottom:2px solid #ddd;border-right:1px solid #eee;color:#2c3e50;font-size:.92rem;text-align:center;font-weight:800;}
-    .matrix-table td{vertical-align:top;width:170px;padding:5px;border-right:1px solid #eee;border-bottom:1px solid #eee;}
-    .time-col{position:sticky;left:0;background:#f8f9fa;z-index:1;border-right:2px solid #ddd;text-align:center;vertical-align:middle!important;font-weight:700;color:#555;width:80px;}
-    .matrix-cell-container{display:flex;flex-direction:column;gap:5px;height:100%;}
-    .matrix-cell{border-radius:8px;padding:9px;cursor:pointer;transition:.2s;min-height:82px;display:flex;flex-direction:column;position:relative;background:#fff;border:1px dashed #ccc;flex:1;}
-    .matrix-cell:hover{transform:translateY(-2px);box-shadow:0 4px 10px rgba(0,0,0,.1);border-style:solid;border-color:var(--teal);z-index:10;}
-    .cell-lesson{background-color:#fff3e0;border:1px solid #ffe0b2;border-left:4px solid #ff9800;}
-    .cell-club{background-color:#fce4ec;border:1px solid #f8bbd0;border-left:4px solid #e91e63;}
-    .cell-break{background-color:#f5f5f5;border:1px solid #e0e0e0;color:#888;align-items:center;justify-content:center;text-align:center;font-style:italic;}
-    .cell-empty{display:flex;align-items:center;justify-content:center;color:#aaa;background:transparent;}
-    .cell-empty:hover{background:#e0f2f1;color:var(--teal);}
-    .cell-subj{font-weight:700;font-size:.83rem;color:#333;margin-bottom:4px;line-height:1.2;}
-    .cell-teacher{font-size:.72rem;color:#e67e22;display:flex;align-items:center;gap:4px;font-weight:600;margin-bottom:4px;}
-    .cell-time{font-size:.68rem;color:#999;margin-top:auto;text-align:right;background:rgba(255,255,255,.7);padding:2px 4px;border-radius:4px;display:inline-block;align-self:flex-end;}
-    .cell-student-linked{font-size:.68rem;color:#8e44ad;background:#f3e5f5;padding:2px 6px;border-radius:4px;font-weight:800;margin-top:4px;border:1px solid #d1c4e9;}
-    .add-parallel-btn{font-size:.72rem;color:#2980b9;text-align:center;cursor:pointer;padding:4px;border:1px dashed #3498db;border-radius:6px;background:#f0f8ff;transition:.2s;margin-top:auto;}
-    .add-parallel-btn:hover{background:#3498db;color:#fff;}
-    .cell-warning-travel{border:2px solid #e67e22!important;box-shadow:inset 0 0 10px rgba(230,126,34,.3);}
-    .cell-warning-conflict{border:2px solid var(--red)!important;box-shadow:inset 0 0 10px rgba(231,76,60,.3);background-color:#fdedec!important;}
-    /* ── QUICK ACTIONS ── */
-    .qa-row{display:flex;gap:8px;margin:12px 0;flex-wrap:wrap;}
-    .qa-btn{flex:1;min-width:130px;padding:var(--space-3) var(--space-2);border-radius:11px;border:none;cursor:pointer;font-weight:700;font-size:var(--text-sm);display:flex;align-items:center;justify-content:center;gap:6px;transition:.2s;margin:0;}
-    .qa-btn:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,0,0,.15);}
-    .qa-grades{background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;}
-    .qa-save{background:linear-gradient(135deg,#43e97b,#38f9d7);color:#1a1a1a;}
-    .qa-exams{background:linear-gradient(135deg,#f39c12,#d35400);color:#fff;}
-    .qa-journal{background:linear-gradient(135deg,var(--purple),#9b59b6);color:#fff;}
-    /* grade legend */
-    .grade-legend{display:flex;gap:5px;flex-wrap:wrap;font-size:.72rem;margin:6px 0;}
-    .grade-legend span{padding:2px 7px;border-radius:6px;font-weight:700;}
-    /* progress bar */
-    .progress-bar-container{width:100%;background-color:#ffeaa7;border-radius:10px;overflow:hidden;margin-top:12px;height:16px;box-shadow:inset 0 1px 3px rgba(0,0,0,.1);}
-    .progress-bar{height:100%;background:linear-gradient(90deg,#f39c12,#e74c3c);width:0%;transition:width .8s ease-out;}
-    /* cal */
-    .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-top:12px;}
-    .cal-header{font-weight:700;color:#555;text-align:center;padding-bottom:4px;border-bottom:2px solid #ddd;font-size:.85rem;}
-    .cal-day{background:#fdfbfb;border:1px solid #eee;border-radius:8px;padding:8px 4px;text-align:center;cursor:pointer;transition:.2s;min-height:46px;display:flex;flex-direction:column;justify-content:center;font-size:.95rem;}
-    .cal-day:hover{background:#e0f2f1;border-color:var(--teal);transform:scale(1.05);}
-    .cal-day.has-1{background-color:#fff3cd;border-color:#ffeeba;color:#d35400;font-weight:700;}
-    .cal-day.has-2{background-color:#f8d7da;border-color:#f5c6cb;color:#c0392b;font-weight:700;}
-    .cal-day.has-exam-p{background-color:#fff3cd;border-color:#ffeeba;color:#d35400;font-weight:700;}
-    .cal-day.has-holiday-p{background-color:#f8d7da;border-color:#f5c6cb;color:#c0392b;font-weight:700;}
-    .cal-day.has-break-p{background-color:#e8f5e9;border-color:#a5d6a7;color:#1b5e20;font-weight:700;}
-    .cal-day.has-multiple-p{background:linear-gradient(135deg,#fff3cd 50%,#f8d7da 50%);font-weight:700;}
-    /* date picker box */
-    .date-picker-box{background:#e0f2f1;padding:14px;border-radius:12px;margin-bottom:18px;text-align:center;box-shadow:0 4px 10px rgba(0,109,119,.1);}
-    #status-msg{display:none;margin-top:9px;text-align:center;font-weight:700;font-size:.92rem;padding:9px;border-radius:8px;}
-    /* topic card */
-    .topic-card{background:linear-gradient(135deg,#667eea12,#764ba212);border:1px solid #764ba230;border-radius:12px;padding:13px;margin-bottom:12px;}
-    .topic-card label{margin-top:0;color:#764ba2;font-size:.83rem;}
-    .topic-display{background:#f3e5f5;border-left:3px solid #764ba2;padding:6px 11px;border-radius:6px;font-size:.83rem;color:#4a148c;font-weight:600;margin-top:5px;}
-    /* ── CURRICULUM ── */
-    .curr-drop-zone{border:2px dashed var(--blue);border-radius:11px;padding:16px;text-align:center;background:#f0f8ff;cursor:pointer;transition:.2s;display:block;}
-    .curr-drop-zone:hover{background:#d6ecff;border-color:#1565c0;}
-    .curr-drop-zone input[type=file]{display:none;}
-    .curr-drop-zone.has-file{border-style:solid;background:#e8f5e9;border-color:var(--green);}
-    .topic-preview{background:#fff;border-radius:9px;padding:11px;margin:6px 0;border:1px solid #e0e0e0;font-size:.85rem;}
-    .topic-preview-subj{font-weight:800;color:var(--purple);margin-bottom:5px;}
-    .topic-preview-row{display:grid;grid-template-columns:30px 1fr 80px 50px;gap:8px;padding:4px 0;border-bottom:1px dashed #f0f0f0;font-size:.78rem;align-items:center;}
-    .topic-preview-row:last-child{border-bottom:none;}
-    .topic-preview-row .num{color:var(--orange);font-weight:800;text-align:center;}
-    .topic-preview-row .hrs{color:#888;text-align:center;font-size:.72rem;}
-    .topic-select-wrap{position:relative;}
-    .topic-select{width:100%;padding:11px;border:1px solid #ce93d8;border-radius:11px;font-size:.92rem;background:#fff;cursor:pointer;font-family:inherit;}
-    .topic-select option:disabled{color:#bbb;background:#f5f5f5;}
-    .topic-status-bar{display:flex;justify-content:space-between;align-items:center;font-size:.76rem;color:#666;margin-top:6px;padding:6px 10px;background:#f3e5f5;border-radius:7px;}
-    .topic-progress-mini{flex:1;height:5px;background:#e0e0e0;border-radius:3px;margin:0 10px;overflow:hidden;min-width:30px;}
-    .topic-progress-mini-fill{height:100%;background:linear-gradient(90deg,#9c27b0,#673ab7);transition:width .4s;}
-    .ct-badge{display:inline-block;background:linear-gradient(135deg,#ff6e40,#ff5252);color:#fff;padding:3px 10px;border-radius:12px;font-size:var(--text-xs);font-weight:800;margin-left:6px;text-transform:uppercase;letter-spacing:.5px;}
-    /* ── PHASE 6: TOPIC DROPDOWN (replaces native <select>, color-coded remaining hours) ── */
-    .topic-dropdown{position:relative;}
-    .topic-dropdown-trigger{width:100%;text-align:left;background:#fff;border:1px solid #ccc;border-radius:8px;padding:9px 11px;cursor:pointer;}
-    .topic-dropdown-list{position:absolute;z-index:50;top:100%;left:0;right:0;background:#fff;border:1px solid #ccc;border-radius:8px;max-height:260px;overflow-y:auto;box-shadow:0 4px 14px rgba(0,0,0,.12);margin-top:3px;}
-    .topic-opt{padding:8px 11px;cursor:pointer;border-bottom:1px solid #f0f0f0;font-size:.85rem;}
-    .topic-opt:hover{background:#f5f5f5;}
-    .topic-opt-green{border-left:4px solid #2ecc71;}
-    .topic-opt-yellow{border-left:4px solid #f39c12;background:#fffdf5;}
-    .topic-opt-red{border-left:4px solid #e74c3c;background:#fdf2f0;color:#999;cursor:not-allowed;}
-    .topic-opt-custom{border-left:4px solid #9575cd;font-style:italic;}
-    /* ═══════════════════════════════════════════════════════
-       RESPONSIVE — MOBILE / TABLET / DESKTOP
-       ═══════════════════════════════════════════════════════ */
-    /* === Touch targets: prevent iOS zoom on input focus === */
-    @media (pointer: coarse) {
-      input[type=text], input[type=email], input[type=password], input[type=date], input[type=month], select, textarea { font-size: 16px !important; }
-      button { min-height: 44px; }
-      .reaction-btn { min-height: 44px !important; min-width: 44px !important; }
-      .g-cell { min-height: 32px; min-width: 32px; }
-    }
-    /* === SMALL MOBILE (<=480px) === */
-    @media (max-width: 480px) {
-      body { padding: 10px; }
-      .container { padding: 16px 14px; border-radius: 14px; margin-bottom: 20px; }
-      h2 { font-size: 1.25rem; }
-      h3 { font-size: 1rem; margin-top: 18px; }
-      label { font-size: .85rem; margin-top: 11px; }
-      button { padding: 12px; font-size: .9rem; margin-top: 13px; }
-      input[type=email], input[type=password], input[type=text], input[type=date], input[type=month], select, textarea { padding: 10px; font-size: 15px; }
-      /* Profile bar — compact */
-      #profile-bar { gap: 10px; padding: 10px; }
-      #pb-avatar { width: 42px !important; height: 42px !important; }
-      #pb-name { font-size: .95rem !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 130px; }
-      #pb-role { font-size: .72rem !important; }
-      #profile-bar > button { padding: 7px 11px !important; font-size: .78rem !important; }
-      /* Quick actions stack vertically on tiny screens */
-      .qa-row { flex-direction: column; gap: 7px; }
-      .qa-btn { width: 100%; min-width: 0; padding: 12px; }
-      /* Two-button rows wrap nicely */
-      #t-exams-journal-btns, .qa-row { gap: 7px; }
-      /* Attendance form — wraps to vertical */
-      #t-mark-absent-block { flex-wrap: wrap; gap: 7px; }
-      #t-mark-absent-block select { flex: 1 1 100%; }
-      #t-mark-absent-block button { flex: 1 1 100%; }
-      /* Sticker / behavior / comment rows wrap */
-      .sticker-row, .behavior-row, [style*="display:flex"][style*="gap:8px"][style*="align-items:flex-end"] { flex-wrap: wrap; }
-      /* Modals — full screen feel */
-      .modal-content { padding: 18px 14px; border-radius: 14px; max-height: 95vh; }
-      .modal-overlay { padding: 4px; }
-      #grade-editor-popup { min-width: 175px; padding: 10px; }
-      #grade-editor-popup .type-btn { padding: 5px 2px; font-size: .65rem; }
-      /* Date picker box */
-      .date-picker-box { padding: 11px; }
-      /* Lesson rows in dynamic schedule — more compact */
-      .lesson-row { padding: 7px 8px; gap: 8px; }
-      .lesson-num { width: 22px; height: 22px; font-size: .68rem; }
-      .lesson-subj { font-size: .82rem; }
-      .lesson-time { font-size: .68rem; }
-      .lesson-countdown { font-size: .7rem; padding: 2px 6px; }
-      /* Payments — tighter */
-      .payment-card { padding: 13px; }
-      .payment-row { font-size: .82rem; padding: 6px 0; }
-      /* Stats counters smaller */
-      .data-card h4 { font-size: .82rem !important; }
-      /* Schedule day label */
-      .schedule-day-label { font-size: .72rem; }
-      /* Smart matching form */
-      #sm-class, #sm-subject, #sm-date, #sm-time { flex: 1 1 100% !important; min-width: 0 !important; }
-      /* Cell editor tighter */
-      #edit-cell-modal .modal-content { padding: 16px 12px; }
-      /* Toast remains at bottom (standard UX) */
-      .toast { font-size: .85rem; padding: 11px 14px; }
-      /* Reactions modal */
-      .reaction-box { gap: 5px; }
-    }
-    /* === MEDIUM MOBILE (481-767px) === */
-    @media (min-width: 481px) and (max-width: 767px) {
-      .container { max-width: 100%; padding: 22px 20px; }
-      .qa-btn { font-size: .85rem; padding: 12px 8px; }
-    }
-    /* === TABLET (768-1023px) === */
-    @media (min-width: 768px) and (max-width: 1023px) {
-      body { padding: 24px; }
-      .container { max-width: 720px; padding: 30px 32px; }
-      h2 { font-size: 1.55rem; }
-      .qa-btn { font-size: .92rem; }
-      /* Stats and counters can sit in row of 3 */
-      #teacher-screen [style*="display:flex"][style*="gap:9px"] { gap: 12px; }
-      /* Modals get a bit wider */
-      .modal-content { max-width: 600px; }
-      /* Journal gets its own ceiling — see the desktop breakpoint for why: it
-         should use more of a big screen without becoming absurdly wide on one. */
-      #journal-modal .modal-content { max-width: min(95vw, 1100px); }
-      #visual-matrix-modal .modal-content { max-width: 95%; }
-    }
-    /* ═══════════════════════════════════════════════════════
-       DESKTOP (>=1024px) — ПРОРАБОТАННЫЕ LAYOUTS ДЛЯ КАЖДОГО КАБИНЕТА
-       ═══════════════════════════════════════════════════════ */
-    @media (min-width: 1024px) {
-      body { padding: 30px 40px; align-items: flex-start; }
-      .container { max-width: 1180px; padding: 30px 40px; border-radius: 22px; }
-      h2 { font-size: 1.7rem; }
-      h3 { font-size: 1.15rem; margin-top: 24px; }
-      /* ───── LOGIN ───── */
-      #login-screen[style*="display: block"], #login-screen[style*="display:block"] {
-        max-width: 440px; margin: 50px auto;
-      }
-      #login-screen h2 { font-size: 1.6rem; }
-      /* ───── PROFILE BAR ───── */
-      #profile-bar { padding: 18px 22px; }
-      #pb-avatar { width: 56px !important; height: 56px !important; }
-      #pb-name { font-size: 1.2rem !important; }
-      #pb-role { font-size: .9rem !important; }
-      /* ───── DATE PICKER (горизонтальный) ───── */
-      .date-picker-box { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding: 16px 22px; }
-      .date-picker-box label { margin: 0 !important; flex-shrink: 0; }
-      .date-picker-box input[type=date] { flex: 1; max-width: 280px; margin-top: 0 !important; }
-      #teacher-class-selector-box { flex: 1 1 100%; padding-bottom: 14px !important; margin-bottom: 14px !important; display: flex; align-items: center; gap: 14px; }
-      #teacher-class-selector-box select { flex: 1; max-width: 280px; margin-top: 0 !important; }
-      #teacher-class-selector-box label { margin-top: 0 !important; }
-      /* ═════════════════════════════════════════
-         ALL 4 ROLE SCREENS — .screen-section is the grid unit.
-         Each screen's HTML groups its cards/details into
-         <section class="screen-section"> (optionally "half" width)
-         blocks; this replaces the old per-inline-style attribute
-         selectors, which broke the moment a card's inline style
-         string changed and couldn't account for new cards at all.
-         ═════════════════════════════════════════ */
-      #admin-screen[style*="display: block"], #admin-screen[style*="display:block"],
-      #director-screen[style*="display: block"], #director-screen[style*="display:block"],
-      #teacher-screen[style*="display: block"], #teacher-screen[style*="display:block"] {
-        display: grid !important;
-        grid-template-columns: 1fr 1fr;
-        column-gap: 28px;
-        row-gap: var(--space-6);
-        align-items: start;
-      }
-      #parent-screen[style*="display: block"], #parent-screen[style*="display:block"],
-      #student-screen[style*="display: block"], #student-screen[style*="display:block"] {
-        display: grid !important;
-        grid-template-columns: 1.25fr 1fr;
-        column-gap: 28px;
-        row-gap: var(--space-6);
-        align-items: start;
-      }
-      #admin-screen[style*="display: block"], #admin-screen[style*="display:block"] {
-        max-width: 800px; margin: 0 auto;
-      }
-      #director-screen > .dtab-bar,
-      #teacher-screen > .dtab-bar,
-      #parent-screen > .dtab-bar,
-      #student-screen > .dtab-bar,
-      #admin-screen > h2, #admin-screen > .btn-logout,
-      #director-screen > h2, #director-screen > .btn-logout,
-      #teacher-screen > h2, #teacher-screen > .btn-logout,
-      #parent-screen > .btn-logout,
-      #student-screen > .btn-logout {
-        grid-column: 1 / -1;
-      }
-      #admin-screen > .screen-section,
-      #director-screen > .screen-section,
-      #teacher-screen > .screen-section,
-      #parent-screen > .screen-section,
-      #student-screen > .screen-section {
-        grid-column: 1 / -1;
-        margin-bottom: 0; /* grid row-gap already spaces sections out */
-        align-self: stretch;
-      }
-      #admin-screen > .screen-section.half,
-      #director-screen > .screen-section.half,
-      #teacher-screen > .screen-section.half,
-      #parent-screen > .screen-section.half,
-      #student-screen > .screen-section.half {
-        grid-column: span 1;
-      }
-      /* ───── PAYMENTS — 3-колоночная структура внутри ───── */
-      #payments-section {
-        display: grid;
-        grid-template-columns: 1fr 1fr 1fr;
-        gap: 18px;
-      }
-      #payments-section > .payment-card { margin-bottom: 0; }
-      #payments-section > .payment-card:nth-child(4) {
-        grid-column: 1 / -1;
-      }
-      /* ═════════════════════════════════════════
-         MODALS — шире и комфортнее на ПК
-         ═════════════════════════════════════════ */
-      .modal-content { max-width: 700px; padding: 32px 36px; }
-      /* Journal: scale with the monitor (min(vw,px)) instead of a flat 95% — on a
-         big/ultrawide desktop 95% of the viewport is excessive for a data table,
-         while on a modest laptop screen it should still use most of the width. */
-      #journal-modal .modal-content { max-width: min(95vw, 1500px); }
-      #visual-matrix-modal .modal-content,
-      #edit-cell-modal .modal-content { max-width: 95%; }
-      #profile-modal .modal-content,
-      #wrapped-modal .modal-content,
-      #reactions-modal .modal-content { max-width: 540px; }
-      #inbox-modal .modal-content { max-width: 720px; height: 85vh; }
-      .modal-overlay { padding: 30px; }
-      /* ───── Журнал table комфортнее (base font up; em metrics scale with it) ───── */
-      .journal-table { font-size: calc(.88rem * var(--journal-scale, 1)); }
-      /* More vertical room on desktop — screens are taller, and the modal's own
-         padding already grew above, so the table can afford a bigger viewport. */
-      #journal-modal .journal-wrap { max-height: 66vh; }
-      /* ───── Lesson rows в schedule крупнее ───── */
-      .lesson-row { padding: 11px 14px; }
-      .lesson-num { width: 28px; height: 28px; font-size: .8rem; }
-      .lesson-subj { font-size: 1rem; }
-      .lesson-time { font-size: .8rem; }
-      /* ───── Quick actions — в один ряд ───── */
-      .qa-row { flex-wrap: nowrap; }
-      /* ───── Toasts — bottom right ───── */
-      #toast-container { left: auto; right: 20px; bottom: 20px; transform: none; }
-      /* ───── Hover effects ───── */
-      .data-card, .payment-card, .schedule-box { transition: box-shadow .25s, transform .25s; }
-      .data-card:hover, .payment-card:hover, .schedule-box:hover { box-shadow: 0 6px 20px rgba(0,0,0,.08); }
-      details[open] { animation: subtleOpen .25s ease-out; }
-      @keyframes subtleOpen { from { opacity: .7; } to { opacity: 1; } }
-    }
-    /* ═══════════════════════════════════════════════════════
-       BIG DESKTOP (>=1440px) — Больше воздуха
-       ═══════════════════════════════════════════════════════ */
-    @media (min-width: 1440px) {
-      .container { max-width: 1320px; padding: 36px 48px; }
-      #parent-screen[style*="display: block"], #parent-screen[style*="display:block"],
-      #student-screen[style*="display: block"], #student-screen[style*="display:block"] {
-        grid-template-columns: 1.3fr 1fr;
-        column-gap: 36px;
-      }
-      #teacher-screen[style*="display: block"], #teacher-screen[style*="display:block"],
-      #director-screen[style*="display: block"], #director-screen[style*="display:block"] {
-        column-gap: 36px;
-      }
-    }
-    /* === Print-friendly === */
-    @media print {
-      body { background: #fff !important; padding: 0; }
-      .container { box-shadow: none; max-width: 100%; padding: 0; }
-      #profile-bar, .btn-logout, #toast-container, .modal-overlay { display: none !important; }
-      .data-card { break-inside: avoid; box-shadow: none !important; border: 1px solid #ddd; }
-    }
-    /* === Accessibility: focus states === */
-    button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
-      outline: 3px solid var(--accent);
-      outline-offset: 2px;
-    }
-    /* === Reduce motion if user prefers === */
-    @media (prefers-reduced-motion: reduce) {
-      *, *::before, *::after {
-        animation-duration: .01ms !important;
-        animation-iteration-count: 1 !important;
-        transition-duration: .01ms !important;
-      }
-    }
-  
-/* Рядок «Повідомлення» під вкладками: доступ звідусіль, але один раз */
-.p-chatbar{margin:0 0 14px 0;}
-.p-chatbar button{position:relative;width:100%;background:var(--purple);color:#fff;
-  padding:12px;border-radius:12px;font-weight:700;font-size:.92rem;}
-/* Заглушка розділу оплат — без жодних сум */
-.pay-soon{display:flex;gap:14px;align-items:flex-start;background:#f7f9fa;
-  border:1px dashed #cfd8dc;border-radius:14px;padding:18px;}
-.pay-soon-icon{font-size:1.7rem;line-height:1;opacity:.5;}
-.pay-soon b{display:block;color:#37474f;font-size:.95rem;margin-bottom:5px;}
-.pay-soon p{margin:0 0 6px 0;font-size:.83rem;color:#78909c;line-height:1.45;}
-.pay-soon-note{font-size:.76rem !important;color:#b0bec5 !important;}
-
-/* Повний розклад на тиждень, розгортається в кабінеті */
-.wk-box{margin-top:10px;}
-.wk-day{background:#fff;border:1px solid #eceff1;border-radius:12px;padding:11px 13px;margin-bottom:8px;}
-.wk-day.today{border-color:#80deea;background:#f0fbfc;}
-.wk-day-name{font-weight:800;font-size:.87rem;color:#37474f;margin-bottom:7px;}
-.wk-today{font-weight:700;font-size:.68rem;color:#00838f;background:#e0f7fa;
-  padding:2px 7px;border-radius:20px;margin-left:6px;vertical-align:middle;}
-.wk-row{display:flex;align-items:baseline;gap:9px;padding:4px 0;border-top:1px dashed #f0f2f3;}
-.wk-row:first-of-type{border-top:none;}
-.wk-num{flex:0 0 18px;font-size:.72rem;color:#b0bec5;font-weight:700;}
-.wk-subj{flex:1;font-size:.85rem;color:#263238;}
-.wk-time{font-size:.75rem;color:#90a4ae;white-space:nowrap;}
-.wk-empty{font-size:.8rem;color:#b0bec5;}
-.wk-full-link{display:block;text-align:center;font-size:.76rem;color:#90a4ae;
-  text-decoration:none;margin-top:8px;}
-
-/* Запізнення: перший блок дня, тому компактний */
-.att-quick .att-hint{margin:0 0 9px 0;font-size:.8rem;color:#8d9ba3;}
-.att-row{display:flex;gap:9px;flex-wrap:wrap;}
-.att-row select{flex:1 1 150px;margin-top:0;}
-</style>
-</head>
-<body>
-<!-- Фон екранів входу: світлові плями в кольорах логотипа замість
-     фонового відео — нуль ваги, нічого не вантажиться ззовні.
-     Видно лише коли <body class="auth-mode">, тобто до входу. -->
-<div id="auth-bg" aria-hidden="true">
-  <div class="glow g1"></div><div class="glow g2"></div>
-  <div class="glow g3"></div><div class="glow g4"></div>
-  <div class="auth-backdrop"></div>
-</div>
-<div id="toast-container"></div>
-<!-- Сюди рендериться розклад для друку; поза друком прихований -->
-<div id="print-area"></div>
-<!-- Табель рендериться сюди приховано, потім знімається html2canvas -->
-<div id="report-card-render" style="position:fixed;left:-10000px;top:0;width:760px;"></div>
-<!-- GRADE EDITOR POPUP -->
-<div id="grade-editor-popup" class="grade-editor-popup">
-  <div style="font-size:.73rem;color:#666;margin-bottom:5px;" id="gep-label">Учень | Предмет | Дата</div>
-  <input type="text" id="gep-value" placeholder="1-6" autocomplete="off">
-  <div class="type-btns" id="gep-type-btns"></div>
-  <div class="editor-actions">
-    <button class="btn-confirm" onclick="confirmGrade()">✔ Зберегти</button>
-    <button class="btn-delete" onclick="deleteGrade()">✖</button>
-    <button class="btn-cancel" onclick="closeGradeEditor()">Скас.</button>
-  </div>
-</div>
-<div class="container">
-  <!-- LOGIN -->
-  <!-- ═══ ЕКРАН 1: ЗВИЧАЙНИЙ ВХІД ═══
-       onsubmit прописаний АТРИБУТОМ, а не через addEventListener у модулі.
-       Це критично: атрибут працює з моменту парсингу HTML, тому навіть якщо
-       JS-модуль не завантажився (кеш, збій CDN, стара версія файлу) — форма
-       НЕ піде звичайним GET-запитом і пароль ніколи не потрапить в URL. -->
-  <div id="login-screen" class="panel" style="display:block;">
-    <div class="auth-brand"><img src="logo.png" alt="Push School Warsaw" class="auth-logo"></div>
-    <h2>Вхід до порталу</h2>
-    <p class="auth-sub">Для учнів, батьків та вчителів</p>
-    <form id="login-form" novalidate
-          onsubmit="event.preventDefault();if(window.submitLogin)window.submitLogin(event);return false;">
-      <label for="email">Email або нікнейм</label>
-      <!-- type="text", а не "email": учні входять за нікнеймом без пошти,
-           і браузер не має відхиляти таке значення як «невірний email». -->
-      <input type="text" id="email" name="email" autocomplete="username"
-             placeholder="ім'я@пошта.com або нікнейм" autocapitalize="none"
-             spellcheck="false" required>
-      <label for="pass">Пароль</label>
-      <div class="pass-wrap">
-        <input type="password" id="pass" name="password" autocomplete="current-password"
-               placeholder="Пароль" required>
-        <button type="button" class="pass-toggle" id="pass-toggle"
-                onclick="togglePassVisibility('pass','pass-toggle')" aria-label="Показати пароль">👁</button>
-      </div>
-      <p id="login-hint" class="login-hint" style="display:none;"></p>
-      <button type="submit" class="btn-login" id="btn-login-submit">Увійти</button>
-      <p id="login-error" class="login-err" style="display:none;"></p>
-    </form>
-    <button type="button" class="link-btn" onclick="showFirstLoginScreen()">Перший вхід? Встановити пароль →</button>
-    <button type="button" class="link-btn" style="color:#7f8c8d;font-weight:600;margin-top:2px;"
-            onclick="requestPasswordReset()">Забули пароль?</button>
-  </div>
-  <!-- ═══ ЕКРАН 2: ПЕРШИЙ ВХІД (окремий екран, не режим) ═══ -->
-  <div id="first-login-screen" class="panel">
-    <div class="auth-brand"><img src="logo.png" alt="Push School Warsaw" class="auth-logo"></div>
-    <h2>Перший вхід</h2>
-    <p class="fl-intro">
-      Якщо школа вже додала вашу електронну адресу, тут ви <b>створюєте власний пароль</b>.
-      Надалі входитимете з ним на головному екрані.
-    </p>
-    <form id="first-login-form" novalidate
-          onsubmit="event.preventDefault();if(window.submitFirstLogin)window.submitFirstLogin(event);return false;">
-      <label for="fl-email">Email, який вам видала школа</label>
-      <input type="email" id="fl-email" name="email" autocomplete="username"
-             placeholder="ім'я@пошта.com" autocapitalize="none" spellcheck="false" required>
-      <label for="fl-pass">Новий пароль (мінімум 6 символів)</label>
-      <div class="pass-wrap">
-        <input type="password" id="fl-pass" name="new-password" autocomplete="new-password"
-               placeholder="Придумайте пароль" required>
-        <button type="button" class="pass-toggle" id="fl-pass-toggle"
-                onclick="togglePassVisibility('fl-pass','fl-pass-toggle')" aria-label="Показати пароль">👁</button>
-      </div>
-      <label for="fl-pass2">Повторіть пароль</label>
-      <input type="password" id="fl-pass2" name="confirm-password" autocomplete="new-password"
-             placeholder="Ще раз той самий пароль" required>
-      <p id="fl-hint" class="login-hint" style="display:none;"></p>
-      <button type="submit" class="btn-login" id="btn-fl-submit">Встановити пароль і увійти</button>
-      <p id="fl-error" class="login-err" style="display:none;"></p>
-    </form>
-    <button type="button" class="link-btn" onclick="showLoginScreen()">← Назад до входу</button>
-  </div>
-  <!-- ═══ ЕКРАН 3: ВСТАНОВЛЕННЯ НОВОГО ПАРОЛЯ ═══
-       Відкривається, коли людина переходить за посиланням із листа
-       відновлення. Працює лише якщо у Firebase Console → Authentication →
-       Templates задано "Customize action URL" на адресу цієї сторінки. -->
-  <div id="reset-password-screen" class="panel">
-    <div class="auth-brand"><img src="logo.png" alt="Push School Warsaw" class="auth-logo"></div>
-    <h2>Новий пароль</h2>
-    <p id="rp-email" class="fl-intro">Встановлення нового пароля</p>
-    <form id="reset-password-form" novalidate
-          onsubmit="event.preventDefault();if(window.submitNewPassword)window.submitNewPassword(event);return false;">
-      <label for="rp-pass">Новий пароль (мінімум 6 символів)</label>
-      <div class="pass-wrap">
-        <input type="password" id="rp-pass" name="new-password" autocomplete="new-password"
-               placeholder="Придумайте пароль" required>
-        <button type="button" class="pass-toggle" id="rp-pass-toggle"
-                onclick="togglePassVisibility('rp-pass','rp-pass-toggle')" aria-label="Показати пароль">👁</button>
-      </div>
-      <label for="rp-pass2">Повторіть пароль</label>
-      <input type="password" id="rp-pass2" name="confirm-password" autocomplete="new-password"
-             placeholder="Ще раз той самий пароль" required>
-      <button type="submit" class="btn-login" id="btn-rp-submit">Зберегти новий пароль</button>
-      <p id="rp-error" class="login-err" style="display:none;"></p>
-    </form>
-  </div>
-  <!-- PROFILE BAR -->
-  <div id="profile-bar" style="display:none;align-items:center;gap:13px;margin-bottom:18px;background:#fff;padding:13px;border-radius:12px;box-shadow:0 4px 10px rgba(0,0,0,.05);border:1px solid #eee;">
-    <img id="pb-avatar" src="https://cdn-icons-png.flaticon.com/512/149/149071.png" style="width:48px;height:48px;border-radius:50%;object-fit:cover;border:2px solid var(--teal);">
-    <div style="flex:1;">
-      <h3 id="pb-name" style="margin:0;font-size:1.05rem;color:#333;border:none;padding:0;">Користувач</h3>
-      <p id="pb-role" style="margin:0;font-size:.82rem;color:#777;">Роль</p>
-      <!-- Перемикач кабінетів — видно лише тим, у кого кілька ролей -->
-      <div id="pb-role-switcher" style="display:none;margin-top:5px;"></div>
-      <!-- Перемикач дітей — для батьків, у яких у школі кілька дітей -->
-      <div id="pb-child-switcher" style="display:none;margin-top:5px;"></div>
-    </div>
-    <button onclick="openProfileModal()" style="width:auto;padding:7px 13px;margin:0;background:var(--teal);color:#fff;border-radius:8px;font-size:.85rem;">⚙️ Профіль</button>
-  </div>
-  <!-- DATE PICKER -->
-  <div id="calendar-block" style="display:none;" class="date-picker-box">
-    <div id="teacher-class-selector-box" style="display:none;margin-bottom:13px;border-bottom:1px dashed var(--teal);padding-bottom:13px;">
-      <label style="margin-top:0;color:#d35400;font-size:.95rem;">🏫 Оберіть клас:</label>
-      <select id="t-class-selector" onchange="handleClassChange()" style="margin-top:4px;border:2px solid #e67e22;color:#d35400;font-weight:700;text-align:center;"></select>
-    </div>
-    <label id="global-date-label" style="margin-top:0;color:var(--teal);font-size:.95rem;">📅 Оберіть дату:</label>
-    <input type="date" id="global-date" onchange="handleDateChange()" style="border:2px solid var(--teal);color:var(--teal);font-weight:700;text-align:center;">
-  </div>
-  <!-- ADMIN -->
-  <div id="admin-screen" class="panel">
-    <h2 style="color:#2c3e50;">🛡️ Панель Адміністратора</h2>
-    <!-- Нові картки адміністратора додавайте новими <section class="screen-section">
-         (додайте клас "half" для пів-ширини на десктопі) — grid підхопить їх автоматично. -->
-
-    <section class="screen-section">
-      <h3>🚀 Швидкі дії</h3>
-      <div style="display:flex;gap:9px;flex-wrap:wrap;">
-        <button onclick="openVisualMatrixModal('live')" style="flex:1;min-width:160px;background:linear-gradient(135deg,#1abc9c,#16a085);color:#fff;margin-top:0;font-size:.95rem;padding:11px;">🗓️ Розклад</button>
-        <button onclick="openJournalModal('administrator')" style="flex:1;min-width:160px;background:linear-gradient(135deg,var(--purple),#9b59b6);color:#fff;margin-top:0;font-size:.95rem;padding:11px;">📖 Журнал</button>
-        <button onclick="openChatModal('administrator')" data-chatbtn="1" style="flex:1;min-width:160px;background:linear-gradient(135deg,#9b59b6,#8e44ad);color:#fff;margin-top:0;font-size:.95rem;padding:11px;">💬 Чат з батьками</button>
-      </div>
-    </section>
-
-    <section class="screen-section">
-      <h3>📋 Відвідуваність</h3>
-      <div class="data-card" style="border-left-color:var(--red);background:#fdfbfb;margin-top:0;">
-        <h4 id="a-att-header" style="margin-top:0;color:var(--red);">🚨 Відсутні та Запізнення</h4>
-        <ul id="a-unified-att-list" class="list-dash" style="padding-left:0;list-style:none;"><li class="empty-msg">Завантаження...</li></ul>
-        <!-- Секретар приймає дзвінки від батьків і відмічає учнів будь-якого класу -->
-        <div id="a-mark-absent-block" style="margin-top:13px;display:flex;gap:8px;flex-wrap:wrap;border-top:1px dashed #f5b7b1;padding-top:13px;">
-          <select id="a-mark-class" onchange="loadAdminStudentsForClass()" style="flex:1;min-width:120px;margin-top:0;border:1px solid #f5b7b1;">
-            <option value="">Клас...</option>
-            <option value="class_1">1 Клас</option><option value="class_2">2 Клас</option><option value="class_3">3 Клас</option>
-            <option value="class_4">4 Клас</option><option value="class_5">5 Клас</option><option value="class_6">6 Клас</option>
-            <option value="class_7">7 Клас</option><option value="class_8">8 Клас</option><option value="class_9">9 Клас</option>
-            <option value="class_10">10 Клас</option><option value="class_11">11 Клас</option>
-          </select>
-          <select id="a-mark-student" style="flex:1;min-width:130px;margin-top:0;border:1px solid #f5b7b1;"><option value="">Спочатку клас</option></select>
-          <select id="a-mark-reason" style="flex:1;min-width:130px;margin-top:0;border:1px solid #f5b7b1;">
-            <option value="Відмічено секретарем">Без причини</option><option value="через хворобу">Хвороба</option>
-            <option value="за сімейними обставинами">Сімейні обставини</option><option value="запізнення">Запізнення</option>
-          </select>
-          <button onclick="adminMarkAbsent()" style="margin-top:0;background:var(--red);color:#fff;width:auto;padding:9px 13px;font-size:.85rem;">Відмітити</button>
-        </div>
-      </div>
-    </section>
-
-    <section class="screen-section half">
-      <h3>📊 Огляд</h3>
-      <div style="display:flex;gap:9px;">
-        <div style="flex:1;background:#e0f7fa;padding:13px;border-radius:12px;text-align:center;">
-          <h4 style="margin:0;color:#00838f;font-size:.82rem;">📚 ДЗ (сьогодні)</h4>
-          <p id="a-hw-counter" style="font-size:1.7rem;font-weight:800;color:#00acc1;margin:4px 0;">0</p>
-        </div>
-        <div style="flex:1;background:#fce4ec;padding:13px;border-radius:12px;text-align:center;">
-          <h4 style="margin:0;color:#ad1457;font-size:.82rem;">💬 Коментарів</h4>
-          <p id="a-com-counter" style="font-size:1.7rem;font-weight:800;color:#d81b60;margin:4px 0;">0</p>
-        </div>
-      </div>
-      <div style="background:#fff3e0;padding:13px;border-radius:12px;text-align:center;margin-top:12px;">
-        <h4 style="margin:0;color:#e65100;font-size:.88rem;">🗓️ Статистика тижня</h4>
-        <div style="display:flex;justify-content:space-around;margin-top:9px;">
-          <div><p id="a-week-late" style="font-size:1.4rem;font-weight:800;color:var(--orange);margin:0;">0</p><span style="font-size:.68rem;color:#888;">запізнень</span></div>
-          <div><p id="a-week-absent" style="font-size:1.4rem;font-weight:800;color:#c0392b;margin:0;">0</p><span style="font-size:.68rem;color:#888;">відсутніх</span></div>
-        </div>
-      </div>
-    </section>
-
-    <section class="screen-section half">
-      <h3>📚 Довідники</h3>
-      <details style="margin-bottom:12px;background:#e8eaf6;padding:14px;border-radius:12px;border:1px solid #9fa8da;" ontoggle="if(this.open)loadAdminBellSchedule()">
-        <summary style="font-weight:700;cursor:pointer;color:#283593;font-size:.95rem;">🔔 Розклад дзвінків</summary>
-        <div style="margin-top:13px;">
-          <select id="a-bell-class" onchange="loadAdminBellSchedule()" style="border:2px solid #7986cb;">
-            <option value="">-- Оберіть клас --</option>
-            <option value="class_1">1 Клас</option><option value="class_2">2 Клас</option><option value="class_3">3 Клас</option>
-            <option value="class_4">4 Клас</option><option value="class_5">5 Клас</option><option value="class_6">6 Клас</option>
-            <option value="class_7">7 Клас</option><option value="class_8">8 Клас</option><option value="class_9">9 Клас</option>
-            <option value="class_10">10 Клас</option><option value="class_11">11 Клас</option>
-          </select>
-          <div id="a-bell-view" style="margin-top:10px;"><p class="empty-msg">Оберіть клас.</p></div>
-        </div>
-      </details>
-      <details style="background:#fff8e1;padding:14px;border-radius:12px;border:1px solid #ffe0b2;" ontoggle="if(this.open)loadAdminAcademicYear()">
-        <summary style="font-weight:700;cursor:pointer;color:#e65100;font-size:.95rem;">📅 Навчальний рік</summary>
-        <div id="a-academic-view" style="margin-top:13px;"><p class="empty-msg">Завантаження...</p></div>
-      </details>
-    </section>
-
-    <button class="btn-logout" onclick="logoutUser()">Вийти</button>
-  </div>
-  <!-- КУХНЯ -->
-  <div id="kitchen-screen" class="panel">
-    <h2 style="color:#00838f;">🍽️ Кухня</h2>
-
-    <section class="screen-section">
-      <h3>📅 Тиждень</h3>
-      <div class="k-weeknav">
-        <button type="button" onclick="kitchenWeekShift(-1)">←</button>
-        <div><b id="k-week-label">—</b><br><a href="#" onclick="event.preventDefault();kitchenThisWeek();">поточний тиждень</a></div>
-        <button type="button" onclick="kitchenWeekShift(1)">→</button>
-      </div>
-      <input type="hidden" id="k-week">
-    </section>
-
-    <section class="screen-section">
-      <h3>🔢 Скільки готувати</h3>
-      <div class="data-card" style="border-left-color:#00838f;margin-top:0;">
-        <div id="k-counts"><p class="empty-msg">Завантаження...</p></div>
-      </div>
-    </section>
-
-    <div id="k-push-warn" style="display:none;"></div>
-
-    <section class="screen-section">
-      <h3>📋 Меню на тиждень</h3>
-      <div class="data-card" style="border-left-color:#4dd0e1;margin-top:0;">
-        <p style="font-size:.76rem;color:#888;margin:0 0 9px 0;">Заповніть дні й натисніть «Опублікувати». Батьки отримають сповіщення лише про ті дні, що змінилися.</p>
-        <div id="k-menu-week"><p class="empty-msg">Завантаження...</p></div>
-        <button onclick="saveWeekMenu()" style="background:#00838f;color:#fff;margin-top:12px;">📢 Опублікувати тиждень</button>
-        <button onclick="copyMondayToWeek()" style="background:#e0f7fa;color:#00838f;border:1px solid #80deea;">📋 Понеділок → на весь тиждень</button>
-        <button onclick="checkNotifySetup()" style="background:#f5f5f5;color:#555;border:1px solid #ddd;">🔍 Перевірити, чи працюють сповіщення</button>
-        <div id="k-notify-info" style="display:none;"></div>
-      </div>
-    </section>
-
-    <section class="screen-section">
-      <h3>📝 Хто що замовив</h3>
-      <div class="data-card" style="border-left-color:#ef6c00;margin-top:0;">
-        <p style="font-size:.76rem;color:#888;margin:0 0 7px 0;">Поіменний список на день — з ним можна виходити на роздачу.</p>
-        <div style="display:flex;gap:8px;">
-          <div style="flex:1;min-width:0;">
-            <label for="k-order-class" style="font-size:.74rem;">Клас</label>
-            <select id="k-order-class" onchange="loadClassOrders()"><option value="">Оберіть...</option><option value="class_1">1 клас</option><option value="class_2">2 клас</option><option value="class_3">3 клас</option><option value="class_4">4 клас</option><option value="class_5">5 клас</option><option value="class_6">6 клас</option><option value="class_7">7 клас</option><option value="class_8">8 клас</option><option value="class_9">9 клас</option><option value="class_10">10 клас</option><option value="class_11">11 клас</option></select>
-          </div>
-          <div style="flex:1;min-width:0;">
-            <label for="k-order-date" style="font-size:.74rem;">Дата</label>
-            <input type="date" id="k-order-date" onchange="loadClassOrders()">
-          </div>
-        </div>
-        <div id="k-orders"><p class="empty-msg">Оберіть клас і дату.</p></div>
-      </div>
-    </section>
-
-    <section class="screen-section">
-      <h3>👥 Хто харчується</h3>
-      <div class="data-card" style="border-left-color:#7e57c2;margin-top:0;">
-        <p style="font-size:.76rem;color:#888;margin:0 0 7px 0;">Зазвичай це налаштовують батьки. Тут можна виправити вручну — наприклад, якщо родина не користується порталом.</p>
-        <select id="k-plan-class" onchange="loadMealPlans()">
-          <option value="">Оберіть клас...</option>
-          <option value="class_1">1 клас</option><option value="class_2">2 клас</option>
-          <option value="class_3">3 клас</option><option value="class_4">4 клас</option>
-          <option value="class_5">5 клас</option><option value="class_6">6 клас</option>
-          <option value="class_7">7 клас</option><option value="class_8">8 клас</option>
-          <option value="class_9">9 клас</option><option value="class_10">10 клас</option>
-          <option value="class_11">11 клас</option>
-        </select>
-        <div id="k-plan-list"><p class="empty-msg">Оберіть клас.</p></div>
-      </div>
-    </section>
-
-    <section class="screen-section">
-      <h3>📊 Статистика за період</h3>
-      <div class="data-card" style="border-left-color:#26a69a;margin-top:0;">
-        <p style="font-size:.76rem;color:#888;margin:0 0 7px 0;">Людино-дні: скільки днів кожна дитина обідала і скільки брала підвечірок. Дні відсутності не рахуються.</p>
-        <div style="display:flex;gap:8px;">
-          <div style="flex:1;min-width:0;"><label for="k-stat-from" style="font-size:.74rem;">Від</label><input type="date" id="k-stat-from"></div>
-          <div style="flex:1;min-width:0;"><label for="k-stat-to" style="font-size:.74rem;">До</label><input type="date" id="k-stat-to"></div>
-        </div>
-        <button onclick="loadMealStats()" style="background:#26a69a;color:#fff;">Порахувати</button>
-        <div id="k-stats"></div>
-      </div>
-    </section>
-
-    <button class="btn-logout" onclick="logoutUser()">Вийти</button>
-  </div>
-  <!-- DIRECTOR -->
-  <div id="director-screen" class="panel">
-    <h2 style="color:#2c3e50;">👔 Кабінет Директора</h2>
-
-    <div class="dtab-bar" id="dtab-bar">
-      <button class="dtab on" data-t="ogl"    onclick="switchDirTab('ogl',this)">Огляд</button>
-      <button class="dtab"    data-t="news"   onclick="switchDirTab('news',this)">Новини<span class="dtab-badge" id="dtab-news-badge"></span></button>
-      <button class="dtab"    data-t="uchni"  onclick="switchDirTab('uchni',this)">Учні та батьки</button>
-      <button class="dtab"    data-t="staff"  onclick="switchDirTab('staff',this)">Персонал</button>
-      <button class="dtab"    data-t="rozklad" onclick="switchDirTab('rozklad',this)">Розклад</button>
-      <button class="dtab"    data-t="stat"   onclick="switchDirTab('stat',this)">Аналітика</button>
-      <button class="dtab"    data-t="nalash" onclick="switchDirTab('nalash',this)">Налаштування</button>
-    </div>
-
-    <section class="screen-section" data-dtab="ogl">
-      <h3>🚀 Швидкі дії</h3>
-      <div style="display:flex;gap:9px;flex-wrap:wrap;">
-        <button onclick="openVisualMatrixModal('live')" style="flex:1;min-width:170px;background:linear-gradient(135deg,#1abc9c,#16a085);color:#fff;margin-top:0;font-size:.95rem;padding:11px;">🗓️ Розклад</button>
-        <button onclick="openJournalModal('director')" style="flex:1;min-width:170px;background:linear-gradient(135deg,var(--purple),#9b59b6);color:#fff;margin-top:0;font-size:.95rem;padding:11px;">📖 Журнал</button>
-        <button onclick="openChatModal('director')" data-chatbtn="1" style="flex:1;min-width:170px;background:linear-gradient(135deg,#9b59b6,#8e44ad);color:#fff;margin-top:0;font-size:.95rem;padding:11px;">💬 Чат з батьками</button>
-      </div>
-    </section>
-
-    <section class="screen-section" data-dtab="ogl">
-      <h3>📊 Огляд</h3>
-      <!-- Статистика -->
-      <div class="data-card" style="border-left-color:var(--purple);background:#fdfafc;margin-top:0;">
-        <h4 style="margin-top:0;color:var(--purple);">📈 Середні оцінки</h4>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:9px;">
-          <select id="d-stat-class" onchange="updateDirectorStatSubjects()" style="flex:1;min-width:110px;">
-            <option value="">Оберіть клас...</option>
-            <option value="class_1">1</option><option value="class_2">2</option><option value="class_3">3</option>
-            <option value="class_4">4</option><option value="class_5">5</option><option value="class_6">6</option>
-            <option value="class_7">7</option><option value="class_8">8</option><option value="class_9">9</option>
-            <option value="class_10">10</option><option value="class_11">11</option>
-          </select>
-          <select id="d-stat-subj" onchange="renderDirectorStats()" style="flex:1;min-width:110px;"><option value="">Спочатку клас</option></select>
-        </div>
-        <div id="d-stat-results"><p class="empty-msg">Оберіть клас та предмет.</p></div>
-      </div>
-      <!-- Дашборд -->
-      <div style="display:flex;gap:9px;margin:16px 0;">
-        <div style="flex:1;background:#e0f7fa;padding:13px;border-radius:12px;text-align:center;">
-          <h4 style="margin:0;color:#00838f;font-size:.82rem;">📚 ДЗ (сьогодні)</h4>
-          <p id="d-hw-counter" style="font-size:1.7rem;font-weight:800;color:#00acc1;margin:4px 0;">0</p>
-        </div>
-        <div style="flex:1;background:#fce4ec;padding:13px;border-radius:12px;text-align:center;">
-          <h4 style="margin:0;color:#ad1457;font-size:.82rem;">💬 Коментарів</h4>
-          <p id="d-com-counter" style="font-size:1.7rem;font-weight:800;color:#d81b60;margin:4px 0;">0</p>
-        </div>
-      </div>
-      <div style="background:#fff3e0;padding:13px;border-radius:12px;text-align:center;margin-bottom:16px;">
-        <h4 style="margin:0;color:#e65100;font-size:.88rem;">🗓️ Статистика тижня</h4>
-        <div style="display:flex;justify-content:space-around;margin-top:9px;">
-          <div><p id="d-week-late" style="font-size:1.4rem;font-weight:800;color:var(--orange);margin:0;">0</p><span style="font-size:.68rem;color:#888;">запізнень</span></div>
-          <div><p id="d-week-absent" style="font-size:1.4rem;font-weight:800;color:#c0392b;margin:0;">0</p><span style="font-size:.68rem;color:#888;">відсутніх</span></div>
-        </div>
-      </div>
-      <div class="data-card" style="border-left-color:var(--red);background:#fdfbfb;margin-top:0;">
-        <h4 id="d-att-header" style="margin-top:0;color:var(--red);">🚨 Відсутні та Запізнення</h4>
-        <ul id="d-unified-att-list" class="list-dash" style="padding-left:0;list-style:none;"><li class="empty-msg">Завантаження...</li></ul>
-      </div>
-    </section>
-
-    <section class="screen-section" data-dtab="rozklad">
-      <h3>🗓️ Розклад та заміни</h3>
-      <!-- SMART MATCHING -->
-      <details data-dtab="rozklad" style="margin-bottom:12px;background:#e8f5e9;padding:14px;border-radius:12px;border:1px solid #a5d6a7;" open>
-        <summary style="font-weight:700;cursor:pointer;color:#1b5e20;font-size:1rem;">🔄 Smart Matching — Підбір на Заміну</summary>
-        <div style="margin-top:13px;">
-          <p style="font-size:.83rem;color:#555;">Система автоматично знаходить вільних учителів з потрібним скілом.</p>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
-            <select id="sm-class" style="flex:1;min-width:110px;border:2px solid #4caf50;margin-top:0;">
-              <option value="">Клас...</option>
-              <option value="class_1">1 Клас</option><option value="class_2">2 Клас</option><option value="class_3">3 Клас</option>
-              <option value="class_4">4 Клас</option><option value="class_5">5 Клас</option><option value="class_6">6 Клас</option>
-              <option value="class_7">7 Клас</option><option value="class_8">8 Клас</option><option value="class_9">9 Клас</option>
-              <option value="class_10">10 Клас</option><option value="class_11">11 Клас</option>
-            </select>
-            <input type="text" id="sm-subject" placeholder="Предмет (напр. Математика)" style="flex:2;min-width:140px;margin-top:0;border:2px solid #4caf50;">
-            <input type="date" id="sm-date" style="flex:1;min-width:110px;margin-top:0;border:2px solid #4caf50;">
-            <input type="text" id="sm-time" placeholder="09:00 - 09:45" style="flex:1;min-width:100px;margin-top:0;border:2px solid #4caf50;">
-          </div>
-          <button onclick="findSubstitute()" style="background:#1b5e20;color:#fff;padding:11px;margin-top:10px;">🔍 Знайти кандидатів</button>
-          <div id="sm-results" style="margin-top:12px;"></div>
-        </div>
-      </details>
-      <!-- Скіли вчителів -->
-      <details data-dtab="staff" style="margin-bottom:12px;background:#e3f2fd;padding:14px;border-radius:12px;border:1px solid #90caf9;">
-        <summary style="font-weight:700;cursor:pointer;color:#0d47a1;font-size:1rem;">🧠 Матриця скілів вчителів</summary>
-        <div style="margin-top:13px;">
-          <p style="font-size:.83rem;color:#555;">Призначайте компетенції (скіли) вчителям — які предмети вони можуть вести на заміні.</p>
-          <select id="d-skills-teacher" style="margin-top:8px;border:2px solid #90caf9;"><option value="">-- Оберіть вчителя --</option></select>
-          <div id="d-skills-current" style="margin-top:8px;min-height:30px;"></div>
-          <div style="display:flex;gap:8px;margin-top:8px;">
-            <input type="text" id="d-skill-input" placeholder="Додати предмет (напр. Фізика)" style="flex:2;margin-top:0;border:2px solid #90caf9;">
-            <button onclick="addTeacherSkill()" style="flex:1;margin-top:0;background:#0d47a1;color:#fff;padding:10px 8px;font-size:.85rem;">+ Додати</button>
-          </div>
-          <button onclick="saveTeacherSkills()" style="background:#0d47a1;color:#fff;padding:10px;margin-top:8px;font-size:.88rem;">💾 Зберегти скіли</button>
-        </div>
-      </details>
-      <!-- Конструктор -->
-      <details data-dtab="rozklad" style="margin-bottom:12px;background:#e0f2f1;padding:14px;border-radius:12px;border:1px solid #1abc9c;" open>
-        <summary style="font-weight:700;cursor:pointer;color:var(--teal);font-size:1rem;">🛠️ Конструктор Розкладу (Чернетки)</summary>
-        <div style="margin-top:13px;">
-          <div id="drafts-list-container"><p class="empty-msg">Завантаження...</p></div>
-          <div style="display:flex;gap:9px;margin-top:12px;">
-            <input type="text" id="new-draft-name" placeholder="Назва (напр. 2026-2027)" style="flex:2;margin-top:0;">
-            <button onclick="createNewDraft()" style="flex:1;margin-top:0;background:var(--teal);color:#fff;">+ Створити</button>
-          </div>
-        </div>
-      </details>
-    </section>
-
-    <section class="screen-section half">
-      <h3>👥 Персонал</h3>
-      <!-- Staff Management -->
-      <details data-dtab="staff" style="margin-bottom:12px;background:#fff;padding:14px;border-radius:12px;border:1px solid #ddd;">
-        <summary style="font-weight:700;cursor:pointer;color:#c0392b;">⚙️ Управління персоналом</summary>
-        <div style="margin-top:13px;">
-          <input type="email" id="new-staff-email" placeholder="Email співробітника">
-          <label style="font-size:.8rem;color:#777;margin-top:8px;">Ролі (можна обрати кілька — Ctrl/Cmd + клік):</label>
-          <select id="new-staff-role" multiple size="5" style="margin-top:4px;">
-            <option value="teacher">👨‍🏫 Вчитель</option><option value="art_school_teacher">🎨 Вчитель школи мистецтв</option>
-            <option value="class_teacher">🎓 Класний керівник</option>
-            <option value="director">👔 Директор</option><option value="administrator">🛡️ Секретар (Адміністратор)</option><option value="kitchen">🍽️ Кухня</option>
-          </select>
-          <button style="background:#c0392b;padding:8px;margin-top:9px;color:#fff;" onclick="grantStaffRole()">Надати доступ</button>
-          <div style="margin-top:14px;border-top:1px dashed #ddd;padding-top:12px;">
-            <div style="display:flex;justify-content:space-between;align-items:center;">
-              <b style="font-size:.88rem;color:#c0392b;">👥 Список персоналу</b>
-              <button onclick="loadStaffList()" style="width:auto;padding:5px 11px;margin:0;font-size:.78rem;background:#f0f0f0;color:#333;">🔄 Оновити</button>
-            </div>
-            <div id="staff-list" style="margin-top:8px;"><p class="empty-msg">Натисніть «Оновити».</p></div>
-          </div>
-        </div>
-      </details>
-      <!-- Class Teacher Assignment -->
-      <details data-dtab="staff" style="background:#e0f7fa;padding:14px;border-radius:12px;border:1px solid #00acc1;">
-        <summary style="font-weight:700;cursor:pointer;color:#00838f;">🔐 Матриця доступу вчителів</summary>
-        <div style="margin-top:13px;">
-          <select id="d-acc-email-select" style="margin-top:8px;border:2px solid #00acc1;"><option value="">-- Оберіть вчителя --</option></select>
-          <select id="d-acc-class" style="margin-top:8px;" onchange="loadDirectorMatrixSubjects()">
-            <option value="">-- Оберіть клас --</option>
-            <option value="class_1">1 Клас</option><option value="class_2">2 Клас</option><option value="class_3">3 Клас</option>
-            <option value="class_4">4 Клас</option><option value="class_5">5 Клас</option><option value="class_6">6 Клас</option>
-            <option value="class_7">7 Клас</option><option value="class_8">8 Клас</option><option value="class_9">9 Клас</option>
-            <option value="class_10">10 Клас</option><option value="class_11">11 Клас</option>
-          </select>
-          <label style="margin-top:13px;">Дозволені предмети:</label>
-          <select id="d-acc-subjects" multiple style="height:130px;margin-top:4px;"><option value="" disabled>Оберіть клас...</option></select>
-          <button style="background:#00838f;padding:11px;margin-top:13px;color:#fff;" onclick="grantTeacherAccess()">💾 Зберегти доступ</button>
-        </div>
-      </details>
-      <details data-dtab="staff" style="background:#fff3e0;padding:14px;border-radius:12px;border:1px solid #ffb74d;">
-        <summary style="font-weight:700;cursor:pointer;color:#e65100;font-size:.95rem;">🎓 Призначення класних керівників</summary>
-        <div style="margin-top:13px;">
-          <p style="font-size:.83rem;color:#555;">Кл. керівник може завантажувати календарне планування для свого класу.</p>
-          <select id="ct-class-select" style="margin-top:8px;border:2px solid #ff9800;">
-            <option value="">-- Оберіть клас --</option>
-            <option value="class_1">1 Клас</option><option value="class_2">2 Клас</option>
-            <option value="class_3">3 Клас</option><option value="class_4">4 Клас</option>
-            <option value="class_5">5 Клас</option><option value="class_6">6 Клас</option>
-            <option value="class_7">7 Клас</option><option value="class_8">8 Клас</option>
-            <option value="class_9">9 Клас</option><option value="class_10">10 Клас</option>
-            <option value="class_11">11 Клас</option>
-          </select>
-          <select id="ct-teacher-select" style="margin-top:8px;border:2px solid #ff9800;">
-            <option value="">-- Оберіть вчителя --</option>
-          </select>
-          <div id="ct-current-info" style="margin-top:8px;font-size:.83rem;color:#666;padding:8px;background:#fff;border-radius:7px;display:none;"></div>
-          <button onclick="assignClassTeacher()" style="background:#e65100;color:#fff;padding:11px;margin-top:10px;">💾 Призначити кл. керівника</button>
-        </div>
-      </details>
-    </section>
-
-    <section class="screen-section">
-      <!-- Згоди батьків: екскурсії, фотозйомка тощо -->
-      <details data-dtab="uchni" style="margin-bottom:12px;background:#f1f8e9;padding:14px;border-radius:12px;border:1px solid #c5e1a5;" ontoggle="if(this.open)loadConsents()">
-        <summary style="font-weight:700;cursor:pointer;color:#33691e;font-size:.95rem;">✍️ Згоди батьків</summary>
-        <div style="margin-top:13px;">
-          <div id="cs-list"><p class="empty-msg">Завантаження...</p></div>
-          <div style="margin-top:12px;border-top:1px dashed #c5e1a5;padding-top:11px;">
-            <b style="font-size:.85rem;color:#33691e;">➕ Новий запит на згоду</b>
-            <input type="text" id="cs-title" placeholder="Напр. Екскурсія до музею 12 грудня" style="margin-top:6px;">
-            <textarea id="cs-text" rows="2" placeholder="Деталі: час, місце, вартість, що взяти з собою" style="margin-top:5px;"></textarea>
-            <label style="font-size:.78rem;color:#666;margin-top:7px;">Відповісти до:</label>
-            <input type="date" id="cs-deadline" style="margin-top:3px;">
-            <label style="display:flex;align-items:center;gap:7px;margin-top:8px;font-size:.82rem;">
-              <input type="checkbox" id="cs-all" onchange="toggleConsentAll()" style="width:17px;height:17px;margin:0;"> Усі класи
-            </label>
-            <select id="cs-classes" multiple size="5" style="margin-top:5px;">
-              <option value="class_1">1 Клас</option><option value="class_2">2 Клас</option><option value="class_3">3 Клас</option>
-              <option value="class_4">4 Клас</option><option value="class_5">5 Клас</option><option value="class_6">6 Клас</option>
-              <option value="class_7">7 Клас</option><option value="class_8">8 Клас</option><option value="class_9">9 Клас</option>
-              <option value="class_10">10 Клас</option><option value="class_11">11 Клас</option>
-            </select>
-            <button onclick="createConsent()" style="background:#33691e;color:#fff;margin-top:8px;">➕ Створити запит</button>
-          </div>
-        </div>
-      </details>
-      <!-- Відсутність вчителів і заміни на день -->
-      <details data-dtab="staff" style="margin-bottom:12px;background:#fff4e5;padding:14px;border-radius:12px;border:1px solid #ffcc80;" ontoggle="if(this.open){fillAbsenceTeachers();loadAbsenceDay();}">
-        <summary style="font-weight:700;cursor:pointer;color:#e65100;font-size:.95rem;">🧑‍🏫 Відсутність вчителів і заміни</summary>
-        <div style="margin-top:13px;">
-          <input type="date" id="sa-date" onchange="loadAbsenceDay()" style="border:2px solid #ffb74d;margin-top:0;">
-          <div id="sa-list" style="margin-top:10px;"><p class="empty-msg">Оберіть дату.</p></div>
-          <div style="margin-top:12px;border-top:1px dashed #ffcc80;padding-top:11px;">
-            <b style="font-size:.85rem;color:#e65100;">➕ Відмітити відсутнього</b>
-            <select id="sa-teacher" style="margin-top:6px;"></select>
-            <select id="sa-reason" style="margin-top:5px;">
-              <option value="хвороба">Хвороба</option>
-              <option value="відрядження">Відрядження</option>
-              <option value="навчання">Навчання / курси</option>
-              <option value="за власний рахунок">За власний рахунок</option>
-              <option value="інша причина">Інша причина</option>
-            </select>
-            <input type="text" id="sa-note" placeholder="Примітка (необов'язково)" style="margin-top:5px;">
-            <button onclick="markStaffAbsent()" style="background:#e65100;color:#fff;margin-top:8px;">➕ Відмітити</button>
-          </div>
-        </div>
-      </details>
-      <!-- Пошук по всій школі: учні та батьки -->
-      <details data-dtab="uchni" style="margin-bottom:12px;background:#eef7ff;padding:14px;border-radius:12px;border:1px solid #b3d9f2;">
-        <summary style="font-weight:700;cursor:pointer;color:#0d47a1;font-size:.95rem;">🔎 Пошук по школі</summary>
-        <div style="margin-top:13px;">
-          <input type="search" id="gs-query" placeholder="Прізвище учня, ПІБ батьків, email або телефон" oninput="runGlobalSearch()">
-          <div style="display:flex;justify-content:flex-end;margin-top:5px;">
-            <button onclick="resetSearchIndex()" style="width:auto;margin:0;padding:3px 9px;font-size:.72rem;background:#eceff1;color:#555;">↻ Оновити індекс</button>
-          </div>
-          <div id="gs-results" style="margin-top:7px;max-height:44vh;overflow-y:auto;"><p class="empty-msg">Введіть щонайменше 2 символи.</p></div>
-        </div>
-      </details>
-      <!-- Статистика відвідуваності за місяць -->
-      <details data-dtab="stat" style="margin-bottom:12px;background:#fdf3f2;padding:14px;border-radius:12px;border:1px solid #f5c6cb;" ontoggle="if(this.open){document.getElementById('att-month').value=document.getElementById('att-month').value||new Date().toISOString().slice(0,7);loadAttendanceStats();}">
-        <summary style="font-weight:700;cursor:pointer;color:#b71c1c;font-size:.95rem;">📉 Статистика відвідуваності</summary>
-        <div style="margin-top:13px;">
-          <input type="month" id="att-month" onchange="loadAttendanceStats()" style="margin-top:0;">
-          <p style="font-size:.76rem;color:#888;margin:6px 0 0 0;">
-            Кілька уроків одного дня рахуються як один пропуск дня.
-          </p>
-          <div id="att-stats" style="margin-top:9px;"><p class="empty-msg">Завантаження...</p></div>
-        </div>
-      </details>
-      <!-- Журнал дій: хто, що і коли змінив -->
-      <details data-dtab="stat" style="margin-bottom:12px;background:#eceff1;padding:14px;border-radius:12px;border:1px solid #b0bec5;" ontoggle="if(this.open){fillAuditActions();loadAuditLog();}">
-        <summary style="font-weight:700;cursor:pointer;color:#37474f;font-size:.95rem;">🕓 Журнал дій</summary>
-        <div style="margin-top:13px;">
-          <p style="font-size:.78rem;color:#666;margin:0 0 8px 0;">
-            Хто і коли змінював оцінки, відмітки, списки. Записи зберігаються помісячно.
-          </p>
-          <div style="display:flex;gap:7px;flex-wrap:wrap;">
-            <input type="month" id="audit-month" onchange="loadAuditLog()" style="flex:1;min-width:130px;margin-top:0;">
-            <select id="audit-action" onchange="loadAuditLog()" style="flex:1.4;min-width:150px;margin-top:0;">
-              <option value="">— усі дії —</option>
-            </select>
-          </div>
-          <input type="search" id="audit-search" placeholder="Пошук: учень, предмет, email..." oninput="loadAuditLog()" style="margin-top:6px;">
-          <div id="audit-list" style="margin-top:9px;max-height:52vh;overflow-y:auto;"><p class="empty-msg">Завантаження...</p></div>
-        </div>
-      </details>
-      <!-- AI-чернетка оголошення для батьків -->
-      <div data-dtab="news" style="margin-bottom:12px;">
-        <button onclick="openNewsComposer()" style="background:#00838f;color:#fff;margin:0 0 10px 0;">➕ Нове оголошення</button>
-        <div id="d-news-feed" class="nw-feed"><p class="empty-msg">Завантаження...</p></div>
-      </div>
-      <details data-dtab="news" style="margin-bottom:12px;background:#fff8e1;padding:14px;border-radius:12px;border:1px solid #ffe0a3;">
-        <summary style="font-weight:700;cursor:pointer;color:#8a6d1f;font-size:.95rem;">📣 Оголошення для батьків (чернетка)</summary>
-        <div style="margin-top:13px;">
-          <p style="font-size:.8rem;color:#666;margin:0 0 7px 0;">
-            Напишіть коротко суть — система оформить це у зрозуміле повідомлення.
-            Дати, час і місце зберігаються точно; нічого зайвого не вигадується.
-          </p>
-          <textarea id="d-ann-note" rows="3" placeholder="Напр.: 12 грудня о 18:00 батьківські збори 5 класу, кабінет 24, просимо бути"></textarea>
-          <div class="ai-hw-row">
-            <button type="button" id="btn-ai-ann" onclick="announcementAI()">✨ Скласти оголошення</button>
-            <span class="ai-hw-note">чернетка — перевірте перед розсилкою</span>
-          </div>
-          <p id="ai-ann-msg" class="ai-hw-msg" style="display:none;"></p>
-          <textarea id="d-ann-out" rows="6" style="display:none;margin-top:8px;" placeholder="Тут з'явиться текст"></textarea>
-          <button type="button" id="btn-ann-copy" onclick="copyAnnouncement()" style="display:none;background:#8a6d1f;color:#fff;margin-top:7px;">📋 Скопіювати текст</button>
-        </div>
-      </details>
-      <h3>🎓 Учні</h3>
-      <!-- Один список замість двох: учні класу, а навпроти кожного — його
-           батьки з контактами. Дані про батьків зберігаються «навпаки»
-           (ключ — їхня пошта), тому тут показуємо перевернутий вигляд. -->
-      <details data-dtab="uchni" style="margin-bottom:12px;background:#f9f4ff;padding:14px;border-radius:12px;border:1px solid #ce93d8;" ontoggle="if(this.open){loadParentsOverview();loadParentLinkStudents();}">
-        <summary style="font-weight:700;cursor:pointer;color:#7b1fa2;font-size:.95rem;">👨‍🎓 Учні класу та їхні батьки</summary>
-        <div style="margin-top:13px;">
-          <select id="po-class" onchange="loadParentsOverview();loadParentLinkStudents()" style="border:2px solid #ce93d8;">
-            <option value="">-- Оберіть клас --</option>
-            <option value="class_1">1 Клас</option><option value="class_2">2 Клас</option><option value="class_3">3 Клас</option>
-            <option value="class_4">4 Клас</option><option value="class_5">5 Клас</option><option value="class_6">6 Клас</option>
-            <option value="class_7">7 Клас</option><option value="class_8">8 Клас</option><option value="class_9">9 Клас</option>
-            <option value="class_10">10 Клас</option><option value="class_11">11 Клас</option>
-          </select>
-          <div id="po-list" style="margin-top:9px;"><p class="empty-msg">Оберіть клас.</p></div>
-          <!-- Директор може прив'язувати батьків у будь-якому класі -->
-          <div style="margin-top:13px;border-top:1px dashed #ce93d8;padding-top:11px;">
-            <b style="font-size:.85rem;color:#7b1fa2;">➕ Прив'язати батьків до учня</b>
-            <p style="font-size:.76rem;color:#888;margin:4px 0 7px 0;">
-              Якщо в цих батьків уже є діти в школі — новий запис додасться до наявних,
-              нічого не зітреться.
-            </p>
-            <select id="pl-student" style="margin-top:5px;border:1px solid #ce93d8;"><option value="">Спочатку оберіть клас</option></select>
-            <select id="pl-role" style="margin-top:5px;border:1px solid #ce93d8;">
-              <option value="mother">👩 Мати</option><option value="father">👨 Батько</option><option value="guardian">🛡️ Опікун</option>
-            </select>
-            <input type="email" id="pl-email" placeholder="Email батьків" style="margin-top:5px;" autocapitalize="none" spellcheck="false">
-            <button onclick="directorLinkParent()" style="background:var(--purple);color:#fff;margin-top:8px;">🔗 Прив'язати</button>
-          </div>
-          <div style="margin-top:12px;border-top:1px dashed #ce93d8;padding-top:11px;">
-            <b style="font-size:.85rem;color:#1b5e20;">➕ Додати учня до класу</b>
-            <input type="text" id="ds-new-name" placeholder="Прізвище та Ім'я" style="margin-top:6px;">
-            <input type="email" id="ds-new-email" placeholder="Email учня (необов'язково — для власного входу)" style="margin-top:5px;" autocapitalize="none" spellcheck="false">
-            <button onclick="directorAddStudent()" style="background:#1b5e20;color:#fff;margin-top:8px;">➕ Додати</button>
-          </div>
-        </div>
-          <div style="margin-top:12px;border-top:1px dashed #ce93d8;padding-top:11px;">
-            <b style="font-size:.85rem;color:#b71c1c;">🔍 Перевірка на тезок</b>
-            <p style="font-size:.76rem;color:#888;margin:4px 0 6px 0;">Оцінки й відвідуваність зберігаються за іменем учня. Двоє з однаковим іменем в одному класі — це один спільний запис.</p>
-            <button onclick="findDuplicateStudents()" style="background:#fff;color:#b71c1c;border:1px solid #ef9a9a;">Перевірити всі класи</button>
-            <div id="d-dup-result" style="display:none;margin-top:8px;"></div>
-          </div>
-          <div style="margin-top:12px;border-top:1px dashed #ce93d8;padding-top:11px;">
-            <b style="font-size:.85rem;color:#00838f;">🆔 Перехід на постійні ідентифікатори</b>
-            <p style="font-size:.76rem;color:#888;margin:4px 0 6px 0;">Показує, скільки записів прив'язано до імені учня і чи всі імена збігаються зі списками класів. Нічого не змінює — це підготовка до переходу.</p>
-            <button onclick="auditStudentKeys()" style="background:#fff;color:#00838f;border:1px solid #80deea;">Порахувати</button>
-            <button onclick="wipeLegacyStudentKeys()" style="background:#fff;color:#b71c1c;border:1px solid #ef9a9a;">🗑️ Стерти старі записи за іменем</button>
-            <div id="d-idmig-result" style="display:none;margin-top:8px;"></div>
-          </div>
-
-      </details>
-      <!-- Переведення одного учня (перехід у паралель / інший клас серед року) -->
-      <details data-dtab="uchni" style="margin-bottom:12px;background:#f9f4ff;padding:14px;border-radius:12px;border:1px solid #ce93d8;" ontoggle="if(this.open)loadTransferClasses()">
-        <summary style="font-weight:700;cursor:pointer;color:#7b1fa2;font-size:.95rem;">↔️ Перевести учня в інший клас</summary>
-        <div style="margin-top:13px;">
-          <p style="font-size:.83rem;color:#555;">Оцінки та відвідуваність за попередній клас залишаються в архіві того класу — переноситься лише сам учень і прив'язки батьків.</p>
-          <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:8px;">
-            <select id="tr-from-class" onchange="loadTransferStudents()" style="flex:1;min-width:120px;margin-top:0;border:2px solid #ce93d8;">
-              <option value="">Із класу...</option>
-              <option value="class_1">1 Клас</option><option value="class_2">2 Клас</option><option value="class_3">3 Клас</option>
-              <option value="class_4">4 Клас</option><option value="class_5">5 Клас</option><option value="class_6">6 Клас</option>
-              <option value="class_7">7 Клас</option><option value="class_8">8 Клас</option><option value="class_9">9 Клас</option>
-              <option value="class_10">10 Клас</option><option value="class_11">11 Клас</option>
-            </select>
-            <select id="tr-student" style="flex:2;min-width:150px;margin-top:0;border:2px solid #ce93d8;"><option value="">Спочатку клас</option></select>
-            <select id="tr-to-class" style="flex:1;min-width:120px;margin-top:0;border:2px solid #ce93d8;">
-              <option value="">У клас...</option>
-              <option value="class_1">1 Клас</option><option value="class_2">2 Клас</option><option value="class_3">3 Клас</option>
-              <option value="class_4">4 Клас</option><option value="class_5">5 Клас</option><option value="class_6">6 Клас</option>
-              <option value="class_7">7 Клас</option><option value="class_8">8 Клас</option><option value="class_9">9 Клас</option>
-              <option value="class_10">10 Клас</option><option value="class_11">11 Клас</option>
-            </select>
-          </div>
-          <button onclick="transferStudent()" style="background:var(--purple);color:#fff;padding:11px;margin-top:10px;">↔️ Перевести учня</button>
-          <div id="tr-result" style="margin-top:10px;"></div>
-        </div>
-      </details>
-      <!-- Річний перехід усієї школи -->
-            <div data-dtab="nalash" style="margin-bottom:12px;background:#f7f9fa;padding:14px;border-radius:12px;border:1px solid #e0e6e8;">
-        <b style="font-size:.9rem;color:#37474f;">🔔 Сповіщення</b>
-        <p style="font-size:.76rem;color:#888;margin:5px 0 8px 0;">Перевіряє ланцюжок по кроках і надсилає тестове сповіщення вам. Нічого не розсилає іншим.</p>
-        <button onclick="checkNotifySetup()" style="background:#fff;color:#00838f;border:1px solid #80deea;">🔍 Перевірити сповіщення</button>
-        <div id="k-notify-info-2" style="display:none;"></div>
-      </div>
-      <div data-dtab="nalash" style="margin-bottom:12px;background:#f7f9fa;padding:14px;border-radius:12px;border:1px solid #e0e6e8;">
-        <b style="font-size:.9rem;color:#37474f;">📇 Довідник контактів для чату</b>
-        <p style="font-size:.76rem;color:#888;margin:5px 0 8px 0;">Батьки й учителі не бачать списку користувачів школи — і не повинні. Щоб їм було з кого обирати в чаті, кожен публікує про себе імʼя, роль і класи при вході. Ця кнопка заповнює довідник за всіх одразу — потрібна один раз після оновлення.</p>
-        <button onclick="rebuildContactDirs()" style="background:#fff;color:#00838f;border:1px solid #80deea;">📇 Заповнити довідник</button>
-        <div id="d-dirs-info" style="display:none;font-size:.8rem;margin-top:8px;"></div>
-      </div>
-<details data-dtab="nalash" style="background:#e8f5e9;padding:14px;border-radius:12px;border:1px solid #a5d6a7;">
-        <summary style="font-weight:700;cursor:pointer;color:#1b5e20;font-size:.95rem;">🎓 Перевести школу на наступний навчальний рік</summary>
-        <div style="margin-top:13px;">
-          <div style="background:#fff3cd;border:1px solid #ffc107;border-radius:10px;padding:10px 14px;font-size:.83rem;color:#856404;">
-            ⚠️ <b>Незворотна операція.</b> Усі учні переходять на клас вище (1→2, 2→3 … 10→11), а 11 клас випускається в архів. Оцінки, відвідуваність і коментарі залишаються в архіві своїх класів — переносяться лише списки учнів і прив'язки акаунтів.
-          </div>
-          <button onclick="previewYearRollover()" style="background:#1b5e20;color:#fff;padding:11px;margin-top:10px;">🔍 Переглянути зміни</button>
-          <div id="yr-preview" style="margin-top:12px;"></div>
-        </div>
-      </details>
-    </section>
-
-    <section class="screen-section half">
-      <h3>📅 Навчальний рік</h3>
-      <!-- PHASE 1: Академічний рік -->
-      <details data-dtab="nalash" style="margin-bottom:12px;background:#fff8e1;padding:14px;border-radius:12px;border:1px solid #ffe0b2;" ontoggle="if(this.open)loadAcademicYear()">
-        <summary style="font-weight:700;cursor:pointer;color:#e65100;font-size:.95rem;">📅 Навчальний рік <span id="ay-year-label" style="font-weight:400;color:#888;font-size:.8rem;"></span></summary>
-        <div style="margin-top:13px;">
-          <h4 style="margin:0 0 7px 0;color:#e65100;font-size:.86rem;">Семестри</h4>
-          <div id="ay-semesters-list"></div>
-          <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:8px;">
-            <input type="text" id="ay-sem-name" placeholder="Назва (напр. I семестр)" style="flex:2;min-width:140px;margin-top:0;">
-            <input type="date" id="ay-sem-start" style="flex:1;min-width:120px;margin-top:0;">
-            <input type="date" id="ay-sem-end" style="flex:1;min-width:120px;margin-top:0;">
-            <button onclick="addSemester()" style="flex:1;min-width:100px;margin-top:0;background:#e65100;color:#fff;">+ Додати</button>
-          </div>
-          <h4 style="margin:16px 0 7px 0;color:#e65100;font-size:.86rem;">Канікули</h4>
-          <div id="ay-breaks-list"></div>
-          <input type="text" id="ay-break-title" placeholder="Назва канікул" style="margin-top:8px;">
-          <div style="display:flex;gap:7px;margin-top:6px;">
-            <input type="date" id="ay-break-start" style="flex:1;margin-top:0;">
-            <input type="date" id="ay-break-end" style="flex:1;margin-top:0;">
-          </div>
-          <label style="display:flex;align-items:center;gap:6px;margin-top:6px;font-weight:400;font-size:.82rem;">
-            <input type="checkbox" id="ay-break-all-classes" onchange="toggleAllClasses('break')" style="width:auto;margin:0;"> Усі класи
-          </label>
-          <select id="ay-break-classes" multiple style="height:90px;margin-top:4px;">
-            <option value="class_1">1 Клас</option><option value="class_2">2 Клас</option><option value="class_3">3 Клас</option>
-            <option value="class_4">4 Клас</option><option value="class_5">5 Клас</option><option value="class_6">6 Клас</option>
-            <option value="class_7">7 Клас</option><option value="class_8">8 Клас</option><option value="class_9">9 Клас</option>
-            <option value="class_10">10 Клас</option><option value="class_11">11 Клас</option>
-          </select>
-          <button onclick="addBreak()" style="background:#e65100;color:#fff;margin-top:8px;">+ Додати канікули</button>
-          <h4 style="margin:16px 0 7px 0;color:#e65100;font-size:.86rem;">Свята</h4>
-          <div id="ay-holidays-list"></div>
-          <input type="text" id="ay-holiday-title" placeholder="Назва свята" style="margin-top:8px;">
-          <input type="date" id="ay-holiday-date" style="margin-top:6px;">
-          <label style="display:flex;align-items:center;gap:6px;margin-top:6px;font-weight:400;font-size:.82rem;">
-            <input type="checkbox" id="ay-holiday-all-classes" onchange="toggleAllClasses('holiday')" style="width:auto;margin:0;"> Усі класи
-          </label>
-          <select id="ay-holiday-classes" multiple style="height:90px;margin-top:4px;">
-            <option value="class_1">1 Клас</option><option value="class_2">2 Клас</option><option value="class_3">3 Клас</option>
-            <option value="class_4">4 Клас</option><option value="class_5">5 Клас</option><option value="class_6">6 Клас</option>
-            <option value="class_7">7 Клас</option><option value="class_8">8 Клас</option><option value="class_9">9 Клас</option>
-            <option value="class_10">10 Клас</option><option value="class_11">11 Клас</option>
-          </select>
-          <select id="ay-holiday-calendar-type" style="margin-top:6px;">
-            <option value="general">🏫 Загальна школа</option>
-            <option value="art_school">🎵 Школа мистецтв</option>
-          </select>
-          <button onclick="addHoliday()" style="background:#e65100;color:#fff;margin-top:8px;">+ Додати свято</button>
-        </div>
-      </details>
-      <!-- PHASE 2: Розклад дзвінків -->
-      <details data-dtab="nalash" style="margin-bottom:12px;background:#e8eaf6;padding:14px;border-radius:12px;border:1px solid #9fa8da;">
-        <summary style="font-weight:700;cursor:pointer;color:#283593;font-size:.95rem;">🔔 Розклад дзвінків</summary>
-        <div style="margin-top:13px;">
-          <select id="bell-class-select" onchange="loadBellSchedule()" style="border:2px solid #7986cb;">
-            <option value="">-- Оберіть клас --</option>
-            <option value="class_1">1 Клас</option><option value="class_2">2 Клас</option><option value="class_3">3 Клас</option>
-            <option value="class_4">4 Клас</option><option value="class_5">5 Клас</option><option value="class_6">6 Клас</option>
-            <option value="class_7">7 Клас</option><option value="class_8">8 Клас</option><option value="class_9">9 Клас</option>
-            <option value="class_10">10 Клас</option><option value="class_11">11 Клас</option>
-          </select>
-          <div id="bell-slots-table" style="margin-top:10px;"><p class="empty-msg">Оберіть клас.</p></div>
-          <button onclick="addBellSlot()" style="background:#7986cb;color:#fff;margin-top:8px;">+ Додати урок</button>
-          <button onclick="saveBellSchedule()" style="background:#283593;color:#fff;margin-top:8px;">💾 Зберегти для цього класу</button>
-          <!-- Один раз налаштувати — застосувати всім класам -->
-          <button onclick="applyBellToAllClasses()" style="background:#00838f;color:#fff;margin-top:8px;">📤 Застосувати цей розклад до ВСІХ класів</button>
-          <!-- Хто який розклад має і в кого не вказано -->
-          <div style="margin-top:14px;border-top:1px dashed #b0bec5;padding-top:10px;">
-            <div style="display:flex;justify-content:space-between;align-items:center;">
-              <b style="font-size:.85rem;color:#283593;">📊 Розклад дзвінків по класах</b>
-              <button onclick="loadBellCoverage()" style="width:auto;padding:4px 10px;margin:0;font-size:.75rem;background:#eceff1;color:#333;">🔄 Оновити</button>
-            </div>
-            <div id="bell-coverage" style="margin-top:7px;"><p class="empty-msg">Завантаження...</p></div>
-          </div>
-        </div>
-      </details>
-      <!-- PHASE 5: Типи оцінок -->
-      <details data-dtab="nalash" style="background:#fdf2e9;padding:14px;border-radius:12px;border:1px solid #f5cba7;" ontoggle="if(this.open)loadGradeTypesAdmin()">
-        <summary style="font-weight:700;cursor:pointer;color:#d35400;font-size:.95rem;">🎯 Типи оцінок</summary>
-        <div style="margin-top:13px;">
-          <div id="gt-types-table"><p class="empty-msg">Відкрийте блок для завантаження...</p></div>
-          <div style="display:flex;gap:7px;margin-top:12px;flex-wrap:wrap;">
-            <input id="gt-new-code" placeholder="Код (напр. ЛР)" style="width:90px;margin:0;">
-            <input id="gt-new-label" placeholder="Назва" style="flex:1;min-width:140px;margin:0;">
-            <input id="gt-new-weight" type="number" step="0.1" min="0.1" placeholder="Коеф." style="width:80px;margin:0;">
-            <button onclick="addGradeType()" style="background:var(--green);color:#fff;width:auto;padding:8px 14px;margin:0;">➕ Додати</button>
-          </div>
-        </div>
-      </details>
-    </section>
-
-    <button class="btn-logout" onclick="logoutUser()">Вийти</button>
-  </div>
-  <!-- ══════════════════════════════
-       TEACHER SCREEN
-       ══════════════════════════════ -->
-  <div id="teacher-screen" class="panel">
-    <h2 id="teacher-dashboard-title">👨‍🏫 Журнал</h2>
-    <div class="dtab-bar" id="teacher-screen-tabs">
-      <button class="dtab on" data-t="day" onclick="switchTab('teacher-screen','day',this)">Сьогодні</button>
-      <button class="dtab" data-t="journal" onclick="switchTab('teacher-screen','journal',this)">Журнал</button>
-      <button class="dtab" data-t="news" onclick="switchTab('teacher-screen','news',this)">Новини<span class="chat-dot"></span></button>
-    </div>
-    <div id="t-push-invite" style="display:none;"></div>
-
-
-    <section class="screen-section" data-dtab="day">
-      <h3>🚀 Швидкі дії</h3>
-      <div id="t-exams-journal-btns" style="display:flex;gap:9px;">
-        <button onclick="openExamsCalendar()" class="qa-btn qa-exams" style="flex:1;min-width:0;">📅 Контрольні</button>
-        <button onclick="openJournalModal('teacher')" class="qa-btn qa-journal" style="flex:1;min-width:0;">📖 Журнал</button>
-        <button onclick="showUngraded()" class="qa-btn" style="flex:1;min-width:0;background:linear-gradient(135deg,#f39c12,#e67e22);color:#fff;">🔍 Без оцінок</button>
-      </div>
-      <div id="t-quick-btns" style="display:flex;gap:9px;margin-bottom:14px;flex-wrap:wrap;">
-        <button onclick="openQuickJournal()" class="qa-btn" style="flex:1;min-width:140px;background:linear-gradient(135deg,#00c6ff,#0072ff);color:#fff;">⚡ Швидкий журнал</button>
-        <button onclick="openClassBroadcast()" class="qa-btn" style="flex:1;min-width:140px;background:linear-gradient(135deg,#9b59b6,#8e44ad);color:#fff;">✉️ Повідомлення класу</button>
-        <button onclick="printClassSchedule()" class="qa-btn" style="flex:1;min-width:140px;background:#eceff1;color:#37474f;">🖨️ Друк розкладу</button>
-      </div>
-      <div id="t-matrix-btn-wrapper" style="display:none;margin-top:9px;">
-        <button onclick="openVisualMatrixModal('live')" style="width:100%;background:linear-gradient(135deg,#1abc9c,#16a085);color:#fff;margin-top:0;padding:11px;">🗓️ Матриця розкладу</button>
-      </div>
-    </section>
-
-    <section class="screen-section" data-dtab="day">
-      <h3>📋 Сьогодні</h3>
-      <!-- Відвідуваність -->
-      <div class="data-card" style="border-left-color:var(--red);background:#fdfbfb;margin-top:0;">
-        <h4 id="t-att-header" style="margin-top:0;color:var(--red);">🚨 Відвідуваність сьогодні:</h4>
-        <ul id="t-attendance-list" class="list-dash" style="list-style:none;padding-left:0;"><li class="empty-msg">Завантаження...</li></ul>
-        <div id="t-mark-absent-block" style="margin-top:13px;display:flex;gap:8px;border-top:1px dashed #f5b7b1;padding-top:13px;">
-          <select id="t-mark-absent-student" style="flex:1;margin-top:0;border:1px solid #f5b7b1;"><option value="">Учень...</option></select>
-          <select id="t-mark-absent-lesson" style="flex:1;margin-top:0;border:1px solid #f5b7b1;"><option value="all">Увесь день</option></select>
-          <select id="t-mark-absent-reason" style="flex:1;margin-top:0;border:1px solid #f5b7b1;">
-            <option value="Відмічено вчителем">Без причини</option><option value="через хворобу">Хвороба</option>
-            <option value="за сімейними обставинами">Сімейні обставини</option><option value="запізнення">Запізнення</option>
-          </select>
-          <button onclick="teacherMarkAbsent()" style="margin-top:0;background:var(--red);color:#fff;width:auto;padding:9px 13px;font-size:.85rem;">Відмітити</button>
-        </div>
-      </div>
-      <!-- Реакції + Підсумки + Перездачі -->
-      <div style="display:flex;gap:9px;margin:14px 0 0 0;">
-        <div style="flex:1;background:#ffeaa7;padding:13px;border-radius:12px;text-align:center;cursor:pointer;" onclick="showReactionsDetails()">
-          <h4 style="margin:0;color:#d35400;font-size:.82rem;">❤️ Реакції</h4>
-          <p id="t-karma-counter" style="font-size:1.6rem;font-weight:800;color:#e67e22;margin:4px 0;">0</p>
-        </div>
-        <div id="t-wrapped-btn" style="flex:1;background:linear-gradient(135deg,#a8ff78,#78ffd6);padding:13px;border-radius:12px;text-align:center;cursor:pointer;" onclick="showWeeklyWrapped()">
-          <h4 style="margin:0;color:var(--teal);font-size:.82rem;">📊 Підсумки</h4>
-          <p style="font-size:1.6rem;margin:4px 0;">🎁</p>
-        </div>
-        <div id="t-retake-btn" style="flex:1;background:#fff3cd;padding:13px;border-radius:12px;text-align:center;cursor:pointer;" onclick="openRetakeRequestsModal()">
-          <h4 style="margin:0;color:#856404;font-size:.82rem;">🔄 Перездачі</h4>
-          <p id="t-retake-counter" style="font-size:1.6rem;font-weight:800;color:#d35400;margin:4px 0;">0</p>
-        </div>
-      </div>
-      <!-- PHASE 7: Статистика наліпок -->
-      <div style="display:flex;gap:9px;margin:14px 0 0 0;">
-        <button onclick="openStickerStatsModal()" style="flex:1;min-width:130px;background:linear-gradient(135deg,#f39c12,#f1c40f);color:#fff;">🌟 Статистика наліпок</button>
-      </div>
-      <div style="display:flex;gap:9px;margin:14px 0 0 0;" id="t-chat-row">
-        <div id="t-chat-btn" style="flex:1;background:#f3e5f5;padding:13px;border-radius:12px;text-align:center;cursor:pointer;" onclick="openChatModal('teacher')" data-chatbtn="1">
-          <h4 style="margin:0;color:#7b1fa2;font-size:.82rem;">💬 Чат з батьками</h4>
-          <p style="font-size:1.6rem;margin:4px 0;">✉️</p>
-        </div>
-      </div>
-      <!-- ДЗ зведення -->
-      <div id="t-hw-list-wrapper" class="data-card" style="border-left-color:var(--blue);background:#f4f9fd;margin:14px 0 0 0;">
-        <h4 style="margin-top:0;color:var(--blue);">📋 ДЗ класу сьогодні:</h4>
-        <div id="t-birthdays" class="bd-box" style="display:none;"></div>
-        <ul id="t-daily-hw-list" class="list-dash"></ul>
-      </div>
-    </section>
-
-    <section class="screen-section" data-dtab="news">
-      <h3>📣 Новини школи</h3>
-      <button onclick="openNewsComposer()" style="background:#00838f;color:#fff;margin-bottom:10px;">➕ Нове оголошення</button>
-      <div id="t-news-feed" class="nw-feed"><p class="empty-msg">Завантаження...</p></div>
-    </section>
-
-    <section class="screen-section" data-dtab="journal">
-      <h3>✏️ Заповнення журналу</h3>
-      <label>Предмет:</label>
-      <select id="t-subject" onchange="handleSubjectChange()"></select>
-      <!-- Підручники -->
-      <div style="margin-top:12px;background:#f0f8ff;padding:13px;border-radius:11px;border:1px solid #d0e8f2;">
-        <h4 style="margin:0 0 8px 0;color:var(--blue);font-size:.88rem;">📘 Посилання на підручники</h4>
-        <div id="t-textbooks-list" style="margin-bottom:8px;"></div>
-        <div style="display:flex;gap:7px;">
-          <input type="text" id="t-tb-title" placeholder="Назва підручника" style="flex:2;margin-top:0;font-size:.85rem;">
-          <input type="text" id="t-tb-url" placeholder="https://..." style="flex:3;margin-top:0;font-size:.85rem;">
-          <button onclick="saveTextbook()" style="flex:1;margin-top:0;background:var(--blue);color:#fff;padding:10px 6px;font-size:.82rem;">+ Додати</button>
-        </div>
-      </div>
-      <!-- Навчальний план -->
-      <details style="margin-top:14px;background:#f9f4ff;padding:14px;border-radius:11px;border:1px solid #ce93d8;">
-        <summary style="font-weight:700;cursor:pointer;color:#7b1fa2;font-size:.95rem;">📚 Навчальний план (Теми)</summary>
-        <div style="margin-top:12px;">
-          <div id="curriculum-smart-alert" class="smart-alert">
-            ⚠️ <b>Увага!</b> Залишок годин значно перевищує кількість тем. Перевірте план.
-          </div>
-          <div id="curriculum-topics" style="max-height:250px;overflow-y:auto;margin-top:8px;"></div>
-          <div style="display:flex;gap:7px;margin-top:9px;">
-            <input type="text" id="new-topic-title" placeholder="Нова тема..." style="flex:3;margin-top:0;font-size:.85rem;">
-            <input type="number" id="new-topic-hours" placeholder="Год." style="flex:1;margin-top:0;font-size:.85rem;" min="1" max="10">
-            <button onclick="addCurriculumTopic()" style="flex:1;margin-top:0;background:var(--purple);color:#fff;padding:10px 6px;font-size:.82rem;">+ Тема</button>
-          </div>
-        </div>
-      </details>
-      <!-- Curriculum Upload (visible to class_teacher of THIS class or director) -->
-      <div id="curriculum-upload-section" style="display:none;margin-top:18px;background:#e3f2fd;padding:14px;border-radius:12px;border:1px solid #64b5f6;">
-        <h4 style="margin:0 0 8px 0;color:#0d47a1;font-size:.95rem;">📅 Календарне планування <span class="ct-badge">Кл. керівник</span></h4>
-        <p style="font-size:.78rem;color:#555;margin-bottom:10px;">Завантажте Excel-файл — теми автоматично прив'яжуться до уроків.</p>
-        <label class="curr-drop-zone" id="curr-drop-zone-label">
-          <input type="file" id="curr-file-input" accept=".xlsx,.xls">
-          <div id="curr-drop-text">📤 Натисніть або перетягніть Excel файл сюди</div>
-        </label>
-        <div id="curr-preview-section" style="display:none;margin-top:12px;">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-            <b style="color:#0d47a1;">Превʼю плану:</b>
-            <span id="curr-preview-class" style="font-size:.78rem;color:#666;"></span>
-          </div>
-          <div id="curr-preview-content" style="max-height:280px;overflow-y:auto;"></div>
-          <button onclick="saveCurriculumToDb()" id="btn-save-curr" style="background:#0d47a1;color:#fff;padding:11px;margin-top:10px;">💾 Зберегти план у систему</button>
-        </div>
-        <details style="margin-top:10px;">
-          <summary style="cursor:pointer;color:#1565c0;font-size:.82rem;">📥 Поточний план у системі</summary>
-          <div id="current-curriculum-display" style="margin-top:8px;font-size:.82rem;"></div>
-        </details>
-      </div>
-      <!-- Тема уроку (PHASE 6: до 2 тем на урок, custom dropdown замість <select>) -->
-      <div class="topic-card" id="t-topic-card" style="margin-top:13px;">
-        <label>📌 Тема уроку 1:</label>
-        <div class="topic-select-wrap">
-          <div class="topic-dropdown" id="t-topic-dropdown-1">
-            <div class="topic-dropdown-trigger" onclick="toggleTopicDropdown(1)" id="t-topic-trigger-1">✏️ Власна тема</div>
-            <div class="topic-dropdown-list" id="t-topic-list-1" style="display:none;"></div>
-            <input type="hidden" id="t-topic-value-1" value="__custom__">
-          </div>
-          <div id="topic-status-line" style="display:none;" class="topic-status-bar">
-            <span id="topic-status-text">—</span>
-            <div class="topic-progress-mini"><div class="topic-progress-mini-fill" id="topic-progress-fill" style="width:0%"></div></div>
-            <span id="topic-status-count" style="font-weight:800;color:var(--purple);">0/0</span>
-          </div>
-        </div>
-        <!-- Видиме за замовчуванням: у t-topic-value-1 початково стоїть
-             __custom__, тож поле ручного вводу має бути показане одразу,
-             інакше стан розмітки суперечить стану значення. -->
-        <input type="text" id="t-topic-1" placeholder="Введіть тему вручну..." style="margin-top:6px;">
-        <div id="t-topic-display-1" style="display:none;" class="topic-display"></div>
-        <button type="button" id="btn-add-second-topic" onclick="showSecondTopicSlot()" style="margin-top:8px;background:#ecf0f1;color:#333;">+ Додати другу тему</button>
-        <div id="t-topic-slot-2-wrap" style="display:none;margin-top:8px;">
-          <label>📌 Тема уроку 2:</label>
-          <div class="topic-dropdown" id="t-topic-dropdown-2">
-            <div class="topic-dropdown-trigger" onclick="toggleTopicDropdown(2)" id="t-topic-trigger-2">✏️ Власна тема</div>
-            <div class="topic-dropdown-list" id="t-topic-list-2" style="display:none;"></div>
-            <input type="hidden" id="t-topic-value-2" value="__custom__">
-          </div>
-          <input type="text" id="t-topic-2" placeholder="Введіть тему вручну..." style="margin-top:6px;display:none;">
-          <div id="t-topic-display-2" style="display:none;" class="topic-display"></div>
-          <button type="button" onclick="hideSecondTopicSlot()" style="margin-top:5px;background:none;color:var(--red);width:auto;padding:2px;">✖ Прибрати</button>
-        </div>
-      </div>
-      <!-- ДЗ + Фото -->
-      <div id="t-hw-input-wrapper">
-        <label>📚 Домашнє завдання (для всього класу):</label>
-        <textarea id="t-hw" rows="2" placeholder="Введіть ДЗ..."></textarea>
-        <!-- AI-чернетка ДЗ за темою уроку. Предмет, тему і клас система бере
-             сама — вчителю не треба нічого формулювати. -->
-        <!-- Необов'язковий контекст для AI: підручник, сторінки, текст вправи -->
-        <details class="ai-ctx" ontoggle="if(this.open)fillHwTextbooks()">
-          <summary>➕ Додати контекст: підручник, сторінки, текст вправи</summary>
-          <div style="margin-top:9px;">
-            <label for="hw-textbook">📘 Підручник</label>
-            <select id="hw-textbook" style="margin-top:3px;">
-              <option value="">— не вказувати —</option>
-            </select>
-            <input type="text" id="hw-textbook-custom" placeholder="або впишіть назву вручну" style="margin-top:5px;">
-            <label for="hw-pages" style="margin-top:9px;">📄 Сторінки / вправи</label>
-            <input type="text" id="hw-pages" placeholder="напр. с. 45, вправи 3–5" style="margin-top:3px;">
-            <label for="hw-material" style="margin-top:9px;">📋 Текст вправи або матеріалу (за бажанням)</label>
-            <textarea id="hw-material" rows="3" placeholder="Вставте сюди текст із підручника — тоді завдання буде складено саме за ним" style="margin-top:3px;"></textarea>
-            <p class="ai-ctx-note">
-              ⚠️ Система <b>не бачить</b> вмісту підручника і не відкриває посилання.
-              Назва та сторінки підуть у завдання лише як посилання на джерело —
-              вигадувати номери вправ їй заборонено. Щоб ДЗ склалося саме за
-              матеріалом, вставте його текст у поле вище.
-            </p>
-          </div>
-        </details>
-        <div class="ai-hw-row">
-          <button type="button" id="btn-ai-hw" onclick="generateHomeworkAI()">✨ Згенерувати чернетку ДЗ</button>
-          <button type="button" id="btn-hw-copy" onclick="openHwCopy()">📋 Скопіювати в інші класи</button>
-        </div>
-        <p class="ai-hw-note" style="margin:4px 0 0 0;">чернетка — перевірте й відредагуйте перед збереженням</p>
-        <p id="ai-hw-msg" class="ai-hw-msg" style="display:none;"></p>
-        <label>📸 Фото:</label>
-        <input type="file" id="t-image" accept="image/*" multiple>
-        <div id="existing-image-info" style="display:none;font-size:.83rem;color:#e67e22;margin-top:4px;"></div>
-      </div>
-      <!-- КНОПКИ -->
-      <div class="qa-row" style="margin-top:13px;">
-        <button class="qa-btn qa-grades" onclick="openJournalForGrading()">📊 Виставити оцінки</button>
-        <button class="qa-btn qa-save" onclick="saveTopicAndHW()" id="btn-save-hw">💾 Зберегти тему та ДЗ</button>
-      </div>
-      <div id="status-msg"></div>
-    </section>
-
-    <section class="screen-section half">
-      <h3>📝 Оцінювання учня</h3>
-      <!-- Оцінка поведінки -->
-      <div style="background:#e8eaf6;padding:13px;border-radius:12px;border:1px solid #c5cae9;">
-        <h4 style="margin:0 0 9px 0;color:#283593;font-size:.9rem;">🤝 Оцінка поведінки (Класний урок)</h4>
-        <div style="display:flex;gap:8px;align-items:flex-end;">
-          <select id="t-behavior-student" style="flex:2;margin-top:0;border-color:#7986cb;"><option value="">Учень...</option></select>
-          <div style="flex:1;display:flex;flex-direction:column;gap:4px;">
-            <label style="margin-top:0;font-size:.72rem;color:#3949ab;">Оцінка (1-6):</label>
-            <input type="text" id="t-behavior-grade" placeholder="1-6" style="margin-top:0;border:2px solid #7986cb;text-align:center;font-weight:800;color:#283593;">
-          </div>
-          <button onclick="saveBehaviorGrade()" style="flex:1;margin-top:0;background:#283593;color:#fff;padding:11px 8px;font-size:.82rem;border-radius:10px;border:none;cursor:pointer;font-weight:700;">💾 Зберегти</button>
-        </div>
-      </div>
-      <!-- Наліпка -->
-      <div style="margin-top:13px;background:#fffcf0;padding:13px;border-radius:12px;border:1px solid #fde3a7;">
-        <h4 style="margin:0 0 8px 0;color:#d35400;font-size:.88rem;">🌟 Видати наліпку учню</h4>
-        <div style="display:flex;gap:8px;align-items:flex-end;">
-          <select id="t-sticker-student" style="flex:2;margin-top:0;"></select>
-          <button onclick="giveStickerToStudent()" style="flex:1;margin-top:0;background:#f1c40f;color:#333;padding:11px 8px;border-radius:10px;border:none;cursor:pointer;font-weight:800;font-size:.88rem;">🌟 Дати</button>
-        </div>
-      </div>
-      <!-- Коментар -->
-      <div style="margin-top:13px;background:#f3e5f5;padding:13px;border-radius:12px;border:1px solid #ce93d8;">
-        <h4 style="margin:0 0 8px 0;color:#7b1fa2;font-size:.88rem;">💬 Коментар учню</h4>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
-          <select id="t-student" style="flex:2;margin-top:0;border-color:#a1887f;"><option value="">Учень...</option></select>
-          <select id="t-subject-for-comment" style="flex:1;margin-top:0;border-color:#a1887f;"></select>
-        </div>
-        <textarea id="t-comment" rows="2" placeholder="Напишіть своїми словами — напр. «не готовий до уроку, заважає»..." style="margin-top:7px;border-color:#a1887f;font-size:.88rem;"></textarea>
-        <!-- AI переформулює чернетку вчителя в коректне повідомлення батькам.
-             Ім'я учня в сервіс не передається — див. teacher.js -->
-        <div class="ai-hw-row">
-          <button type="button" id="btn-ai-comment" onclick="improveCommentAI()">✨ Допомогти сформулювати</button>
-          <span class="ai-hw-note">перепишу ввічливо й конструктивно</span>
-        </div>
-        <p id="ai-comment-msg" class="ai-hw-msg" style="display:none;"></p>
-        <button onclick="saveComment()" style="background:#7b1fa2;color:#fff;padding:9px;margin-top:7px;border-radius:9px;font-size:.85rem;border:none;cursor:pointer;width:100%;font-weight:700;">💬 Зберегти коментар</button>
-      </div>
-    </section>
-
-    <section class="screen-section half">
-      <!-- Управління класом -->
-      <details style="background:#fff;padding:13px;border-radius:12px;border:1px solid #ddd;">
-        <summary style="font-weight:700;cursor:pointer;color:#7f8c8d;">⚙️ Управління класом</summary>
-        <div style="margin-top:13px;">
-          <input type="text" id="new-student-name" placeholder="Прізвище та Ім'я учня">
-          <input type="email" id="new-student-email" placeholder="Email учня (для входу)" style="margin-top:5px; border-color:#f1c40f;">
-          <button style="background:#f1c40f;padding:8px;margin-top:5px;margin-bottom:13px;" onclick="addStudent()">Додати учня</button>
-          <hr>
-          <!-- Список батьків свого класу: контакти можна дивитись і редагувати -->
-          <details style="margin-top:13px;background:#f9f4ff;padding:12px;border-radius:11px;border:1px solid #ce93d8;"
-                   ontoggle="if(this.open)renderParentsBlock('t-parents-list',getActiveClass())">
-            <summary style="font-weight:700;cursor:pointer;color:#7b1fa2;font-size:.88rem;">👪 Батьки мого класу</summary>
-            <div id="t-parents-list" style="margin-top:9px;"><p class="empty-msg">Завантаження...</p></div>
-          </details>
-          <p style="font-size:.83rem;color:#555;margin-top:13px;font-weight:700;">Прив'язка батьків:</p>
-          <select id="t-parent-role" style="margin-top:4px;border-color:#9b59b6;">
-            <option value="mother">👩‍👧 Мати</option><option value="father">👨‍👦 Батько</option><option value="guardian">🛡️ Опекун</option>
-          </select>
-          <input type="email" id="parent-email" placeholder="Email батьків" style="margin-top:4px;">
-          <select id="t-student-for-parent" style="margin-top:4px;"><option value="">Учень...</option></select>
-          <button style="background:#9b59b6;padding:8px;margin-top:9px;color:#fff;" onclick="linkParent()">Прив'язати Email</button>
-        </div>
-      </details>
-    </section>
-
-    <button class="btn-logout" onclick="logoutUser()">Вийти</button>
-  </div>
-  <!-- ══════════════════════════════
-       PARENT / STUDENT SCREEN
-       ══════════════════════════════ -->
-  <div id="parent-screen" class="panel">
-    <div class="dtab-bar" id="parent-screen-tabs">
-      <button class="dtab on" data-t="day" onclick="switchTab('parent-screen','day',this)">Сьогодні</button>
-      <button class="dtab" data-t="news" onclick="switchTab('parent-screen','news',this)">Новини</button>
-      <button class="dtab" data-t="study" onclick="switchTab('parent-screen','study',this)">Навчання</button>
-      <button class="dtab" data-t="profile" onclick="switchTab('parent-screen','profile',this)">Профіль</button>
-    </div>
-    <!-- Повідомлення поза вкладками: до листування має бути доступ звідусіль,
-         але як один рядок, а не як розділ, що дублюється на кожній вкладці. -->
-    <div class="p-chatbar">
-      <button onclick="openChatModal('parent')" data-chatbtn="1">💬 Повідомлення</button>
-    </div>
-    <div id="p-push-invite" style="display:none;"></div>
-
-    <!-- ═══════════ СЬОГОДНІ ═══════════ -->
-    <!-- Першою на вкладці навмисно: запізнення й хвороба — те, чим батько
-         користується вранці найчастіше, і шукати це внизу списку незручно. -->
-    <section class="screen-section" data-dtab="day">
-      <h3>🕒 Запізнення та відсутність</h3>
-      <div id="p-teacher-att-alert" style="display:none;background:#fff3cd;border:1px solid #ffeeba;color:#856404;padding:11px 14px;border-radius:10px;margin-bottom:12px;font-size:.85rem;"></div>
-      <div class="data-card att-quick" style="border-left-color:var(--red);background:#fdfbfb;margin-top:0;">
-        <p class="att-hint">Повідомте вчителя — він побачить це одразу.</p>
-        <div class="att-row">
-          <select id="p-att-type" onchange="updateAttOptions()" style="border-color:var(--red);"><option value="late">Запізнюється</option><option value="absent">Відсутній (весь день)</option></select>
-          <select id="p-att-reason" style="border-color:var(--red);"><option value="на 10 хвилин">на 10 хвилин</option></select>
-        </div>
-        <button onclick="submitAttendance()" style="background:var(--red);padding:11px;color:#fff;margin-top:11px;width:100%;">Відправити</button>
-        <p id="p-att-status" style="font-size:.83rem;color:var(--green);font-weight:700;margin-top:9px;display:none;">✅ Сповіщення надіслано!</p>
-      </div>
-    </section>
-    <section class="screen-section" data-dtab="day">
-      <h3>🗓️ Розклад</h3>
-      <div class="schedule-box" style="margin-top:0;">
-        <div class="schedule-day-label" id="p-schedule-day-label">📅 Розклад на сьогодні</div>
-        <div id="p-dynamic-schedule">
-          <div class="no-lessons-msg">⏳ Завантаження розкладу...</div>
-        </div>
-        <button type="button" onclick="printClassSchedule()" style="background:#eceff1;color:#37474f;margin-top:0;margin-bottom:7px;">🖨️ Роздрукувати розклад</button>
-      <button type="button" id="p-week-btn" onclick="toggleWeekSchedule('p')"
-              style="width:100%;background:var(--blue);color:#fff;padding:10px;border-radius:10px;font-weight:700;margin-top:10px;font-size:.88rem;">📅 Показати весь тиждень</button>
-      <div id="p-week-schedule" class="wk-box" style="display:none;"></div>
-      <!-- Посилання лишається прихованим: common.js досі проставляє йому href,
-           а комусь може знадобитися сторінка класу окремою вкладкою. -->
-      <a id="p-schedule-link" href="#" target="_blank" class="wk-full-link">Відкрити сторінку класу ↗</a>
-      </div>
-      <div class="data-card" style="border-left-color:var(--orange);background:#fffcf0;">
-        <h4 style="margin-top:0;color:var(--orange);">📅 Календар класу</h4>
-        <div id="p-calendar-container"></div>
-        <div id="p-cal-day-details" style="display:none;margin-top:10px;background:#fff;border-radius:8px;padding:9px;border:1px dashed var(--orange);font-size:.82rem;"></div>
-      </div>
-      <div class="data-card" style="border-left-color:#7986cb;background:#f5f6ff;">
-        <h4 style="margin-top:0;color:#283593;">🔔 Розклад дзвінків</h4>
-        <div id="p-bell-schedule-container"><p class="empty-msg">Завантаження...</p></div>
-      </div>
-    </section>
-
-    <section class="screen-section" data-dtab="day">
-      <h3>🍽️ Харчування</h3>
-      <div id="p-menu" class="pm-box"><p class="empty-msg">Завантаження...</p></div>
-    </section>
-
-    <section class="screen-section" data-dtab="day">
-      <h3>📚 Задано на сьогодні</h3>
-      <div class="data-card" style="border-left-color:#00b894;background:#f0fff4;margin-top:0;">
-        <ul id="p-daily-hw-list" class="list-dash"></ul>
-        <!-- AI-поради батькам за темою уроку / домашнім завданням.
-             У сервіс іде лише предмет, тема, ДЗ і номер класу. -->
-        <div class="ai-help-box">
-          <div class="ai-hw-row">
-            <select id="p-help-subject" style="flex:1;min-width:140px;margin-top:0;font-size:.82rem;"></select>
-            <button type="button" id="btn-ai-parent" onclick="parentHelpAI()">🏠 Як допомогти вдома</button>
-          </div>
-          <p id="ai-parent-msg" class="ai-hw-msg" style="display:none;"></p>
-          <div id="ai-parent-out" class="ai-out" style="display:none;"></div>
-        </div>
-      </div>
-    </section>
-
-    <section class="screen-section" data-dtab="day">
-      <h3>📝 Оцінки та коментарі за день</h3>
-      <div class="data-card" style="border-left-color:#ff4757;background:#fff0f1;margin-top:0;">
-        <ul id="p-daily-comments-list" class="list-dash"></ul>
-      </div>
-    </section>
-
-
-    <!-- ═══════════ НОВИНИ ═══════════ -->
-    <section class="screen-section" data-dtab="news">
-      <h3>📣 Новини школи</h3>
-      <div id="p-news-feed" class="nw-feed"><p class="empty-msg">Завантаження...</p></div>
-    </section>
-
-    <section class="screen-section" data-dtab="news">
-      <h3>🎂 Дні народження</h3>
-      <div id="p-birthdays" class="bd-box" style="display:none;"></div>
-      <p id="p-birthdays-empty" class="empty-msg">Цього тижня іменинників немає.</p>
-    </section>
-
-    <!-- ═══════════ НАВЧАННЯ ═══════════ -->
-    <section class="screen-section" data-dtab="study">
-      <h3>📊 Успішність</h3>
-      <div class="data-card" style="border-left-color:#f1c40f;background:#fffcf0;text-align:center;margin-top:0;">
-        <h4 style="margin-top:0;color:var(--orange);font-size:1rem;">🌟 Прогрес наліпок</h4>
-        <div class="progress-bar-container"><div id="p-ribbon-progress" class="progress-bar"></div></div>
-        <p id="p-ribbon-count" style="font-size:1.1rem;font-weight:700;color:#d35400;margin:13px 0 4px 0;">Завантаження...</p>
-        <p id="p-ribbon-msg" style="color:var(--green);font-weight:800;margin:0;font-size:.95rem;"></p>
-      </div>
-      <div class="data-card" style="border-left-color:#3949ab;background:#e8eaf6;">
-        <h4 style="margin-top:0;color:#283593;">🤝 Поведінка (цей тиждень)</h4>
-        <div id="p-behavior-list"><p class="empty-msg">Завантаження...</p></div>
-      </div>
-      <div class="data-card" style="border-left-color:#00838f;background:#e0f7fa;">
-        <h4 style="margin-top:0;color:#00838f;">🏆 Підсумкові оцінки</h4>
-        <div id="p-final-grades" class="fin-box" style="display:none;"></div>
-        <button type="button" id="btn-report-card" onclick="downloadMyReportCard()" style="background:#00838f;color:#fff;margin-top:0;">📄 Завантажити табель</button>
-      </div>
-    </section>
-
-    <section class="screen-section" data-dtab="study">
-      <h3>📘 Підручники</h3>
-      <div class="data-card" style="border-left-color:var(--blue);background:#f0f8ff;margin-top:0;">
-        <div id="p-textbooks-list"><p class="empty-msg">Завантаження...</p></div>
-      </div>
-    </section>
-
-    <!-- ═══════════ ПРОФІЛЬ ═══════════ -->
-    <section class="screen-section" data-dtab="profile">
-      <h3>🔑 Доступ дитини до порталу</h3>
-      <details style="background:#f3f7fb;padding:14px;border-radius:12px;border:1px solid #cfd8dc;">
-        <summary style="font-weight:700;cursor:pointer;color:#37474f;font-size:.95rem;">Вхід для дитини</summary>
-        <div style="margin-top:13px;">
-          <p style="font-size:.82rem;color:#666;margin:0 0 10px 0;">
-            Дитина заходить у портал за нікнеймом — пошта не потрібна. Якщо пошта є,
-            вкажіть її: тоді дитина зможе відновити пароль самостійно, листом.
-            Пароль ви завжди можете змінити тут.
-          </p>
-          <label for="ca-child" style="margin-top:0;">Дитина</label>
-          <select id="ca-child" onchange="caRender()"></select>
-          <div id="ca-body" style="margin-top:12px;">
-            <p class="empty-msg">Натисніть «Оновити», щоб завантажити.</p>
-          </div>
-          <button onclick="caInit()"
-                  style="background:#eceff1;color:#546e7a;padding:9px;margin-top:9px;width:100%;font-size:.85rem;">
-            Оновити</button>
-          <pre id="ca-trail" style="display:none;font-size:.66rem;line-height:1.5;color:#78909c;
-               background:#fff;border:1px solid #eceff1;border-radius:8px;padding:8px;margin-top:9px;
-               white-space:pre-wrap;word-break:break-word;font-family:ui-monospace,monospace;"></pre>
-          <div id="ca-ver" style="font-size:.68rem;color:#cfd8dc;margin-top:6px;text-align:right;">
-            розділ не завантажився</div>
-        </div>
-      </details>
-    </section>
-
-    <section class="screen-section" data-dtab="profile">
-      <h3>✍️ Згоди</h3>
-      <div id="p-consents"><p class="empty-msg">Активних запитів немає.</p></div>
-    </section>
-
-    <section class="screen-section" data-dtab="profile">
-      <h3>💳 Оплати</h3>
-      <div id="payments-section"></div>
-    </section>
-
-    <button class="btn-logout" onclick="logoutUser()">Вийти</button>
-  </div>
-  <!-- ══════════════════════════════
-       STUDENT SCREEN
-       ══════════════════════════════ -->
-  <div id="student-screen" class="panel">
-    <div class="dtab-bar" id="student-screen-tabs">
-      <button class="dtab on" data-t="day" onclick="switchTab('student-screen','day',this)">Сьогодні</button>
-      <button class="dtab" data-t="news" onclick="switchTab('student-screen','news',this)">Новини<span class="chat-dot"></span></button>
-      <button class="dtab" data-t="study" onclick="switchTab('student-screen','study',this)">Навчання</button>
-    </div>
-    <div id="s-push-invite" style="display:none;"></div>
-
-
-    <section class="screen-section" data-dtab="day">
-      <h3>🗓️ Розклад</h3>
-      <!-- ДИНАМІЧНИЙ РОЗКЛАД -->
-      <div class="schedule-box" style="margin-top:0;">
-        <div class="schedule-day-label" id="s-schedule-day-label">📅 Мій розклад на сьогодні</div>
-        <div id="s-dynamic-schedule">
-          <div class="no-lessons-msg">⏳ Завантаження розкладу...</div>
-        </div>
-        <button type="button" onclick="printClassSchedule()" style="background:#eceff1;color:#37474f;margin-top:0;margin-bottom:7px;">🖨️ Роздрукувати розклад</button>
-      <button type="button" id="s-week-btn" onclick="toggleWeekSchedule('s')"
-              style="width:100%;background:var(--blue);color:#fff;padding:10px;border-radius:10px;font-weight:700;margin-top:10px;font-size:.88rem;">📅 Показати весь тиждень</button>
-      <div id="s-week-schedule" class="wk-box" style="display:none;"></div>
-      <!-- Посилання лишається прихованим: common.js досі проставляє йому href,
-           а комусь може знадобитися сторінка класу окремою вкладкою. -->
-      <a id="s-schedule-link" href="#" target="_blank" class="wk-full-link">Відкрити сторінку класу ↗</a>
-      </div>
-      <!-- PHASE 3: Календар -->
-      <div class="data-card" style="border-left-color:var(--orange);background:#fffcf0;">
-        <h4 style="margin-top:0;color:var(--orange);">📅 Календар класу</h4>
-        <div id="s-calendar-container"></div>
-        <div id="s-cal-day-details" style="display:none;margin-top:10px;background:#fff;border-radius:8px;padding:9px;border:1px dashed var(--orange);font-size:.82rem;"></div>
-      </div>
-      <!-- PHASE 3: Розклад дзвінків -->
-      <div class="data-card" style="border-left-color:#7986cb;background:#f5f6ff;">
-        <h4 style="margin-top:0;color:#283593;">🔔 Розклад дзвінків</h4>
-        <div id="s-bell-schedule-container"><p class="empty-msg">Завантаження...</p></div>
-      </div>
-    </section>
-
-    <section class="screen-section" data-dtab="news">
-      <h3>📣 Новини школи</h3>
-      
-      <div id="s-news-feed" class="nw-feed"><p class="empty-msg">Завантаження...</p></div>
-    </section>
-
-    <section class="screen-section" data-dtab="study">
-      <h3>📚 Навчання</h3>
-      <!-- Наліпки -->
-      <div class="data-card" style="border-left-color:#f1c40f;background:#fffcf0;text-align:center;margin-top:0;">
-        <h4 style="margin-top:0;color:var(--orange);font-size:1rem;">🌟 Мої наліпки</h4>
-        <div class="progress-bar-container"><div id="s-ribbon-progress" class="progress-bar"></div></div>
-        <p id="s-ribbon-count" style="font-size:1.1rem;font-weight:700;color:#d35400;margin:13px 0 4px 0;">Завантаження...</p>
-      </div>
-      <!-- Підручники -->
-      <div class="data-card" style="border-left-color:var(--blue);background:#f0f8ff;">
-        <h4 style="margin-top:0;color:var(--blue);">📘 Мої підручники</h4>
-        <div id="s-textbooks-list"><p class="empty-msg">Завантаження...</p></div>
-      </div>
-      <!-- ДЗ -->
-      <div class="data-card" style="border-left-color:#00b894;background:#f0fff4;">
-        <h4 style="margin-top:0;color:#00b894;">📚 Завдання для мене:</h4>
-        <div id="s-final-grades" class="fin-box" style="display:none;"></div>
-        <div id="s-birthdays" class="bd-box" style="display:none;"></div>
-        <ul id="s-daily-hw-list" class="list-dash"></ul>
-        <!-- Питання для самоперевірки. Свідомо НЕ «поясни тему» і не
-             «зроби ДЗ» — модель має підштовхнути до перевірки себе. -->
-        <div class="ai-help-box">
-          <div class="ai-hw-row">
-            <select id="s-help-subject" style="flex:1;min-width:140px;margin-top:0;font-size:.82rem;"></select>
-            <button type="button" id="btn-ai-student" onclick="selfCheckAI()">🧠 Перевір себе</button>
-          </div>
-          <p id="ai-student-msg" class="ai-hw-msg" style="display:none;"></p>
-          <div id="ai-student-out" class="ai-out" style="display:none;"></div>
-        </div>
-      </div>
-      <!-- Журнал та коментарі -->
-      <div class="data-card" style="border-left-color:#ff4757;background:#fff0f1;">
-        <h4 style="margin-top:0;color:#ff4757;">📝 Мої оцінки та коментарі:</h4>
-        <ul id="s-daily-comments-list" class="list-dash"></ul>
-      </div>
-      <!-- Behavior -->
-      <div class="data-card" style="border-left-color:#3949ab;background:#e8eaf6;">
-        <h4 style="margin-top:0;color:#283593;">🤝 Поведінка (цей тиждень):</h4>
-        <div id="s-behavior-list"><p class="empty-msg">Завантаження...</p></div>
-      </div>
-    </section>
-
-    <section class="screen-section half">
-      <h3>🕒 Відвідуваність</h3>
-      <!-- PHASE 2: Алерт про невизнану відмітку вчителя -->
-      <div id="s-teacher-att-alert" style="display:none;background:#fff3cd;border:1px solid #ffeeba;color:#856404;padding:11px 14px;border-radius:10px;margin-bottom:12px;font-size:.85rem;"></div>
-      <!-- Відсутність -->
-      <div class="data-card" style="border-left-color:var(--red);background:#fdfbfb;margin-top:0;">
-        <h4 style="margin-top:0;color:var(--red);">🕒 Я запізнююсь / буду відсутній</h4>
-        <div style="display:flex;flex-direction:column;gap:9px;margin-top:9px;">
-          <select id="s-att-type" onchange="updateAttOptionsStudent()" style="border-color:var(--red);"><option value="late">Запізнююсь</option><option value="absent">Буду відсутній</option></select>
-          <select id="s-att-reason" style="border-color:var(--red);"><option value="на 10 хвилин">на 10 хвилин</option></select>
-        </div>
-        <button onclick="submitAttendance('student')" style="background:var(--red);padding:11px;color:#fff;margin-top:13px;">Відправити</button>
-        <p id="s-att-status" style="font-size:.83rem;color:var(--green);font-weight:700;margin-top:9px;display:none;">✅ Повідомлення надіслано!</p>
-      </div>
-    </section>
-
-    <section class="screen-section half">
-      <h3>💬 Комунікація</h3>
-      <!-- Чат -->
-      <div class="data-card" style="border-left-color:var(--purple);background:#f9f4ff; text-align:center;margin-top:0;">
-        <button onclick="openChatModal('student')" data-chatbtn="1" style="background:var(--purple); color:#fff; padding:12px; border-radius:12px; font-weight:700; width:100%;">💬 Написати вчителю / директору</button>
-      </div>
-    </section>
-
-    <button class="btn-logout" onclick="logoutUser()">Вийти</button>
-  </div>
-</div>
-<!-- ══════════════════ MODALS ══════════════════ -->
-<!-- Підсумкові (семестрові) оцінки. z-index вищий: відкривається поверх журналу -->
-<div id="semester-modal" class="modal-overlay" style="z-index:1010;">
-  <div class="modal-content" style="max-width:640px;text-align:left;">
-    <h2 style="color:#00838f;margin-top:0;text-align:center;">🎓 Підсумкові оцінки</h2>
-    <p style="text-align:center;font-size:.85rem;color:#555;margin:0 0 10px 0;">
-      <b id="sem-class">—</b> · <b id="sem-subject">—</b>
-    </p>
-    <label for="sem-period">Період</label>
-    <select id="sem-period" onchange="renderSemesterTable()" style="border:2px solid #4dd0e1;"></select>
-    <p style="font-size:.77rem;color:#888;margin:8px 0 0 0;">
-      Система рахує середньозважений бал за період і пропонує оцінку.
-      Остаточне рішення — за вами: будь-яке поле можна змінити.
-      Позначка ✎ означає, що оцінка відрізняється від запропонованої.
-    </p>
-    <div id="sem-body" style="margin-top:10px;"><p class="empty-msg">Оберіть період.</p></div>
-    <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
-      <button onclick="semesterFillAuto()" style="background:#e0f7fa;color:#00838f;border:1px solid #80deea;flex:1;min-width:150px;margin-top:0;">↧ Підставити запропоновані</button>
-      <button id="btn-sem-save" onclick="saveSemesterGrades()" style="background:var(--green);color:#fff;flex:1;min-width:150px;margin-top:0;">💾 Зберегти підсумкові</button>
-    </div>
-    <button onclick="closeSemesterGrades()" style="background:#f5f6fa;color:#333;margin-top:8px;border:1px solid #dcdde1;">Закрити</button>
-  </div>
-</div>
-<!-- Швидкий журнал: увесь клас на одному екрані -->
-<div id="quick-journal-modal" class="modal-overlay" style="z-index:1010;">
-  <div class="modal-content" style="max-width:520px;text-align:left;">
-    <h2 style="color:#0072ff;margin-top:0;text-align:center;">⚡ Швидкий журнал</h2>
-    <p style="text-align:center;font-size:.85rem;color:#555;margin:0 0 8px 0;">
-      <b id="qj-subject">—</b> · <b id="qj-date">—</b>
-    </p>
-    <label for="qj-type" style="margin-top:0;">Тип оцінок на цьому уроці</label>
-    <select id="qj-type" style="margin-top:3px;"></select>
-    <div class="qj-legend"><span><b>✓</b> присутній</span><span><b>З</b> запізнення</span><span><b>Н</b> відсутній</span></div>
-    <div id="qj-body" style="margin-top:6px;max-height:52vh;overflow-y:auto;"></div>
-    <button id="btn-qj-save" onclick="saveQuickJournal()" style="background:var(--green);color:#fff;margin-top:12px;">💾 Зберегти все</button>
-    <button onclick="closeQuickJournal()" style="background:#f5f6fa;color:#333;margin-top:7px;border:1px solid #dcdde1;">Скасувати</button>
-  </div>
-</div>
-<!-- Повідомлення всім батькам класу -->
-<div id="class-broadcast-modal" class="modal-overlay" style="z-index:1010;">
-  <div class="modal-content" style="max-width:440px;text-align:left;">
-    <h2 style="color:var(--purple);margin-top:0;text-align:center;">✉️ Повідомлення класу</h2>
-    <p style="text-align:center;font-size:.85rem;color:#555;margin:0 0 4px 0;"><b id="cb-class">—</b></p>
-    <p style="font-size:.77rem;color:#888;margin:0 0 10px 0;">
-      Кожен отримає повідомлення в особистий чат — батьки не бачитимуть
-      контактів одне одного і не зможуть відповісти «всім».
-    </p>
-    <textarea id="cb-text" rows="4" placeholder="Напр. Завтра принести альбом і олівці"></textarea>
-    <p id="cb-status" style="font-size:.8rem;color:var(--green);font-weight:700;margin:7px 0 0 0;"></p>
-    <button id="btn-cb-send" onclick="sendClassBroadcast()" style="background:var(--purple);color:#fff;margin-top:10px;">✉️ Надіслати всім</button>
-    <button onclick="closeClassBroadcast()" style="background:#f5f6fa;color:#333;margin-top:7px;border:1px solid #dcdde1;">Скасувати</button>
-  </div>
-</div>
-<!-- Учні, яких давно не оцінювали -->
-<div id="ungraded-modal" class="modal-overlay" style="z-index:1010;">
-  <div class="modal-content" style="max-width:440px;text-align:left;">
-    <h2 style="color:#e67e22;margin-top:0;text-align:center;">🔍 Хто давно без оцінок</h2>
-    <p style="text-align:center;font-size:.85rem;color:#555;margin:0 0 4px 0;">Предмет: <b id="ungraded-subject">—</b></p>
-    <p style="font-size:.76rem;color:#888;margin:0 0 10px 0;">Перевіряються останні три місяці. Позначено тих, кого не оцінювали 14 днів і довше.</p>
-    <div id="ungraded-body"></div>
-    <button onclick="closeUngraded()" style="background:#333;color:#fff;margin-top:12px;">Закрити</button>
-  </div>
-</div>
-<!-- Копіювання ДЗ у паралельні класи -->
-<div id="hw-copy-modal" class="modal-overlay">
-  <div class="modal-content" style="max-width:400px;text-align:left;">
-    <h2 style="color:var(--blue);margin-top:0;text-align:center;">📋 Скопіювати ДЗ</h2>
-    <p style="font-size:.84rem;color:#555;margin:0 0 4px 0;">Предмет: <b id="hw-copy-subject">—</b></p>
-    <p style="font-size:.76rem;color:#888;margin:0 0 10px 0;">
-      Копіюється лише домашнє завдання. Теми уроків не переносяться —
-      у кожного класу свій прогрес за календарним планом.
-    </p>
-    <div id="hw-copy-classes"></div>
-    <button id="btn-hw-copy-do" onclick="doHwCopy()" style="background:var(--blue);color:#fff;margin-top:12px;">📋 Скопіювати</button>
-    <button onclick="closeHwCopy()" style="background:#f5f6fa;color:#333;margin-top:7px;border:1px solid #dcdde1;">Скасувати</button>
-  </div>
-</div>
-<!-- Картка учня. Медичні дані — особлива категорія за GDPR, тому редагування
-     доступне лише директору, адміністратору й класному керівнику цього класу;
-     решта відкриває картку в режимі перегляду. -->
-<!-- z-index вищий за решту модалок: картку можна відкрити поверх іншого
-     вікна (напр. із профілю батьків), а порядок у DOM цього не гарантує -->
-<div id="student-card-modal" class="modal-overlay" style="z-index:1010;">
-  <div class="modal-content" style="max-width:560px;text-align:left;">
-    <h2 style="color:var(--teal);margin-top:0;text-align:center;">📋 Картка учня</h2>
-    <p style="text-align:center;font-size:.9rem;color:#333;margin:0 0 12px 0;"><b id="sc-student">—</b></p>
-    <p id="sc-readonly" style="display:none;font-size:.78rem;color:#8a6d1f;background:#fff8e1;border:1px solid #ffe0a3;border-radius:8px;padding:8px 10px;margin:0 0 10px 0;">
-      Режим перегляду. Редагувати картку можуть директор, адміністрація та класний керівник цього класу.
-    </p>
-    <div id="sc-fields"></div>
-    <button id="sc-save" onclick="saveStudentCard()" style="background:var(--green);color:#fff;margin-top:14px;">💾 Зберегти</button>
-    <button onclick="closeStudentCard()" style="background:#f5f6fa;color:#333;margin-top:7px;border:1px solid #dcdde1;">Закрити</button>
-  </div>
-</div>
-<!-- Вхід учня: додати, змінити або прибрати власну пошту для входу -->
-<div id="student-login-modal" class="modal-overlay">
-  <div class="modal-content" style="max-width:420px;text-align:left;">
-    <h2 style="color:var(--teal);margin-top:0;text-align:center;">🔑 Вхід учня</h2>
-    <p style="text-align:center;font-size:.85rem;color:#555;margin:0 0 4px 0;"><b id="sl-student">—</b></p>
-    <p style="font-size:.78rem;color:#888;margin:0 0 12px 0;">
-      Email потрібен лише тоді, коли учень заходить у портал <b>сам</b>.
-      Батьки бачать оцінки дитини незалежно від цього.
-    </p>
-    <label for="sl-email">Email для входу</label>
-    <input type="email" id="sl-email" placeholder="учень@пошта.com" autocapitalize="none" spellcheck="false">
-    <p style="font-size:.74rem;color:#8a6d1f;background:#fff8e1;border:1px solid #ffe0a3;border-radius:8px;padding:7px 9px;margin:9px 0 0 0;">
-      Після збереження учень заходить через «Перший вхід» і сам створює пароль.
-      Якщо змінюєте адресу вже наявному учню — вхід за старою перестане діяти.
-    </p>
-    <button onclick="saveStudentLogin()" style="background:var(--green);color:#fff;margin-top:14px;">💾 Зберегти</button>
-    <button id="sl-remove" onclick="removeStudentLogin()" style="background:#fdecea;color:var(--red);border:1px solid #f5c6cb;margin-top:7px;display:none;">🔒 Прибрати вхід</button>
-    <button onclick="closeStudentLogin()" style="background:#f5f6fa;color:#333;margin-top:7px;border:1px solid #dcdde1;">Скасувати</button>
-  </div>
-</div>
-<!-- Редактор контактів батьків. Спільний для кабінету вчителя і директора -->
-<div id="parent-edit-modal" class="modal-overlay">
-  <div class="modal-content" style="max-width:460px;text-align:left;">
-    <h2 style="color:var(--purple);margin-top:0;text-align:center;">👪 Контакти батьків</h2>
-    <p style="text-align:center;font-size:.8rem;color:#888;margin:0 0 4px 0;" id="pe-email">—</p>
-    <p style="font-size:.76rem;color:#999;text-align:center;margin:0 0 12px 0;">Незаповнені поля просто не показуються у списку</p>
-    <div id="pe-fields"></div>
-    <button id="pe-save" onclick="saveParentProfile()" style="background:var(--green);color:#fff;margin-top:16px;">💾 Зберегти</button>
-    <button onclick="closeParentEditor()" style="background:#f5f6fa;color:#333;margin-top:8px;border:1px solid #dcdde1;">Скасувати</button>
-  </div>
-</div>
-<!-- Profile -->
-<div id="profile-modal" class="modal-overlay">
-  <div class="modal-content">
-    <h2 style="color:var(--teal);margin-top:0;">⚙️ Профіль</h2>
-    <div style="display:flex;justify-content:center;margin-bottom:13px;">
-      <img id="modal-avatar-preview" src="https://cdn-icons-png.flaticon.com/512/149/149071.png" style="width:78px;height:78px;border-radius:50%;object-fit:cover;border:3px solid var(--teal);">
-    </div>
-    <label>Фото:</label><input type="file" id="profile-photo" accept="image/*" style="margin-bottom:13px;">
-    <!-- Для батьків ці два поля ховаються: у них ПІБ разом із контактами нижче -->
-    <div id="profile-name-block">
-      <label>Ім'я:</label><input type="text" id="profile-first-name" placeholder="Ім'я" style="margin-bottom:8px;">
-      <label>Прізвище:</label><input type="text" id="profile-last-name" placeholder="Прізвище" style="margin-bottom:8px;">
-    </div>
-    <!-- Встановлення застосунку — має бути ВИЩЕ за сповіщення: на iPhone
-         вони працюють лише після встановлення на екран «Домів» -->
-    <div id="install-block" style="display:none;margin-top:13px;padding-top:11px;border-top:1px dashed #ccc;text-align:left;"></div>
-    <!-- Сповіщення: показується всім, у кого браузер їх підтримує -->
-    <button type="button" onclick="checkPush()" style="background:#eceff1;color:#455a64;margin-top:10px;font-size:.8rem;">🔍 Перевірити сповіщення</button>
-    <div id="push-toggle" style="display:none;margin-top:13px;padding-top:11px;border-top:1px dashed #ccc;text-align:left;"></div>
-    <!-- Дані дитини: доступно лише батькам -->
-    <div id="child-block" style="display:none;margin-top:13px;padding-top:11px;border-top:1px dashed #ccc;text-align:left;">
-      <label style="color:var(--purple);margin-top:0;">👶 Дані дитини</label>
-      <p style="font-size:.76rem;color:#888;margin:3px 0 7px 0;">
-        Тут ви можете оновити медичні відомості, контакти та список тих,
-        хто має право забирати дитину.
-      </p>
-      <button type="button" onclick="openMyChildCard()" style="background:var(--purple);color:#fff;margin-top:0;">📋 Відкрити картку дитини</button>
-      <button type="button" onclick="exportMyChildData()" style="background:#eceff1;color:#37474f;border:1px solid #cfd8dc;margin-top:7px;">📦 Завантажити всі дані про дитину</button>
-      <p style="font-size:.72rem;color:#999;margin:4px 0 0 0;">Файл у форматі JSON — усе, що портал зберігає про вашу дитину.</p>
-    </div>
-    <!-- Контактні дані батьків: заповнює сам батько/мати, а бачать і можуть
-         виправити вчитель і директор. Зберігаються в parent_links, не в users. -->
-    <div id="p-contacts-section" style="display:none;margin-top:13px;padding-top:11px;border-top:1px dashed #ccc;text-align:left;">
-      <label style="color:var(--purple);margin-top:0;">👪 Мої контактні дані</label>
-      <p style="font-size:.76rem;color:#888;margin:3px 0 6px 0;">Ці дані бачать класний керівник і адміністрація школи.</p>
-      <div id="p-contacts-fields"></div>
-    </div>
-    <div id="t-skills-section" style="display:none;margin-top:13px;padding-top:11px;border-top:1px dashed #ccc;text-align:left;">
-      <label style="color:#0d47a1;margin-top:0;">🧠 Мої скіли (предмети для заміни):</label>
-      <div id="t-my-skills-tags" style="margin-top:6px;min-height:28px;"></div>
-      <div style="display:flex;gap:7px;margin-top:7px;">
-        <input type="text" id="t-skill-add-input" placeholder="Предмет..." style="flex:2;margin-top:0;font-size:.85rem;">
-        <button onclick="addMySkill()" style="flex:1;margin-top:0;background:#0d47a1;color:#fff;padding:9px 6px;font-size:.82rem;">+ Додати</button>
-      </div>
-    </div>
-    <div style="margin-top:13px;padding-top:9px;border-top:1px dashed #ccc;text-align:left;">
-      <label style="color:var(--red);margin-top:0;">Зміна пароля:</label>
-      <input type="password" id="profile-new-pass" placeholder="Новий пароль (від 6 символів)" style="margin-bottom:18px;border-color:var(--red);">
-    </div>
-    <button onclick="saveProfile()" id="btn-save-profile" style="background:var(--green);color:#fff;">💾 Зберегти</button>
-    <button onclick="closeProfileModal()" style="background:#f5f6fa;color:#333;margin-top:9px;border:1px solid #dcdde1;">Скасувати</button>
-  </div>
-</div>
-<!-- Visual Matrix -->
-<div id="visual-matrix-modal" class="modal-overlay" style="align-items:flex-start;padding-top:36px;">
-  <div class="modal-content" style="max-width:96%;width:100%;padding:18px;background:#f4f6f8;">
-    <h2 id="matrix-modal-title" style="color:#1abc9c;margin-top:0;margin-bottom:9px;">🗓️ Матриця розкладу</h2>
-    <div style="display:flex;justify-content:center;gap:9px;margin-bottom:13px;flex-wrap:wrap;">
-      <select id="matrix-day-select" onchange="renderMatrixGrid()" style="max-width:280px;border:2px solid #1abc9c;color:#16a085;font-weight:700;">
-        <option value="Monday">Понеділок</option><option value="Tuesday">Вівторок</option><option value="Wednesday">Середа</option><option value="Thursday">Четвер</option><option value="Friday">П'ятниця</option>
-      </select>
-    </div>
-    <div id="constructor-warnings" style="display:none;background:#fff3cd;border:1px solid #ffeeba;color:#856404;padding:9px;border-radius:8px;margin-bottom:9px;text-align:left;font-size:.82rem;"></div>
-    <div class="matrix-wrapper">
-      <table class="matrix-table">
-        <thead><tr id="matrix-thead-row"></tr></thead>
-        <tbody id="matrix-tbody"></tbody>
-      </table>
-    </div>
-    <button onclick="closeVisualMatrixModal()" style="background:#333;color:#fff;width:auto;min-width:180px;margin-top:18px;display:block;margin-left:auto;margin-right:auto;">Закрити</button>
-  </div>
-</div>
-<!-- Edit Cell Modal -->
-<div id="edit-cell-modal" class="modal-overlay" style="z-index:1001;">
-  <div class="modal-content" style="max-width:440px;">
-    <h3 style="color:#2c3e50;margin-top:0;border-bottom:none;padding-bottom:0;" id="edit-cell-title">Редагування слоту</h3>
-    <p id="edit-cell-subtitle" style="color:#7f8c8d;font-size:.82rem;margin-top:4px;margin-bottom:9px;"></p>
-    <div id="cell-live-warnings" style="display:none;margin-bottom:13px;text-align:left;font-size:.78rem;border-radius:6px;padding:7px;"></div>
-    <label>Тип слоту:</label>
-    <select id="cell-type-select" style="margin-bottom:9px;border-color:#9b59b6;" onchange="toggleCellType()">
-      <option value="lesson">📚 Урок</option><option value="break">☕ Перерва</option><option value="extra">🎸 Гурток</option>
-    </select>
-    <label id="cell-subj-label">Назва предмету:</label>
-    <input type="text" id="cell-subj-ua" placeholder="Напр. Математика" style="margin-bottom:9px;border-color:var(--blue);" oninput="handleSubjInput()">
-    <div id="cell-extra-wrapper" style="display:none;margin-bottom:9px;background:#f0f8ff;padding:13px;border-radius:12px;border:1px solid var(--blue);text-align:left;">
-      <label style="color:#2980b9;margin-top:0;">Формат:</label>
-      <select id="cell-extra-format" style="border-color:var(--blue);margin-bottom:9px;" onchange="toggleExtraFormat()"><option value="group">👥 Групове</option><option value="individual">👤 Індивідуальне</option></select>
-      <div id="extra-individual-wrap" style="display:none;"><label style="color:#2980b9;margin-top:4px;">Учень:</label><select id="extra-ind-student" style="border-color:var(--blue);"></select></div>
-      <div id="extra-group-wrap" style="display:none;">
-        <label style="color:#2980b9;margin-top:4px;">Склад:</label>
-        <select id="extra-group-type" style="border-color:var(--blue);margin-bottom:9px;" onchange="toggleExtraGroupType()"><option value="classes">Класи</option><option value="students">Учні</option></select>
-        <div id="extra-group-classes-wrap"><select id="extra-group-classes" multiple style="height:90px;"></select></div>
-        <div id="extra-group-students-wrap" style="display:none;"><select id="extra-group-students" multiple style="height:130px;"></select></div>
-      </div>
-    </div>
-    <div id="cell-teacher-wrapper">
-      <label>Вчитель:</label>
-      <select id="cell-teacher-select" style="margin-bottom:9px;border-color:#e67e22;" onchange="triggerSmartCheck()"><option value="">-- Не призначено --</option></select>
-    </div>
-    <div style="display:flex;gap:9px;">
-      <div style="flex:1;"><label>Номер:</label><input type="text" id="cell-number" placeholder="1"></div>
-      <div style="flex:2;"><label>Час:</label><input type="text" id="cell-time" placeholder="09:00 - 09:45"></div>
-    </div>
-    <input type="hidden" id="cell-edit-class"><input type="hidden" id="cell-edit-row"><input type="hidden" id="cell-edit-subindex">
-    <div style="display:flex;gap:9px;margin-top:22px;">
-      <button onclick="deleteMatrixCell()" style="background:var(--red);color:#fff;margin-top:0;flex:1;">Очистити</button>
-      <button onclick="saveMatrixCell()" style="background:var(--green);color:#fff;margin-top:0;flex:2;">Зберегти</button>
-    </div>
-    <button onclick="closeEditCellModal()" style="background:transparent;color:#7f8c8d;border:1px solid #bdc3c7;margin-top:9px;">Скасувати</button>
-  </div>
-</div>
-<!-- Journal Modal -->
-<div id="journal-modal" class="modal-overlay">
-  <div class="modal-content" style="max-width:96%;width:100%;padding:18px;">
-    <h2 style="color:var(--blue);margin-top:0;">📖 Класний журнал</h2>
-
-    <!-- Toolbar: Клас / Предмет / Період (від—до) -->
-    <div style="display:flex;gap:var(--space-3);flex-wrap:wrap;margin-bottom:var(--space-3);">
-      <div id="j-class-field" style="flex:1;min-width:110px;display:none;">
-        <label style="margin-top:0;font-size:var(--text-xs);">Клас</label>
-        <select id="j-class-select" style="margin-top:2px;" onchange="updateJournalSubjects()"></select>
-      </div>
-      <div style="flex:1;min-width:110px;">
-        <label style="margin-top:0;font-size:var(--text-xs);">Предмет</label>
-        <select id="j-subj-select" style="margin-top:2px;" onchange="renderJournalTable()"></select>
-      </div>
-      <div style="flex:2;min-width:210px;">
-        <label style="margin-top:0;font-size:var(--text-xs);">Період</label>
-        <div style="display:flex;gap:6px;align-items:center;margin-top:2px;">
-          <input type="month" id="j-month-from" title="Місяць від" style="margin-top:0;flex:1;" onchange="handleJournalRangeChange()">
-          <span style="color:#aaa;">—</span>
-          <input type="month" id="j-month-to" title="Місяць до" style="margin-top:0;flex:1;" onchange="handleJournalRangeChange()">
-        </div>
-      </div>
-    </div>
-
-    <!-- Controls row: mode toggle (teacher/director) + zoom -->
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:var(--space-2);flex-wrap:wrap;margin-bottom:var(--space-2);">
-      <div id="j-mode-toggle-wrap" class="mode-toggle" style="display:none;margin-bottom:0;">
-        <button id="j-mode-view" class="active" onclick="setJournalMode('view')">👁 Перегляд</button>
-        <button id="j-mode-edit" onclick="setJournalMode('edit')">✏️ Редагування</button>
-      </div>
-      <div style="display:flex;align-items:center;gap:6px;margin-left:auto;">
-        <span style="font-size:var(--text-xs);color:#888;">🔍</span>
-        <button onclick="journalZoomOut()" title="Зменшити" style="width:auto;padding:5px 11px;margin:0;background:#ecf0f1;color:#333;border-radius:7px;">−</button>
-        <button onclick="journalZoomFit()" id="journal-zoom-label" title="Підібрати за шириною" style="width:auto;padding:5px 11px;margin:0;background:#ecf0f1;color:#333;border-radius:7px;font-size:var(--text-xs);min-width:56px;">100%</button>
-        <button onclick="journalZoomIn()" title="Збільшити" style="width:auto;padding:5px 11px;margin:0;background:#ecf0f1;color:#333;border-radius:7px;">+</button>
-      </div>
-    </div>
-
-    <div id="j-edit-hint" style="display:none;background:#e0f7fa;padding:8px 12px;border-radius:8px;margin-bottom:7px;font-size:.8rem;color:#006064;">
-      💡 Клікніть на клітинку щоб виставити або змінити оцінку. Tab/Enter — наступний учень.
-    </div>
-    <div id="journal-type-legend" style="margin:4px 0 6px 0;"></div>
-    <div id="j-range-summary" style="font-size:var(--text-xs);color:#999;margin:0 0 6px 2px;"></div>
-    <div class="journal-wrap">
-      <div id="journal-scale-inner">
-        <table class="journal-table" id="journal-table-el"></table>
-      </div>
-    </div>
-    <!-- Weighted Average info -->
-    <div id="j-weighted-avg" style="margin-top:var(--space-3);background:#f4ecf7;border-radius:var(--card-radius);padding:var(--space-3);font-size:var(--text-sm);display:none;"></div>
-    <div style="display:flex;gap:9px;margin-top:13px;flex-wrap:wrap;">
-      <button onclick="openSemesterGrades()" style="background:linear-gradient(135deg,#00838f,#006064);color:#fff;flex:1;min-width:150px;margin-top:0;">🎓 Підсумкові оцінки</button>
-      <button id="btn-export-journal-pdf" onclick="exportJournalToPDF()" style="background:linear-gradient(135deg,#e74c3c,#c0392b);color:#fff;flex:1;min-width:130px;margin-top:0;">📄 Експорт PDF</button>
-      <button onclick="closeJournalModal()" style="background:#333;color:#fff;flex:1;min-width:110px;margin-top:0;">Закрити</button>
-    </div>
-  </div>
-</div>
-<!-- Exams Modal -->
-<div id="exams-modal" class="modal-overlay">
-  <div class="modal-content">
-    <h2 style="color:#d35400;margin-top:0;">📅 Контрольні роботи</h2>
-    <p style="font-size:.83rem;color:#666;margin-bottom:13px;">Клас: <b id="exam-class-label"></b></p>
-    <input type="month" id="exam-month-select" onchange="renderExamsCalendar()" style="margin-bottom:13px;border:2px solid #d35400;color:#d35400;font-weight:700;text-align:center;">
-    <div id="exams-cal-container"></div>
-    <div id="exams-day-details" style="margin-top:18px;text-align:left;background:#fffcf0;padding:13px;border-radius:12px;border:1px dashed var(--orange);display:none;"></div>
-    <button onclick="closeExamsModal()" style="background:#333;color:#fff;width:100%;margin-top:18px;">Закрити</button>
-  </div>
-</div>
-<!-- Inbox / Chat Modal -->
-<div id="inbox-modal" class="modal-overlay">
-  <div class="chat-win">
-
-    <!-- Список переписок -->
-    <div id="chat-list-view" class="chat-pane">
-      <header class="chat-bar">
-        <span class="chat-bar-title">Повідомлення</span>
-        <button class="chat-icon" onclick="openChatPicker('new')" aria-label="Нова переписка" title="Нова переписка">+</button>
-        <button class="chat-x" onclick="closeInboxModal()" aria-label="Закрити">&times;</button>
-      </header>
-      <div id="inbox-contacts-list" class="chat-scroll list">
-        <p class="empty-msg" style="padding:20px;">Завантаження...</p>
-      </div>
-    </div>
-
-    <!-- Одна переписка -->
-    <div id="chat-detail-view" class="chat-pane" style="display:none;">
-      <header class="chat-bar">
-        <button class="chat-back" onclick="backToChatList()" aria-label="Назад">&#8249;</button>
-        <span class="chat-bar-titles">
-          <span class="chat-bar-title" id="chat-detail-title">Чат</span>
-          <small class="chat-bar-sub" id="chat-detail-sub" style="display:none;"></small>
-        </span>
-        <button class="chat-icon" onclick="openChatPicker('add')" aria-label="Додати до розмови" title="Додати до розмови">&#43;&#128100;</button>
-        <button class="chat-x" onclick="closeInboxModal()" aria-label="Закрити">&times;</button>
-      </header>
-      <div id="inbox-messages-list" class="chat-scroll msgs"></div>
-      <div id="chat-readonly" class="chat-readonly" style="display:none;">Ви переглядаєте чужу переписку. Писати в неї не можна.</div>
-      <div class="chat-compose" id="chat-compose">
-        <textarea id="msg-text-input" rows="1" placeholder="Повідомлення..."></textarea>
-        <button class="chat-send" onclick="sendInboxMessage()" aria-label="Надіслати">&#10148;</button>
-      </div>
-    </div>
-
-  </div>
-</div>
-
-<div id="wrapped-modal" class="modal-overlay">
-  <div class="modal-content">
-    <h2 style="color:var(--green);margin-top:0;">🎉 Ваші підсумки!</h2>
-    <ul style="list-style:none;padding:0;font-size:1.05rem;line-height:2.1;text-align:left;background:#f8f9fa;padding:13px;border-radius:12px;">
-      <li>📚 Завдань задано: <b id="w-hw" style="float:right;color:var(--blue);">0</b></li>
-      <li>📝 Коментарів: <b id="w-com" style="float:right;color:var(--purple);">0</b></li>
-      <li>🌟 Наліпок: <b id="w-st" style="float:right;color:var(--orange);">0</b></li>
-    </ul>
-    <p style="font-weight:700;color:#d35400;margin-top:18px;">Ви робите неймовірну роботу! ❤️</p>
-    <button onclick="closeModal()" style="background:linear-gradient(135deg,#27ae60,#2ecc71);color:#fff;width:100%;margin-top:9px;">Дякую!</button>
-  </div>
-</div>
-<!-- Reactions Modal -->
-<div id="reactions-modal" class="modal-overlay">
-  <div class="modal-content" style="max-width:500px;max-height:80vh;display:flex;flex-direction:column;">
-    <h2 style="color:#d35400;margin-top:0;">❤️ Реакції</h2>
-    <div id="reactions-list" style="overflow-y:auto;text-align:left;padding:9px 0;"></div>
-    <button onclick="closeReactionsModal()" style="background:#333;color:#fff;width:100%;margin-top:13px;">Закрити</button>
-  </div>
-</div>
-<!-- Retake Requests Modal -->
-<div id="retake-modal" class="modal-overlay">
-  <div class="modal-content" style="max-width:500px;">
-    <h2 style="color:#856404;margin-top:0;">🔄 Запити на перездачу</h2>
-    <div id="retake-list" style="text-align:left;max-height:60vh;overflow-y:auto;"></div>
-    <button onclick="closeRetakeModal()" style="background:#333;color:#fff;width:100%;margin-top:13px;">Закрити</button>
-  </div>
-</div>
-<!-- PHASE 7: Sticker Stats Modal (same structure as #reactions-modal) -->
-<div id="sticker-stats-modal" class="modal-overlay">
-  <div class="modal-content" style="max-width:500px;max-height:80vh;display:flex;flex-direction:column;">
-    <h3 style="margin-top:0;color:#f39c12;">🌟 Статистика наліпок</h3>
-    <div id="sticker-stats-list" style="overflow-y:auto;text-align:left;padding:9px 0;"></div>
-    <button onclick="closeStickerStatsModal()" style="background:#333;color:#fff;margin-top:13px;">Закрити</button>
-  </div>
-</div>
-<!-- ═══════════════════════ APP MODULES (ES modules) ═══════════════════════ -->
-
-<!-- НАЛАШТУВАННЯ ХАРЧУВАННЯ (батьки) -->
-<div id="meal-settings-modal" class="modal-overlay" style="display:none;z-index:1010;">
-  <div class="modal-content">
-    <h3 style="color:#00838f;margin-top:0;">⚙️ Налаштування харчування</h3>
-    <div id="meal-settings-body"></div>
-    <button onclick="saveMealSettings()" style="background:#00838f;color:#fff;">💾 Зберегти</button>
-    <button onclick="document.getElementById('meal-settings-modal').style.display='none'" style="background:#eceff1;color:#37474f;">Закрити</button>
-  </div>
-</div>
-
-<!-- СТАТИСТИКА ХАРЧУВАННЯ (батьки) -->
-<div id="meal-stats-modal" class="modal-overlay" style="display:none;z-index:1010;">
-  <div class="modal-content">
-    <h3 style="color:#00838f;margin-top:0;">📊 Харчування дитини</h3>
-    <div style="display:flex;gap:8px;">
-      <div style="flex:1;min-width:0;"><label for="pms-from" style="font-size:.74rem;">Від</label><input type="date" id="pms-from" onchange="reloadMyMealStats()"></div>
-      <div style="flex:1;min-width:0;"><label for="pms-to" style="font-size:.74rem;">До</label><input type="date" id="pms-to" onchange="reloadMyMealStats()"></div>
-    </div>
-    <div id="meal-stats-body"></div>
-    <button onclick="document.getElementById('meal-stats-modal').style.display='none'" style="background:#eceff1;color:#37474f;">Закрити</button>
-  </div>
-</div>
-
-
-<!-- ОГОЛОШЕННЯ -->
-<div id="news-modal" class="modal-overlay" style="display:none;z-index:1010;">
-  <div class="modal-content">
-    <h3 style="color:#00838f;margin-top:0;">📣 Нове оголошення</h3>
-    <div id="nw-scope-row">
-      <label for="nw-scope">Кому</label>
-      <select id="nw-scope" onchange="nwScopeChanged()">
-        <option value="school">Усій школі</option>
-        <option value="class">Окремому класу</option>
-      </select>
-    </div>
-    <div id="nw-class-row" style="display:none;">
-      <label for="nw-class">Клас</label>
-      <select id="nw-class"><option value="">Оберіть...</option><option value="class_1">1 клас</option><option value="class_2">2 клас</option><option value="class_3">3 клас</option><option value="class_4">4 клас</option><option value="class_5">5 клас</option><option value="class_6">6 клас</option><option value="class_7">7 клас</option><option value="class_8">8 клас</option><option value="class_9">9 клас</option><option value="class_10">10 клас</option><option value="class_11">11 клас</option></select>
-    </div>
-    <p id="nw-scope-note" style="font-size:.78rem;color:#888;margin:6px 0 0 0;"></p>
-    <label for="nw-title">Заголовок <span style="color:#aaa;font-weight:400;">(необовʼязково)</span></label>
-    <input type="text" id="nw-title" placeholder="напр. Батьківські збори">
-    <label for="nw-text">Текст</label>
-    <textarea id="nw-text" rows="5" placeholder="Напишіть коротко суть — або натисніть «Скласти чернетку», і AI розгорне її у текст."></textarea>
-    <button id="nw-ai" onclick="newsDraftAI()" style="background:#f3e5f5;color:#6a1b9a;border:1px solid #ce93d8;">✨ Скласти чернетку</button>
-    <label class="nw-imp-row">
-      <input type="checkbox" id="nw-important">
-      <span><b>Важливе</b> — надіслати сповіщення<br>
-        <small>Без галочки оголошення просто зʼявиться у стрічці. Не позначайте важливим усе підряд — інакше сповіщення вимкнуть.</small></span>
-    </label>
-    <button id="nw-publish" onclick="publishNews()" style="background:#00838f;color:#fff;">📢 Опублікувати</button>
-    <button onclick="document.getElementById('news-modal').style.display='none'" style="background:#eceff1;color:#37474f;">Скасувати</button>
-  </div>
-</div>
-
-
-<!-- ВИБІР СПІВРОЗМОВНИКІВ -->
-<div id="chat-picker" class="modal-overlay" style="display:none;z-index:1020;">
-  <div class="modal-content" style="text-align:left;">
-    <h3 id="cp-title" style="color:#00838f;margin-top:0;">Нова переписка</h3>
-    <p id="cp-note" style="font-size:.78rem;color:#888;margin:0 0 10px 0;"></p>
-    <div id="cp-list" class="cp-list"><p class="empty-msg">Завантаження...</p></div>
-    <button onclick="createChatFromPicker()" style="background:#00838f;color:#fff;">Почати розмову</button>
-    <button onclick="closeChatPicker()" style="background:#eceff1;color:#37474f;">Скасувати</button>
-  </div>
-</div>
-
-
-<script>
-// Значок непрочитаних чіпляємо до всіх кнопок чату одним проходом.
-// Розмітка кнопок різна (де button, де div), тому додаємо програмно.
-document.addEventListener('DOMContentLoaded', function(){
-  document.querySelectorAll('[data-chatbtn]').forEach(function(b){
-    if(b.querySelector('.chat-dot')) return;
-    var s = document.createElement('span');
-    s.className = 'chat-dot';
-    b.appendChild(s);
+    await update(ref(db,`users/${auth.currentUser.uid}`),{firstName:finalFirst,lastName:finalLast,photoURL});
+    currentUserData.firstName=finalFirst;currentUserData.lastName=finalLast;currentUserData.photoURL=photoURL;
+    // Save skills
+    const isTeacher=currentUserData.role==='teacher'||currentUserData.role==='art_school_teacher';
+    if(isTeacher){const se=currentUserData.email?.replace(/\./g,'_');await set(ref(db,`teacher_skills/${se}/subjects`),mySkillsTemp);}
+    updateProfileBar();closeProfileModal();showToast("✅ Профіль оновлено!");
+  }catch(e){alert("Помилка: "+e.message);}
+  btn.disabled=false;btn.innerText="💾 Зберегти";
+};
+// My skills in profile
+window.addMySkill=function(){const v=document.getElementById('t-skill-add-input').value.trim();if(!v)return;if(!mySkillsTemp.includes(v))mySkillsTemp.push(v);document.getElementById('t-skill-add-input').value='';renderMySkillsTags();};
+function renderMySkillsTags(){const c=document.getElementById('t-my-skills-tags');c.innerHTML='';mySkillsTemp.forEach((s,i)=>c.innerHTML+=`<span class="skill-tag remove" onclick="removeMySkill(${i})">✖ ${escHtml(s)}</span>`);if(mySkillsTemp.length===0)c.innerHTML='<p class="empty-msg" style="font-size:.8rem;">Скілів немає.</p>';}
+window.removeMySkill=function(i){mySkillsTemp.splice(i,1);renderMySkillsTags();};
+// ══════════ DATE / CLASS CHANGE ══════════
+window.handleDateChange=function(){
+  if(!currentUserData)return;
+  if(currentUserData.role==='teacher'||currentUserData.role==='class_teacher'||currentUserData.role==='art_school_teacher'||currentUserData.role==='music_teacher'){updateSubjectList();loadTeacherDashboard();loadCurrentTopicAndHW();listenTeacherAttendance();}
+  else if(currentUserData.role==='director'){loadDirectorDashboard();document.getElementById('d-detail-hw-class')&&(document.getElementById('d-detail-hw-class').value='');}
+  else if(currentUserData.role==='kitchen'){/* кухня працює тижнями — має власну навігацію */}
+  else if(currentUserData.role==='administrator'){loadAdminDashboard();}
+  else if(currentUserData.role==='student'){loadStudentDashboard();}
+  else{loadParentDashboard();}
+};
+window.handleClassChange=function(){
+  const ac=getActiveClass();if(!ac)return;
+  const sel=document.getElementById('t-class-selector');const label=sel.options[sel.selectedIndex].text;
+  document.getElementById('teacher-dashboard-title').innerText=`👨‍🏫 Журнал: ${label}`;
+  loadStudentsList();loadScheduleScript(ac,()=>handleDateChange());
+  checkCurriculumUploadAccess(); /* CURRICULUM v3 */
+};
+// Предмети НЕ зберігаються окремим списком — вони беруться з РОЗКЛАДУ класу
+// (schedules/{clas}/lessons/{день}) і додатково фільтруються матрицею доступу
+// вчителя. Тому «порожньо» означає одне з трьох, і раніше всі три випадки
+// показувались однаковим текстом «Немає предметів на цей день», через що
+// незрозуміло, що робити. Тепер розрізняємо.
+function updateSubjectList(){
+  const cls=getActiveClass();const dateStr=document.getElementById('global-date').value;
+  const [y,m,d]=dateStr.split('-');const dv=new Date(y,m-1,d);const dn=dayKeys[dv.getDay()];
+  const flat=window.getTodayLessonsFlattened(dn);
+  const allSubjs=[...new Set(flat.map(window.getValidSubjectName).filter(Boolean))];
+  const subjs=allSubjs.filter(s=>window.isSubjectAllowed(cls,s));
+  const sel=document.getElementById('t-subject');sel.innerHTML='';
+  const sc=document.getElementById('t-subject-for-comment');if(sc)sc.innerHTML='';
+  subjs.forEach(s=>{
+    [sel,sc].forEach(el=>{if(el){const o=document.createElement('option');o.value=s;o.innerText=s;el.appendChild(o.cloneNode(true));}});
   });
+  if(subjs.length===0){
+    // Чи є взагалі розклад у цього класу (хоч на якийсь день тижня)?
+    const hasAnySchedule=window.schedule&&Object.keys(window.schedule).length>0&&
+      dayKeys.some(k=>(window.getTodayLessonsFlattened(k)||[]).some(i=>window.getValidSubjectName(i)));
+    let msg;
+    if(!hasAnySchedule)msg='⚠️ Розклад класу не заповнено — додайте уроки в «🗓️ Розклад»';
+    else if(allSubjs.length===0)msg='На цей день у розкладі уроків немає';
+    else msg='⛔ Вам не надано доступ до предметів цього дня';
+    sel.innerHTML=`<option value="" disabled>${msg}</option>`;
+  }
+}
+// ══════════ AUTH ══════════
+onAuthStateChanged(auth,async user=>{
+  // Темна тема лише для екранів входу: після входу портал світлий, як і був.
+  document.body.classList.toggle('auth-mode',!user);
+  // Людина перейшла за посиланням із листа відновлення пароля — показуємо
+  // сторінку встановлення нового пароля і не чіпаємо звичайний вхід.
+  if(hasPendingAuthAction()){document.body.classList.add('auth-mode');initPasswordResetScreen();return;}
+  document.querySelectorAll('.panel').forEach(p=>p.style.display='none');document.getElementById('calendar-block').style.display='none';document.getElementById('profile-bar').style.display='none';
+  if(user){
+    const se=user.email.replace(/\./g,'_');
+    const snap=await get(child(ref(db),`users/${user.uid}`));
+    if(snap.exists()){
+      currentUserData=snap.val();
+      // Доступ відкликано директором — не пускаємо, навіть якщо акаунт існує.
+      // (Видалити сам акаунт Firebase Auth з браузера неможливо — лише через
+      //  Admin SDK, тому "видалення співробітника" = відкликання доступу.)
+      if(currentUserData.disabled){alert("Ваш доступ до системи закрито. Зверніться до адміністрації.");signOut(auth);return;}
+      if(!currentUserData.email){currentUserData.email=user.email;update(ref(db,`users/${user.uid}`),{email:user.email});}
+      // CHILD SYNC: список дітей веде вчитель у parent_links, тож звіряємо його
+      // при кожному вході — інакше друга дитина, прив'язана пізніше, не
+      // з'явилася б у батьків, які вже колись заходили.
+      if(currentUserData.role==='parent'){
+        try{
+          const pl=await get(child(ref(db),`parent_links/${se}`));
+          if(pl.exists()){
+            const kids=normalizeChildren(pl.val());
+            const known=getUserChildren(currentUserData);
+            const same=kids.length===known.length&&kids.every((k,i)=>k.studentName===known[i]?.studentName&&k.class===known[i]?.class);
+            if(kids.length>0&&!same){
+              currentUserData.children=kids;
+              // Активну дитину зберігаємо, якщо вона ще прив'язана
+              const still=kids.find(k=>k.studentName===currentUserData.studentName&&k.class===currentUserData.class);
+              const act=still||kids[0];
+              currentUserData.studentName=act.studentName;currentUserData.class=act.class;
+              currentUserData.parentRole=act.role||currentUserData.parentRole||'guardian';
+              await update(ref(db,`users/${user.uid}`),{children:kids,studentName:act.studentName,class:act.class,parentRole:currentUserData.parentRole});
+            }
+          }
+        }catch(e){console.warn('Child sync skipped:',e.message);}
+      }
+      // ROLE SYNC: pre_approved_roles is the director-controlled source of truth for
+      // STAFF roles, but it used to be read only when users/{uid} didn't exist yet
+      // (i.e. on the very first login ever). That meant a later role change —
+      // whether via "Управління персоналом" or edited by hand in the Firebase
+      // console — never reached an account that had already logged in once: the
+      // stale role in users/{uid} won forever (this is why re-assigning "Директор"
+      // to an existing account kept opening the administrator panel).
+      // Now every login reconciles the two. Parent/student roles are derived from
+      // parent_links/student_links, never from pre_approved_roles, so they're left
+      // alone unless an entry explicitly exists for that email.
+      // Тепер синхронізуємо ВЕСЬ набір ролей, а не одну: директор міг додати
+      // другу роль (напр. вчитель + адміністратор) вже після першого входу.
+      try{
+        const prs=await get(child(ref(db),`pre_approved_roles/${se}`));
+        if(prs.exists()){
+          const approved=normalizeRoles(prs.val());
+          const known=getUserRoles(currentUserData);
+          const same=approved.length===known.length&&approved.every(r=>known.includes(r));
+          if(approved.length>0&&!same){
+            currentUserData.roles=approved;
+            // Активну роль зберігаємо, якщо вона ще дозволена; інакше беремо першу.
+            if(!approved.includes(currentUserData.role))currentUserData.role=approved[0];
+            await update(ref(db,`users/${user.uid}`),{roles:approved,role:currentUserData.role});
+          }
+        }
+      }catch(e){console.warn('Role sync skipped:',e.message);}
+      if(isTeacherRole(currentUserData.role))await fetchTeacherAccess(se);
+      await loadGradeTypesCache();initUserSession();
+    }
+    else{const rs=await get(child(ref(db),`pre_approved_roles/${se}`));if(rs.exists()){const roles=normalizeRoles(rs.val());const primary=roles[0];const nd={role:primary,roles,email:user.email};if(isTeacherRole(primary))await fetchTeacherAccess(se);await set(ref(db,`users/${user.uid}`),nd);currentUserData=nd;await loadGradeTypesCache();initUserSession();}
+    else{const ls=await get(child(ref(db),`parent_links/${se}`));if(ls.exists()){
+      // Дітей може бути кілька; studentName/class зберігаємо як АКТИВНУ дитину,
+      // щоб уся наявна логіка (getActiveClass, дашборди) працювала без змін.
+      const kids=normalizeChildren(ls.val());
+      const first=kids[0]||{studentName:'',class:'class_2',role:'guardian'};
+      const nd={role:"parent",children:kids,studentName:first.studentName,studentId:first.studentId||null,class:first.class,parentRole:first.role||'guardian',email:user.email};
+      await set(ref(db,`users/${user.uid}`),nd);currentUserData=nd;await loadGradeTypesCache();initUserSession();}else{const sls=await get(child(ref(db),`student_links/${se}`));if(sls.exists()){const sd=sls.val();const nd={role:"student",studentName:sd.studentName,studentId:sd.studentId||null,class:sd.class,email:user.email};await set(ref(db,`users/${user.uid}`),nd);currentUserData=nd;await loadGradeTypesCache();initUserSession();}else{signOut(auth).then(()=>{
+      if(window.showFirstLoginScreen){
+        window.showFirstLoginScreen();
+        setMsg('fl-error','Цей email ще не додано школою. Зверніться до класного керівника або директора.','login-err');
+      } else alert('Цей email ще не додано школою. Зверніться до класного керівника або директора.');
+    });}}}}
+  }else document.getElementById('login-screen').style.display='block';
 });
-</script>
+async function fetchTeacherAccess(se){const s=await get(child(ref(db),`teacher_access/${se}`));teacherAccessMatrix=s.exists()?s.val():{};}
 
-<script src="push-config.js"></script>
-<script type="module" src="common.js"></script>
-<script type="module" src="curriculum.js"></script>
-<script type="module" src="director.js"></script>
-<script type="module" src="journal.js"></script>
-<script type="module" src="parent-student.js"></script>
-<script type="module" src="teacher.js"></script>
-<script type="module" src="kitchen.js"></script>
-<script type="module" src="news.js"></script>
-<script type="module" src="chat.js"></script>
-</body>
-</html>
+// ══════════ САМОВІДНОВЛЕННЯ ЗАПИСУ В pre_approved_roles ══════════
+// Акаунти, створені до появи правил доступу, є в users, але їх немає у
+// списку персоналу. Правила ж звіряються саме зі списком — і така людина
+// не може ані створити розмову, ані підтвердити свою роль при перезаписі.
+// Директор і секретар мають право писати в цей вузол, тож дописуємо тихо.
+// Нових прав це не дає: роль береться з наявного запису, а не вигадується.
+async function healStaffRegistry(){
+  try{
+    const u = currentUserData;
+    if(!u || !u.email) return;
+    const roles = getUserRoles(u);
+    if(!roles.length) return;
+    const isAdmin = roles.includes('director') || roles.includes('administrator');
+    if(!isAdmin) return;                       // тільки адміністрація має право запису
+    const se = u.email.toLowerCase().replace(/\./g,'_');
+    const snap = await get(child(ref(db), `pre_approved_roles/${se}`));
+    if(snap.exists()) return;
+    await set(ref(db, `pre_approved_roles/${se}`), roles.length > 1 ? roles : roles[0]);
+    console.info('Запис у списку персоналу відновлено:', se);
+  }catch(e){ /* не критично: підкаже перевірка при створенні розмови */ }
+}
+
+// ── Довідник контактів ──
+// Кожен пише сам про себе рівно те, що потрібно для вибору співрозмовника
+// в чаті. Без цього батько не бачив би, кому писати: `users`,
+// `parent_links` і `teacher_access` для нього закриті — і правильно,
+// там медичні дані й контакти всіх родин.
+export async function publishContactCard(){
+  try{
+    const u = currentUserData;
+    if(!u || !u.email) return;
+    const se = u.email.toLowerCase().replace(/\./g,'_');
+    const name = [u.firstName, u.lastName].filter(Boolean).join(' ') || u.email;
+    const roles = getUserRoles(u);
+    const role = roles[0] || u.role || '';
+
+    if(role === 'parent' || role === 'student'){
+      if(!u.class) return;                      // без класу нема куди писати
+      const kids = u.studentName || '';
+      await update(ref(db, `class_parents/${u.class}/${se}`),
+                   { name: String(name).slice(0,120), children: String(kids).slice(0,200), ts: Date.now() });
+      return;
+    }
+    if(!role) return;
+    // Класи вчителя беремо з його власного рядка teacher_access.
+    // Там лежить СПИСОК ПРЕДМЕТІВ на клас, а довіднику треба лише факт
+    // «має цей клас» — кладемо true, інакше перевірка типу відхилить запис.
+    let classes = null;
+    try{
+      const ts = await get(child(ref(db), `teacher_access/${se}`));
+      if(ts.exists()){
+        classes = {};
+        Object.keys(ts.val() || {}).forEach(c => { classes[c] = true; });
+        if(!Object.keys(classes).length) classes = null;
+      }
+    }catch(e){ /* не всі ролі мають доступ — не біда */ }
+    const rec = { name: String(name).slice(0,120), role: String(role), ts: Date.now() };
+    if(classes) rec.classes = classes;
+    await update(ref(db, `staff_directory/${se}`), rec);
+  }catch(e){
+    // Мовчки: довідник — зручність, а не умова роботи кабінету.
+    console.warn('publishContactCard', e.message);
+  }
+}
+
+async function initUserSession(){
+  healStaffRegistry();
+  publishContactCard();
+  // тихо відновлюємо запис у списку персоналу, якщо його немає
+  setTimeout(()=>{ if(window.watchUnread) window.watchUnread(); }, 300);
+  try{
+    let dirs = await preloadStudentDirs();
+    // Порожній довідник = усі імена на екрані перетворяться на ключі.
+    // Одна повторна спроба дешевша за незрозумілий інтерфейс.
+    if(!Object.keys(dirs||{}).length){
+      await new Promise(r=>setTimeout(r,700));
+      dirs = await preloadStudentDirs();
+      if(!Object.keys(dirs||{}).length)
+        console.error('Довідник учнів порожній — імена показуватимуться як ключі');
+    }
+    // Дочекатися обовʼязково: кабінет одразу читає дані за цим ключем
+    if(currentUserData && (currentUserData.role==='parent'||currentUserData.role==='student'))
+      await backfillStudentId();
+  }catch(e){ console.warn('Довідник учнів не завантажено:', e.message); }
+  // Приховуємо всі кабінети перед відкриттям потрібного — обов'язково для
+  // switchRole(), інакше попередній кабінет залишиться на екрані поверх нового.
+  document.querySelectorAll('.panel').forEach(p=>p.style.display='none');
+  document.getElementById('calendar-block').style.display='block';updateProfileBar();
+  const r=currentUserData.role;
+  if(r==='director'){document.getElementById('director-screen').style.display='block';setTimeout(()=>{if(window.initDirTabs)window.initDirTabs();},0);document.getElementById('teacher-class-selector-box').style.display='none';loadTeachersListForDirector();loadDirectorTeacherSkillsList();handleDateChange();loadDrafts();if(window.loadBellCoverage)window.loadBellCoverage();}
+  else if(r==='kitchen'){document.getElementById('kitchen-screen').style.display='block';document.getElementById('teacher-class-selector-box').style.display='none';const gd=document.getElementById('global-date'),gl=document.getElementById('global-date-label');if(gd)gd.style.display='none';if(gl)gl.style.display='none';if(window.refreshKitchen)window.refreshKitchen();}
+  else if(r==='administrator'){document.getElementById('admin-screen').style.display='block';document.getElementById('teacher-class-selector-box').style.display='none';handleDateChange();}
+  else if(r==='teacher'||r==='class_teacher'||r==='art_school_teacher'||r==='music_teacher'){
+    document.getElementById('teacher-screen').style.display='block';document.getElementById('teacher-class-selector-box').style.display='block';
+    const isArt=r==='art_school_teacher';
+    document.getElementById('t-matrix-btn-wrapper').style.display=isArt?'block':'none';
+    document.getElementById('t-mark-absent-block').style.display=isArt?'none':'flex';
+    document.getElementById('t-exams-journal-btns').style.display=isArt?'none':'flex';
+    document.getElementById('t-wrapped-btn').style.display=isArt?'none':'block';
+    document.getElementById('t-hw-list-wrapper').style.display=isArt?'none':'block';
+    document.getElementById('t-hw-input-wrapper').style.display=isArt?'none':'block';
+    document.getElementById('t-topic-card').style.display=isArt?'none':'block';
+    const cs=document.getElementById('t-class-selector');cs.innerHTML='';
+    Object.keys(teacherAccessMatrix).forEach(c=>cs.innerHTML+=`<option value="${c}">${c.replace('class_','')} Клас</option>`);
+    if(cs.options.length===0){
+      if(isArt)cs.innerHTML='<option value="class_1">1 Клас</option>';
+      else{
+        // No teacher_access entries at all. Previously this fired a bare
+        // "Класи не призначено." alert and returned, leaving a blank screen with
+        // no explanation of what to do. Now the screen itself explains it.
+        cs.innerHTML='<option value="" disabled>Класи не призначено</option>';
+        const banner=document.createElement('div');
+        banner.className='data-card';
+        banner.style.cssText='border-left-color:var(--orange);background:#fff8e1;';
+        banner.innerHTML='<h4 style="margin-top:0;color:#e65100;">⚠️ Класи ще не призначено</h4><p style="font-size:.85rem;color:#555;margin:0;">Директор має надати вам доступ до класу (Кабінет директора → «Матриця доступу вчителів»). Якщо ви класний керівник — доступ призначається автоматично при призначенні на клас.</p>';
+        const screen=document.getElementById('teacher-screen');
+        screen.insertBefore(banner,screen.querySelector('.screen-section'));
+        return;
+      }
+    }
+    window.handleClassChange();
+    setTimeout(()=>{if(window.initTabs)window.initTabs('teacher-screen');},0);
+    setTimeout(()=>{if(window.renderPushInvite)window.renderPushInvite('t-push-invite');},600);
+  }
+  else if(r==='student'){
+    setTimeout(()=>{if(window.initTabs)window.initTabs('student-screen');},0);
+    setTimeout(()=>{if(window.renderPushInvite)window.renderPushInvite('s-push-invite');},600);
+    document.getElementById('student-screen').style.display='block';
+    const cn=currentUserData.class.replace('class_','');document.getElementById('s-schedule-link').href=`https://planlekcjipush.netlify.app/class-${cn}`;
+    loadScheduleScript(currentUserData.class,()=>handleDateChange());
+    loadTextbooksForParent('student');
+  }
+  else{
+    setTimeout(()=>{if(window.initTabs)window.initTabs('parent-screen');},0);
+    setTimeout(()=>{if(window.renderPushInvite)window.renderPushInvite('p-push-invite');},600);
+    document.getElementById('parent-screen').style.display='block';
+    const cn=currentUserData.class.replace('class_','');document.getElementById('p-schedule-link').href=`https://planlekcjipush.netlify.app/class-${cn}`;
+    loadScheduleScript(currentUserData.class,()=>handleDateChange());
+    renderPaymentsMockup();loadTextbooksForParent();
+    if(window.caInit)window.caInit();
+  }
+}
+// ══════════════════════════════════════════════════════════════════
+//  ЖУРНАЛ ДІЙ (аудит)
+// ══════════════════════════════════════════════════════════════════
+// Хто, що і коли змінив. Найважливіше — правки оцінок: без такого журналу
+// неможливо розібрати спірну ситуацію «оцінка була інша».
+//
+// Розбивка по місяцях (audit_log/{РРРР-ММ}) навмисна: записів з часом
+// стануть десятки тисяч, і читати одну спільну гілку було б повільно.
+// Читаємо завжди лише потрібний місяць і лише останні N записів.
+export const AUDIT_LABELS={
+  grade_set:'📊 Оцінку виставлено', grade_del:'📊 Оцінку видалено',
+  attendance:'🚨 Відмітка відсутності', comment:'💬 Коментар учню',
+  homework:'📚 Домашнє завдання', behavior:'🤝 Оцінка поведінки',
+  student_add:'👨‍🎓 Учня додано', student_rename:'✏️ Учня перейменовано',
+  student_del:'🗑 Учня прибрано', student_transfer:'↔️ Учня переведено',
+  card_edit:'📋 Картку учня змінено', data_export:'📦 Вивантаження даних дитини', staff_absent:'🧑‍🏫 Відсутність вчителя', consent_create:'✍️ Запит на згоду', quick_journal:'⚡ Швидкий журнал', menu:'🍽️ Меню оновлено', announcement:'📣 Оголошення', meal_plan:'🥪 Харчування учня', migration:'🆔 Перехід на ідентифікатори', broadcast:'✉️ Повідомлення класу', substitute:'🔄 Призначено заміну', semester_grade:'🎓 Підсумкові оцінки',
+  student_login:'🔑 Вхід учня створено', student_email:'✉️ Email учня змінено',
+  student_login_del:'🔒 Вхід учня прибрано',
+  parent_link:'🔗 Батьків прив\'язано', parent_unlink:'🔓 Батьків відв\'язано',
+  parent_edit:'👪 Контакти батьків', parent_email:'✉️ Email батьків змінено',
+  staff_grant:'🛡️ Доступ співробітнику', staff_remove:'🗑 Доступ відкликано',
+  pass_reset:'🔑 Скидання пароля', schedule_publish:'🗓️ Розклад опубліковано',
+  bell_apply:'🔔 Розклад дзвінків', curriculum:'📅 Календарний план',
+  grade_type:'🎯 Типи оцінок', year_rollover:'🎓 Перехід на новий рік'
+};
+// Виклик навмисно «тихий» і без await: запис у журнал не має ані
+// сповільнювати основну дію, ані зривати її, якщо не вдався.
+export function logAction(action,details={}){
+  try{
+    const u=currentUserData||{};
+    const name=(u.firstName||u.lastName)
+      ? `${u.firstName||''} ${u.lastName||''}`.trim()
+      : (u.email||'—');
+    push(ref(db,`audit_log/${localDateString.slice(0,7)}`),{
+      ts:Date.now(),
+      uid:auth.currentUser?.uid||'',
+      actor:name,
+      role:u.role||'',
+      action,
+      ...details
+    }).catch(()=>{});
+  }catch(e){/* журнал не має ламати основну дію */}
+}
+window.logAction=logAction;
+// ══════════════════════════════════════════════════════════════════
+//  СПОВІЩЕННЯ (Push / Firebase Cloud Messaging)
+// ══════════════════════════════════════════════════════════════════
+// Портал був пасивним: оцінку виставили, дитину відмітили відсутньою —
+// батьки дізнавалися, лише якщо самі зайшли. Push це закриває.
+//
+// НАЛАШТУВАННЯ (один раз, у Firebase Console):
+//   Project settings → Cloud Messaging → Web Push certificates →
+//   Generate key pair → скопіювати ключ у VAPID_KEY нижче.
+// Ключ живе в push-config.js — файлі, який оновлення коду не чіпають.
+// Раніше він лежав тут, і кожне оновлення common.js стирало вставлене.
+const VAPID_KEY = (typeof window !== 'undefined' && window.PUSH_VAPID_KEY)
+  || 'ЗАМІНИТИ_НА_КЛЮЧ_З_FIREBASE_CONSOLE';
+// Без цього ключа ніхто не може підписатися, тож і слати нема кому.
+// Виносимо назовні, щоб екрани могли чесно попередити, а не мовчати.
+export const pushConfigured = !VAPID_KEY.startsWith('ЗАМІНИТИ');
+let swRegistration=null;
+// Реєструємо Service Worker одразу: без нього не працюють ані push,
+// ані встановлення застосунку на телефон. Раніше він не реєструвався
+// взагалі, тож PWA фактично не працював.
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>{
+    navigator.serviceWorker.register('firebase-messaging-sw.js')
+      .then(r=>{swRegistration=r;})
+      .catch(e=>console.warn('SW не зареєстровано:',e.message));
+  });
+}
+// ── Встановлення застосунку (PWA) ──
+// Більшість батьків не знає, що сайт можна «встановити», а на iPhone без
+// установки сповіщення взагалі не працюють. Тому показуємо кнопку в порталі.
+let deferredInstall=null;
+export const isStandalone=()=>window.matchMedia('(display-mode: standalone)').matches||window.navigator.standalone===true;
+export const isIOS=()=>/iphone|ipad|ipod/i.test(navigator.userAgent);
+// Chrome/Edge/Android дають цю подію — перехоплюємо, щоб показати свою кнопку
+window.addEventListener('beforeinstallprompt',(e)=>{
+  e.preventDefault();deferredInstall=e;renderInstallBlock();
+});
+window.addEventListener('appinstalled',()=>{deferredInstall=null;renderInstallBlock();renderPushButton();});
+window.installApp=async function(){
+  if(!deferredInstall)return;
+  deferredInstall.prompt();
+  await deferredInstall.userChoice;
+  deferredInstall=null;renderInstallBlock();
+};
+export function renderInstallBlock(){
+  const box=document.getElementById('install-block');
+  if(!box)return;
+  if(isStandalone()){box.style.display='none';return;}
+  if(deferredInstall){
+    box.style.display='block';
+    box.innerHTML=`<div class="push-row">
+      <span class="push-label">📲 Встановити застосунок на пристрій</span>
+      <button type="button" class="push-btn" onclick="installApp()">Встановити</button>
+    </div>
+    <p class="push-hint">Портал відкриватиметься як звичайний застосунок, з іконкою на екрані.</p>`;
+    return;
+  }
+  if(isIOS()){
+    // На iPhone програмної установки немає — лише інструкція
+    box.style.display='block';
+    box.innerHTML=`<div class="push-label" style="margin-bottom:5px;">📲 Встановити на iPhone</div>
+      <p class="push-hint" style="flex:auto;">
+        Внизу екрана натисніть <b>Поділитися</b> ⬆️ → <b>На екран «Домів»</b>.<br>
+        Без цього iPhone не показуватиме сповіщення від порталу.
+      </p>`;
+    return;
+  }
+  box.style.display='none';
+}
+window.renderInstallBlock=renderInstallBlock;
+export async function pushSupported(){
+  try{
+    return 'Notification' in window && 'serviceWorker' in navigator && await messagingSupported();
+  }catch(e){return false;}
+}
+// Стан для кнопки: 'unsupported' | 'denied' | 'on' | 'off'
+export async function pushState(){
+  if(!await pushSupported())return 'unsupported';
+  if(Notification.permission==='denied')return 'denied';
+  if(Notification.permission!=='granted')return 'off';
+  const uid=auth.currentUser?.uid;
+  if(!uid)return 'off';
+  const snap=await get(child(ref(db),`push_tokens/${uid}`));
+  return snap.exists()?'on':'off';
+}
+window.enablePush=async function(){
+  if(!await pushSupported())return showToast('⚠️ Ваш браузер не підтримує сповіщення');
+  if(!pushConfigured)return showToast('⚠️ Сповіщення ще не налаштовані адміністратором');
+  try{
+    const perm=await Notification.requestPermission();
+    if(perm!=='granted'){
+      showToast(perm==='denied'
+        ?'🔕 Сповіщення заблоковані у налаштуваннях браузера'
+        :'🔕 Дозвіл не надано');
+      return renderPushButton();
+    }
+    // Чекаємо реєстрації SW — на першому заході вона може ще тривати
+    const reg=swRegistration||await navigator.serviceWorker.ready;
+    const messaging=getMessaging(app);
+    const token=await getToken(messaging,{vapidKey:VAPID_KEY,serviceWorkerRegistration:reg});
+    if(!token)return showToast('⚠️ Не вдалося отримати токен сповіщень');
+    const uid=auth.currentUser.uid;
+    // Зберігаємо разом із роллю і дитиною — щоб сервер знав, кому що слати
+    await set(ref(db,`push_tokens/${uid}`),{
+      token,
+      role:currentUserData?.role||'',
+      email:currentUserData?.email||'',
+      studentName:currentUserData?.studentName||'',
+      studentId:currentUserData?.studentId||'',
+      class:currentUserData?.class||'',
+      updatedAt:Date.now()
+    });
+    showToast('🔔 Сповіщення увімкнено');
+    renderPushButton();
+  }catch(e){
+    console.error(e);
+    showToast('Помилка: '+(e.message||e.code));
+  }
+};
+window.disablePush=async function(){
+  const uid=auth.currentUser?.uid;
+  if(uid)await remove(ref(db,`push_tokens/${uid}`));
+  // Відкликати дозвіл браузера з коду не можна — лише перестаємо слати
+  showToast('🔕 Сповіщення вимкнено');
+  renderPushButton();
+};
+
+// ══════════ ЗАПРОШЕННЯ УВІМКНУТИ СПОВІЩЕННЯ ══════════
+// Кнопка вмикання жила лише всередині модалки «Профіль» — туди майже
+// ніхто не заходить, тому батьки просто не підписувалися, і пуші не
+// приходили нікому. Показуємо помітну смужку прямо в кабінеті, поки
+// сповіщення не увімкнені. Один раз відхилили — не нагадуємо тиждень.
+const PUSH_NAG_KEY = 'push_school_push_nag';
+export async function renderPushInvite(containerId){
+  const box = document.getElementById(containerId);
+  if(!box) return;
+  box.style.display = 'none';
+  if(!pushConfigured) return;
+  try{
+    const st = await pushState();
+    if(st === 'on') return;
+    if(st === 'unsupported'){
+      if(!(isIOS() && !isStandalone())) return;
+      box.style.display = 'block';
+      box.className = 'push-invite';
+      box.innerHTML = `<span>🔔 Щоб отримувати сповіщення на iPhone, додайте портал на початковий екран
+        — кнопка «Поділитися» → «Додати на початковий екран».</span>
+        <button type="button" class="pi-x" onclick="dismissPushInvite('${containerId}')">Пізніше</button>`;
+      return;
+    }
+    let snoozed = 0;
+    try{ snoozed = Number(localStorage.getItem(PUSH_NAG_KEY)) || 0; }catch(e){}
+    if(Date.now() - snoozed < 7*24*3600*1000) return;
+    box.style.display = 'block';
+    box.className = 'push-invite';
+    box.innerHTML = st === 'denied'
+      ? `<span>🔕 Сповіщення заблоковані у браузері. Дозвольте їх у налаштуваннях сайту, щоб не пропустити повідомлення від школи.</span>
+         <button type="button" class="pi-x" onclick="dismissPushInvite('${containerId}')">Зрозуміло</button>`
+      : `<span>🔔 Увімкніть сповіщення — і не пропустите повідомлення вчителя, оголошення та зміни в меню.</span>
+         <button type="button" class="pi-go" onclick="enablePush().then(()=>renderPushInvite('${containerId}'))">Увімкнути</button>
+         <button type="button" class="pi-x" onclick="dismissPushInvite('${containerId}')">Пізніше</button>`;
+  }catch(e){ /* не критично */ }
+}
+window.renderPushInvite = renderPushInvite;
+window.dismissPushInvite = function(containerId){
+  try{ localStorage.setItem(PUSH_NAG_KEY, String(Date.now())); }catch(e){}
+  const b = document.getElementById(containerId);
+  if(b) b.style.display = 'none';
+};
+
+
+// ══════════ ДІАГНОСТИКА СПОВІЩЕНЬ ══════════
+// Проходить ланцюжок по кроках і каже, де саме обрив. Раніше така
+// перевірка була лише в кабінеті кухні — а не працювало здебільшого
+// в батьків, які до неї не мають доступу.
+window.checkPush = async function(){
+  const out = [];
+  const line = (ok, txt) => out.push(`${ok ? '✅' : '❌'} ${txt}`);
+
+  line(pushConfigured, pushConfigured
+    ? 'Ключ VAPID вставлено в код'
+    : 'У common.js досі заглушка замість ключа VAPID');
+
+  const sup = await pushSupported();
+  line(sup, sup ? 'Браузер підтримує сповіщення'
+                : (isIOS() && !isStandalone()
+                   ? 'iPhone: спочатку додайте портал на початковий екран'
+                   : 'Браузер не підтримує web push'));
+
+  const perm = (typeof Notification !== 'undefined') ? Notification.permission : 'unsupported';
+  line(perm === 'granted', perm === 'granted' ? 'Дозвіл на сповіщення надано'
+      : perm === 'denied' ? 'Дозвіл заблоковано — зніміть блокування в налаштуваннях сайту'
+      : 'Дозвіл ще не запитували — натисніть «Увімкнути»');
+
+  let hasToken = false;
+  try{
+    const uid = auth.currentUser?.uid;
+    if(uid){ const sn = await get(child(ref(db), `push_tokens/${uid}`)); hasToken = sn.exists(); }
+  }catch(e){}
+  line(hasToken, hasToken ? 'Пристрій підписано, токен збережено'
+                          : 'Токена немає — підписка не відбулася');
+
+  let server = '—';
+  try{
+    const r = await fetch('/.netlify/functions/notify', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ type:'menu', probe:true })
+    });
+    const d = await r.json();
+    if(!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+    server = `підписників усього: ${d.eligible ?? '?'} (проєкт ${d.project || '?'})`;
+    line(true, 'Сервер сповіщень відповідає · ' + server);
+  }catch(e){
+    line(false, 'Сервер сповіщень: ' + (e.message || 'немає відповіді'));
+  }
+  alert('Стан сповіщень\n\n' + out.join('\n'));
+};
+
+export async function renderPushButton(){
+  const box=document.getElementById('push-toggle');
+  if(!box)return;
+  const st=await pushState();
+  const map={
+    unsupported:['','',''],
+    denied:['🔕 Сповіщення заблоковані','', 'Дозвольте сповіщення для цього сайту в налаштуваннях браузера'],
+    on:['🔔 Сповіщення увімкнено','disablePush()','Вимкнути'],
+    off:['🔕 Сповіщення вимкнено','enablePush()','Увімкнути']
+  };
+  if(st==='unsupported'){
+    // На iPhone сповіщення з'являються лише після встановлення на екран
+    // «Домів». Мовчки ховати кнопку не можна — людина не зрозуміє, чому в
+    // неї немає того, що є в інших.
+    if(isIOS()&&!isStandalone()){
+      box.style.display='block';
+      box.innerHTML=`<div class="push-row"><span class="push-label">🔔 Сповіщення</span></div>
+        <p class="push-hint">Щоб отримувати сповіщення на iPhone, спочатку встановіть застосунок (інструкція вище).</p>`;
+      return;
+    }
+    box.style.display='none';return;
+  }
+  const [label,action,btn]=map[st];
+  box.style.display='block';
+  box.innerHTML=`<div class="push-row">
+    <span class="push-label">${label}</span>
+    ${action?`<button type="button" class="push-btn" onclick="${action}">${btn}</button>`
+             :`<span class="push-hint">${btn}</span>`}
+  </div>`;
+}
+window.renderPushButton=renderPushButton;
+// Надіслати сповіщення про подію. Свідомо «тихий» виклик: якщо сповіщення
+// не налаштовані або впали — основна дія (оцінка, відмітка) вже збережена
+// і не має зриватися через це.
+export function notifyEvent(type,payload){
+  if(!pushConfigured) return Promise.resolve({ok:false,error:'Push не налаштовано: немає VAPID-ключа'});
+  return fetch('/.netlify/functions/notify',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({type,...payload})
+  }).then(async r=>{
+    let d={}; try{ d=await r.json(); }catch(e){}
+    if(!r.ok) return {ok:false,error:d.error||`HTTP ${r.status}`};
+    return {ok:true,sent:d.sent||0,note:d.note||''};
+  }).catch(e=>({ok:false,error:e.message||'Немає звʼязку з сервером'}));
+}
+// Попередження на екрані замість мовчазної тиші, коли push не налаштований
+export function renderPushWarning(containerId){
+  const box=document.getElementById(containerId);
+  if(!box)return;
+  if(pushConfigured){box.style.display='none';return;}
+  box.style.display='block';
+  box.className='push-warn';
+  box.textContent='⚠️ Сповіщення поки не працюють: адміністратор ще не додав ключ Firebase. Меню збережеться, але батьки повідомлення не отримають.';
+}
+window.renderPushWarning=renderPushWarning;
+window.notifyEvent=notifyEvent;
+// Сповіщення, коли портал відкритий: системне вікно браузер не показує,
+// тому показуємо власний тост — інакше подія просто зникне непоміченою.
+(async()=>{
+  if(!await pushSupported())return;
+  try{
+    onMessage(getMessaging(app),(payload)=>{
+      const d=payload.data||{};
+      showToast(`${d.title||'Сповіщення'}: ${d.body||''}`);
+    });
+  }catch(e){/* messaging недоступний — не критично */}
+})();
+
+// ── Дрібниці оформлення чату ──
+// Ініціали й колір аватара рахуємо з імені: однакова людина завжди
+// того самого кольору, і список читається швидше за текст.
+function initials(name){
+  const p = String(name||'').trim().split(/\s+/);
+  return ((p[0]||'')[0] || '?').toUpperCase() + ((p[1]||'')[0] || '').toUpperCase();
+}
+const AV_COLORS = ['#5c6bc0','#26a69a','#ef6c00','#8e24aa','#00838f','#c2185b','#558b2f','#4527a0'];
+function avatarColor(name){
+  let h = 0; const s = String(name||'');
+  for(let i=0;i<s.length;i++) h = (h*31 + s.charCodeAt(i)) >>> 0;
+  return AV_COLORS[h % AV_COLORS.length];
+}
+function chatTime(ts){
+  if(!ts) return '';
+  const d = new Date(ts), now = new Date();
+  if(d.toDateString() === now.toDateString())
+    return d.toLocaleTimeString('uk-UA',{hour:'2-digit',minute:'2-digit'});
+  const y = new Date(now); y.setDate(y.getDate()-1);
+  if(d.toDateString() === y.toDateString()) return 'вчора';
+  return d.toLocaleDateString('uk-UA',{day:'numeric',month:'short'});
+}
+function chatDayLabel(ts){
+  const d = new Date(ts), now = new Date();
+  if(d.toDateString() === now.toDateString()) return 'Сьогодні';
+  const y = new Date(now); y.setDate(y.getDate()-1);
+  if(d.toDateString() === y.toDateString()) return 'Вчора';
+  return d.toLocaleDateString('uk-UA',{day:'numeric',month:'long',year:
+    d.getFullYear()===now.getFullYear()?undefined:'numeric'});
+}
+// ══════════ БАТЬКИ КЛАСУ: спільний список + редактор ══════════
+// Один код для кабінету вчителя і директора — інакше довелося б підтримувати
+// дві копії. Дані лежать «навпаки» (ключ — пошта батьків), тому для показу
+// перевертаємо: дитина → її батьки.
+const PARENT_ROLE_LABELS={mother:'👩 Мати',father:'👨 Батько',guardian:'🛡️ Опікун'};
+export async function renderParentsBlock(containerId,cls){
+  const box=document.getElementById(containerId);
+  if(!box)return;
+  if(!cls){box.innerHTML='<p class="empty-msg">Оберіть клас.</p>';return;}
+  box.innerHTML='<p class="empty-msg">Завантаження...</p>';
+  try{
+    const [stSnap,plSnap,usersSnap,slSnap,cardSnap]=await Promise.all([
+      get(child(ref(db),`students_list/${cls}`)),
+      get(child(ref(db),'parent_links')),
+      getUsersSnap(),
+      get(child(ref(db),'student_links')),
+      get(child(ref(db),`student_cards/${cls}`))
+    ]);
+    const cards=cardSnap.exists()?cardSnap.val():{};
+    const students=stSnap.exists()?Object.values(stSnap.val()).sort((a,b)=>String(a).localeCompare(String(b),'uk')):[];
+    if(students.length===0){box.innerHTML='<p class="empty-msg">У цьому класі ще немає учнів.</p>';return;}
+    const loggedIn=new Set();
+    if(usersSnap.exists()){
+      const u=usersSnap.val();
+      for(const uid in u)if(u[uid].email&&u[uid].role==='parent')loggedIn.add(u[uid].email.toLowerCase());
+    }
+    const byChild={};
+    if(plSnap.exists()){
+      const pl=plSnap.val();
+      for(const safeEmail in pl){
+        const rec=pl[safeEmail];
+        const email=safeEmail.replace(/_/g,'.');
+        const profile=getParentProfile(rec);
+        normalizeChildren(rec).forEach(k=>{
+          if(k.class!==cls)return;
+          (byChild[k.studentName]=byChild[k.studentName]||[]).push({safeEmail,email,profile,role:k.role||'guardian'});
+        });
+      }
+    }
+    const orphans=students.filter(s=>!byChild[s]||byChild[s].length===0);
+    let html=orphans.length
+      ? `<div class="bell-missing">⚠️ Без прив'язаних батьків: ${escHtml(orphans.join(', '))}</div>`
+      : `<div class="po-ok">✓ У всіх учнів є прив'язані контакти</div>`;
+    // Ключі учнів потрібні, щоб можна було перейменувати/прибрати учня
+    // прямо звідси — окремий «список учнів» більше не потрібен.
+    const keyByName={};
+    if(stSnap.exists()){const d=stSnap.val();for(const k in d)keyByName[d[k]]=k;}
+    // Власний вхід учня: student_links ключується його поштою, тож
+    // перевертаємо в «ім'я → email», щоб показати, у кого вхід є, а в кого ні
+    const loginByStudent={};
+    if(slSnap.exists()){
+      const sl=slSnap.val();
+      for(const se in sl){
+        const v=sl[se];
+        if(v&&v.class===cls&&v.studentName)loginByStudent[v.studentName]=se.replace(/_/g,'.');
+      }
+    }
+    students.forEach(st=>{
+      const list=byChild[st]||[];
+      const sk=keyByName[st]||'';
+      html+=`<div class="po-row" id="ds-row-${escHtml(sk)}">
+        <div class="po-child">
+          <span class="po-child-name">${escHtml(st)}</span>
+          <span class="po-login ${loginByStudent[st]?'':'none'}">🔑 ${loginByStudent[st]?escHtml(loginByStudent[st]):'входу немає'}</span>
+          ${(cards[sk]&&cards[sk].allergies)
+            // Позначка про алергію видна всім, хто бачить список: на уроці це
+            // питання безпеки. Самі медичні деталі — лише в картці, під правами.
+            ? `<span class="po-allergy" title="${escHtml(cards[sk].allergies)}">⚠️ Алергія</span>`:''}
+          <span class="po-child-acts">
+            <button class="po-edit" title="Картка учня" onclick="openStudentCard('${escJs(cls)}','${escJs(sk)}','${escJs(st)}')">📋</button>
+            <button class="po-edit" title="Табель (PDF)" onclick="downloadReportCard('${escJs(cls)}','${escJs(st)}')">📄</button>
+            <button class="po-edit" title="Змінити ПІБ учня" onclick="editStudentName('${escJs(cls)}','${escJs(sk)}','${escJs(st)}')">✏️</button>
+            <button class="po-edit" title="Вхід учня (email)" onclick="openStudentLogin('${escJs(cls)}','${escJs(st)}','${escJs(loginByStudent[st]||'')}')">🔑</button>
+            <button class="po-edit po-del" title="Прибрати зі списку" onclick="removeStudent('${escJs(cls)}','${escJs(sk)}','${escJs(st)}')">🗑</button>
+          </span>
+        </div>
+        <div class="po-parents">`;
+      if(list.length===0)html+=`<span class="po-none">контактів немає</span>`;
+      else list.forEach(p=>{
+        const tg=telegramHandle(p.profile.telegram);
+        const nm=parentFullName(p.profile,p.email);
+        html+=`<div class="po-parent">
+          <div class="po-line">
+            <span class="po-role">${escHtml(PARENT_ROLE_LABELS[p.role]||p.role)}</span>
+            <b class="po-name">${escHtml(nm)}</b>
+            ${!loggedIn.has(p.email.toLowerCase())?'<span class="po-new">ще не входив</span>':''}
+            <button class="po-edit" onclick="openParentEditor('${escJs(p.safeEmail)}')" title="Редагувати контакти">✏️</button>
+          </div>
+          <div class="po-contacts">
+            <span class="po-email">${escHtml(p.email)}</span>
+            ${p.profile.phonePL?`<a href="${telHref(p.profile.phonePL)}">🇵🇱 ${escHtml(p.profile.phonePL)}</a>`:''}
+            ${p.profile.phoneUA?`<a href="${telHref(p.profile.phoneUA)}">🇺🇦 ${escHtml(p.profile.phoneUA)}</a>`:''}
+            ${tg?`<a href="${escHtml(tg.url)}" target="_blank" rel="noopener noreferrer">✈️ ${escHtml(tg.handle)}</a>`:''}
+            ${p.profile.address?`<span class="po-addr">🏠 ${escHtml(p.profile.address)}</span>`:''}
+          </div>
+        </div>`;
+      });
+      html+=`</div></div>`;
+    });
+    box.innerHTML=html;
+  }catch(e){box.innerHTML=`<p style="color:red;font-size:.8rem;">Помилка: ${escHtml(e.message)}</p>`;}
+}
+// Inline-атрибути в HTML (ontoggle/onclick) бачать лише глобальні функції,
+// а не експорти модуля — тому дублюємо у window.
+window.renderParentsBlock=renderParentsBlock;
+window.getActiveClass=getActiveClass;
+// Список показується у двох кабінетах під різними id — оновлюємо той,
+// що зараз на екрані, щоб функції редагування не знали про це нічого.
+export function refreshRoster(cls){
+  for(const id of ['t-parents-list','po-list']){
+    const el=document.getElementById(id);
+    if(el&&el.offsetParent!==null){renderParentsBlock(id,cls);return;}
+  }
+}
+window.refreshRoster=refreshRoster;
+// ══════════════════════════════════════════════════════════════════
+//  КАРТКА УЧНЯ
+// ══════════════════════════════════════════════════════════════════
+// Раніше учень у системі був лише рядком з іменем — не було куди покласти
+// ні договір, ні дату народження, ні алергії.
+//
+// Ключ — pushKey зі students_list, а НЕ ім'я: тоді перейменування учня
+// не рве картку (на відміну від оцінок, які історично ключуються ім'ям).
+//
+// ЗАХИСТ ДАНИХ: медичні відомості за GDPR — особлива категорія. Тому
+// редагувати картку можуть лише директор, адміністратор і класний керівник
+// цього класу. Решта вчителів бачить у списку тільки позначку про алергію —
+// це потрібно для безпеки на уроці, але без доступу до PESEL, адреси й договору.
+export const CARD_GROUPS=[
+  {title:'Загальні дані',fields:[
+    {k:'birthDate',label:'Дата народження',type:'date'},
+    {k:'pesel',label:'PESEL',ph:'11 цифр'},
+    {k:'address',label:'Адреса проживання',ph:'вул., буд., місто'}
+  ]},
+  {title:'Договір',fields:[
+    {k:'contractNo',label:'Номер договору',ph:'напр. 2026/114'},
+    {k:'enrolledAt',label:'Дата зарахування',type:'date'}
+  ]},
+  {title:'Медичні відомості',danger:true,fields:[
+    {k:'allergies',label:'Алергії',ph:'напр. горіхи — анафілаксія',area:true},
+    {k:'conditions',label:'Хронічні захворювання',area:true},
+    {k:'meds',label:'Ліки, які приймає',area:true}
+  ]},
+  {title:'Безпека',fields:[
+    {k:'pickup',label:'Хто має право забирати дитину',
+     ph:'Іваненко Оксана (мати) +48 600 000 000\nІваненко Сергій (батько) +48 601 000 000',area:true},
+    {k:'pickupBan',label:'Кому забирати ЗАБОРОНЕНО',ph:'якщо є судові обмеження',area:true},
+    {k:'emergency',label:'Екстрений контакт',ph:"ім'я, ким доводиться, телефон",area:true}
+  ]},
+  {title:'Інше',fields:[{k:'notes',label:'Примітки',area:true}]}
+];
+// Поля, які веде ШКОЛА і батьки не редагують: номер договору й дата
+// зарахування — адміністративні. Заборона забирати дитину — навмисно теж:
+// це поле про судові обмеження, і саме його зацікавлена сторона могла б
+// «підправити». Решту (медичне, контакти, адресу) батьки ведуть самі —
+// вони знають це краще за школу, та й дані будуть свіжіші.
+const SCHOOL_ONLY_FIELDS=['contractNo','enrolledAt','pickupBan'];
+export function canEditCard(cls){
+  const r=currentUserData?.role;
+  if(r==='director'||r==='administrator')return true;
+  if(r==='parent')return true; // з обмеженням по полях, див. SCHOOL_ONLY_FIELDS
+  // Класний керівник саме цього класу
+  return !!(classTeacherCache[cls]&&currentUserData?.email&&
+            classTeacherCache[cls].toLowerCase()===currentUserData.email.toLowerCase());
+}
+const isFieldLocked=(k)=>currentUserData?.role==='parent'&&SCHOOL_ONLY_FIELDS.includes(k);
+let classTeacherCache={};
+async function loadClassTeacherCache(){
+  const s=await get(child(ref(db),'class_teachers'));
+  classTeacherCache={};
+  if(s.exists()){const d=s.val();for(const c in d)if(d[c]?.teacherEmail)classTeacherCache[c]=d[c].teacherEmail;}
+}
+let cardTarget={cls:'',key:'',name:''};
+window.openStudentCard=async function(cls,key,name){
+  cardTarget={cls,key,name};
+  await loadClassTeacherCache();
+  const editable=canEditCard(cls);
+  document.getElementById('sc-student').textContent=name;
+  document.getElementById('sc-save').style.display=editable?'block':'none';
+  document.getElementById('sc-readonly').style.display=editable?'none':'block';
+  const box=document.getElementById('sc-fields');
+  box.innerHTML='<p class="empty-msg">Завантаження...</p>';
+  document.getElementById('student-card-modal').style.display='flex';
+  const snap=await get(child(ref(db),`student_cards/${cls}/${key}`));
+  const c=snap.exists()?snap.val():{};
+  box.innerHTML=CARD_GROUPS.map(g=>`
+    <div class="sc-group${g.danger?' danger':''}">
+      <b>${escHtml(g.title)}</b>
+      ${g.fields.map(f=>{
+        const ro=!editable||isFieldLocked(f.k);
+        const hint=isFieldLocked(f.k)?' <span class="sc-lock">веде школа</span>':'';
+        return `
+        <label for="sc-${f.k}">${escHtml(f.label)}${hint}</label>
+        ${f.area
+          ? `<textarea id="sc-${f.k}" rows="2" placeholder="${escHtml(f.ph||'')}" ${ro?'readonly':''}>${escHtml(c[f.k]||'')}</textarea>`
+          : `<input type="${f.type||'text'}" id="sc-${f.k}" value="${escHtml(c[f.k]||'')}" placeholder="${escHtml(f.ph||'')}" ${ro?'readonly':''}>`}`;
+      }).join('')}
+    </div>`).join('');
+};
+window.closeStudentCard=function(){document.getElementById('student-card-modal').style.display='none';};
+// Батьки відкривають картку своєї активної дитини зі свого кабінету.
+// Ключ у students_list доводиться шукати за ім'ям — картка ключується
+// саме ним, щоб переживати перейменування.
+window.openMyChildCard=async function(){
+  const cls=currentUserData?.class, name=currentUserData?.studentName;
+  if(!cls||!name)return showToast('⚠️ Дитина не визначена');
+  // Картку відкривають із вікна профілю. Закриваємо його, інакше воно
+  // лишається поверх: у DOM профіль іде пізніше, а z-index у модалок однаковий.
+  window.closeProfileModal();
+  const snap=await get(child(ref(db),`students_list/${cls}`));
+  let key='';
+  if(snap.exists()){const d=snap.val();for(const k in d)if(d[k]===name){key=k;break;}}
+  if(!key)return showToast('⚠️ Дитину не знайдено у списку класу');
+  window.openStudentCard(cls,key,name);
+};
+// Пароль дитини змінити напряму не можна — надсилаємо лист на її пошту.
+// Блок «Вхід дитини» переїхав у parent-student.js: там і показ, і
+// зміна пароля, і вимкнення доступу — через серверну функцію.
+window.saveStudentCard=async function(){
+  const {cls,key,name}=cardTarget;
+  if(!canEditCard(cls))return alert('У вас немає прав редагувати картку.');
+  const btn=document.getElementById('sc-save');
+  btn.disabled=true;btn.textContent='⏳ Збереження...';
+  try{
+    // readonly у формі — лише підказка для ока. Тому поля, які веде школа,
+    // беремо з бази, а не з форми: інакше збереження від батьків їх затерло б.
+    const prevSnap=await get(child(ref(db),`student_cards/${cls}/${key}`));
+    const prev=prevSnap.exists()?prevSnap.val():{};
+    const data={};
+    CARD_GROUPS.forEach(g=>g.fields.forEach(f=>{
+      if(isFieldLocked(f.k)){data[f.k]=prev[f.k]||'';return;}
+      const el=document.getElementById('sc-'+f.k);
+      if(el)data[f.k]=el.value.trim();
+    }));
+    await set(ref(db,`student_cards/${cls}/${key}`),{...data,updatedAt:Date.now()});
+    // У журнал пишемо сам факт правки, БЕЗ вмісту: там медичні дані
+    logAction('card_edit',{cls,target:name});
+    showToast('✅ Картку збережено');
+    window.closeStudentCard();
+    refreshRoster(cls);
+  }catch(e){alert('Помилка: '+e.message);}
+  finally{btn.disabled=false;btn.textContent='💾 Зберегти';}
+};
+// ══════════════════════════════════════════════════════════════════
+//  ДНІ НАРОДЖЕННЯ НА ТИЖНІ
+// ══════════════════════════════════════════════════════════════════
+// Беремо з карток учнів (birthDate). Свідомо показуємо лише день і місяць,
+// без року: однокласникам і чужим батькам вік дитини знати не потрібно.
+const MONTHS_UA=['січня','лютого','березня','квітня','травня','червня',
+                 'липня','серпня','вересня','жовтня','листопада','грудня'];
+export async function getWeekBirthdays(cls,dateStr){
+  const [stSnap,cardSnap]=await Promise.all([
+    get(child(ref(db),`students_list/${cls}`)),
+    get(child(ref(db),`student_cards/${cls}`))
+  ]);
+  if(!stSnap.exists()||!cardSnap.exists())return[];
+  const names=stSnap.val(), cards=cardSnap.val();
+  // Тиждень Пн–Нд, той самий, що і в решті звітів
+  const week=getWeekDates(dateStr).map(d=>d.slice(5)); // «MM-DD»
+  const out=[];
+  for(const key in names){
+    const bd=cards[key]&&cards[key].birthDate;
+    if(!bd||bd.length<10)continue;
+    const md=bd.slice(5);
+    const i=week.indexOf(md);
+    if(i===-1)continue;
+    const [,m,d]=bd.split('-');
+    out.push({name:names[key],md,idx:i,label:`${parseInt(d)} ${MONTHS_UA[parseInt(m)-1]}`});
+  }
+  return out.sort((a,b)=>a.idx-b.idx);
+}
+// Один рендер для всіх кабінетів — вчителя, батьків та учня
+export async function renderBirthdays(containerId,cls,dateStr,selfName){
+  const box=document.getElementById(containerId);
+  if(!box)return;
+  try{
+    const list=await getWeekBirthdays(cls,dateStr);
+    // Поруч може лежати блок порожнього стану — щоб на вкладці не висів
+    // самотній заголовок без вмісту. Там, де його немає, нічого не робимо.
+    const empty=document.getElementById(containerId+'-empty');
+    if(list.length===0){
+      box.style.display='none';
+      if(empty) empty.style.display='block';
+      return;
+    }
+    if(empty) empty.style.display='none';
+    box.style.display='block';
+    box.innerHTML=`<div class="bd-title">🎂 Дні народження цього тижня</div>`+
+      list.map(b=>`<div class="bd-row${b.name===selfName?' me':''}">
+        <span class="bd-name">${escHtml(b.name)}${b.name===selfName?' — це ти!':''}</span>
+        <span class="bd-date">${escHtml(b.label)}</span>
+      </div>`).join('');
+  }catch(e){
+    box.style.display='none';
+    const empty=document.getElementById(containerId+'-empty');
+    if(empty) empty.style.display='block';
+  }
+}
+window.renderBirthdays=renderBirthdays;
+// ══════════════════════════════════════════════════════════════════
+//  ТАБЕЛЬ УЧНЯ (PDF)
+// ══════════════════════════════════════════════════════════════════
+// Рендеримо HTML і знімаємо його через html2canvas, а не малюємо текст
+// у jsPDF: вбудовані шрифти jsPDF не мають кирилиці, і текст вийшов би
+// «кракозябрами». Так само вже зроблено в експорті журналу.
+window.downloadReportCard=async function(cls,studentName){
+  // Дані лежать під постійним ідентифікатором; імʼя потрібне лише для шапки
+  const sid = stuId(cls, studentName) || studentName;
+  if(!window.html2canvas||!window.jspdf)return alert('Бібліотеки експорту не завантажились. Оновіть сторінку.');
+  const holder=document.getElementById('report-card-render');
+  holder.innerHTML='<p style="padding:20px;">Готую табель...</p>';
+  try{
+    const [semSnap,gradesSnap,cardSnap,stSnap]=await Promise.all([
+      get(child(ref(db),`academic_year/${ACADEMIC_YEAR_ID_LOCAL}/semesters`)),
+      get(child(ref(db),`semester_grades/${cls}`)),
+      get(child(ref(db),`student_cards/${cls}`)),
+      get(child(ref(db),`students_list/${cls}`))
+    ]);
+    const sems=semSnap.exists()?semSnap.val():{};
+    const all=gradesSnap.exists()?gradesSnap.val():{};
+    // Картку шукаємо за ключем учня — вона ключується саме ним
+    let card={};
+    if(cardSnap.exists()&&stSnap.exists()){
+      const names=stSnap.val();
+      card = cardSnap.val()[sid] || {};
+    }
+    // Предмети — об'єднання по всіх семестрах, щоб таблиця була рівна
+    const semIds=Object.keys(all);
+    const subjects=[...new Set(semIds.flatMap(id=>Object.keys(all[id]||{})))]
+      .filter(s=>semIds.some(id=>all[id][s]&&all[id][s][sid]))
+      .sort((a,b)=>a.localeCompare(b,'uk'));
+    if(subjects.length===0){holder.innerHTML='';return alert('Для цього учня ще немає підсумкових оцінок.');}
+    const head=semIds.map(id=>`<th>${escHtml(sems[id]?.name||id)}</th>`).join('');
+    const body=subjects.map(s=>`<tr><td class="rc-subj">${escHtml(s)}</td>`+
+      semIds.map(id=>{
+        const rec=all[id][s]&&all[id][s][sid];
+        return `<td class="rc-val">${rec&&rec.value?escHtml(displayGrade(rec.value,cls)):'—'}</td>`;
+      }).join('')+'</tr>').join('');
+    holder.innerHTML=`<div class="rc-page">
+      <div class="rc-head">
+        <div class="rc-title">Табель успішності</div>
+        <div class="rc-school">Push School Warsaw · ${escHtml(ACADEMIC_YEAR_ID_LOCAL)} н.р.</div>
+      </div>
+      <div class="rc-meta">
+        <div><b>Учень:</b> ${escHtml(studentName)}</div>
+        <div><b>Клас:</b> ${escHtml(cls.replace('class_',''))}</div>
+        ${card.birthDate?`<div><b>Дата народження:</b> ${escHtml(card.birthDate.split('-').reverse().join('.'))}</div>`:''}
+      </div>
+      <table class="rc-table"><thead><tr><th>Предмет</th>${head}</tr></thead><tbody>${body}</tbody></table>
+      <div class="rc-foot">
+        <div>Сформовано: ${new Date().toLocaleDateString('uk-UA')}</div>
+        <div class="rc-sign">Класний керівник __________________</div>
+      </div>
+    </div>`;
+    const canvas=await html2canvas(holder.firstElementChild,{scale:2,backgroundColor:'#fff'});
+    const {jsPDF}=window.jspdf;
+    const pdf=new jsPDF('p','mm','a4');
+    const w=190, h=canvas.height*w/canvas.width;
+    pdf.addImage(canvas.toDataURL('image/png'),'PNG',10,10,w,Math.min(h,270));
+    pdf.save(`Табель_${studentName.replace(/\s+/g,'_')}_${cls.replace('class_','')}кл.pdf`);
+    showToast('📄 Табель завантажено');
+  }catch(e){alert('Помилка: '+e.message);}
+  finally{holder.innerHTML='';}
+};
+// ACADEMIC_YEAR_ID живе в director.js, але common.js імпортувати його не може
+// (director вже імпортує common — вийшов би цикл). Рахуємо ту саму формулу тут.
+const ACADEMIC_YEAR_ID_LOCAL=(()=>{
+  const d=new Date(), y=d.getFullYear();
+  return d.getMonth()+1>=9?`${y}-${y+1}`:`${y-1}-${y}`;
+})();
+// ══════════════════════════════════════════════════════════════════
+//  ВИВАНТАЖЕННЯ ДАНИХ ДИТИНИ
+// ══════════════════════════════════════════════════════════════════
+// За GDPR батьки мають право отримати всі дані про свою дитину. Без цієї
+// кнопки школі довелося б збирати їх вручну через консоль Firebase.
+// Формат JSON — повний і однозначний; він же годиться для перенесення
+// в іншу систему (право на переносимість даних).
+window.exportChildData=async function(cls,studentName){
+  const sid = stuId(cls, studentName) || studentName;
+  if(!cls||!studentName)return showToast('⚠️ Дитина не визначена');
+  showToast('⏳ Збираю дані...');
+  try{
+    const ym=(o,pick)=>{const r={};for(const m in o)if(pick(m))r[m]=o[m];return r;};
+    const [stSnap,cardSnap,gradesSnap,typesSnap,attSnap,behSnap,stickSnap,
+           comSnap,semSnap,retSnap,plSnap,slSnap]=await Promise.all([
+      get(child(ref(db),`students_list/${cls}`)),
+      get(child(ref(db),`student_cards/${cls}`)),
+      get(child(ref(db),`grades/${cls}`)),
+      get(child(ref(db),`grade_types/${cls}`)),
+      get(child(ref(db),`attendance/${cls}`)),
+      get(child(ref(db),`behavior_grades/${cls}`)),
+      get(child(ref(db),`stickers/${cls}/${sid}`)),
+      get(child(ref(db),`comments/${cls}`)),
+      get(child(ref(db),`semester_grades/${cls}`)),
+      get(child(ref(db),`retake_requests/${cls}`)),
+      get(child(ref(db),'parent_links')),
+      get(child(ref(db),'student_links'))
+    ]);
+    // Дані інших дітей у вивантаження потрапити не повинні — усюди
+    // фільтруємо строго по імені цієї дитини
+    const pick=(snap,depth)=>{
+      if(!snap.exists())return {};
+      const walk=(node,d)=>{
+        if(d===0)return node[sid]!==undefined?node[sid]:undefined;
+        const out={};
+        for(const k in node){const v=walk(node[k],d-1);if(v!==undefined&&(typeof v!=='object'||Object.keys(v).length))out[k]=v;}
+        return out;
+      };
+      return walk(snap.val(),depth);
+    };
+    const card = cardSnap.exists() ? (cardSnap.val()[sid] || {}) : {};
+    // Батьки, прив'язані саме до цієї дитини
+    const parents=[];
+    if(plSnap.exists()){
+      const pl=plSnap.val();
+      for(const se in pl){
+        const kids=normalizeChildren(pl[se]);
+        if(kids.some(k=>k.studentName===studentName&&k.class===cls))
+          parents.push({email:se.replace(/_/g,'.'),...getParentProfile(pl[se]),
+                        role:kids.find(k=>k.studentName===studentName)?.role||''});
+      }
+    }
+    let ownLogin='';
+    if(slSnap.exists()){
+      const sl=slSnap.val();
+      for(const se in sl)if(sl[se]?.studentName===studentName&&sl[se]?.class===cls){ownLogin=se.replace(/_/g,'.');break;}
+    }
+    const data={
+      _про_файл:'Усі дані, які портал Push School зберігає про цю дитину.',
+      _сформовано:new Date().toISOString(),
+      учень:{імʼя:studentName,клас:cls.replace('class_',''),власний_вхід:ownLogin||'немає'},
+      картка:card,
+      батьки:parents,
+      оцінки:pick(gradesSnap,3),
+      типи_оцінок:pick(typesSnap,3),
+      підсумкові:pick(semSnap,2),
+      відвідуваність:pick(attSnap,1),
+      поведінка:pick(behSnap,2),
+      коментарі:pick(comSnap,2),
+      заявки_на_перездачу:pick(retSnap,2),
+      наліпки:stickSnap.exists()?stickSnap.val():{}
+    };
+    const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json;charset=utf-8'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download=`Дані_${studentName.replace(/\s+/g,'_')}_${new Date().toISOString().slice(0,10)}.json`;
+    a.click();URL.revokeObjectURL(a.href);
+    logAction('data_export',{cls,target:studentName});
+    showToast('📦 Дані вивантажено');
+  }catch(e){alert('Помилка: '+e.message);}
+};
+// ══════════════════════════════════════════════════════════════════
+//  ДРУК РОЗКЛАДУ
+// ══════════════════════════════════════════════════════════════════
+// Розклад регулярно вішають на стіну. Матриця на екрані для цього не
+// годиться, тому будуємо окрему чисту таблицю «урок × день» і друкуємо
+// лише її — решту сторінки ховає правило @media print.
+window.printClassSchedule=async function(cls){
+  cls=cls||getActiveClass();
+  if(!cls)return showToast('⚠️ Клас не визначено');
+  const holder=document.getElementById('print-area');
+  try{
+    const [schedSnap,bellSnap]=await Promise.all([
+      get(child(ref(db),`schedules/${cls}/lessons`)),
+      get(child(ref(db),`bell_schedules/${cls}`))
+    ]);
+    if(!schedSnap.exists())return showToast('⚠️ Розклад цього класу не заповнено');
+    const sched=schedSnap.val();
+    const bells=bellSnap.exists()?bellSnap.val():{};
+    const days=['Monday','Tuesday','Wednesday','Thursday','Friday'];
+    // Скільки рядків потрібно — за найдовшим днем
+    let maxRows=0;
+    days.forEach(d=>{if(Array.isArray(sched[d]))maxRows=Math.max(maxRows,sched[d].length);});
+    if(maxRows===0)return showToast('⚠️ У розкладі немає уроків');
+    const cell=(d,i)=>{
+      const slot=(sched[d]||[])[i];
+      const items=Array.isArray(slot)?slot:(slot&&slot.subject?[slot]:[]);
+      return items.map(l=>{
+        const sn=typeof l.subject==='string'?l.subject:(l.subject?.ua||'');
+        if(!sn)return '';
+        const isBreak=sn.toLowerCase().includes('перерва')||sn.toLowerCase().includes('обід');
+        return `<div class="${isBreak?'ps-break':''}">${escHtml(sn)}</div>`;
+      }).join('');
+    };
+    const bellFor=(i)=>{
+      const b=bells[i+1]||bells[String(i+1)];
+      return b&&b.start?`${escHtml(b.start)}–${escHtml(b.end||'')}`:'';
+    };
+    let rows='';
+    for(let i=0;i<maxRows;i++){
+      const filled=days.some(d=>cell(d,i).trim());
+      if(!filled)continue;
+      rows+=`<tr><td class="ps-num">${i+1}<div class="ps-time">${bellFor(i)}</div></td>`+
+        days.map(d=>`<td>${cell(d,i)}</td>`).join('')+'</tr>';
+    }
+    holder.innerHTML=`<div class="ps-sheet">
+      <div class="ps-head">
+        <div class="ps-title">Розклад уроків</div>
+        <div class="ps-cls">${escHtml(cls.replace('class_',''))} клас · ${escHtml(ACADEMIC_YEAR_ID_LOCAL)} н.р.</div>
+      </div>
+      <table class="ps-table">
+        <thead><tr><th>№</th>${days.map(d=>`<th>${escHtml(dayNamesUA[d])}</th>`).join('')}</tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div class="ps-foot">Push School Warsaw · роздруковано ${new Date().toLocaleDateString('uk-UA')}</div>
+    </div>`;
+    document.body.classList.add('printing');
+    window.print();
+    // Прибираємо після діалогу друку — інакше вміст лишиться у DOM
+    setTimeout(()=>{document.body.classList.remove('printing');holder.innerHTML='';},600);
+  }catch(e){alert('Помилка: '+e.message);}
+};
+// ══════════ ВХІД УЧНЯ (власний email) ══════════
+// Раніше пошту учня можна було вказати ЛИШЕ під час створення. Якщо тоді її
+// не ввели — додати чи змінити було ніде, і в списку не було видно, у кого
+// взагалі є доступ. Тепер це керується звідси.
+let studentLoginTarget={cls:'',name:'',oldEmail:''};
+window.openStudentLogin=function(cls,name,oldEmail){
+  studentLoginTarget={cls,name,oldEmail:oldEmail||''};
+  document.getElementById('sl-student').textContent=name;
+  document.getElementById('sl-email').value=oldEmail||'';
+  document.getElementById('sl-remove').style.display=oldEmail?'block':'none';
+  document.getElementById('student-login-modal').style.display='flex';
+  setTimeout(()=>document.getElementById('sl-email').focus(),60);
+};
+window.closeStudentLogin=function(){document.getElementById('student-login-modal').style.display='none';};
+window.saveStudentLogin=async function(){
+  const {cls,name,oldEmail}=studentLoginTarget;
+  const raw=document.getElementById('sl-email').value.trim().toLowerCase();
+  if(!raw)return alert('Введіть email або натисніть «Прибрати вхід».');
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(raw))return alert('Схоже, це не email.');
+  if(raw===oldEmail)return window.closeStudentLogin();
+  const newSafe=raw.replace(/\./g,'_');
+  try{
+    const busy=await get(child(ref(db),`student_links/${newSafe}`));
+    if(busy.exists()){
+      const v=busy.val();
+      return alert(`Ця адреса вже прив'язана до учня «${v.studentName}». Оберіть іншу.`);
+    }
+    await set(ref(db,`student_links/${newSafe}`),{studentName:name,class:cls});
+    // Стару прив'язку прибираємо, інакше учень зможе заходити з обох адрес
+    if(oldEmail)await remove(ref(db,`student_links/${oldEmail.replace(/\./g,'_')}`));
+    logAction(oldEmail?'student_email':'student_login',{cls,target:name,value:raw,from:oldEmail||''});
+    showToast(oldEmail?`✉️ Вхід змінено на ${raw}`:`🔑 Вхід створено: ${raw}`);
+    window.closeStudentLogin();
+    refreshRoster(cls);
+  }catch(e){alert('Помилка: '+e.message);}
+};
+window.removeStudentLogin=async function(){
+  const {cls,name,oldEmail}=studentLoginTarget;
+  if(!oldEmail)return;
+  if(!confirm(`Прибрати вхід для ${name}?\n\nУчень більше не зможе заходити у портал самостійно.\nОцінки та всі його дані залишаться недоторканими,\nбатьки бачитимуть їх як і раніше.\n\nПродовжити?`))return;
+  try{
+    await remove(ref(db,`student_links/${oldEmail.replace(/\./g,'_')}`));
+    logAction('student_login_del',{cls,target:name,value:oldEmail});
+    showToast('🔒 Вхід прибрано');
+    window.closeStudentLogin();
+    refreshRoster(cls);
+  }catch(e){alert('Помилка: '+e.message);}
+};
+// Хто саме зараз відкрив редактор і куди повертатися після збереження
+let parentEditorTarget={safeEmail:'',containerId:'',cls:''};
+window.openParentEditor=async function(safeEmail){
+  // Запам'ятовуємо, який список оновити після збереження
+  const teacherBox=document.getElementById('t-parents-list');
+  const visibleTeacher=teacherBox&&teacherBox.offsetParent!==null;
+  parentEditorTarget={
+    safeEmail,
+    containerId:visibleTeacher?'t-parents-list':'po-list',
+    cls:visibleTeacher?getActiveClass():(document.getElementById('po-class')?.value||'')
+  };
+  const modal=document.getElementById('parent-edit-modal');
+  const body=document.getElementById('pe-fields');
+  document.getElementById('pe-email').textContent=safeEmail.replace(/_/g,'.');
+  body.innerHTML='<p class="empty-msg">Завантаження...</p>';
+  modal.style.display='flex';
+  const snap=await get(child(ref(db),`parent_links/${safeEmail}`));
+  const rec=snap.exists()?snap.val():{};
+  const profile=getParentProfile(rec);
+  const kids=normalizeChildren(rec);
+  body.innerHTML=PARENT_FIELDS.map(f=>`
+    <label for="pe-${f.k}">${f.label}</label>
+    <input type="${f.type||'text'}" id="pe-${f.k}" value="${escHtml(profile[f.k])}" placeholder="${escHtml(f.ph)}">
+  `).join('')+renderParentKids(safeEmail,kids)+renderEmailChange(safeEmail);
+};
+// Прив'язані діти: можна змінити роль або відв'язати
+function renderParentKids(safeEmail,kids){
+  const opts=(sel)=>['mother','father','guardian']
+    .map(r=>`<option value="${r}" ${r===sel?'selected':''}>${PARENT_ROLE_LABELS[r]}</option>`).join('');
+  let h=`<div class="pe-section"><b>👶 Прив'язані діти</b>`;
+  if(kids.length===0)h+=`<p class="empty-msg" style="font-size:.8rem;">Дітей не прив'язано.</p>`;
+  else kids.forEach((k,i)=>{
+    h+=`<div class="pe-kid">
+      <span class="pe-kid-name">${escHtml(k.studentName)} <span style="color:#999;">(${escHtml(String(k.class||'').replace('class_',''))} кл.)</span></span>
+      <select onchange="setParentChildRole('${escJs(safeEmail)}',${i},this.value)">${opts(k.role||'guardian')}</select>
+      <button class="pe-unlink" onclick="unlinkParentChild('${escJs(safeEmail)}',${i},'${escJs(k.studentName)}')" title="Відв'язати">✖</button>
+    </div>`;
+  });
+  return h+'</div>';
+}
+// Пошта — це ключ запису, тож «зміна email» = перенесення запису.
+// ВАЖЛИВО: акаунт Firebase Auth так не переїжджає, тому попереджаємо.
+function renderEmailChange(safeEmail){
+  return `<div class="pe-section">
+    <b>✉️ Змінити email</b>
+    <p style="font-size:.75rem;color:#888;margin:4px 0 6px 0;">
+      Контакти й діти перенесуться на нову адресу. Але вхід у портал прив'язаний
+      до старої пошти — з новою людина заходить як «Перший вхід» і задає пароль наново.
+    </p>
+    <input type="email" id="pe-new-email" placeholder="нова@пошта.com" autocapitalize="none" spellcheck="false">
+    <button onclick="changeParentEmail('${escJs(safeEmail)}')" style="background:#e67e22;color:#fff;margin-top:6px;">✉️ Перенести на новий email</button>
+  </div>`;
+}
+async function refreshParentEditorAndList(safeEmail){
+  await window.openParentEditor(safeEmail);
+  const {containerId,cls}=parentEditorTarget;
+  if(containerId&&cls)renderParentsBlock(containerId,cls);
+}
+window.setParentChildRole=async function(safeEmail,idx,role){
+  const snap=await get(child(ref(db),`parent_links/${safeEmail}`));
+  const kids=normalizeChildren(snap.exists()?snap.val():{});
+  if(!kids[idx])return;
+  kids[idx].role=role;
+  await update(ref(db,`parent_links/${safeEmail}`),{children:kids});
+  await syncParentUserChildren(safeEmail,kids);
+  showToast('✅ Роль оновлено');
+  const {containerId,cls}=parentEditorTarget;
+  if(containerId&&cls)renderParentsBlock(containerId,cls);
+};
+window.unlinkParentChild=async function(safeEmail,idx,name){
+  if(!confirm(`Відв'язати ${name} від ${safeEmail.replace(/_/g,'.')}?\n\nОцінки та інші дані дитини залишаться недоторканими —\nзникне лише доступ цих батьків до неї.`))return;
+  const snap=await get(child(ref(db),`parent_links/${safeEmail}`));
+  const kids=normalizeChildren(snap.exists()?snap.val():{});
+  kids.splice(idx,1);
+  await update(ref(db,`parent_links/${safeEmail}`),{children:kids});
+  await syncParentUserChildren(safeEmail,kids);
+  logAction('parent_unlink',{target:name,value:safeEmail.replace(/_/g,'.')});
+  showToast(`🔓 ${name} відв'язаний`);
+  refreshParentEditorAndList(safeEmail);
+};
+window.changeParentEmail=async function(oldSafe){
+  const raw=document.getElementById('pe-new-email').value.trim().toLowerCase();
+  if(!raw)return alert('Введіть нову адресу.');
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(raw))return alert('Схоже, це не email.');
+  const newSafe=raw.replace(/\./g,'_');
+  if(newSafe===oldSafe)return alert('Це та сама адреса.');
+  const exists=await get(child(ref(db),`parent_links/${newSafe}`));
+  if(exists.exists())return alert(`На ${raw} уже є запис. Об'єднання адрес робиться вручну.`);
+  if(!confirm(`Перенести запис на ${raw}?\n\nСтара адреса ${oldSafe.replace(/_/g,'.')} перестане бути прив'язаною.\nЯкщо людина вже заходила зі старої пошти — доступ по ній зникне,\nа з новою вона увійде через «Перший вхід».\n\nПродовжити?`))return;
+  try{
+    const snap=await get(child(ref(db),`parent_links/${oldSafe}`));
+    await set(ref(db,`parent_links/${newSafe}`),snap.exists()?snap.val():{});
+    await remove(ref(db,`parent_links/${oldSafe}`));
+    logAction('parent_email',{from:oldSafe.replace(/_/g,'.'),target:raw});
+    showToast('✉️ Запис перенесено на нову адресу');
+    window.closeParentEditor();
+    const {containerId,cls}=parentEditorTarget;
+    if(containerId&&cls)renderParentsBlock(containerId,cls);
+  }catch(e){alert('Помилка: '+e.message);}
+};
+// Якщо батьки вже заходили — тримаємо їхній профіль у синхроні
+async function syncParentUserChildren(safeEmail,kids){
+  const email=safeEmail.replace(/_/g,'.').toLowerCase();
+  const us=await getUsersSnap();
+  if(!us.exists())return;
+  const u=us.val();
+  for(const uid in u){
+    if((u[uid].email||'').toLowerCase()!==email||u[uid].role!=='parent')continue;
+    const patch={children:kids};
+    // Активна дитина зникла зі списку — перемикаємо на першу доступну
+    const still=kids.find(k=>k.studentName===u[uid].studentName&&k.class===u[uid].class);
+    if(!still&&kids[0]){patch.studentName=kids[0].studentName;patch.class=kids[0].class;patch.parentRole=kids[0].role||'guardian';}
+    await update(ref(db,`users/${uid}`),patch);
+  }
+}
+window.closeParentEditor=function(){document.getElementById('parent-edit-modal').style.display='none';};
+window.saveParentProfile=async function(){
+  const {safeEmail,containerId,cls}=parentEditorTarget;
+  if(!safeEmail)return;
+  const btn=document.getElementById('pe-save');
+  const profile={};
+  PARENT_FIELDS.forEach(f=>{
+    const el=document.getElementById('pe-'+f.k);
+    profile[f.k]=el?el.value.trim():'';
+  });
+  btn.disabled=true;btn.textContent='⏳ Збереження...';
+  try{
+    // update, а не set: children у цьому ж вузлі не можна зачепити
+    await update(ref(db,`parent_links/${safeEmail}`),{profile});
+    showToast('✅ Контакти збережено');
+    logAction('parent_edit',{target:safeEmail.replace(/_/g,'.')});
+    window.closeParentEditor();
+    if(containerId&&cls)renderParentsBlock(containerId,cls);
+  }catch(e){alert('Помилка: '+e.message);}
+  finally{btn.disabled=false;btn.textContent='💾 Зберегти';}
+};
+// ══════════ ЕКРАНИ ВХОДУ ══════════
+// Два ОКРЕМІ екрани, а не один з режимом:
+//   #login-screen        — звичайний вхід
+//   #first-login-screen  — створення пароля при першому вході
+// Обробники submit навішені атрибутом onsubmit прямо в HTML (див. cabinet.html),
+// тому форма фізично не може піти звичайним GET-запитом навіть якщо цей модуль
+// не виконався — інакше пароль потрапляє в адресний рядок.
+// email скрізь у нижньому регістрі: директор зберігає pre_approved_roles через
+// .toLowerCase(), тож "Ivan@School.com" інакше не знаходив свій дозвіл.
+const emailKey=e=>String(e||'').trim().toLowerCase().replace(/\./g,'_');
+function setBusy(btnId,on,label){
+  const b=document.getElementById(btnId);
+  if(!b)return;
+  b.disabled=on;
+  if(on){b.dataset.label=b.innerText;b.innerText='⏳ Зачекайте...';}
+  else b.innerText=label||b.dataset.label||b.innerText;
+}
+function setMsg(id,msg,cls){
+  const el=document.getElementById(id);
+  if(!el)return;
+  el.innerHTML=msg||'';
+  if(cls!==undefined)el.className=cls;
+  el.style.display=msg?'block':'none';
+}
+// ── перемикання екранів ──
+window.showFirstLoginScreen=function(prefillEmail,hint){
+  document.getElementById('login-screen').style.display='none';
+  document.getElementById('first-login-screen').style.display='block';
+  const em=document.getElementById('fl-email');
+  const src=prefillEmail||document.getElementById('email').value;
+  if(em&&src)em.value=String(src).trim().toLowerCase();
+  setMsg('fl-error','');
+  setMsg('fl-hint',hint||'','login-hint');
+  (em&&!em.value?em:document.getElementById('fl-pass'))?.focus();
+};
+window.showLoginScreen=function(prefillEmail,hint){
+  document.getElementById('first-login-screen').style.display='none';
+  document.getElementById('login-screen').style.display='block';
+  const em=document.getElementById('email');
+  if(em&&prefillEmail)em.value=String(prefillEmail).trim().toLowerCase();
+  setMsg('login-error','');
+  setMsg('login-hint',hint||'','login-hint');
+  (em&&!em.value?em:document.getElementById('pass'))?.focus();
+};
+window.togglePassVisibility=function(inputId,btnId){
+  const p=document.getElementById(inputId||'pass');
+  const b=document.getElementById(btnId||'pass-toggle');
+  if(!p)return;
+  const show=p.type==='password';
+  p.type=show?'text':'password';
+  if(b){b.innerText=show?'🙈':'👁';b.setAttribute('aria-label',show?'Сховати пароль':'Показати пароль');}
+};
+// Чи додала школа цей email (три можливі джерела дозволу)
+// Повертає true / false / null. null означає «не змогли перевірити» —
+// саме так буває до входу, коли правила ще не дають читати базу.
+// Тоді підказку показуємо нейтральну, а не стверджуємо неправду.
+async function isEmailApproved(rawEmail){
+  const se=emailKey(rawEmail);
+  if(!se)return false;
+  try{
+    const [rs,ls,sls]=await Promise.all([
+      get(child(ref(db),`pre_approved_roles/${se}`)),
+      get(child(ref(db),`parent_links/${se}`)),
+      get(child(ref(db),`student_links/${se}`))
+    ]);
+    return rs.exists()||ls.exists()||sls.exists();
+  }catch(e){ return null; }
+}
+const AUTH_ERRORS={
+  'auth/invalid-email':'Невірний формат email.',
+  'auth/too-many-requests':'Забагато спроб. Спробуйте за кілька хвилин.',
+  'auth/network-request-failed':"Немає зв'язку із сервером. Перевірте інтернет.",
+  'auth/user-disabled':'Цей акаунт відключено. Зверніться до адміністрації.',
+  'auth/weak-password':'Пароль занадто простий (мінімум 6 символів).'
+};
+// ── ВХІД ЗА НІКНЕЙМОМ ──
+// Firebase Authentication уміє входити лише за поштою. Але в молодших
+// класах у дитини пошти немає, а вигадувати її батькам — зайвий крок і
+// ще одна скринька, яку ніхто не читає.
+//
+// Тому нікнейм перетворюється на технічну адресу виду nick@pupil.push.local.
+// Домен існує тільки всередині системи: листи на нього не ходять і не
+// мають ходити. Для Firebase це звичайна пошта, для дитини — просто логін.
+//
+// Унікальність нікнеймів окремо стежити не треба: Firebase не дасть
+// створити другий акаунт з тією самою адресою.
+export const PUPIL_DOMAIN = 'pupil.push.local';
+
+// Дозволяємо тільки те, що переживе перетворення на адресу і не зіпсує
+// ключ у базі: латиниця, цифри, крапка, дефіс, підкреслення.
+export function normalizeNick(v){
+  return String(v || '').trim().toLowerCase().replace(/[^a-z0-9._-]/g, '');
+}
+export function nickToEmail(nick){ return normalizeNick(nick) + '@' + PUPIL_DOMAIN; }
+export function isPupilEmail(email){ return String(email||'').endsWith('@' + PUPIL_DOMAIN); }
+export function emailToNick(email){
+  return isPupilEmail(email) ? String(email).split('@')[0] : '';
+}
+// Що ввели у полі входу — пошту чи нікнейм
+export function loginIdToEmail(raw){
+  const v = String(raw || '').trim();
+  return v.includes('@') ? v.toLowerCase() : nickToEmail(v);
+}
+
+// ── ЗВИЧАЙНИЙ ВХІД ──
+window.submitLogin=async function(ev){
+  if(ev&&ev.preventDefault)ev.preventDefault();
+  const raw=document.getElementById('email').value.trim();
+  const email=loginIdToEmail(raw);
+  const byNick=!raw.includes('@');
+  const pass=document.getElementById('pass').value;
+  setMsg('login-error','');setMsg('login-hint','','login-hint');
+  if(!raw||!pass){setMsg('login-error','Введіть email або нікнейм і пароль.','login-err');return false;}
+  setBusy('btn-login-submit',true);
+  try{
+    await signInWithEmailAndPassword(auth,email,pass);
+    // Успіх — onAuthStateChanged сам відкриє потрібний кабінет.
+  }catch(err){
+    setBusy('btn-login-submit',false,'Увійти');
+    const code=err&&err.code||'';
+    if(code==='auth/user-not-found'){
+      // Акаунт учня створює хтось із батьків — самостійного «першого входу»
+      // за нікнеймом не буває, тож не пропонуємо його.
+      if(byNick){
+        setMsg('login-error','Такого нікнейма немає. Перевірте написання або попросіть батьків.','login-err');
+        return false;
+      }
+      const approved=await isEmailApproved(email);
+      if(approved!==false)
+        window.showFirstLoginScreen(email,'Схоже, це ваш <b>перший вхід</b> — акаунта ще немає. Придумайте пароль нижче.');
+      else
+        setMsg('login-error','Цей email не зареєстровано у школі.','login-err');
+      return false;
+    }
+    if(code==='auth/invalid-credential'||code==='auth/wrong-password'){
+      // Firebase із захистом від перебору не розрізняє "немає акаунта" і
+      // "невірний пароль", тому підказуємо обидва варіанти.
+      setMsg('login-error', byNick ? 'Невірний нікнейм або пароль.' : 'Невірний email або пароль.','login-err');
+      if(byNick){
+        setMsg('login-hint','Пароль можна змінити в кабінеті батьків.','login-hint');
+        return false;
+      }
+      if(await isEmailApproved(email)!==false)
+        setMsg('login-hint','Якщо ви входите <b>вперше</b> — натисніть «Перший вхід? Встановити пароль» внизу.','login-hint warn');
+      return false;
+    }
+    setMsg('login-error',AUTH_ERRORS[code]||('Помилка входу: '+(err.message||code)),'login-err');
+  }
+  return false;
+};
+// ── ПЕРШИЙ ВХІД (створення пароля) ──
+window.submitFirstLogin=async function(ev){
+  if(ev&&ev.preventDefault)ev.preventDefault();
+  const email=document.getElementById('fl-email').value.trim().toLowerCase();
+  const p1=document.getElementById('fl-pass').value;
+  const p2=document.getElementById('fl-pass2').value;
+  setMsg('fl-error','');
+  if(!email||!p1){setMsg('fl-error','Заповніть email і пароль.','login-err');return false;}
+  if(p1.length<6){setMsg('fl-error','Пароль має бути не коротшим за 6 символів.','login-err');return false;}
+  if(p1!==p2){setMsg('fl-error','Паролі не збігаються.','login-err');return false;}
+  setBusy('btn-fl-submit',true);
+  try{
+    // Список дозволених пошт лежить у базі, а читати її можна лише після
+    // входу. Тому спершу створюємо акаунт, а перевірку робить обробник
+    // входу — він побачить, що пошти немає, і коректно завершить сеанс.
+    await createUserWithEmailAndPassword(auth,email,p1);
+  }catch(err){
+    setBusy('btn-fl-submit',false,'Встановити пароль і увійти');
+    const code=err&&err.code||'';
+    if(code==='auth/email-already-in-use'){
+      window.showLoginScreen(email,'Акаунт із таким email вже існує — увійдіть своїм паролем.');
+      return false;
+    }
+    setMsg('fl-error',AUTH_ERRORS[code]||('Помилка: '+(err.message||code)),'login-err');
+  }
+  return false;
+};
+// ── ВІДНОВЛЕННЯ ПАРОЛЯ ──
+// Пароль зберігається у Firebase Auth, а НЕ в базі даних порталу. Тому
+// видалення й повторне створення email+ролі в «Управлінні персоналом» пароль
+// не змінює — акаунт лишається зі старим паролем. Єдиний коректний шлях —
+// лист для відновлення (або скидання вручну у Firebase Console).
+export async function sendPasswordReset(rawEmail){
+  const email=String(rawEmail||'').trim().toLowerCase();
+  if(!email)throw new Error('Вкажіть email.');
+  // continueUrl додає в лист кнопку «Продовжити», яка повертає людину на
+  // портал. Але Firebase приймає його ЛИШЕ якщо домен є в
+  // Authentication → Settings → Authorized domains, інакше кидає
+  // auth/unauthorized-continue-uri і лист не надсилається взагалі.
+  // Тому: пробуємо з кнопкою повернення, а якщо домен не дозволений —
+  // мовчки надсилаємо звичайний лист. Відновлення пароля важливіше за
+  // зручність повернення і не має залежати від налаштувань консолі.
+  const origin=window.location.origin;
+  const canUseContinue=/^https?:/i.test(origin); // file:// не підходить
+  if(canUseContinue){
+    try{
+      await sendPasswordResetEmail(auth,email,{url:origin+window.location.pathname,handleCodeInApp:false});
+      return email;
+    }catch(err){
+      if(!err||err.code!=='auth/unauthorized-continue-uri')throw err;
+      console.warn(
+        `[Push School] Домен ${origin} не дозволений у Firebase.\n`+
+        `Лист надіслано БЕЗ кнопки повернення на портал.\n`+
+        `Щоб додати кнопку: Firebase Console → Authentication → Settings →\n`+
+        `Authorized domains → Add domain → ${location.hostname}`);
+    }
+  }
+  await sendPasswordResetEmail(auth,email);
+  return email;
+}
+// ══════════ СТОРІНКА ВСТАНОВЛЕННЯ НОВОГО ПАРОЛЯ ══════════
+// Працює, коли у Firebase Console → Authentication → Templates задано
+// "Customize action URL" на адресу цієї сторінки. Тоді посилання з листа веде
+// СЮДИ (з параметрами ?mode=resetPassword&oobCode=...), і людина взагалі не
+// потрапляє на сторінку Firebase — усе відбувається на порталі, українською.
+// Поки custom action URL не налаштований, цей код просто не спрацьовує.
+let resetOobCode=null;
+export function hasPendingAuthAction(){
+  const p=new URLSearchParams(window.location.search);
+  return p.get('mode')==='resetPassword'&&!!p.get('oobCode');
+}
+async function initPasswordResetScreen(){
+  const p=new URLSearchParams(window.location.search);
+  resetOobCode=p.get('oobCode');
+  document.querySelectorAll('.panel').forEach(el=>el.style.display='none');
+  const scr=document.getElementById('reset-password-screen');
+  if(!scr)return;
+  scr.style.display='block';
+  try{
+    // Перевіряємо код і показуємо, для якої адреси змінюється пароль
+    const email=await verifyPasswordResetCode(auth,resetOobCode);
+    const box=document.getElementById('rp-email');
+    if(box)box.innerHTML=`Встановлення нового пароля для <b>${escHtml(email)}</b>`;
+  }catch(err){
+    setMsg('rp-error','Посилання недійсне або застаріле. Запросіть новий лист для відновлення пароля.','login-err');
+    const form=document.getElementById('reset-password-form');
+    if(form)form.style.display='none';
+  }
+}
+window.submitNewPassword=async function(ev){
+  if(ev&&ev.preventDefault)ev.preventDefault();
+  const p1=document.getElementById('rp-pass').value;
+  const p2=document.getElementById('rp-pass2').value;
+  setMsg('rp-error','');
+  if(p1.length<6){setMsg('rp-error','Пароль має бути не коротшим за 6 символів.','login-err');return false;}
+  if(p1!==p2){setMsg('rp-error','Паролі не збігаються.','login-err');return false;}
+  setBusy('btn-rp-submit',true);
+  try{
+    await confirmPasswordReset(auth,resetOobCode,p1);
+    // Прибираємо oobCode з адреси, щоб при перезавантаженні не спрацював знову
+    window.history.replaceState({},'',window.location.pathname);
+    document.getElementById('reset-password-screen').style.display='none';
+    window.showLoginScreen('','✅ Пароль змінено. Тепер увійдіть із новим паролем.');
+  }catch(err){
+    setBusy('btn-rp-submit',false,'Зберегти новий пароль');
+    setMsg('rp-error',AUTH_ERRORS[err&&err.code]||('Не вдалося змінити пароль: '+(err.message||'')),'login-err');
+  }
+  return false;
+};
+window.requestPasswordReset=async function(){
+  const email=document.getElementById('email').value.trim().toLowerCase();
+  setMsg('login-error','');
+  if(!email){
+    setMsg('login-hint','Спочатку введіть свій email у поле вище — і натисніть «Забули пароль?» ще раз.','login-hint warn');
+    document.getElementById('email').focus();
+    return;
+  }
+  // Нікнейм не має пошти, тож і листа надсилати нікуди. Пароль дитині
+  // змінює хтось із батьків у своєму кабінеті.
+  if(!email.includes('@') || isPupilEmail(email)){
+    setMsg('login-hint','Це вхід за нікнеймом — листа надсилати нікуди. Пароль змінюють батьки у своєму кабінеті, розділ «Доступ дитини».','login-hint');
+    return;
+  }
+  try{
+    await sendPasswordReset(email);
+    // Нейтральне формулювання: Firebase із захистом від перебору не повідомляє,
+    // чи існує акаунт, тому не стверджуємо це і ми.
+    setMsg('login-hint',`📧 Якщо акаунт із адресою <b>${escHtml(email)}</b> існує, ми надіслали на неї лист для встановлення нового пароля.<br><span style="font-size:.76rem;">Перевірте також папку «Спам». Лист дійсний обмежений час.</span>`,'login-hint');
+  }catch(err){
+    const code=err&&err.code||'';
+    setMsg('login-error',AUTH_ERRORS[code]||('Не вдалося надіслати лист: '+(err.message||code)),'login-err');
+  }
+};
+// Сумісність зі старими викликами
+window.loginUser=()=>window.submitLogin();
+window.registerUser=()=>window.showFirstLoginScreen();
+window.logoutUser=function(){if(window.stopWatchUnread)window.stopWatchUnread();if(teacherAttendanceListener)teacherAttendanceListener();if(parentLessonInterval)clearInterval(parentLessonInterval);document.getElementById('profile-bar').style.display='none';signOut(auth);};
+// ══════════ ADMIN DASHBOARD ══════════
+window.loadAdminDashboard=async function(){try{const date=document.getElementById('global-date').value;document.getElementById('a-att-header').innerText=`🚨 Відсутні (${date.split('-').reverse().slice(0,2).join('.')})`;const wd=getWeekDates(date);let wl=0,wa=0,hw=0,com=0;const _lo=wd[0]<date?wd[0]:date, _hi=wd[wd.length-1]>date?wd[wd.length-1]:date;const[_ad,_hd,_cd]=await Promise.all([getSchoolRange('attendance',_lo,_hi),getSchoolRange('homeworks',_lo,_hi),getSchoolRange('comments',_lo,_hi)]);const s={exists:()=>true,val:()=>_ad},hwS={exists:()=>true,val:()=>_hd},comS={exists:()=>true,val:()=>_cd};let h='';if(s.exists()){const d=s.val();for(let i=1;i<=11;i++){const c=`class_${i}`;if(d[c]&&d[c][date])for(let st in d[c][date]){const slots=d[c][date][st];for(let sk in slots){const r=slots[sk];if(r?.status){const bc=r.status==='late'?'badge-late':'badge-absent';const markerIcon=r.markedBy==='teacher'?'👨‍🏫':(r.markedBy==='student'?'🎒':(r.markedBy==='administrator'?'🛡️':'👪'));h+=`<li style="margin-bottom:9px;border-bottom:1px solid #eee;padding-bottom:4px;"><span style="font-size:.72rem;background:var(--teal);color:#fff;padding:2px 5px;border-radius:4px;margin-right:4px;">${i} Кл</span> <b>${escHtml(stuName(c, st))}</b> <span class="badge ${bc}">${r.status==='late'?'Запізнення':'Відсутність'}</span> <span style="font-size:.72rem;color:#888;">${escHtml(formatAttendanceSlotLabel(sk))} ${markerIcon}</span></li>`;}}}
+    // Week counters (same aggregation the director dashboard does)
+    if(d[c])wd.forEach(w=>{if(d[c][w]&&typeof d[c][w]==='object')Object.values(d[c][w]).forEach(slots=>{if(slots&&typeof slots==='object')Object.values(slots).forEach(r=>{if(r?.status==='late')wl++;else if(r?.status==='absent')wa++;});});});
+  }}
+  const hd=hwS.exists()?hwS.val():{};const cd=comS.exists()?comS.val():{};
+  for(let i=1;i<=11;i++){const c=`class_${i}`;if(hd[c]&&hd[c][date])hw+=Object.keys(hd[c][date]).length;if(cd[c]&&cd[c][date])for(let st in cd[c][date])if(typeof cd[c][date][st]==='object')com+=Object.keys(cd[c][date][st]).length;}
+  document.getElementById('a-hw-counter').innerText=hw;document.getElementById('a-com-counter').innerText=com;
+  document.getElementById('a-week-late').innerText=wl;document.getElementById('a-week-absent').innerText=wa;
+  document.getElementById('a-unified-att-list').innerHTML=h||'<li class="empty-msg">Відсутніх немає.</li>';}catch(e){console.error(e);}};
+// ══════════ ADMIN (SECRETARY) — mark absences for any class ══════════
+// The secretary takes phone calls from parents and records them centrally, so
+// unlike the teacher's version this one isn't scoped to teacher_access — the
+// class is picked explicitly. markedBy:'administrator' distinguishes these
+// entries in every list that renders an origin icon.
+window.loadAdminStudentsForClass=async function(){
+  const cls=document.getElementById('a-mark-class').value;
+  const sel=document.getElementById('a-mark-student');
+  if(!cls){sel.innerHTML='<option value="">Спочатку клас</option>';return;}
+  sel.innerHTML='<option value="">Завантаження...</option>';
+  const snap=await get(child(ref(db),`students_list/${cls}`));
+  sel.innerHTML='<option value="">Учень...</option>';
+  if(snap.exists())Object.entries(snap.val()).sort((a,b)=>String(a[1]).localeCompare(String(b[1]),'uk')).forEach(([sid,nm])=>{const o=document.createElement('option');o.value=sid;o.innerText=nm;sel.appendChild(o);});
+  else sel.innerHTML='<option value="" disabled>Учнів немає</option>';
+};
+window.adminMarkAbsent=async function(){
+  const cls=document.getElementById('a-mark-class').value;
+  const st=document.getElementById('a-mark-student').value;
+  const reason=document.getElementById('a-mark-reason').value;
+  if(!cls||!st)return alert('Оберіть клас та учня!');
+  const date=document.getElementById('global-date').value;
+  const status=reason==='запізнення'?'late':'absent';
+  await set(ref(db,`attendance/${cls}/${date}/${st}/all`),{status,reason,markedBy:'administrator'});
+  showToast(`✅ ${stuName(cls, st)}: ${status==='late'?'запізнення':'відсутність'} (${reason})`);
+  loadAdminDashboard();
+};
+// ══════════ ADMIN — read-only reference views ══════════
+window.loadAdminBellSchedule=async function(){
+  const cls=document.getElementById('a-bell-class').value;
+  const box=document.getElementById('a-bell-view');
+  if(!box)return;
+  if(!cls){box.innerHTML='<p class="empty-msg">Оберіть клас.</p>';return;}
+  box.innerHTML='<p class="empty-msg">Завантаження...</p>';
+  const snap=await get(ref(db,`bell_schedules/${cls}`));
+  if(!snap.exists()){box.innerHTML='<p class="empty-msg">Розклад дзвінків не задано.</p>';return;}
+  const d=snap.val();
+  const rows=Object.keys(d).sort((a,b)=>(parseInt(a)||0)-(parseInt(b)||0))
+    .map(k=>`<div style="display:flex;justify-content:space-between;padding:6px 9px;background:#fff;border:1px solid #e8eaf6;border-radius:7px;margin-bottom:5px;font-size:.85rem;"><b>Урок ${escHtml(d[k].number??k)}</b><span style="color:#555;">${escHtml(d[k].start||'—')} – ${escHtml(d[k].end||'—')}</span></div>`).join('');
+  box.innerHTML=rows||'<p class="empty-msg">Уроків немає.</p>';
+};
+window.loadAdminAcademicYear=async function(){
+  const box=document.getElementById('a-academic-view');
+  if(!box)return;
+  box.innerHTML='<p class="empty-msg">Завантаження...</p>';
+  const snap=await get(ref(db,'academic_year'));
+  if(!snap.exists()){box.innerHTML='<p class="empty-msg">Навчальний рік не налаштовано.</p>';return;}
+  const years=snap.val();const yearId=Object.keys(years)[0];const y=years[yearId]||{};
+  const section=(title,obj,fmt)=>{
+    const items=obj?Object.values(obj):[];
+    if(items.length===0)return `<h4 style="margin:12px 0 6px 0;color:#e65100;font-size:.86rem;">${title}</h4><p class="empty-msg" style="margin:0;">Немає.</p>`;
+    return `<h4 style="margin:12px 0 6px 0;color:#e65100;font-size:.86rem;">${title}</h4>`+
+      items.map(it=>`<div style="background:#fff;border:1px solid #ffe0b2;border-radius:7px;padding:6px 9px;margin-bottom:5px;font-size:.83rem;">${fmt(it)}</div>`).join('');
+  };
+  box.innerHTML=
+    section('Семестри',y.semesters,s=>`<b>${escHtml(s.name||'—')}</b><br><span style="color:#666;">${escHtml(s.start||'')} – ${escHtml(s.end||'')}</span>`)+
+    section('Канікули',y.breaks,b=>`<b>${escHtml(b.title||'—')}</b><br><span style="color:#666;">${escHtml(b.start||'')} – ${escHtml(b.end||'')}</span>`)+
+    section('Свята',y.holidays,h=>`<b>${escHtml(h.title||'—')}</b><br><span style="color:#666;">${escHtml(h.date||'')}</span>`);
+};
+// ══════════ UNIFIED INBOX (Chat) ══════════
+// Used by director-screen, teacher-screen and parent/student-screen alike,
+// so it lives here rather than in any single role file.
+// Листування переїхало в chat.js: модель змінилася з «дві пошти» на
+// список учасників, і код виріс до окремого модуля.
+
+// Поле вводу поводиться як у месенджері: росте під текст, Enter надсилає,
+// Shift+Enter переносить рядок. Без цього доводиться цілитися в кнопку.
+(function(){
+  const bind = () => {
+    const ta = document.getElementById('msg-text-input');
+    if(!ta || ta.dataset.bound) return;
+    ta.dataset.bound = '1';
+    const grow = () => { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 110) + 'px'; };
+    ta.addEventListener('input', grow);
+    ta.addEventListener('keydown', e=>{
+      if(e.key === 'Enter' && !e.shiftKey){
+        e.preventDefault();
+        if(window.sendInboxMessage) window.sendInboxMessage();
+        setTimeout(()=>{ ta.style.height='auto'; }, 0);
+      }
+    });
+  };
+  document.addEventListener('DOMContentLoaded', bind);
+  bind();
+})();
