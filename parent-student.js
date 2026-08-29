@@ -98,6 +98,18 @@ function renderDynamicSchedule(role='parent'){
       </div>
       ${isCurrent?`<div class="lesson-countdown">⏱ ${countdown}</div>`:''}
     </div>`;
+    // Перерва після уроку. У розкладі на сьогодні вона ще й показує,
+    // що саме зараз іде перерва і скільки її лишилося — вранці це
+    // потрібніше за сам список уроків.
+    const br = breakAfter(lessons, i);
+    if(br){
+      const nowBreak = !showTomorrow && currentMins >= br.from && currentMins < br.to;
+      const left = br.to - currentMins;
+      html += `<div class="lesson-break${nowBreak?' now':''}">
+        <span class="lb-label">${nowBreak?'Зараз перерва':'перерва'} ${br.mins} хв</span>
+        <span class="lb-time">${nowBreak?`ще ${left} хв`:`${hhmm(br.from)} – ${hhmm(br.to)}`}</span>
+      </div>`;
+    }
   });
   container.innerHTML=html;
 }
@@ -849,6 +861,30 @@ window.caDisable = async function(off){
 };
 window.caRender = caRenderLocal;
 
+// ── Перерви ──
+// У базі лежать лише уроки з їхнім часом. Перерва — це проміжок між
+// кінцем одного уроку і початком наступного, тож рахуємо її самі, а не
+// просимо школу заповнювати ще одну таблицю.
+function minsOf(hhmm){
+  const [h,m] = String(hhmm||'').split(':');
+  const n = parseInt(h)*60 + parseInt(m);
+  return isNaN(n) ? null : n;
+}
+function lessonBounds(l){
+  const [a,b] = String(l && l.time || '').split(' - ');
+  return { start: minsOf(a), end: minsOf(b) };
+}
+// Проміжок між уроками i та i+1 у хвилинах; null, якщо часу немає або
+// уроки йдуть впритул
+function breakAfter(lessons, i){
+  const cur = lessonBounds(lessons[i]);
+  const nxt = lessons[i+1] ? lessonBounds(lessons[i+1]) : null;
+  if(cur.end == null || !nxt || nxt.start == null) return null;
+  const gap = nxt.start - cur.end;
+  return gap > 0 ? { mins: gap, from: cur.end, to: nxt.start } : null;
+}
+const hhmm = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+
 // ══════════ ПОВНИЙ РОЗКЛАД НА ТИЖДЕНЬ ══════════
 // РАНІШЕ: кнопка «Відкрити повний розклад» вела на окрему сторінку сайту.
 // Людина виходила з кабінету, дивилася розклад і поверталася назад руками —
@@ -883,11 +919,16 @@ function renderWeekSchedule(prefix){
       ${lessons.length
         ? lessons.map((l,i)=>{
             const sn = typeof l.subject==='string' ? l.subject : (l.subject?.ua || '');
+            const br = breakAfter(lessons, i);
             return `<div class="wk-row">
               <span class="wk-num">${i+1}</span>
               <span class="wk-subj">${escHtml(sn)}</span>
               <span class="wk-time">${escHtml(l.time||'—')}</span>
-            </div>`;
+            </div>`
+            + (br ? `<div class="wk-break">
+                 <span class="wk-break-label">перерва ${br.mins} хв</span>
+                 <span class="wk-break-time">${hhmm(br.from)} – ${hhmm(br.to)}</span>
+               </div>` : '');
           }).join('')
         : '<div class="wk-empty">Уроків немає</div>'}
     </div>`;
