@@ -103,37 +103,25 @@ function renderDynamicSchedule(role='parent'){
 }
 // ══════════ PAYMENTS MOCKUP ══════════
 export function renderPaymentsMockup(){
-  const el=document.getElementById('payments-section');if(!el)return;
-  const today=new Date();const isFirstOfMonth=today.getDate()===1;
+  const el=document.getElementById('payments-section');
+  if(!el)return;
+  // ЧОМУ ТУТ НЕМАЄ СУМ. Раніше стояв макет із вигаданими цифрами: борг
+  // 4150 грн, оплачені місяці, кнопки «оплатити». Виглядало як справжні
+  // дані — батько міг повірити, що заборгував школі, або навпаки що вже
+  // все сплатив. Розмити такі числа мало: розмите число все одно читається
+  // як число, у нього просто вдивляються. Тому їх немає зовсім.
   el.innerHTML=`
-  <div class="payment-card">
-    <h4>🏫 Оплата за навчання</h4>
-    ${isFirstOfMonth?'<div style="background:#fff3cd;border-radius:8px;padding:6px 11px;font-size:.8rem;color:#856404;margin-bottom:8px;">🔔 Нагадування: сьогодні 1-ше число — день оплати!</div>':''}
-    <div class="payment-row"><span>Листопад 2025</span><span class="pay-amount pay-paid">✅ Оплачено</span></div>
-    <div class="payment-row"><span>Грудень 2025</span><span class="pay-amount pay-due">3 500 грн <span class="debt-badge">Борг</span></span></div>
-    <button class="pay-btn" style="margin-top:10px;width:100%;">💳 Оплатити зараз (тестово)</button>
-    <p style="font-size:.7rem;color:#aaa;text-align:center;margin-top:5px;">* Платіжна інтеграція у розробці</p>
-  </div>
-  <div class="payment-card">
-    <h4>🍽️ Харчування</h4>
-    <div class="payment-row"><span>Поточний баланс</span><span class="pay-amount pay-paid">450 грн</span></div>
-    <div class="payment-row"><span>Поточний тиждень (передплата)</span><span class="pay-amount">250 грн</span></div>
-    <div class="payment-row" style="font-size:.8rem;color:#888;"><span>Перерахунок щопонеділка</span><span>—</span></div>
-    <button class="pay-btn" style="margin-top:10px;width:100%;">+ Поповнити баланс харчування</button>
-  </div>
-  <div class="payment-card">
-    <h4>🎭 Додаткові послуги</h4>
-    <div class="payment-row"><span>🎵 Школа мистецтв</span><span class="pay-amount"><span class="paid-badge">Оплачено</span></span></div>
-    <div class="payment-row"><span>🏊 Басейн (грудень)</span><span class="pay-amount pay-due">450 грн</span></div>
-    <div class="payment-row"><span>🚌 Екскурсія (12 груд.)</span><span class="pay-amount pay-due">200 грн</span></div>
-    <button class="pay-btn" style="margin-top:10px;width:100%;">💳 Оплатити послуги</button>
-  </div>
-  <div class="payment-card" style="border:1px solid #f5c6cb;">
-    <h4 style="color:var(--red);">⚠️ Заборгованість</h4>
-    <div class="payment-row"><span>Загальна сума боргу</span><span class="pay-amount pay-due">4 150 грн</span></div>
-    <p style="font-size:.75rem;color:#888;margin:6px 0 0 0;">Будь ласка, погасіть заборгованість до 10 числа поточного місяця.</p>
+  <div class="pay-soon">
+    <div class="pay-soon-icon">💳</div>
+    <div>
+      <b>Розділ у розробці</b>
+      <p>Оплата за навчання, харчування та додаткові послуги зʼявиться тут пізніше.
+         Поки що все — як і раніше, через адміністрацію школи.</p>
+      <p class="pay-soon-note">Коли розділ запрацює, ми повідомимо окремо.</p>
+    </div>
   </div>`;
 }
+
 // ══════════ TEXTBOOKS (parent/student side) ══════════
 export async function loadTextbooksForParent(role='parent'){
   const prefix = role==='student'?'s':'p';
@@ -366,7 +354,9 @@ export async function renderFinalGrades(containerId,cls,studentName){
     }
     if(!html){box.style.display='none';return;}
     box.style.display='block';box.innerHTML=html;
-  }catch(e){box.style.display='none';}
+  }catch(e){
+    box.innerHTML='<p class="empty-msg">Не вдалося завантажити згоди.</p>';
+  }
 }
 // Табель активної дитини (у батьків) або власний (в учня)
 window.downloadMyReportCard=function(){
