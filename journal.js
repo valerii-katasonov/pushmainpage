@@ -5,7 +5,7 @@
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, update } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { ACADEMIC_YEAR_ID } from './director.js';
-import { db, getActiveClass, currentUserData, displayGrade, gradeClass6, calculateStudentWeightedAvg, getClassNum, GRADE_WEIGHTS, dayKeys, dayNamesUA, showToast, localDateString, summarizeAttendanceSlots, gradeTypesCache, escJs, escHtml, notifyEvent, logAction, getUserRoles, getUsersSnap, stuName } from './common.js';
+import { db, getActiveClass, currentUserData, displayGrade, gradeClass6, calculateStudentWeightedAvg, getClassNum, GRADE_WEIGHTS, dayKeys, dayNamesUA, showToast, localDateString, summarizeAttendanceSlots, gradeTypesCache, escJs, escHtml, notifyEvent, logAction, getUserRoles, getUsersSnap, stuName, gradeWritePaths} from './common.js';
 
 // globalTeacherAccess is reassigned only in this file (openVisualMatrixModal)
 // and read from common.js (window.getDefaultTeacher) — plain export/import.
@@ -85,8 +85,8 @@ window.confirmGrade=async function(){
   // validate 1-6 scale
   const n=parseInt(val);
   if(!isNaN(n)&&(n<1||n>6)){showToast('⚠️ Оцінка має бути від 1 до 6!');return;}
-  await set(ref(db,`grades/${gepCls}/${gepYMonth}/${gepSubj}/${gepDate}/${gepStudent}`),val);
-  await set(ref(db,`grade_types/${gepCls}/${gepYMonth}/${gepSubj}/${gepDate}/${gepStudent}`),gepType);
+  // Основа і дзеркало — одним атомарним записом
+  await update(ref(db), gradeWritePaths(gepCls,gepYMonth,gepSubj,gepDate,gepStudent,val,gepType));
   closeGradeEditor();renderJournalTable();showToast(`✅ ${stuName(gepCls,gepStudent)}: ${displayGrade(val,gepCls)} (${gepType})`);
   // Сповіщаємо батьків/учня. Оцінку показуємо у вигляді, який бачить сім'я
   // (для 1-5 класів — літерою, а не цифрою).
@@ -94,8 +94,7 @@ window.confirmGrade=async function(){
   logAction('grade_set',{cls:gepCls,target:stuName(gepCls,gepStudent),subject:gepSubj,date:gepDate,value:val,gtype:gepType});
 };
 window.deleteGrade=async function(){
-  await set(ref(db,`grades/${gepCls}/${gepYMonth}/${gepSubj}/${gepDate}/${gepStudent}`),null);
-  await set(ref(db,`grade_types/${gepCls}/${gepYMonth}/${gepSubj}/${gepDate}/${gepStudent}`),null);
+  await update(ref(db), gradeWritePaths(gepCls,gepYMonth,gepSubj,gepDate,gepStudent,null,null));
   closeGradeEditor();renderJournalTable();showToast('🗑️ Оцінку видалено');
   logAction('grade_del',{cls:gepCls,target:stuName(gepCls,gepStudent),subject:gepSubj,date:gepDate});
 };
