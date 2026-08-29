@@ -1532,7 +1532,13 @@ window.saveStudentCard=async function(){
       const el=document.getElementById('sc-'+f.k);
       if(el)data[f.k]=el.value.trim();
     }));
-    await set(ref(db,`student_cards/${cls}/${key}`),{...data,updatedAt:Date.now()});
+    // Картка і день народження — одним атомарним записом, щоб вузол дат
+    // не розійшовся з карткою.
+    const upd = {};
+    upd[`student_cards/${cls}/${key}`] = {...data,updatedAt:Date.now()};
+    const bd = String(data.birthDate||'');
+    upd[`student_birthdays/${cls}/${key}`] = bd.length>=10 ? bd.slice(5) : null;
+    await update(ref(db), upd);
     // У журнал пишемо сам факт правки, БЕЗ вмісту: там медичні дані
     logAction('card_edit',{cls,target:name});
     showToast('✅ Картку збережено');
@@ -1548,23 +1554,27 @@ window.saveStudentCard=async function(){
 // без року: однокласникам і чужим батькам вік дитини знати не потрібно.
 const MONTHS_UA=['січня','лютого','березня','квітня','травня','червня',
                  'липня','серпня','вересня','жовтня','листопада','грудня'];
+// ЧОМУ ОКРЕМИЙ ВУЗОЛ ПІД ДАТИ. Дні народження — це дата всіх однокласників,
+// а лежать вони в картці разом з медичними даними, PESEL і телефонами.
+// Відкрити картки класу батькам не можна, тож поруч тримаємо вузол
+// student_birthdays/{клас}/{учень} = "MM-DD" — тільки день і місяць, без
+// року й без будь-чого іншого. Пише його школа разом із карткою.
 export async function getWeekBirthdays(cls,dateStr){
-  const [stSnap,cardSnap]=await Promise.all([
+  const [stSnap,bdSnap]=await Promise.all([
     get(child(ref(db),`students_list/${cls}`)),
-    get(child(ref(db),`student_cards/${cls}`))
+    get(child(ref(db),`student_birthdays/${cls}`)).catch(()=>null)
   ]);
-  if(!stSnap.exists()||!cardSnap.exists())return[];
-  const names=stSnap.val(), cards=cardSnap.val();
+  if(!stSnap.exists()||!bdSnap||!bdSnap.exists())return[];
+  const names=stSnap.val(), days=bdSnap.val();
   // Тиждень Пн–Нд, той самий, що і в решті звітів
   const week=getWeekDates(dateStr).map(d=>d.slice(5)); // «MM-DD»
   const out=[];
   for(const key in names){
-    const bd=cards[key]&&cards[key].birthDate;
-    if(!bd||bd.length<10)continue;
-    const md=bd.slice(5);
+    const md=days[key];                     // «MM-DD»
+    if(!md||md.length!==5)continue;
     const i=week.indexOf(md);
     if(i===-1)continue;
-    const [,m,d]=bd.split('-');
+    const [m,d]=md.split('-');
     out.push({name:names[key],md,idx:i,label:`${parseInt(d)} ${MONTHS_UA[parseInt(m)-1]}`});
   }
   return out.sort((a,b)=>a.idx-b.idx);
@@ -1613,17 +1623,15 @@ window.downloadReportCard=async function(cls,studentName){
     const [semSnap,gradesSnap,cardSnap,stSnap]=await Promise.all([
       get(child(ref(db),`academic_year/${ACADEMIC_YEAR_ID_LOCAL}/semesters`)),
       get(child(ref(db),`semester_grades/${cls}`)),
-      get(child(ref(db),`student_cards/${cls}`)),
+      // Лише картка цієї дитини. Раніше тягнули картки всього класу і
+      // вибирали потрібну вже в браузері — правила таке (справедливо)
+      // забороняють батькам: там медичні дані й PESEL усіх родин.
+      get(child(ref(db),`student_cards/${cls}/${sid}`)),
       get(child(ref(db),`students_list/${cls}`))
     ]);
     const sems=semSnap.exists()?semSnap.val():{};
     const all=gradesSnap.exists()?gradesSnap.val():{};
-    // Картку шукаємо за ключем учня — вона ключується саме ним
-    let card={};
-    if(cardSnap.exists()&&stSnap.exists()){
-      const names=stSnap.val();
-      card = cardSnap.val()[sid] || {};
-    }
+    const card = cardSnap.exists() ? cardSnap.val() : {};
     // Предмети — об'єднання по всіх семестрах, щоб таблиця була рівна
     const semIds=Object.keys(all);
     const subjects=[...new Set(semIds.flatMap(id=>Object.keys(all[id]||{})))]
@@ -1684,7 +1692,7 @@ window.exportChildData=async function(cls,studentName){
     const [stSnap,cardSnap,gradesSnap,typesSnap,attSnap,behSnap,stickSnap,
            comSnap,semSnap,retSnap,plSnap,slSnap]=await Promise.all([
       get(child(ref(db),`students_list/${cls}`)),
-      get(child(ref(db),`student_cards/${cls}`)),
+      get(child(ref(db),`student_cards/${cls}/${sid}`)),
       get(child(ref(db),`grades/${cls}`)),
       get(child(ref(db),`grade_types/${cls}`)),
       get(child(ref(db),`attendance/${cls}`)),
@@ -1708,7 +1716,7 @@ window.exportChildData=async function(cls,studentName){
       };
       return walk(snap.val(),depth);
     };
-    const card = cardSnap.exists() ? (cardSnap.val()[sid] || {}) : {};
+    const card = cardSnap.exists() ? cardSnap.val() : {};
     // Батьки, прив'язані саме до цієї дитини
     const parents=[];
     if(plSnap.exists()){
