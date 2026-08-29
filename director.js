@@ -1615,7 +1615,25 @@ window.rebuildContactDirs = async function(){
       }
     }
 
-    if(!staff && !parents){
+    // ── Дні народження ──
+    // Дата лежить у картці; клас має бачити свята, але картки класу
+    // батькам закриті. Переносимо в student_birthdays лише «MM-DD».
+    const bdUpd = {};
+    let bdays = 0;
+    try{
+      const cardsSnap = await get(child(ref(db),'student_cards'));
+      const cards = cardsSnap.exists() ? cardsSnap.val() : {};
+      for(const cls in cards){
+        for(const key in cards[cls]){
+          const bd = String((cards[cls][key]||{}).birthDate||'');
+          if(bd.length < 10) continue;
+          bdUpd[`student_birthdays/${cls}/${key}`] = bd.slice(5);
+          bdays++;
+        }
+      }
+    }catch(e){ /* карток може ще не бути — не привід зупиняти решту */ }
+
+    if(!staff && !parents && !bdays){
       return say('Нічого заповнювати: немає ні персоналу зі списку ролей, ні привʼязаних батьків.'
         + (skipped.length ? '\n\nПропущено (немає в «Управлінні персоналом»): ' + skipped.join(', ') : ''), true);
     }
@@ -1625,13 +1643,14 @@ window.rebuildContactDirs = async function(){
     const errs = [];
     if(staff)   { try{ await update(ref(db), staffUpd); }catch(e){ errs.push('персонал: ' + e.message); staff = 0; } }
     if(parents) { try{ await update(ref(db), parUpd);   }catch(e){ errs.push('батьки: ' + e.message); parents = 0; } }
+    if(bdays)   { try{ await update(ref(db), bdUpd);    }catch(e){ errs.push('дні народження: ' + e.message); bdays = 0; } }
 
     if(errs.length){
       return say('Частина не записалася.\n' + errs.join('\n')
-        + '\n\nЗаписано: персоналу ' + staff + ', батьків ' + parents, true);
+        + `\n\nЗаписано: персоналу ${staff}, батьків ${parents}, дат народження ${bdays}`, true);
     }
     logAction('settings', { value: `довідники контактів: ${staff} персоналу, ${parents} записів батьків` });
-    say(`✅ Готово: персоналу ${staff}, записів батьків ${parents}.`
+    say(`✅ Готово: персоналу ${staff}, записів батьків ${parents}, дат народження ${bdays}.`
       + (skipped.length ? `\n\n⚠️ Пропущено, бо немає в «Управлінні персоналом»: ${skipped.join(', ')}` : '')
       + '\n\nТепер у батьків і вчителів є з кого обирати в чаті.');
   }catch(e){
