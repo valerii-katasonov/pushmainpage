@@ -1620,18 +1620,35 @@ window.downloadReportCard=async function(cls,studentName){
   const holder=document.getElementById('report-card-render');
   holder.innerHTML='<p style="padding:20px;">Готую табель...</p>';
   try{
-    const [semSnap,gradesSnap,cardSnap,stSnap]=await Promise.all([
-      get(child(ref(db),`academic_year/${ACADEMIC_YEAR_ID_LOCAL}/semesters`)),
-      get(child(ref(db),`semester_grades/${cls}`)),
-      // Лише картка цієї дитини. Раніше тягнули картки всього класу і
-      // вибирали потрібну вже в браузері — правила таке (справедливо)
-      // забороняють батькам: там медичні дані й PESEL усіх родин.
-      get(child(ref(db),`student_cards/${cls}/${sid}`)),
-      get(child(ref(db),`students_list/${cls}`))
+    // ЧОМУ КОЖНЕ ЧИТАННЯ ОКРЕМО. Promise.all падає на першій відмові й не
+    // каже, на якій саме — а шляхів тут чотири. Читаємо кожен зі своїм
+    // перехопленням: тоді видно і що вдалося, і що ні.
+    //
+    // Картка потрібна рівно для одного рядка — дати народження. Правило
+    // пускає батька до картки, лише якщо імʼя в students_list збігається
+    // з іменем у профілі символ у символ. Розбіжність у регістрі чи
+    // пробілі не привід не видати табель узагалі.
+    const readOpt = async (path) => {
+      try{ return { snap: await get(child(ref(db), path)) }; }
+      catch(e){ return { err: `${path}: ${e.message || e.code || 'відмова'}` }; }
+    };
+    const [semR,gradesR,cardR,stR] = await Promise.all([
+      readOpt(`academic_year/${ACADEMIC_YEAR_ID_LOCAL}/semesters`),
+      readOpt(`semester_grades/${cls}`),
+      readOpt(`student_cards/${cls}/${sid}`),
+      readOpt(`students_list/${cls}`)
     ]);
-    const sems=semSnap.exists()?semSnap.val():{};
+    // Без підсумкових оцінок табеля не буде — це єдине обовʼязкове читання
+    if(gradesR.err){
+      holder.innerHTML='';
+      return alert('Не вдалося прочитати підсумкові оцінки.\n\n' + gradesR.err);
+    }
+    const semSnap=semR.snap, gradesSnap=gradesR.snap, stSnap=stR.snap;
+    const cardSnap=cardR.snap;
+    if(cardR.err) console.warn('Табель без картки учня —', cardR.err);
+    const sems=semSnap&&semSnap.exists()?semSnap.val():{};
     const all=gradesSnap.exists()?gradesSnap.val():{};
-    const card = cardSnap.exists() ? cardSnap.val() : {};
+    const card = (cardSnap && cardSnap.exists()) ? cardSnap.val() : {};
     // Предмети — об'єднання по всіх семестрах, щоб таблиця була рівна
     const semIds=Object.keys(all);
     const subjects=[...new Set(semIds.flatMap(id=>Object.keys(all[id]||{})))]
