@@ -1185,6 +1185,18 @@
 .cal-list .ev.brk::before{background:#d4edda;border-color:#c3e6cb;}
 .cal-list .ev.exam::before{background:#fff3cd;border-color:#ffeeba;}
 .cal-none{font-size:.8rem;color:#b0bec5;margin:14px 0 0 0;}
+
+/* Встановлення застосунку */
+.install-box .inst{background:#f7f9fa;border:1px solid #e0e6e8;border-radius:12px;padding:15px;}
+.install-box .inst.ok{background:#f1f8f4;border-color:#c8e6d0;}
+.install-box .inst b{display:block;color:#37474f;font-size:.92rem;margin-bottom:6px;}
+.install-box .inst p{margin:0 0 8px 0;font-size:.83rem;color:#78909c;line-height:1.45;}
+.install-box .inst-steps{margin:0 0 8px 0;padding-left:20px;font-size:.83rem;
+  color:#546e7a;line-height:1.6;}
+.install-box .inst-steps li{margin-bottom:3px;}
+.install-box .inst-note{font-size:.77rem !important;color:#b0bec5 !important;margin-bottom:0 !important;}
+.install-box .inst-btn{width:100%;background:var(--teal);color:#fff;padding:11px;
+  border-radius:10px;font-weight:700;margin-top:4px;}
 </style>
 </head>
 <body>
@@ -2381,6 +2393,11 @@
 
     <!-- ═══════════ ПРОФІЛЬ ═══════════ -->
     <section class="screen-section" data-dtab="profile">
+      <h3>📲 Застосунок на телефоні</h3>
+      <div class="install-box"></div>
+    </section>
+
+    <section class="screen-section" data-dtab="profile">
       <h3>🔑 Доступ дитини до порталу</h3>
       <details style="background:#f3f7fb;padding:14px;border-radius:12px;border:1px solid #cfd8dc;">
         <summary style="font-weight:700;cursor:pointer;color:#37474f;font-size:.95rem;">Вхід для дитини</summary>
@@ -2533,7 +2550,12 @@
       </div>
     </section>
 
-    <button class="btn-logout" onclick="logoutUser()">Вийти</button>
+        <section class="screen-section" data-dtab="day">
+      <h3>📲 Застосунок на телефоні</h3>
+      <div class="install-box"></div>
+    </section>
+
+<button class="btn-logout" onclick="logoutUser()">Вийти</button>
   </div>
 </div>
 <!-- ══════════════════ MODALS ══════════════════ -->
