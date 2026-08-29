@@ -1575,14 +1575,26 @@ export async function renderBirthdays(containerId,cls,dateStr,selfName){
   if(!box)return;
   try{
     const list=await getWeekBirthdays(cls,dateStr);
-    if(list.length===0){box.style.display='none';return;}
+    // Поруч може лежати блок порожнього стану — щоб на вкладці не висів
+    // самотній заголовок без вмісту. Там, де його немає, нічого не робимо.
+    const empty=document.getElementById(containerId+'-empty');
+    if(list.length===0){
+      box.style.display='none';
+      if(empty) empty.style.display='block';
+      return;
+    }
+    if(empty) empty.style.display='none';
     box.style.display='block';
     box.innerHTML=`<div class="bd-title">🎂 Дні народження цього тижня</div>`+
       list.map(b=>`<div class="bd-row${b.name===selfName?' me':''}">
         <span class="bd-name">${escHtml(b.name)}${b.name===selfName?' — це ти!':''}</span>
         <span class="bd-date">${escHtml(b.label)}</span>
       </div>`).join('');
-  }catch(e){box.style.display='none';}
+  }catch(e){
+    box.style.display='none';
+    const empty=document.getElementById(containerId+'-empty');
+    if(empty) empty.style.display='block';
+  }
 }
 window.renderBirthdays=renderBirthdays;
 // ══════════════════════════════════════════════════════════════════
