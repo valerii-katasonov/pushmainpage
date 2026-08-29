@@ -1129,6 +1129,27 @@
 .pay-soon b{display:block;color:#37474f;font-size:.95rem;margin-bottom:5px;}
 .pay-soon p{margin:0 0 6px 0;font-size:.83rem;color:#78909c;line-height:1.45;}
 .pay-soon-note{font-size:.76rem !important;color:#b0bec5 !important;}
+
+/* Повний розклад на тиждень, розгортається в кабінеті */
+.wk-box{margin-top:10px;}
+.wk-day{background:#fff;border:1px solid #eceff1;border-radius:12px;padding:11px 13px;margin-bottom:8px;}
+.wk-day.today{border-color:#80deea;background:#f0fbfc;}
+.wk-day-name{font-weight:800;font-size:.87rem;color:#37474f;margin-bottom:7px;}
+.wk-today{font-weight:700;font-size:.68rem;color:#00838f;background:#e0f7fa;
+  padding:2px 7px;border-radius:20px;margin-left:6px;vertical-align:middle;}
+.wk-row{display:flex;align-items:baseline;gap:9px;padding:4px 0;border-top:1px dashed #f0f2f3;}
+.wk-row:first-of-type{border-top:none;}
+.wk-num{flex:0 0 18px;font-size:.72rem;color:#b0bec5;font-weight:700;}
+.wk-subj{flex:1;font-size:.85rem;color:#263238;}
+.wk-time{font-size:.75rem;color:#90a4ae;white-space:nowrap;}
+.wk-empty{font-size:.8rem;color:#b0bec5;}
+.wk-full-link{display:block;text-align:center;font-size:.76rem;color:#90a4ae;
+  text-decoration:none;margin-top:8px;}
+
+/* Запізнення: перший блок дня, тому компактний */
+.att-quick .att-hint{margin:0 0 9px 0;font-size:.8rem;color:#8d9ba3;}
+.att-row{display:flex;gap:9px;flex-wrap:wrap;}
+.att-row select{flex:1 1 150px;margin-top:0;}
 </style>
 </head>
 <body>
@@ -2212,6 +2233,21 @@
     <div id="p-push-invite" style="display:none;"></div>
 
     <!-- ═══════════ СЬОГОДНІ ═══════════ -->
+    <!-- Першою на вкладці навмисно: запізнення й хвороба — те, чим батько
+         користується вранці найчастіше, і шукати це внизу списку незручно. -->
+    <section class="screen-section" data-dtab="day">
+      <h3>🕒 Запізнення та відсутність</h3>
+      <div id="p-teacher-att-alert" style="display:none;background:#fff3cd;border:1px solid #ffeeba;color:#856404;padding:11px 14px;border-radius:10px;margin-bottom:12px;font-size:.85rem;"></div>
+      <div class="data-card att-quick" style="border-left-color:var(--red);background:#fdfbfb;margin-top:0;">
+        <p class="att-hint">Повідомте вчителя — він побачить це одразу.</p>
+        <div class="att-row">
+          <select id="p-att-type" onchange="updateAttOptions()" style="border-color:var(--red);"><option value="late">Запізнюється</option><option value="absent">Відсутній (весь день)</option></select>
+          <select id="p-att-reason" style="border-color:var(--red);"><option value="на 10 хвилин">на 10 хвилин</option></select>
+        </div>
+        <button onclick="submitAttendance()" style="background:var(--red);padding:11px;color:#fff;margin-top:11px;width:100%;">Відправити</button>
+        <p id="p-att-status" style="font-size:.83rem;color:var(--green);font-weight:700;margin-top:9px;display:none;">✅ Сповіщення надіслано!</p>
+      </div>
+    </section>
     <section class="screen-section" data-dtab="day">
       <h3>🗓️ Розклад</h3>
       <div class="schedule-box" style="margin-top:0;">
@@ -2220,7 +2256,12 @@
           <div class="no-lessons-msg">⏳ Завантаження розкладу...</div>
         </div>
         <button type="button" onclick="printClassSchedule()" style="background:#eceff1;color:#37474f;margin-top:0;margin-bottom:7px;">🖨️ Роздрукувати розклад</button>
-      <a id="p-schedule-link" href="#" target="_blank" style="display:block;background:var(--blue);color:#fff;padding:10px;border-radius:10px;text-decoration:none;font-weight:700;margin-top:10px;text-align:center;font-size:.88rem;">📅 Відкрити повний розклад</a>
+      <button type="button" id="p-week-btn" onclick="toggleWeekSchedule('p')"
+              style="width:100%;background:var(--blue);color:#fff;padding:10px;border-radius:10px;font-weight:700;margin-top:10px;font-size:.88rem;">📅 Показати весь тиждень</button>
+      <div id="p-week-schedule" class="wk-box" style="display:none;"></div>
+      <!-- Посилання лишається прихованим: common.js досі проставляє йому href,
+           а комусь може знадобитися сторінка класу окремою вкладкою. -->
+      <a id="p-schedule-link" href="#" target="_blank" class="wk-full-link">Відкрити сторінку класу ↗</a>
       </div>
       <div class="data-card" style="border-left-color:var(--orange);background:#fffcf0;">
         <h4 style="margin-top:0;color:var(--orange);">📅 Календар класу</h4>
@@ -2262,19 +2303,6 @@
       </div>
     </section>
 
-    <section class="screen-section" data-dtab="day">
-      <h3>🕒 Відвідуваність</h3>
-      <div id="p-teacher-att-alert" style="display:none;background:#fff3cd;border:1px solid #ffeeba;color:#856404;padding:11px 14px;border-radius:10px;margin-bottom:12px;font-size:.85rem;"></div>
-      <div class="data-card" style="border-left-color:var(--red);background:#fdfbfb;margin-top:0;">
-        <h4 style="margin-top:0;color:var(--red);">🕒 Повідомити про відсутність</h4>
-        <div style="display:flex;flex-direction:column;gap:9px;margin-top:9px;">
-          <select id="p-att-type" onchange="updateAttOptions()" style="border-color:var(--red);"><option value="late">Запізнюється</option><option value="absent">Відсутній (весь день)</option></select>
-          <select id="p-att-reason" style="border-color:var(--red);"><option value="на 10 хвилин">на 10 хвилин</option></select>
-        </div>
-        <button onclick="submitAttendance()" style="background:var(--red);padding:11px;color:#fff;margin-top:13px;">Відправити</button>
-        <p id="p-att-status" style="font-size:.83rem;color:var(--green);font-weight:700;margin-top:9px;display:none;">✅ Сповіщення надіслано!</p>
-      </div>
-    </section>
 
     <!-- ═══════════ НОВИНИ ═══════════ -->
     <section class="screen-section" data-dtab="news">
@@ -2376,7 +2404,12 @@
           <div class="no-lessons-msg">⏳ Завантаження розкладу...</div>
         </div>
         <button type="button" onclick="printClassSchedule()" style="background:#eceff1;color:#37474f;margin-top:0;margin-bottom:7px;">🖨️ Роздрукувати розклад</button>
-      <a id="s-schedule-link" href="#" target="_blank" style="display:block;background:var(--blue);color:#fff;padding:10px;border-radius:10px;text-decoration:none;font-weight:700;margin-top:10px;text-align:center;font-size:.88rem;">📅 Відкрити повний розклад</a>
+      <button type="button" id="s-week-btn" onclick="toggleWeekSchedule('s')"
+              style="width:100%;background:var(--blue);color:#fff;padding:10px;border-radius:10px;font-weight:700;margin-top:10px;font-size:.88rem;">📅 Показати весь тиждень</button>
+      <div id="s-week-schedule" class="wk-box" style="display:none;"></div>
+      <!-- Посилання лишається прихованим: common.js досі проставляє йому href,
+           а комусь може знадобитися сторінка класу окремою вкладкою. -->
+      <a id="s-schedule-link" href="#" target="_blank" class="wk-full-link">Відкрити сторінку класу ↗</a>
       </div>
       <!-- PHASE 3: Календар -->
       <div class="data-card" style="border-left-color:var(--orange);background:#fffcf0;">
