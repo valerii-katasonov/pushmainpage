@@ -288,7 +288,7 @@ window.updateJournalSubjects=function(){
 function finishJournalSubjectsRender(unique,cls,ss){
   if(currentUserData.role==='teacher'||currentUserData.role==='art_school_teacher')unique=new Set([...unique].filter(s=>window.isSubjectAllowed(cls,s)));
   ss.innerHTML='<option value="">-- Предмет --</option>';
-  if(unique.size>0)[...unique].sort().forEach(s=>ss.innerHTML+=`<option value="${s}">${s}</option>`);
+  if(unique.size>0)[...unique].sort().forEach(s=>ss.innerHTML+=`<option value="${escHtml(s)}">${escHtml(s)}</option>`);
   else ss.innerHTML='<option value="" disabled>Предметів немає</option>';
   if(document.getElementById('t-subject')?.value){const cv=document.getElementById('t-subject').value;if(unique.has(cv))ss.value=cv;}
   renderJournalTable();
