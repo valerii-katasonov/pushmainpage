@@ -1204,6 +1204,63 @@
 .install-box .inst-note{font-size:.77rem !important;color:#b0bec5 !important;margin-bottom:0 !important;}
 .install-box .inst-btn{width:100%;background:var(--teal);color:#fff;padding:11px;
   border-radius:10px;font-weight:700;margin-top:4px;}
+
+/* Розподіл за варіантами основної страви */
+.k-choice{background:#f7f9fa;border:1px solid #e0e6e8;border-radius:10px;padding:9px 12px;margin-top:10px;}
+.k-choice-row{display:flex;align-items:center;gap:9px;padding:4px 0;font-size:.85rem;}
+.k-choice-row b{margin-left:auto;font-size:1rem;color:#00838f;}
+.k-choice-name{color:#546e7a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.k-ab{flex:0 0 22px;height:22px;border-radius:6px;display:flex;align-items:center;
+  justify-content:center;font-weight:800;font-size:.74rem;color:#fff;}
+.k-ab.a{background:#00838f;} .k-ab.b{background:#8e44ad;}
+
+/* Вибір основної страви в кабінеті батьків */
+.pm-choice{margin:10px 0;padding:11px;background:#f7fbfc;border:1px solid #d7ecef;border-radius:12px;}
+.pm-choice-title{font-size:.78rem;color:#78909c;margin-bottom:8px;}
+.pm-opt{display:flex;align-items:center;gap:10px;width:100%;text-align:left;
+  background:#fff;border:1.5px solid #e0e6e8;border-radius:10px;padding:10px 12px;
+  margin-bottom:7px;font-size:.88rem;color:#263238;}
+.pm-opt.on{border-color:#00838f;background:#e0f7fa;}
+.pm-opt:disabled{opacity:.6;}
+.pm-opt-mark{flex:0 0 24px;height:24px;border-radius:7px;background:#eceff1;color:#607d8b;
+  display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.76rem;}
+.pm-opt.on .pm-opt-mark{background:#00838f;color:#fff;}
+.pm-opt-name{flex:1;}
+.pm-opt-on{font-size:.7rem;color:#00838f;font-weight:700;}
+.pm-btn.brk{background:#fff3e0;color:#e65100;}
+.pm-locked.small{font-size:.74rem;}
+
+.k-ord-ab{font-size:.78rem;color:#546e7a;background:#eceff1;padding:2px 8px;border-radius:20px;margin-left:4px;}
+.k-ord-menu{font-size:.76rem;color:#78909c;margin:6px 0 4px 0;}
+
+/* Позиції на винос */
+.ta-box:empty{display:none;}
+.ta-box{margin-top:12px;background:#fffdf7;border:1px solid #f0e3c8;border-radius:14px;padding:13px;}
+.ta-head{font-weight:800;font-size:.9rem;color:#8a6d1f;margin-bottom:9px;}
+.ta-head span{font-weight:400;color:#b0a184;font-size:.78rem;margin-left:6px;}
+.ta-row{display:flex;align-items:center;gap:10px;background:#fff;border:1px solid #f0e3c8;
+  border-radius:10px;padding:9px 11px;margin-bottom:7px;}
+.ta-row.on{border-color:#e0b34a;background:#fffaf0;}
+.ta-row-main{flex:1;min-width:0;}
+.ta-row-main b{display:block;font-size:.86rem;color:#263238;}
+.ta-item-note{display:block;font-size:.74rem;color:#a99b7e;}
+.ta-price{font-size:.82rem;font-weight:700;color:#8a6d1f;white-space:nowrap;}
+.ta-qty{display:flex;align-items:center;gap:8px;}
+.ta-qty button{width:28px;height:28px;border-radius:8px;background:#f5efe0;color:#8a6d1f;
+  font-weight:800;font-size:1rem;line-height:1;padding:0;}
+.ta-qty button:disabled{opacity:.35;}
+.ta-qty span{min-width:14px;text-align:center;font-weight:700;font-size:.88rem;}
+.ta-qty-locked{font-weight:700;color:#b0a184;}
+.ta-sum{margin-top:9px;font-size:.85rem;color:#5d4e2a;}
+.ta-sum span{display:block;font-size:.73rem;color:#b0a184;margin-top:2px;}
+.ta-locked{margin-top:7px;font-size:.76rem;color:#b0a184;}
+/* Кабінет кухні */
+.ta-item{display:flex;align-items:center;gap:9px;background:#fff;border:1px solid #eceff1;
+  border-radius:10px;padding:9px 11px;margin-bottom:7px;}
+.ta-item.off{opacity:.5;}
+.ta-item-main{flex:1;min-width:0;}
+.ta-mini{padding:5px 10px;font-size:.74rem;background:#eceff1;color:#546e7a;border-radius:8px;}
+.ta-mini.del{background:#fdecea;color:#c0392b;}
 </style>
 </head>
 <body>
@@ -1474,6 +1531,32 @@
         </div>
         <div id="k-orders"><p class="empty-msg">Оберіть клас і дату.</p></div>
       </div>
+    </section>
+
+    <section class="screen-section">
+      <h3>🥡 Позиції на винос</h3>
+      <p style="font-size:.8rem;color:#8d9ba3;margin:0 0 11px 0;">
+        Асортимент поза меню: випічка, салати, супи в контейнері. Батьки замовляють
+        на конкретний день, оплата — у школі, як завжди.</p>
+
+      <details style="background:#fffdf7;border:1px solid #f0e3c8;border-radius:12px;padding:13px;margin-bottom:12px;">
+        <summary style="font-weight:700;cursor:pointer;color:#8a6d1f;font-size:.9rem;">➕ Додати позицію</summary>
+        <div style="margin-top:11px;">
+          <label for="k-ta-title">Назва</label>
+          <input type="text" id="k-ta-title" placeholder="напр. Сирник">
+          <label for="k-ta-price">Ціна, zł</label>
+          <input type="text" id="k-ta-price" inputmode="decimal" placeholder="напр. 8.50">
+          <label for="k-ta-note">Примітка <span style="font-weight:400;color:#b0a184;">— необовʼязково</span></label>
+          <input type="text" id="k-ta-note" placeholder="напр. 200 г, без цукру">
+          <button onclick="addTakeawayItem()" style="background:#8a6d1f;color:#fff;padding:10px;margin-top:11px;width:100%;">Додати</button>
+        </div>
+      </details>
+
+      <div id="k-ta-items"><p class="empty-msg">Завантаження...</p></div>
+
+      <h4 style="margin:18px 0 8px 0;color:#37474f;font-size:.9rem;">Замовлення на день</h4>
+      <input type="date" id="k-ta-date" onchange="loadTakeawayOrders()">
+      <div id="k-ta-orders" style="margin-top:10px;"><p class="empty-msg">Оберіть дату.</p></div>
     </section>
 
     <section class="screen-section">
@@ -2332,6 +2415,7 @@
     <section class="screen-section" data-dtab="day">
       <h3>🍽️ Харчування</h3>
       <div id="p-menu" class="pm-box"><p class="empty-msg">Завантаження...</p></div>
+      <div id="p-takeaway" class="ta-box"></div>
     </section>
 
     <section class="screen-section" data-dtab="day">
