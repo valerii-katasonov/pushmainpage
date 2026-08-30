@@ -324,9 +324,11 @@ window.sendInboxMessage = async function(){
     });
     // Короткий зліпок останнього повідомлення: за ним рахується значок
     // непрочитаних, не читаючи всю переписку.
+    // Якщо зліпок не запишеться, повідомлення все одно піде, але значок
+    // непрочитаних у співрозмовника не зʼявиться — мовчати про це не варто.
     await update(ref(db, `chats/${currentChatId}`), {
       lastMsg: { from: myKey(), text: text.slice(0,120), ts }
-    }).catch(()=>{});
+    }).catch(e => console.warn('lastMsg не оновлено:', e.message));
     input.value = ''; input.style.height = 'auto';
 
     // Сповіщення решті учасників. Тексту в пуш не кладемо: він видно на
@@ -519,7 +521,7 @@ export function watchUnread(){
       }, ()=>{}));
     });
     if(!ids.length) paintBadge(0);
-  }, ()=>{});
+  }, err => console.warn('значок непрочитаних:', err.message));
 }
 window.watchUnread = watchUnread;
 export function stopWatchUnread(){
