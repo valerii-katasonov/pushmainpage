@@ -7,7 +7,14 @@
   <link rel="manifest" href="manifest-cabinet.json">
   <meta name="theme-color" content="#fff">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/330/330996.png">
+  <!-- iOS не бере іконку з маніфесту: для екрана «Домів» потрібен саме
+       apple-touch-icon у розмітці. Раніше тут стояло чуже посилання на
+       зовнішній CDN — звідти й бралася не та картинка. -->
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+  <link rel="apple-touch-icon" sizes="167x167" href="apple-touch-icon-167.png">
+  <link rel="apple-touch-icon" sizes="152x152" href="apple-touch-icon-152.png">
+  <meta name="apple-mobile-web-app-title" content="Push School">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;800&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
