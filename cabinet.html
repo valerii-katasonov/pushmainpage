@@ -1029,20 +1029,20 @@
          selectors, which broke the moment a card's inline style
          string changed and couldn't account for new cards at all.
          ═════════════════════════════════════════ */
+      /* ОДНА КОЛОНКА, а не дві.
+         Раніше екрани розкладалися в дві колонки, причому одні секції
+         займали обидві, інші — одну. Через це на десктопі був рваний
+         правий край: короткий згорнутий блок поруч із порожнечею, під
+         ним блок на всю ширину. Візуально це читалося як помилка верстки.
+         Тепер усі секції однакової ширини — край рівний, а порядок
+         блоків на телефоні й на компʼютері збігається. */
       #admin-screen[style*="display: block"], #admin-screen[style*="display:block"],
       #director-screen[style*="display: block"], #director-screen[style*="display:block"],
-      #teacher-screen[style*="display: block"], #teacher-screen[style*="display:block"] {
-        display: grid !important;
-        grid-template-columns: 1fr 1fr;
-        column-gap: 28px;
-        row-gap: var(--space-6);
-        align-items: start;
-      }
+      #teacher-screen[style*="display: block"], #teacher-screen[style*="display:block"],
       #parent-screen[style*="display: block"], #parent-screen[style*="display:block"],
       #student-screen[style*="display: block"], #student-screen[style*="display:block"] {
         display: grid !important;
-        grid-template-columns: 1.25fr 1fr;
-        column-gap: 28px;
+        grid-template-columns: minmax(0, 1fr);
         row-gap: var(--space-6);
         align-items: start;
       }
@@ -1069,13 +1069,20 @@
         margin-bottom: 0; /* grid row-gap already spaces sections out */
         align-self: stretch;
       }
-      #admin-screen > .screen-section.half,
-      #director-screen > .screen-section.half,
-      #teacher-screen > .screen-section.half,
-      #parent-screen > .screen-section.half,
-      #student-screen > .screen-section.half {
-        grid-column: span 1;
-      }
+      /* Клас "half" лишається в розмітці, але більше нічого не звужує:
+         саме він і створював різну ширину. Видаляти його з десятків
+         секцій немає потреби — досить, щоб він нічого не робив. */
+      /* Кнопки. Глобально button{width:100%} — це правильно для телефона,
+         але на компʼютері кнопка завширшки 1300 px виглядає як банер, а не
+         як дія. Обмежуємо ширину, лишаючи винятки для таблиць і вкладок,
+         де кнопка має підлаштовуватися під клітинку. */
+      .screen-section button{ max-width: 460px; }
+      .screen-section table button,
+      .screen-section .journal-wrap button,
+      .screen-section .matrix-wrapper button,
+      .screen-section .wk-box button,
+      .dtab-bar button{ max-width: none; }
+
       /* ───── PAYMENTS — 3-колоночная структура внутри ───── */
       #payments-section {
         display: grid;
@@ -1125,16 +1132,12 @@
        BIG DESKTOP (>=1440px) — Больше воздуха
        ═══════════════════════════════════════════════════════ */
     @media (min-width: 1440px) {
-      .container { max-width: 1320px; padding: 36px 48px; }
-      #parent-screen[style*="display: block"], #parent-screen[style*="display:block"],
-      #student-screen[style*="display: block"], #student-screen[style*="display:block"] {
-        grid-template-columns: 1.3fr 1fr;
-        column-gap: 36px;
-      }
-      #teacher-screen[style*="display: block"], #teacher-screen[style*="display:block"],
-      #director-screen[style*="display: block"], #director-screen[style*="display:block"] {
-        column-gap: 36px;
-      }
+      /* Ширину контейнера навмисно НЕ збільшуємо понад десктопні 1180 px.
+         Раніше на великому моніторі він розтягувався до 1320, і рядок
+         тексту ставав задовгим — око губить початок наступного рядка.
+         Таблиці журналу й матриці це не обмежує: вони прокручуються
+         всередині своїх рамок і відкриваються у вікні на всю ширину. */
+      .container { padding: 36px 48px; }
     }
     /* === Print-friendly === */
     @media print {
@@ -1451,7 +1454,7 @@
     </form>
   </div>
   <!-- PROFILE BAR -->
-  <div id="profile-bar" style="display:none;align-items:center;gap:13px;margin-bottom:18px;background:#fff;padding:13px;border-radius:12px;box-shadow:0 4px 10px rgba(0,0,0,.05);border:1px solid #eee;">
+  <div id="profile-bar" style="display:none;align-items:center;gap:13px;margin-bottom:18px;background:#fff;padding:14px;border-radius:12px;box-shadow:0 4px 10px rgba(0,0,0,.05);border:1px solid #eee;">
     <img id="pb-avatar" src="https://cdn-icons-png.flaticon.com/512/149/149071.png" style="width:48px;height:48px;border-radius:50%;object-fit:cover;border:2px solid var(--teal);">
     <div style="flex:1;">
       <h3 id="pb-name" style="margin:0;font-size:1.05rem;color:#333;border:none;padding:0;">Користувач</h3>
@@ -1514,16 +1517,16 @@
     <section class="screen-section half">
       <h3>📊 Огляд</h3>
       <div style="display:flex;gap:9px;">
-        <div style="flex:1;background:#e0f7fa;padding:13px;border-radius:12px;text-align:center;">
+        <div style="flex:1;background:#e0f7fa;padding:14px;border-radius:12px;text-align:center;">
           <h4 style="margin:0;color:#00838f;font-size:.82rem;">📚 ДЗ (сьогодні)</h4>
           <p id="a-hw-counter" style="font-size:1.7rem;font-weight:800;color:#00acc1;margin:4px 0;">0</p>
         </div>
-        <div style="flex:1;background:#fce4ec;padding:13px;border-radius:12px;text-align:center;">
+        <div style="flex:1;background:#fce4ec;padding:14px;border-radius:12px;text-align:center;">
           <h4 style="margin:0;color:#ad1457;font-size:.82rem;">💬 Коментарів</h4>
           <p id="a-com-counter" style="font-size:1.7rem;font-weight:800;color:#d81b60;margin:4px 0;">0</p>
         </div>
       </div>
-      <div style="background:#fff3e0;padding:13px;border-radius:12px;text-align:center;margin-top:12px;">
+      <div style="background:#fff3e0;padding:14px;border-radius:12px;text-align:center;margin-top:12px;">
         <h4 style="margin:0;color:#e65100;font-size:.88rem;">🗓️ Статистика тижня</h4>
         <div style="display:flex;justify-content:space-around;margin-top:9px;">
           <div><p id="a-week-late" style="font-size:1.4rem;font-weight:800;color:var(--orange);margin:0;">0</p><span style="font-size:.68rem;color:#888;">запізнень</span></div>
@@ -1614,7 +1617,7 @@
         Асортимент поза меню: випічка, салати, супи в контейнері. Батьки замовляють
         на конкретний день, оплата — у школі, як завжди.</p>
 
-      <details style="background:#fffdf7;border:1px solid #f0e3c8;border-radius:12px;padding:13px;margin-bottom:12px;">
+      <details style="background:#fffdf7;border:1px solid #f0e3c8;border-radius:12px;padding:14px;margin-bottom:12px;">
         <summary style="font-weight:700;cursor:pointer;color:#8a6d1f;font-size:.9rem;">➕ Додати позицію</summary>
         <div style="margin-top:11px;">
           <label for="k-ta-title">Назва</label>
@@ -1708,16 +1711,16 @@
       </div>
       <!-- Дашборд -->
       <div style="display:flex;gap:9px;margin:16px 0;">
-        <div style="flex:1;background:#e0f7fa;padding:13px;border-radius:12px;text-align:center;">
+        <div style="flex:1;background:#e0f7fa;padding:14px;border-radius:12px;text-align:center;">
           <h4 style="margin:0;color:#00838f;font-size:.82rem;">📚 ДЗ (сьогодні)</h4>
           <p id="d-hw-counter" style="font-size:1.7rem;font-weight:800;color:#00acc1;margin:4px 0;">0</p>
         </div>
-        <div style="flex:1;background:#fce4ec;padding:13px;border-radius:12px;text-align:center;">
+        <div style="flex:1;background:#fce4ec;padding:14px;border-radius:12px;text-align:center;">
           <h4 style="margin:0;color:#ad1457;font-size:.82rem;">💬 Коментарів</h4>
           <p id="d-com-counter" style="font-size:1.7rem;font-weight:800;color:#d81b60;margin:4px 0;">0</p>
         </div>
       </div>
-      <div style="background:#fff3e0;padding:13px;border-radius:12px;text-align:center;margin-bottom:16px;">
+      <div style="background:#fff3e0;padding:14px;border-radius:12px;text-align:center;margin-bottom:16px;">
         <h4 style="margin:0;color:#e65100;font-size:.88rem;">🗓️ Статистика тижня</h4>
         <div style="display:flex;justify-content:space-around;margin-top:9px;">
           <div><p id="d-week-late" style="font-size:1.4rem;font-weight:800;color:var(--orange);margin:0;">0</p><span style="font-size:.68rem;color:#888;">запізнень</span></div>
@@ -2046,7 +2049,7 @@
 <details data-dtab="nalash" style="background:#e8f5e9;padding:14px;border-radius:12px;border:1px solid #a5d6a7;">
         <summary style="font-weight:700;cursor:pointer;color:#1b5e20;font-size:.95rem;">🎓 Перевести школу на наступний навчальний рік</summary>
         <div style="margin-top:13px;">
-          <div style="background:#fff3cd;border:1px solid #ffc107;border-radius:10px;padding:10px 14px;font-size:.83rem;color:#856404;">
+          <div style="background:#fff3cd;border:1px solid #ffc107;border-radius:12px;padding:10px 14px;font-size:.83rem;color:#856404;">
             ⚠️ <b>Незворотна операція.</b> Усі учні переходять на клас вище (1→2, 2→3 … 10→11), а 11 клас випускається в архів. Оцінки, відвідуваність і коментарі залишаються в архіві своїх класів — переносяться лише списки учнів і прив'язки акаунтів.
           </div>
           <button onclick="previewYearRollover()" style="background:#1b5e20;color:#fff;padding:11px;margin-top:10px;">🔍 Переглянути зміни</button>
@@ -2197,15 +2200,15 @@
       </div>
       <!-- Реакції + Підсумки + Перездачі -->
       <div style="display:flex;gap:9px;margin:14px 0 0 0;">
-        <div style="flex:1;background:#ffeaa7;padding:13px;border-radius:12px;text-align:center;cursor:pointer;" onclick="showReactionsDetails()">
+        <div style="flex:1;background:#ffeaa7;padding:14px;border-radius:12px;text-align:center;cursor:pointer;" onclick="showReactionsDetails()">
           <h4 style="margin:0;color:#d35400;font-size:.82rem;">❤️ Реакції</h4>
           <p id="t-karma-counter" style="font-size:1.6rem;font-weight:800;color:#e67e22;margin:4px 0;">0</p>
         </div>
-        <div id="t-wrapped-btn" style="flex:1;background:linear-gradient(135deg,#a8ff78,#78ffd6);padding:13px;border-radius:12px;text-align:center;cursor:pointer;" onclick="showWeeklyWrapped()">
+        <div id="t-wrapped-btn" style="flex:1;background:linear-gradient(135deg,#a8ff78,#78ffd6);padding:14px;border-radius:12px;text-align:center;cursor:pointer;" onclick="showWeeklyWrapped()">
           <h4 style="margin:0;color:var(--teal);font-size:.82rem;">📊 Підсумки</h4>
           <p style="font-size:1.6rem;margin:4px 0;">🎁</p>
         </div>
-        <div id="t-retake-btn" style="flex:1;background:#fff3cd;padding:13px;border-radius:12px;text-align:center;cursor:pointer;" onclick="openRetakeRequestsModal()">
+        <div id="t-retake-btn" style="flex:1;background:#fff3cd;padding:14px;border-radius:12px;text-align:center;cursor:pointer;" onclick="openRetakeRequestsModal()">
           <h4 style="margin:0;color:#856404;font-size:.82rem;">🔄 Перездачі</h4>
           <p id="t-retake-counter" style="font-size:1.6rem;font-weight:800;color:#d35400;margin:4px 0;">0</p>
         </div>
@@ -2215,7 +2218,7 @@
         <button onclick="openStickerStatsModal()" style="flex:1;min-width:130px;background:linear-gradient(135deg,#f39c12,#f1c40f);color:#fff;">🌟 Статистика наліпок</button>
       </div>
       <div style="display:flex;gap:9px;margin:14px 0 0 0;" id="t-chat-row">
-        <div id="t-chat-btn" style="flex:1;background:#f3e5f5;padding:13px;border-radius:12px;text-align:center;cursor:pointer;" onclick="openChatModal('teacher')" data-chatbtn="1">
+        <div id="t-chat-btn" style="flex:1;background:#f3e5f5;padding:14px;border-radius:12px;text-align:center;cursor:pointer;" onclick="openChatModal('teacher')" data-chatbtn="1">
           <h4 style="margin:0;color:#7b1fa2;font-size:.82rem;">💬 Чат з батьками</h4>
           <p style="font-size:1.6rem;margin:4px 0;">✉️</p>
         </div>
@@ -2239,7 +2242,7 @@
       <label>Предмет:</label>
       <select id="t-subject" onchange="handleSubjectChange()"></select>
       <!-- Підручники -->
-      <div style="margin-top:12px;background:#f0f8ff;padding:13px;border-radius:11px;border:1px solid #d0e8f2;">
+      <div style="margin-top:12px;background:#f0f8ff;padding:14px;border-radius:12px;border:1px solid #d0e8f2;">
         <h4 style="margin:0 0 8px 0;color:var(--blue);font-size:.88rem;">📘 Посилання на підручники</h4>
         <div id="t-textbooks-list" style="margin-bottom:8px;"></div>
         <div style="display:flex;gap:7px;">
@@ -2249,7 +2252,7 @@
         </div>
       </div>
       <!-- Навчальний план -->
-      <details style="margin-top:14px;background:#f9f4ff;padding:14px;border-radius:11px;border:1px solid #ce93d8;">
+      <details style="margin-top:14px;background:#f9f4ff;padding:14px;border-radius:12px;border:1px solid #ce93d8;">
         <summary style="font-weight:700;cursor:pointer;color:#7b1fa2;font-size:.95rem;">📚 Навчальний план (Теми)</summary>
         <div style="margin-top:12px;">
           <div id="curriculum-smart-alert" class="smart-alert">
@@ -2370,7 +2373,7 @@
     <section class="screen-section half">
       <h3>📝 Оцінювання учня</h3>
       <!-- Оцінка поведінки -->
-      <div style="background:#e8eaf6;padding:13px;border-radius:12px;border:1px solid #c5cae9;">
+      <div style="background:#e8eaf6;padding:14px;border-radius:12px;border:1px solid #c5cae9;">
         <h4 style="margin:0 0 9px 0;color:#283593;font-size:.9rem;">🤝 Оцінка поведінки (Класний урок)</h4>
         <div style="display:flex;gap:8px;align-items:flex-end;">
           <select id="t-behavior-student" style="flex:2;margin-top:0;border-color:#7986cb;"><option value="">Учень...</option></select>
@@ -2382,7 +2385,7 @@
         </div>
       </div>
       <!-- Наліпка -->
-      <div style="margin-top:13px;background:#fffcf0;padding:13px;border-radius:12px;border:1px solid #fde3a7;">
+      <div style="margin-top:13px;background:#fffcf0;padding:14px;border-radius:12px;border:1px solid #fde3a7;">
         <h4 style="margin:0 0 8px 0;color:#d35400;font-size:.88rem;">🌟 Видати наліпку учню</h4>
         <div style="display:flex;gap:8px;align-items:flex-end;">
           <select id="t-sticker-student" style="flex:2;margin-top:0;"></select>
@@ -2390,7 +2393,7 @@
         </div>
       </div>
       <!-- Коментар -->
-      <div style="margin-top:13px;background:#f3e5f5;padding:13px;border-radius:12px;border:1px solid #ce93d8;">
+      <div style="margin-top:13px;background:#f3e5f5;padding:14px;border-radius:12px;border:1px solid #ce93d8;">
         <h4 style="margin:0 0 8px 0;color:#7b1fa2;font-size:.88rem;">💬 Коментар учню</h4>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
           <select id="t-student" style="flex:2;margin-top:0;border-color:#a1887f;"><option value="">Учень...</option></select>
@@ -2410,7 +2413,7 @@
 
     <section class="screen-section half">
       <!-- Управління класом -->
-      <details style="background:#fff;padding:13px;border-radius:12px;border:1px solid #ddd;">
+      <details style="background:#fff;padding:14px;border-radius:12px;border:1px solid #ddd;">
         <summary style="font-weight:700;cursor:pointer;color:#7f8c8d;">⚙️ Управління класом</summary>
         <div style="margin-top:13px;">
           <input type="text" id="new-student-name" placeholder="Прізвище та Ім'я учня">
@@ -2418,7 +2421,7 @@
           <button style="background:#f1c40f;padding:8px;margin-top:5px;margin-bottom:13px;" onclick="addStudent()">Додати учня</button>
           <hr>
           <!-- Список батьків свого класу: контакти можна дивитись і редагувати -->
-          <details style="margin-top:13px;background:#f9f4ff;padding:12px;border-radius:11px;border:1px solid #ce93d8;"
+          <details style="margin-top:13px;background:#f9f4ff;padding:12px;border-radius:12px;border:1px solid #ce93d8;"
                    ontoggle="if(this.open)renderParentsBlock('t-parents-list',getActiveClass())">
             <summary style="font-weight:700;cursor:pointer;color:#7b1fa2;font-size:.88rem;">👪 Батьки мого класу</summary>
             <div id="t-parents-list" style="margin-top:9px;"><p class="empty-msg">Завантаження...</p></div>
@@ -2458,7 +2461,7 @@
          користується вранці найчастіше, і шукати це внизу списку незручно. -->
     <section class="screen-section" data-dtab="day">
       <h3>🕒 Запізнення та відсутність</h3>
-      <div id="p-teacher-att-alert" style="display:none;background:#fff3cd;border:1px solid #ffeeba;color:#856404;padding:11px 14px;border-radius:10px;margin-bottom:12px;font-size:.85rem;"></div>
+      <div id="p-teacher-att-alert" style="display:none;background:#fff3cd;border:1px solid #ffeeba;color:#856404;padding:11px 14px;border-radius:12px;margin-bottom:12px;font-size:.85rem;"></div>
       <div class="data-card att-quick" style="border-left-color:var(--red);background:#fdfbfb;margin-top:0;">
         <p class="att-hint">Повідомте вчителя — він побачить це одразу.</p>
         <div class="att-row">
@@ -2709,7 +2712,7 @@
     <section class="screen-section half">
       <h3>🕒 Відвідуваність</h3>
       <!-- PHASE 2: Алерт про невизнану відмітку вчителя -->
-      <div id="s-teacher-att-alert" style="display:none;background:#fff3cd;border:1px solid #ffeeba;color:#856404;padding:11px 14px;border-radius:10px;margin-bottom:12px;font-size:.85rem;"></div>
+      <div id="s-teacher-att-alert" style="display:none;background:#fff3cd;border:1px solid #ffeeba;color:#856404;padding:11px 14px;border-radius:12px;margin-bottom:12px;font-size:.85rem;"></div>
       <!-- Відсутність -->
       <div class="data-card" style="border-left-color:var(--red);background:#fdfbfb;margin-top:0;">
         <h4 style="margin-top:0;color:var(--red);">🕒 Я запізнююсь / буду відсутній</h4>
@@ -2947,7 +2950,7 @@
     </select>
     <label id="cell-subj-label">Назва предмету:</label>
     <input type="text" id="cell-subj-ua" placeholder="Напр. Математика" style="margin-bottom:9px;border-color:var(--blue);" oninput="handleSubjInput()">
-    <div id="cell-extra-wrapper" style="display:none;margin-bottom:9px;background:#f0f8ff;padding:13px;border-radius:12px;border:1px solid var(--blue);text-align:left;">
+    <div id="cell-extra-wrapper" style="display:none;margin-bottom:9px;background:#f0f8ff;padding:14px;border-radius:12px;border:1px solid var(--blue);text-align:left;">
       <label style="color:#2980b9;margin-top:0;">Формат:</label>
       <select id="cell-extra-format" style="border-color:var(--blue);margin-bottom:9px;" onchange="toggleExtraFormat()"><option value="group">👥 Групове</option><option value="individual">👤 Індивідуальне</option></select>
       <div id="extra-individual-wrap" style="display:none;"><label style="color:#2980b9;margin-top:4px;">Учень:</label><select id="extra-ind-student" style="border-color:var(--blue);"></select></div>
@@ -3039,7 +3042,7 @@
     <p style="font-size:.83rem;color:#666;margin-bottom:13px;">Клас: <b id="exam-class-label"></b></p>
     <input type="month" id="exam-month-select" onchange="renderExamsCalendar()" style="margin-bottom:13px;border:2px solid #d35400;color:#d35400;font-weight:700;text-align:center;">
     <div id="exams-cal-container"></div>
-    <div id="exams-day-details" style="margin-top:18px;text-align:left;background:#fffcf0;padding:13px;border-radius:12px;border:1px dashed var(--orange);display:none;"></div>
+    <div id="exams-day-details" style="margin-top:18px;text-align:left;background:#fffcf0;padding:14px;border-radius:12px;border:1px dashed var(--orange);display:none;"></div>
     <button onclick="closeExamsModal()" style="background:#333;color:#fff;width:100%;margin-top:18px;">Закрити</button>
   </div>
 </div>
