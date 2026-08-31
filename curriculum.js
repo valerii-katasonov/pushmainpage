@@ -140,7 +140,8 @@ window.handleCurriculumFile=function(e){
     try{
       const wb=XLSX.read(evt.target.result,{type:'array',cellDates:true});
       parsedCurriculum=parseCurriculumWorkbook(wb);
-      renderCurriculumPreview(parsedCurriculum);
+      // Предмет із поля має пріоритет над здогадкою за назвою файлу
+      applyChosenSubject(parsedCurriculum);
     }catch(err){alert("Помилка парсингу: "+err.message);console.error(err);}
   };
   reader.readAsArrayBuffer(file);
@@ -286,7 +287,10 @@ function renderCurriculumPreview(data){
     // створила б окремий предмет-двійник) і не збереже план у чужий предмет.
     const allowed = uploadAccess.allowed;
     const okSubj  = subjectAllowedForUpload(s.meta.subject, allowed);
-    if(allowed !== null){
+    // Предмет уже обрано у полі над завантаженням — другий раз не питаємо.
+    if(s.meta.subjectChosen){
+      /* нічого не показуємо: назва вже у заголовку картки вище */
+    } else if(allowed !== null){
       if(!okSubj){
         html+=`<div class="curr-warn danger">Предмет «${escHtml(s.meta.subject)}» вам у цьому
           класі не призначено. Оберіть свій предмет — інакше план не збережеться.</div>`;
@@ -345,6 +349,17 @@ window.saveCurriculumToDb=async function(){
   // Перевірка предмета — тут, а не лише у превʼю. Превʼю можна обійти,
   // збереження — ні. Правила бази цього не ловлять: вони дозволяють запис
   // будь-якому вчителю, бо не знають, який предмет усередині файлу.
+  // Предмет має бути заданий явно. Раніше він міг лишитися здогадкою за
+  // назвою файлу — і план тихо зберігався під назвою на кшталт «matematyka»,
+  // якої немає в розкладі. Теми після цього не показувалися ніде.
+  const noSubject = Object.values(parsedCurriculum.sheets)
+    .filter(sh => !String(sh.meta.subject || '').trim()).length;
+  if(noSubject){
+    alert('Не вказано предмет. Оберіть його у полі «Предмет, до якого належить план» '
+        + 'над завантаженням файлу.');
+    return;
+  }
+
   const notMine=[];
   for(const name in parsedCurriculum.sheets){
     const subj=parsedCurriculum.sheets[name].meta.subject;
@@ -680,6 +695,99 @@ window.loadClassTeacherInfo=async function(){
 //
 // Завантажити план наперед не заважаємо: у серпні плани здають раніше,
 // ніж складають розклад. Тому це попередження, а не заборона.
+// ═══════ ПРЕДМЕТ ПЛАНУ ═══════
+// Предмет тепер обирає людина, а не вгадує портал за назвою файлу.
+//
+// ЧОМУ ЦЕ ВАЖЛИВІШЕ, НІЖ ЗДАЄТЬСЯ. План зберігається за ключем предмета,
+// а журнал шукає теми за назвою предмета З РОЗКЛАДУ. Якщо в плані
+// «Математика», а в розкладі «Математика (алгебра)» — це різні ключі, і
+// вчитель просто не побачить жодної теми. Причину знайти майже
+// неможливо: помилки немає, список порожній.
+//
+// Тому список береться саме з розкладу класу: обрати можна лише те, що
+// там справді є. Вручну вписати теж можна — на випадок, коли розкладу ще
+// немає, — але тоді показуємо попередження.
+export function subjectsFromSchedule(lessons){
+  const out = new Set();
+  Object.values(lessons || {}).forEach(day => {
+    (Array.isArray(day) ? day : Object.values(day || {})).forEach(item => {
+      if(!item) return;
+      const raw = item.subject && item.subject.ua ? item.subject.ua : item.subject;
+      const name = typeof raw === 'string' ? raw.trim() : '';
+      if(name && name !== 'Перерва' && item.number !== ' ') out.add(name);
+    });
+  });
+  return [...out].sort((a, b) => a.localeCompare(b, 'uk'));
+}
+
+export function chosenSubject(){
+  const sel = document.getElementById('curr-subject');
+  if(!sel) return '';
+  if(sel.value === '__other__'){
+    const inp = document.getElementById('curr-subject-other');
+    return inp ? inp.value.trim() : '';
+  }
+  return sel.value.trim();
+}
+
+let scheduleSubjects = [];
+
+async function fillSubjectSelect(cls){
+  const sel = document.getElementById('curr-subject');
+  if(!sel) return;
+  const keep = sel.value;
+  scheduleSubjects = [];
+  try{
+    const snap = await get(ref(db, `schedules/${cls}`));
+    if(snap.exists()) scheduleSubjects = subjectsFromSchedule((snap.val() || {}).lessons);
+  }catch(e){ console.warn('schedules:', e.message); }
+
+  // Учителю показуємо лише його предмети; директор і класний керівник
+  // бачать усі предмети класу (uploadAccess.allowed === null).
+  const allowed = uploadAccess.allowed;
+  const list = allowed === null
+    ? scheduleSubjects
+    : scheduleSubjects.filter(s => subjectAllowedForUpload(s, allowed));
+
+  sel.innerHTML = '<option value="">— оберіть предмет —</option>'
+    + list.map(s => `<option value="${escHtml(s)}">${escHtml(s)}</option>`).join('')
+    + '<option value="__other__">Іншого немає у списку…</option>';
+  if(keep && [...sel.options].some(o => o.value === keep)) sel.value = keep;
+  onCurrSubjectChange();
+}
+
+window.onCurrSubjectChange = function(){
+  const sel = document.getElementById('curr-subject');
+  const other = document.getElementById('curr-subject-other');
+  const warn = document.getElementById('curr-subject-warn');
+  if(other) other.style.display = (sel && sel.value === '__other__') ? 'block' : 'none';
+  const subj = chosenSubject();
+  if(warn){
+    // Назва не з розкладу — найчастіша причина «теми не показуються»
+    const off = subj && scheduleSubjects.length
+                && !scheduleSubjects.some(s => s.toLowerCase() === subj.toLowerCase());
+    warn.style.display = off ? 'block' : 'none';
+    if(off) warn.textContent = 'У розкладі класу такого предмета немає. План збережеться, '
+      + 'але вчитель не побачить тем, доки назва не збігатиметься з розкладом рівно.';
+  }
+  // Уже розібраний файл перечитуємо під новий предмет
+  if(parsedCurriculum) applyChosenSubject(parsedCurriculum);
+};
+
+// Проставляє обраний предмет у розібраний файл.
+// Якщо аркушів кілька (старий формат із кількома предметами) — не чіпаємо:
+// там предмет свій на кожному аркуші.
+function applyChosenSubject(data){
+  const names = Object.keys(data.sheets || {});
+  const subj = chosenSubject();
+  if(names.length === 1 && subj){
+    data.sheets[names[0]].meta.subject = subj;
+    data.sheets[names[0]].meta.subjectGuessed = false;
+    data.sheets[names[0]].meta.subjectChosen = true;
+  }
+  renderCurriculumPreview(data);
+}
+
 async function warnIfNoSchedule(cls){
   const box = document.getElementById('curr-sched-warn');
   if(!box) return;
@@ -730,6 +838,7 @@ export async function checkCurriculumUploadAccess(){
     sec.style.display='block';
     loadCurrentCurriculumDisplay();
     warnIfNoSchedule(currClass());
+    fillSubjectSelect(currClass());
     return;
   }
 
@@ -763,6 +872,7 @@ export async function checkCurriculumUploadAccess(){
   sec.style.display='block';
   loadCurrentCurriculumDisplay();
   warnIfNoSchedule(cls);
+  fillSubjectSelect(cls);
 }
 
 // Список класів для директора: беремо ті, що є в розкладі/списках учнів.
