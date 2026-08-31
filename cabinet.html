@@ -2277,6 +2277,13 @@
           <select id="curr-dir-class" onchange="onCurrDirClassChange()" style="margin-top:4px;"></select>
         </div>
         <div id="curr-access-hint" class="curr-src" style="margin-bottom:10px;"></div>
+        <label style="font-size:.8rem;color:#0d47a1;font-weight:600;">Предмет, до якого належить план:</label>
+        <select id="curr-subject" onchange="onCurrSubjectChange()" style="margin-top:4px;">
+          <option value="">— оберіть предмет —</option>
+        </select>
+        <input type="text" id="curr-subject-other" placeholder="Назва предмета точно як у розкладі"
+               style="display:none;margin-top:6px;" oninput="onCurrSubjectChange()">
+        <div id="curr-subject-warn" class="curr-warn" style="display:none;"></div>
         <label class="curr-drop-zone" id="curr-drop-zone-label">
           <input type="file" id="curr-file-input" accept=".xlsx,.xls">
           <div id="curr-drop-text">📤 Натисніть або перетягніть Excel файл сюди</div>
