@@ -333,6 +333,9 @@ window.sendRetakeRequest=sendRetakeRequest;
 // ══════════ PARENT DASHBOARD ══════════
 export function loadParentDashboard(){
   if(!currentUserData)return;const date=document.getElementById('global-date').value;const cls=getActiveClass();
+  // Список причин будується тут, а не лише в onchange: інакше до першої
+  // зміни типу в полі висів би єдиний варіант, зашитий у розмітці.
+  fillAttReasons('p');
   // Dynamic schedule
   if(window.schedule){renderDynamicSchedule();if(parentLessonInterval)clearInterval(parentLessonInterval);parentLessonInterval=setInterval(renderDynamicSchedule,30000);}
   // Stickers
@@ -567,7 +570,44 @@ async function runDayAI(task,prefix,btnId,outId){
 window.parentHelpAI=()=>runDayAI('parentHelp','parent','btn-ai-parent','ai-parent-out');
 window.selfCheckAI=()=>runDayAI('selfCheck','student','btn-ai-student','ai-student-out');
 window.loadParentDashboard=loadParentDashboard;
-window.updateAttOptions=function(){const t=document.getElementById('p-att-type').value;const r=document.getElementById('p-att-reason');r.innerHTML='';if(t==='late')r.innerHTML='<option value="на 10 хвилин">на 10 хвилин</option><option value="на 15 хвилин">на 15 хвилин</option><option value="до 2-го уроку">до 2-го уроку</option><option value="до 3-го уроку">до 3-го уроку</option>';else r.innerHTML='<option value="за сімейними обставинами">За сімейними обставинами</option><option value="через хворобу">Через хворобу</option>';};
+// ── Причини запізнення та відсутності ──
+// Раніше цей перелік був двічі переписаний рядком у коді — окремо для
+// батька, окремо для учня. Дві копії одного списку рано чи пізно
+// розходяться, тому тепер він один і будується з чисел.
+//
+// Хвилини: від 5 до 30 з кроком 5. Усі ці числа беруть форму «хвилин»
+// (5, 10, 15, 20, 25, 30), тож окремої обробки відмінків не потрібно.
+export const LATE_MINUTES = [5, 10, 15, 20, 25, 30];
+
+// Запізнення «до N-го уроку» — це вже не хвилини, а інша ситуація:
+// дитина приїде значно пізніше. Лишаємо як окремі варіанти в кінці.
+export const LATE_REASONS = [
+  ...LATE_MINUTES.map(m => `на ${m} хвилин`),
+  'до 2-го уроку',
+  'до 3-го уроку'
+];
+export const ABSENT_REASONS = [
+  { v:'за сімейними обставинами', t:'За сімейними обставинами' },
+  { v:'через хворобу',            t:'Через хворобу' }
+];
+
+function attReasonOptions(type){
+  const list = type === 'late'
+    ? LATE_REASONS.map(v => ({ v, t:v }))
+    : ABSENT_REASONS;
+  return list.map(o => `<option value="${escHtml(o.v)}">${escHtml(o.t)}</option>`).join('');
+}
+
+// prefix: 'p' — батько, 's' — учень. Одна функція на обидва кабінети.
+export function fillAttReasons(prefix){
+  const ts = document.getElementById(`${prefix}-att-type`);
+  const rs = document.getElementById(`${prefix}-att-reason`);
+  if(!ts || !rs) return;
+  rs.innerHTML = attReasonOptions(ts.value);
+}
+window.fillAttReasons = fillAttReasons;
+
+window.updateAttOptions=function(){ fillAttReasons('p'); };
 window.submitAttendance=function(role='parent'){
   const date=document.getElementById('global-date').value;
   const prefix=role==='student'?'s':'p';
@@ -580,12 +620,13 @@ window.submitAttendance=function(role='parent'){
     checkTeacherAttendanceAlert(role);
   });
 };
-window.updateAttOptionsStudent=function(){const t=document.getElementById('s-att-type').value;const r=document.getElementById('s-att-reason');r.innerHTML='';if(t==='late')r.innerHTML='<option value="на 10 хвилин">на 10 хвилин</option><option value="на 15 хвилин">на 15 хвилин</option><option value="до 2-го уроку">до 2-го уроку</option><option value="до 3-го уроку">до 3-го уроку</option>';else r.innerHTML='<option value="за сімейними обставинами">За сімейними обставинами</option><option value="через хворобу">Через хворобу</option>';};
+window.updateAttOptionsStudent=function(){ fillAttReasons('s'); };
 window.sendReaction=function(date,subject,emoji){if(!currentUserData)return;set(ref(db,`reactions/${getActiveClass()}/${date}/${subject}/${currentUserData.studentId||currentUserData.studentName}`),emoji).then(()=>loadParentDashboard());};
 // ══════════ STUDENT DASHBOARD ══════════
 export function loadStudentDashboard(){
   renderNewsFeed('s-news-feed');
   if(!currentUserData)return;const date=document.getElementById('global-date').value;const cls=getActiveClass();
+  fillAttReasons('s');
   if(window.schedule){renderDynamicSchedule('student');if(parentLessonInterval)clearInterval(parentLessonInterval);parentLessonInterval=setInterval(()=>renderDynamicSchedule('student'),30000);}
   get(child(ref(db),`stickers/${cls}/${currentUserData.studentId||currentUserData.studentName}`)).then(snap=>{const cnt=snap.exists()?Object.keys(snap.val()).length:0;const pct=Math.min((cnt/STICKER_GOAL)*100,100);document.getElementById('s-ribbon-progress').style.width=pct+'%';document.getElementById('s-ribbon-count').innerText=`${cnt} / ${STICKER_GOAL} наліпок до призу`;});
   get(child(ref(db),`attendance/${cls}/${date}/${currentUserData.studentId||currentUserData.studentName}/${SELF_REPORT_SLOT}`)).then(snap=>{const se=document.getElementById('s-att-status');if(snap.exists()){const d=snap.val();se.innerText=`✅ Повідомлено: ${d.status==='late'?'Запізнення':'Відсутність'} (${d.reason})`;se.style.display='block';}else se.style.display='none';});
