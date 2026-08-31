@@ -334,6 +334,61 @@ export let currentUserData=null;
 // onFail викликається, якщо функція так і не зʼявилася. Це не дрібниця:
 // найчастіша причина — файл модуля не викладений на сайт, і без onFail
 // користувач бачить порожній розділ, а не причину.
+// Оновлює картку однієї людини в довіднику контактів.
+//
+// НАВІЩО. Кожен публікує картку про себе при вході (publishContactCard).
+// Але коли директор змінює чужі дані — призначає предмет, посаду, додає
+// співробітника — сам той співробітник у цю мить у порталі не сидить, і
+// його рядок лишається старим, доки він не зайде. Через це в чаті
+// з'являлися то посада «вчитель» замість керівника, то класи без назв
+// предметів. Тому після кожної такої дії директор оновлює картку одразу.
+//
+// Пише set, а не update: якщо в людини забрали клас, при update старий
+// ключ лишився б назавжди.
+//
+// Повертає true, якщо картку записано.
+export async function syncStaffCard(se){
+  if(!se) return false;
+  try{
+    const [pr, ta, prev] = await Promise.all([
+      get(child(ref(db), `pre_approved_roles/${se}`)),
+      get(child(ref(db), `teacher_access/${se}`)).catch(() => null),
+      get(child(ref(db), `staff_directory/${se}`)).catch(() => null)
+    ]);
+    // Правило вимагає, щоб людина була у списку персоналу. Якщо її там
+    // немає — запис усе одно відхилили б, тому виходимо мовчки.
+    if(!pr.exists()) return false;
+    const role = normalizeRoles(pr.val())[0];
+    if(!role || role === 'parent' || role === 'student') return false;
+
+    let name = (prev && prev.exists() && prev.val().name) || '';
+    if(!name){
+      const us = await getUsersSnap();
+      const users = us.exists() ? us.val() : {};
+      for(const uid in users){
+        const u = users[uid] || {};
+        if(String(u.email || '').toLowerCase().replace(/\./g, '_') === se){
+          name = [u.firstName, u.lastName].filter(Boolean).join(' ') || u.email;
+          break;
+        }
+      }
+    }
+    const rec = { name: String(name || se).slice(0, 120), role: String(role), ts: Date.now() };
+    if(ta && ta.exists()){
+      const classes = {};
+      const v = ta.val() || {};
+      Object.keys(v).forEach(c => { classes[c] = subjectsLabel(v[c]); });
+      if(Object.keys(classes).length) rec.classes = classes;
+    }
+    await set(ref(db, `staff_directory/${se}`), rec);
+    if(window.invalidateContactDir) window.invalidateContactDir();
+    return true;
+  }catch(e){
+    console.warn('syncStaffCard', se, e.message);
+    return false;
+  }
+}
+
 // Змінює викладацьку посаду, не чіпаючи решту ролей людини.
 //
 // Одна людина може бути одночасно, скажімо, вчителем і адміністратором —
