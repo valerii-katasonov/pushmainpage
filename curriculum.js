@@ -673,10 +673,19 @@ export async function checkCurriculumUploadAccess(){
   // Тепер картка переїжджає до кабінету директора, у вкладку «Розклад».
   if(DIR_ROLES.includes(role)){
     const slot=document.getElementById('curr-dir-slot');
-    if(slot && sec.parentElement!==slot) slot.appendChild(sec);
-    if(dirBox){ dirBox.style.display='block'; fillDirClassSelect(); }
+    if(!slot){
+      // Слота немає — отже, у браузері стара розмітка. Мовчати не можна:
+      // саме так минулого разу картка «була в коді», але її ніхто не бачив.
+      console.warn('curr-dir-slot не знайдено: cabinet.html не оновлено?');
+      return;
+    }
+    if(sec.parentElement!==slot) slot.appendChild(sec);
+    if(dirBox) dirBox.style.display='block';
+    // Спершу список класів, і лише потім читання плану: інакше клас ще
+    // порожній, і показали б план невідомо якого класу.
+    await fillDirClassSelect();
     uploadAccess={allowed:null,isClassTeacher:false,cls:currClass()};
-    if(hint) hint.innerText='Ви можете завантажити план за будь-який клас і предмет.';
+    if(hint) hint.textContent='Ви можете завантажити план за будь-який клас і предмет.';
     sec.style.display='block';
     loadCurrentCurriculumDisplay();
     return;
@@ -705,7 +714,7 @@ export async function checkCurriculumUploadAccess(){
   if(allowed !== null && allowed.length===0){ sec.style.display='none'; return; }
 
   if(hint){
-    hint.innerText = isClassTeacher
+    hint.textContent = isClassTeacher
       ? 'Ви класний керівник цього класу — можете завантажити план за будь-який його предмет.'
       : 'Ваші предмети в цьому класі: ' + allowed.join(', ');
   }
