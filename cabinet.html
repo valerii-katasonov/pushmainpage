@@ -2269,7 +2269,9 @@
       <!-- Curriculum Upload (visible to class_teacher of THIS class or director) -->
       <div id="curriculum-upload-section" style="display:none;margin-top:18px;background:#e3f2fd;padding:14px;border-radius:12px;border:1px solid #64b5f6;">
         <h4 style="margin:0 0 8px 0;color:#0d47a1;font-size:.95rem;">📅 Календарне планування <span class="ct-badge">Кл. керівник</span></h4>
-        <p style="font-size:.78rem;color:#555;margin-bottom:10px;">Завантажте Excel-файл — теми автоматично прив'яжуться до уроків.</p>
+        <p style="font-size:.78rem;color:#555;margin-bottom:10px;">Завантажте Excel-файл — портал збереже теми списком за предметом.
+          Учитель обиратиме їх зі списку, коли заповнює журнал уроку.</p>
+        <div id="curr-sched-warn" class="curr-warn danger" style="display:none;"></div>
         <div id="curr-dir-class-box" style="display:none;margin-bottom:10px;">
           <label style="font-size:.8rem;color:#0d47a1;font-weight:600;">Клас, у який зберегти план:</label>
           <select id="curr-dir-class" onchange="onCurrDirClassChange()" style="margin-top:4px;"></select>
