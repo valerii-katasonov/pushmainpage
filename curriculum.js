@@ -8,7 +8,7 @@
 // XLSX comes from the CDN <script> tag already in <head> (global).
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, update } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, auth, getActiveClass, currentUserData, showToast, localDateString, escHtml, getUsersSnap } from './common.js';
+import { db, auth, getActiveClass, currentUserData, showToast, localDateString, escHtml, getUsersSnap, teacherAccessMatrix } from './common.js';
 
 let parsedCurriculum=null;        // після парсингу xlsx
 const MAX_TOPICS=250;             // стеля на предмет: захист від зіпсованого файлу
@@ -204,10 +204,62 @@ function parseCurriculumWorkbook(wb){
   });
   return result;
 }
+// ═══════ Хто і що має право вантажити ═══════
+// Календарний план належить предмету, а не класу: математику веде один
+// учитель, історію інший, і кожен складає свій план сам. Тому право на
+// завантаження визначається призначенням на предмет, а не посадою.
+//
+//   директор       — будь-який клас, будь-який предмет
+//   класний керівник — будь-який предмет свого класу
+//   учитель        — лише предмети, на які його призначено в цьому класі
+//
+// Джерело істини — teacher_access/{пошта}/{клас} = [перелік предметів],
+// той самий вузол, за яким учителя пускають виставляти оцінки. Окремого
+// списку не заводимо: два списки неминуче розійдуться.
+const DIR_ROLES = ['director', 'administrator'];
+
+// Клас, у який зберігається план. У вчителя — обраний у селекторі зверху,
+// у директора власного класу немає, тому він обирає його в самій картці.
+export function currClass(){
+  if(DIR_ROLES.includes(currentUserData?.role)){
+    const sel = document.getElementById('curr-dir-class');
+    if(sel && sel.value) return sel.value;
+  }
+  return getActiveClass();
+}
+
+// Предмети, дозволені цьому користувачу в цьому класі.
+// null означає «будь-який» — так простіше, ніж перелічувати всі предмети школи.
+export function allowedSubjectsFor(cls, role, matrix, isClassTeacher){
+  if(DIR_ROLES.includes(role)) return null;
+  if(isClassTeacher) return null;
+  const raw = (matrix || {})[cls];
+  if(!raw) return [];
+  const list = (Array.isArray(raw) ? raw : Object.values(raw))
+    .map(s => typeof s === 'string' ? s.trim() : '')
+    .filter(Boolean);
+  if(list.includes('Всі предмети')) return null;
+  return list;
+}
+
+// Чи можна зберегти план саме з такою назвою предмета.
+// Порівнюємо без урахування регістру: учитель напише «математика», а в
+// призначеннях стоїть «Математика» — це той самий предмет.
+export function subjectAllowedForUpload(subject, allowed){
+  if(allowed === null) return true;
+  const s = String(subject || '').trim().toLowerCase();
+  if(!s) return false;
+  return allowed.some(a => a.toLowerCase() === s);
+}
+
+// Стан доступу поточного користувача — обчислюється один раз при показі
+// картки і використовується і у превʼю, і при збереженні.
+let uploadAccess = { allowed: [], isClassTeacher: false, cls: null };
+
 function renderCurriculumPreview(data){
   const container=document.getElementById('curr-preview-content');
   const classSpan=document.getElementById('curr-preview-class');
-  const cls=getActiveClass();
+  const cls=currClass();
   const clsNum=parseInt(String(cls).replace('class_',''));
   classSpan.innerText=`→ ${cls.replace('class_','')} клас`;
   let html='';
@@ -227,13 +279,35 @@ function renderCurriculumPreview(data){
     if(simple){
       html+=`<div class="curr-src">Розпізнано простий бланк школи${
         s.meta.classNum?` · клас із назви файлу: ${s.meta.classNum}`:''}</div>`;
-      if(s.meta.subjectGuessed){
-        html+=`<div class="curr-warn">Предмет узятий із назви файлу — перевірте,
-          чи він правильний. Виправити можна нижче.</div>
-          <input type="text" class="curr-subj-fix" value="${escHtml(s.meta.subject)}"
-                 oninput="fixPlanSubject('${escJsSafe(sheetName)}', this.value)"
-                 placeholder="Назва предмета українською">`;
+    }
+
+    // Предмет: якщо в користувача є перелік дозволених — вибір зі списку,
+    // а не вільний текст. Так учитель не помилиться в написанні («Матемтика»
+    // створила б окремий предмет-двійник) і не збереже план у чужий предмет.
+    const allowed = uploadAccess.allowed;
+    const okSubj  = subjectAllowedForUpload(s.meta.subject, allowed);
+    if(allowed !== null){
+      if(!okSubj){
+        html+=`<div class="curr-warn danger">Предмет «${escHtml(s.meta.subject)}» вам у цьому
+          класі не призначено. Оберіть свій предмет — інакше план не збережеться.</div>`;
+      } else if(s.meta.subjectGuessed){
+        html+=`<div class="curr-warn">Предмет узятий із назви файлу — перевірте, чи правильно.</div>`;
       }
+      html+=`<select class="curr-subj-fix" onchange="fixPlanSubject('${escJsSafe(sheetName)}', this.value)">
+        ${!okSubj?'<option value="" selected>— оберіть предмет —</option>':''}
+        ${allowed.map(a=>`<option value="${escHtml(a)}"${
+          okSubj && a.toLowerCase()===String(s.meta.subject).trim().toLowerCase()?' selected':''
+        }>${escHtml(a)}</option>`).join('')}
+      </select>`;
+    } else if(simple && s.meta.subjectGuessed){
+      html+=`<div class="curr-warn">Предмет узятий із назви файлу — перевірте,
+        чи він правильний. Виправити можна нижче.</div>
+        <input type="text" class="curr-subj-fix" value="${escHtml(s.meta.subject)}"
+               oninput="fixPlanSubject('${escJsSafe(sheetName)}', this.value)"
+               placeholder="Назва предмета українською">`;
+    }
+
+    if(simple){
       if(clsMismatch){
         html+=`<div class="curr-warn danger">У назві файлу клас ${s.meta.classNum},
           а в кабінеті відкрито ${clsNum}. План збережеться в ${clsNum} клас —
@@ -266,7 +340,25 @@ window.fixPlanSubject=function(sheetName, value){
 };
 window.saveCurriculumToDb=async function(){
   if(!parsedCurriculum)return alert("Спочатку завантажте файл!");
-  const cls=getActiveClass();
+  const cls=currClass();
+
+  // Перевірка предмета — тут, а не лише у превʼю. Превʼю можна обійти,
+  // збереження — ні. Правила бази цього не ловлять: вони дозволяють запис
+  // будь-якому вчителю, бо не знають, який предмет усередині файлу.
+  const notMine=[];
+  for(const name in parsedCurriculum.sheets){
+    const subj=parsedCurriculum.sheets[name].meta.subject;
+    if(!subjectAllowedForUpload(subj, uploadAccess.allowed))
+      notMine.push(subj || '(без назви)');
+  }
+  if(notMine.length){
+    alert('Не збережено. Ці предмети вам у цьому класі не призначені: '
+      + notMine.join(', ')
+      + '.\n\nОберіть свій предмет у списку над темами. Якщо предмет справді ваш — '
+      + 'попросіть директора призначити вас на нього.');
+    return;
+  }
+
   const btn=document.getElementById('btn-save-curr');
   btn.disabled=true;btn.innerText="⏳ Збереження...";
   try{
@@ -306,7 +398,7 @@ window.saveCurriculumToDb=async function(){
       await set(ref(db,`curriculum_plans/${cls}/${sk}/topics`),newTopics);
     }
     showToast(trimmedWarnings.length>0
-      ?`✅ План збережено! ⚠️ Ліміт 5 тем/рік — не поміщено: ${trimmedWarnings.join(', ')}`
+      ?`✅ План збережено! ⚠️ Перевищено ліміт ${MAX_TOPICS} тем на предмет — не поміщено: ${trimmedWarnings.join(', ')}`
       :"✅ Календарне планування збережено!");
     parsedCurriculum=null;
     document.getElementById('curr-preview-section').style.display='none';
@@ -319,7 +411,7 @@ window.saveCurriculumToDb=async function(){
   btn.disabled=false;btn.innerText="💾 Зберегти план у систему";
 };
 async function loadCurrentCurriculumDisplay(){
-  const cls=getActiveClass();
+  const cls=currClass();
   const snap=await get(ref(db,`curriculum_plans/${cls}`));
   const el=document.getElementById('current-curriculum-display');
   if(!el)return;
@@ -571,15 +663,77 @@ window.loadClassTeacherInfo=async function(){
 export async function checkCurriculumUploadAccess(){
   const sec=document.getElementById('curriculum-upload-section');
   if(!sec||!currentUserData)return;
-  if(currentUserData.role==='director'){sec.style.display='block';loadCurrentCurriculumDisplay();return;}
-  if(currentUserData.role!=='teacher'&&currentUserData.role!=='class_teacher'&&currentUserData.role!=='art_school_teacher'){sec.style.display='none';return;}
-  const cls=getActiveClass();
-  const snap=await get(ref(db,`class_teachers/${cls}`));
-  if(snap.exists()&&snap.val().teacherEmail===currentUserData.email){
+  const hint=document.getElementById('curr-access-hint');
+  const dirBox=document.getElementById('curr-dir-class-box');
+  const role=currentUserData.role;
+
+  // Директор: картка живе в розмітці кабінету вчителя, а його кабінет
+  // прихований цілком. Раніше код ставив цій картці display:block усередині
+  // невидимого екрана — тобто відкривав доступ, якого не було видно.
+  // Тепер картка переїжджає до кабінету директора, у вкладку «Розклад».
+  if(DIR_ROLES.includes(role)){
+    const slot=document.getElementById('curr-dir-slot');
+    if(slot && sec.parentElement!==slot) slot.appendChild(sec);
+    if(dirBox){ dirBox.style.display='block'; fillDirClassSelect(); }
+    uploadAccess={allowed:null,isClassTeacher:false,cls:currClass()};
+    if(hint) hint.innerText='Ви можете завантажити план за будь-який клас і предмет.';
     sec.style.display='block';
     loadCurrentCurriculumDisplay();
-  } else sec.style.display='none';
+    return;
+  }
+
+  if(!['teacher','class_teacher','art_school_teacher','music_teacher'].includes(role)){
+    sec.style.display='none'; return;
+  }
+  if(dirBox) dirBox.style.display='none';
+
+  const cls=getActiveClass();
+  let isClassTeacher=false;
+  try{
+    const snap=await get(ref(db,`class_teachers/${cls}`));
+    isClassTeacher=snap.exists()&&snap.val().teacherEmail===currentUserData.email;
+  }catch(e){
+    // Не змогли перевірити — не мовчимо. Класним керівником не вважаємо,
+    // але предметний доступ нижче все одно спрацює.
+    console.warn('class_teachers:', e.message);
+  }
+
+  const allowed=allowedSubjectsFor(cls, role, teacherAccessMatrix, isClassTeacher);
+  uploadAccess={allowed, isClassTeacher, cls};
+
+  // Немає жодного предмета в цьому класі — картку не показуємо взагалі.
+  if(allowed !== null && allowed.length===0){ sec.style.display='none'; return; }
+
+  if(hint){
+    hint.innerText = isClassTeacher
+      ? 'Ви класний керівник цього класу — можете завантажити план за будь-який його предмет.'
+      : 'Ваші предмети в цьому класі: ' + allowed.join(', ');
+  }
+  sec.style.display='block';
+  loadCurrentCurriculumDisplay();
 }
+
+// Список класів для директора: беремо ті, що є в розкладі/списках учнів.
+async function fillDirClassSelect(){
+  const sel=document.getElementById('curr-dir-class');
+  if(!sel || sel.dataset.filled==='1') return;
+  let classes=[];
+  try{
+    const snap=await get(ref(db,'students_list'));
+    if(snap.exists()) classes=Object.keys(snap.val());
+  }catch(e){ console.warn('students_list:', e.message); }
+  if(!classes.length) classes=Array.from({length:11},(_,i)=>`class_${i+1}`);
+  classes.sort((a,b)=>parseInt(a.replace('class_',''))-parseInt(b.replace('class_','')));
+  sel.innerHTML=classes.map(c=>`<option value="${escHtml(c)}">${escHtml(c.replace('class_',''))} клас</option>`).join('');
+  sel.dataset.filled='1';
+}
+
+// Директор змінив клас — перечитати те, що вже збережено для нового класу.
+window.onCurrDirClassChange=function(){
+  uploadAccess.cls=currClass();
+  loadCurrentCurriculumDisplay();
+  if(parsedCurriculum) renderCurriculumPreview(parsedCurriculum);
+};
 window.checkCurriculumUploadAccess=checkCurriculumUploadAccess;
 // ═══════ Hooks ═══════
 // File input handler
