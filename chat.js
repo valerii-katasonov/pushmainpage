@@ -65,15 +65,24 @@ const clsLabel  = c => c ? String(c).replace('class_','') + ' клас' : '';
 //
 // classes[клас] може бути рядком предметів (новий формат) або true
 // (старий запис, зроблений до цієї зміни) — обробляємо обидва.
-export function staffSubtitle(rec, viewerRole, viewerClass){
-  const role = roleLabel(rec.role);
+// ctClasses — класи, де ця людина є класним керівником. Береться з вузла
+// class_teachers, а не з поля role, і це принципово: роль у записі
+// користувача оновлюється лише коли людина сама зайде в портал, тож
+// щойно призначений керівник ще довго значився б просто вчителем.
+// class_teachers натомість змінюється тієї ж миті, коли директор призначив.
+export function staffSubtitle(rec, viewerRole, viewerClass, ctClasses){
+  const ct = Array.isArray(ctClasses) ? ctClasses : [];
   const classes = rec.classes || {};
   const isFamily = viewerRole === 'parent' || viewerRole === 'student';
   if(isFamily){
     const v = viewerClass ? classes[viewerClass] : null;
     const subj = (typeof v === 'string' && v.trim()) ? v.trim() : '';
+    // Для родини важливо саме «керівник МОГО класу», а не взагалі керівник
+    const role = (viewerClass && ct.includes(viewerClass))
+      ? ROLE_LABEL.class_teacher : roleLabel(rec.role);
     return [role, subj].filter(Boolean).join(' · ');
   }
+  const role = ct.length ? ROLE_LABEL.class_teacher : roleLabel(rec.role);
   const list = Object.keys(classes).map(c => c.replace('class_','')).join(', ');
   return [role, list && list + ' кл.'].filter(Boolean).join(' · ');
 }
@@ -98,6 +107,21 @@ export async function contactDirectory(){
                    classes: (extra && extra.classes) || (prev && prev.classes) || [] });
   };
 
+  // Хто де класний керівник. Вузол відкритий на читання всім, хто увійшов,
+  // і оновлюється одразу при призначенні — тому підпис не чекає, поки
+  // людина сама зайде в портал і її роль синхронізується.
+  const ctBy = {};
+  try{
+    const ct = await get(child(ref(db),'class_teachers'));
+    if(ct.exists()){
+      const v = ct.val();
+      for(const cls in v){
+        const em = String((v[cls]||{}).teacherEmail || '').toLowerCase();
+        if(em) (ctBy[safe(em)] ||= []).push(cls);
+      }
+    }
+  }catch(e){ console.warn('class_teachers', e.message); }
+
   // Персонал бачать усі
   try{
     const sd = await get(child(ref(db),'staff_directory'));
@@ -105,7 +129,7 @@ export async function contactDirectory(){
       const v = sd.val();
       for(const se in v){
         const r = v[se] || {};
-        put(se, r.name, staffSubtitle(r, role, currentUserData?.class), 'staff',
+        put(se, r.name, staffSubtitle(r, role, currentUserData?.class, ctBy[se]), 'staff',
             { role: r.role, classes: r.classes ? Object.keys(r.classes) : [] });
       }
     }
