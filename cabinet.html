@@ -109,7 +109,12 @@
     .journal-table{border-collapse:collapse;font-size:calc(.8rem*var(--journal-scale,1));text-align:center;}
     .journal-table th{background:#e8f4fd;color:#154360;font-weight:800;position:sticky;top:0;z-index:3;border:1px solid #ddd;padding:.55em .31em;white-space:nowrap;}
     .journal-table td{border:1px solid #eee;padding:.16em;vertical-align:middle;height:2.66em;min-width:2.5em;max-width:3.75em;}
-    .journal-table td.sn{text-align:left;font-weight:700;background:#fffcf0;position:sticky;left:0;z-index:2;border-right:2px solid #ccc;padding-left:.63em;min-width:10.9em;font-size:1.03em;white-space:nowrap;}
+    /* Колонка з прізвищем. max-width тут ОБОВʼЯЗКОВИЙ: загальне правило для td
+       вище ставить max-width:3.75em (воно розраховане на вузькі клітинки з
+       оцінками), і колонка імені його успадковувала. Разом із nowrap це давало
+       текст, який виходив за межу колонки й накладався на дати.
+       Тепер довге прізвище переноситься на другий рядок, а не вилазить. */
+    .journal-table td.sn{text-align:left;font-weight:700;background:#fffcf0;position:sticky;left:0;z-index:2;border-right:2px solid #ccc;padding-left:.63em;min-width:10.9em;max-width:11.5em;font-size:1.03em;white-space:normal;overflow-wrap:anywhere;line-height:1.18;}
     .journal-table th.sn{background:#e8f4fd;z-index:6;border-right:2px solid #ccc;left:0;top:0;vertical-align:middle;}
     .journal-table td.avg-col{background:#f4ecf7;font-weight:800;color:var(--purple);position:sticky;right:0;border-left:2px solid #d1c4e9;min-width:3.6em;}
     .journal-table th.avg-col{background:#f4ecf7;color:var(--purple);position:sticky;right:0;border-left:2px solid #d1c4e9;z-index:6;top:0;vertical-align:middle;}
