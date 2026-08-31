@@ -1569,7 +1569,7 @@ window.rebuildContactDirs = async function(){
     // ── Персонал ──
     const staffUpd = {};
     const skipped = [];
-    let staff = 0;
+    let staff = 0, withSubjects = 0;
     for(const uid in users){
       const u = users[uid];
       if(!u || !u.email || u.disabled) continue;
@@ -1579,9 +1579,14 @@ window.rebuildContactDirs = async function(){
       // Правило вимагає, щоб людина була у списку персоналу — інакше через
       // довідник можна було б приписати собі будь-яку посаду.
       if(!pre[se]){ skipped.push(u.email); continue; }
+      // Посаду беремо з pre_approved_roles, а не з users. users оновлюється
+      // лише коли людина сама зайде в портал, тому щойно призначений класний
+      // керівник ще кілька днів значився б у чаті звичайним учителем.
+      // pre_approved_roles — це те, що директор призначив, і воно чинне одразу.
+      const assigned = normalizeRoles(pre[se])[0];
       const rec = {
         name: [u.firstName,u.lastName].filter(Boolean).join(' ') || u.email,
-        role: String(rawRole),
+        role: String(assigned || rawRole),
         ts: Date.now()
       };
       // Пишемо перелік предметів на клас — саме його бачить батько в списку
@@ -1592,6 +1597,11 @@ window.rebuildContactDirs = async function(){
         const cls = {};
         Object.keys(ta[se]).forEach(c => { cls[c] = subjectsLabel(ta[se][c]); });
         if(Object.keys(cls).length) rec.classes = cls;
+        // Рахуємо, скільком людям справді вписалися назви предметів.
+        // Без цього повідомлення «Готово» виглядало однаково і тоді, коли
+        // предмети записалися, і тоді, коли в усіх стоїть «Всі предмети»
+        // або порожньо — а батько потім не бачить у чаті жодного предмета.
+        if(Object.values(cls).some(v => typeof v === 'string')) withSubjects++;
       }
       staffUpd[`staff_directory/${se}`] = rec; staff++;
     }
@@ -1653,6 +1663,11 @@ window.rebuildContactDirs = async function(){
     }
     logAction('settings', { value: `довідники контактів: ${staff} персоналу, ${parents} записів батьків` });
     say(`✅ Готово: персоналу ${staff}, записів батьків ${parents}, дат народження ${bdays}.`
+      + `\nЗ назвами предметів: ${withSubjects} із ${staff}.`
+      + (withSubjects === 0 && staff
+          ? '\n\n⚠️ Жодного предмета не записано. Перевірте «Матрицю доступу»: якщо там '
+            + 'у всіх стоїть «Всі предмети», батьки бачитимуть лише посаду, без предмета.'
+          : '')
       + (skipped.length ? `\n\n⚠️ Пропущено, бо немає в «Управлінні персоналом»: ${skipped.join(', ')}` : '')
       + '\n\nТепер у батьків і вчителів є з кого обирати в чаті.');
   }catch(e){
