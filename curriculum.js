@@ -671,6 +671,36 @@ window.loadClassTeacherInfo=async function(){
   }
 };
 // ═══════ Curriculum Upload Access ═══════
+// Чи є в класу розклад.
+//
+// НАВІЩО ПОПЕРЕДЖАТИ. План сам по собі до уроків не привʼязується — це
+// список тем за предметом. Учитель бачить його тоді, коли заповнює
+// журнал, а предмет на конкретний день портал бере з РОЗКЛАДУ. Немає
+// розкладу — немає предмета в журналі, і список тем нема де показати.
+//
+// Завантажити план наперед не заважаємо: у серпні плани здають раніше,
+// ніж складають розклад. Тому це попередження, а не заборона.
+async function warnIfNoSchedule(cls){
+  const box = document.getElementById('curr-sched-warn');
+  if(!box) return;
+  box.style.display = 'none';
+  if(!cls) return;
+  try{
+    const snap = await get(ref(db, `schedules/${cls}`));
+    const v = snap.exists() ? snap.val() : null;
+    const hasLessons = v && Object.values(v).some(day =>
+      day && typeof day === 'object' && Object.keys(day).length);
+    if(hasLessons) return;
+    box.style.display = 'block';
+    box.textContent = 'У цього класу ще немає розкладу. План збережеться, але вчитель '
+      + 'побачить теми лише після того, як зʼявиться розклад: предмет на день портал '
+      + 'бере саме звідти.';
+  }catch(e){
+    // Немає доступу до розкладу — не привід лякати повідомленням
+    console.warn('schedules:', e.message);
+  }
+}
+
 export async function checkCurriculumUploadAccess(){
   const sec=document.getElementById('curriculum-upload-section');
   if(!sec||!currentUserData)return;
@@ -699,6 +729,7 @@ export async function checkCurriculumUploadAccess(){
     if(hint) hint.textContent='Ви можете завантажити план за будь-який клас і предмет.';
     sec.style.display='block';
     loadCurrentCurriculumDisplay();
+    warnIfNoSchedule(currClass());
     return;
   }
 
@@ -731,6 +762,7 @@ export async function checkCurriculumUploadAccess(){
   }
   sec.style.display='block';
   loadCurrentCurriculumDisplay();
+  warnIfNoSchedule(cls);
 }
 
 // Список класів для директора: беремо ті, що є в розкладі/списках учнів.
@@ -752,6 +784,7 @@ async function fillDirClassSelect(){
 window.onCurrDirClassChange=function(){
   uploadAccess.cls=currClass();
   loadCurrentCurriculumDisplay();
+  warnIfNoSchedule(currClass());
   if(parsedCurriculum) renderCurriculumPreview(parsedCurriculum);
 };
 window.checkCurriculumUploadAccess=checkCurriculumUploadAccess;
