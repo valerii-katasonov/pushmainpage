@@ -547,7 +547,7 @@ async function runDayAI(task,prefix,btnId,outId){
   const btn=document.getElementById(btnId);
   const out=document.getElementById(outId);
   if(!subject)return aiOut(prefix,'На цей день уроків із завданнями немає.',true);
-  if(!ctx.topic&&!ctx.homework)return aiOut(prefix,'Учитель ще не вказав тему уроку чи завдання.',true);
+  if(!ctx.topic&&!ctx.homework)return aiOut(prefix,'Вчитель ще не вказав тему уроку чи завдання.',true);
   btn.disabled=true;const label=btn.textContent;btn.textContent='⏳ Хвилинку...';
   aiOut(prefix,'');out.style.display='none';
   try{
