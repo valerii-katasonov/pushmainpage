@@ -1631,6 +1631,10 @@ window.rebuildContactDirs = async function(){
         role: String(assigned || rawRole),
         ts: Date.now()
       };
+      // Фото теж переносимо: інакше після масового заповнення аватарки в
+      // чаті зникали б у тих, хто вже їх завантажив.
+      const ph = String(u.photoURL || '');
+      if(ph && ph.length <= 60000 && !/flaticon/.test(ph)) rec.photo = ph;
       // Пишемо перелік предметів на клас — саме його бачить батько в списку
       // контактів. Формат той самий, що й у publishContactCard: один спосіб
       // на два місця, інакше довідник виглядав би по-різному залежно від
