@@ -1261,6 +1261,49 @@
 .ta-item-main{flex:1;min-width:0;}
 .ta-mini{padding:5px 10px;font-size:.74rem;background:#eceff1;color:#546e7a;border-radius:8px;}
 .ta-mini.del{background:#fdecea;color:#c0392b;}
+
+/* Екран згоди при вході */
+.cg-back{position:fixed;inset:0;background:rgba(20,30,35,.55);z-index:9000;
+  display:flex;align-items:center;justify-content:center;padding:16px;}
+.cg-win{background:#fff;border-radius:18px;max-width:560px;width:100%;
+  max-height:92vh;display:flex;flex-direction:column;overflow:hidden;}
+.cg-head{padding:18px 22px 14px;font-size:1.15rem;font-weight:800;color:#00838f;
+  border-bottom:1px solid #eceff1;}
+.cg-scroll{padding:18px 22px 22px;overflow-y:auto;}
+.cg-lead{font-size:.88rem;color:#455a64;margin:0 0 14px 0;line-height:1.5;}
+.cg-doc{background:#f7f9fa;border:1px solid #e0e6e8;border-radius:12px;padding:12px 14px;margin-bottom:16px;}
+.cg-doc summary{font-weight:700;cursor:pointer;color:#37474f;font-size:.88rem;}
+.cg-doc ul{margin:11px 0 0 0;padding-left:19px;font-size:.83rem;color:#546e7a;line-height:1.55;}
+.cg-doc li{margin-bottom:6px;}
+.cg-note{font-size:.76rem;color:#90a4ae;margin:10px 0 0 0;}
+.cg-must{display:flex;gap:11px;align-items:flex-start;background:#e0f7fa;border:1.5px solid #80deea;
+  border-radius:12px;padding:13px;font-size:.87rem;color:#00696f;font-weight:600;cursor:pointer;}
+.cg-must input{margin-top:2px;width:18px;height:18px;flex:0 0 auto;}
+.cg-sep{font-size:.78rem;color:#90a4ae;margin:18px 0 10px 0;}
+.cg-opt{display:flex;gap:11px;align-items:flex-start;background:#fff;border:1px solid #e0e6e8;
+  border-radius:12px;padding:12px;margin-bottom:8px;cursor:pointer;}
+.cg-opt input{margin-top:2px;width:18px;height:18px;flex:0 0 auto;}
+.cg-opt b{display:block;font-size:.87rem;color:#263238;margin-bottom:3px;}
+.cg-opt em{display:block;font-style:normal;font-size:.79rem;color:#78909c;line-height:1.45;}
+.cg-warn{display:block;font-style:normal;font-size:.75rem;color:#b7791f;margin-top:5px;}
+.cg-opt.small{padding:10px;}
+.cg-err{background:#fdecea;border:1px solid #f5c6cb;color:#b3261e;border-radius:10px;
+  padding:10px 12px;font-size:.82rem;margin:12px 0;}
+#cg-save,.mc-save{width:100%;background:#00838f;color:#fff;padding:13px;border-radius:12px;
+  font-weight:700;font-size:.92rem;margin-top:14px;}
+.cg-foot{font-size:.76rem;color:#b0bec5;text-align:center;margin:10px 0 0 0;line-height:1.45;}
+.mc-when{font-size:.78rem;color:#78909c;margin:0 0 11px 0;}
+
+.cg-doc-link{display:block;text-align:center;background:#f7f9fa;border:1px solid #e0e6e8;
+  border-radius:12px;padding:12px;margin:12px 0;color:#00838f;font-weight:700;
+  font-size:.85rem;text-decoration:none;}
+
+/* Превʼю календарного планування */
+.curr-src{font-size:.74rem;color:#78909c;margin:6px 0 4px 0;}
+.curr-warn{font-size:.76rem;color:#8a6d1f;background:#fff8e1;border:1px solid #ffe0a3;
+  border-radius:8px;padding:7px 9px;margin:6px 0;line-height:1.4;}
+.curr-warn.danger{color:#b3261e;background:#fdecea;border-color:#f5c6cb;}
+.curr-subj-fix{width:100%;margin:4px 0 8px 0;font-size:.84rem;}
 </style>
 </head>
 <body>
@@ -2516,7 +2559,12 @@
     </section>
 
     <section class="screen-section" data-dtab="profile">
-      <h3>✍️ Згоди</h3>
+      <h3>✍️ Згоди на обробку даних</h3>
+      <div id="p-my-consents"><p class="empty-msg">Завантаження...</p></div>
+    </section>
+
+    <section class="screen-section" data-dtab="profile">
+      <h3>📋 Запити школи</h3>
       <div id="p-consents"><p class="empty-msg">Активних запитів немає.</p></div>
     </section>
 
@@ -3121,5 +3169,16 @@ document.addEventListener('DOMContentLoaded', function(){
 <script type="module" src="kitchen.js"></script>
 <script type="module" src="news.js"></script>
 <script type="module" src="chat.js"></script>
+<script type="module" src="consent.js"></script>
+
+  <!-- ═══ ЕКРАН ЗГОДИ ПРИ ВХОДІ ═══
+       Модалка без кнопки закриття: GDPR вимагає поінформувати ДО обробки,
+       тож обійти екран не можна — лише відповісти. -->
+  <div id="consent-gate" class="cg-back" style="display:none;">
+    <div class="cg-win">
+      <div class="cg-head">Дані вашої дитини</div>
+      <div id="cg-body" class="cg-scroll"></div>
+    </div>
+  </div>
 </body>
 </html>
