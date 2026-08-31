@@ -8,7 +8,7 @@
 // XLSX comes from the CDN <script> tag already in <head> (global).
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, update } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, auth, getActiveClass, currentUserData, showToast, localDateString, escHtml, teacherAccessMatrix, withTeachingRole } from './common.js';
+import { db, auth, getActiveClass, currentUserData, showToast, localDateString, escHtml, teacherAccessMatrix, withTeachingRole, syncStaffCard } from './common.js';
 
 let parsedCurriculum=null;        // після парсингу xlsx
 const MAX_TOPICS=250;             // стеля на предмет: захист від зіпсованого файлу
@@ -643,7 +643,12 @@ window.assignClassTeacher=async function(){
     }
   }
 
-  showToast(`✅ ${teacher.name} — кл. керівник ${cls.replace('class_','')} класу. Роль застосується при його наступному вході.`);
+  // Довідник чату оновлюємо одразу за обох: і за нового керівника, і за
+  // попереднього. Інакше в батьків підпис змінився б лише після того, як
+  // ці двоє наступного разу зайдуть у портал.
+  await syncStaffCard(teacherSE);
+  if(prevEmail) await syncStaffCard(prevEmail.replace(/\./g,'_'));
+  showToast(`✅ ${teacher.name} — кл. керівник ${cls.replace('class_','')} класу.`);
   loadClassTeacherInfo();
 };
 window.loadClassTeacherInfo=async function(){
