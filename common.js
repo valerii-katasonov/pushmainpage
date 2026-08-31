@@ -334,6 +334,79 @@ export let currentUserData=null;
 // onFail викликається, якщо функція так і не зʼявилася. Це не дрібниця:
 // найчастіша причина — файл модуля не викладений на сайт, і без onFail
 // користувач бачить порожній розділ, а не причину.
+// ══════════════════════════════════════════════════════════════════
+//  ФОТО ПРОФІЛЮ
+// ══════════════════════════════════════════════════════════════════
+// Знімок зменшується просто в браузері й зберігається рядком у базі.
+//
+// ЧОМУ НЕ ЗОВНІШНІЙ СЕРВІС. Раніше фото вантажилися в Cloudinary. Це
+// третій обробник персональних даних поза Google і Netlify — його
+// довелося б вписати в документ для батьків і укласти з ним договір.
+// Заради аватарки на 128 пікселів це надмірно.
+//
+// ЧОМУ НЕ FIREBASE STORAGE. З лютого 2026 Google вимагає тарифу Blaze з
+// привʼязаною картою навіть для порожнього сховища.
+//
+// ЧОМУ ЦЕ НЕ РОЗДМУХАЄ БАЗУ. 128×128 у JPEG — близько 8–12 КБ, з
+// кодуванням base64 до 16 КБ. На двадцять співробітників це третина
+// мегабайта. Стеля MAX_PHOTO_BYTES не дає завантажити щось більше:
+// якість знижується, доки знімок не вміститься.
+export const PHOTO_SIZE = 128;
+export const MAX_PHOTO_BYTES = 40000;
+
+// Обрізаємо по центру до квадрата — інакше портрет 3:4 стиснувся б
+// у ширину, і обличчя виглядало б розплющеним.
+export function coverCrop(w, h){
+  const side = Math.min(w, h);
+  return { sx: Math.round((w - side) / 2), sy: Math.round((h - side) / 2), side };
+}
+
+export function shrinkImage(file, size = PHOTO_SIZE, maxBytes = MAX_PHOTO_BYTES){
+  return new Promise((resolve, reject) => {
+    if(!file) return reject(new Error('Файл не обрано'));
+    if(!/^image\//.test(file.type)) return reject(new Error('Це не зображення. Оберіть JPG або PNG.'));
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      try{
+        const { sx, sy, side } = coverCrop(img.naturalWidth, img.naturalHeight);
+        const cv = document.createElement('canvas');
+        cv.width = cv.height = size;
+        const ctx = cv.getContext('2d');
+        ctx.drawImage(img, sx, sy, side, side, 0, 0, size, size);
+        // Знижуємо якість, доки не вміститься. Крок дрібний, щоб не
+        // псувати картинку сильніше, ніж потрібно.
+        let q = 0.8, out = cv.toDataURL('image/jpeg', q);
+        while(out.length > maxBytes && q > 0.3){
+          q -= 0.1;
+          out = cv.toDataURL('image/jpeg', q);
+        }
+        if(out.length > maxBytes) return reject(new Error('Не вдалося стиснути фото. Спробуйте інший знімок.'));
+        resolve(out);
+      }catch(e){ reject(e); }
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Не вдалося прочитати зображення.')); };
+    img.src = url;
+  });
+}
+
+// Знімок людини: спершу з її облікового запису, інакше лишаємо той, що
+// вже стоїть у довіднику. Директор читає users, тож знайде; для решти
+// випадків старе фото краще за порожнє місце.
+async function photoOf(se, prev){
+  try{
+    const us = await getUsersSnap();
+    const users = us.exists() ? us.val() : {};
+    for(const uid in users){
+      const u = users[uid] || {};
+      if(String(u.email || '').toLowerCase().replace(/\./g, '_') === se)
+        return u.photoURL && String(u.photoURL).length <= 60000 ? u.photoURL : '';
+    }
+  }catch(e){ /* немає доступу до users — не біда */ }
+  return (prev && prev.exists() && prev.val().photo) || '';
+}
+
 // Оновлює картку однієї людини в довіднику контактів.
 //
 // НАВІЩО. Кожен публікує картку про себе при вході (publishContactCard).
@@ -374,6 +447,10 @@ export async function syncStaffCard(se){
       }
     }
     const rec = { name: String(name || se).slice(0, 120), role: String(role), ts: Date.now() };
+    // Фото — з профілю людини, якщо воно там є. Довідник читають усі, тому
+    // сюди потрапляє лише мініатюра, і лише для персоналу.
+    const ph = await photoOf(se, prev);
+    if(ph) rec.photo = ph;
     if(ta && ta.exists()){
       const classes = {};
       const v = ta.val() || {};
@@ -752,37 +829,13 @@ window.saveProfile=async function(){
   if(newPass){if(newPass.length<6){alert("Пароль мінімум 6 символів!");btn.disabled=false;btn.innerText="💾 Зберегти";return;}try{await updatePassword(auth.currentUser,newPass);document.getElementById('profile-new-pass').value='';}catch(e){if(e.code==='auth/requires-recent-login')alert("Для зміни пароля потрібно переввійти.");else alert("Помилка: "+e.message);btn.disabled=false;btn.innerText="💾 Зберегти";return;}}
   let photoURL=currentUserData.photoURL||"https://cdn-icons-png.flaticon.com/512/149/149071.png";
   if(fileInput.files.length>0){
-    const stop=(msg)=>{alert(msg);btn.disabled=false;btn.innerText="💾 Зберегти";};
-    const f=fileInput.files[0];
-    // Перевіряємо ДО відправлення: інакше людина чекає завантаження великого
-    // файлу, щоб дізнатися, що він не підходить.
-    if(!/^image\//.test(f.type)) { stop('Це не зображення. Оберіть файл JPG або PNG.'); return; }
-    if(f.size > 10*1024*1024){ stop(`Файл завеликий: ${(f.size/1048576).toFixed(1)} МБ. Максимум 10 МБ.`); return; }
-    btn.innerText='⏳ Завантажую фото...';
-    const fd=new FormData();fd.append('file',f);fd.append('upload_preset',UPLOAD_PRESET);
+    btn.innerText='⏳ Обробляю фото...';
     try{
-      const rs=await fetch(CLOUDINARY_URL,{method:'POST',body:fd});
-      const txt=await rs.text();
-      let dt={}; try{ dt=JSON.parse(txt); }catch(_){}
-      // ГОЛОВНЕ ВИПРАВЛЕННЯ. Раніше бралося dt.secure_url без жодної
-      // перевірки. Коли Cloudinary відмовляв, поле було undefined, і далі
-      // в базу йшов запис зі значенням undefined — той падав уже з іншою,
-      // незрозумілою помилкою, у якій про фото не було ні слова.
-      const err=(dt.error && dt.error.message) || (!rs.ok ? `HTTP ${rs.status}` : '');
-      if(err || !dt.secure_url){
-        console.warn('Cloudinary:', rs.status, txt.slice(0,300));
-        stop(/whitelist|unsigned|preset/i.test(err)
-          ? 'Сервіс зображень не приймає завантаження: пресет «' + UPLOAD_PRESET +
-            '» не увімкнено для неавторизованих завантажень.\n\nЦе налаштування на боці ' +
-            'Cloudinary, у коді порталу все правильно.'
-          : 'Не вдалося завантажити фото: ' + (err || 'сервіс не повернув посилання') +
-            '\n\nІмʼя та прізвище можна зберегти без фото.');
-        return;
-      }
-      photoURL=dt.secure_url;
+      // Стискаємо тут, у браузері. Нічого нікуди не відправляється.
+      photoURL=await shrinkImage(fileInput.files[0]);
     }catch(e){
-      console.warn('Cloudinary fetch:', e);
-      stop('Не вдалося звʼязатися із сервісом зображень: '+e.message);
+      alert('Фото: '+e.message+'\n\nІмʼя та прізвище можна зберегти без фото.');
+      btn.disabled=false;btn.innerText="💾 Зберегти";
       return;
     }
   }
@@ -1025,6 +1078,9 @@ export async function publishContactCard(){
       }
     }catch(e){ /* не всі ролі мають доступ — не біда */ }
     const rec = { name: String(name).slice(0,120), role: String(role), ts: Date.now() };
+    // Своє фото публікуємо разом із карткою — щоб у чаті була мініатюра.
+    const myPhoto = currentUserData?.photoURL || '';
+    if(myPhoto && String(myPhoto).length <= 60000 && !/flaticon/.test(myPhoto)) rec.photo = myPhoto;
     if(classes) rec.classes = classes;
     await update(ref(db, `staff_directory/${se}`), rec);
   }catch(e){
