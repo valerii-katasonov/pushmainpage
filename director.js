@@ -149,7 +149,36 @@ window.removeHoliday=function(id){if(confirm("Видалити це свято?"
 export async function loadTeachersListForDirector(){invalidateUsersCache();const s=document.getElementById('d-acc-email-select');s.innerHTML='<option value="">-- Вчитель --</option>';const snap=await getUsersSnap();window.globalTeachersList=[];if(snap.exists()){const u=snap.val();for(let uid in u){const us=u[uid];const rs=getUserRoles(us);if(rs.some(r=>r==='teacher'||r==='art_school_teacher'||r==='class_teacher'||r==='music_teacher')&&us.email&&!us.disabled){const n=(us.firstName||us.lastName)?`${us.firstName||''} ${us.lastName||''}`.trim():us.email;const se=us.email.replace(/\./g,'_');s.innerHTML+=`<option value="${se}">${escHtml(n)} (${escHtml(us.email)})</option>`;window.globalTeachersList.push({email:us.email,name:n,safeEmail:se});}}}}
 window.loadTeachersListForDirector=loadTeachersListForDirector;
 window.loadDirectorMatrixSubjects=function(){const cls=document.getElementById('d-acc-class').value;const ss=document.getElementById('d-acc-subjects');if(!cls){ss.innerHTML='<option disabled>Оберіть клас...</option>';return;}ss.innerHTML='<option disabled>Завантаження...</option>';window.loadScheduleScript(cls,()=>{let u=new Set();if(window.schedule)['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'].forEach(d=>window.getTodayLessonsFlattened(d).forEach(i=>{const s=window.getValidSubjectName(i);if(s)u.add(s);}));ss.innerHTML='<option value="Всі предмети" style="font-weight:700;color:#d35400;">🌟 Всі предмети</option>';if(u.size>0)[...u].sort().forEach(subj=>ss.innerHTML+=`<option value="${subj}">${subj}</option>`);else ss.innerHTML='<option disabled>Розклад не знайдено</option>';});};
-window.grantTeacherAccess=function(){const se=document.getElementById('d-acc-email-select').value;const cls=document.getElementById('d-acc-class').value;const opts=document.getElementById('d-acc-subjects').selectedOptions;const subjs=Array.from(opts).map(o=>o.value);if(!se||!cls||subjs.length===0)return alert('Заповніть усі поля!');Promise.all([set(ref(db,`pre_approved_roles/${se}`),'teacher'),set(ref(db,`teacher_access/${se}/${cls}`),subjs)]).then(()=>{alert('✅ Доступ збережено!');}).catch(e=>alert('Помилка: '+e.message+'\n\nЯкщо не записався список персоналу, учитель не зможе листуватися.'));};
+window.grantTeacherAccess=async function(){
+  const se=document.getElementById('d-acc-email-select').value;
+  const cls=document.getElementById('d-acc-class').value;
+  const subjs=Array.from(document.getElementById('d-acc-subjects').selectedOptions).map(o=>o.value);
+  if(!se||!cls||subjs.length===0)return alert('Заповніть усі поля!');
+  try{
+    // РОЛЬ НЕ ЧІПАЄМО, ЯКЩО ВОНА ВЖЕ Є.
+    //
+    // Раніше тут беззастережно писалося pre_approved_roles/{se} = 'teacher'.
+    // Через це призначення предмета скидало посаду: щойно призначений
+    // класний керівник ставав звичайним учителем, а якщо в людини було
+    // кілька ролей (напр. учитель і адміністратор) — лишалася одна.
+    // Саме тому в чаті керівник підписувався як «Вчитель».
+    //
+    // Роль тут потрібна лише для того, щоб людина взагалі значилася в
+    // списку персоналу. Якщо вона там уже є — не втручаємось.
+    const cur=await get(child(ref(db),`pre_approved_roles/${se}`));
+    const writes=[set(ref(db,`teacher_access/${se}/${cls}`),subjs)];
+    let roleNote='';
+    if(!cur.exists()){
+      writes.push(set(ref(db,`pre_approved_roles/${se}`),'teacher'));
+      roleNote='\n\nЛюдину додано до списку персоналу як вчителя.';
+    }
+    await Promise.all(writes);
+    alert(`✅ Доступ збережено: ${subjs.join(', ')} — ${cls.replace('class_','')} клас.`+roleNote
+      + '\n\nЩоб предмет зʼявився в чаті у батьків, натисніть «📇 Довідник контактів для чату».');
+  }catch(e){
+    alert('Помилка: '+e.message+'\n\nЯкщо не записався список персоналу, учитель не зможе листуватися.');
+  }
+};
 // pre_approved_roles/{safeEmail} тепер може містити масив ролей — одна особа
 // може бути одночасно, напр., вчителем і адміністратором.
 window.grantStaffRole=async function(){
