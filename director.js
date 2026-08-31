@@ -7,7 +7,7 @@
 // header for why.)
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, push, remove, update, query, limitToLast } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, showToast, getClassNum, displayGrade, gradeClass6, teacherAccessMatrix, getWeekDates, formatAttendanceSlotLabel, gradeTypesCache, loadGradeTypesCache, calculateStudentWeightedAvg, escJs, escHtml, localDateString, normalizeRoles, getUserRoles, ROLE_LABELS, currentUserData, dayNamesUA, sendPasswordReset, normalizeChildren, renderParentsBlock, logAction, AUDIT_LABELS, getParentProfile, parentFullName, getSchoolRange, getAllUsers, invalidateUsersCache, getUsersSnap, stuName, invalidateStudentDir, subjectsLabel } from './common.js';
+import { db, showToast, getClassNum, displayGrade, gradeClass6, teacherAccessMatrix, getWeekDates, formatAttendanceSlotLabel, gradeTypesCache, loadGradeTypesCache, calculateStudentWeightedAvg, escJs, escHtml, localDateString, normalizeRoles, getUserRoles, ROLE_LABELS, currentUserData, dayNamesUA, sendPasswordReset, normalizeChildren, renderParentsBlock, logAction, AUDIT_LABELS, getParentProfile, parentFullName, getSchoolRange, getAllUsers, invalidateUsersCache, getUsersSnap, stuName, invalidateStudentDir, subjectsLabel, syncStaffCard } from './common.js';
 
 let directorSkillsTemp=[];
 
@@ -173,8 +173,12 @@ window.grantTeacherAccess=async function(){
       roleNote='\n\nЛюдину додано до списку персоналу як вчителя.';
     }
     await Promise.all(writes);
+    // Оновлюємо картку в довіднику одразу — щоб предмет зʼявився в чаті
+    // у батьків зараз, а не після того, як учитель наступного разу зайде.
+    const synced = await syncStaffCard(se);
     alert(`✅ Доступ збережено: ${subjs.join(', ')} — ${cls.replace('class_','')} клас.`+roleNote
-      + '\n\nЩоб предмет зʼявився в чаті у батьків, натисніть «📇 Довідник контактів для чату».');
+      + (synced ? '\n\nУ чаті в батьків предмет уже видно.'
+                : '\n\nДовідник контактів оновити не вдалося — скористайтеся кнопкою «📇 Довідник контактів для чату».'));
   }catch(e){
     alert('Помилка: '+e.message+'\n\nЯкщо не записався список персоналу, учитель не зможе листуватися.');
   }
@@ -204,6 +208,7 @@ window.grantStaffRole=async function(){
         }
       }
     }
+    await syncStaffCard(se);   // одразу в довідник, щоб був у списку чату
     const names=roles.map(r=>ROLE_LABELS[r]||r).join(', ');
     showToast(`✅ Доступ надано: ${names}`);
     logAction('staff_grant',{target:raw,value:roles.join(',')});
@@ -325,8 +330,12 @@ window.removeStaffMember=async function(safeEmail){
     await Promise.all([
       remove(ref(db,`pre_approved_roles/${safeEmail}`)),
       remove(ref(db,`teacher_access/${safeEmail}`)),
-      remove(ref(db,`teacher_skills/${safeEmail}`))
+      remove(ref(db,`teacher_skills/${safeEmail}`)),
+      // З довідника теж: інакше звільнена людина лишалася б у списку
+      // контактів чату, і їй можна було б написати.
+      remove(ref(db,`staff_directory/${safeEmail}`))
     ]);
+    if(window.invalidateContactDir) window.invalidateContactDir();
     // 2. Позначаємо профіль як відключений (блокує вхід)
     const usersSnap=await getUsersSnap();
     if(usersSnap.exists()){
