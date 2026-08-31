@@ -7,7 +7,7 @@
 // header for why.)
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, push, remove, update, query, limitToLast } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, showToast, getClassNum, displayGrade, gradeClass6, teacherAccessMatrix, getWeekDates, formatAttendanceSlotLabel, gradeTypesCache, loadGradeTypesCache, calculateStudentWeightedAvg, escJs, escHtml, localDateString, normalizeRoles, getUserRoles, ROLE_LABELS, currentUserData, dayNamesUA, sendPasswordReset, normalizeChildren, renderParentsBlock, logAction, AUDIT_LABELS, getParentProfile, parentFullName, getSchoolRange, getAllUsers, invalidateUsersCache, getUsersSnap, stuName, invalidateStudentDir } from './common.js';
+import { db, showToast, getClassNum, displayGrade, gradeClass6, teacherAccessMatrix, getWeekDates, formatAttendanceSlotLabel, gradeTypesCache, loadGradeTypesCache, calculateStudentWeightedAvg, escJs, escHtml, localDateString, normalizeRoles, getUserRoles, ROLE_LABELS, currentUserData, dayNamesUA, sendPasswordReset, normalizeChildren, renderParentsBlock, logAction, AUDIT_LABELS, getParentProfile, parentFullName, getSchoolRange, getAllUsers, invalidateUsersCache, getUsersSnap, stuName, invalidateStudentDir, subjectsLabel } from './common.js';
 
 let directorSkillsTemp=[];
 
@@ -1584,11 +1584,13 @@ window.rebuildContactDirs = async function(){
         role: String(rawRole),
         ts: Date.now()
       };
-      // teacher_access зберігає СПИСОК ПРЕДМЕТІВ, а довіднику потрібен лише
-      // факт «має цей клас». Кладемо true, інакше перевірка типу відхилить запис.
+      // Пишемо перелік предметів на клас — саме його бачить батько в списку
+      // контактів. Формат той самий, що й у publishContactCard: один спосіб
+      // на два місця, інакше довідник виглядав би по-різному залежно від
+      // того, хто його заповнив останнім.
       if(ta[se]){
         const cls = {};
-        Object.keys(ta[se]).forEach(c => { cls[c] = true; });
+        Object.keys(ta[se]).forEach(c => { cls[c] = subjectsLabel(ta[se][c]); });
         if(Object.keys(cls).length) rec.classes = cls;
       }
       staffUpd[`staff_directory/${se}`] = rec; staff++;
