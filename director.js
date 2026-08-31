@@ -7,7 +7,7 @@
 // header for why.)
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, push, remove, update, query, limitToLast } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, showToast, getClassNum, displayGrade, gradeClass6, teacherAccessMatrix, getWeekDates, formatAttendanceSlotLabel, gradeTypesCache, loadGradeTypesCache, calculateStudentWeightedAvg, escJs, escHtml, localDateString, normalizeRoles, getUserRoles, ROLE_LABELS, currentUserData, dayNamesUA, sendPasswordReset, normalizeChildren, renderParentsBlock, logAction, AUDIT_LABELS, getParentProfile, parentFullName, getSchoolRange, getAllUsers, invalidateUsersCache, getUsersSnap, stuName, invalidateStudentDir, subjectsLabel, syncStaffCard } from './common.js';
+import { db, showToast, getClassNum, displayGrade, gradeClass6, teacherAccessMatrix, getWeekDates, formatAttendanceSlotLabel, gradeTypesCache, loadGradeTypesCache, calculateStudentWeightedAvg, escJs, escHtml, localDateString, normalizeRoles, getUserRoles, ROLE_LABELS, currentUserData, dayNamesUA, sendPasswordReset, normalizeChildren, renderParentsBlock, logAction, AUDIT_LABELS, getParentProfile, parentFullName, getSchoolRange, getAllUsers, invalidateUsersCache, getUsersSnap, stuName, invalidateStudentDir, subjectsLabel, syncStaffCard, shrinkImage } from './common.js';
 
 let directorSkillsTemp=[];
 
@@ -245,13 +245,17 @@ window.loadStaffList=async function(){invalidateUsersCache();
       const name=(u&&(u.firstName||u.lastName))?`${u.firstName||''} ${u.lastName||''}`.trim():'—';
       const isMe=safeEmail===myEmailSafe;
       const neverLoggedIn=!u;
+      const ph=u?.photoURL||'';
       html+=`<div class="staff-row${u?.disabled?' is-disabled':''}">
+        <span class="staff-av">${escHtml((name==='—'?email:name).trim().slice(0,1).toUpperCase())}${
+          /^(data:image\/|https:\/\/)/.test(ph)?`<img src="${escHtml(ph)}" alt="" loading="lazy" onerror="this.remove()">`:''}</span>
         <div class="staff-main">
           <div><b>${escHtml(name)}</b>${isMe?' <span style="font-size:.7rem;color:var(--teal);">(це ви)</span>':''}${neverLoggedIn?' <span style="font-size:.68rem;color:#f39c12;">ще не входив</span>':''}</div>
           <div class="staff-email">${escHtml(email)}</div>
           <div class="staff-roles">${roles.map(r=>`<span class="staff-role-tag">${escHtml(ROLE_LABELS[r]||r)}</span>`).join('')}</div>
         </div>
         <div class="staff-actions">
+          <button class="staff-edit" onclick="openStaffProfile('${escJs(safeEmail)}')" title="Змінити імʼя та фото">✏️ Профіль</button>
           <button class="staff-reset" onclick="resetStaffPassword('${escJs(email)}')" title="Надіслати лист для встановлення нового пароля">📧 Скинути пароль</button>
           ${isMe?'':`<button class="staff-del" onclick="removeStaffMember('${escJs(safeEmail)}')">🗑 Видалити</button>`}
         </div>
@@ -1710,5 +1714,109 @@ window.rebuildContactDirs = async function(){
       + '\n\nТепер у батьків і вчителів є з кого обирати в чаті.');
   }catch(e){
     say('Не вдалося: ' + e.message, true);
+  }
+};
+
+// ══════════ ПЕРСОНАЛ: профіль співробітника ══════════
+// Директор змінює імʼя, прізвище та фото вчителя.
+//
+// ЧОМУ ЦЕ ПОТРІБНО. Донедавна профіль міг заповнити лише сам власник
+// запису, і в списку персоналу висіли прочерки замість імен, доки людина
+// не зайде й не заповнить себе сама. Тепер правило users/$uid дозволяє
+// запис адміністрації, тож директор може підготувати профілі наперед.
+//
+// ЧОМУ ЛИШЕ ІМʼЯ ТА ФОТО. Роль призначається окремо, у списку персоналу:
+// змішувати «як людину звати» і «що їй дозволено» в одній формі — вірний
+// спосіб колись роздати зайві права, не помітивши.
+let staffProfileSE = null, staffProfilePhoto = null;
+
+window.openStaffProfile = async function(safeEmail){
+  staffProfileSE = safeEmail; staffProfilePhoto = null;
+  const box = document.getElementById('staff-profile-modal');
+  if(!box) return alert('Розділ профілю не знайдено — оновіть cabinet.html.');
+  const err = document.getElementById('sp-err'); if(err) err.style.display='none';
+  document.getElementById('sp-email').textContent = safeEmail.replace(/_/g,'.');
+  document.getElementById('sp-first').value = '';
+  document.getElementById('sp-last').value  = '';
+  document.getElementById('sp-preview').removeAttribute('src');
+  document.getElementById('sp-preview').style.display = 'none';
+  document.getElementById('sp-file').value = '';
+  box.style.display = 'flex';
+  try{
+    const us = await getUsersSnap();
+    const users = us.exists() ? us.val() : {};
+    for(const uid in users){
+      const u = users[uid] || {};
+      if(String(u.email||'').replace(/\./g,'_') === safeEmail){
+        document.getElementById('sp-first').value = u.firstName || '';
+        document.getElementById('sp-last').value  = u.lastName  || '';
+        if(u.photoURL){
+          const img = document.getElementById('sp-preview');
+          img.src = u.photoURL; img.style.display = 'block';
+        }
+        return;
+      }
+    }
+    // Людина ще жодного разу не заходила — записувати нема куди.
+    if(err){
+      err.style.display = 'block';
+      err.textContent = 'Ця людина ще не входила в портал. Профіль можна буде заповнити '
+        + 'після її першого входу — облікового запису поки не існує.';
+    }
+  }catch(e){
+    if(err){ err.style.display='block'; err.textContent = 'Не вдалося прочитати профіль: ' + e.message; }
+  }
+};
+window.closeStaffProfile = function(){
+  const b = document.getElementById('staff-profile-modal');
+  if(b) b.style.display = 'none';
+  staffProfileSE = null; staffProfilePhoto = null;
+};
+
+window.pickStaffPhoto = async function(input){
+  const err = document.getElementById('sp-err');
+  if(!input.files || !input.files[0]) return;
+  try{
+    staffProfilePhoto = await shrinkImage(input.files[0]);
+    const img = document.getElementById('sp-preview');
+    img.src = staffProfilePhoto; img.style.display = 'block';
+    if(err) err.style.display = 'none';
+  }catch(e){
+    staffProfilePhoto = null;
+    if(err){ err.style.display='block'; err.textContent = 'Фото: ' + e.message; }
+  }
+};
+
+window.saveStaffProfile = async function(){
+  if(!staffProfileSE) return;
+  const btn = document.getElementById('sp-save');
+  const err = document.getElementById('sp-err');
+  const first = document.getElementById('sp-first').value.trim();
+  const last  = document.getElementById('sp-last').value.trim();
+  btn.disabled = true; btn.textContent = 'Зберігаю...';
+  try{
+    const us = await getUsersSnap();
+    const users = us.exists() ? us.val() : {};
+    let uid = null;
+    for(const k in users){
+      if(String((users[k]||{}).email||'').replace(/\./g,'_') === staffProfileSE){ uid = k; break; }
+    }
+    if(!uid) throw new Error('Обліковий запис не знайдено — людина ще не входила в портал.');
+    const patch = { firstName: first, lastName: last };
+    if(staffProfilePhoto) patch.photoURL = staffProfilePhoto;
+    await update(ref(db, `users/${uid}`), patch);
+    // Довідник чату оновлюємо одразу — інакше нове імʼя й фото зʼявилися б
+    // у батьків лише після того, як цей учитель сам зайде в портал.
+    await syncStaffCard(staffProfileSE);
+    invalidateUsersCache();
+    logAction('staff_profile', { target: staffProfileSE.replace(/_/g,'.'),
+                                 value: staffProfilePhoto ? 'імʼя та фото' : 'імʼя' });
+    showToast('✅ Профіль збережено');
+    window.closeStaffProfile();
+    window.loadStaffList();
+  }catch(e){
+    if(err){ err.style.display='block'; err.textContent = 'Не вдалося зберегти: ' + e.message; }
+  }finally{
+    btn.disabled = false; btn.textContent = '💾 Зберегти';
   }
 };
