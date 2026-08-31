@@ -8,7 +8,7 @@
 // XLSX comes from the CDN <script> tag already in <head> (global).
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, update } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, auth, getActiveClass, currentUserData, showToast, localDateString, escHtml, getUsersSnap, teacherAccessMatrix } from './common.js';
+import { db, auth, getActiveClass, currentUserData, showToast, localDateString, escHtml, teacherAccessMatrix } from './common.js';
 
 let parsedCurriculum=null;        // після парсингу xlsx
 const MAX_TOPICS=250;             // стеля на предмет: захист від зіпсованого файлу
@@ -616,28 +616,27 @@ window.assignClassTeacher=async function(){
   // seeds first logins, and in any existing users/{uid} record, which is what an
   // already-registered account actually reads). Specialist roles
   // (art_school_teacher / music_teacher / director) are left untouched.
+  //
+  // РОЛЬ ЗМІНЮЄТЬСЯ ЛИШЕ ТУТ, у pre_approved_roles.
+  //
+  // Раніше код додатково писав роль просто в users/{uid} тієї людини — і
+  // саме це давало PERMISSION_DENIED: правило users/$uid дозволяє запис
+  // тільки власнику запису ($uid === auth.uid). Це не помилка правила, а
+  // його сенс: якби директор (чи будь-хто) міг писати в чужий users, роль
+  // можна було б підробити. Тому директор задає роль у списку персоналу,
+  // а сам користувач підхоплює її при вході (ROLE SYNC у common.js).
   await set(ref(db,`pre_approved_roles/${teacherSE}`),'class_teacher');
-  const usersSnap=await getUsersSnap();
-  if(usersSnap.exists()){
-    const u=usersSnap.val();
-    for(let uid in u){
-      const email=(u[uid].email||'').toLowerCase();
-      if(email===teacher.email.toLowerCase()&&u[uid].role==='teacher'){
-        await update(ref(db,`users/${uid}`),{role:'class_teacher'});
-      }
-      // Demote the previous holder back to plain teacher — but only if they're
-      // not still class teacher of some OTHER class.
-      if(prevEmail&&email===prevEmail.toLowerCase()&&email!==teacher.email.toLowerCase()&&u[uid].role==='class_teacher'){
-        const ctSnap=await get(ref(db,'class_teachers'));
-        const stillCT=ctSnap.exists()&&Object.values(ctSnap.val()).some(v=>(v.teacherEmail||'').toLowerCase()===email);
-        if(!stillCT){
-          await update(ref(db,`users/${uid}`),{role:'teacher'});
-          await set(ref(db,`pre_approved_roles/${prevEmail.replace(/\./g,'_')}`),'teacher');
-        }
-      }
-    }
+
+  // Знімаємо посаду з попереднього керівника — але лише якщо він більше
+  // не веде жодного іншого класу.
+  if(prevEmail && prevEmail.toLowerCase() !== teacher.email.toLowerCase()){
+    const ctSnap=await get(ref(db,'class_teachers'));
+    const stillCT=ctSnap.exists() &&
+      Object.values(ctSnap.val()).some(v=>(v.teacherEmail||'').toLowerCase()===prevEmail.toLowerCase());
+    if(!stillCT) await set(ref(db,`pre_approved_roles/${prevEmail.replace(/\./g,'_')}`),'teacher');
   }
-  showToast(`✅ ${teacher.name} призначений кл. керівником ${cls.replace('class_','')} класу!`);
+
+  showToast(`✅ ${teacher.name} — кл. керівник ${cls.replace('class_','')} класу. Роль застосується при його наступному вході.`);
   loadClassTeacherInfo();
 };
 window.loadClassTeacherInfo=async function(){
