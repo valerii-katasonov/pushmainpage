@@ -20,7 +20,18 @@ import { ref, set, get, child } from "https://www.gstatic.com/firebasejs/10.8.1/
 import { db, currentUserData, showToast, escHtml, logAction } from './common.js';
 
 // Дата версії документа. Змінили текст інформації для батьків — змініть і це.
-export const PRIVACY_VERSION = '2026-08-30';
+// Зміна версії означає, що екран згоди покажеться всім заново: попередня
+// згода стосувалася іншого тексту й нового не покриває.
+export const PRIVACY_VERSION = '2026-08-31';
+
+// Адміністратор даних. Названий тут, а не лише в PDF: батько має бачити,
+// хто саме розпоряджається даними, ще до того як відкриє документ.
+export const CONTROLLER = {
+  name:  'Niepubliczna Szkoła Podstawowa PUSH School Warsaw w Markach',
+  addr:  'ul. Wyspiańskiego 2, 05-270 Marki',
+  email: 'pushschool.warsaw@gmail.com',
+  phone: '730 701 108'
+};
 // Повний текст лежить поруч із порталом. Файл — а не сторінка в коді:
 // документ правитиме юрист, і кожна правка не має вимагати деплою.
 export const PRIVACY_URL = 'privacy.pdf';
@@ -98,7 +109,9 @@ export function renderConsentGate(ack){
     <details class="cg-doc">
       <summary>Коротко про головне</summary>
       <ul>
-        <li>Розпорядником даних є школа. Портал — її інструмент, він не діє у власних інтересах.</li>
+        <li>Розпорядник даних — <b>${escHtml(CONTROLLER.name)}</b>, ${escHtml(CONTROLLER.addr)}.
+            Питання щодо даних: ${escHtml(CONTROLLER.email)}, ${escHtml(CONTROLLER.phone)}.</li>
+        <li>Портал — інструмент школи, він не діє у власних інтересах.</li>
         <li>Оцінки, відвідуваність і журнал школа веде <b>за законом</b> — на це згода не потрібна
             і відкликати її не можна.</li>
         <li>Медичні дані, сповіщення, доступ дитини, фото — <b>лише за вашою згодою</b>,
