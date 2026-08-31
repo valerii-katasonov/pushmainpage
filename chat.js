@@ -89,6 +89,7 @@ export function staffSubtitle(rec, viewerRole, viewerClass, ctClasses){
 
 let _dirCache = null, _dirAt = 0;
 export function invalidateContactDir(){ _dirCache = null; }
+window.invalidateContactDir = invalidateContactDir;
 
 // Map: safeEmail → { name, sub, kind:'staff'|'parent' }
 export async function contactDirectory(){
