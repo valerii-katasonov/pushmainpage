@@ -11,6 +11,7 @@ import { ref, set, get, update } from "https://www.gstatic.com/firebasejs/10.8.1
 import { db, auth, getActiveClass, currentUserData, showToast, localDateString, escHtml, getUsersSnap } from './common.js';
 
 let parsedCurriculum=null;        // після парсингу xlsx
+const MAX_TOPICS=250;             // стеля на предмет: захист від зіпсованого файлу
 // availableTopicsCache is reassigned only here (populateTopicSelector)
 // and read (property access) from teacher.js (saveTopicAndHW) — plain
 // export/import.
@@ -28,9 +29,108 @@ function excelDateToISO(val){
   if(typeof val==='string'&&val.match(/^\d{4}-\d{2}-\d{2}/))return val.slice(0,10);
   return null;
 }
+
+// ═══════ ПРОСТИЙ ШАБЛОН КАЛЕНДАРНО-ТЕМАТИЧНОГО ПЛАНУВАННЯ ═══════
+// Школа роздає вчителям бланк із трьох колонок:
+//     № уроку | Тема | Години
+// Номери уроків на кілька годин пишуться діапазоном: «1-4».
+// Нижче таблиці в бланку є пояснення й приклад — вони не мають потрапити
+// в план, тому читаємо лише до першого порожнього рядка.
+//
+// ЧОМУ ДВА ФОРМАТИ. Раніше портал приймав інший файл — з блоком
+// метаданих і шістьма колонками. У вчителів такі файли лишилися, тож
+// формат визначаємо за заголовком, а не ламаємо те, що працює.
+
+// «1-4» → {from:1, to:4};  «5» → {from:5, to:5};  порожньо → null
+export function parseLessonRange(v){
+  const t = String(v == null ? '' : v).trim();
+  if(!t) return null;
+  // Тире буває звичайне, довге й нерозривне — люди копіюють із різних місць
+  const m = t.replace(/[\u2010-\u2015\u2212]/g, '-').match(/^(\d+)\s*-\s*(\d+)$/);
+  if(m){
+    const a = parseInt(m[1]), b = parseInt(m[2]);
+    if(isNaN(a) || isNaN(b) || b < a) return null;
+    return { from:a, to:b };
+  }
+  const one = t.match(/^(\d+)$/);
+  if(one) return { from:parseInt(one[1]), to:parseInt(one[1]) };
+  return null;
+}
+
+// Чи це рядок заголовка простого бланка
+function isSimpleHeader(r){
+  if(!r) return false;
+  const a = String(r[0] || '').toLowerCase();
+  const b = String(r[1] || '').toLowerCase();
+  return a.includes('уроку') && b.includes('тема');
+}
+
+export function parseSimplePlan(rows){
+  let head = -1;
+  for(let i = 0; i < rows.length; i++){
+    if(isSimpleHeader(rows[i])){ head = i; break; }
+  }
+  if(head < 0) return null;
+
+  const topics = [];
+  for(let i = head + 1; i < rows.length; i++){
+    const r = rows[i] || [];
+    const title = String(r[1] == null ? '' : r[1]).trim();
+    // Порожній рядок — кінець таблиці. Далі в бланку йдуть пояснення
+    // й приклад із таким самим заголовком; читати їх не можна.
+    if(!title) break;
+    const range = parseLessonRange(r[0]);
+    const hoursCell = Number(String(r[2] == null ? '' : r[2]).replace(',', '.'));
+    const hours = (hoursCell > 0)
+      ? Math.round(hoursCell)
+      : (range ? (range.to - range.from + 1) : 1);
+    topics.push({
+      section: '',
+      lessonNum: range ? range.from : (topics.length + 1),
+      lessonTo:  range ? range.to   : null,
+      title,
+      plannedDate: null,
+      plannedHours: hours,
+      tags: ''
+    });
+  }
+  return topics.length ? topics : null;
+}
+
+// «matematyka5.xlsx» → {subjectHint:'matematyka', classNum:5}
+export function parsePlanFileName(name){
+  const base = String(name || '').replace(/\.[^.]+$/, '').trim();
+  const m = base.match(/^(.*?)[ _-]*(\d{1,2})$/);
+  if(!m) return { subjectHint: base, classNum: null };
+  const n = parseInt(m[2]);
+  return {
+    subjectHint: m[1].replace(/[_-]+/g, ' ').trim(),
+    classNum: (n >= 1 && n <= 11) ? n : null
+  };
+}
+
+// Латиниця з бланка → назва предмета українською. Список неповний
+// навмисно: якщо предмета тут немає, учитель обирає його руками, і це
+// краще, ніж підставити схоже, але не те.
+const SUBJECT_HINTS = {
+  matematyka:'Математика', ukrainska:'Українська мова', ukrmova:'Українська мова',
+  chytannia:'Читання', literatura:'Література', anglijska:'Англійська мова',
+  english:'Англійська мова', polska:'Польська мова', istoria:'Історія',
+  pryroda:'Природознавство', biologia:'Біологія', geografia:'Географія',
+  fizyka:'Фізика', himia:'Хімія', informatyka:'Інформатика',
+  muzyka:'Музичне мистецтво', obrazotvorche:'Образотворче мистецтво',
+  fizkultura:'Фізична культура', trudove:'Трудове навчання'
+};
+export function subjectFromHint(hint){
+  const k = String(hint || '').toLowerCase().replace(/[^a-z]/g, '');
+  return SUBJECT_HINTS[k] || '';
+}
+
 // ═══════ Парсер Excel ═══════
+let lastPlanFile='';
 window.handleCurriculumFile=function(e){
   const file=e.target.files[0];if(!file)return;
+  lastPlanFile=file.name;
   const dropEl=document.getElementById('curr-drop-zone-label');
   const txtEl=document.getElementById('curr-drop-text');
   txtEl.innerText=`📄 ${file.name}`;
@@ -47,9 +147,28 @@ window.handleCurriculumFile=function(e){
 };
 function parseCurriculumWorkbook(wb){
   const result={sheets:{}};
+  const fromName=parsePlanFileName(lastPlanFile);
   wb.SheetNames.forEach(sheetName=>{
     const sheet=wb.Sheets[sheetName];
     const rows=XLSX.utils.sheet_to_json(sheet,{header:1,defval:null});
+
+    // Спершу простий бланк школи: три колонки й заголовок «№ уроку | Тема».
+    // Якщо його немає — читаємо старий формат із блоком метаданих.
+    const simple=parseSimplePlan(rows);
+    if(simple){
+      result.sheets[sheetName]={
+        meta:{
+          year:'', teacher:'', language:'',
+          classNum: fromName.classNum,
+          subject: subjectFromHint(fromName.subjectHint) || fromName.subjectHint || sheetName,
+          subjectGuessed: !subjectFromHint(fromName.subjectHint),
+          format:'simple'
+        },
+        topics:simple
+      };
+      return;
+    }
+
     const meta={};let dataStartRow=0;
     for(let i=0;i<rows.length;i++){
       const r=rows[i];if(!r||!r[0])continue;
@@ -76,7 +195,8 @@ function parseCurriculumWorkbook(wb){
           classNum:meta['Клас']?parseInt(meta['Клас']):null,
           subject:meta['Предмет']||sheetName,
           teacher:meta['Учитель']||'',
-          language:meta['Мова викладання']||''
+          language:meta['Мова викладання']||'',
+          format:'legacy'
         },
         topics:topics
       };
@@ -88,38 +208,83 @@ function renderCurriculumPreview(data){
   const container=document.getElementById('curr-preview-content');
   const classSpan=document.getElementById('curr-preview-class');
   const cls=getActiveClass();
+  const clsNum=parseInt(String(cls).replace('class_',''));
   classSpan.innerText=`→ ${cls.replace('class_','')} клас`;
   let html='';
   for(let sheetName in data.sheets){
     const s=data.sheets[sheetName];
-    html+=`<div class="topic-preview"><div class="topic-preview-subj">📚 ${s.meta.subject} (${s.topics.length} тем) <span style="font-size:.72rem;color:#888;font-weight:400;">— ${s.meta.year}, ${s.meta.teacher}</span></div>`;
+    const simple = s.meta.format==='simple';
+    const hours = s.topics.reduce((a,t)=>a+(t.plannedHours||0),0);
+    // Клас із імені файлу проти класу, обраного в кабінеті. Розбіжність —
+    // найчастіша помилка: учитель відкрив один клас, а вантажить файл іншого.
+    const clsMismatch = simple && s.meta.classNum && clsNum && s.meta.classNum!==clsNum;
+
+    html+=`<div class="topic-preview">
+      <div class="topic-preview-subj">📚 ${escHtml(s.meta.subject)}
+        <span style="font-size:.72rem;color:#888;font-weight:400;">
+          ${s.topics.length} тем · ${hours} год</span></div>`;
+
+    if(simple){
+      html+=`<div class="curr-src">Розпізнано простий бланк школи${
+        s.meta.classNum?` · клас із назви файлу: ${s.meta.classNum}`:''}</div>`;
+      if(s.meta.subjectGuessed){
+        html+=`<div class="curr-warn">Предмет узятий із назви файлу — перевірте,
+          чи він правильний. Виправити можна нижче.</div>
+          <input type="text" class="curr-subj-fix" value="${escHtml(s.meta.subject)}"
+                 oninput="fixPlanSubject('${escJsSafe(sheetName)}', this.value)"
+                 placeholder="Назва предмета українською">`;
+      }
+      if(clsMismatch){
+        html+=`<div class="curr-warn danger">У назві файлу клас ${s.meta.classNum},
+          а в кабінеті відкрито ${clsNum}. План збережеться в ${clsNum} клас —
+          перевірте, чи це те, що потрібно.</div>`;
+      }
+    }
+
     s.topics.forEach(t=>{
-      html+=`<div class="topic-preview-row"><span class="num">${escHtml(t.lessonNum)}</span><span><b>${escHtml(t.title)}</b><br><span style="color:#888;font-size:.7rem;">${escHtml(t.section)}${t.tags?' · '+escHtml(t.tags):''}</span></span><span class="hrs">${escHtml(t.plannedDate||'—')}</span><span class="hrs">${escHtml(t.plannedHours)} год.</span></div>`;
+      const label = t.lessonTo && t.lessonTo!==t.lessonNum
+        ? `${t.lessonNum}-${t.lessonTo}` : String(t.lessonNum);
+      html+=`<div class="topic-preview-row">
+        <span class="num">${escHtml(label)}</span>
+        <span><b>${escHtml(t.title)}</b><br>
+          <span style="color:#888;font-size:.7rem;">${t.plannedHours} год${
+            t.plannedDate?` · ${escHtml(t.plannedDate)}`:''}</span></span></div>`;
     });
     html+=`</div>`;
   }
   container.innerHTML=html;
   document.getElementById('curr-preview-section').style.display='block';
 }
+
+// Просте екранування для підстановки в onclick/oninput
+function escJsSafe(v){ return String(v).replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
+
+// Учитель виправляє предмет, який портал угадав із назви файлу
+window.fixPlanSubject=function(sheetName, value){
+  if(!parsedCurriculum || !parsedCurriculum.sheets[sheetName]) return;
+  parsedCurriculum.sheets[sheetName].meta.subject = String(value||'').trim();
+};
 window.saveCurriculumToDb=async function(){
   if(!parsedCurriculum)return alert("Спочатку завантажте файл!");
   const cls=getActiveClass();
   const btn=document.getElementById('btn-save-curr');
   btn.disabled=true;btn.innerText="⏳ Збереження...";
   try{
-    // Phase 6: ліміт 5 тем на рік. saveCurriculumToDb() завжди робить повний
-    // set() всього /topics (заміна, не додавання) — тож "поточна кількість тем"
-    // до завантаження не підсумовується з новими, а просто замінюється ними.
-    // Тому ліміт застосовуємо до самого завантаженого списку: перші 5 зберігаємо,
-    // решту відкидаємо з попередженням у toast скільки тем не поміщено.
+    // Ліміт тем на предмет. Раніше стояло 5 — значення з часів, коли
+    // завантажували пробні файли. Справжнє календарне планування має
+    // десятки рядків, і такий ліміт мовчки викидав майже все.
+    //
+    // Стеля лишається, але розумна: навчальний рік — близько 35 тижнів,
+    // при семи уроках предмета на тиждень це 245. MAX_TOPICS захищає базу
+    // від зіпсованого файлу на тисячі рядків, а не від нормального плану.
     let trimmedWarnings=[];
     for(let sheetName in parsedCurriculum.sheets){
       const s=parsedCurriculum.sheets[sheetName];
       const sk=window.subjKey(s.meta.subject);
       let topicsToSave=s.topics;
-      if(topicsToSave.length>5){
-        const cut=topicsToSave.length-5;
-        topicsToSave=topicsToSave.slice(0,5);
+      if(topicsToSave.length>MAX_TOPICS){
+        const cut=topicsToSave.length-MAX_TOPICS;
+        topicsToSave=topicsToSave.slice(0,MAX_TOPICS);
         trimmedWarnings.push(`${s.meta.subject}: -${cut}`);
       }
       await set(ref(db,`curriculum_plans/${cls}/${sk}/meta`),{
