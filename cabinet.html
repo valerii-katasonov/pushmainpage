@@ -415,15 +415,41 @@
     .cp-row:hover{background:#fafafa;}
     .cp-row input{width:auto;margin:0;flex:none;}
     .cp-av{width:32px;height:32px;border-radius:50%;flex:none;display:flex;align-items:center;
-           justify-content:center;color:#fff;font-size:.72rem;font-weight:700;}
+           justify-content:center;color:#fff;font-size:.72rem;font-weight:700;position:relative;overflow:hidden;}
     .cp-mid{flex:1;min-width:0;display:flex;flex-direction:column;}
+    /* Профіль співробітника (кабінет директора) */
+    .sp-back{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:70;
+             display:flex;align-items:center;justify-content:center;padding:16px;}
+    .sp-card{background:#fff;border-radius:16px;padding:20px;width:100%;max-width:380px;
+             max-height:88vh;overflow-y:auto;}
+    .sp-card h3{margin:0 0 4px 0;color:var(--teal);}
+    .sp-email{font-size:.78rem;color:#888;margin:0 0 14px 0;word-break:break-all;}
+    .sp-photo-row{display:flex;align-items:center;gap:14px;margin-bottom:14px;}
+    #sp-preview{width:72px;height:72px;border-radius:50%;object-fit:cover;border:2px solid #e0f2f4;}
+    .sp-pick{background:#e0f7fa;color:#00838f;padding:9px 13px;border-radius:10px;
+             font-size:.83rem;font-weight:700;cursor:pointer;}
+    .sp-pick input{display:none;}
+    .sp-lab{display:block;font-size:.78rem;color:#555;margin:9px 0 3px;}
+    .sp-err{background:#fdecea;color:#b3261e;padding:10px;border-radius:9px;
+            font-size:.8rem;margin-top:11px;}
+    .sp-save{background:var(--teal);color:#fff;padding:12px;width:100%;margin-top:14px;}
+    .sp-cancel{background:#eceff1;color:#455a64;padding:11px;width:100%;margin-top:8px;}
+    .sp-note{font-size:.72rem;color:#888;margin-top:11px;line-height:1.35;}
+    .staff-av{width:38px;height:38px;border-radius:50%;flex:none;display:flex;
+              align-items:center;justify-content:center;background:#b0bec5;color:#fff;
+              font-weight:700;font-size:.9rem;position:relative;overflow:hidden;margin-right:10px;}
+    .staff-av img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
+    .staff-edit{background:#e8f5e9;color:#2e7d32;font-size:.75rem;padding:7px 9px;border-radius:8px;}
     .cp-mid b{font-weight:600;color:#222;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
     .cp-mid small{font-size:.72rem;color:#999;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
     /* ── Чат: список ── */
     .ch-row{display:flex;align-items:center;gap:12px;padding:11px 14px;cursor:pointer;border-bottom:1px solid #f0f0f0;background:#fff;transition:background .12s;}
     .ch-row:hover{background:#fafafa;}
     .ch-row:active{background:#f0f0f0;}
-    .ch-av{width:42px;height:42px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:.88rem;letter-spacing:.02em;}
+    .ch-av{width:42px;height:42px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:.88rem;letter-spacing:.02em;position:relative;overflow:hidden;}
+    /* Фото лягає поверх ініціалів. Якщо картинка не завантажилась, вона
+       прибирає себе сама, і під нею вже готовий кружок з літерами. */
+    .ch-av img,.cp-av img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:50%;}
     .ch-av.dir{background:#78909c;font-size:1.05rem;}
     .ch-mid{flex:1;min-width:0;}
     .ch-top{display:flex;align-items:baseline;gap:8px;}
@@ -3188,7 +3214,32 @@ document.addEventListener('DOMContentLoaded', function(){
   <!-- ═══ ЕКРАН ЗГОДИ ПРИ ВХОДІ ═══
        Модалка без кнопки закриття: GDPR вимагає поінформувати ДО обробки,
        тож обійти екран не можна — лише відповісти. -->
-  <div id="consent-gate" class="cg-back" style="display:none;">
+  <!-- Профіль співробітника: імʼя, прізвище та фото. Відкриває директор
+     зі списку персоналу. -->
+<div id="staff-profile-modal" class="sp-back" style="display:none;">
+  <div class="sp-card">
+    <h3>✏️ Профіль співробітника</h3>
+    <p class="sp-email" id="sp-email"></p>
+    <div class="sp-photo-row">
+      <img id="sp-preview" alt="" style="display:none;">
+      <label class="sp-pick">
+        <input type="file" accept="image/*" id="sp-file" onchange="pickStaffPhoto(this)">
+        📷 Обрати фото
+      </label>
+    </div>
+    <label class="sp-lab">Імʼя</label>
+    <input type="text" id="sp-first" placeholder="Імʼя">
+    <label class="sp-lab">Прізвище</label>
+    <input type="text" id="sp-last" placeholder="Прізвище">
+    <div id="sp-err" class="sp-err" style="display:none;"></div>
+    <button id="sp-save" class="sp-save" onclick="saveStaffProfile()">💾 Зберегти</button>
+    <button class="sp-cancel" onclick="closeStaffProfile()">Скасувати</button>
+    <p class="sp-note">Фото зменшується до 128×128 і зберігається в базі школи.
+      Жодні сторонні сервіси не використовуються.</p>
+  </div>
+</div>
+
+<div id="consent-gate" class="cg-back" style="display:none;">
     <div class="cg-win">
       <div class="cg-head">Дані вашої дитини</div>
       <div id="cg-body" class="cg-scroll"></div>
