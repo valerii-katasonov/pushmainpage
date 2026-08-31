@@ -915,7 +915,12 @@ async function initUserSession(){
   document.querySelectorAll('.panel').forEach(p=>p.style.display='none');
   document.getElementById('calendar-block').style.display='block';updateProfileBar();
   const r=currentUserData.role;
-  if(r==='director'){document.getElementById('director-screen').style.display='block';callWhenReady('initDirTabs');document.getElementById('teacher-class-selector-box').style.display='none';loadTeachersListForDirector();loadDirectorTeacherSkillsList();handleDateChange();loadDrafts();callWhenReady('loadBellCoverage');}
+  if(r==='director'){document.getElementById('director-screen').style.display='block';callWhenReady('initDirTabs');document.getElementById('teacher-class-selector-box').style.display='none';loadTeachersListForDirector();loadDirectorTeacherSkillsList();handleDateChange();loadDrafts();callWhenReady('loadBellCoverage');
+    // Календарне планування. Раніше цю перевірку викликав лише
+    // handleClassChange() — обробник селектора класу з кабінету вчителя.
+    // У директора такого селектора немає (він прихований), тож функція не
+    // запускалася жодного разу, і картка не переїжджала до його кабінету.
+    checkCurriculumUploadAccess();}
   else if(r==='kitchen'){document.getElementById('kitchen-screen').style.display='block';document.getElementById('teacher-class-selector-box').style.display='none';const gd=document.getElementById('global-date'),gl=document.getElementById('global-date-label');if(gd)gd.style.display='none';if(gl)gl.style.display='none';callWhenReady('refreshKitchen');}
   else if(r==='administrator'){document.getElementById('admin-screen').style.display='block';document.getElementById('teacher-class-selector-box').style.display='none';handleDateChange();}
   else if(r==='teacher'||r==='class_teacher'||r==='art_school_teacher'||r==='music_teacher'){
