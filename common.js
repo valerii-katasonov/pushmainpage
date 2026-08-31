@@ -319,6 +319,36 @@ export function getUserChildren(u){
 // other module imports it read-only (they may still mutate its
 // properties, e.g. saveProfile() below, which is fine with live bindings).
 export let currentUserData=null;
+
+// ══════════════════════════════════════════════════════════════════
+//  ВІДКЛАДЕНИЙ ВИКЛИК ФУНКЦІЇ З ІНШОГО МОДУЛЯ
+// ══════════════════════════════════════════════════════════════════
+// Модулі виконуються в порядку тегів у HTML, а кабінет відкривається за
+// подією входу — вона може статися будь-коли, зокрема раніше, ніж встиг
+// виконатися останній модуль. Стара перевірка «if(window.щось) виклик»
+// у такому разі мовчки не робила нічого, і розділ лишався порожнім або з
+// написом «Завантаження...» назавжди, без жодного сліду в консолі.
+//
+// Тут навпаки: чекаємо, поки функція зʼявиться, і якщо не дочекалися —
+// говоримо про це вголос. Мовчазних пропусків більше немає.
+// onFail викликається, якщо функція так і не зʼявилася. Це не дрібниця:
+// найчастіша причина — файл модуля не викладений на сайт, і без onFail
+// користувач бачить порожній розділ, а не причину.
+export function callWhenReady(name, delay = 0, args = [], onFail = null, tries = 40){
+  const attempt = (left) => {
+    const fn = window[name];
+    if(typeof fn === 'function'){
+      try{ fn(...args); }catch(e){ console.warn(name + ' впав:', e); }
+      return;
+    }
+    if(left > 0) setTimeout(() => attempt(left - 1), 150);
+    else{
+      console.warn(name + ': функція так і не зʼявилася — модуль не завантажився або впав при виконанні');
+      if(onFail) try{ onFail(); }catch(e){ console.warn('onFail:', e); }
+    }
+  };
+  setTimeout(() => attempt(tries), delay);
+}
 // teacherAccessMatrix is reassigned only here (fetchTeacherAccess) and
 // read here + in director.js (findSubstitute) — plain export/import.
 export let teacherAccessMatrix={};
@@ -885,8 +915,8 @@ async function initUserSession(){
   document.querySelectorAll('.panel').forEach(p=>p.style.display='none');
   document.getElementById('calendar-block').style.display='block';updateProfileBar();
   const r=currentUserData.role;
-  if(r==='director'){document.getElementById('director-screen').style.display='block';setTimeout(()=>{if(window.initDirTabs)window.initDirTabs();},0);document.getElementById('teacher-class-selector-box').style.display='none';loadTeachersListForDirector();loadDirectorTeacherSkillsList();handleDateChange();loadDrafts();if(window.loadBellCoverage)window.loadBellCoverage();}
-  else if(r==='kitchen'){document.getElementById('kitchen-screen').style.display='block';document.getElementById('teacher-class-selector-box').style.display='none';const gd=document.getElementById('global-date'),gl=document.getElementById('global-date-label');if(gd)gd.style.display='none';if(gl)gl.style.display='none';if(window.refreshKitchen)window.refreshKitchen();}
+  if(r==='director'){document.getElementById('director-screen').style.display='block';callWhenReady('initDirTabs');document.getElementById('teacher-class-selector-box').style.display='none';loadTeachersListForDirector();loadDirectorTeacherSkillsList();handleDateChange();loadDrafts();callWhenReady('loadBellCoverage');}
+  else if(r==='kitchen'){document.getElementById('kitchen-screen').style.display='block';document.getElementById('teacher-class-selector-box').style.display='none';const gd=document.getElementById('global-date'),gl=document.getElementById('global-date-label');if(gd)gd.style.display='none';if(gl)gl.style.display='none';callWhenReady('refreshKitchen');}
   else if(r==='administrator'){document.getElementById('admin-screen').style.display='block';document.getElementById('teacher-class-selector-box').style.display='none';handleDateChange();}
   else if(r==='teacher'||r==='class_teacher'||r==='art_school_teacher'||r==='music_teacher'){
     document.getElementById('teacher-screen').style.display='block';document.getElementById('teacher-class-selector-box').style.display='block';
@@ -917,12 +947,12 @@ async function initUserSession(){
       }
     }
     window.handleClassChange();
-    setTimeout(()=>{if(window.initTabs)window.initTabs('teacher-screen');},0);
-    setTimeout(()=>{if(window.renderPushInvite)window.renderPushInvite('t-push-invite');},600);
+    callWhenReady('initTabs', 0, ['teacher-screen']);
+    callWhenReady('renderPushInvite', 600, ['t-push-invite']);
   }
   else if(r==='student'){
-    setTimeout(()=>{if(window.initTabs)window.initTabs('student-screen');},0);
-    setTimeout(()=>{if(window.renderPushInvite)window.renderPushInvite('s-push-invite');},600);
+    callWhenReady('initTabs', 0, ['student-screen']);
+    callWhenReady('renderPushInvite', 600, ['s-push-invite']);
     document.getElementById('student-screen').style.display='block';
     
     loadScheduleScript(currentUserData.class,()=>handleDateChange());
@@ -930,14 +960,21 @@ async function initUserSession(){
     renderInstallBlock();
   }
   else{
-    setTimeout(()=>{if(window.initTabs)window.initTabs('parent-screen');},0);
-    setTimeout(()=>{if(window.renderPushInvite)window.renderPushInvite('p-push-invite');},600);
+    callWhenReady('initTabs', 0, ['parent-screen']);
+    callWhenReady('renderPushInvite', 600, ['p-push-invite']);
     document.getElementById('parent-screen').style.display='block';
     
     loadScheduleScript(currentUserData.class,()=>handleDateChange());
     renderPaymentsMockup();loadTextbooksForParent();
-    if(window.caInit)window.caInit();
+    callWhenReady('caInit');
     renderInstallBlock();
+    // Згода — після того, як кабінет відкрився: екран накриває його зверху
+    callWhenReady('startConsent', 400, [], ()=>{
+      const box = document.getElementById('p-my-consents');
+      if(box) box.innerHTML = '<p class="empty-msg">Розділ згод не завантажився: файл '
+        + '<code>consent.js</code> недоступний на сайті. Перевірте, чи він викладений разом '
+        + 'з рештою файлів.</p>';
+    });
   }
 }
 // ══════════════════════════════════════════════════════════════════
