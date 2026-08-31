@@ -49,12 +49,34 @@ let listListener = null, msgListener = null, currentChatId = null, currentMember
 // і клас, без контактів та медичних даних.
 const ROLE_LABEL = {
   director:'Директор', administrator:'Адміністрація', kitchen:'Кухня',
-  teacher:'Учитель', class_teacher:'Класний керівник',
-  art_school_teacher:'Учитель мистецтв', music_teacher:'Учитель музики',
+  teacher:'Вчитель', class_teacher:'Класний керівник',
+  art_school_teacher:'Вчитель мистецтв', music_teacher:'Вчитель музики',
   psychologist:'Психолог', nurse:'Медсестра', secretary:'Секретар'
 };
 const roleLabel = r => ROLE_LABEL[r] || (r ? String(r) : '');
 const clsLabel  = c => c ? String(c).replace('class_','') + ' клас' : '';
+
+// Підпис під імʼям співробітника.
+//
+// Батькові й учню показуємо ПРЕДМЕТ, який ця людина веде в їхньому класі.
+// Перелік чужих класів («3, 5 кл.») родині нічого не дає: батько шукає
+// «вчителя інформатики моєї дитини», а не того, хто ще де викладає.
+// Персоналу навпаки лишаємо класи — їм важливо, з ким людина працює.
+//
+// classes[клас] може бути рядком предметів (новий формат) або true
+// (старий запис, зроблений до цієї зміни) — обробляємо обидва.
+export function staffSubtitle(rec, viewerRole, viewerClass){
+  const role = roleLabel(rec.role);
+  const classes = rec.classes || {};
+  const isFamily = viewerRole === 'parent' || viewerRole === 'student';
+  if(isFamily){
+    const v = viewerClass ? classes[viewerClass] : null;
+    const subj = (typeof v === 'string' && v.trim()) ? v.trim() : '';
+    return [role, subj].filter(Boolean).join(' · ');
+  }
+  const list = Object.keys(classes).map(c => c.replace('class_','')).join(', ');
+  return [role, list && list + ' кл.'].filter(Boolean).join(' · ');
+}
 
 let _dirCache = null, _dirAt = 0;
 export function invalidateContactDir(){ _dirCache = null; }
@@ -83,8 +105,7 @@ export async function contactDirectory(){
       const v = sd.val();
       for(const se in v){
         const r = v[se] || {};
-        const cls = r.classes ? Object.keys(r.classes).map(c=>c.replace('class_','')).join(', ') : '';
-        put(se, r.name, [roleLabel(r.role), cls && cls + ' кл.'].filter(Boolean).join(' · '), 'staff',
+        put(se, r.name, staffSubtitle(r, role, currentUserData?.class), 'staff',
             { role: r.role, classes: r.classes ? Object.keys(r.classes) : [] });
       }
     }
