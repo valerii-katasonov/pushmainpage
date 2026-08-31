@@ -55,19 +55,33 @@ export const CONSENT_OPTS = [
        + 'доступній лише батькам і персоналу школи.' }
 ];
 
+// Позначка збірки. Видно в консолі й у розділі згод: якщо на екрані стара
+// поведінка, першим ділом видно, чи взагалі доїхав новий файл.
+export const CONSENT_BUILD = '2026-08-31 · v2';
+console.log('consent.js', CONSENT_BUILD);
+
 const myKey = () => String(currentUserData?.email || '').toLowerCase().replace(/\./g, '_');
+
+// Читання з обмеженням у часі. Без нього будь-яке зависання запиту лишає
+// людину з написом «Завантаження...» назавжди, і причину видно лише в консолі.
+function withTimeout(promise, ms, label){
+  return Promise.race([
+    promise,
+    new Promise((_, rej) => setTimeout(() => rej(new Error(label + ': немає відповіді за ' + (ms/1000) + ' с')), ms))
+  ]);
+}
 
 export async function getMyAck(){
   const se = myKey();
   if(!se) return null;
   try{
-    const snap = await get(child(ref(db), `policy_ack/${se}`));
+    const snap = await withTimeout(get(child(ref(db), `policy_ack/${se}`)), 8000, 'policy_ack');
     return snap.exists() ? snap.val() : null;
   }catch(e){
     // Не змогли перевірити — не тримаємо людину на екрані згоди назавжди,
     // але й не вважаємо, що згода є. Просто пропускаємо цей раз.
     console.warn('policy_ack:', e.message);
-    return { version: PRIVACY_VERSION, unchecked: true };
+    return { version: PRIVACY_VERSION, unchecked: true, error: e.message };
   }
 }
 
@@ -173,14 +187,36 @@ window.saveConsentGate = async function(){
 };
 
 // ── Розділ у кабінеті: перегляд і зміна ──
+// Обгортка існує заради одного: що б не сталося всередині, у блоці має
+// зʼявитися або форма, або причина. «Завантаження...» назавжди — не варіант.
 export async function renderMyConsents(){
   const box = document.getElementById('p-my-consents');
   if(!box) return;
-  if(currentUserData?.role !== 'parent'){ box.innerHTML = ''; return; }
+  try{
+    await renderMyConsentsInner(box);
+  }catch(e){
+    console.warn('renderMyConsents:', e);
+    box.innerHTML = `<p class="empty-msg">Не вдалося показати згоди: ${escHtml(e.message || String(e))}
+      <br><small>Збірка ${escHtml(CONSENT_BUILD)}</small></p>`;
+  }
+}
+
+async function renderMyConsentsInner(box){
+  if(!currentUserData){
+    box.innerHTML = '<p class="empty-msg">Дані користувача ще не завантажені. Оновіть сторінку.</p>';
+    return;
+  }
+  if(currentUserData.role !== 'parent'){
+    box.innerHTML = '<p class="empty-msg">Цей розділ призначений для батьків.</p>';
+    return;
+  }
   box.innerHTML = '<p class="empty-msg">Завантаження...</p>';
   const ack = await getMyAck();
   const when = ack && ack.ts ? new Date(ack.ts).toLocaleDateString('uk-UA') : null;
   box.innerHTML = `
+    ${ack && ack.error
+      ? `<p class="cg-err" style="display:block;">Не вдалося прочитати ваші відповіді: ${escHtml(ack.error)}.
+         Галочки нижче показані незаповненими — збережіть їх ще раз.</p>` : ''}
     ${when
       ? `<p class="mc-when">Відповіді збережено ${escHtml(when)} · версія документа ${escHtml(ack.version||'—')}</p>`
       : '<p class="mc-when">Ви ще не відповідали.</p>'}
@@ -199,6 +235,26 @@ export async function renderMyConsents(){
       відвідуваність школа веде за законом — вони не залежать від цих галочок.</p>`;
 }
 window.renderMyConsents = renderMyConsents;
+
+// ── Запуск ──
+// Раніше common.js перевіряв наявність цих функцій у момент відкриття
+// кабінету і, якщо модуль ще не виконався, мовчки нічого не викликав —
+// блок згод так і лишався з написом «Завантаження...». Тепер точка входу
+// одна, вона захищена від повторного виклику, і модуль вміє стартувати сам.
+let started = false;
+export function startConsent(){
+  if(started) return;
+  started = true;
+  maybeShowConsent();
+  renderMyConsents();
+}
+window.startConsent = startConsent;
+
+(function selfStart(tries = 60){
+  if(started) return;
+  if(currentUserData && currentUserData.role){ startConsent(); return; }
+  if(tries > 0) setTimeout(() => selfStart(tries - 1), 200);
+})();
 
 window.saveMyConsents = async function(){
   const ack = await getMyAck();
