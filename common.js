@@ -334,6 +334,21 @@ export let currentUserData=null;
 // onFail викликається, якщо функція так і не зʼявилася. Це не дрібниця:
 // найчастіша причина — файл модуля не викладений на сайт, і без onFail
 // користувач бачить порожній розділ, а не причину.
+// teacher_access зберігає предмети масивом: ['Математика','Фізика'] або
+// ['Всі предмети'] у класного керівника. Для довідника потрібен короткий
+// рядок. «Всі предмети» не пишемо — це не назва предмета, і в списку
+// контактів вона лише збиває з пантелику; там достатньо посади.
+// Порожній рядок правило теж прийме, але сенсу в ньому немає — повертаємо
+// true, щоб зберігся хоча б факт «веде в цьому класі».
+export function subjectsLabel(raw){
+  const list = Array.isArray(raw) ? raw : (raw && typeof raw === 'object' ? Object.values(raw) : []);
+  const clean = list
+    .map(s => typeof s === 'string' ? s.trim() : '')
+    .filter(s => s && s !== 'Всі предмети');
+  if(!clean.length) return true;
+  return clean.join(', ').slice(0, 120);
+}
+
 export function callWhenReady(name, delay = 0, args = [], onFail = null, tries = 40){
   const attempt = (left) => {
     const fn = window[name];
@@ -667,7 +682,44 @@ window.saveProfile=async function(){
   const btn=document.getElementById('btn-save-profile');btn.disabled=true;btn.innerText="⏳ Збереження...";
   if(newPass){if(newPass.length<6){alert("Пароль мінімум 6 символів!");btn.disabled=false;btn.innerText="💾 Зберегти";return;}try{await updatePassword(auth.currentUser,newPass);document.getElementById('profile-new-pass').value='';}catch(e){if(e.code==='auth/requires-recent-login')alert("Для зміни пароля потрібно переввійти.");else alert("Помилка: "+e.message);btn.disabled=false;btn.innerText="💾 Зберегти";return;}}
   let photoURL=currentUserData.photoURL||"https://cdn-icons-png.flaticon.com/512/149/149071.png";
-  if(fileInput.files.length>0){const fd=new FormData();fd.append('file',fileInput.files[0]);fd.append('upload_preset',UPLOAD_PRESET);try{const rs=await fetch(CLOUDINARY_URL,{method:'POST',body:fd});const dt=await rs.json();photoURL=dt.secure_url;}catch(e){alert("Помилка фото!");btn.disabled=false;btn.innerText="💾 Зберегти";return;}}
+  if(fileInput.files.length>0){
+    const stop=(msg)=>{alert(msg);btn.disabled=false;btn.innerText="💾 Зберегти";};
+    const f=fileInput.files[0];
+    // Перевіряємо ДО відправлення: інакше людина чекає завантаження великого
+    // файлу, щоб дізнатися, що він не підходить.
+    if(!/^image\//.test(f.type)) { stop('Це не зображення. Оберіть файл JPG або PNG.'); return; }
+    if(f.size > 10*1024*1024){ stop(`Файл завеликий: ${(f.size/1048576).toFixed(1)} МБ. Максимум 10 МБ.`); return; }
+    btn.innerText='⏳ Завантажую фото...';
+    const fd=new FormData();fd.append('file',f);fd.append('upload_preset',UPLOAD_PRESET);
+    try{
+      const rs=await fetch(CLOUDINARY_URL,{method:'POST',body:fd});
+      const txt=await rs.text();
+      let dt={}; try{ dt=JSON.parse(txt); }catch(_){}
+      // ГОЛОВНЕ ВИПРАВЛЕННЯ. Раніше бралося dt.secure_url без жодної
+      // перевірки. Коли Cloudinary відмовляв, поле було undefined, і далі
+      // в базу йшов запис зі значенням undefined — той падав уже з іншою,
+      // незрозумілою помилкою, у якій про фото не було ні слова.
+      const err=(dt.error && dt.error.message) || (!rs.ok ? `HTTP ${rs.status}` : '');
+      if(err || !dt.secure_url){
+        console.warn('Cloudinary:', rs.status, txt.slice(0,300));
+        stop(/whitelist|unsigned|preset/i.test(err)
+          ? 'Сервіс зображень не приймає завантаження: пресет «' + UPLOAD_PRESET +
+            '» не увімкнено для неавторизованих завантажень.\n\nЦе налаштування на боці ' +
+            'Cloudinary, у коді порталу все правильно.'
+          : 'Не вдалося завантажити фото: ' + (err || 'сервіс не повернув посилання') +
+            '\n\nІмʼя та прізвище можна зберегти без фото.');
+        return;
+      }
+      photoURL=dt.secure_url;
+    }catch(e){
+      console.warn('Cloudinary fetch:', e);
+      stop('Не вдалося звʼязатися із сервісом зображень: '+e.message);
+      return;
+    }
+  }
+  // Підстраховка: у базу ніколи не має піти undefined — саме на цьому
+  // раніше падало збереження цілком, разом з імʼям і прізвищем.
+  if(!photoURL) photoURL="https://cdn-icons-png.flaticon.com/512/149/149071.png";
   try{
     // Батьки редагують ПІБ у блоці контактів, тому беремо звідти
     let finalFirst=fName, finalLast=lName;
@@ -870,15 +922,17 @@ export async function publishContactCard(){
       return;
     }
     if(!role) return;
-    // Класи вчителя беремо з його власного рядка teacher_access.
-    // Там лежить СПИСОК ПРЕДМЕТІВ на клас, а довіднику треба лише факт
-    // «має цей клас» — кладемо true, інакше перевірка типу відхилить запис.
+    // Класи та предмети вчителя беремо з його власного рядка teacher_access.
+    // Записуємо саме ПЕРЕЛІК ПРЕДМЕТІВ на клас, а не просто «має цей клас»:
+    // батькові номер класу нічого не каже, йому треба знати, що це вчитель
+    // інформатики його дитини.
     let classes = null;
     try{
       const ts = await get(child(ref(db), `teacher_access/${se}`));
       if(ts.exists()){
         classes = {};
-        Object.keys(ts.val() || {}).forEach(c => { classes[c] = true; });
+        const v = ts.val() || {};
+        Object.keys(v).forEach(c => { classes[c] = subjectsLabel(v[c]); });
         if(!Object.keys(classes).length) classes = null;
       }
     }catch(e){ /* не всі ролі мають доступ — не біда */ }
