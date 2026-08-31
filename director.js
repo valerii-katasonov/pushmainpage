@@ -1611,7 +1611,7 @@ window.rebuildContactDirs = async function(){
     // ── Персонал ──
     const staffUpd = {};
     const skipped = [];
-    let staff = 0, withSubjects = 0;
+    let staff = 0, withSubjects = 0, withPhoto = 0;
     for(const uid in users){
       const u = users[uid];
       if(!u || !u.email || u.disabled) continue;
@@ -1634,7 +1634,7 @@ window.rebuildContactDirs = async function(){
       // Фото теж переносимо: інакше після масового заповнення аватарки в
       // чаті зникали б у тих, хто вже їх завантажив.
       const ph = String(u.photoURL || '');
-      if(ph && ph.length <= 60000 && !/flaticon/.test(ph)) rec.photo = ph;
+      if(ph && ph.length <= 60000 && !/flaticon/.test(ph)){ rec.photo = ph; withPhoto++; }
       // Пишемо перелік предметів на клас — саме його бачить батько в списку
       // контактів. Формат той самий, що й у publishContactCard: один спосіб
       // на два місця, інакше довідник виглядав би по-різному залежно від
@@ -1710,6 +1710,12 @@ window.rebuildContactDirs = async function(){
     logAction('settings', { value: `довідники контактів: ${staff} персоналу, ${parents} записів батьків` });
     say(`✅ Готово: персоналу ${staff}, записів батьків ${parents}, дат народження ${bdays}.`
       + `\nЗ назвами предметів: ${withSubjects} із ${staff}.`
+      + `\nЗ фото: ${withPhoto} із ${staff}.`
+      + (withPhoto === 0 && staff
+          ? '\n\nℹ️ Фото ще ніхто не завантажив. Аватарка зʼявляється в чаті у ТОГО, '
+            + 'хто її поставив, і видно її іншим — власної аватарки у списку розмов ви не '
+            + 'побачите. Щоб перевірити, поставте фото комусь із учителів кнопкою «✏️ Профіль».'
+          : '')
       + (withSubjects === 0 && staff
           ? '\n\n⚠️ Жодного предмета не записано. Перевірте «Матрицю доступу»: якщо там '
             + 'у всіх стоїть «Всі предмети», батьки бачитимуть лише посаду, без предмета.'
