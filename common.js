@@ -862,7 +862,13 @@ window.saveProfile=async function(){
     // Save skills
     const isTeacher=currentUserData.role==='teacher'||currentUserData.role==='art_school_teacher';
     if(isTeacher){const se=currentUserData.email?.replace(/\./g,'_');await set(ref(db,`teacher_skills/${se}/subjects`),mySkillsTemp);}
-    updateProfileBar();closeProfileModal();showToast("✅ Профіль оновлено!");
+    // Довідник чату оновлюємо тут-таки. Раніше картка публікувалася лише
+    // при вході, тому щойно завантажене фото зʼявлялося в чаті аж після
+    // наступного входу — виглядало так, ніби воно взагалі не збереглося.
+    const pub = await publishContactCard();
+    updateProfileBar();closeProfileModal();
+    showToast(pub === true ? "✅ Профіль оновлено!"
+      : "✅ Збережено, але в чаті фото зʼявиться пізніше: " + pub);
   }catch(e){alert("Помилка: "+e.message);}
   btn.disabled=false;btn.innerText="💾 Зберегти";
 };
@@ -1046,23 +1052,25 @@ async function healStaffRegistry(){
 // в чаті. Без цього батько не бачив би, кому писати: `users`,
 // `parent_links` і `teacher_access` для нього закриті — і правильно,
 // там медичні дані й контакти всіх родин.
+// Повертає true, якщо картку записано, або текст помилки — щоб виклик
+// із збереження профілю міг сказати людині правду, а не мовчати.
 export async function publishContactCard(){
   try{
     const u = currentUserData;
-    if(!u || !u.email) return;
+    if(!u || !u.email) return 'немає даних користувача';
     const se = u.email.toLowerCase().replace(/\./g,'_');
     const name = [u.firstName, u.lastName].filter(Boolean).join(' ') || u.email;
     const roles = getUserRoles(u);
     const role = roles[0] || u.role || '';
 
     if(role === 'parent' || role === 'student'){
-      if(!u.class) return;                      // без класу нема куди писати
+      if(!u.class) return 'без класу нема куди писати';
       const kids = u.studentName || '';
       await update(ref(db, `class_parents/${u.class}/${se}`),
                    { name: String(name).slice(0,120), children: String(kids).slice(0,200), ts: Date.now() });
-      return;
+      return true;
     }
-    if(!role) return;
+    if(!role) return 'роль не визначено';
     // Класи та предмети вчителя беремо з його власного рядка teacher_access.
     // Записуємо саме ПЕРЕЛІК ПРЕДМЕТІВ на клас, а не просто «має цей клас»:
     // батькові номер класу нічого не каже, йому треба знати, що це вчитель
@@ -1083,9 +1091,11 @@ export async function publishContactCard(){
     if(myPhoto && String(myPhoto).length <= 60000 && !/flaticon/.test(myPhoto)) rec.photo = myPhoto;
     if(classes) rec.classes = classes;
     await update(ref(db, `staff_directory/${se}`), rec);
+    if(window.invalidateContactDir) window.invalidateContactDir();
+    return true;
   }catch(e){
-    // Мовчки: довідник — зручність, а не умова роботи кабінету.
     console.warn('publishContactCard', e.message);
+    return e.message;
   }
 }
 
