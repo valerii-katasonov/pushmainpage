@@ -2436,7 +2436,7 @@
         <p class="att-hint">Повідомте вчителя — він побачить це одразу.</p>
         <div class="att-row">
           <select id="p-att-type" onchange="updateAttOptions()" style="border-color:var(--red);"><option value="late">Запізнюється</option><option value="absent">Відсутній (весь день)</option></select>
-          <select id="p-att-reason" style="border-color:var(--red);"><option value="на 10 хвилин">на 10 хвилин</option></select>
+          <select id="p-att-reason" style="border-color:var(--red);"><option value="на 5 хвилин">на 5 хвилин</option><option value="на 10 хвилин">на 10 хвилин</option><option value="на 15 хвилин">на 15 хвилин</option><option value="на 20 хвилин">на 20 хвилин</option><option value="на 25 хвилин">на 25 хвилин</option><option value="на 30 хвилин">на 30 хвилин</option><option value="до 2-го уроку">до 2-го уроку</option><option value="до 3-го уроку">до 3-го уроку</option></select>
         </div>
         <button onclick="submitAttendance()" style="background:var(--red);padding:11px;color:#fff;margin-top:11px;width:100%;">Відправити</button>
         <p id="p-att-status" style="font-size:.83rem;color:var(--green);font-weight:700;margin-top:9px;display:none;">✅ Сповіщення надіслано!</p>
@@ -2688,7 +2688,7 @@
         <h4 style="margin-top:0;color:var(--red);">🕒 Я запізнююсь / буду відсутній</h4>
         <div style="display:flex;flex-direction:column;gap:9px;margin-top:9px;">
           <select id="s-att-type" onchange="updateAttOptionsStudent()" style="border-color:var(--red);"><option value="late">Запізнююсь</option><option value="absent">Буду відсутній</option></select>
-          <select id="s-att-reason" style="border-color:var(--red);"><option value="на 10 хвилин">на 10 хвилин</option></select>
+          <select id="s-att-reason" style="border-color:var(--red);"><option value="на 5 хвилин">на 5 хвилин</option><option value="на 10 хвилин">на 10 хвилин</option><option value="на 15 хвилин">на 15 хвилин</option><option value="на 20 хвилин">на 20 хвилин</option><option value="на 25 хвилин">на 25 хвилин</option><option value="на 30 хвилин">на 30 хвилин</option><option value="до 2-го уроку">до 2-го уроку</option><option value="до 3-го уроку">до 3-го уроку</option></select>
         </div>
         <button onclick="submitAttendance('student')" style="background:var(--red);padding:11px;color:#fff;margin-top:13px;">Відправити</button>
         <p id="s-att-status" style="font-size:.83rem;color:var(--green);font-weight:700;margin-top:9px;display:none;">✅ Повідомлення надіслано!</p>
