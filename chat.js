@@ -165,7 +165,14 @@ export async function contactDirectory(){
         const u = users[uid];
         if(!u || !u.email || u.disabled) continue;
         if(u.role === 'parent' || u.role === 'student') continue;
-        put(safe(u.email), [u.firstName,u.lastName].filter(Boolean).join(' '), roleLabel(u.role), 'staff', { role: u.role });
+        // Фото беремо прямо з облікових записів. Директору вузол users
+        // відкритий, тож йому не потрібно чекати, доки кожен співробітник
+        // опублікує свою картку — він бачить аватарки одразу.
+        // Батькам і вчителям users закритий, для них джерелом лишається
+        // довідник, який оновлюється при вході та при правках директора.
+        const ph = String(u.photoURL || '');
+        put(safe(u.email), [u.firstName,u.lastName].filter(Boolean).join(' '), roleLabel(u.role), 'staff',
+            { role: u.role, photo: (ph && !/flaticon/.test(ph)) ? ph : '' });
       }
       const pls = plSnap.exists() ? plSnap.val() : {};
       for(const se in pls){
