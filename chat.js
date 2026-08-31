@@ -87,6 +87,22 @@ export function staffSubtitle(rec, viewerRole, viewerClass, ctClasses){
   return [role, list && list + ' кл.'].filter(Boolean).join(' · ');
 }
 
+// Аватарка співрозмовника. Фото є не в усіх, тому ініціали лишаються
+// повноцінним варіантом, а не заглушкою «немає фото».
+//
+// Джерело — довідник (поле photo), а не вузол users: батькам users
+// закритий, і саме тому в чаті колись світилися пошти замість імен.
+// Ініціали лежать у самому кружку, а фото накривається зверху. Так не
+// доводиться підставляти запасний варіант через onerror із рядком коду
+// всередині атрибута — якщо картинка не завантажилась, вона просто
+// прибирає себе, і під нею вже готові ініціали.
+export function avatarHtml(name, photo, cls){
+  const ok = photo && /^(data:image\/|https:\/\/)/.test(String(photo));
+  return `<span class="${cls}" style="background:${avatarColor(name)};">${escHtml(initials(name))}`
+    + (ok ? `<img src="${escHtml(photo)}" alt="" loading="lazy" onerror="this.remove()">` : '')
+    + `</span>`;
+}
+
 let _dirCache = null, _dirAt = 0;
 export function invalidateContactDir(){ _dirCache = null; }
 window.invalidateContactDir = invalidateContactDir;
@@ -105,6 +121,7 @@ export async function contactDirectory(){
     map.set(key, { key, name: name || (prev && prev.name) || unsafe(key),
                    sub: sub || (prev && prev.sub) || '', kind: kind || (prev && prev.kind),
                    role: (extra && extra.role) || (prev && prev.role) || '',
+                   photo: (extra && extra.photo) || (prev && prev.photo) || '',
                    classes: (extra && extra.classes) || (prev && prev.classes) || [] });
   };
 
@@ -131,7 +148,8 @@ export async function contactDirectory(){
       for(const se in v){
         const r = v[se] || {};
         put(se, r.name, staffSubtitle(r, role, currentUserData?.class, ctBy[se]), 'staff',
-            { role: r.role, classes: r.classes ? Object.keys(r.classes) : [] });
+            { role: r.role, photo: r.photo || '',
+              classes: r.classes ? Object.keys(r.classes) : [] });
       }
     }
   }catch(e){ console.warn('staff_directory', e.message); }
@@ -190,6 +208,7 @@ export async function chatCandidates(){
   const dir = await contactDirectory();
   const mine = myKey();
   const asItem = c => ({ key:c.key, email:unsafe(c.key), name:c.name, kind:c.kind,
+                         photo:c.photo || '',
                          tag:c.sub || (c.kind==='parent'?'Батьки':'Персонал') });
   const isAdminRec = c => c.role === 'director' || c.role === 'administrator';
 
@@ -234,13 +253,14 @@ window.openChatModal = async function(){
       const last = msgs.length ? msgs[msgs.length-1] : null;
       const unread = msgs.filter(m=>m.from !== myKey() && !m.read).length;
       rows.push({ id, title: chatTitle(c, dir), sub: chatSubtitle(c, dir),
+                  photo: chatPhoto(c, dir),
                   members:Object.keys(c.members||{}).length,
                   last, unread, time: last ? last.time : (c.createdAt||0) });
     });
     rows.sort((a,b)=>b.time-a.time);
     box.innerHTML = rows.map(r=>`
       <div class="ch-row" onclick="selectChatThread('${escJs(r.id)}')">
-        <div class="ch-av" style="background:${avatarColor(r.title)};">${escHtml(initials(r.title))}</div>
+        ${avatarHtml(r.title, r.photo, 'ch-av')}
         <div class="ch-mid">
           <div class="ch-top"><span class="ch-name">${escHtml(r.title)}</span>
             ${r.time ? `<span class="ch-time">${chatTime(r.time)}</span>` : ''}</div>
@@ -264,6 +284,15 @@ function chatTitle(c, dir){
   return others.map(k => (dir && dir.get(k) && dir.get(k).name) || unsafe(k)).join(', ');
 }
 // Другий рядок підпису: посада або клас дитини
+// Фото показуємо лише в розмові вдвох: у груповій незрозуміло, чиє саме
+// обличчя ставити, тому там лишаються ініціали за назвою розмови.
+function chatPhoto(c, dir){
+  const others = Object.keys(c.members||{}).filter(k=>k!==myKey());
+  if(others.length !== 1 || !dir) return '';
+  const r = dir.get(others[0]);
+  return (r && r.photo) || '';
+}
+
 function chatSubtitle(c, dir){
   const others = Object.keys(c.members||{}).filter(k=>k!==myKey());
   if(others.length !== 1 || !dir) return '';
@@ -409,7 +438,7 @@ window.openChatPicker = async function(mode){
     box.innerHTML = list.map(c=>`
       <label class="cp-row">
         <input type="checkbox" value="${escHtml(c.key)}" data-name="${escHtml(c.name)}">
-        <span class="cp-av" style="background:${avatarColor(c.name)};">${escHtml(initials(c.name))}</span>
+        ${avatarHtml(c.name, c.photo, 'cp-av')}
         <span class="cp-mid"><b>${escHtml(c.name)}</b><small>${escHtml(c.tag||'')}</small></span>
       </label>`).join('');
   }catch(e){
