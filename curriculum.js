@@ -7,8 +7,8 @@
 // physically grouped in the original script).
 // XLSX comes from the CDN <script> tag already in <head> (global).
 // ═══════════════════════════════════════════════════════════════
-import { ref, set, get, update } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, auth, getActiveClass, currentUserData, showToast, localDateString, escHtml, teacherAccessMatrix } from './common.js';
+import { ref, set, get, child, update } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+import { db, auth, getActiveClass, currentUserData, showToast, localDateString, escHtml, teacherAccessMatrix, withTeachingRole } from './common.js';
 
 let parsedCurriculum=null;        // після парсингу xlsx
 const MAX_TOPICS=250;             // стеля на предмет: захист від зіпсованого файлу
@@ -625,7 +625,9 @@ window.assignClassTeacher=async function(){
   // його сенс: якби директор (чи будь-хто) міг писати в чужий users, роль
   // можна було б підробити. Тому директор задає роль у списку персоналу,
   // а сам користувач підхоплює її при вході (ROLE SYNC у common.js).
-  await set(ref(db,`pre_approved_roles/${teacherSE}`),'class_teacher');
+  const curRoles=await get(child(ref(db),`pre_approved_roles/${teacherSE}`));
+  await set(ref(db,`pre_approved_roles/${teacherSE}`),
+            withTeachingRole(curRoles.exists()?curRoles.val():null,'class_teacher'));
 
   // Знімаємо посаду з попереднього керівника — але лише якщо він більше
   // не веде жодного іншого класу.
@@ -633,7 +635,12 @@ window.assignClassTeacher=async function(){
     const ctSnap=await get(ref(db,'class_teachers'));
     const stillCT=ctSnap.exists() &&
       Object.values(ctSnap.val()).some(v=>(v.teacherEmail||'').toLowerCase()===prevEmail.toLowerCase());
-    if(!stillCT) await set(ref(db,`pre_approved_roles/${prevEmail.replace(/\./g,'_')}`),'teacher');
+    if(!stillCT){
+      const prevSE=prevEmail.replace(/\./g,'_');
+      const prevRoles=await get(child(ref(db),`pre_approved_roles/${prevSE}`));
+      await set(ref(db,`pre_approved_roles/${prevSE}`),
+                withTeachingRole(prevRoles.exists()?prevRoles.val():null,'teacher'));
+    }
   }
 
   showToast(`✅ ${teacher.name} — кл. керівник ${cls.replace('class_','')} класу. Роль застосується при його наступному вході.`);
