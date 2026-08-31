@@ -810,6 +810,25 @@ onAuthStateChanged(auth,async user=>{
       //  Admin SDK, тому "видалення співробітника" = відкликання доступу.)
       if(currentUserData.disabled){alert("Ваш доступ до системи закрито. Зверніться до адміністрації.");signOut(auth);return;}
       if(!currentUserData.email){currentUserData.email=user.email;update(ref(db,`users/${user.uid}`),{email:user.email});}
+      // ROLE SYNC. Роль призначає директор, але правила дозволяють писати
+      // в users/{uid} лише самому власнику запису — і це навмисно: інакше
+      // роль можна було б підробити. Тому директор змінює лише
+      // pre_approved_roles, а звіряння відбувається тут, при вході.
+      // Без цього кроку призначення класним керівником не діяло взагалі:
+      // запис у чужий users/{uid} відхилявся з PERMISSION_DENIED.
+      if(currentUserData.role!=='parent'&&currentUserData.role!=='student'){
+        try{
+          const pr=await get(child(ref(db),`pre_approved_roles/${se}`));
+          if(pr.exists()){
+            const roles=normalizeRoles(pr.val());
+            const primary=roles[0];
+            if(primary&&primary!==currentUserData.role){
+              await update(ref(db,`users/${user.uid}`),{role:primary,roles});
+              currentUserData.role=primary;currentUserData.roles=roles;
+            }
+          }
+        }catch(e){ console.warn('Синхронізація ролі:', e.message); }
+      }
       // CHILD SYNC: список дітей веде вчитель у parent_links, тож звіряємо його
       // при кожному вході — інакше друга дитина, прив'язана пізніше, не
       // з'явилася б у батьків, які вже колись заходили.
