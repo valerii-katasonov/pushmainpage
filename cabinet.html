@@ -1217,6 +1217,14 @@
   font-size:.75rem;color:#90a4ae;}
 .lesson-break.now{background:#fff8e1;color:#8a6d1f;font-weight:700;}
 .lesson-break .lb-time{white-space:nowrap;font-variant-numeric:tabular-nums;}
+/* Іменована перерва — обід чи велика перерва зі свого розкладу.
+   Відрізняється від безіменного проміжку між уроками: у неї є назва,
+   час і вона займає слот, тому виглядає вагоміше. */
+.lesson-break.named{background:#e8f5e9;color:#2e7d32;border-left:3px solid #66bb6a;
+                    padding-left:10px;font-weight:600;}
+.lesson-break.named.now{background:#fff3e0;color:#e65100;border-left-color:var(--orange);}
+.lesson-break.named.passed{opacity:.55;}
+
 
 /* Календар у кабінеті батьків та учня */
 .cal-hint{font-size:.78rem;color:#8d9ba3;margin:0 0 9px 0;}
