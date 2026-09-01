@@ -225,6 +225,27 @@ export function shiftDateToYear(ds, fromYear, toYear){
   return `${ny}-${String(mm).padStart(2,'0')}-${String(nd).padStart(2,'0')}`;
 }
 
+// Чи належить дата цьому навчальному році. Межа — серпень.
+export function dateBelongsToYear(ds, year){
+  const m0 = /^(\d{4})-(\d{2})-\d{2}$/.exec(String(ds || ''));
+  const [a, b] = String(year || '').split('-').map(Number);
+  if(!m0 || !a || !b) return false;
+  const y = Number(m0[1]), mm = Number(m0[2]);
+  return y === (mm >= 8 ? a : b);
+}
+
+// Куди покласти дату при перенесенні.
+//
+// ЧОМУ НЕ ПРОСТО ЗСУВ. Виявилося, що свята нового року можуть лежати у
+// вузлі старого: їх вносили в серпні, коли портал ще називав рік
+// попереднім. Дати там уже правильні — зсовувати їх означало б зіпсувати
+// на рік уперед. Тому спершу дивимось, чи дата вже належить потрібному
+// року: якщо так — беремо як є, і лише інакше зсуваємо.
+export function mapDateToYear(ds, fromYear, toYear){
+  if(dateBelongsToYear(ds, toYear)) return ds;
+  return shiftDateToYear(ds, fromYear, toYear);
+}
+
 window.fillCopyFromSelect = async function(){
   const sel = document.getElementById('ay-copy-from');
   if(!sel) return;
@@ -263,17 +284,23 @@ window.copyYearData = async function(){
     if(curB.exists()) Object.values(curB.val()).forEach(x => have.add('b|'+x.title+'|'+x.startDate));
 
     const holidays = [], breaks = [], skipped = [];
+    let asIs = 0, shifted = 0;
     if(hSnap.exists()) Object.values(hSnap.val()).forEach(x => {
-      const d = shiftDateToYear(x.date, src, ACTIVE_YEAR);
+      const d = mapDateToYear(x.date, src, ACTIVE_YEAR);
       if(!d){ skipped.push(`${x.title || 'Свято'} (${x.date})`); return; }
       if(have.has('h|'+x.title+'|'+d)) return;         // вже є — не дублюємо
+      d === x.date ? asIs++ : shifted++;
       holidays.push({ ...x, date: d });
     });
     if(bSnap.exists()) Object.values(bSnap.val()).forEach(x => {
-      const s2 = shiftDateToYear(x.startDate, src, ACTIVE_YEAR);
-      const e2 = shiftDateToYear(x.endDate, src, ACTIVE_YEAR);
+      // Обидві дати періоду обробляємо однаково: якщо початок уже в
+      // потрібному році — кінець теж беремо як є, інакше зсуваємо обидві.
+      const keep = dateBelongsToYear(x.startDate, ACTIVE_YEAR);
+      const s2 = keep ? x.startDate : shiftDateToYear(x.startDate, src, ACTIVE_YEAR);
+      const e2 = keep ? x.endDate   : shiftDateToYear(x.endDate,   src, ACTIVE_YEAR);
       if(!s2 || !e2){ skipped.push(`${x.title || 'Канікули'} (${x.startDate})`); return; }
       if(have.has('b|'+x.title+'|'+s2)) return;
+      keep ? asIs++ : shifted++;
       breaks.push({ ...x, startDate: s2, endDate: e2 });
     });
 
@@ -283,7 +310,9 @@ window.copyYearData = async function(){
     }
     if(!confirm(`Перенести з ${src} у ${ACTIVE_YEAR}?\n\n`
       + `Свят: ${holidays.length}\nКанікул: ${breaks.length}\n\n`
-      + 'Дати зсунуться на відповідні дні нового року. Наявні записи не чіпаємо.')) return;
+      + `Дати вже правильні, беремо як є: ${asIs}\n`
+      + `Дати зсуваються на рік уперед: ${shifted}\n\n`
+      + 'Наявні записи не чіпаємо.')) return;
 
     if(btn){ btn.disabled = true; btn.textContent = '⏳ Переношу...'; }
     for(const x of holidays) await push(ref(db, `academic_year/${ACTIVE_YEAR}/holidays`), x);
