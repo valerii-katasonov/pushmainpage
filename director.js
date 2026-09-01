@@ -82,7 +82,7 @@ window.removeDirectorSkill=function(i){directorSkillsTemp.splice(i,1);renderDire
 window.addTeacherSkill=function(){const v=document.getElementById('d-skill-input').value.trim();if(!v)return;if(!directorSkillsTemp.includes(v))directorSkillsTemp.push(v);document.getElementById('d-skill-input').value='';renderDirectorSkillsTags();};
 window.saveTeacherSkills=async function(){const se=document.getElementById('d-skills-teacher').value;if(!se)return alert("Оберіть вчителя!");await set(ref(db,`teacher_skills/${se}/subjects`),directorSkillsTemp);showToast("✅ Скіли збережено!");};
 // ══════════ SCHEDULE DRAFTS (Конструктор Розкладу) ══════════
-export function loadDrafts(){get(ref(db,'schedule_drafts')).then(snap=>{const c=document.getElementById('drafts-list-container');if(snap.exists()){let h='';const dr=snap.val();for(let dn in dr)h+=`<div style="background:#f4f9fd;padding:13px;border-radius:8px;border:1px solid var(--blue);margin-bottom:9px;"><b style="color:var(--teal);">📝 ${dn}</b><div style="display:flex;gap:8px;margin-top:9px;flex-wrap:wrap;"><button style="flex:1;background:#f39c12;color:#fff;padding:11px;margin:0;min-width:100px;" onclick="openVisualMatrixModal('${dn}')">✏️ Відкрити</button><button style="background:var(--red);color:#fff;padding:11px 13px;margin:0;" onclick="deleteDraft('${dn}')">🗑</button><button style="flex:100%;background:var(--green);color:#fff;padding:11px;margin:0;" onclick="activateDraft('${dn}')">🚀 Опублікувати</button></div></div>`;c.innerHTML=h;}else c.innerHTML='<p class="empty-msg">Чернеток немає.</p>';});}
+export function loadDrafts(){get(ref(db,'schedule_drafts')).then(snap=>{const c=document.getElementById('drafts-list-container');if(snap.exists()){let h='';const dr=snap.val();for(let dn in dr)h+=`<div style="background:#f4f9fd;padding:13px;border-radius:8px;border:1px solid var(--blue);margin-bottom:9px;"><b style="color:var(--teal);">📝 ${dn}</b><div style="display:flex;gap:8px;margin-top:9px;flex-wrap:wrap;"><button style="flex:1;background:#f39c12;color:#fff;padding:11px;margin:0;min-width:100px;" onclick="openVisualMatrixModal('${dn}')">✏️ Відкрити</button><button style="background:var(--red);color:#fff;padding:11px 13px;margin:0;" onclick="deleteDraft('${dn}')">🗑</button><button style="flex:100%;background:var(--green);color:#fff;padding:11px;margin:0;" onclick="activateDraft('${dn}','replace')">🚀 Опублікувати як увесь розклад школи</button><button style="flex:100%;background:#0288d1;color:#fff;padding:10px;margin:0;font-size:.83rem;" onclick="activateDraft('${dn}','merge')">➕ Оновити лише класи з чернетки</button></div></div>`;c.innerHTML=h;}else c.innerHTML='<p class="empty-msg">Чернеток немає.</p>';});}
 window.loadDrafts=loadDrafts;
 window.createNewDraft=async function(){const name=document.getElementById('new-draft-name').value.trim();if(!name)return alert("Введіть назву!");const ok=confirm("Скопіювати поточний розклад?");if(ok){const s=await get(ref(db,'schedules'));if(s.exists())await set(ref(db,`schedule_drafts/${name}`),s.val());else await set(ref(db,`schedule_drafts/${name}`),{placeholder:true});}else await set(ref(db,`schedule_drafts/${name}`),{placeholder:true});document.getElementById('new-draft-name').value='';showToast("✅ Чернетку створено!");loadDrafts();};
 window.deleteDraft=function(name){if(confirm(`Видалити "${name}"?`))remove(ref(db,`schedule_drafts/${name}`)).then(()=>loadDrafts());};
@@ -99,7 +99,22 @@ window.deleteDraft=function(name){if(confirm(`Видалити "${name}"?`))remo
 //
 // Тепер: перевіряємо вміст, рахуємо, що публікуємо, звіряємо після
 // запису й показуємо це людині.
-window.activateDraft=async function(name){
+// Публікація чернетки у двох режимах.
+//
+// ЧОМУ ДВА. Раніше я публікував лише класи з чернетки, а решту лишав як є —
+// це здавалося безпечнішим. Але очікування було інше: «опублікував розклад»
+// означає, що новий розклад стає ЄДИНИМ. Обидві поведінки осмислені,
+// тому вибір робить людина, а не я за неї:
+//
+//   replace — чернетка стає всім розкладом школи. Класи, яких у ній немає,
+//             лишаються без розкладу. Так починають новий навчальний рік.
+//   merge   — оновлюються лише класи з чернетки, решта не чіпається.
+//             Так вносять зміни в один-два класи посеред року.
+//
+// У режимі replace перед записом перелічуємо поіменно, у кого зникне
+// розклад: 11 класів без розкладу через один клік — те, про що треба
+// попередити словами, а не дрібним шрифтом.
+window.activateDraft=async function(name, mode){
   try{
     const snap=await get(ref(db,`schedule_drafts/${name}`));
     if(!snap.exists()) return alert(`Чернетки «${name}» більше немає.`);
@@ -120,9 +135,28 @@ window.activateDraft=async function(name){
         + 'Відкрийте чернетку, складіть розклад і спробуйте знову.');
     }
 
-    if(!confirm(`Зробити «${name}» основним розкладом школи?\n\n`
-      + `Класів: ${classes.length}\nДнів тижня: ${days.size}\nУроків: ${lessons}\n\n`
-      + 'Поточний розклад буде замінено повністю.')) return;
+    // Хто зараз має розклад, але в чернетці його немає
+    const liveSnap = await get(child(ref(db),'schedules'));
+    const liveClasses = liveSnap.exists()
+      ? Object.keys(liveSnap.val()||{}).filter(k => /^class_\d+$/.test(k)) : [];
+    const willClear = mode === 'replace'
+      ? liveClasses.filter(c => !classes.includes(c)) : [];
+
+    const head = mode === 'replace'
+      ? `Зробити «${name}» УСІМ розкладом школи?`
+      : `Оновити з «${name}» лише класи, що є в чернетці?`;
+    let msg = head + `\n\nКласів у чернетці: ${classes.length}\nДнів тижня: ${days.size}\nУроків: ${lessons}\n`;
+    if(mode === 'replace'){
+      msg += willClear.length
+        ? `\n⚠️ Ці класи ЗАЛИШАТЬСЯ БЕЗ РОЗКЛАДУ, бо їх немає в чернетці:\n`
+          + willClear.map(c=>c.replace('class_','')+' клас').join(', ')
+          + '\n\nЯкщо це не те, що потрібно — скасуйте і скористайтеся кнопкою '
+          + '«Оновити лише класи з чернетки».'
+        : '\nУсі класи, що мають розклад, є в чернетці.';
+    } else {
+      msg += '\nРешта класів збереже свій розклад.';
+    }
+    if(!confirm(msg)) return;
 
     // ЗАПИС ПО КЛАСАХ, А НЕ В КОРІНЬ.
     //
@@ -141,6 +175,12 @@ window.activateDraft=async function(name){
       try{ await set(ref(db,`schedules/${c}`), draft[c]); }
       catch(e){ failed.push(`${c.replace('class_','')} кл.: ${e.message}`); }
     }
+    // Повна заміна: класи поза чернеткою прибираємо поштучно — запис у
+    // корінь schedules правилами заборонений.
+    for(const c of willClear){
+      try{ await remove(ref(db,`schedules/${c}`)); }
+      catch(e){ failed.push(`${c.replace('class_','')} кл. (очищення): ${e.message}`); }
+    }
     if(failed.length===classes.length){
       return alert('Не вдалося опублікувати жодного класу.\n\n'+failed.join('\n'));
     }
@@ -151,11 +191,15 @@ window.activateDraft=async function(name){
       alert(`Опубліковано частково.\n\nНе записалося:\n${failed.join('\n')}`);
     }
     showToast(`🚀 Опубліковано: ${classes.length-failed.length} кл., ${lessons} уроків`);
-    alert(`✅ Розклад опубліковано.\n\nКласів у чернетці: ${classes.length}\n`
-      + `Уроків: ${lessons}\nВсього класів із розкладом у школі: ${got}\n\n`
-      + 'Класи, яких у чернетці не було, зберегли свій попередній розклад. '
-      + 'Предмети в «Матриці доступу вчителів» беруться саме звідси, за всі дні тижня.');
-    logAction('settings',{value:`розклад опубліковано: ${name}, ${classes.length} кл., ${lessons} уроків`});
+    alert(`✅ Розклад опубліковано.\n\nОновлено класів: ${classes.length - failed.length}\n`
+      + `Уроків: ${lessons}\n`
+      + (mode === 'replace' && willClear.length ? `Очищено класів: ${willClear.length}\n` : '')
+      + `Всього класів із розкладом у школі: ${got}\n\n`
+      + (mode === 'replace'
+          ? 'Чернетка тепер — увесь розклад школи.'
+          : 'Класи, яких у чернетці не було, зберегли свій попередній розклад.')
+      + ' Предмети в «Матриці доступу вчителів» беруться саме звідси, за всі дні тижня.');
+    logAction('settings',{value:`розклад ${mode==='replace'?'замінено':'оновлено'}: ${name}, ${classes.length} кл., ${lessons} уроків`+(willClear.length?`, очищено ${willClear.length}`:'')});
     loadDrafts();
   }catch(e){
     alert('Не вдалося опублікувати: '+e.message);
