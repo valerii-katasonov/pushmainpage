@@ -2109,6 +2109,12 @@
           <button onclick="addBreak()" style="background:#e65100;color:#fff;margin-top:8px;">+ Додати канікули</button>
           <h4 style="margin:16px 0 7px 0;color:#e65100;font-size:.86rem;">Свята</h4>
           <div id="ay-holidays-list"></div>
+          <div style="background:#fff;border:1px dashed #ffb74d;border-radius:10px;padding:11px;margin-top:11px;">
+            <b style="font-size:.83rem;color:#e65100;">📋 Перенести з іншого року</b>
+            <p style="font-size:.74rem;color:#78909c;margin:5px 0 7px;line-height:1.35;">Свята й канікули скопіюються в поточний рік, а дати зсунуться на відповідні дні. Те, що вже є, не дублюється.</p>
+            <select id="ay-copy-from" style="margin-top:0;"></select>
+            <button type="button" id="ay-copy-btn" onclick="copyYearData()" style="background:#ff9800;color:#fff;padding:10px;margin-top:8px;">📋 Перенести з іншого року</button>
+          </div>
           <input type="text" id="ay-holiday-title" placeholder="Назва свята" style="margin-top:8px;">
           <input type="date" id="ay-holiday-date" style="margin-top:6px;">
           <label style="display:flex;align-items:center;gap:6px;margin-top:6px;font-weight:400;font-size:.82rem;">
