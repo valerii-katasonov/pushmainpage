@@ -1824,6 +1824,7 @@
           </select>
           <label style="margin-top:13px;">Дозволені предмети:</label>
           <select id="d-acc-subjects" multiple style="height:130px;margin-top:4px;"><option value="" disabled>Оберіть клас...</option></select>
+          <div id="d-acc-subj-src" style="display:none;font-size:.72rem;color:#78909c;margin-top:5px;line-height:1.35;"></div>
           <button style="background:#00838f;padding:11px;margin-top:13px;color:#fff;" onclick="grantTeacherAccess()">💾 Зберегти доступ</button>
         </div>
       </details>
@@ -2933,6 +2934,7 @@
   <div class="modal-content" style="max-width:96%;width:100%;padding:18px;background:#f4f6f8;">
     <h2 id="matrix-modal-title" style="color:#1abc9c;margin-top:0;margin-bottom:9px;">🗓️ Матриця розкладу</h2>
     <div style="display:flex;justify-content:center;gap:9px;margin-bottom:13px;flex-wrap:wrap;">
+      <div id="matrix-load-info" style="display:none;font-size:.75rem;color:#78909c;margin-bottom:6px;"></div>
       <select id="matrix-day-select" onchange="renderMatrixGrid()" style="max-width:280px;border:2px solid #1abc9c;color:#16a085;font-weight:700;">
         <option value="Monday">Понеділок</option><option value="Tuesday">Вівторок</option><option value="Wednesday">Середа</option><option value="Thursday">Четвер</option><option value="Friday">П'ятниця</option>
       </select>
