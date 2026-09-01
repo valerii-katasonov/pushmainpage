@@ -1551,11 +1551,11 @@
       <h3>📊 Огляд</h3>
       <div style="display:flex;gap:9px;">
         <div style="flex:1;background:#e0f7fa;padding:14px;border-radius:12px;text-align:center;">
-          <h4 id="d-hw-title" style="margin:0;color:#00838f;font-size:.82rem;">📚 ДЗ</h4>
+          <h4 id="a-hw-title" style="margin:0;color:#00838f;font-size:.82rem;">📚 ДЗ</h4>
           <p id="a-hw-counter" style="font-size:1.7rem;font-weight:800;color:#00acc1;margin:4px 0;">0</p>
         </div>
         <div style="flex:1;background:#fce4ec;padding:14px;border-radius:12px;text-align:center;">
-          <h4 id="d-com-title" style="margin:0;color:#ad1457;font-size:.82rem;">💬 Коментарів</h4>
+          <h4 id="a-com-title" style="margin:0;color:#ad1457;font-size:.82rem;">💬 Коментарів</h4>
           <p id="a-com-counter" style="font-size:1.7rem;font-weight:800;color:#d81b60;margin:4px 0;">0</p>
         </div>
       </div>
@@ -1746,23 +1746,29 @@
       <div style="display:flex;gap:9px;margin:16px 0;">
         <div onclick="toggleHomeworkBreakdown()" title="Показати, хто що задав"
              style="flex:1;background:#e0f7fa;padding:14px;border-radius:12px;text-align:center;cursor:pointer;">
-          <h4 style="margin:0;color:#00838f;font-size:.82rem;">📚 ДЗ (сьогодні)</h4>
+          <h4 id="d-hw-title" style="margin:0;color:#00838f;font-size:.82rem;">📚 ДЗ</h4>
           <p id="d-hw-counter" style="font-size:1.7rem;font-weight:800;color:#00acc1;margin:4px 0;">0</p>
           <span style="font-size:.68rem;color:#00838f;">натисніть — деталі</span>
         </div>
-        <div style="flex:1;background:#fce4ec;padding:14px;border-radius:12px;text-align:center;">
-          <h4 style="margin:0;color:#ad1457;font-size:.82rem;">💬 Коментарів</h4>
+        <div onclick="toggleCommentsBreakdown()" title="Показати, хто що написав"
+             style="flex:1;background:#fce4ec;padding:14px;border-radius:12px;text-align:center;cursor:pointer;">
+          <h4 id="d-com-title" style="margin:0;color:#ad1457;font-size:.82rem;">💬 Коментарів</h4>
           <p id="d-com-counter" style="font-size:1.7rem;font-weight:800;color:#d81b60;margin:4px 0;">0</p>
+          <span style="font-size:.68rem;color:#ad1457;">натисніть — деталі</span>
         </div>
       </div>
       <div id="d-hw-breakdown" style="display:none;background:#fff;border:1px solid #b2ebf2;border-radius:12px;padding:12px;margin:-6px 0 16px;"></div>
-      <div style="background:#fff3e0;padding:14px;border-radius:12px;text-align:center;margin-bottom:16px;">
+      <div id="d-com-breakdown" style="display:none;background:#fff;border:1px solid #f8bbd0;border-radius:12px;padding:12px;margin:-6px 0 16px;"></div>
+      <div onclick="toggleWeekBreakdown()" title="Показати, з чого складаються числа"
+           style="background:#fff3e0;padding:14px;border-radius:12px;text-align:center;margin-bottom:16px;cursor:pointer;">
         <h4 style="margin:0;color:#e65100;font-size:.88rem;">🗓️ Статистика тижня</h4>
         <div style="display:flex;justify-content:space-around;margin-top:9px;">
           <div><p id="d-week-late" style="font-size:1.4rem;font-weight:800;color:var(--orange);margin:0;">0</p><span style="font-size:.68rem;color:#888;">запізнень</span></div>
           <div><p id="d-week-absent" style="font-size:1.4rem;font-weight:800;color:#c0392b;margin:0;">0</p><span style="font-size:.68rem;color:#888;">відсутніх</span></div>
         </div>
+        <span style="font-size:.68rem;color:#e65100;">натисніть — деталі</span>
       </div>
+      <div id="d-week-breakdown" style="display:none;background:#fff;border:1px solid #ffe0b2;border-radius:12px;padding:12px;margin:-10px 0 16px;"></div>
       <div class="data-card" style="border-left-color:var(--red);background:#fdfbfb;margin-top:0;">
         <h4 id="d-att-header" style="margin-top:0;color:var(--red);">🚨 Відсутні та Запізнення</h4>
         <ul id="d-unified-att-list" class="list-dash" style="padding-left:0;list-style:none;"><li class="empty-msg">Завантаження...</li></ul>
