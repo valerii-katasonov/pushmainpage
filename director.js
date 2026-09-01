@@ -202,6 +202,103 @@ window.resolveAcademicYear = async function(){
 
 // Перемикач року для директора. Показуємо і роки, які вже є в базі, —
 // інакше дані, внесені «не в той» рік, знайти було б неможливо.
+// ══════════ ПЕРЕНЕСЕННЯ СВЯТ І КАНІКУЛ З ІНШОГО РОКУ ══════════
+// Дати обовʼязково ЗСУВАЮТЬСЯ. Просте копіювання було б марним: свято з
+// датою 2025-12-25 у році «2026-2027» не показалося б ніде, бо календар
+// малює 2026-й і 2027-й. Тому кожна дата переїжджає у відповідний
+// календарний рік нового навчального року.
+//
+// Межа — серпень, та сама, що й у getAcademicYearId.
+export function shiftDateToYear(ds, fromYear, toYear){
+  const m0 = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(ds || ''));
+  if(!m0) return null;
+  const [fa, fb] = String(fromYear).split('-').map(Number);
+  const [ta, tb] = String(toYear).split('-').map(Number);
+  if(!fa || !fb || !ta || !tb) return null;
+  const y = Number(m0[1]), mm = Number(m0[2]), dd = Number(m0[3]);
+  const first = mm >= 8;
+  if(y !== (first ? fa : fb)) return null;   // дата не з цього навчального року
+  const ny = first ? ta : tb;
+  // 29 лютого існує не щороку — переносимо на 28-е, а не мовчки псуємо дату
+  const days = new Date(ny, mm, 0).getDate();
+  const nd = Math.min(dd, days);
+  return `${ny}-${String(mm).padStart(2,'0')}-${String(nd).padStart(2,'0')}`;
+}
+
+window.fillCopyFromSelect = async function(){
+  const sel = document.getElementById('ay-copy-from');
+  if(!sel) return;
+  let opts = [];
+  try{
+    const snap = await get(child(ref(db), 'academic_year'));
+    const v = snap.exists() ? (snap.val() || {}) : {};
+    Object.keys(v).forEach(k => {
+      if(!/^\d{4}-\d{4}$/.test(k) || k === ACTIVE_YEAR) return;
+      const n = (v[k].holidays ? Object.keys(v[k].holidays).length : 0)
+              + (v[k].breaks   ? Object.keys(v[k].breaks).length   : 0);
+      if(n) opts.push({ k, n });
+    });
+  }catch(e){ console.warn('academic_year:', e.message); }
+  opts.sort((a,b)=>b.k.localeCompare(a.k));
+  sel.innerHTML = opts.length
+    ? opts.map(o=>`<option value="${o.k}">${o.k} — записів: ${o.n}</option>`).join('')
+    : '<option value="">Інших років із даними немає</option>';
+};
+
+window.copyYearData = async function(){
+  const sel = document.getElementById('ay-copy-from');
+  const src = sel ? sel.value : '';
+  if(!src) return alert('Немає року, з якого копіювати.');
+  if(src === ACTIVE_YEAR) return alert('Це той самий рік.');
+  const btn = document.getElementById('ay-copy-btn');
+  try{
+    const [hSnap, bSnap, curH, curB] = await Promise.all([
+      get(child(ref(db), `academic_year/${src}/holidays`)),
+      get(child(ref(db), `academic_year/${src}/breaks`)),
+      get(child(ref(db), `academic_year/${ACTIVE_YEAR}/holidays`)),
+      get(child(ref(db), `academic_year/${ACTIVE_YEAR}/breaks`))
+    ]);
+    const have = new Set();
+    if(curH.exists()) Object.values(curH.val()).forEach(x => have.add('h|'+x.title+'|'+x.date));
+    if(curB.exists()) Object.values(curB.val()).forEach(x => have.add('b|'+x.title+'|'+x.startDate));
+
+    const holidays = [], breaks = [], skipped = [];
+    if(hSnap.exists()) Object.values(hSnap.val()).forEach(x => {
+      const d = shiftDateToYear(x.date, src, ACTIVE_YEAR);
+      if(!d){ skipped.push(`${x.title || 'Свято'} (${x.date})`); return; }
+      if(have.has('h|'+x.title+'|'+d)) return;         // вже є — не дублюємо
+      holidays.push({ ...x, date: d });
+    });
+    if(bSnap.exists()) Object.values(bSnap.val()).forEach(x => {
+      const s2 = shiftDateToYear(x.startDate, src, ACTIVE_YEAR);
+      const e2 = shiftDateToYear(x.endDate, src, ACTIVE_YEAR);
+      if(!s2 || !e2){ skipped.push(`${x.title || 'Канікули'} (${x.startDate})`); return; }
+      if(have.has('b|'+x.title+'|'+s2)) return;
+      breaks.push({ ...x, startDate: s2, endDate: e2 });
+    });
+
+    if(!holidays.length && !breaks.length){
+      return alert('Переносити нема чого: усе вже є в цьому році'
+        + (skipped.length ? `, а ці дати не належать року ${src}:\n` + skipped.join('\n') : '.'));
+    }
+    if(!confirm(`Перенести з ${src} у ${ACTIVE_YEAR}?\n\n`
+      + `Свят: ${holidays.length}\nКанікул: ${breaks.length}\n\n`
+      + 'Дати зсунуться на відповідні дні нового року. Наявні записи не чіпаємо.')) return;
+
+    if(btn){ btn.disabled = true; btn.textContent = '⏳ Переношу...'; }
+    for(const x of holidays) await push(ref(db, `academic_year/${ACTIVE_YEAR}/holidays`), x);
+    for(const x of breaks)   await push(ref(db, `academic_year/${ACTIVE_YEAR}/breaks`), x);
+    logAction('settings', { value: `перенесено з ${src}: свят ${holidays.length}, канікул ${breaks.length}` });
+    alert(`✅ Перенесено.\n\nСвят: ${holidays.length}\nКанікул: ${breaks.length}`
+      + (skipped.length ? `\n\nНе перенесено (дати поза роком ${src}):\n` + skipped.join('\n') : ''));
+    window.loadAcademicYear();
+  }catch(e){
+    alert('Не вдалося перенести: ' + e.message);
+  }finally{
+    if(btn){ btn.disabled = false; btn.textContent = '📋 Перенести з іншого року'; }
+  }
+};
+
 window.fillYearSelect = async function(){
   const sel = document.getElementById('ay-year-select');
   if(!sel) return;
@@ -241,7 +338,7 @@ window.switchAcademicYear = async function(){
   }catch(e){ alert('Не вдалося змінити рік: ' + e.message); }
 };
 function formatClassesLabel(classes){if(classes==='all')return '🌟 Усі класи';if(Array.isArray(classes)&&classes.length>0)return classes.map(c=>c.replace('class_','')).sort((a,b)=>a-b).join(', ')+' кл.';return '—';}
-window.loadAcademicYear=function(){const lbl=document.getElementById('ay-year-label');if(lbl)lbl.innerText=ACTIVE_YEAR;window.fillYearSelect();loadSemesters();loadBreaks();loadHolidays();};
+window.loadAcademicYear=function(){const lbl=document.getElementById('ay-year-label');if(lbl)lbl.innerText=ACTIVE_YEAR;window.fillYearSelect();window.fillCopyFromSelect();loadSemesters();loadBreaks();loadHolidays();};
 // --- Семестри ---
 function loadSemesters(){get(ref(db,`academic_year/${ACTIVE_YEAR}/semesters`)).then(snap=>{const c=document.getElementById('ay-semesters-list');if(snap.exists()){const d=snap.val();let h='';for(let id in d){const s=d[id];h+=`<div style="background:#fff;padding:9px 11px;border-radius:8px;border:1px solid #ffe0b2;margin-bottom:7px;display:flex;justify-content:space-between;align-items:center;"><div><b>${s.name}</b><br><span style="font-size:.78rem;color:#888;">${(s.startDate||'').split('-').reverse().join('.')} — ${(s.endDate||'').split('-').reverse().join('.')}</span></div><button onclick="removeSemester('${id}')" style="background:var(--red);color:#fff;width:auto;padding:6px 10px;margin:0;border-radius:7px;font-size:.78rem;">🗑</button></div>`;}c.innerHTML=h||'<p class="empty-msg">Семестрів ще немає.</p>';}else c.innerHTML='<p class="empty-msg">Семестрів ще немає.</p>';});}
 window.addSemester=async function(){
