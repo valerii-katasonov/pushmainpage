@@ -674,7 +674,33 @@ export function safeHttpUrl(u){
 }
 export function getActiveClass(){if(currentUserData&&(currentUserData.role==='teacher'||currentUserData.role==='class_teacher'||currentUserData.role==='art_school_teacher'||currentUserData.role==='music_teacher'))return document.getElementById('t-class-selector').value;return currentUserData?currentUserData.class:'class_2';}
 window.getTodayLessonsFlattened=function(dayName){if(!window.schedule||!window.schedule[dayName])return[];let flat=[];window.schedule[dayName].forEach(slot=>{if(Array.isArray(slot))flat.push(...slot);else if(slot&&Object.keys(slot).length>0)flat.push(slot);});return flat;};
-window.getValidSubjectName=function(item){if(!item)return null;let sName=item.subject&&item.subject.ua?item.subject.ua:item.subject;if(sName&&typeof sName==='string'&&sName.trim()!=="Перерва"&&item.number!==" ")return sName.trim();return null;};
+// Чи цей запис розкладу — перерва, а не урок.
+//
+// ЧОМУ ОКРЕМА ФУНКЦІЯ. Раніше кожне місце вирішувало це по-своєму:
+// getValidSubjectName звіряло назву рівно з «Перерва», конструктор шукав
+// у назві «перерва» або «обід», а вибір предмета для плану — ще інакше.
+// Через це перерва з назвою «Обід 1-3 класи» проходила як предмет і
+// потрапляла в «Дозволені предмети» матриці доступу та в список предметів
+// журналу. Учителю можна було призначити обід.
+//
+// Головна ознака — поле type, яке ставить конструктор. Назва і порожній
+// номер лишаються запасними ознаками: у старих файлах розкладу type немає.
+export function isBreakItem(item){
+  if(!item) return true;
+  if(item.type === 'break') return true;
+  if(item.number === ' ') return true;
+  const raw = item.subject && item.subject.ua ? item.subject.ua : item.subject;
+  const n = (typeof raw === 'string' ? raw : '').trim().toLowerCase();
+  if(!n) return true;
+  return n.includes('перерва') || n.includes('обід') || n.includes('обед');
+}
+window.isBreakItem=isBreakItem;
+
+window.getValidSubjectName=function(item){
+  if(!item || isBreakItem(item)) return null;
+  const raw = item.subject && item.subject.ua ? item.subject.ua : item.subject;
+  return (typeof raw === 'string' && raw.trim()) ? raw.trim() : null;
+};
 window.isSubjectAllowed=function(cls,subjectName){if(!subjectName)return false;let raw=teacherAccessMatrix[cls]||[];let allowed=Array.isArray(raw)?raw:Object.values(raw);let normAllowed=allowed.map(s=>typeof s==='string'?s.trim():'');if(normAllowed.includes("Всі предмети"))return true;return normAllowed.includes(subjectName.trim());};
 window.getDefaultTeacher=function(clsId,subjName){if(!subjName||!globalTeacherAccess)return null;let nt=subjName.trim().toLowerCase();for(let se in globalTeacherAccess){if(globalTeacherAccess[se][clsId]){let a=globalTeacherAccess[se][clsId];let ok=false;if(Array.isArray(a))ok=a.some(s=>s.trim().toLowerCase()==="всі предмети"||s.trim().toLowerCase()===nt);else ok=Object.values(a).some(s=>s.trim().toLowerCase()==="всі предмети"||s.trim().toLowerCase()===nt);if(ok){let t=window.globalTeachersList.find(t=>t.safeEmail===se);if(t)return{email:t.email,name:t.name};}}}return null;};
 window.loadScheduleScript=function(classId,callback){if(!classId)return;get(child(ref(db),`schedules/${classId}`)).then(snap=>{if(snap.exists()){window.schedule=snap.val().lessons||{};window.clubSchedule=snap.val().clubs||{};}else{window.schedule={};window.clubSchedule={};}if(callback)callback();}).catch(()=>{window.schedule={};window.clubSchedule={};if(callback)callback();});};
