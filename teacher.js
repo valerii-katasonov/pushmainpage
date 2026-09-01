@@ -360,7 +360,7 @@ window.doHwCopy=async function(){
   const btn=document.getElementById('btn-hw-copy-do');
   btn.disabled=true;btn.textContent='⏳ Копіюю...';
   try{
-    const payload={text,images:currentHwImages};
+    const payload={text,images:currentHwImages,ts:Date.now()};
     for(const c of targets){
       await set(ref(db,`homeworks/${c}/${date}/${subject}`),payload);
       await set(ref(db,`authors/${c}/${date}/${subject}`),auth.currentUser.uid);
@@ -485,7 +485,10 @@ window.saveTopicAndHW=async function(){
     try{finalImageUrls=await Promise.all(Array.from(fileInput.files).map(async file=>{const fd=new FormData();fd.append('file',file);fd.append('upload_preset',UPLOAD_PRESET);const r=await fetch(CLOUDINARY_URL,{method:'POST',body:fd});const d=await r.json();return d.secure_url;}));}
     catch(e){alert("Помилка фото: "+e.message);btn.disabled=false;btn.innerText="💾 Зберегти тему та ДЗ";return;}
   }
-  if(hwText||finalImageUrls.length>0)await set(ref(db,`homeworks/${cls}/${date}/${subject}`),{text:hwText,images:finalImageUrls});
+  // ts — коли завдання внесли. Дата в ключі каже, НА який день задано,
+  // а не коли це зробили. Без позначки часу старий тестовий запис
+  // неможливо відрізнити від сьогоднішнього.
+  if(hwText||finalImageUrls.length>0)await set(ref(db,`homeworks/${cls}/${date}/${subject}`),{text:hwText,images:finalImageUrls,ts:Date.now()});
   // 7. UI feedback — displays for both slots are refreshed by populateTopicSelector()
   //    below (→ loadSavedTopicForLesson() → applyTopicToSlot()), so no manual per-slot
   //    display update is needed here anymore.
