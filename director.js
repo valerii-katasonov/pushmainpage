@@ -164,26 +164,100 @@ window.activateDraft=async function(name){
 // ══════════ ACADEMIC YEAR (Навчальний рік) ══════════
 // Exported so parent-student.js's read-only calendar (Phase 3) can look up
 // the same school year's holidays/breaks without recomputing the rule.
-export function getAcademicYearId(){const now=new Date();const y=now.getFullYear();const m=now.getMonth()+1;return m>=9?`${y}-${y+1}`:`${y-1}-${y}`;}
-export const ACADEMIC_YEAR_ID=getAcademicYearId();
+// Навчальний рік: КОРДОН У СЕРПНІ, А НЕ У ВЕРЕСНІ.
+//
+// Раніше межа стояла на 1 вересня. Це означало, що канікули та свята,
+// внесені в серпні на майбутній рік, лягали у вузол ПОПЕРЕДНЬОГО року —
+// а 1 вересня портал починав читати новий вузол, і календар ставав
+// порожнім за одну ніч. Саме це й сталося: дані від 31 серпня лежать у
+// «2025-2026», а портал 1 вересня пішов у «2026-2027».
+//
+// Школи планують рік у серпні, тому серпень уже належить новому року.
+export function getAcademicYearId(now = new Date()){
+  const y = now.getFullYear(), m = now.getMonth() + 1;
+  return m >= 8 ? `${y}-${y+1}` : `${y-1}-${y}`;
+}
+export const ACADEMIC_YEAR_ID = getAcademicYearId();
+
+// Але й дати вирішувати все не можна: школа може ще працювати з минулим
+// роком або готувати наступний. Тому чинний рік — це НАЛАШТУВАННЯ в базі,
+// а обчислення лишається запасним варіантом, коли налаштування ще немає.
+export let ACTIVE_YEAR = ACADEMIC_YEAR_ID;
+
+export function yearsAround(id){
+  const [a] = String(id).split('-').map(Number);
+  return [`${a-1}-${a}`, `${a}-${a+1}`, `${a+1}-${a+2}`];
+}
+
+window.resolveAcademicYear = async function(){
+  try{
+    const snap = await get(child(ref(db), 'academic_year/current'));
+    const saved = snap.exists() ? String(snap.val() || '') : '';
+    if(/^\d{4}-\d{4}$/.test(saved)) ACTIVE_YEAR = saved;
+  }catch(e){ console.warn('academic_year/current:', e.message); }
+  const lbl = document.getElementById('ay-year-label');
+  if(lbl) lbl.innerText = ACTIVE_YEAR;
+  return ACTIVE_YEAR;
+};
+
+// Перемикач року для директора. Показуємо і роки, які вже є в базі, —
+// інакше дані, внесені «не в той» рік, знайти було б неможливо.
+window.fillYearSelect = async function(){
+  const sel = document.getElementById('ay-year-select');
+  if(!sel) return;
+  const years = new Set(yearsAround(ACADEMIC_YEAR_ID));
+  years.add(ACTIVE_YEAR);
+  const counts = {};
+  try{
+    const snap = await get(child(ref(db), 'academic_year'));
+    if(snap.exists()){
+      const v = snap.val() || {};
+      Object.keys(v).forEach(k => {
+        if(!/^\d{4}-\d{4}$/.test(k)) return;
+        years.add(k);
+        const n = (v[k] && v[k].holidays ? Object.keys(v[k].holidays).length : 0)
+                + (v[k] && v[k].breaks   ? Object.keys(v[k].breaks).length   : 0);
+        counts[k] = n;
+      });
+    }
+  }catch(e){ console.warn('academic_year:', e.message); }
+  sel.innerHTML = [...years].sort().map(y =>
+    `<option value="${y}"${y===ACTIVE_YEAR?' selected':''}>${y}`
+    + (counts[y] ? ` — записів: ${counts[y]}` : ' — порожній') + `</option>`).join('');
+};
+
+window.switchAcademicYear = async function(){
+  const sel = document.getElementById('ay-year-select');
+  if(!sel || !sel.value) return;
+  try{
+    await set(ref(db, 'academic_year/current'), sel.value);
+    ACTIVE_YEAR = sel.value;
+    const lbl = document.getElementById('ay-year-label');
+    if(lbl) lbl.innerText = ACTIVE_YEAR;
+    logAction('settings', { value: 'навчальний рік: ' + ACTIVE_YEAR });
+    showToast('✅ Рік: ' + ACTIVE_YEAR);
+    window.loadAcademicYear();
+    if(window.renderParentCalendar) window.renderParentCalendar('parent');
+  }catch(e){ alert('Не вдалося змінити рік: ' + e.message); }
+};
 function formatClassesLabel(classes){if(classes==='all')return '🌟 Усі класи';if(Array.isArray(classes)&&classes.length>0)return classes.map(c=>c.replace('class_','')).sort((a,b)=>a-b).join(', ')+' кл.';return '—';}
-window.loadAcademicYear=function(){const lbl=document.getElementById('ay-year-label');if(lbl)lbl.innerText=ACADEMIC_YEAR_ID;loadSemesters();loadBreaks();loadHolidays();};
+window.loadAcademicYear=function(){const lbl=document.getElementById('ay-year-label');if(lbl)lbl.innerText=ACTIVE_YEAR;window.fillYearSelect();loadSemesters();loadBreaks();loadHolidays();};
 // --- Семестри ---
-function loadSemesters(){get(ref(db,`academic_year/${ACADEMIC_YEAR_ID}/semesters`)).then(snap=>{const c=document.getElementById('ay-semesters-list');if(snap.exists()){const d=snap.val();let h='';for(let id in d){const s=d[id];h+=`<div style="background:#fff;padding:9px 11px;border-radius:8px;border:1px solid #ffe0b2;margin-bottom:7px;display:flex;justify-content:space-between;align-items:center;"><div><b>${s.name}</b><br><span style="font-size:.78rem;color:#888;">${(s.startDate||'').split('-').reverse().join('.')} — ${(s.endDate||'').split('-').reverse().join('.')}</span></div><button onclick="removeSemester('${id}')" style="background:var(--red);color:#fff;width:auto;padding:6px 10px;margin:0;border-radius:7px;font-size:.78rem;">🗑</button></div>`;}c.innerHTML=h||'<p class="empty-msg">Семестрів ще немає.</p>';}else c.innerHTML='<p class="empty-msg">Семестрів ще немає.</p>';});}
+function loadSemesters(){get(ref(db,`academic_year/${ACTIVE_YEAR}/semesters`)).then(snap=>{const c=document.getElementById('ay-semesters-list');if(snap.exists()){const d=snap.val();let h='';for(let id in d){const s=d[id];h+=`<div style="background:#fff;padding:9px 11px;border-radius:8px;border:1px solid #ffe0b2;margin-bottom:7px;display:flex;justify-content:space-between;align-items:center;"><div><b>${s.name}</b><br><span style="font-size:.78rem;color:#888;">${(s.startDate||'').split('-').reverse().join('.')} — ${(s.endDate||'').split('-').reverse().join('.')}</span></div><button onclick="removeSemester('${id}')" style="background:var(--red);color:#fff;width:auto;padding:6px 10px;margin:0;border-radius:7px;font-size:.78rem;">🗑</button></div>`;}c.innerHTML=h||'<p class="empty-msg">Семестрів ще немає.</p>';}else c.innerHTML='<p class="empty-msg">Семестрів ще немає.</p>';});}
 window.addSemester=async function(){
   const name=document.getElementById('ay-sem-name').value.trim();
   const startDate=document.getElementById('ay-sem-start').value;
   const endDate=document.getElementById('ay-sem-end').value;
   if(!name||!startDate||!endDate)return alert("Заповніть усі поля!");
   if(startDate>endDate)return alert("Дата початку пізніше дати завершення!");
-  await push(ref(db,`academic_year/${ACADEMIC_YEAR_ID}/semesters`),{name,startDate,endDate});
+  await push(ref(db,`academic_year/${ACTIVE_YEAR}/semesters`),{name,startDate,endDate});
   document.getElementById('ay-sem-name').value='';document.getElementById('ay-sem-start').value='';document.getElementById('ay-sem-end').value='';
   showToast("✅ Семестр додано!");loadSemesters();
 };
-window.removeSemester=function(id){if(confirm("Видалити цей семестр?"))remove(ref(db,`academic_year/${ACADEMIC_YEAR_ID}/semesters/${id}`)).then(()=>{showToast("🗑️ Семестр видалено");loadSemesters();});};
+window.removeSemester=function(id){if(confirm("Видалити цей семестр?"))remove(ref(db,`academic_year/${ACTIVE_YEAR}/semesters/${id}`)).then(()=>{showToast("🗑️ Семестр видалено");loadSemesters();});};
 // --- Канікули ---
 window.toggleAllClasses=function(kind){const cb=document.getElementById(`ay-${kind}-all-classes`);const sel=document.getElementById(`ay-${kind}-classes`);sel.disabled=cb.checked;if(cb.checked)Array.from(sel.options).forEach(o=>o.selected=false);};
-function loadBreaks(){get(ref(db,`academic_year/${ACADEMIC_YEAR_ID}/breaks`)).then(snap=>{const c=document.getElementById('ay-breaks-list');if(snap.exists()){const d=snap.val();let h='';for(let id in d){const b=d[id];h+=`<div style="background:#fff;padding:9px 11px;border-radius:8px;border:1px solid #ffe0b2;margin-bottom:7px;display:flex;justify-content:space-between;align-items:center;"><div><b>${b.title}</b><br><span style="font-size:.78rem;color:#888;">${(b.startDate||'').split('-').reverse().join('.')} — ${(b.endDate||'').split('-').reverse().join('.')} | ${formatClassesLabel(b.classes)}</span></div><button onclick="removeBreak('${id}')" style="background:var(--red);color:#fff;width:auto;padding:6px 10px;margin:0;border-radius:7px;font-size:.78rem;">🗑</button></div>`;}c.innerHTML=h||'<p class="empty-msg">Канікул ще немає.</p>';}else c.innerHTML='<p class="empty-msg">Канікул ще немає.</p>';});}
+function loadBreaks(){get(ref(db,`academic_year/${ACTIVE_YEAR}/breaks`)).then(snap=>{const c=document.getElementById('ay-breaks-list');if(snap.exists()){const d=snap.val();let h='';for(let id in d){const b=d[id];h+=`<div style="background:#fff;padding:9px 11px;border-radius:8px;border:1px solid #ffe0b2;margin-bottom:7px;display:flex;justify-content:space-between;align-items:center;"><div><b>${b.title}</b><br><span style="font-size:.78rem;color:#888;">${(b.startDate||'').split('-').reverse().join('.')} — ${(b.endDate||'').split('-').reverse().join('.')} | ${formatClassesLabel(b.classes)}</span></div><button onclick="removeBreak('${id}')" style="background:var(--red);color:#fff;width:auto;padding:6px 10px;margin:0;border-radius:7px;font-size:.78rem;">🗑</button></div>`;}c.innerHTML=h||'<p class="empty-msg">Канікул ще немає.</p>';}else c.innerHTML='<p class="empty-msg">Канікул ще немає.</p>';});}
 window.addBreak=async function(){
   const title=document.getElementById('ay-break-title').value.trim();
   const startDate=document.getElementById('ay-break-start').value;
@@ -194,14 +268,14 @@ window.addBreak=async function(){
   if(!title||!startDate||!endDate)return alert("Заповніть усі поля!");
   if(startDate>endDate)return alert("Дата початку пізніше дати завершення!");
   if(!allChecked&&classes.length===0)return alert("Оберіть класи або позначте 'Усі класи'!");
-  await push(ref(db,`academic_year/${ACADEMIC_YEAR_ID}/breaks`),{title,startDate,endDate,classes});
+  await push(ref(db,`academic_year/${ACTIVE_YEAR}/breaks`),{title,startDate,endDate,classes});
   document.getElementById('ay-break-title').value='';document.getElementById('ay-break-start').value='';document.getElementById('ay-break-end').value='';
   document.getElementById('ay-break-all-classes').checked=false;sel.disabled=false;Array.from(sel.options).forEach(o=>o.selected=false);
   showToast("✅ Канікули додано!");loadBreaks();
 };
-window.removeBreak=function(id){if(confirm("Видалити ці канікули?"))remove(ref(db,`academic_year/${ACADEMIC_YEAR_ID}/breaks/${id}`)).then(()=>{showToast("🗑️ Видалено");loadBreaks();});};
+window.removeBreak=function(id){if(confirm("Видалити ці канікули?"))remove(ref(db,`academic_year/${ACTIVE_YEAR}/breaks/${id}`)).then(()=>{showToast("🗑️ Видалено");loadBreaks();});};
 // --- Свята ---
-function loadHolidays(){get(ref(db,`academic_year/${ACADEMIC_YEAR_ID}/holidays`)).then(snap=>{const c=document.getElementById('ay-holidays-list');if(snap.exists()){const d=snap.val();let h='';for(let id in d){const hd=d[id];const typeLabel=hd.calendarType==='art_school'?'🎵 Школа мистецтв':'🏫 Загальна школа';h+=`<div style="background:#fff;padding:9px 11px;border-radius:8px;border:1px solid #ffe0b2;margin-bottom:7px;display:flex;justify-content:space-between;align-items:center;"><div><b>${hd.title}</b><br><span style="font-size:.78rem;color:#888;">${(hd.date||'').split('-').reverse().join('.')} | ${formatClassesLabel(hd.classes)} | ${typeLabel}</span></div><button onclick="removeHoliday('${id}')" style="background:var(--red);color:#fff;width:auto;padding:6px 10px;margin:0;border-radius:7px;font-size:.78rem;">🗑</button></div>`;}c.innerHTML=h||'<p class="empty-msg">Свят ще немає.</p>';}else c.innerHTML='<p class="empty-msg">Свят ще немає.</p>';});}
+function loadHolidays(){get(ref(db,`academic_year/${ACTIVE_YEAR}/holidays`)).then(snap=>{const c=document.getElementById('ay-holidays-list');if(snap.exists()){const d=snap.val();let h='';for(let id in d){const hd=d[id];const typeLabel=hd.calendarType==='art_school'?'🎵 Школа мистецтв':'🏫 Загальна школа';h+=`<div style="background:#fff;padding:9px 11px;border-radius:8px;border:1px solid #ffe0b2;margin-bottom:7px;display:flex;justify-content:space-between;align-items:center;"><div><b>${hd.title}</b><br><span style="font-size:.78rem;color:#888;">${(hd.date||'').split('-').reverse().join('.')} | ${formatClassesLabel(hd.classes)} | ${typeLabel}</span></div><button onclick="removeHoliday('${id}')" style="background:var(--red);color:#fff;width:auto;padding:6px 10px;margin:0;border-radius:7px;font-size:.78rem;">🗑</button></div>`;}c.innerHTML=h||'<p class="empty-msg">Свят ще немає.</p>';}else c.innerHTML='<p class="empty-msg">Свят ще немає.</p>';});}
 window.addHoliday=async function(){
   const title=document.getElementById('ay-holiday-title').value.trim();
   const date=document.getElementById('ay-holiday-date').value;
@@ -211,12 +285,12 @@ window.addHoliday=async function(){
   const calendarType=document.getElementById('ay-holiday-calendar-type').value;
   if(!title||!date)return alert("Заповніть усі поля!");
   if(!allChecked&&classes.length===0)return alert("Оберіть класи або позначте 'Усі класи'!");
-  await push(ref(db,`academic_year/${ACADEMIC_YEAR_ID}/holidays`),{title,date,classes,calendarType});
+  await push(ref(db,`academic_year/${ACTIVE_YEAR}/holidays`),{title,date,classes,calendarType});
   document.getElementById('ay-holiday-title').value='';document.getElementById('ay-holiday-date').value='';
   document.getElementById('ay-holiday-all-classes').checked=false;sel.disabled=false;Array.from(sel.options).forEach(o=>o.selected=false);
   showToast("✅ Свято додано!");loadHolidays();
 };
-window.removeHoliday=function(id){if(confirm("Видалити це свято?"))remove(ref(db,`academic_year/${ACADEMIC_YEAR_ID}/holidays/${id}`)).then(()=>{showToast("🗑️ Видалено");loadHolidays();});};
+window.removeHoliday=function(id){if(confirm("Видалити це свято?"))remove(ref(db,`academic_year/${ACTIVE_YEAR}/holidays/${id}`)).then(()=>{showToast("🗑️ Видалено");loadHolidays();});};
 // ══════════ TEACHER LIST FOR DIRECTOR (access matrix + staff mgmt) ══════════
 // Мультиролі: вчителем вважається той, у кого вчительська роль є СЕРЕД ролей,
 // а не лише як активна. Відключених (disabled) до списків не додаємо.
