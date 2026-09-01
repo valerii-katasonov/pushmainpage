@@ -2510,8 +2510,8 @@
   <div id="parent-screen" class="panel">
     <div class="dtab-bar" id="parent-screen-tabs">
       <button class="dtab on" data-t="day" onclick="switchTab('parent-screen','day',this)">Сьогодні</button>
-      <button class="dtab" data-t="news" onclick="switchTab('parent-screen','news',this)">Новини</button>
-      <button class="dtab" data-t="study" onclick="switchTab('parent-screen','study',this)">Навчання</button>
+      <button class="dtab" data-t="grades" onclick="switchTab('parent-screen','grades',this)">Оцінки</button>
+      <button class="dtab" data-t="school" onclick="switchTab('parent-screen','school',this)">Школа</button>
       <button class="dtab" data-t="profile" onclick="switchTab('parent-screen','profile',this)">Профіль</button>
     </div>
     <!-- Повідомлення поза вкладками: до листування має бути доступ звідусіль,
@@ -2549,17 +2549,7 @@
               style="width:100%;background:var(--blue);color:#fff;padding:10px;border-radius:10px;font-weight:700;margin-top:10px;font-size:.88rem;">📅 Показати весь тиждень</button>
       <div id="p-week-schedule" class="wk-box" style="display:none;"></div>
       </div>
-      <div class="data-card" style="border-left-color:var(--orange);background:#fffcf0;">
-        <h4 style="margin-top:0;color:var(--orange);">📅 Календар класу</h4>
-        <p class="cal-hint">Свята, канікули та контрольні цього місяця — списком нижче.</p>
-        <input type="month" id="p-cal-month-select" onchange="renderParentCalendar('parent')"
-               style="margin-top:0;font-size:.85rem;">
-        <div id="p-cal-grid"><p class="empty-msg">⏳ Завантаження...</p></div>
-        <button type="button" id="p-cal-year-btn" onclick="toggleYearCalendar('parent')" style="background:#eceff1;color:#37474f;margin-top:10px;">📅 Показати весь навчальний рік</button>
-        <div id="p-cal-year" style="display:none;margin-top:10px;"></div>
-
-        <div id="p-cal-day-details" style="display:none;margin-top:10px;background:#fff;border-radius:8px;padding:9px;border:1px dashed var(--orange);font-size:.82rem;"></div>
-      </div>
+      
       <div class="data-card" style="border-left-color:#7986cb;background:#f5f6ff;">
         <h4 style="margin-top:0;color:#283593;">🔔 Розклад дзвінків</h4>
         <div id="p-bell-schedule-container"><p class="empty-msg">Завантаження...</p></div>
@@ -2589,7 +2579,7 @@
       </div>
     </section>
 
-    <section class="screen-section" data-dtab="day">
+    <section class="screen-section" data-dtab="grades">
       <h3>📝 Оцінки та коментарі за день</h3>
       <div class="data-card" style="border-left-color:#ff4757;background:#fff0f1;margin-top:0;">
         <ul id="p-daily-comments-list" class="list-dash"></ul>
@@ -2598,19 +2588,33 @@
 
 
     <!-- ═══════════ НОВИНИ ═══════════ -->
-    <section class="screen-section" data-dtab="news">
+    <section class="screen-section" data-dtab="school">
       <h3>📣 Новини школи</h3>
       <div id="p-news-feed" class="nw-feed"><p class="empty-msg">Завантаження...</p></div>
     </section>
 
-    <section class="screen-section" data-dtab="news">
+        <section class="screen-section" data-dtab="school">
+      <h3>📅 Календар класу</h3>
+<div class="data-card" style="border-left-color:var(--orange);background:#fffcf0;">
+        <h4 style="margin-top:0;color:var(--orange);">📅 Календар класу</h4>
+        <p class="cal-hint">Свята, канікули та контрольні цього місяця — списком нижче.</p>
+        <input type="month" id="p-cal-month-select" onchange="renderParentCalendar('parent')"
+               style="margin-top:0;font-size:.85rem;">
+        <div id="p-cal-grid"><p class="empty-msg">⏳ Завантаження...</p></div>
+        <button type="button" id="p-cal-year-btn" onclick="toggleYearCalendar('parent')" style="background:#eceff1;color:#37474f;margin-top:10px;">📅 Показати весь навчальний рік</button>
+        <div id="p-cal-year" style="display:none;margin-top:10px;"></div>
+
+        <div id="p-cal-day-details" style="display:none;margin-top:10px;background:#fff;border-radius:8px;padding:9px;border:1px dashed var(--orange);font-size:.82rem;"></div>
+      </div>
+    </section>
+    <section class="screen-section" data-dtab="school">
       <h3>🎂 Дні народження</h3>
       <div id="p-birthdays" class="bd-box" style="display:none;"></div>
       <p id="p-birthdays-empty" class="empty-msg">Цього тижня іменинників немає.</p>
     </section>
 
     <!-- ═══════════ НАВЧАННЯ ═══════════ -->
-    <section class="screen-section" data-dtab="study">
+    <section class="screen-section" data-dtab="grades">
       <h3>📊 Успішність</h3>
       <div class="data-card" style="border-left-color:#f1c40f;background:#fffcf0;text-align:center;margin-top:0;">
         <h4 style="margin-top:0;color:var(--orange);font-size:1rem;">🌟 Прогрес наліпок</h4>
@@ -2629,7 +2633,7 @@
       </div>
     </section>
 
-    <section class="screen-section" data-dtab="study">
+    <section class="screen-section" data-dtab="school">
       <h3>📘 Підручники</h3>
       <div class="data-card" style="border-left-color:var(--blue);background:#f0f8ff;margin-top:0;">
         <div id="p-textbooks-list"><p class="empty-msg">Завантаження...</p></div>
@@ -2674,7 +2678,7 @@
       <div id="p-my-consents"><p class="empty-msg">Завантаження...</p></div>
     </section>
 
-    <section class="screen-section" data-dtab="profile">
+    <section class="screen-section" data-dtab="school">
       <h3>📋 Запити школи</h3>
       <div id="p-consents"><p class="empty-msg">Активних запитів немає.</p></div>
     </section>
