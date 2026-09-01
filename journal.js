@@ -4,7 +4,7 @@
 // schedule and director's drafts.
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, update } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { ACADEMIC_YEAR_ID } from './director.js';
+import { ACTIVE_YEAR } from './director.js';
 import { db, getActiveClass, currentUserData, displayGrade, gradeClass6, calculateStudentWeightedAvg, getClassNum, GRADE_WEIGHTS, dayKeys, dayNamesUA, showToast, localDateString, summarizeAttendanceSlots, gradeTypesCache, escJs, escHtml, notifyEvent, logAction, getUserRoles, getUsersSnap, stuName, gradeWritePaths, isBreakItem} from './common.js';
 
 // globalTeacherAccess is reassigned only in this file (openVisualMatrixModal)
@@ -119,7 +119,7 @@ window.openSemesterGrades=async function(){
   const sel=document.getElementById('sem-period');
   sel.innerHTML='<option value="">Завантаження...</option>';
   document.getElementById('semester-modal').style.display='flex';
-  const snap=await get(child(ref(db),`academic_year/${ACADEMIC_YEAR_ID}/semesters`));
+  const snap=await get(child(ref(db),`academic_year/${ACTIVE_YEAR}/semesters`));
   semCache=snap.exists()?snap.val():{};
   const ids=Object.keys(semCache);
   sel.innerHTML=ids.length
