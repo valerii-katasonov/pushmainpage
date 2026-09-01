@@ -611,8 +611,26 @@ window.exportJournalToPDF=async function(){
   }
 };
 // ══════════ VISUAL MATRIX ══════════
+// ВІДКРИТТЯ КОНСТРУКТОРА.
+//
+// Тут не було жодного try/catch. Якщо будь-яке з чотирьох читань падало,
+// функція обривалася ДО renderMatrixGrid — вікно відкривалося порожнім, і
+// це виглядало як «понеділок не відкривається для редагування»: адже
+// перший день не малювався взагалі, а варто було перемкнути день, і сітка
+// зʼявлялася (бо onchange викликає renderMatrixGrid напряму).
+//
+// Тепер: помилка видима, день завжди скидається на понеділок, а під
+// заголовком видно, що саме завантажилося.
 window.openVisualMatrixModal=async function(mode){
-  currentMatrixMode=mode;document.getElementById('visual-matrix-modal').style.display='flex';showToast("⏳ Завантаження...");
+  currentMatrixMode=mode;
+  document.getElementById('visual-matrix-modal').style.display='flex';
+  const daySel=document.getElementById('matrix-day-select');
+  if(daySel) daySel.value='Monday';
+  const info=document.getElementById('matrix-load-info');
+  const say=(t,bad)=>{ if(info){ info.style.display=t?'block':'none'; info.textContent=t||'';
+                                 info.style.color=bad?'var(--red)':'#78909c'; } };
+  say('Завантаження...');
+  try{
   let dbPath=mode==='live'?'schedules':`schedule_drafts/${mode}`;
   const [snap,accSnap,stSnap]=await Promise.all([get(ref(db,dbPath)),get(ref(db,'teacher_access')),get(ref(db,'students_list'))]);
   globalAllSchedules=snap.exists()?snap.val():{};globalTeacherAccess=accSnap.exists()?accSnap.val():{};globalAllStudents=stSnap.exists()?stSnap.val():{};
@@ -622,6 +640,22 @@ window.openVisualMatrixModal=async function(mode){
   if(mode!=='live'){title.innerHTML=`🛠️ Конструктор: <span style="color:#e67e22">${mode}</span>`;wb.style.display='block';}
   else{title.innerHTML='🗓️ Матриця розкладу';wb.style.display='none';}
   window.calculateMatrixWarnings();renderMatrixGrid();
+
+  // Що саме прочитано — щоб «порожній понеділок» більше не був загадкою
+  const clsKeys=Object.keys(globalAllSchedules||{}).filter(k=>k!=='placeholder');
+  let mon=0;
+  clsKeys.forEach(c=>{
+    const arr=globalAllSchedules[c]?.lessons?.Monday;
+    const list=Array.isArray(arr)?arr:Object.values(arr||{});
+    list.forEach(i=>{ const items=Array.isArray(i)?i:(i&&i.subject?[i]:[]); mon+=items.length; });
+  });
+  say(clsKeys.length
+    ? `${mode==='live'?'Чинний розклад':'Чернетка «'+mode+'»'}: класів ${clsKeys.length}, уроків у понеділок ${mon}.`
+    : `${mode==='live'?'Чинний розклад':'Чернетка «'+mode+'»'} порожня — жодного класу. Додайте уроки клацанням по клітинці.`);
+  }catch(e){
+    console.error('openVisualMatrixModal', e);
+    say('Не вдалося завантажити: '+e.message+'. Сітку не побудовано.', true);
+  }
 };
 window.closeVisualMatrixModal=function(){document.getElementById('visual-matrix-modal').style.display='none';};
 window.calculateMatrixWarnings=function(){if(currentMatrixMode==='live')return;draftWarningsCache=[];const day=document.getElementById('matrix-day-select').value;let wHtml='<b>⚠️ Аналіз накладок:</b><ul style="margin:4px 0 0 0;padding-left:18px;">';let hasW=false;let tracker={};let maxR=8;for(let i=1;i<=11;i++){const cls=`class_${i}`;if(globalAllSchedules[cls]?.lessons?.[day])maxR=Math.max(maxR,globalAllSchedules[cls].lessons[day].length);}for(let row=0;row<maxR;row++){let slotT={};for(let c=1;c<=11;c++){const clsId=`class_${c}`;const building=c<=5?1:2;const la=(globalAllSchedules[clsId]?.lessons?.[day])||[];const raw=la[row];let items=Array.isArray(raw)?raw:(raw&&raw.subject?[raw]:[]);items.forEach((lesson,si)=>{if(lesson.type==='break')return;let te=lesson.teacherEmail;if(!te&&lesson.subject){const sn=typeof lesson.subject==='string'?lesson.subject:(lesson.subject.ua||'');const dt=window.getDefaultTeacher(clsId,sn);if(dt)te=dt.email;}if(te){if(!tracker[te])tracker[te]={};if(slotT[te]){hasW=true;wHtml+=`<li style="color:#c0392b;"><b>Накладка!</b> ${te}: ${clsId}+${slotT[te].classId} (Слот ${row+1})</li>`;draftWarningsCache.push({type:'conflict',row,classId:clsId,subIdx:si});draftWarningsCache.push({type:'conflict',row,classId:slotT[te].classId,subIdx:slotT[te].subIdx});}else slotT[te]={classId:clsId,subIdx:si};tracker[te][row]={classId:clsId,building,subIdx:si};}});}}for(let te in tracker){const slots=Object.keys(tracker[te]).map(Number).sort((a,b)=>a-b);for(let i=0;i<slots.length-1;i++){if(slots[i+1]-slots[i]===1&&tracker[te][slots[i]].building!==tracker[te][slots[i+1]].building){hasW=true;wHtml+=`<li style="color:#e67e22;"><b>Переїзд:</b> ${te} між слотами ${slots[i]+1}→${slots[i+1]+1}</li>`;draftWarningsCache.push({type:'travel',row:slots[i],classId:tracker[te][slots[i]].classId,subIdx:tracker[te][slots[i]].subIdx});draftWarningsCache.push({type:'travel',row:slots[i+1],classId:tracker[te][slots[i+1]].classId,subIdx:tracker[te][slots[i+1]].subIdx});}}}wHtml+='</ul>';const wb=document.getElementById('constructor-warnings');if(hasW){wb.innerHTML=wHtml;wb.style.display='block';}else{wb.innerHTML='✅ Накладок не виявлено!';wb.style.display='block';}};
