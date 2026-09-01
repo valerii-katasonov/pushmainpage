@@ -2197,10 +2197,15 @@ window.toggleHomeworkBreakdown = async function(){
         const text = typeof v === 'string' ? v : String(v && v.text || '');
         const imgs = (v && Array.isArray(v.images)) ? v.images.length : (v && v.image ? 1 : 0);
         const who = nameOf(au[c] && au[c][date] && au[c][date][subj]);
+        // Коли внесли. У старих записах позначки немає — так і пишемо,
+        // а не вигадуємо дату.
+        const ts = v && typeof v === 'object' ? v.ts : null;
+        const made = ts ? new Date(ts).toLocaleDateString('uk-UA') : '';
         h += `<div class="hwb-row">
           <div class="hwb-subj">${escHtml(subj)}</div>
           <div class="hwb-text">${escHtml(text) || '<i>без тексту</i>'}${imgs?` 📎${imgs}`:''}</div>
-          <div class="hwb-who">${who ? '👨‍🏫 ' + escHtml(who) : '<i>автор не вказаний</i>'}</div>
+          <div class="hwb-who">${who ? '👨‍🏫 ' + escHtml(who) : '<i>автор не вказаний</i>'}`
+          + `${made ? ' · внесено ' + escHtml(made) : ' · <i>час не записано (старий запис)</i>'}</div>
         </div>`;
       });
     });
