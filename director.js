@@ -2214,3 +2214,107 @@ window.toggleHomeworkBreakdown = async function(){
     box.innerHTML = `<p class="empty-msg" style="color:var(--red);">Не вдалося прочитати: ${escHtml(e.message||'відмова')}</p>`;
   }
 };
+
+// ══════════ РОЗШИФРОВКА: КОМЕНТАРІ ══════════
+// comments/{клас}/{дата}/{предмет}/{учень} = текст.
+// Автора коментаря портал не зберігає — тут його свідомо не вигадуємо.
+window.toggleCommentsBreakdown = async function(){
+  const box = document.getElementById('d-com-breakdown');
+  if(!box) return;
+  const opening = box.style.display === 'none' || !box.style.display;
+  box.style.display = opening ? 'block' : 'none';
+  if(!opening) return;
+
+  const date = document.getElementById('global-date').value;
+  box.innerHTML = '<p class="empty-msg">Завантаження...</p>';
+  try{
+    const cd = await getSchoolRange('comments', date, date);
+    const human = date.split('-').reverse().join('.');
+    const classes = Object.keys(cd).filter(c => cd[c] && cd[c][date])
+                          .sort((a,b) => getClassNum(a) - getClassNum(b));
+    let h = `<p class="hwb-date">Коментарі за ${escHtml(human)}${date===localDateString?' (сьогодні)':''}</p>`;
+    let total = 0;
+    classes.forEach(c => {
+      const bySubj = cd[c][date] || {};
+      const rows = [];
+      Object.keys(bySubj).sort((a,b)=>a.localeCompare(b,'uk')).forEach(subj => {
+        const perStudent = bySubj[subj];
+        if(!perStudent || typeof perStudent !== 'object') return;
+        Object.keys(perStudent).forEach(st => {
+          rows.push({ subj, st, text: String(perStudent[st] || '') });
+        });
+      });
+      if(!rows.length) return;
+      h += `<div class="hwb-cls"><b>${escHtml(c.replace('class_',''))} клас</b> <span>${rows.length}</span></div>`;
+      rows.forEach(r => {
+        total++;
+        h += `<div class="hwb-row">
+          <div class="hwb-subj">${escHtml(stuName(c, r.st))} <span style="font-weight:400;color:#90a4ae;">· ${escHtml(r.subj)}</span></div>
+          <div class="hwb-text">${escHtml(r.text)}</div>
+        </div>`;
+      });
+    });
+    box.innerHTML = total
+      ? h + `<p class="hwb-total">Усього коментарів: ${total}</p>`
+      : `<p class="empty-msg">За ${escHtml(human)} коментарів немає.</p>`;
+  }catch(e){
+    box.innerHTML = `<p class="empty-msg" style="color:var(--red);">Не вдалося прочитати: ${escHtml(e.message||'відмова')}</p>`;
+  }
+};
+
+// ══════════ РОЗШИФРОВКА: СТАТИСТИКА ТИЖНЯ ══════════
+// Числа на картці — сума за весь тиждень по всій школі. Побачити, з чого
+// вони складаються, було ніяк: список нижче показує лише обраний день.
+window.toggleWeekBreakdown = async function(){
+  const box = document.getElementById('d-week-breakdown');
+  if(!box) return;
+  const opening = box.style.display === 'none' || !box.style.display;
+  box.style.display = opening ? 'block' : 'none';
+  if(!opening) return;
+
+  const date = document.getElementById('global-date').value;
+  const wd = getWeekDates(date);
+  box.innerHTML = '<p class="empty-msg">Завантаження...</p>';
+  try{
+    const ad = await getSchoolRange('attendance', wd[0], wd[wd.length-1]);
+    const UA = ['Пн','Вт','Ср','Чт','Пт','Сб','Нд'];
+    let h = `<p class="hwb-date">Тиждень ${escHtml(wd[0].split('-').reverse().join('.'))}`
+          + ` – ${escHtml(wd[wd.length-1].split('-').reverse().join('.'))}</p>`;
+    let late = 0, absent = 0, days = 0;
+
+    wd.forEach((ds, di) => {
+      const rows = [];
+      Object.keys(ad).sort((a,b)=>getClassNum(a)-getClassNum(b)).forEach(c => {
+        const byStudent = (ad[c] && ad[c][ds]) || {};
+        Object.keys(byStudent).forEach(st => {
+          const slots = byStudent[st] || {};
+          Object.keys(slots).forEach(sk => {
+            const r = slots[sk];
+            if(!r || !r.status) return;
+            if(r.status === 'late') late++; else if(r.status === 'absent') absent++;
+            rows.push({ c, st, sk, r });
+          });
+        });
+      });
+      if(!rows.length) return;
+      days++;
+      h += `<div class="hwb-cls"><b>${UA[di]}, ${escHtml(ds.split('-').reverse().slice(0,2).join('.'))}</b>`
+         + ` <span>${rows.length}</span></div>`;
+      rows.forEach(({c, st, sk, r}) => {
+        const badge = r.status === 'late' ? 'badge-late' : 'badge-absent';
+        const label = r.status === 'late' ? 'Запізнення' : 'Відсутність';
+        h += `<div class="hwb-row">
+          <div class="hwb-subj">${escHtml(c.replace('class_',''))} кл · ${escHtml(stuName(c, st))}
+            <span class="badge ${badge}">${label}</span></div>
+          <div class="hwb-text">${escHtml(formatAttendanceSlotLabel(sk))}${r.reason?' · '+escHtml(r.reason):''}</div>
+        </div>`;
+      });
+    });
+
+    box.innerHTML = days
+      ? h + `<p class="hwb-total">За тиждень: запізнень ${late}, відсутностей ${absent}</p>`
+      : '<p class="empty-msg">Цього тижня відміток немає.</p>';
+  }catch(e){
+    box.innerHTML = `<p class="empty-msg" style="color:var(--red);">Не вдалося прочитати: ${escHtml(e.message||'відмова')}</p>`;
+  }
+};
