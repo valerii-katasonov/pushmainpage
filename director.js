@@ -1927,7 +1927,9 @@ export function switchTab(screenId, tab, btn){
     el.style.display = (el.dataset.dtab === tab) ? '' : 'none';
   });
   try{ localStorage.setItem('push_school_tab_' + screenId, tab); }catch(e){}
-  if(tab === 'news' && window.renderNewsFeed){
+  // У батьків вкладка новин тепер називається «Школа». Без цього рядка
+  // стрічка не оновлювалася б при перемиканні на неї.
+  if((tab === 'news' || tab === 'school') && window.renderNewsFeed){
     const feed = scr.querySelector('.nw-feed');
     if(feed && feed.id) window.renderNewsFeed(feed.id);
   }
