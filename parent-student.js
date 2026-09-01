@@ -5,7 +5,7 @@
 // lives in teacher.js).
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, getActiveClass, currentUserData, STICKER_GOAL, getWeekDates, displayGrade, gradeClass6, showToast, renderHwItem, dayKeys, localDateString, formatAttendanceSlotLabel, renderGradeFormulaInfo, escJs, escHtml, safeUrl, renderBirthdays, stuName, auth, normalizeChildren, gradesFromMirror} from './common.js';
+import { db, getActiveClass, currentUserData, STICKER_GOAL, getWeekDates, displayGrade, gradeClass6, showToast, renderHwItem, dayKeys, dayNamesUA, localDateString, formatAttendanceSlotLabel, renderGradeFormulaInfo, escJs, escHtml, safeUrl, renderBirthdays, stuName, auth, normalizeChildren, gradesFromMirror} from './common.js';
 import { ACTIVE_YEAR } from './director.js';
 import { renderParentMenu } from './kitchen.js';
 import { renderNewsFeed } from './news.js';
@@ -58,6 +58,42 @@ export async function loadTodaySubstitutions(cls,date){
     todaySubs=snap.exists()?snap.val():{};
   }catch(e){todaySubs={};}
 }
+// ── Коли показувати завтрашній розклад ──
+//
+// ЩО БУЛО. Перемикання спрацьовувало лише за трьох умов одразу: сьогодні
+// є уроки, у них проставлено час, і час останнього вже минув. Досить було
+// одного уроку без часу в кінці дня — і портал до ночі показував уже
+// відпрацьований день. А в суботу чи на канікулах він писав «вихідний» і
+// не заглядав уперед зовсім.
+//
+// ЯК ТЕПЕР. День вважається завершеним, якщо минув час останнього уроку.
+// Якщо часу немає в жодного уроку — покладатися нема на що, лишаємо
+// сьогодні. Якщо уроків сьогодні немає взагалі — одразу шукаємо
+// найближчий навчальний день.
+export function dayIsOver(lessons, currentMins){
+  let last = 0;
+  (lessons || []).forEach(l => {
+    const end = String(l && l.time || '').split(' - ')[1];
+    if(!end) return;
+    const [h, m] = end.split(':').map(Number);
+    if(!isNaN(h) && !isNaN(m)) last = Math.max(last, h * 60 + m);
+  });
+  if(!last) return false;          // часу не знаємо — не вгадуємо
+  return currentMins >= last;
+}
+
+// Найближчий день з уроками, починаючи з fromDow (0 = неділя).
+// hasLessons(dayName) → чи є в цей день уроки.
+// Повертає {dayName, offset} або null, якщо тиждень порожній.
+export function nextSchoolDay(dayKeysList, fromDow, hasLessons){
+  for(let i = 0; i < 7; i++){
+    const dow = (fromDow + i) % 7;
+    const name = dayKeysList[dow];
+    if(hasLessons(name)) return { dayName: name, offset: i };
+  }
+  return null;
+}
+
 function renderDynamicSchedule(role='parent'){
   if(!window.schedule)return;
   const prefix = role==='student'?'s':'p';
@@ -65,17 +101,26 @@ function renderDynamicSchedule(role='parent'){
   const todayDow=now.getDay();const todayDayName=dayKeys[todayDow];
   const tomorrowDate=new Date(now);tomorrowDate.setDate(tomorrowDate.getDate()+1);
   const tomorrowDow=tomorrowDate.getDay();const tomorrowDayName=dayKeys[tomorrowDow];
-  // Check if today's lessons are all done
   const todayLessons=buildDynamicSchedule(window.schedule,todayDayName,true)||[];
-  let lastEndMins=0;
-  todayLessons.forEach(l=>{const[,e]=(l.time||'').split(' - ');if(e){const[eh,em]=e.split(':');const em2=parseInt(eh)*60+parseInt(em);if(em2>lastEndMins)lastEndMins=em2;}});
-  const showTomorrow=todayLessons.length>0&&currentMins>=lastEndMins&&lastEndMins>0;
-  const targetDayName=showTomorrow?tomorrowDayName:todayDayName;
-  const label=showTomorrow?'📅 Розклад на завтра':'📅 Розклад на сьогодні';
+  const hasLessons=(dn)=>((buildDynamicSchedule(window.schedule,dn,false)||[]).length>0);
+  const todayDone = todayLessons.length===0 || dayIsOver(todayLessons,currentMins);
+
+  // Шукаємо з завтрашнього дня — сьогоднішній уже або порожній, або минув
+  const nextDay = todayDone ? nextSchoolDay(dayKeys, (todayDow+1)%7, hasLessons) : null;
+  const showTomorrow = !!nextDay;
+  const targetDayName = showTomorrow ? nextDay.dayName : todayDayName;
+  const label = !showTomorrow ? '📅 Розклад на сьогодні'
+    : (nextDay.offset===0 ? `📅 Розклад на завтра (${dayNamesUA[targetDayName]||''})`
+                          : `📅 Розклад на ${dayNamesUA[targetDayName]||'наступний день'}`);
   const lblEl=document.getElementById(`${prefix}-schedule-day-label`);if(lblEl)lblEl.textContent=label;
   const lessons=buildDynamicSchedule(window.schedule,targetDayName,!showTomorrow)||[];
   const container=document.getElementById(`${prefix}-dynamic-schedule`);if(!container)return;
-  if(lessons.length===0){container.innerHTML='<div class="no-lessons-msg">🎉 Уроків немає — вихідний!</div>';return;}
+  if(lessons.length===0){
+    container.innerHTML = todayDone
+      ? '<div class="no-lessons-msg">🎉 Уроків цього тижня більше немає</div>'
+      : '<div class="no-lessons-msg">🎉 Уроків немає — вихідний!</div>';
+    return;
+  }
   let html='';
   lessons.forEach((l,i)=>{
     const sn=typeof l.subject==='string'?l.subject:(l.subject.ua||'');
