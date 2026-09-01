@@ -710,14 +710,24 @@ window.loadClassTeacherInfo=async function(){
 export function subjectsFromSchedule(lessons){
   const out = new Set();
   Object.values(lessons || {}).forEach(day => {
-    (Array.isArray(day) ? day : Object.values(day || {})).forEach(item => {
-      // Перерви й обіди — не предмети. Ознака одна на весь застосунок:
-      // isBreakItem у common.js. Своя копія правил тут колись і привела
-      // до «Обід 1-3 класи» у списку предметів.
-      if(isBreakItem(item)) return;
-      const raw = item.subject && item.subject.ua ? item.subject.ua : item.subject;
-      const name = typeof raw === 'string' ? raw.trim() : '';
-      if(name) out.add(name);
+    // День — це список СЛОТІВ. У слоті може стояти або один урок, або
+    // МАСИВ паралельних (конструктор зберігає саме масив). Раніше тут
+    // слот не розгортався, і в предметах опинявся масив, у якого немає
+    // .subject — тому список предметів був порожній для всіх класів,
+    // чий розклад складали в конструкторі. Старі файли розкладу
+    // зберігали урок прямо в слоті, тож вони працювали, і збій виглядав
+    // випадковим.
+    const slots = Array.isArray(day) ? day : Object.values(day || {});
+    slots.forEach(slot => {
+      const items = Array.isArray(slot) ? slot : (slot && slot.subject ? [slot] : []);
+      items.forEach(item => {
+        // Перерви й обіди — не предмети. Ознака одна на весь застосунок:
+        // isBreakItem у common.js.
+        if(isBreakItem(item)) return;
+        const raw = item.subject && item.subject.ua ? item.subject.ua : item.subject;
+        const name = typeof raw === 'string' ? raw.trim() : '';
+        if(name) out.add(name);
+      });
     });
   });
   return [...out].sort((a, b) => a.localeCompare(b, 'uk'));
@@ -756,6 +766,18 @@ async function fillSubjectSelect(cls){
     + list.map(s => `<option value="${escHtml(s)}">${escHtml(s)}</option>`).join('')
     + '<option value="__other__">Іншого немає у списку…</option>';
   if(keep && [...sel.options].some(o => o.value === keep)) sel.value = keep;
+
+  // Порожній список — найчастіше не помилка, а те, що розклад склали в
+  // чернетці й не опублікували. Кажемо це прямо, інакше людина бачить
+  // порожній вибір і не знає, куди дивитися.
+  const hint = document.getElementById('curr-access-hint');
+  if(hint && !list.length){
+    hint.textContent = scheduleSubjects.length
+      ? 'У чинному розкладі цього класу є уроки, але жоден із предметів вам не призначено. '
+        + 'Попросіть директора призначити вас на предмет.'
+      : 'У чинному розкладі цього класу немає жодного уроку. Якщо ви складали розклад у '
+        + 'чернетці — його треба опублікувати: кабінет директора → Розклад → Опублікувати.';
+  }
   onCurrSubjectChange();
 }
 
