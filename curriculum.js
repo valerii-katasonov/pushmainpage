@@ -8,7 +8,7 @@
 // XLSX comes from the CDN <script> tag already in <head> (global).
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, update } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, auth, getActiveClass, currentUserData, showToast, localDateString, escHtml, teacherAccessMatrix, withTeachingRole, syncStaffCard } from './common.js';
+import { db, auth, getActiveClass, currentUserData, showToast, localDateString, escHtml, teacherAccessMatrix, withTeachingRole, syncStaffCard, isBreakItem } from './common.js';
 
 let parsedCurriculum=null;        // після парсингу xlsx
 const MAX_TOPICS=250;             // стеля на предмет: захист від зіпсованого файлу
@@ -711,10 +711,13 @@ export function subjectsFromSchedule(lessons){
   const out = new Set();
   Object.values(lessons || {}).forEach(day => {
     (Array.isArray(day) ? day : Object.values(day || {})).forEach(item => {
-      if(!item) return;
+      // Перерви й обіди — не предмети. Ознака одна на весь застосунок:
+      // isBreakItem у common.js. Своя копія правил тут колись і привела
+      // до «Обід 1-3 класи» у списку предметів.
+      if(isBreakItem(item)) return;
       const raw = item.subject && item.subject.ua ? item.subject.ua : item.subject;
       const name = typeof raw === 'string' ? raw.trim() : '';
-      if(name && name !== 'Перерва' && item.number !== ' ') out.add(name);
+      if(name) out.add(name);
     });
   });
   return [...out].sort((a, b) => a.localeCompare(b, 'uk'));
