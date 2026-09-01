@@ -6,7 +6,7 @@
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { db, getActiveClass, currentUserData, STICKER_GOAL, getWeekDates, displayGrade, gradeClass6, showToast, renderHwItem, dayKeys, localDateString, formatAttendanceSlotLabel, renderGradeFormulaInfo, escJs, escHtml, safeUrl, renderBirthdays, stuName, auth, normalizeChildren, gradesFromMirror} from './common.js';
-import { ACADEMIC_YEAR_ID } from './director.js';
+import { ACTIVE_YEAR } from './director.js';
 import { renderParentMenu } from './kitchen.js';
 import { renderNewsFeed } from './news.js';
 
@@ -172,8 +172,8 @@ window.renderParentCalendar=async function(role='parent'){
   try{
     [examsSnap,holidaysSnap,breaksSnap]=await Promise.all([
       get(ref(db,`exams/${cls}/${ym}`)),
-      get(ref(db,`academic_year/${ACADEMIC_YEAR_ID}/holidays`)),
-      get(ref(db,`academic_year/${ACADEMIC_YEAR_ID}/breaks`))
+      get(ref(db,`academic_year/${ACTIVE_YEAR}/holidays`)),
+      get(ref(db,`academic_year/${ACTIVE_YEAR}/breaks`))
     ]);
   }catch(e){
     grid.innerHTML=`<p class="empty-msg" style="color:var(--red);">Не вдалося завантажити календар: ${escHtml(e.message||e.code||'відмова')}</p>`;
@@ -271,8 +271,8 @@ window.showParentCalDayDetails=async function(role,ds){
   try{
     [examsSnap,holidaysSnap,breaksSnap]=await Promise.all([
       get(ref(db,`exams/${cls}/${ym}/${ds}`)),
-      get(ref(db,`academic_year/${ACADEMIC_YEAR_ID}/holidays`)),
-      get(ref(db,`academic_year/${ACADEMIC_YEAR_ID}/breaks`))
+      get(ref(db,`academic_year/${ACTIVE_YEAR}/holidays`)),
+      get(ref(db,`academic_year/${ACTIVE_YEAR}/breaks`))
     ]);
   }catch(e){
     dd.innerHTML=`<p class="empty-msg" style="color:var(--red);">Не вдалося завантажити подробиці: ${escHtml(e.message||e.code||'відмова')}</p>`;
@@ -403,7 +403,7 @@ export async function renderFinalGrades(containerId,cls,studentName){
   if(!box)return;
   try{
     const [semSnap,gradesSnap]=await Promise.all([
-      get(child(ref(db),`academic_year/${ACADEMIC_YEAR_ID}/semesters`)),
+      get(child(ref(db),`academic_year/${ACTIVE_YEAR}/semesters`)),
       get(child(ref(db),`semester_grades/${cls}`))
     ]);
     if(!gradesSnap.exists()){box.style.display='none';return;}
@@ -1043,3 +1043,121 @@ window.toggleWeekSchedule = function(prefix){
   box.style.display = opening ? 'block' : 'none';
   if(btn) btn.textContent = opening ? '▲ Згорнути тиждень' : '📅 Показати весь тиждень';
 };
+
+// ══════════════════════════════════════════════════════════════════
+//  КАЛЕНДАР НА ВЕСЬ НАВЧАЛЬНИЙ РІК
+// ══════════════════════════════════════════════════════════════════
+// Помісячний перегляд відповідає на питання «що цього місяця», але не на
+// «коли канікули» й «скільки ще до свят». Для цього доводилося клацати
+// місяць за місяцем. Тут — усі 12 місяців року одразу, з підсвіченими
+// датами, і під ними суцільний список подій із датами.
+//
+// Дані читаються ОДИН раз на весь рік, а не по місяцю: свята й канікули
+// лежать в одному вузлі, а контрольні — по місяцях, тож їх беремо
+// діапазоном ключів.
+const YEAR_MONTHS = ['09','10','11','12','01','02','03','04','05','06','07','08'];
+
+// Місяць «09» року «2026-2027» → 2026; «01» → 2027
+export function monthYear(ym, academicYear){
+  const [a, b] = String(academicYear || '').split('-').map(Number);
+  const m = parseInt(ym, 10);
+  if(!a || !b || !m) return null;
+  return m >= 9 ? a : b;
+}
+
+window.toggleYearCalendar = async function(role = 'parent'){
+  const prefix = role === 'student' ? 's' : 'p';
+  const box = document.getElementById(`${prefix}-cal-year`);
+  const btn = document.getElementById(`${prefix}-cal-year-btn`);
+  if(!box) return;
+  const opening = box.style.display === 'none' || !box.style.display;
+  box.style.display = opening ? 'block' : 'none';
+  if(btn) btn.textContent = opening ? '📅 Згорнути рік' : '📅 Показати весь навчальний рік';
+  if(!opening) return;
+  await renderYearCalendar(role);
+};
+
+async function renderYearCalendar(role){
+  const prefix = role === 'student' ? 's' : 'p';
+  const box = document.getElementById(`${prefix}-cal-year`);
+  const cls = getActiveClass();
+  box.innerHTML = '<p class="empty-msg">⏳ Завантаження...</p>';
+
+  let holidaysSnap, breaksSnap, examsSnap;
+  try{
+    [holidaysSnap, breaksSnap, examsSnap] = await Promise.all([
+      get(ref(db, `academic_year/${ACTIVE_YEAR}/holidays`)),
+      get(ref(db, `academic_year/${ACTIVE_YEAR}/breaks`)),
+      get(ref(db, `exams/${cls}`))
+    ]);
+  }catch(e){
+    box.innerHTML = `<p class="empty-msg" style="color:var(--red);">Не вдалося завантажити рік: ${escHtml(e.message||'відмова')}</p>`;
+    return;
+  }
+
+  const holidays = holidaysSnap.exists() ? Object.values(holidaysSnap.val()) : [];
+  const breaks   = breaksSnap.exists()   ? Object.values(breaksSnap.val())   : [];
+  const exams    = examsSnap.exists()    ? examsSnap.val()                   : {};
+  const myType = currentUserData?.isArtSchool ? 'art_school' : 'general';
+  const mine = cs => cs === 'all' || (Array.isArray(cs) && cs.includes(cls));
+
+  // Розкладаємо все по днях один раз
+  const byDay = {};
+  const mark = (ds, kind) => { (byDay[ds] = byDay[ds] || new Set()).add(kind); };
+  const events = [];
+
+  holidays.forEach(x => {
+    if(!x.date || (x.calendarType && x.calendarType !== myType) || !mine(x.classes)) return;
+    mark(x.date, 'holiday');
+    events.push({ kind:'holiday', sort:x.date, when:humanDay(x.date), title:x.title || 'Свято' });
+  });
+  breaks.forEach(b => {
+    if(!b.startDate || !b.endDate || !mine(b.classes)) return;
+    for(let cur = new Date(b.startDate); cur <= new Date(b.endDate); cur.setDate(cur.getDate()+1)) mark(iso(cur), 'brk');
+    events.push({ kind:'brk', sort:b.startDate,
+                  when:`${humanDay(b.startDate)} – ${humanDay(b.endDate)}`, title:b.title || 'Канікули' });
+  });
+  Object.keys(exams).forEach(ym => {
+    Object.keys(exams[ym] || {}).forEach(ds => {
+      const subjects = Object.keys(exams[ym][ds] || {});
+      if(!subjects.length) return;
+      mark(ds, 'exam');
+      events.push({ kind:'exam', sort:ds, when:humanDay(ds), title:'Контрольна: ' + subjects.join(', ') });
+    });
+  });
+  events.sort((a, b) => a.sort.localeCompare(b.sort));
+
+  const MN = { '09':'Вересень','10':'Жовтень','11':'Листопад','12':'Грудень','01':'Січень','02':'Лютий',
+               '03':'Березень','04':'Квітень','05':'Травень','06':'Червень','07':'Липень','08':'Серпень' };
+  let h = '<div class="yc-wrap">';
+  YEAR_MONTHS.forEach(mm => {
+    const yy = monthYear(mm, ACTIVE_YEAR);
+    const dim = new Date(yy, parseInt(mm), 0).getDate();
+    let fd = new Date(yy, parseInt(mm)-1, 1).getDay(); if(fd === 0) fd = 7;
+    h += `<div class="yc-month"><div class="yc-name">${MN[mm]} <span>${yy}</span></div><div class="yc-grid">`;
+    ['Пн','Вт','Ср','Чт','Пт','Сб','Нд'].forEach(d => h += `<i class="yc-h">${d}</i>`);
+    for(let i = 1; i < fd; i++) h += '<i></i>';
+    for(let d = 1; d <= dim; d++){
+      const ds = `${yy}-${mm}-${String(d).padStart(2,'0')}`;
+      const kinds = byDay[ds];
+      let c = '';
+      if(kinds) c = kinds.size > 1 ? 'yc-multi' : ('yc-' + [...kinds][0]);
+      h += `<i class="${c}" title="${kinds ? escHtml([...kinds].join(', ')) : ''}">${d}</i>`;
+    }
+    h += '</div></div>';
+  });
+  h += '</div>';
+
+  h += '<div class="yc-legend"><span class="yc-holiday"></span>свято'
+     + '<span class="yc-brk"></span>канікули<span class="yc-exam"></span>контрольна</div>';
+
+  h += events.length
+    ? `<ul class="cal-list">${events.map(e => `
+        <li class="ev ${e.kind}">
+          <span class="ev-when">${escHtml(e.when)}</span>
+          <span class="ev-title">${escHtml(e.title)}</span>
+        </li>`).join('')}</ul>`
+    : `<p class="cal-none">У ${escHtml(ACTIVE_YEAR)} навчальному році подій ще не внесено.</p>`;
+
+  box.innerHTML = h;
+}
