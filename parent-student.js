@@ -21,10 +21,13 @@ const SELF_REPORT_SLOT='all';
 // Checks today's attendance/{cls}/{date}/{student} slot-map for teacher-marked
 // entries that the parent/student hasn't acknowledged (no "all" self-report
 // and no self-report on that exact slotKey), and shows/hides a persistent
-// alert banner (#p-teacher-alert-banner / #s-teacher-alert-banner).
+// alert banner (#p-teacher-att-alert / #s-teacher-att-alert).
 async function checkTeacherAttendanceAlert(role='parent'){
   const prefix=role==='student'?'s':'p';
-  const banner=document.getElementById(`${prefix}-teacher-alert-banner`);
+  // У розмітці цей блок називається ...-teacher-att-alert. Через
+  // розбіжність банер «Вчитель відмітив відсутність» не показувався
+  // жодного разу: getElementById повертав null, і функція виходила.
+  const banner=document.getElementById(`${prefix}-teacher-att-alert`);
   if(!banner||!currentUserData)return;
   const date=document.getElementById('global-date').value;
   const cls=getActiveClass();
@@ -384,10 +387,19 @@ window.showParentCalDayDetails=async function(role,ds){
 // ══════════ BELL SCHEDULE (read-only, from Phase 2's bell_schedules) ══════════
 window.loadParentBellSchedule=async function(role='parent'){
   const prefix=role==='student'?'s':'p';
-  const container=document.getElementById(`${prefix}-bell-schedule-table`);
-  if(!container)return;
+  // Ідентифікатор мав бути ...-container. Через розбіжність у назві
+  // getElementById повертав null, функція мовчки виходила — і в блоці
+  // назавжди лишалося «Завантаження...», без жодного сліду в консолі.
+  const container=document.getElementById(`${prefix}-bell-schedule-container`);
+  if(!container){ console.warn('bell schedule: контейнера немає'); return; }
   const cls=getActiveClass();
-  const snap=await get(ref(db,`bell_schedules/${cls}`));
+  let snap;
+  try{
+    snap=await get(ref(db,`bell_schedules/${cls}`));
+  }catch(e){
+    container.innerHTML=`<p class="empty-msg" style="color:var(--red);">Не вдалося завантажити розклад дзвінків: ${escHtml(e.message||e.code||'відмова')}</p>`;
+    return;
+  }
   if(!snap.exists()){container.innerHTML='<p class="empty-msg">Розклад дзвінків ще не задано.</p>';return;}
   const d=snap.val();
   const rows=Object.keys(d).sort((a,b)=>(parseInt(a)||0)-(parseInt(b)||0)).map(k=>d[k]);
