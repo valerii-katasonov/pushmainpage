@@ -1126,6 +1126,15 @@ export async function publishContactCard(){
 }
 
 async function initUserSession(){
+  // Чинний навчальний рік читаємо ПЕРШИМ. Календар, семестри й табелі
+  // залежать від нього, і якщо взяти його пізніше, вони встигнуть
+  // прочитати не той вузол — саме так календар і став порожнім 1 вересня.
+  try{
+    if(window.resolveAcademicYear){
+      const y = await window.resolveAcademicYear();
+      if(window.setActiveYearLocal) window.setActiveYearLocal(y);
+    }
+  }catch(e){ console.warn('навчальний рік:', e.message); }
   healStaffRegistry();
   publishContactCard();
   // тихо відновлюємо запис у списку персоналу, якщо його немає
@@ -2000,10 +2009,14 @@ window.downloadReportCard=async function(cls,studentName){
 };
 // ACADEMIC_YEAR_ID живе в director.js, але common.js імпортувати його не може
 // (director вже імпортує common — вийшов би цикл). Рахуємо ту саму формулу тут.
-const ACADEMIC_YEAR_ID_LOCAL=(()=>{
-  const d=new Date(), y=d.getFullYear();
-  return d.getMonth()+1>=9?`${y}-${y+1}`:`${y-1}-${y}`;
+// Копія правила з director.js. Імпортувати звідти не можна — вийшов би
+// цикл. Межа СЕРПЕНЬ, як і там: рік планують у серпні. Якщо школа
+// вибрала рік вручну, беремо її вибір (його кладе resolveAcademicYear).
+let ACADEMIC_YEAR_ID_LOCAL=(()=>{
+  const now=new Date(); const y=now.getFullYear(); const m=now.getMonth()+1;
+  return m>=8 ? `${y}-${y+1}` : `${y-1}-${y}`;
 })();
+window.setActiveYearLocal=(v)=>{ if(/^\d{4}-\d{4}$/.test(v||'')) ACADEMIC_YEAR_ID_LOCAL=v; };
 // ══════════════════════════════════════════════════════════════════
 //  ВИВАНТАЖЕННЯ ДАНИХ ДИТИНИ
 // ══════════════════════════════════════════════════════════════════
