@@ -743,6 +743,9 @@ export function chosenSubject(){
   return sel.value.trim();
 }
 
+export const CURR_BUILD = '2026-09-02 · plan v3';
+console.log('curriculum.js', CURR_BUILD);
+
 let scheduleSubjects = [];
 
 async function fillSubjectSelect(cls){
@@ -771,6 +774,14 @@ async function fillSubjectSelect(cls){
   // чернетці й не опублікували. Кажемо це прямо, інакше людина бачить
   // порожній вибір і не знає, куди дивитися.
   const hint = document.getElementById('curr-access-hint');
+  // Рядок стану. Коли предметів немає, він одразу каже, на що дивитися:
+  // чи той клас, чи прочитався розклад, чи справа в призначеннях.
+  console.log('[план] клас', cls, '· у розкладі', scheduleSubjects.length,
+              '· доступно', list.length, scheduleSubjects);
+  if(hint && list.length){
+    hint.textContent = `Клас ${String(cls).replace('class_','')} · предметів у розкладі: `
+      + `${scheduleSubjects.length}` + (allowed === null ? '' : `, доступно вам: ${list.length}`);
+  }
   if(hint && !list.length){
     hint.textContent = scheduleSubjects.length
       ? 'У чинному розкладі цього класу є уроки, але жоден із предметів вам не призначено. '
@@ -917,9 +928,15 @@ async function fillDirClassSelect(){
 
 // Директор змінив клас — перечитати те, що вже збережено для нового класу.
 window.onCurrDirClassChange=function(){
-  uploadAccess.cls=currClass();
+  const cls=currClass();
+  uploadAccess.cls=cls;
   loadCurrentCurriculumDisplay();
-  warnIfNoSchedule(currClass());
+  warnIfNoSchedule(cls);
+  // ЦЬОГО РЯДКА БРАКУВАЛО. Список предметів заповнювався один раз при
+  // відкритті картки — для того класу, що стояв першим. Директор обирав
+  // інший клас, а перелік лишався від першого: якщо в того класу розкладу
+  // немає, вибір виглядав порожнім завжди, хоч би скільки класів перебрав.
+  fillSubjectSelect(cls);
   if(parsedCurriculum) renderCurriculumPreview(parsedCurriculum);
 };
 window.checkCurriculumUploadAccess=checkCurriculumUploadAccess;
