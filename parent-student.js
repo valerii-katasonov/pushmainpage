@@ -5,7 +5,7 @@
 // lives in teacher.js).
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, getActiveClass, currentUserData, STICKER_GOAL, getWeekDates, displayGrade, gradeClass6, showToast, renderHwItem, dayKeys, dayNamesUA, localDateString, formatAttendanceSlotLabel, renderGradeFormulaInfo, escJs, escHtml, safeUrl, renderBirthdays, stuName, auth, normalizeChildren, gradesFromMirror} from './common.js';
+import { db, getActiveClass, currentUserData, STICKER_GOAL, getWeekDates, displayGrade, gradeClass6, showToast, renderHwItem, dayKeys, dayNamesUA, isBreakItem, localDateString, formatAttendanceSlotLabel, renderGradeFormulaInfo, escJs, escHtml, safeUrl, renderBirthdays, stuName, auth, normalizeChildren, gradesFromMirror} from './common.js';
 import { ACTIVE_YEAR } from './director.js';
 import { renderParentMenu } from './kitchen.js';
 import { renderNewsFeed } from './news.js';
@@ -42,12 +42,34 @@ async function checkTeacherAttendanceAlert(role='parent'){
 }
 
 // ══════════ DYNAMIC SCHEDULE (PARENT/STUDENT) ══════════
+// Розклад дня для кабінету родини.
+//
+// ЩО ЗМІНИЛОСЯ. Раніше звідси викидалося все, у назві чого є «перерва», —
+// але обіди називаються «Обід 1-3 класи», тож вони проходили як звичайні
+// уроки й отримували номер. На екрані було «4. Обід 1-3 класи» між
+// математикою та англійською.
+//
+// Тепер перерви НЕ викидаються, а позначаються: показати їх треба, просто
+// інакше — без номера й іншим кольором.
+//
+// _slot — номер слота в розкладі дня. Він потрібен для замін: директор
+// зберігає заміну за індексом слота, а кабінет раніше шукав її за
+// індексом у відфільтрованому списку. Через кожну перерву на початку дня
+// значок «заміна» зʼїжджав на сусідній урок.
 function buildDynamicSchedule(schedule,dayName,isToday){
   if(!schedule||!schedule[dayName])return null;
-  const flat=[];
-  (schedule[dayName]||[]).forEach(slot=>{const items=Array.isArray(slot)?slot:(slot&&slot.subject?[slot]:[]);items.forEach(l=>{if(l&&l.time&&l.subject){const sn=typeof l.subject==='string'?l.subject:(l.subject.ua||'');if(!sn.toLowerCase().includes('перерва'))flat.push(l);}});});
-  return flat;
+  const out=[];
+  (schedule[dayName]||[]).forEach((slot,slotIdx)=>{
+    const items=Array.isArray(slot)?slot:(slot&&slot.subject?[slot]:[]);
+    items.forEach(l=>{
+      if(!l||!l.time||!l.subject)return;
+      out.push({ ...l, _slot:slotIdx, _break:isBreakItem(l) });
+    });
+  });
+  return out;
 }
+// Скільки в дні справжніх уроків (без перерв)
+function realLessons(list){ return (list||[]).filter(l=>!l._break).length; }
 // Заміни на обрану дату: {індекс слота → дані}. Тримаємо окремо, щоб
 // renderDynamicSchedule лишався синхронним — він викликається щохвилини
 // з таймера, і читати базу звідти не можна.
@@ -102,8 +124,8 @@ function renderDynamicSchedule(role='parent'){
   const tomorrowDate=new Date(now);tomorrowDate.setDate(tomorrowDate.getDate()+1);
   const tomorrowDow=tomorrowDate.getDay();const tomorrowDayName=dayKeys[tomorrowDow];
   const todayLessons=buildDynamicSchedule(window.schedule,todayDayName,true)||[];
-  const hasLessons=(dn)=>((buildDynamicSchedule(window.schedule,dn,false)||[]).length>0);
-  const todayDone = todayLessons.length===0 || dayIsOver(todayLessons,currentMins);
+  const hasLessons=(dn)=>realLessons(buildDynamicSchedule(window.schedule,dn,false))>0;
+  const todayDone = realLessons(todayLessons)===0 || dayIsOver(todayLessons,currentMins);
 
   // Шукаємо з завтрашнього дня — сьогоднішній уже або порожній, або минув
   const nextDay = todayDone ? nextSchoolDay(dayKeys, (todayDow+1)%7, hasLessons) : null;
@@ -115,45 +137,64 @@ function renderDynamicSchedule(role='parent'){
   const lblEl=document.getElementById(`${prefix}-schedule-day-label`);if(lblEl)lblEl.textContent=label;
   const lessons=buildDynamicSchedule(window.schedule,targetDayName,!showTomorrow)||[];
   const container=document.getElementById(`${prefix}-dynamic-schedule`);if(!container)return;
-  if(lessons.length===0){
+  if(realLessons(lessons)===0){
     container.innerHTML = todayDone
       ? '<div class="no-lessons-msg">🎉 Уроків цього тижня більше немає</div>'
       : '<div class="no-lessons-msg">🎉 Уроків немає — вихідний!</div>';
     return;
   }
   let html='';
+  let num = 0;                      // нумеруємо ЛИШЕ уроки, перерви — ні
   lessons.forEach((l,i)=>{
     const sn=typeof l.subject==='string'?l.subject:(l.subject.ua||'');
     const [startStr,endStr]=(l.time||'').split(' - ');
-    let isCurrent=false;let isPassed=false;let countdown='';let progress=0;
-    if(!showTomorrow&&startStr&&endStr){
-      const[sh,sm]=startStr.split(':');const sMins=parseInt(sh)*60+parseInt(sm);
-      const[eh,em]=endStr.split(':');const eMins=parseInt(eh)*60+parseInt(em);
-      isCurrent=currentMins>=sMins&&currentMins<eMins;isPassed=currentMins>=eMins;
-      if(isCurrent){const rem=eMins-currentMins;countdown=`${rem} хв`;progress=Math.round(((currentMins-sMins)/(eMins-sMins))*100);}
+    const b=lessonBounds(l);
+    const live = !showTomorrow && b.start!=null && b.end!=null;
+    const isCurrent = live && currentMins>=b.start && currentMins<b.end;
+    const isPassed  = live && currentMins>=b.end;
+
+    // ── Перерва або обід ──
+    if(l._break){
+      const left = isCurrent ? b.end-currentMins : 0;
+      html += `<div class="lesson-break named${isCurrent?' now':''}${isPassed?' passed':''}">
+        <span class="lb-label">${escHtml(sn)}</span>
+        <span class="lb-time">${isCurrent?`ще ${left} хв`:escHtml(l.time||'')}</span>
+      </div>`;
+      return;
     }
-    // Заміни зіставляємо за індексом уроку в розкладі дня
-    const sub=todaySubs[i];
+
+    // ── Урок ──
+    num++;
+    let countdown='', progress=0;
+    if(isCurrent){
+      countdown = `${b.end-currentMins} хв`;
+      progress  = Math.round(((currentMins-b.start)/(b.end-b.start))*100);
+    }
+    // Заміну директор зберігає за номером слота в розкладі, а не за
+    // порядком у списку — тому шукаємо саме за _slot.
+    const sub=todaySubs[l._slot];
     html+=`<div class="lesson-row${isCurrent?' current':isPassed?' passed':''}">
-      <div class="lesson-num">${i+1}</div>
+      <div class="lesson-num">${num}</div>
       <div class="lesson-info">
         <div class="lesson-subj">${escHtml(sn)}${sub?' <span class="sub-badge">заміна</span>':''}</div>
-        <div class="lesson-time">${l.time||'—'}${sub&&sub.subName?` · ${escHtml(sub.subName)}`:''}</div>
+        <div class="lesson-time">${escHtml(l.time||'—')}${sub&&sub.subName?` · ${escHtml(sub.subName)}`:''}</div>
         ${isCurrent?`<div class="progress-thin"><div class="progress-thin-fill" style="width:${progress}%"></div></div>`:''}
       </div>
       ${isCurrent?`<div class="lesson-countdown">⏱ ${countdown}</div>`:''}
     </div>`;
-    // Перерва після уроку. У розкладі на сьогодні вона ще й показує,
-    // що саме зараз іде перерва і скільки її лишилося — вранці це
-    // потрібніше за сам список уроків.
-    const br = breakAfter(lessons, i);
-    if(br){
-      const nowBreak = !showTomorrow && currentMins >= br.from && currentMins < br.to;
-      const left = br.to - currentMins;
-      html += `<div class="lesson-break${nowBreak?' now':''}">
-        <span class="lb-label">${nowBreak?'Зараз перерва':'перерва'} ${br.mins} хв</span>
-        <span class="lb-time">${nowBreak?`ще ${left} хв`:`${hhmm(br.from)} – ${hhmm(br.to)}`}</span>
-      </div>`;
+
+    // Проміжок між уроками, не заповнений явною перервою. Якщо наступний
+    // запис — перерва, вона вже все показала, другий рядок не потрібен.
+    const nxt = lessons[i+1];
+    if(nxt && !nxt._break){
+      const br = breakAfter(lessons, i);
+      if(br){
+        const nowBreak = !showTomorrow && currentMins >= br.from && currentMins < br.to;
+        html += `<div class="lesson-break${nowBreak?' now':''}">
+          <span class="lb-label">${nowBreak?'Зараз перерва':'перерва'} ${br.mins} хв</span>
+          <span class="lb-time">${nowBreak?`ще ${br.to-currentMins} хв`:`${hhmm(br.from)} – ${hhmm(br.to)}`}</span>
+        </div>`;
+      }
     }
   });
   container.innerHTML=html;
