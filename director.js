@@ -86,7 +86,81 @@ export function loadDrafts(){get(ref(db,'schedule_drafts')).then(snap=>{const c=
 window.loadDrafts=loadDrafts;
 window.createNewDraft=async function(){const name=document.getElementById('new-draft-name').value.trim();if(!name)return alert("Введіть назву!");const ok=confirm("Скопіювати поточний розклад?");if(ok){const s=await get(ref(db,'schedules'));if(s.exists())await set(ref(db,`schedule_drafts/${name}`),s.val());else await set(ref(db,`schedule_drafts/${name}`),{placeholder:true});}else await set(ref(db,`schedule_drafts/${name}`),{placeholder:true});document.getElementById('new-draft-name').value='';showToast("✅ Чернетку створено!");loadDrafts();};
 window.deleteDraft=function(name){if(confirm(`Видалити "${name}"?`))remove(ref(db,`schedule_drafts/${name}`)).then(()=>loadDrafts());};
-window.activateDraft=async function(name){if(confirm(`⚠️ Зробити "${name}" основним розкладом?`)){const s=await get(ref(db,`schedule_drafts/${name}`));if(s.exists()){await set(ref(db,'schedules'),s.val());showToast("🚀 Розклад опубліковано!");}}};
+// Публікація чернетки розкладу.
+//
+// ЩО ТУТ БУЛО НЕ ТАК.
+// 1. Порожня чернетка СТИРАЛА ВЕСЬ РОЗКЛАД ШКОЛИ. Створена без копіювання
+//    чернетка має вигляд {placeholder:true}; публікація писала цей обʼєкт
+//    у schedules цілком — тобто всі класи лишалися без розкладу. Один
+//    зайвий клік, і відновлювати нема звідки, бо резервних копій немає.
+// 2. Не було жодного підтвердження результату. Помилку запису ніхто не
+//    ловив, а «опубліковано» показувалося ще до того, як стало відомо,
+//    що саме записалося.
+//
+// Тепер: перевіряємо вміст, рахуємо, що публікуємо, звіряємо після
+// запису й показуємо це людині.
+window.activateDraft=async function(name){
+  try{
+    const snap=await get(ref(db,`schedule_drafts/${name}`));
+    if(!snap.exists()) return alert(`Чернетки «${name}» більше немає.`);
+    const draft=snap.val()||{};
+
+    // Рахуємо реальні класи з уроками, а не просто ключі
+    const classes=Object.keys(draft).filter(k=>k!=='placeholder' && draft[k] && draft[k].lessons);
+    let lessons=0, days=new Set();
+    classes.forEach(c=>Object.entries(draft[c].lessons||{}).forEach(([d,arr])=>{
+      const list=Array.isArray(arr)?arr:Object.values(arr||{});
+      const n=list.filter(i=>i && (Array.isArray(i)?i.length:i.subject)).length;
+      if(n){ lessons+=n; days.add(d); }
+    }));
+
+    if(!classes.length || !lessons){
+      return alert(`Чернетка «${name}» порожня — у ній немає жодного уроку.\n\n`
+        + 'Публікація стерла б чинний розклад усієї школи, тому вона зупинена. '
+        + 'Відкрийте чернетку, складіть розклад і спробуйте знову.');
+    }
+
+    if(!confirm(`Зробити «${name}» основним розкладом школи?\n\n`
+      + `Класів: ${classes.length}\nДнів тижня: ${days.size}\nУроків: ${lessons}\n\n`
+      + 'Поточний розклад буде замінено повністю.')) return;
+
+    // ЗАПИС ПО КЛАСАХ, А НЕ В КОРІНЬ.
+    //
+    // Раніше тут стояло set(ref(db,'schedules'), draft) — запис у САМ вузол
+    // schedules. А правила дозволяють запис лише в schedules/{клас}: на
+    // самому вузлі правила .write немає взагалі. Тобто публікація завжди
+    // отримувала відмову — і, оскільки помилку ніхто не ловив, виглядало
+    // це так, ніби нічого не відбувається. Розклад не змінювався жодного
+    // разу, а в матриці доступу лишалися старі предмети.
+    //
+    // Побічний наслідок такого запису: класи, яких немає в чернетці,
+    // тепер зберігають свій розклад, а не зникають. Для чернетки на один
+    // клас це саме те, що потрібно.
+    const failed=[];
+    for(const c of classes){
+      try{ await set(ref(db,`schedules/${c}`), draft[c]); }
+      catch(e){ failed.push(`${c.replace('class_','')} кл.: ${e.message}`); }
+    }
+    if(failed.length===classes.length){
+      return alert('Не вдалося опублікувати жодного класу.\n\n'+failed.join('\n'));
+    }
+
+    const check=await get(ref(db,'schedules'));
+    const got=check.exists()?Object.keys(check.val()||{}).filter(k=>k!=='placeholder').length:0;
+    if(failed.length){
+      alert(`Опубліковано частково.\n\nНе записалося:\n${failed.join('\n')}`);
+    }
+    showToast(`🚀 Опубліковано: ${classes.length-failed.length} кл., ${lessons} уроків`);
+    alert(`✅ Розклад опубліковано.\n\nКласів у чернетці: ${classes.length}\n`
+      + `Уроків: ${lessons}\nВсього класів із розкладом у школі: ${got}\n\n`
+      + 'Класи, яких у чернетці не було, зберегли свій попередній розклад. '
+      + 'Предмети в «Матриці доступу вчителів» беруться саме звідси, за всі дні тижня.');
+    logAction('settings',{value:`розклад опубліковано: ${name}, ${classes.length} кл., ${lessons} уроків`});
+    loadDrafts();
+  }catch(e){
+    alert('Не вдалося опублікувати: '+e.message);
+  }
+};
 // ══════════ ACADEMIC YEAR (Навчальний рік) ══════════
 // Exported so parent-student.js's read-only calendar (Phase 3) can look up
 // the same school year's holidays/breaks without recomputing the rule.
@@ -148,7 +222,42 @@ window.removeHoliday=function(id){if(confirm("Видалити це свято?"
 // а не лише як активна. Відключених (disabled) до списків не додаємо.
 export async function loadTeachersListForDirector(){invalidateUsersCache();const s=document.getElementById('d-acc-email-select');s.innerHTML='<option value="">-- Вчитель --</option>';const snap=await getUsersSnap();window.globalTeachersList=[];if(snap.exists()){const u=snap.val();for(let uid in u){const us=u[uid];const rs=getUserRoles(us);if(rs.some(r=>r==='teacher'||r==='art_school_teacher'||r==='class_teacher'||r==='music_teacher')&&us.email&&!us.disabled){const n=(us.firstName||us.lastName)?`${us.firstName||''} ${us.lastName||''}`.trim():us.email;const se=us.email.replace(/\./g,'_');s.innerHTML+=`<option value="${se}">${escHtml(n)} (${escHtml(us.email)})</option>`;window.globalTeachersList.push({email:us.email,name:n,safeEmail:se});}}}}
 window.loadTeachersListForDirector=loadTeachersListForDirector;
-window.loadDirectorMatrixSubjects=function(){const cls=document.getElementById('d-acc-class').value;const ss=document.getElementById('d-acc-subjects');if(!cls){ss.innerHTML='<option disabled>Оберіть клас...</option>';return;}ss.innerHTML='<option disabled>Завантаження...</option>';window.loadScheduleScript(cls,()=>{let u=new Set();if(window.schedule)['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'].forEach(d=>window.getTodayLessonsFlattened(d).forEach(i=>{const s=window.getValidSubjectName(i);if(s)u.add(s);}));ss.innerHTML='<option value="Всі предмети" style="font-weight:700;color:#d35400;">🌟 Всі предмети</option>';if(u.size>0)[...u].sort().forEach(subj=>ss.innerHTML+=`<option value="${subj}">${subj}</option>`);else ss.innerHTML='<option disabled>Розклад не знайдено</option>';});};
+// Предмети для матриці доступу беруться з ЧИННОГО розкладу класу, за всі
+// дні тижня одразу. Це збиває з пантелику: додав розклад на понеділок —
+// а в списку ще й предмети з решти днів, які лишилися від попереднього
+// розкладу (чернетку зазвичай створюють копією старого). Тому тепер під
+// списком прямо написано, звідки він і скільки там днів.
+window.loadDirectorMatrixSubjects=function(){
+  const cls=document.getElementById('d-acc-class').value;
+  const ss=document.getElementById('d-acc-subjects');
+  const info=document.getElementById('d-acc-subj-src');
+  const say=(t,bad)=>{ if(info){ info.style.display=t?'block':'none'; info.textContent=t||'';
+                                 info.style.color=bad?'var(--red)':'#78909c'; } };
+  if(!cls){ ss.innerHTML='<option disabled>Оберіть клас...</option>'; say(''); return; }
+  ss.innerHTML='<option disabled>Завантаження...</option>'; say('Читаю розклад класу...');
+  window.loadScheduleScript(cls,()=>{
+    const DAYS=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+    const UA={Monday:'Пн',Tuesday:'Вт',Wednesday:'Ср',Thursday:'Чт',Friday:'Пт',Saturday:'Сб',Sunday:'Нд'};
+    const u=new Set(); const withLessons=[];
+    if(window.schedule) DAYS.forEach(d=>{
+      const items=window.getTodayLessonsFlattened(d)||[];
+      let n=0;
+      items.forEach(i=>{ const s=window.getValidSubjectName(i); if(s){ u.add(s); n++; } });
+      if(n) withLessons.push(UA[d]);
+    });
+    ss.innerHTML='<option value="Всі предмети" style="font-weight:700;color:#d35400;">🌟 Всі предмети</option>';
+    if(u.size>0){
+      [...u].sort((a,b)=>a.localeCompare(b,'uk')).forEach(subj=>{
+        ss.innerHTML+=`<option value="${escHtml(subj)}">${escHtml(subj)}</option>`;
+      });
+      say(`Предметів: ${u.size}. З чинного розкладу класу, дні: ${withLessons.join(', ')}.`);
+    }else{
+      ss.innerHTML='<option disabled>Розклад не знайдено</option>';
+      say('У цього класу немає жодного уроку в чинному розкладі. '
+        + 'Якщо ви щойно публікували чернетку — перевірте, чи вона справді опублікована.', true);
+    }
+  });
+};
 window.grantTeacherAccess=async function(){
   const se=document.getElementById('d-acc-email-select').value;
   const cls=document.getElementById('d-acc-class').value;
