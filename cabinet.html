@@ -866,6 +866,10 @@
     .progress-bar-container{width:100%;background-color:#ffeaa7;border-radius:10px;overflow:hidden;margin-top:12px;height:16px;box-shadow:inset 0 1px 3px rgba(0,0,0,.1);}
     .progress-bar{height:100%;background:linear-gradient(90deg,#f39c12,#e74c3c);width:0%;transition:width .8s ease-out;}
     /* cal */
+    /* Режим матриці: чинний розклад чи чернетка */
+    .mx-mode{padding:9px 12px;border-radius:9px;font-size:.79rem;line-height:1.35;margin-bottom:9px;}
+    .mx-mode.live{background:#fff3e0;color:#e65100;border:1px solid #ffb74d;font-weight:600;}
+    .mx-mode.draft{background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;}
     /* Розшифровка лічильника ДЗ у директора */
     .hwb-cls{display:flex;justify-content:space-between;align-items:center;background:#e0f7fa;
              color:#00838f;padding:6px 10px;border-radius:8px;margin:10px 0 6px;font-size:.83rem;}
@@ -2988,6 +2992,7 @@
 <div id="visual-matrix-modal" class="modal-overlay" style="align-items:flex-start;padding-top:36px;">
   <div class="modal-content" style="max-width:96%;width:100%;padding:18px;background:#f4f6f8;">
     <h2 id="matrix-modal-title" style="color:#1abc9c;margin-top:0;margin-bottom:9px;">🗓️ Матриця розкладу</h2>
+    <div id="matrix-mode-banner" class="mx-mode" style="display:none;"></div>
     <div style="display:flex;justify-content:center;gap:9px;margin-bottom:13px;flex-wrap:wrap;">
       <div id="matrix-load-info" style="display:none;font-size:.75rem;color:#78909c;margin-bottom:6px;"></div>
       <select id="matrix-day-select" onchange="renderMatrixGrid()" style="max-width:280px;border:2px solid #1abc9c;color:#16a085;font-weight:700;">
