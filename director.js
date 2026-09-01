@@ -2139,3 +2139,63 @@ window.saveStaffProfile = async function(){
     btn.disabled = false; btn.textContent = '💾 Зберегти';
   }
 };
+
+// ══════════ РОЗШИФРОВКА ЛІЧИЛЬНИКА ДЗ ══════════
+// Число на дашборді відповідало на «скільки», але не на «що і хто» —
+// і зрозуміти, звідки взялася одиниця, було ніяк. Тепер по натисканню
+// розгортається список: клас → предмет → текст → хто задав.
+//
+// Автор береться з вузла authors/{клас}/{дата}/{предмет} — його пише
+// вчитель разом із самим завданням.
+window.toggleHomeworkBreakdown = async function(){
+  const box = document.getElementById('d-hw-breakdown');
+  if(!box) return;
+  const opening = box.style.display === 'none' || !box.style.display;
+  box.style.display = opening ? 'block' : 'none';
+  if(!opening) return;
+
+  const date = document.getElementById('global-date').value;
+  box.innerHTML = '<p class="empty-msg">Завантаження...</p>';
+  try{
+    const [hw, au, usersSnap] = await Promise.all([
+      getSchoolRange('homeworks', date, date),
+      getSchoolRange('authors',   date, date).catch(()=>({})),
+      getUsersSnap()
+    ]);
+    const users = usersSnap.exists() ? usersSnap.val() : {};
+    const nameOf = uid => {
+      const u = users[uid];
+      if(!u) return '';
+      return [u.firstName, u.lastName].filter(Boolean).join(' ') || u.email || '';
+    };
+
+    const classes = Object.keys(hw).filter(c => hw[c] && hw[c][date])
+                          .sort((a,b) => getClassNum(a) - getClassNum(b));
+    if(!classes.length){
+      box.innerHTML = `<p class="empty-msg">На ${escHtml(date.split('-').reverse().join('.'))} домашніх завдань немає.</p>`;
+      return;
+    }
+    let h = '', total = 0;
+    classes.forEach(c => {
+      const subjects = hw[c][date] || {};
+      const keys = Object.keys(subjects);
+      if(!keys.length) return;
+      h += `<div class="hwb-cls"><b>${escHtml(c.replace('class_',''))} клас</b> <span>${keys.length}</span></div>`;
+      keys.sort((a,b)=>a.localeCompare(b,'uk')).forEach(subj => {
+        total++;
+        const v = subjects[subj];
+        const text = typeof v === 'string' ? v : String(v && v.text || '');
+        const imgs = (v && Array.isArray(v.images)) ? v.images.length : (v && v.image ? 1 : 0);
+        const who = nameOf(au[c] && au[c][date] && au[c][date][subj]);
+        h += `<div class="hwb-row">
+          <div class="hwb-subj">${escHtml(subj)}</div>
+          <div class="hwb-text">${escHtml(text) || '<i>без тексту</i>'}${imgs?` 📎${imgs}`:''}</div>
+          <div class="hwb-who">${who ? '👨‍🏫 ' + escHtml(who) : '<i>автор не вказаний</i>'}</div>
+        </div>`;
+      });
+    });
+    box.innerHTML = h + `<p class="hwb-total">Усього завдань: ${total}</p>`;
+  }catch(e){
+    box.innerHTML = `<p class="empty-msg" style="color:var(--red);">Не вдалося прочитати: ${escHtml(e.message||'відмова')}</p>`;
+  }
+};
