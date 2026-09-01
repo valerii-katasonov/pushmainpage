@@ -646,8 +646,9 @@ function dayArr(raw){
 //
 // Тепер: помилка видима, день завжди скидається на понеділок, а під
 // заголовком видно, що саме завантажилося.
+let liveEditConfirmed=false;   // підтвердження правки чинного розкладу — раз на відкриття
 window.openVisualMatrixModal=async function(mode){
-  currentMatrixMode=mode;
+  currentMatrixMode=mode;liveEditConfirmed=false;
   document.getElementById('visual-matrix-modal').style.display='flex';
   const daySel=document.getElementById('matrix-day-select');
   if(daySel) daySel.value='Monday';
@@ -662,8 +663,25 @@ window.openVisualMatrixModal=async function(mode){
   const uSnap=await getUsersSnap();window.globalTeachersList=[];
   if(uSnap.exists()){const u=uSnap.val();for(let uid in u){const us=u[uid];const rs=getUserRoles(us);if(rs.some(r=>r==='teacher'||r==='class_teacher'||r==='art_school_teacher'||r==='music_teacher')&&us.email&&!us.disabled){const n=(us.firstName||us.lastName)?`${us.firstName||''} ${us.lastName||''}`.trim():"Ім'я";const se=us.email.replace(/\./g,'_');window.globalTeachersList.push({email:us.email,name:n,safeEmail:se});}}}
   const title=document.getElementById('matrix-modal-title');const wb=document.getElementById('constructor-warnings');
-  if(mode!=='live'){title.innerHTML=`🛠️ Конструктор: <span style="color:#e67e22">${mode}</span>`;wb.style.display='block';}
-  else{title.innerHTML='🗓️ Матриця розкладу';wb.style.display='none';}
+  // ЧІТКО КАЖЕМО, ЩО САМЕ РЕДАГУЄТЬСЯ.
+  //
+  // Вікно виглядало однаково для чинного розкладу і для чернетки, тому
+  // було незрозуміло, куди підуть зміни. А різниця принципова: у режимі
+  // «чинний» кожна правка одразу видима батькам і вчителям, скасувати її
+  // нема чим — історії змін розкладу портал не веде.
+  const mb=document.getElementById('matrix-mode-banner');
+  if(mode!=='live'){
+    title.innerHTML=`🛠️ Конструктор: <span style="color:#e67e22">${mode}</span>`;
+    wb.style.display='block';
+    if(mb){ mb.className='mx-mode draft'; mb.style.display='block';
+      mb.textContent='Це чернетка. На чинний розклад вона не впливає, доки ви не натиснете «Опублікувати».'; }
+  } else {
+    title.innerHTML='🗓️ Чинний розклад школи';
+    wb.style.display='none';
+    if(mb){ mb.className='mx-mode live'; mb.style.display='block';
+      mb.textContent='Ви редагуєте ЧИННИЙ розклад. Кожна зміна одразу видима батькам і вчителям. '
+        + 'Щоб готувати новий розклад безпечно — робіть це в чернетці.'; }
+  }
   window.calculateMatrixWarnings();renderMatrixGrid();
 
   // Що саме прочитано — щоб «порожній понеділок» більше не був загадкою
@@ -740,6 +758,15 @@ window.saveMatrixCell=async function(){
   const nc={number:num,time,subject:{ua:subj,pl:subj},teacherEmail:te,teacherName:tn,type,extraData:ed};
   let tClasses=[clsId];if(type==='extra'&&ed?.format==='group'){if(ed.groupType==='classes'&&ed.classes?.length>0)tClasses=ed.classes;else if(ed.groupType==='students'&&ed.students?.length>0){let ac=new Set();ed.students.forEach(st=>{for(let c in globalAllStudents)if(Object.values(globalAllStudents[c]).includes(st)){ac.add(c);break;}});if(ac.size>0)tClasses=Array.from(ac);}}
   const dp=currentMatrixMode==='live'?'schedules':`schedule_drafts/${currentMatrixMode}`;
+  // Чинний розклад видно всій школі, а історії змін портал не веде —
+  // відкотити правку нема чим. Питаємо один раз за відкриття вікна.
+  if(currentMatrixMode==='live' && !liveEditConfirmed){
+    if(!confirm('Ви змінюєте ЧИННИЙ розклад школи.\n\n'
+      + 'Зміна одразу зʼявиться в кабінетах батьків і вчителів. Скасувати її автоматично '
+      + 'не вийде — портал не зберігає попередніх версій розкладу.\n\n'
+      + 'Якщо ви готуєте новий розклад — краще робити це в чернетці.\n\nПродовжити?')) return;
+    liveEditConfirmed=true;
+  }
   try{for(let tc of tClasses){if(!globalAllSchedules[tc])globalAllSchedules[tc]={};if(!globalAllSchedules[tc].lessons)globalAllSchedules[tc].lessons={};if(!globalAllSchedules[tc].lessons[day])globalAllSchedules[tc].lessons[day]=[];let da=dayArr(globalAllSchedules[tc].lessons[day]);globalAllSchedules[tc].lessons[day]=da;while(da.length<=ri)da.push({});let es=da[ri];let si2=Array.isArray(es)?[...es]:(es&&es.subject?[es]:[]);if(sis!=='')si2[parseInt(sis)]={...nc};else si2.push({...nc});da[ri]=si2;await set(ref(db,`${dp}/${tc}/lessons/${day}`),da);}
   if(te&&subj&&type!=='break'&&currentMatrixMode==='live'){const se=te.replace(/\./g,'_');for(let tc of tClasses){const as=await get(child(ref(db),`teacher_access/${se}/${tc}`));let ca=as.exists()?as.val():[];if(!Array.isArray(ca))ca=Object.values(ca);if(!ca.includes("Всі предмети")&&!ca.includes(subj)){ca.push(subj);await set(ref(db,`teacher_access/${se}/${tc}`),ca);}}}
   closeEditCellModal();if(currentMatrixMode!=='live')window.calculateMatrixWarnings();renderMatrixGrid();showToast("✅ Збережено!");}catch(e){alert("Помилка: "+e.message);}};
