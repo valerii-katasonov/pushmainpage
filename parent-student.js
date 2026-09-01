@@ -1055,14 +1055,17 @@ window.toggleWeekSchedule = function(prefix){
 // Дані читаються ОДИН раз на весь рік, а не по місяцю: свята й канікули
 // лежать в одному вузлі, а контрольні — по місяцях, тож їх беремо
 // діапазоном ключів.
-const YEAR_MONTHS = ['09','10','11','12','01','02','03','04','05','06','07','08'];
+// Рік починається із серпня — так само, як його визначає getAcademicYearId.
+// Якби тут був вересень, а там серпень, серпневі свята потрапляли б
+// у клітинку наступного календарного року.
+const YEAR_MONTHS = ['08','09','10','11','12','01','02','03','04','05','06','07'];
 
-// Місяць «09» року «2026-2027» → 2026; «01» → 2027
+// Місяць «08» року «2026-2027» → 2026; «01» → 2027
 export function monthYear(ym, academicYear){
   const [a, b] = String(academicYear || '').split('-').map(Number);
   const m = parseInt(ym, 10);
   if(!a || !b || !m) return null;
-  return m >= 9 ? a : b;
+  return m >= 8 ? a : b;
 }
 
 window.toggleYearCalendar = async function(role = 'parent'){
