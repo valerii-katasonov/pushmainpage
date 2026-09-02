@@ -142,9 +142,23 @@ function optionPlanned(plan, key, wd){
 function snackPlanned(plan, wd){ return optionPlanned(plan, 'snack', wd); }
 
 // Один розрахунок для кухні, для батьків і для статистики — щоб цифри збігалися.
+// Чи батько взагалі відповів на питання «дитина обідає в школі?».
+//
+// НАВІЩО ОКРЕМИЙ СТАН. Раніше обід вважався замовленим за замовчуванням:
+// немає запису — значить обідає. Через це в кухні всі 165 дітей були
+// «на обіді», зокрема ті, кого ніхто не записував. Порахувати справжню
+// кількість порцій було неможливо.
+//
+// Тепер три стани, а не два: обідає, не обідає, і — не обрано. Останній
+// не рахується як замовлення, але й не мовчить: батько бачить питання.
+export function lunchChosen(plan){
+  return !!(plan && typeof plan.lunch === 'boolean');
+}
+
 export function effectiveMeals(plan, dayOverride, isAbsent, wd){
   if(isAbsent) return { lunch:false, snack:false, breakfast:false, absent:true };
-  let lunch = !plan || plan.lunch !== false;
+  // Обід лише за явною згодою батьків. Мовчання — не замовлення.
+  let lunch = !!(plan && plan.lunch === true);
   let snack = optionPlanned(plan, 'snack', wd);
   let breakfast = optionPlanned(plan, 'breakfast', wd);
   if(dayOverride){
@@ -327,7 +341,7 @@ export async function loadWeekCounts(){
       const hasChoice = !!String(menuDay.second2||'').trim();
       const hasBrkMenu = !!String(menuDay.breakfast||'').trim();
       const wd = weekdayIdx(date);
-      let lunch=0, snack=0, brk=0, pa=0, pb=0, absent=0, off=0;
+      let lunch=0, snack=0, brk=0, pa=0, pb=0, absent=0, off=0, unset=0;
       const classes = {}, skips = [];
       for(let i=1;i<=11;i++){
         const cls = `class_${i}`;
@@ -352,6 +366,10 @@ export async function loadWeekCounts(){
             }
           }
           else if(permanentlyOff){ off++; }
+          // За цю дитину батьки ще не відповіли про обіди. Це не відмова
+          // і не разовий пропуск — окремий стан, і кухня має його бачити,
+          // інакше дитина просто зникає з підрахунку без пояснення.
+          else if(!lunchChosen(plan)){ unset++; }
           else { skips.push({cls:i,name,reason:(ov&&ov.reason)||''}); }
           if(e.snack){ snack++; cs++; }
           if(e.breakfast && hasBrkMenu){ brk++; cb++; }
@@ -360,7 +378,7 @@ export async function loadWeekCounts(){
       }
       return { date, lunch, snack, brk, pa, pb, hasChoice, hasBrkMenu,
                menuA:menuDay.second||'', menuB:menuDay.second2||'',
-               absent, off, classes, skips };
+               absent, off, unset, classes, skips };
     });
 
     const today = perDay.find(d=>d.date===localDateString) || perDay[0];
@@ -369,7 +387,7 @@ export async function loadWeekCounts(){
         <b>${today.lunch}</b><span>обідів на ${escHtml(human(today.date))}</span>
         <div class="k-total-snack">+ ${today.snack} підвечірків</div>
       </div>
-      <div class="k-sub">відсутні: ${today.absent} · не харчуються: ${today.off} · відмови: ${today.skips.length}</div>
+      <div class="k-sub">відсутні: ${today.absent} · не харчуються: ${today.off} · відмови: ${today.skips.length}${today.unset ? ` · <b style="color:var(--orange);">батьки не відповіли: ${today.unset}</b>` : ''}</div>
 
       <table class="k-table"><thead><tr><th>День</th><th>Обіди</th><th>Підвеч.</th><th>Відсутні</th></tr></thead><tbody>
         ${perDay.map((d,i)=>`<tr class="${d.date===localDateString?'k-now':''}">
@@ -427,10 +445,14 @@ export async function loadMealPlans(){
   const plans = plSnap.exists()?plSnap.val():{};
   box.innerHTML = Object.entries(stSnap.val()).sort((a,b)=>String(a[1]).localeCompare(String(b[1]),'uk')).map(([sid,name])=>{
     const p = plans[sid] || {};
-    const lunch = p.lunch !== false;
+    // Галочка показує РЕАЛЬНИЙ стан. Раніше вона стояла увімкненою і в
+    // тих, за кого батьки нічого не обирали, — і персонал бачив клас,
+    // де «обідають усі», хоча насправді не відповів ніхто.
+    const lunch = p.lunch === true;
+    const noAnswer = !lunchChosen(p);
     const snack = p.snack || 'no';
-    return `<div class="k-plan-row">
-      <span class="k-plan-name">${escHtml(name)}</span>
+    return `<div class="k-plan-row${noAnswer?' k-plan-unset':''}">
+      <span class="k-plan-name">${escHtml(name)}${noAnswer?' <i class="k-plan-note">батьки не відповіли</i>':''}</span>
       <label class="k-plan-lunch"><input type="checkbox" ${lunch?'checked':''}
         onchange="setMealPlan('${escJs(cls)}','${escJs(sid)}','lunch',this.checked)"> обід</label>
       <select onchange="setMealPlan('${escJs(cls)}','${escJs(sid)}','snack',this.value)">
@@ -756,6 +778,7 @@ export async function renderParentMenu(cls, studentKey, date){
     const eff  = effectiveMeals(plan, ov, isAbsent, weekdayIdx(cur));
     const gate = mealsEditable(cur);
     const notEating = plan.lunch === false;
+    const noAnswer  = !lunchChosen(plan);   // батько ще не відповів про обіди
 
     const strip = week.map((d,i)=>`<button type="button" class="pm-tab${d===cur?' on':''}${has[i]?'':' empty'}"
         onclick="pmShowDay('${escJs(d)}')">
@@ -788,11 +811,13 @@ export async function renderParentMenu(cls, studentKey, date){
       `<span class="${on?'pm-on':cls}">${on?textOn:textOff}</span>`;
     const statusLine =
       (hasBrk ? chip(eff.breakfast, '✓ Сніданок', 'без сніданку') : '') +
-      chip(eff.lunch, '✓ Обід', notEating ? 'Обіди не замовлені' : '✕ Без обіду', 'pm-off') +
+      chip(eff.lunch, '✓ Обід',
+           noAnswer ? 'Обіди не підтверджені' : (notEating ? 'Обіди не замовлені' : '✕ Без обіду'),
+           'pm-off') +
       chip(eff.snack, '✓ Підвечірок', 'без підвечірка');
 
     const lunchBtns = gate.ok
-      ? (notEating ? '' : `<button class="pm-btn ${eff.lunch?'':'back'}" onclick="setMealDay('${escJs(cur)}','lunch',${eff.lunch?0:1})">${eff.lunch?'Не буде обідати':'Поверну обід'}</button>`)
+      ? ((notEating || noAnswer) ? '' : `<button class="pm-btn ${eff.lunch?'':'back'}" onclick="setMealDay('${escJs(cur)}','lunch',${eff.lunch?0:1})">${eff.lunch?'Не буде обідати':'Поверну обід'}</button>`)
         + `<button class="pm-btn snack" onclick="setMealDay('${escJs(cur)}','snack',${eff.snack?0:1})">${eff.snack?'Без підвечірка':'+ Підвечірок'}</button>`
       : `<span class="pm-locked">🔒 ${escHtml(gate.msg)}</span>`;
     const brkBtn = !hasBrk ? ''
@@ -801,7 +826,21 @@ export async function renderParentMenu(cls, studentKey, date){
           : `<span class="pm-locked small">🔒 ${escHtml(bGate.msg)}</span>`);
     const actions = lunchBtns + brkBtn;
 
+    // ПИТАННЯ ПРО ОБІДИ. Поки батько не відповів, кухня цю дитину не
+    // рахує — тож питання має бути помітним, а не рядком у налаштуваннях.
+    const askLunch = !noAnswer ? '' : `
+      <div class="pm-ask">
+        <b>Ваша дитина обідає в школі?</b>
+        <span>Поки ви не відповіли, обіди на неї не замовляються.</span>
+        <div class="pm-ask-btns">
+          <button type="button" class="pm-ask-yes" onclick="setLunchPlan(1)">Так, обідає</button>
+          <button type="button" class="pm-ask-no"  onclick="setLunchPlan(0)">Ні, не обідає</button>
+        </div>
+        <small>Відповідь можна змінити будь-коли в налаштуваннях харчування.</small>
+      </div>`;
+
     box.innerHTML = `
+      ${askLunch}
       <div class="pm-tabs">${strip}</div>
       <div class="pm-title">${escHtml(DOW[ci])}, ${escHtml(human(cur))}${cur===localDateString?' — сьогодні':''}</div>
       ${(dishes || secondBlock) ? dishes + secondBlock : '<div class="pm-none">Меню на цей день ще не опубліковане</div>'}
@@ -860,7 +899,10 @@ window.openMealSettings = async function(){
   if(!cls || !sid) return;
   const snap = await get(child(ref(db),`meal_plan/${cls}/${sid}`));
   const p = snap.exists()?snap.val():{};
-  const lunch = p.lunch !== false, snack = p.snack || 'no';
+  // Галочка відображає РЕАЛЬНИЙ стан. Раніше вона стояла увімкненою
+  // навіть тоді, коли батько нічого не обирав, — і виглядало це так,
+  // ніби обіди вже замовлені.
+  const lunch = p.lunch === true, snack = p.snack || 'no';
   const sd = p.snackDays || {};
   const brk = p.breakfast || 'no';          // за замовчуванням сніданків немає
   const bd = p.breakfastDays || {};
@@ -1159,4 +1201,22 @@ window.setTakeaway = async function(date, itemId, qty){
     await set(ref(db,`takeaway_orders/${date}/${cls}/${sid}/${itemId}`), q>0 ? q : null);
     renderTakeaway(date);
   }catch(e){ alert('Не вдалося зберегти: ' + e.message); }
+};
+
+// Відповідь на питання «дитина обідає в школі». Пишемо лише поле lunch,
+// не чіпаючи налаштування сніданків і підвечірків, які батько міг уже
+// задати: set перезаписав би весь вузол.
+window.setLunchPlan = async function(yes){
+  const cls = currentUserData?.class;
+  const sid = currentUserData?.studentId || currentUserData?.studentName;
+  if(!cls || !sid) return;
+  try{
+    await update(ref(db, `meal_plan/${cls}/${sid}`), {
+      lunch: !!yes, by: currentUserData.email || '', ts: Date.now()
+    });
+    showToast(yes ? '✅ Обіди замовлено' : 'Обіди не замовляються');
+    renderParentMenu();
+  }catch(e){
+    alert('Не вдалося зберегти: ' + e.message);
+  }
 };
