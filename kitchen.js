@@ -1010,6 +1010,58 @@ window.saveMealSettings = async function(){
   renderParentMenu();
 };
 
+// Статистика для ОДНОЇ дитини — окремим шляхом.
+//
+// ЧОМУ НЕ СПІЛЬНА ФУНКЦІЯ. computeMealStats читає корені students_list,
+// meal_plan, meal_day й відвідуваність усієї школи — це правильно для
+// кухні, але батькам ці вузли закриті цілком. Тому виклик із кабінету
+// батька щоразу падав на Permission denied, а без обробки помилки напис
+// «Рахуємо...» лишався назавжди. Тут читаємо рівно те, що дозволено:
+// свій клас і свою дитину.
+export async function computeMyMealStats(from, to, cls, sid){
+  const [planSnap, attRange] = await Promise.all([
+    get(child(ref(db), `meal_plan/${cls}/${sid}`)),
+    getDateRange(`attendance/${cls}`, from, to)
+  ]);
+  const plan = planSnap.exists() ? planSnap.val() : null;
+
+  const dates = [];
+  const d = new Date(from + 'T12:00:00'), end = new Date(to + 'T12:00:00');
+  while(d <= end){
+    const wd = d.getDay();
+    if(wd >= 1 && wd <= 5) dates.push(iso(d));   // вихідні не рахуємо
+    d.setDate(d.getDate() + 1);
+  }
+
+  // Разові зміни на день лежать у meal_day. Корінь цього вузла родині
+  // закритий — дозволено лише свою дитину, тож читаємо поденно. Для
+  // довгих періодів це були б сотні запитів, тому там рахуємо за планом
+  // і чесно про це попереджаємо.
+  const OVERRIDE_LIMIT = 70;
+  const withOverrides = dates.length <= OVERRIDE_LIMIT;
+  const ovByDate = {};
+  if(withOverrides){
+    const snaps = await Promise.all(dates.map(date =>
+      get(child(ref(db), `meal_day/${date}/${cls}/${sid}`)).catch(() => null)));
+    dates.forEach((date, i) => {
+      if(snaps[i] && snaps[i].exists()) ovByDate[date] = snaps[i].val();
+    });
+  }
+
+  let lunch = 0, snack = 0, brk = 0, absent = 0;
+  dates.forEach(date => {
+    const att = (attRange && attRange[date] && attRange[date][sid]) || null;
+    const isAbsent = !!(att && Object.values(att).some(r => r && r.status === 'absent'));
+    if(isAbsent){ absent++; return; }
+    const ov = ovByDate[date] || null;
+    const e = effectiveMeals(plan, ov, false, weekdayIdx(date));
+    if(e.lunch) lunch++;
+    if(e.snack) snack++;
+    if(e.breakfast) brk++;
+  });
+  return [{ lunch, snack, brk, absent, days: dates.length, withOverrides }];
+}
+
 window.openMyMealStats = async function(){
   const cls = currentUserData?.class, sid = await mealKey(cls);
   if(!cls || !sid) return;
@@ -1019,18 +1071,46 @@ window.openMyMealStats = async function(){
   modal.style.display = 'flex';
   const to = localDateString, from = to.slice(0,8) + '01';
   const f = document.getElementById('pms-from'), t = document.getElementById('pms-to');
-  if(f && !f.value) f.value = from;
-  if(t && !t.value) t.value = to;
+  // Верхню межу ставимо тут, а не в розмітці: «сьогодні» змінюється щодня
+  if(f){ f.max = localDateString; if(!f.value) f.value = from; }
+  if(t){ t.max = localDateString; if(!t.value) t.value = to; }
   window.reloadMyMealStats();
 };
 window.reloadMyMealStats = async function(){
-  const cls = currentUserData?.class, sid = await mealKey(cls);
   const body = document.getElementById('meal-stats-body');
-  const from = document.getElementById('pms-from').value;
-  const to   = document.getElementById('pms-to').value;
-  if(!body || !from || !to) return;
+  if(!body) return;
+  const cls = currentUserData?.class, sid = await mealKey(cls);
+  let from = document.getElementById('pms-from').value;
+  let to   = document.getElementById('pms-to').value;
+  if(!from || !to){ body.innerHTML = '<p class="empty-msg">Оберіть обидві дати.</p>'; return; }
+
+  // ПЕРЕВІРКА ПЕРІОДУ.
+  //
+  // Поле дати дозволяє прокрутити рік до чого завгодно — у полі опинявся
+  // 1234-й. Для Firebase це означає startAt більше за endAt: запит падає,
+  // а через відсутність обробки помилки напис «Рахуємо...» лишався назавжди.
+  if(from > to){ const x = from; from = to; to = x; }   // переплутали місцями — виправляємо мовчки
+  const MIN = '2020-01-01', MAX = localDateString;
+  if(from < MIN || to > MAX){
+    body.innerHTML = `<p class="empty-msg">Період має бути між ${escHtml(human(MIN))} і сьогоднішнім днем.</p>`;
+    return;
+  }
+  // Півтора року вистачає на будь-який навчальний рік, а більше — це вже
+  // сотні читань із бази заради цифри, яку ніхто не попросить.
+  const days = Math.round((new Date(to) - new Date(from)) / 86400000);
+  if(days > 550){
+    body.innerHTML = '<p class="empty-msg">Забагато: оберіть період до півтора року.</p>';
+    return;
+  }
+
   body.innerHTML = '<p class="empty-msg">Рахуємо...</p>';
-  const rows = await computeMealStats(from, to, cls, sid);
+  let rows;
+  try{
+    rows = await computeMyMealStats(from, to, cls, sid);
+  }catch(e){
+    body.innerHTML = `<p class="empty-msg" style="color:var(--red);">Не вдалося порахувати: ${escHtml(e.message||'відмова')}</p>`;
+    return;
+  }
   const r = rows[0] || { lunch:0, snack:0, brk:0, absent:0, days:0 };
   body.innerHTML = `
     <div class="pms-grid">
@@ -1040,7 +1120,11 @@ window.reloadMyMealStats = async function(){
       <div class="pms-cell"><b>${r.absent||0}</b><span>днів відсутності</span></div>
     </div>
     <p class="ms-note">Період: ${escHtml(human(from))} — ${escHtml(human(to))}. Рахуються лише робочі дні.
-    Дні, коли дитина була відсутня, до харчування не зараховуються.</p>`;
+    Дні, коли дитина була відсутня, до харчування не зараховуються.
+    ${r.withOverrides === false
+      ? '<br>Для такого довгого періоду разові відмови на окремі дні не враховано — '
+        + 'оберіть до трьох місяців, щоб побачити точні числа.'
+      : ''}</p>`;
 };
 
 // ═══════════ ПОЗИЦІЇ НА ВИНОС ═══════════
