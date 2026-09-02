@@ -39,7 +39,7 @@
 //   через stuName(): воно може змінитися, ключ — ні.
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, update } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, currentUserData, showToast, escHtml, escJs, localDateString, logAction, notifyEvent, pushConfigured, renderPushWarning, getSchoolRange, sidOf, getDateRange, stuName } from './common.js';
+import { db, auth, currentUserData, showToast, escHtml, escJs, localDateString, logAction, notifyEvent, pushConfigured, renderPushWarning, getSchoolRange, sidOf, getDateRange, stuName } from './common.js';
 
 export const MEAL_CUTOFF_HOUR = 9;   // до 09:00 можна відмовитися від сьогоднішнього
 // Сніданок їдять до уроків, тож дедлайн 09:00 для нього безглуздий — його
@@ -901,6 +901,19 @@ export async function mealKey(cls){
     try{ key = await sidOf(c, currentUserData.studentName); }
     catch(e){ console.warn('sidOf:', e.message); }
   }
+  // ЗАПИСУЄМО ЗНАЙДЕНИЙ ІДЕНТИФІКАТОР У ПРОФІЛЬ.
+  //
+  // Без цього кроку виходить пастка: правила доступу звіряють ключ із
+  // users/{uid}.studentId, а ми почали передавати справжній ідентифікатор
+  // зі списку класу. Якщо в профілі його немає, база відповідає
+  // «Permission denied» — саме це й ламало налаштування харчування та
+  // позиції на винос.
+  if(key && currentUserData && currentUserData.studentId !== key && auth?.currentUser){
+    try{
+      await update(ref(db, `users/${auth.currentUser.uid}`), { studentId: key });
+      currentUserData.studentId = key;
+    }catch(e){ console.warn('studentId у профіль:', e.message); }
+  }
   _mealKey = key || currentUserData?.studentName || null;
   _mealKeyCls = c;
   return _mealKey;
@@ -908,9 +921,26 @@ export async function mealKey(cls){
 
 // Постійні налаштування дитини — тут батько може зняти її з харчування зовсім
 window.openMealSettings = async function(){
-  const cls = currentUserData?.class, sid = await mealKey(cls);
-  if(!cls || !sid) return;
-  const snap = await get(child(ref(db),`meal_plan/${cls}/${sid}`));
+  // Жодних тихих виходів: раніше будь-яка перешкода — не знайшли клас,
+  // відмовила база — просто нічого не робила, і виглядало це як мертва
+  // кнопка. Тепер кожен випадок каже про себе.
+  const box0 = document.getElementById('meal-settings-body');
+  const modal = document.getElementById('meal-settings-modal');
+  if(!box0 || !modal){ alert('Розділ налаштувань не завантажено — оновіть сторінку.'); return; }
+  const cls = currentUserData?.class;
+  let sid;
+  try{ sid = await mealKey(cls); }
+  catch(e){ alert('Не вдалося визначити дитину: ' + e.message); return; }
+  if(!cls || !sid){ alert('Не вдалося визначити клас або дитину. Оновіть сторінку.'); return; }
+  let snap;
+  try{
+    snap = await get(child(ref(db),`meal_plan/${cls}/${sid}`));
+  }catch(e){
+    alert('Не вдалося прочитати налаштування: ' + e.message
+      + '\n\nЯкщо написано Permission denied — оновіть сторінку: портал допише '
+      + 'ідентифікатор дитини у ваш профіль і доступ зʼявиться.');
+    return;
+  }
   const p = snap.exists()?snap.val():{};
   // Галочка відображає РЕАЛЬНИЙ стан. Раніше вона стояла увімкненою
   // навіть тоді, коли батько нічого не обирав, — і виглядало це так,
@@ -1197,7 +1227,9 @@ export async function renderTakeaway(date){
         <span>Оплата — у школі, як завжди</span></div>
       ${gate.ok ? '' : `<div class="ta-locked">🔒 ${escHtml(gate.msg)}</div>`}`;
   }catch(e){
-    box.innerHTML = `<div class="pm-none">Не вдалося завантажити позиції: ${escHtml(e.message)}</div>`;
+    box.innerHTML = `<div class="pm-none">Не вдалося завантажити позиції: ${escHtml(e.message)}`
+      + (/permission/i.test(e.message||'') ? ' — оновіть сторінку, портал допише ідентифікатор дитини у профіль' : '')
+      + `</div>`;
   }
 }
 window.renderTakeaway = renderTakeaway;
