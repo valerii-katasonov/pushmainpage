@@ -20,7 +20,7 @@ import { ref, set, get, child, update, remove } from "https://www.gstatic.com/fi
 import { db, currentUserData, showToast, escHtml, escJs, logAction,
          makeBreak, hhmmFromMins, isBreakItem, dayNamesUA } from './common.js';
 
-export const BREAKS_BUILD = '2026-09-02 · breaks v1';
+export const BREAKS_BUILD = '2026-09-02 · breaks v3 (діагностика)';
 
 const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 const CLASSES = Array.from({ length: 11 }, (_, i) => `class_${i + 1}`);
@@ -175,7 +175,9 @@ window.renderBreaksCard = async function(){
       ⏱ Розставити ці перерви в усі дні класу</button>
     <button type="button" class="bk-copy" onclick="openBreakCopy()">
       📋 Скопіювати дзвінки й назви в інші класи</button>
-    <div id="bk-copy-box"></div>`;
+    <div id="bk-copy-box"></div>
+    <div id="bk-log"></div>
+    <div class="bk-build">версія модуля: ${escHtml(BREAKS_BUILD)}</div>`;
 };
 
 window.setBreakName = async function(after, value){
@@ -241,19 +243,38 @@ window.openBreakCopy = function(){
     </div>`;
 };
 
+// Журнал кроків просто на сторінці. Ця кнопка вже двічі «не працювала»
+// з різних причин, і щоразу з'ясувати чому можна було лише навпомацки.
+// Тепер вона сама розповідає, що зробила.
+function bkLog(line, kind){
+  const box = document.getElementById('bk-log');
+  if(!box) return;
+  box.innerHTML += `<div class="bk-log-line ${kind || ''}">${escHtml(line)}</div>`;
+}
+function bkLogReset(){
+  const box = document.getElementById('bk-log');
+  if(box) box.innerHTML = '<div class="bk-log-title">Щосталося:</div>';
+}
+
 window.doBreakCopy = async function(){
   const box = document.getElementById('bk-copy-box');
-  const picked = [...box.querySelectorAll('input[type=checkbox]:checked')].map(i => i.value);
-  if(!picked.length) return alert('Оберіть хоча б один клас.');
-  if(!Object.keys(state.bells).length)
-    return alert('У цього класу немає розкладу дзвінків — копіювати нічого.');
+  bkLogReset();
+  const boxes = box ? box.querySelectorAll('input[type=checkbox]') : [];
+  const picked = [...boxes].filter(i => i.checked).map(i => i.value);
+  bkLog(`Прапорців на екрані: ${boxes.length}, відмічено: ${picked.length}` +
+        (picked.length ? ` — ${picked.map(c=>c.replace('class_','')).join(', ')} кл.` : ''));
+  bkLog(`Джерело: ${String(state.cls).replace('class_','')} кл., уроків у дзвінках: ${Object.keys(state.bells).length}`);
+  if(!picked.length){ bkLog('Зупинився: не відмічено жодного класу.', 'bad'); return; }
+  if(!Object.keys(state.bells).length){
+    bkLog('Зупинився: у класу-джерела порожній розклад дзвінків — копіювати нічого.', 'bad'); return; }
   // Називаємо класи поіменно. Раніше тут стояла кількість — «у 1 кл.» —
   // і це читалося як «у 1 клас», тобто повідомлення казало протилежне тому,
   // що робила кнопка.
   const names = picked.map(c => c.replace('class_','')).join(', ');
   if(!confirm(`Скопіювати з ${state.cls.replace('class_','')} класу в ${picked.length === 1 ? 'клас' : 'класи'}: ${names}?\n\n`
     + 'Копіюються розклад дзвінків і назви перерв.\n'
-    + `Наявні дзвінки ${picked.length === 1 ? 'цього класу' : 'цих класів'} буде замінено.`)) return;
+    + `Наявні дзвінки ${picked.length === 1 ? 'цього класу' : 'цих класів'} буде замінено.`)){
+    bkLog('Зупинився: ви натиснули «Скасувати» у вікні підтвердження.', 'bad'); return; }
   // ДЗВІНКИ Й НАЗВИ ПИШЕМО ОКРЕМО, А НЕ ОДНИМ update().
   // Спільний запис був атомарний: якщо правила для нового вузла break_names
   // ще не опубліковані, база відхиляла всю операцію — і разом із назвами
@@ -267,12 +288,21 @@ window.doBreakCopy = async function(){
     try{
       await set(ref(db, `bell_schedules/${c}`), state.bells);
       bellsOk++;
-    }catch(e){ failed.push(`дзвінки в ${c.replace('class_','')} кл.: ${e.message}`); continue; }
+      bkLog(`✓ дзвінки записано → bell_schedules/${c}`, 'ok');
+    }catch(e){
+      failed.push(`дзвінки в ${c.replace('class_','')} кл.: ${e.message}`);
+      bkLog(`✕ дзвінки НЕ записано → bell_schedules/${c}: ${e.message}`, 'bad');
+      continue;
+    }
     if(!hasNames){ try{ await remove(ref(db, `break_names/${c}`)); }catch(e){} continue; }
     try{
       await set(ref(db, `break_names/${c}`), state.names);
       namesOk++;
-    }catch(e){ failed.push(`назви перерв у ${c.replace('class_','')} кл.: ${e.message}`); }
+      bkLog(`✓ назви записано → break_names/${c}`, 'ok');
+    }catch(e){
+      failed.push(`назви перерв у ${c.replace('class_','')} кл.: ${e.message}`);
+      bkLog(`✕ назви НЕ записано → break_names/${c}: ${e.message}`, 'bad');
+    }
   }
 
   // Перевіряємо читанням: інакше повідомлення «скопійовано» — це віра,
@@ -281,11 +311,14 @@ window.doBreakCopy = async function(){
   for(const c of picked){
     try{
       const chk = await get(child(ref(db), `bell_schedules/${c}`));
-      if(chk.exists() && Object.keys(chk.val() || {}).length) verified++;
-    }catch(e){}
+      const n = chk.exists() ? Object.keys(chk.val() || {}).length : 0;
+      if(n) verified++;
+      bkLog(`перечитав bell_schedules/${c}: уроків ${n}`, n ? 'ok' : 'bad');
+    }catch(e){ bkLog(`не зміг перечитати bell_schedules/${c}: ${e.message}`, 'bad'); }
   }
 
   if(!bellsOk){
+    bkLog('Підсумок: жоден клас не змінено.', 'bad');
     alert('Скопіювати не вдалося — жоден клас не змінено.\n\n'
       + failed.join('\n')
       + '\n\nНайімовірніша причина: у базі ще не опубліковано нові правила '
@@ -302,5 +335,8 @@ window.doBreakCopy = async function(){
     showToast(`✅ Скопійовано в ${picked.length === 1 ? 'клас' : 'класи'} ${names}`
       + (verified === picked.length ? '' : ` (підтверджено ${verified})`));
   }
+  bkLog(`Підсумок: дзвінки в ${bellsOk} кл., назви в ${namesOk} кл., підтверджено читанням ${verified}.`,
+        verified === picked.length ? 'ok' : 'bad');
+  // Список галочок ховаємо, але журнал лишаємо на екрані
   box.innerHTML = '';
 };
