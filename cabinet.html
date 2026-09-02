@@ -889,6 +889,27 @@
     .mx-mode{padding:9px 12px;border-radius:9px;font-size:.79rem;line-height:1.35;margin-bottom:9px;}
     .mx-mode.live{background:#fff3e0;color:#e65100;border:1px solid #ffb74d;font-weight:600;}
     .mx-mode.draft{background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;}
+    /* Предмети класу та перейменування */
+    .sc-list{margin-top:11px;background:#fff;border-radius:10px;border:1px solid #f8bbd0;overflow:hidden;}
+    .sc-item{display:flex;align-items:center;gap:8px;padding:8px 11px;border-bottom:1px solid #fdf2f6;font-size:.82rem;}
+    .sc-item:last-child{border-bottom:none;}
+    .sc-item span{flex:1;min-width:0;color:#4a148c;}
+    .sc-item i{font-style:normal;font-size:.68rem;color:#e65100;background:#fff3e0;padding:2px 6px;border-radius:6px;}
+    .sc-item button{width:auto;margin:0;padding:3px 9px;background:transparent;color:#bbb;border:none;font-size:1rem;}
+    .sc-item button:hover{color:var(--red);}
+    .sc-add{display:flex;gap:7px;margin-top:9px;}
+    .sc-add input{flex:1;margin:0;font-size:.84rem;}
+    .sc-add button{width:auto;margin:0;padding:9px 14px;background:#ad1457;color:#fff;font-size:.82rem;}
+    .sc-add-hint{margin-top:9px;font-size:.75rem;color:#6a1b9a;background:#f3e5f5;padding:9px 11px;border-radius:9px;}
+    .sc-add-hint button{width:auto;margin:6px 0 0;padding:5px 11px;background:#8e24aa;color:#fff;font-size:.74rem;display:block;}
+    .rs-sum{margin-top:12px;font-size:.85rem;font-weight:700;color:#ad1457;}
+    .rs-table{width:100%;border-collapse:collapse;font-size:.78rem;margin-top:7px;background:#fff;border-radius:9px;overflow:hidden;}
+    .rs-table td{padding:6px 10px;border-bottom:1px solid #fdf2f6;}
+    .rs-table td:last-child{text-align:right;font-weight:700;color:#ad1457;width:70px;}
+    .rs-warn{background:#fff8e1;border-left:3px solid var(--orange);color:#7a5b00;
+             padding:9px 11px;border-radius:0 8px 8px 0;font-size:.77rem;margin-top:9px;line-height:1.45;}
+    .rs-ok{background:#e8f5e9;border-left:3px solid var(--green);color:#1b5e20;
+           padding:9px 11px;border-radius:0 8px 8px 0;font-size:.79rem;margin-top:9px;}
     /* Картка чергування уроків */
     .alt-week{margin-top:12px;background:#fff;border-radius:10px;border:1px solid #e1bee7;overflow:hidden;}
     .alt-week-head{background:#f3e5f5;color:#6a1b9a;font-weight:700;font-size:.82rem;
@@ -1952,6 +1973,22 @@
         <div style="margin-top:13px;">
           <p style="font-size:.78rem;color:#555;">Уроки, що йдуть через тиждень («Музичне / Фізичне»). Позначте, що саме буде — батьки побачать конкретну назву.</p>
           <div id="alt-slot-dir"></div>
+        </div>
+      </details>
+      <details data-dtab="rozklad" style="margin-bottom:12px;background:#fce4ec;padding:14px;border-radius:12px;border:1px solid #f48fb1;" ontoggle="if(this.open)openSubjectsCatalog()">
+        <summary style="font-weight:700;cursor:pointer;color:#ad1457;font-size:.95rem;">📗 Предмети класу</summary>
+        <div style="margin-top:13px;">
+          <p style="font-size:.78rem;color:#555;">Список назв для підказок при складанні розкладу. Не дає з'явитися «English», «english» і «Англ. мова» як трьом різним предметам.</p>
+          <label style="font-size:.8rem;color:#ad1457;font-weight:600;">Клас:</label>
+          <select id="sc-class" onchange="renderSubjectsCatalog()" style="margin-top:4px;"></select>
+          <div id="sc-body"></div>
+        </div>
+      </details>
+      <details data-dtab="rozklad" style="margin-bottom:12px;background:#fce4ec;padding:14px;border-radius:12px;border:1px solid #f48fb1;" ontoggle="if(this.open)openRenameSubject()">
+        <summary style="font-weight:700;cursor:pointer;color:#ad1457;font-size:.95rem;">✏️ Перейменувати предмет</summary>
+        <div style="margin-top:13px;">
+          <p style="font-size:.78rem;color:#555;">Назва зміниться в розкладі й одночасно в оцінках, домашніх завданнях, планах і всьому іншому. Дані не втрачаються — вони переїжджають під нову назву.</p>
+          <div id="rs-body"></div>
         </div>
       </details>
       <div id="curr-dir-slot" data-dtab="rozklad"></div>
@@ -3130,7 +3167,7 @@
       <option value="lesson">📚 Урок</option><option value="break">☕ Перерва</option><option value="extra">🎸 Гурток</option>
     </select>
     <label id="cell-subj-label">Назва предмету:</label>
-    <input type="text" id="cell-subj-ua" placeholder="Напр. Математика" style="margin-bottom:9px;border-color:var(--blue);" oninput="handleSubjInput()">
+    <input type="text" id="cell-subj-ua" list="subject-suggestions" autocomplete="off" placeholder="Напр. Математика" style="margin-bottom:9px;border-color:var(--blue);" oninput="handleSubjInput()">
     <div id="cell-extra-wrapper" style="display:none;margin-bottom:9px;background:#f0f8ff;padding:14px;border-radius:12px;border:1px solid var(--blue);text-align:left;">
       <label style="color:#2980b9;margin-top:0;">Формат:</label>
       <select id="cell-extra-format" style="border-color:var(--blue);margin-bottom:9px;" onchange="toggleExtraFormat()"><option value="group">👥 Групове</option><option value="individual">👤 Індивідуальне</option></select>
@@ -3394,6 +3431,7 @@ document.addEventListener('DOMContentLoaded', function(){
 <script type="module" src="kitchen.js"></script>
 <script type="module" src="news.js"></script>
 <script type="module" src="chat.js"></script>
+<script type="module" src="subjects.js"></script>
 <script type="module" src="alternating.js"></script>
 <script type="module" src="schedule-import.js"></script>
 <script type="module" src="consent.js"></script>
