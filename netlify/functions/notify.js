@@ -201,7 +201,23 @@ exports.handler = async (event) => {
 
     // data-only: показ бере на себе Service Worker — так вигляд сповіщення
     // однаковий і у фоні, і при відкритому порталі
-    const url = `https://${ALLOWED_HOSTS[0]}/cabinet`;
+    // Куди вести з натискання на сповіщення.
+    //
+    // Раніше посилання завжди вело просто на /cabinet, і портал відкривався
+    // на вкладці за замовчуванням. Людина отримувала «Оголошення школи»,
+    // натискала — і бачила «Сьогодні», без жодного натяку, де ж оголошення.
+    //
+    // Тепер у посиланні є підказка, яку вкладку відкрити. Кабінет її читає
+    // й перемикається (див. openFromNotification у common.js).
+    const TAB_BY_TYPE = {
+      news:    'school',   // оголошення — вкладка «Школа»
+      grade:   'grades',
+      absence: 'day',
+      menu:    'day',
+      chat:    'chat'      // особливий випадок: відкриваємо саме листування
+    };
+    const tab = TAB_BY_TYPE[body.type] || 'day';
+    const url = `https://${ALLOWED_HOSTS[0]}/cabinet?open=${tab}`;
     const results = await Promise.allSettled(targets.map(t =>
       fetch(`https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`, {
         method: 'POST',
