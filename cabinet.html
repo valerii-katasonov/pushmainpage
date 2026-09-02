@@ -71,7 +71,7 @@
     .toast{background:rgba(0,0,0,.86);color:#fff;padding:14px 18px;border-radius:11px;box-shadow:0 5px 15px rgba(0,0,0,.3);font-size:.92rem;animation:slideUp .3s ease-out;}
     @keyframes slideUp{from{transform:translateY(80px);opacity:0}to{transform:translateY(0);opacity:1}}
     /* ── MODAL ── */
-    .modal-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.8);z-index:1000;justify-content:center;align-items:center;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px 0;backdrop-filter:blur(5px);padding:10px;}
+    .modal-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.8);z-index:1000;justify-content:center;align-items:center;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px 0;backdrop-filter:blur(5px);padding:10px;overscroll-behavior:contain;}
     .modal-content{background:#fff;padding:28px;border-radius:18px;text-align:center;max-width:460px;width:100%;box-shadow:0 15px 30px rgba(0,0,0,.3);animation:popIn .3s ease-out;max-height:92vh;overflow-y:auto;}
     @keyframes popIn{0%{transform:scale(.8);opacity:0}100%{transform:scale(1);opacity:1}}
     /* ── GRADE CELLS — 6-БАЛЬНА ── */
@@ -387,7 +387,10 @@
                        color:#7a8b93;font-size:1.4rem;line-height:1;cursor:pointer;border-radius:8px;}
     .chat-back:hover,.chat-x:hover{background:#f2f5f6;color:#37474f;}
     .chat-back{font-size:1.9rem;}
-    .chat-scroll{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;}
+    /* overscroll-behavior:contain — щоб рух пальцем у списку не «перетікав»
+       на сторінку під вікном, яка в цей момент заморожена */
+    .chat-scroll{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;
+                 overscroll-behavior:contain;touch-action:pan-y;}
     .chat-scroll.list{background:#fff;}
     .chat-scroll.msgs{background:#f6f8f9;padding:8px 14px 14px;display:flex;flex-direction:column;}
     .chat-compose{display:flex;align-items:flex-end;gap:8px;padding:10px 12px;background:#fff;
@@ -882,6 +885,28 @@
     .mx-mode{padding:9px 12px;border-radius:9px;font-size:.79rem;line-height:1.35;margin-bottom:9px;}
     .mx-mode.live{background:#fff3e0;color:#e65100;border:1px solid #ffb74d;font-weight:600;}
     .mx-mode.draft{background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;}
+    /* Картка чергування уроків */
+    .alt-week{margin-top:12px;background:#fff;border-radius:10px;border:1px solid #e1bee7;overflow:hidden;}
+    .alt-week-head{background:#f3e5f5;color:#6a1b9a;font-weight:700;font-size:.82rem;
+                   padding:8px 11px;display:flex;justify-content:space-between;align-items:center;}
+    .alt-week-head span{font-weight:400;font-size:.72rem;color:#9c27b0;}
+    .alt-row{padding:9px 11px;border-top:1px solid #f5f0f7;}
+    .alt-when{font-size:.78rem;font-weight:600;color:#4a148c;}
+    .alt-when span{display:block;font-weight:400;font-size:.68rem;color:#9e9e9e;}
+    .alt-opts{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center;}
+    .alt-opt{margin:0;padding:7px 11px;font-size:.76rem;background:#f5f5f5;color:#555;
+             border:1px solid #e0e0e0;border-radius:8px;width:auto;}
+    .alt-opt.on{background:#8e24aa;color:#fff;border-color:#8e24aa;font-weight:700;}
+    .alt-opt:disabled{opacity:.55;cursor:not-allowed;}
+    .alt-clear{margin:0;padding:7px 10px;font-size:.8rem;background:#fff;color:#9e9e9e;
+               border:1px solid #e0e0e0;border-radius:8px;width:auto;}
+    .alt-none{font-size:.68rem;color:#ef6c00;margin-top:5px;}
+    /* Уроки, що чергуються */
+    .alt-badge{display:inline-block;background:#ede7f6;color:#5e35b1;border-radius:6px;
+               padding:1px 6px;font-size:.64rem;font-weight:700;vertical-align:middle;margin-left:5px;}
+    .alt-badge.pending{background:#fff3e0;color:#e65100;}
+    .alt-hint{font-size:.68rem;color:#9575cd;margin-top:2px;}
+    .alt-mini{font-style:normal;font-size:.62rem;color:#9575cd;margin-left:4px;}
     /* Імпорт розкладу з Word */
     .si-drop{display:block;border:2px dashed #b39ddb;border-radius:10px;padding:16px;text-align:center;
              color:#4527a0;font-size:.84rem;cursor:pointer;margin-top:11px;background:#fff;}
@@ -1918,6 +1943,13 @@
           <div id="si-preview"></div>
         </div>
       </details>
+      <details data-dtab="rozklad" style="margin-bottom:12px;background:#f3e5f5;padding:14px;border-radius:12px;border:1px solid #ce93d8;" ontoggle="if(this.open)openAltCard()">
+        <summary style="font-weight:700;cursor:pointer;color:#6a1b9a;font-size:.95rem;">🔁 Чергування уроків</summary>
+        <div style="margin-top:13px;">
+          <p style="font-size:.78rem;color:#555;">Уроки, що йдуть через тиждень («Музичне / Фізичне»). Позначте, що саме буде — батьки побачать конкретну назву.</p>
+          <div id="alt-slot-dir"></div>
+        </div>
+      </details>
       <div id="curr-dir-slot" data-dtab="rozklad"></div>
 
 <details data-dtab="staff" style="background:#e0f7fa;padding:14px;border-radius:12px;border:1px solid #00acc1;">
@@ -2383,6 +2415,13 @@
             <input type="number" id="new-topic-hours" placeholder="Год." style="flex:1;margin-top:0;font-size:.85rem;" min="1" max="10">
             <button onclick="addCurriculumTopic()" style="flex:1;margin-top:0;background:var(--purple);color:#fff;padding:10px 6px;font-size:.82rem;">+ Тема</button>
           </div>
+        </div>
+      </details>
+      <details style="margin-top:14px;background:#f3e5f5;padding:14px;border-radius:12px;border:1px solid #ce93d8;" ontoggle="if(this.open)openAltCard()">
+        <summary style="font-weight:700;cursor:pointer;color:#6a1b9a;font-size:.95rem;">🔁 Чергування уроків</summary>
+        <div style="margin-top:12px;">
+          <p style="font-size:.78rem;color:#555;">Позначте, що саме буде цього й наступного тижня. Поки не позначено, батьки бачать обидві назви.</p>
+          <div id="alt-slot-teacher"></div>
         </div>
       </details>
       <!-- Curriculum Upload (visible to class_teacher of THIS class or director) -->
@@ -3351,6 +3390,7 @@ document.addEventListener('DOMContentLoaded', function(){
 <script type="module" src="kitchen.js"></script>
 <script type="module" src="news.js"></script>
 <script type="module" src="chat.js"></script>
+<script type="module" src="alternating.js"></script>
 <script type="module" src="schedule-import.js"></script>
 <script type="module" src="consent.js"></script>
 
