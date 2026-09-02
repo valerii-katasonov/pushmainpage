@@ -48,7 +48,14 @@ self.addEventListener('notificationclick', (e) => {
   const target = (e.notification.data && e.notification.data.url) || './cabinet.html';
   e.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
-      for (const c of list) if (c.url.includes('cabinet') && 'focus' in c) return c.focus();
+      for (const c of list) {
+        if (!c.url.includes('cabinet') || !('focus' in c)) continue;
+        // Вкладка вже відкрита. Раніше ми просто переводили на неї фокус —
+        // і людина бачила той екран, на якому пішла, а не те, про що
+        // прийшло сповіщення. Тепер ще й ведемо за адресою з підказкою.
+        if ('navigate' in c && target) return c.navigate(target).then(w => (w || c).focus());
+        return c.focus();
+      }
       if (clients.openWindow) return clients.openWindow(target);
     })
   );
