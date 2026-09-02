@@ -717,13 +717,30 @@ export async function renderParentMenu(cls, studentKey, date){
     const monday = mondayOf(wda===0 || wda===6 ? nextWorkday(anchor) : anchor);
     const week = weekDates(monday);
     const menus = await Promise.all(week.map(d=>get(child(ref(db),`menu/${d}`))));
-    const has = week.map((d,i)=>menus[i].exists() && (menus[i].val().first || menus[i].val().second));
+    // День вважаємо заповненим, якщо є хоч одна страва. Раніше тут
+    // перевірялися лише перша й друга — день, у якому кухня вписала
+    // тільки сніданок чи підвечірок, вважався порожнім.
+    const has = week.map((d,i)=>{
+      if(!menus[i].exists()) return false;
+      const v = menus[i].val() || {};
+      return !!(v.first || v.second || v.second2 || v.breakfast || v.snack);
+    });
 
     // Якщо день не обирали вручну — відкриваємо сьогоднішній, а як його
     // немає в цьому тижні або він порожній, то перший день із меню.
+    // ЯКИЙ ДЕНЬ ВІДКРИВАТИ.
+    //
+    // Останнім варіантом раніше стояв week[0] — понеділок. Через це, поки
+    // кухня не заповнила меню на тиждень, блок харчування завжди відкривався
+    // на понеділку, хоч би який був день. Виглядало як «застряг».
+    //
+    // Тепер запасний варіант — СЬОГОДНІ (а на вихідних найближчий робочий
+    // день), бо саме сьогоднішній день людині й потрібен.
+    const todayInWeek = week.includes(localDateString) ? localDateString : null;
+    const fallback = todayInWeek || week.find(d => d >= localDateString) || week[0];
     let cur = pmDate && week.includes(pmDate) ? pmDate
-            : (week.includes(localDateString) && has[week.indexOf(localDateString)] ? localDateString
-            : (week.find((d,i)=>has[i] && d >= localDateString) || week.find((d,i)=>has[i]) || week[0]));
+            : (todayInWeek && has[week.indexOf(todayInWeek)] ? todayInWeek
+            : (week.find((d,i)=>has[i] && d >= localDateString) || week.find((d,i)=>has[i]) || fallback));
     pmDate = cur;
     const ci = week.indexOf(cur);
     const m = menus[ci].exists() ? menus[ci].val() : null;
