@@ -394,7 +394,7 @@ export async function loadWeekCounts(){
     const perDay = dates.map((date,di)=>{
       // Канікули чи свято — школа не годує, рахувати нічого
       if(noSchool[date]) return { date, closed: noSchool[date],
-        lunch:0, snack:0, brk:0, pa:0, pb:0, absent:0, off:0, unset:0, classes:{}, skips:[], extras:[] };
+        lunch:0, snack:0, brk:0, pa:0, pb:0, absent:0, off:0, unset:0, classes:{}, skips:[], extras:[], unanswered:[] };
       const overrides = daySnaps[di].exists()?daySnaps[di].val():{};
       const menuDay = menuSnaps[di].exists()?menuSnaps[di].val():{};
       const choice = choicePair(menuDay);
@@ -402,7 +402,7 @@ export async function loadWeekCounts(){
       const hasBrkMenu = !!String(menuDay.breakfast||'').trim();
       const wd = weekdayIdx(date);
       let lunch=0, snack=0, brk=0, pa=0, pb=0, absent=0, off=0, unset=0;
-      const classes = {}, skips = [], extras = [];
+      const classes = {}, skips = [], extras = [], unanswered = [];
       for(let i=1;i<=11;i++){
         const cls = `class_${i}`;
         if(!students[cls]) continue;
@@ -436,7 +436,7 @@ export async function loadWeekCounts(){
           // За цю дитину батьки ще не відповіли про обіди. Це не відмова
           // і не разовий пропуск — окремий стан, і кухня має його бачити,
           // інакше дитина просто зникає з підрахунку без пояснення.
-          else if(!lunchChosen(plan)){ unset++; }
+          else if(!lunchChosen(plan)){ unset++; unanswered.push({cls:i, name}); }
           else { skips.push({cls:i,name,reason:(ov&&ov.reason)||''}); }
           if(e.snack){ snack++; cs++; }
           if(e.breakfast && hasBrkMenu){ brk++; cb++; }
@@ -445,7 +445,7 @@ export async function loadWeekCounts(){
       }
       return { date, lunch, snack, brk, pa, pb, hasChoice, hasBrkMenu,
                menuA:choice?choice.a:'', menuB:choice?choice.b:'',
-               absent, off, unset, classes, skips, extras };
+               absent, off, unset, classes, skips, extras, unanswered };
     });
 
     const today = perDay.find(d=>d.date===localDateString) || perDay[0];
@@ -475,6 +475,9 @@ export async function loadWeekCounts(){
           : `<tr><td colspan="${today.hasChoice?5:4}" class="empty-msg">Немає даних</td></tr>`}
       </tbody></table>
 
+      ${today.unanswered.length ? `<div class="k-skip-title warn">Батьки ще не відповіли про обіди (${today.unanswered.length})</div>`
+        + `<div class="k-skip-note">Ці діти не потрапляють у замовлення, доки батьки не натиснуть «Так, обідає» або «Ні, не обідає».</div>`
+        + today.unanswered.map(s=>`<div class="k-skip warn">${escHtml(s.name)} <span>${s.cls} кл.</span></div>`).join('') : ''}
       ${today.extras.length ? `<div class="k-skip-title extra">Разові обіди на ${escHtml(human(today.date))} — діти, які зазвичай не обідають</div>` +
         today.extras.map(s=>`<div class="k-skip extra">${escHtml(s.name)} <span>${s.cls} кл.</span></div>`).join('') : ''}
       ${today.skips.length ? `<div class="k-skip-title">Відмови на ${escHtml(human(today.date))}</div>` +
