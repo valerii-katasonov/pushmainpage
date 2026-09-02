@@ -301,21 +301,6 @@ window.saveWeekMenu = async function(){
   loadWeekMenu(); loadWeekCounts();
 };
 
-// Меню часто повторюється — даємо розмножити перший день на весь тиждень
-window.copyMondayToWeek = function(){
-  const dates = weekDates(currentMonday());
-  if(!confirm('Скопіювати меню понеділка на решту днів тижня?\n\nЗаповнені поля інших днів буде замінено. Збережеться після натискання «Опублікувати».')) return;
-  MENU_FIELDS.forEach(f=>{
-    const src = document.getElementById(`km-${dates[0]}-${f.k}`);
-    if(!src) return;
-    dates.slice(1).forEach(d=>{
-      const el = document.getElementById(`km-${d}-${f.k}`);
-      if(el) el.value = src.value;
-    });
-  });
-  showToast('Скопійовано — перевірте і натисніть «Опублікувати»');
-};
-
 // ── Скільки готувати ──
 export async function loadWeekCounts(){
   const box = document.getElementById('k-counts');
