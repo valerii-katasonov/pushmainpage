@@ -16,8 +16,9 @@
 // показуються. Тому без дзвінків імпорт зупиняється й каже про це.
 import { ref, set, get, child, update } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { db, currentUserData, showToast, escHtml, escJs, logAction, getClassNum } from './common.js';
+import { subjectsInLessons, similarNames, safeKey } from './subjects.js';
 
-export const IMPORT_BUILD = '2026-09-02 · docx v2';
+export const IMPORT_BUILD = '2026-09-02 · docx v3';
 
 // Назви днів у заголовку → ключі, якими користується портал
 const DAY_KEYS = {
@@ -225,6 +226,25 @@ async function renderSchedulePreview(guess){
         }).join('') + '</tr>';
   }
 
+  // Які назви з файлу для цього класу нові. Це найдешевший спосіб
+  // упіймати друкарську помилку ДО того, як вона стане окремим предметом
+  // з окремим журналом оцінок.
+  let known = [];
+  try{
+    const [cat, sch] = await Promise.all([
+      get(child(ref(db), `subjects_catalog/${cls}`)),
+      get(child(ref(db), `schedules/${cls}/lessons`))
+    ]);
+    if(cat.exists()) known = known.concat(Object.values(cat.val() || {}).map(v => String(v).trim()));
+    if(sch.exists()) known = known.concat(subjectsInLessons(sch.val()));
+  }catch(e){ console.warn('subjects:', e.message); }
+  known = [...new Set(known.filter(Boolean))];
+  const fromFile = subjectsInLessons(built.lessons);
+  window._siSubjects = fromFile;
+  const fresh = fromFile.filter(n => !known.includes(n));
+  const looksLike = fresh.map(n => ({ name: n, near: similarNames(known.concat(fromFile), n) }))
+                         .filter(x => x.near.length);
+
   const problems = [];
   if(built.missingTimes.length)
     problems.push(`<b>Немає часу для уроків ${built.missingTimes.join(', ')}.</b> Заповніть розклад дзвінків `
@@ -234,6 +254,13 @@ async function renderSchedulePreview(guess){
       + 'другий тиждень інший. Що саме буде цього тижня, вчитель позначає в картці «🔁 Чергування уроків». '
       + 'Поки не позначив, батьки бачать обидві назви.<br>'
       + parsedSchedule.warnings.map(w => escHtml(w)).join('<br>'));
+  if(looksLike.length)
+    problems.push('<b>Схожі назви — імовірно друкарська помилка.</b> Портал вважатиме їх різними предметами '
+      + 'з різними журналами:<br>' + looksLike.map(x =>
+          `«${escHtml(x.name)}» ↔ «${escHtml(x.near.join('», «'))}»`).join('<br>'));
+  else if(fresh.length)
+    problems.push(`Нові для цього класу назви (${fresh.length}): ${escHtml(fresh.join(', '))}. `
+      + 'Перевірте написання — після збереження вони стануть окремими предметами в журналі.');
   if(guess && `class_${guess}` !== cls)
     problems.push(`У файлі згадано ${guess} клас, а обрано ${cls.replace('class_','')}. Перевірте, чи це те, що потрібно.`);
 
@@ -259,6 +286,13 @@ window.saveImportedSchedule = async function(){
   try{
     const path = dest === 'live' ? `schedules/${cls}` : `schedule_drafts/${dest}/${cls}`;
     await set(ref(db, path), { lessons: built.lessons });
+    // Поповнюємо список предметів класу — далі конструктор підказуватиме
+    // саме ці назви, і розбіжності не наростатимуть
+    try{
+      const patch = {};
+      (window._siSubjects || []).forEach(n => { patch[safeKey(n)] = n; });
+      if(Object.keys(patch).length) await update(ref(db, `subjects_catalog/${cls}`), patch);
+    }catch(e){ console.warn('subjects_catalog:', e.message); }
     logAction('settings', { value: `розклад ${cls} імпортовано з Word у ${dest === 'live' ? 'чинний' : dest}` });
     showToast('✅ Розклад збережено');
     document.getElementById('si-preview').innerHTML =
