@@ -1125,6 +1125,35 @@ export async function publishContactCard(){
   }
 }
 
+// ══════════════════════════════════════════════════════════════════
+//  ПЕРЕХІД ЗІ СПОВІЩЕННЯ
+// ══════════════════════════════════════════════════════════════════
+// Сповіщення веде на /cabinet?open=<вкладка>. Без цієї обробки портал
+// відкривався на вкладці за замовчуванням: людина натискала «Оголошення
+// школи» й бачила «Сьогодні», не розуміючи, куди дивитися.
+//
+// Підказку прибираємо з адреси одразу після переходу — інакше вона
+// спрацьовувала б знову при кожному оновленні сторінки.
+export function tabFromUrl(search){
+  const m = /(?:^|[?&])open=([a-z]+)/i.exec(String(search || ''));
+  const v = m ? m[1].toLowerCase() : '';
+  return ['day','grades','school','profile','chat'].includes(v) ? v : null;
+}
+
+window.openFromNotification = function(screenId){
+  const want = tabFromUrl(location.search);
+  if(!want) return;
+  try{ history.replaceState(null, '', location.pathname); }catch(e){}
+  if(want === 'chat'){
+    // Функція називається openChatModal — саме її вішає chat.js
+    if(window.openChatModal) window.openChatModal();
+    return;
+  }
+  const bar = document.getElementById(screenId + '-tabs');
+  const btn = bar && bar.querySelector(`.dtab[data-t="${want}"]`);
+  if(btn && window.switchTab) window.switchTab(screenId, want, btn);
+};
+
 async function initUserSession(){
   // Чинний навчальний рік читаємо ПЕРШИМ. Календар, семестри й табелі
   // залежать від нього, і якщо взяти його пізніше, вони встигнуть
@@ -1217,6 +1246,8 @@ async function initUserSession(){
     callWhenReady('caInit');
     renderInstallBlock();
     // Згода — після того, як кабінет відкрився: екран накриває його зверху
+    // Перехід зі сповіщення: ?open=school|grades|day|chat
+    callWhenReady('openFromNotification', 500, ['parent-screen']);
     callWhenReady('startConsent', 400, [], ()=>{
       const box = document.getElementById('p-my-consents');
       if(box) box.innerHTML = '<p class="empty-msg">Розділ згод не завантажився: файл '
