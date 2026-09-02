@@ -3222,8 +3222,8 @@
   <div class="modal-content">
     <h3 style="color:#00838f;margin-top:0;">📊 Харчування дитини</h3>
     <div style="display:flex;gap:8px;">
-      <div style="flex:1;min-width:0;"><label for="pms-from" style="font-size:.74rem;">Від</label><input type="date" id="pms-from" onchange="reloadMyMealStats()"></div>
-      <div style="flex:1;min-width:0;"><label for="pms-to" style="font-size:.74rem;">До</label><input type="date" id="pms-to" onchange="reloadMyMealStats()"></div>
+      <div style="flex:1;min-width:0;"><label for="pms-from" style="font-size:.74rem;">Від</label><input type="date" id="pms-from" onchange="reloadMyMealStats()" min="2020-01-01" max="2099-12-31"></div>
+      <div style="flex:1;min-width:0;"><label for="pms-to" style="font-size:.74rem;">До</label><input type="date" id="pms-to" onchange="reloadMyMealStats()" min="2020-01-01" max="2099-12-31"></div>
     </div>
     <div id="meal-stats-body"></div>
     <button onclick="document.getElementById('meal-stats-modal').style.display='none'" style="background:#eceff1;color:#37474f;">Закрити</button>
