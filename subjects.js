@@ -393,7 +393,10 @@ window.applyRenameSubject = async function(){
     plan = null;
   }catch(e){
     alert('Не вдалося перейменувати: ' + e.message
-      + '\n\nНічого не змінено — перенесення виконується цілком або ніяк.');
+      + '\n\nНічого не змінено — перенесення виконується цілком або ніяк.'
+      + '\n\nЯкщо тут «PERMISSION_DENIED», найімовірніша причина — у базі не '
+      + 'опубліковано нові правила (database.rules.json). Перейменування зачіпає '
+      + 'зокрема нові вузли subjects_catalog і schedule_alt, і без правил запис у них заборонено.');
     btn.disabled = false; btn.textContent = 'Спробувати ще раз';
   }
 };
