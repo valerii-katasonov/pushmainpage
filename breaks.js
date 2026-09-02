@@ -254,15 +254,53 @@ window.doBreakCopy = async function(){
   if(!confirm(`Скопіювати з ${state.cls.replace('class_','')} класу в ${picked.length === 1 ? 'клас' : 'класи'}: ${names}?\n\n`
     + 'Копіюються розклад дзвінків і назви перерв.\n'
     + `Наявні дзвінки ${picked.length === 1 ? 'цього класу' : 'цих класів'} буде замінено.`)) return;
-  try{
-    const patch = {};
-    picked.forEach(c => {
-      patch[`bell_schedules/${c}`] = state.bells;
-      patch[`break_names/${c}`] = Object.keys(state.names).length ? state.names : null;
-    });
-    await update(ref(db), patch);
-    logAction('bell_apply', { value: `дзвінки й перерви з ${state.cls} → ${picked.join(', ')}` });
-    showToast(`✅ Скопійовано в ${picked.length === 1 ? 'клас' : 'класи'} ${names}`);
-    box.innerHTML = '';
-  }catch(e){ alert('Не вдалося скопіювати: ' + e.message); }
+  // ДЗВІНКИ Й НАЗВИ ПИШЕМО ОКРЕМО, А НЕ ОДНИМ update().
+  // Спільний запис був атомарний: якщо правила для нового вузла break_names
+  // ще не опубліковані, база відхиляла всю операцію — і разом із назвами
+  // не доїжджали дзвінки. Ззовні це виглядало так, ніби кнопка не працює.
+  // Дзвінки важливіші, тож вони йдуть першими й окремо.
+  const failed = [];
+  let bellsOk = 0, namesOk = 0;
+  const hasNames = Object.keys(state.names).length > 0;
+
+  for(const c of picked){
+    try{
+      await set(ref(db, `bell_schedules/${c}`), state.bells);
+      bellsOk++;
+    }catch(e){ failed.push(`дзвінки в ${c.replace('class_','')} кл.: ${e.message}`); continue; }
+    if(!hasNames){ try{ await remove(ref(db, `break_names/${c}`)); }catch(e){} continue; }
+    try{
+      await set(ref(db, `break_names/${c}`), state.names);
+      namesOk++;
+    }catch(e){ failed.push(`назви перерв у ${c.replace('class_','')} кл.: ${e.message}`); }
+  }
+
+  // Перевіряємо читанням: інакше повідомлення «скопійовано» — це віра,
+  // а не факт. Цю кнопку вже одного разу вважали робочою даремно.
+  let verified = 0;
+  for(const c of picked){
+    try{
+      const chk = await get(child(ref(db), `bell_schedules/${c}`));
+      if(chk.exists() && Object.keys(chk.val() || {}).length) verified++;
+    }catch(e){}
+  }
+
+  if(!bellsOk){
+    alert('Скопіювати не вдалося — жоден клас не змінено.\n\n'
+      + failed.join('\n')
+      + '\n\nНайімовірніша причина: у базі ще не опубліковано нові правила '
+      + '(database.rules.json). Без них запис у нові вузли заборонено.');
+    return;
+  }
+
+  logAction('bell_apply', { value: `дзвінки й перерви з ${state.cls} → ${picked.join(', ')}` });
+  if(failed.length){
+    alert(`Дзвінки скопійовано в ${verified} кл., але не все пройшло:\n\n${failed.join('\n')}`
+      + '\n\nНазви перерв не зберігаються, поки не опубліковано нові правила бази. '
+      + 'Час перерв від цього не залежить — він береться з дзвінків.');
+  }else{
+    showToast(`✅ Скопійовано в ${picked.length === 1 ? 'клас' : 'класи'} ${names}`
+      + (verified === picked.length ? '' : ` (підтверджено ${verified})`));
+  }
+  box.innerHTML = '';
 };
