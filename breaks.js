@@ -20,7 +20,7 @@ import { ref, set, get, child, update, remove } from "https://www.gstatic.com/fi
 import { db, currentUserData, showToast, escHtml, escJs, logAction,
          makeBreak, hhmmFromMins, isBreakItem, dayNamesUA } from './common.js';
 
-export const BREAKS_BUILD = '2026-09-02 · breaks v3 (діагностика)';
+export const BREAKS_BUILD = '2026-09-02 · breaks v4 (порядок уроків + діагностика)';
 
 const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 const CLASSES = Array.from({ length: 11 }, (_, i) => `class_${i + 1}`);
@@ -77,19 +77,33 @@ export function isBreakSlot(slot){
 
 // Розставити перерви в одному дні. Наявні перерви прибираємо, щоб
 // повторне застосування давало той самий результат, а не подвоєння.
+//
+// ЯКОРЕМ Є НОМЕР УРОКУ, АЛЕ НЕ ЗАВЖДИ ВІН Є. Поле «номер» у розкладі
+// заповнене не скрізь: імпорт його ставить, а рука людини в конструкторі
+// може лишити порожнім. Якщо шукати збіг лише за номером, у такому дні
+// не знайдеться жодного — і кнопка мовчки прибрала б наявні перерви,
+// не поставивши натомість нічого. Тому за відсутності номера беремо
+// порядок уроку в дні: перший урок — перший, і так далі.
 export function applyBreakPlan(day, plan){
   const src = (day || []).filter(slot => !isBreakSlot(slot));
   const out = [];
-  src.forEach(slot => {
+  src.forEach((slot, i) => {
     out.push(slot);
     const n = slotLessonNumber(slot);
-    if(n === null) return;
-    const b = plan.find(p => p.after === n);
+    const eff = (n === null) ? i + 1 : n;
+    const b = plan.find(p => p.after === eff);
     if(b) out.push([ makeBreak(`${b.start} - ${b.end}`, b.name) ]);
   });
   // Перерва в самому кінці дня безглузда: після неї нічого немає
   while(out.length && isBreakSlot(out[out.length - 1])) out.pop();
   return out;
+}
+
+// Скільки уроків дня мають заповнений номер — потрібно, щоб чесно
+// сказати директору, за чим саме прив'язувалися перерви
+export function numberedLessons(day){
+  const src = (day || []).filter(slot => !isBreakSlot(slot));
+  return { total: src.length, numbered: src.filter(s => slotLessonNumber(s) !== null).length };
 }
 
 // Скільки перерв додасться і скільки зникне — для чесного попередження
@@ -195,35 +209,86 @@ window.applyBreaksToClass = async function(){
   const dest = document.getElementById('bk-dest').value;
   const base = dest === 'live' ? `schedules/${cls}` : `schedule_drafts/${dest}/${cls}`;
   const plan = breakPlan(state.bells, state.names);
+  bkLogReset();
+  bkLog(`Клас ${String(cls).replace('class_','')}, куди: ${dest === 'live' ? 'чинний розклад' : 'чернетка ' + dest}`);
+  bkLog(`Перерв у плані: ${plan.length}` + (plan.length ? ` (після уроків ${plan.map(p=>p.after).join(', ')})` : ''));
+  if(!plan.length){
+    bkLog('Зупинився: у дзвінках класу немає проміжків між уроками.', 'bad');
+    return alert('У цього класу немає проміжків між уроками в розкладі дзвінків — розставляти нічого.');
+  }
   let lessons = {};
   try{
     const snap = await get(child(ref(db), `${base}/lessons`));
     lessons = snap.exists() ? (snap.val() || {}) : {};
-  }catch(e){ return alert('Не вдалося прочитати розклад: ' + e.message); }
-  if(!Object.keys(lessons).length)
+  }catch(e){
+    bkLog(`Зупинився: не зміг прочитати ${base}/lessons — ${e.message}`, 'bad');
+    return alert('Не вдалося прочитати розклад: ' + e.message);
+  }
+  bkLog(`Днів у розкладі: ${Object.keys(lessons).length} (${Object.keys(lessons).join(', ') || '—'})`);
+  if(!Object.keys(lessons).length){
+    bkLog('Зупинився: розкладу немає.', 'bad');
     return alert('У цього класу ще немає розкладу — нема куди вставляти перерви.');
+  }
+
+  // Чи заповнені номери уроків. Якщо ні — прив'язка йде за порядком,
+  // і директор має про це знати, а не гадати.
+  let tot = 0, num = 0;
+  DAYS.forEach(day => {
+    const raw = lessons[day];
+    if(!raw) return;
+    const cur = Array.isArray(raw) ? raw : Object.values(raw);
+    const r = numberedLessons(cur);
+    tot += r.total; num += r.numbered;
+  });
+  bkLog(`Уроків у тижні: ${tot}, із заповненим номером: ${num}`
+        + (num < tot ? ' → решту прив\'яжу за порядком у дні' : ''), num < tot ? 'bad' : 'ok');
 
   const d = planDiff(lessons, plan);
-  if(!d.added && !d.removed)
+  bkLog(`Порахував: днів торкнеться ${d.days}, перерв додасться ${d.added}, наявних заміниться ${d.removed}`);
+  if(!d.added && !d.removed){
+    bkLog('Зупинився: перерви вже стоять саме так, змінювати нічого.', 'ok');
     return alert('Нічого не зміниться: перерви вже стоять саме так.');
+  }
   if(!confirm(`Клас ${cls.replace('class_','')}, ${dest === 'live' ? 'ЧИННИЙ розклад' : `чернетка «${dest}»`}.\n\n`
     + `Днів торкнеться: ${d.days}\nПерерв додасться: ${d.added}\n`
     + (d.removed ? `Наявних перерв буде замінено: ${d.removed}\n` : '')
     + '\nПерерви, розставлені руками, буде замінено на цей набір.'
     + (dest === 'live' ? '\nЗміну одразу побачать батьки та вчителі.' : ''))) return;
 
+  const patch = {};
+  DAYS.forEach(day => {
+    const raw = lessons[day];
+    if(!raw) return;
+    const cur = Array.isArray(raw) ? raw : Object.values(raw);
+    patch[`${base}/lessons/${day}`] = applyBreakPlan(cur, plan);
+  });
+  bkLog(`Записую днів: ${Object.keys(patch).length}`);
   try{
-    const patch = {};
+    await update(ref(db), patch);
+    bkLog('✓ запис пройшов', 'ok');
+  }catch(e){
+    bkLog(`✕ запис відхилено: ${e.message}`, 'bad');
+    return alert('Не вдалося зберегти: ' + e.message
+      + '\n\nЯкщо тут «PERMISSION_DENIED» — перевірте, чи опубліковано правила бази.');
+  }
+
+  // Перечитуємо: повідомлення «готово» має спиратися на факт, а не на віру
+  let after = 0;
+  try{
+    const chk = await get(child(ref(db), `${base}/lessons`));
+    const v = chk.exists() ? chk.val() : {};
     DAYS.forEach(day => {
-      const raw = lessons[day];
+      const raw = v[day];
       if(!raw) return;
       const cur = Array.isArray(raw) ? raw : Object.values(raw);
-      patch[`${base}/lessons/${day}`] = applyBreakPlan(cur, plan);
+      after += cur.filter(isBreakSlot).length;
     });
-    await update(ref(db), patch);
-    logAction('settings', { value: `перерви розставлено: ${cls}, ${dest}, +${d.added}` });
-    showToast(`✅ Перерв додано: ${d.added}`);
-  }catch(e){ alert('Не вдалося зберегти: ' + e.message); }
+    bkLog(`перечитав ${base}/lessons: перерв у тижні ${after}`, after ? 'ok' : 'bad');
+  }catch(e){ bkLog(`не зміг перечитати: ${e.message}`, 'bad'); }
+
+  logAction('settings', { value: `перерви розставлено: ${cls}, ${dest}, +${d.added}` });
+  showToast(`✅ Перерв у тижні: ${after}`);
+  bkLog(`Підсумок: у розкладі класу тепер ${after} перерв.`, after ? 'ok' : 'bad');
 };
 
 window.openBreakCopy = function(){
