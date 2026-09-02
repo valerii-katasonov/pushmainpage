@@ -247,8 +247,13 @@ window.doBreakCopy = async function(){
   if(!picked.length) return alert('Оберіть хоча б один клас.');
   if(!Object.keys(state.bells).length)
     return alert('У цього класу немає розкладу дзвінків — копіювати нічого.');
-  if(!confirm(`Скопіювати дзвінки й назви перерв у ${picked.length} кл.?\n\n`
-    + 'Наявний розклад дзвінків цих класів буде замінено.')) return;
+  // Називаємо класи поіменно. Раніше тут стояла кількість — «у 1 кл.» —
+  // і це читалося як «у 1 клас», тобто повідомлення казало протилежне тому,
+  // що робила кнопка.
+  const names = picked.map(c => c.replace('class_','')).join(', ');
+  if(!confirm(`Скопіювати з ${state.cls.replace('class_','')} класу в ${picked.length === 1 ? 'клас' : 'класи'}: ${names}?\n\n`
+    + 'Копіюються розклад дзвінків і назви перерв.\n'
+    + `Наявні дзвінки ${picked.length === 1 ? 'цього класу' : 'цих класів'} буде замінено.`)) return;
   try{
     const patch = {};
     picked.forEach(c => {
@@ -257,7 +262,7 @@ window.doBreakCopy = async function(){
     });
     await update(ref(db), patch);
     logAction('bell_apply', { value: `дзвінки й перерви з ${state.cls} → ${picked.join(', ')}` });
-    showToast(`✅ Скопійовано в ${picked.length} кл.`);
+    showToast(`✅ Скопійовано в ${picked.length === 1 ? 'клас' : 'класи'} ${names}`);
     box.innerHTML = '';
   }catch(e){ alert('Не вдалося скопіювати: ' + e.message); }
 };
