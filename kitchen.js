@@ -213,6 +213,21 @@ export function pickedSecond(menuDay, dayOverride){
   if(!choicePair(menuDay)) return null;
   return (dayOverride && dayOverride.pick === 'b') ? 'b' : 'a';
 }
+
+// Поіменний список у кабінеті кухні. Згорнутий, бо в школі таких імен
+// може бути півтори сотні, і розгорнутий список ховає під собою все інше.
+// Те, за чим кухар мусить діяти сьогодні (разові обіди, відмови), лишаємо
+// розгорнутим — його зазвичай кілька рядків.
+function nameList(kind, title, rows, note, open){
+  if(!rows || !rows.length) return '';
+  return `<details class="k-names" ${open ? 'open' : ''}>
+    <summary class="k-skip-title ${kind}">${escHtml(title)}</summary>
+    ${note ? `<div class="k-skip-note">${escHtml(note)}</div>` : ''}
+    ${rows.map(r => `<div class="k-skip ${kind}">${escHtml(r.name)} <span>${escHtml(String(r.cls))} кл.${
+      r.reason ? ' · ' + escHtml(r.reason) : ''}</span></div>`).join('')}
+  </details>`;
+}
+
 // Відсутність будь-де в межах дня знімає дитину з харчування
 function absentSet(attClassDay){
   const out = {};
@@ -475,13 +490,11 @@ export async function loadWeekCounts(){
           : `<tr><td colspan="${today.hasChoice?5:4}" class="empty-msg">Немає даних</td></tr>`}
       </tbody></table>
 
-      ${today.unanswered.length ? `<div class="k-skip-title warn">Батьки ще не відповіли про обіди (${today.unanswered.length})</div>`
-        + `<div class="k-skip-note">Ці діти не потрапляють у замовлення, доки батьки не натиснуть «Так, обідає» або «Ні, не обідає».</div>`
-        + today.unanswered.map(s=>`<div class="k-skip warn">${escHtml(s.name)} <span>${s.cls} кл.</span></div>`).join('') : ''}
-      ${today.extras.length ? `<div class="k-skip-title extra">Разові обіди на ${escHtml(human(today.date))} — діти, які зазвичай не обідають</div>` +
-        today.extras.map(s=>`<div class="k-skip extra">${escHtml(s.name)} <span>${s.cls} кл.</span></div>`).join('') : ''}
-      ${today.skips.length ? `<div class="k-skip-title">Відмови на ${escHtml(human(today.date))}</div>` +
-        today.skips.map(s=>`<div class="k-skip">${escHtml(s.name)} <span>${s.cls} кл.${s.reason?' · '+escHtml(s.reason):''}</span></div>`).join('') : ''}`;
+      ${nameList('warn', `Батьки ще не відповіли про обіди (${today.unanswered.length})`, today.unanswered,
+          'Ці діти не потрапляють у замовлення, доки батьки не натиснуть «Так, обідає» або «Ні, не обідає».', false)}
+      ${nameList('extra', `Разові обіди на ${human(today.date)} — діти, які зазвичай не обідають (${today.extras.length})`,
+          today.extras, '', true)}
+      ${nameList('', `Відмови на ${human(today.date)} (${today.skips.length})`, today.skips, '', true)}`;
   }catch(e){
     box.innerHTML = `<p style="color:red;font-size:.8rem;">Помилка: ${escHtml(e.message)}</p>`;
   }
