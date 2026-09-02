@@ -190,6 +190,8 @@ window.setAltChoice = async function(week, day, slot, name){
     logAction('settings', { value: `чергування ${cls} ${day} слот ${slot} на ${week}: ${name || 'знято'}` });
   }catch(e){
     alert('Не вдалося зберегти: ' + e.message
-      + '\n\nПозначати може вчитель цього предмета, класний керівник або директор.');
+      + '\n\nПозначати може вчитель цього предмета, класний керівник або директор.'
+      + '\n\nЯкщо тут «PERMISSION_DENIED» навіть у директора — у базі ще не '
+      + 'опубліковано нові правила (database.rules.json): вузол schedule_alt новий.');
   }
 };
