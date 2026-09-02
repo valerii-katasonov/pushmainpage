@@ -17,7 +17,7 @@
 import { ref, set, get, child, update } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { db, currentUserData, showToast, escHtml, escJs, logAction, getClassNum } from './common.js';
 
-export const IMPORT_BUILD = '2026-09-02 · docx v1';
+export const IMPORT_BUILD = '2026-09-02 · docx v2';
 
 // Назви днів у заголовку → ключі, якими користується портал
 const DAY_KEYS = {
@@ -43,8 +43,9 @@ export function classFromTitle(text){
   return (n >= 1 && n <= 11) ? n : null;
 }
 
-// Клітинка «Музичне мистецтво / Фізичне виховання» — два уроки одночасно
-// для різних підгруп. Конструктор саме так їх і зберігає: масивом у слоті.
+// Клітинка «Музичне мистецтво / Фізичне виховання» — це НЕ два уроки
+// одночасно. У школі так позначають чергування: один тиждень одне, другий
+// тиждень інше. Тому з такої клітинки народжується один урок із полем alt.
 export function splitCell(text){
   return String(text || '')
     .replace(/\s+/g, ' ')
@@ -80,7 +81,7 @@ export function parseScheduleTable(rows){
     Object.entries(cols).forEach(([ci, key]) => {
       const parts = splitCell(row[ci]);
       if(!parts.length) return;
-      if(parts.length > 1) warnings.push(`${key}, урок ${num}: «${parts.join(' / ')}» — збережемо як паралельні`);
+      if(parts.length > 1) warnings.push(`${key}, урок ${num}: «${parts.join(' / ')}» — збережемо як чергування`);
       days[key][num - 1] = parts;
       lessons += parts.length;
     });
@@ -112,6 +113,18 @@ export function toSchedule(parsed, times){
       if(!items.length) return {};
       const time = times[i + 1] || '';
       if(!time) missing.add(i + 1);
+      // Чергування — ОДИН урок із переліком варіантів. subject лишаємо
+      // парним рядком: якщо вибір на тиждень не зроблено, портал покаже
+      // саме його, і це чесніше, ніж мовчки показати один із двох.
+      if(items.length > 1) return [{
+        number: i + 1,
+        subject: { ua: items.join(' / '), pl: items.join(' / ') },
+        alt: items.slice(),
+        time,
+        teacherEmail: '',
+        teacherName: '',
+        type: 'lesson'
+      }];
       return items.map(name => ({
         number: i + 1,
         subject: { ua: name, pl: name },
@@ -205,7 +218,10 @@ async function renderSchedulePreview(guess){
     body += `<tr><td class="si-num">${i + 1}<span>${escHtml(times[i + 1] || 'без часу')}</span></td>`
       + order.map(d => {
           const items = parsedSchedule.days[d][i] || [];
-          return `<td>${items.length ? items.map(x => escHtml(x)).join('<br><i>+ паралельно</i><br>') : ''}</td>`;
+          if(!items.length) return '<td></td>';
+          if(items.length > 1)
+            return `<td>${items.map(x => escHtml(x)).join('<br>')}<br><i>🔁 чергується</i></td>`;
+          return `<td>${escHtml(items[0])}</td>`;
         }).join('') + '</tr>';
   }
 
@@ -213,7 +229,11 @@ async function renderSchedulePreview(guess){
   if(built.missingTimes.length)
     problems.push(`<b>Немає часу для уроків ${built.missingTimes.join(', ')}.</b> Заповніть розклад дзвінків `
       + `цього класу — інакше ці уроки не побачать ні батьки, ні учні.`);
-  parsedSchedule.warnings.forEach(w => problems.push(escHtml(w)));
+  if(parsedSchedule.warnings.length)
+    problems.push('Клітинки з косою рискою збережено як <b>чергування</b> — один тиждень один предмет, '
+      + 'другий тиждень інший. Що саме буде цього тижня, вчитель позначає в картці «🔁 Чергування уроків». '
+      + 'Поки не позначив, батьки бачать обидві назви.<br>'
+      + parsedSchedule.warnings.map(w => escHtml(w)).join('<br>'));
   if(guess && `class_${guess}` !== cls)
     problems.push(`У файлі згадано ${guess} клас, а обрано ${cls.replace('class_','')}. Перевірте, чи це те, що потрібно.`);
 
