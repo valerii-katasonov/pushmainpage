@@ -1076,23 +1076,37 @@ export async function computeMyMealStats(from, to, cls, sid){
     d.setDate(d.getDate() + 1);
   }
 
-  // Разові зміни на день лежать у meal_day. Корінь цього вузла родині
-  // закритий — дозволено лише свою дитину, тож читаємо поденно. Для
-  // довгих періодів це були б сотні запитів, тому там рахуємо за планом
-  // і чесно про це попереджаємо.
+  // Дні, коли школи немає: канікули та свята. Раніше статистика їх не
+  // знала й рахувала обіди за постійним планом навіть тоді, коли кухня
+  // не працювала.
+  const noSchool = await loadNoSchoolDays(dates);
+
+  // Разові зміни на день лежать у meal_day, а меню — у menu/{дата}.
+  // Корінь meal_day родині закритий, тож читаємо поденно. Для довгих
+  // періодів це були б сотні запитів — там рахуємо за планом і чесно
+  // про це попереджаємо.
   const OVERRIDE_LIMIT = 70;
   const withOverrides = dates.length <= OVERRIDE_LIMIT;
-  const ovByDate = {};
+  const ovByDate = {}, menuByDate = {};
   if(withOverrides){
-    const snaps = await Promise.all(dates.map(date =>
-      get(child(ref(db), `meal_day/${date}/${cls}/${sid}`)).catch(() => null)));
+    const [ovs, menus] = await Promise.all([
+      Promise.all(dates.map(date =>
+        get(child(ref(db), `meal_day/${date}/${cls}/${sid}`)).catch(() => null))),
+      Promise.all(dates.map(date =>
+        get(child(ref(db), `menu/${date}`)).catch(() => null)))
+    ]);
     dates.forEach((date, i) => {
-      if(snaps[i] && snaps[i].exists()) ovByDate[date] = snaps[i].val();
+      if(ovs[i] && ovs[i].exists()) ovByDate[date] = ovs[i].val();
+      const mv = menus[i] && menus[i].exists() ? (menus[i].val() || {}) : null;
+      // День рахуємо лише тоді, коли кухня справді щось готувала.
+      menuByDate[date] = !!(mv && (mv.first || mv.second || mv.second2 || mv.breakfast || mv.snack));
     });
   }
 
-  let lunch = 0, snack = 0, brk = 0, absent = 0;
+  let lunch = 0, snack = 0, brk = 0, absent = 0, skipped = 0;
   dates.forEach(date => {
+    // Канікули, свято або день без меню — кухня не готувала, рахувати нічого
+    if(noSchool[date] || (withOverrides && menuByDate[date] === false)){ skipped++; return; }
     const att = (attRange && attRange[date] && attRange[date][sid]) || null;
     const isAbsent = !!(att && Object.values(att).some(r => r && r.status === 'absent'));
     if(isAbsent){ absent++; return; }
@@ -1102,7 +1116,7 @@ export async function computeMyMealStats(from, to, cls, sid){
     if(e.snack) snack++;
     if(e.breakfast) brk++;
   });
-  return [{ lunch, snack, brk, absent, days: dates.length, withOverrides }];
+  return [{ lunch, snack, brk, absent, days: dates.length - skipped, skipped, withOverrides }];
 }
 
 window.openMyMealStats = async function(){
@@ -1162,7 +1176,8 @@ window.reloadMyMealStats = async function(){
       <div class="pms-cell"><b>${r.brk||0}</b><span>зі сніданком</span></div>
       <div class="pms-cell"><b>${r.absent||0}</b><span>днів відсутності</span></div>
     </div>
-    <p class="ms-note">Період: ${escHtml(human(from))} — ${escHtml(human(to))}. Рахуються лише робочі дні.
+    <p class="ms-note">Період: ${escHtml(human(from))} — ${escHtml(human(to))}. Рахуються лише робочі дні,
+    коли кухня працювала.${r.skipped ? ` Не враховано днів (канікули, свята або меню не публікувалося): ${r.skipped}.` : ''}
     Дні, коли дитина була відсутня, до харчування не зараховуються.
     ${r.withOverrides === false
       ? '<br>Для такого довгого періоду разові відмови на окремі дні не враховано — '
