@@ -5,7 +5,7 @@
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, update } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { ACTIVE_YEAR } from './director.js';
-import { db, getActiveClass, currentUserData, displayGrade, gradeClass6, calculateStudentWeightedAvg, getClassNum, GRADE_WEIGHTS, dayKeys, dayNamesUA, showToast, localDateString, summarizeAttendanceSlots, gradeTypesCache, escJs, escHtml, notifyEvent, logAction, getUserRoles, getUsersSnap, stuName, gradeWritePaths, isBreakItem} from './common.js';
+import { db, getActiveClass, currentUserData, displayGrade, gradeClass6, calculateStudentWeightedAvg, getClassNum, GRADE_WEIGHTS, dayKeys, dayNamesUA, showToast, localDateString, summarizeAttendanceSlots, gradeTypesCache, escJs, escHtml, notifyEvent, logAction, getUserRoles, getUsersSnap, stuName, gradeWritePaths, isBreakItem, insertSlot, removeSlot, makeBreak, withBreaks, slotBounds, hhmmFromMins } from './common.js';
 
 // globalTeacherAccess is reassigned only in this file (openVisualMatrixModal)
 // and read from common.js (window.getDefaultTeacher) — plain export/import.
@@ -752,6 +752,80 @@ window.openCellEditor=async function(clsId,rowIdx,subIdx,lessonObj){
   if(isArt)Array.from(ts.options).forEach(o=>o.disabled=(o.value!=='extra'));else Array.from(ts.options).forEach(o=>o.disabled=false);
   window.updateCellEditorTeacherOptions(clsId,sn,lessonObj?lessonObj.teacherEmail:'');toggleCellType();if(currentMatrixMode!=='live')window.triggerSmartCheck();
 };
+
+// ── РЯДКИ РОЗКЛАДУ ──────────────────────────────────────────────
+// Перерву не можна «дописати» в клітинку: у дні вона займає власний
+// рядок, і все, що нижче, має з'їхати. Без цих кнопок школі довелося б
+// перескладати день заново, щоб додати одну перерву.
+async function writeDay(clsId, day, arr){
+  const dp = currentMatrixMode === 'live' ? 'schedules' : `schedule_drafts/${currentMatrixMode}`;
+  if(!globalAllSchedules[clsId]) globalAllSchedules[clsId] = {};
+  if(!globalAllSchedules[clsId].lessons) globalAllSchedules[clsId].lessons = {};
+  globalAllSchedules[clsId].lessons[day] = arr;
+  await set(ref(db, `${dp}/${clsId}/lessons/${day}`), arr);
+  if(currentMatrixMode !== 'live') window.calculateMatrixWarnings();
+  renderMatrixGrid();
+}
+
+// where: 'above' | 'below'; what: 'break' | 'empty'
+window.insertMatrixRow = async function(where, what){
+  const clsId = document.getElementById('cell-edit-class').value;
+  const ri = parseInt(document.getElementById('cell-edit-row').value);
+  const day = document.getElementById('matrix-day-select').value;
+  if(currentMatrixMode === 'live' && !liveEditConfirmed){
+    if(!confirm('Ви змінюєте ЧИННИЙ розклад школи.\n\nЗміна одразу зʼявиться в кабінетах '
+      + 'батьків і вчителів, і скасувати її автоматично не вийде.\n\nПродовжити?')) return;
+    liveEditConfirmed = true;
+  }
+  const cur = dayArr(globalAllSchedules[clsId]?.lessons?.[day]);
+  const at = where === 'above' ? ri : ri + 1;
+  let slot = {};
+  if(what === 'break'){
+    // Час перерви пропонуємо з проміжку між сусідніми уроками, якщо він є
+    const prev = slotBounds(cur[at - 1]), next = slotBounds(cur[at]);
+    let time = '', label = 'Перерва';
+    if(prev && next && next.start > prev.end){
+      const gap = next.start - prev.end;
+      time = `${hhmmFromMins(prev.end)} - ${hhmmFromMins(next.start)}`;
+      label = `Перерва ${gap} хв`;
+    }
+    const name = prompt('Назва перерви:', label);
+    if(name === null) return;
+    const t = prompt('Час (напр. 11:35 - 11:55). Можна лишити порожнім:', time);
+    if(t === null) return;
+    slot = [ makeBreak(t.trim(), name.trim() || 'Перерва') ];
+  }
+  await writeDay(clsId, day, insertSlot(cur, at, slot));
+  closeEditCellModal();
+  showToast(what === 'break' ? '✅ Перерву вставлено' : '✅ Рядок вставлено');
+};
+
+window.deleteMatrixRow = async function(){
+  const clsId = document.getElementById('cell-edit-class').value;
+  const ri = parseInt(document.getElementById('cell-edit-row').value);
+  const day = document.getElementById('matrix-day-select').value;
+  if(!confirm(`Прибрати рядок ${ri + 1} цілком?\n\nУсе, що нижче, підніметься на один рядок вгору.`)) return;
+  const cur = dayArr(globalAllSchedules[clsId]?.lessons?.[day]);
+  await writeDay(clsId, day, removeSlot(cur, ri));
+  closeEditCellModal();
+  showToast('🗑️ Рядок прибрано');
+};
+
+// Один день класу — розставити перерви за проміжками в часі уроків
+window.autoBreaksForDay = async function(){
+  const clsId = document.getElementById('cell-edit-class').value;
+  const day = document.getElementById('matrix-day-select').value;
+  const cur = dayArr(globalAllSchedules[clsId]?.lessons?.[day]);
+  const next = withBreaks(cur);
+  const added = next.length - cur.length;
+  if(!added) return alert('Проміжків між уроками не знайдено.\n\n'
+    + 'Перерви розставляються за часом уроків: якщо час не заповнений або уроки йдуть впритул, вставляти нема чого.');
+  if(!confirm(`Додати перерв: ${added}?\n\nЧас візьмемо з проміжків між уроками цього дня.`)) return;
+  await writeDay(clsId, day, next);
+  closeEditCellModal();
+  showToast(`✅ Додано перерв: ${added}`);
+};
+
 window.closeEditCellModal=function(){document.getElementById('edit-cell-modal').style.display='none';};
 window.saveMatrixCell=async function(){
   const clsId=document.getElementById('cell-edit-class').value;const ri=parseInt(document.getElementById('cell-edit-row').value);const sis=document.getElementById('cell-edit-subindex').value;const day=document.getElementById('matrix-day-select').value;
