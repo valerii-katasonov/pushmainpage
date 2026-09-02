@@ -2,10 +2,10 @@
 // kitchen.js — харчування: меню на тиждень, облік обідів і підвечірків.
 //
 // МОДЕЛЬ ДАНИХ
-//   menu/{дата}                = {first,second,second2,side,drink,dessert,
+//   menu/{дата}                = {first,second,side,side2,drink,dessert,
 //                                 allergens,note, snack,snackNote,
 //                                 breakfast, by, ts, pub}
-//        second2 — другий варіант основної страви. Порожнє поле означає,
+//        side2 — другий варіант гарніру. Порожнє поле означає,
 //        що вибору того дня немає: кухня готує одне.
 //        breakfast — сніданок. Порожнє поле = того дня сніданків немає.
 //        ts  — коли востаннє змінено;  pub — коли вперше опубліковано.
@@ -38,7 +38,7 @@
 //   {ID} — постійний ключ учня зі students_list, а не імʼя. Імʼя показуємо
 //   через stuName(): воно може змінитися, ключ — ні.
 // ═══════════════════════════════════════════════════════════════
-import { ref, set, get, child, update } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+import { ref, set, get, child, update, remove } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { db, auth, currentUserData, showToast, escHtml, escJs, localDateString, logAction, notifyEvent, pushConfigured, renderPushWarning, getSchoolRange, sidOf, getDateRange, stuName } from './common.js';
 
 export const MEAL_CUTOFF_HOUR = 9;   // до 09:00 можна відмовитися від сьогоднішнього
@@ -50,10 +50,13 @@ const DOW = ['Понеділок','Вівторок','Середа','Четве�
 const DOW_SHORT = ['Пн','Вт','Ср','Чт','Пт'];
 
 export const MENU_FIELDS = [
-  { k:'first',     label:'Перша страва',  ph:'напр. Борщ український' },
-  { k:'second',    label:'Друга страва — варіант А', ph:'напр. Котлета з індички' },
-  { k:'second2',   label:'Друга страва — варіант Б', ph:'необовʼязково; заповніть, щоб дати вибір', choice:true },
-  { k:'side',      label:'Гарнір',        ph:'напр. Пюре картопляне' },
+  // «Друга страва» за каноном означає все друге разом із гарніром, тож
+  // тримати поруч «другу страву» й «гарнір» — називати частину тим самим
+  // словом, що й ціле. Звідси й плутанина, куди подіти котлету.
+  { k:'first',     label:'Перша страва',  ph:'суп, напр. Борщ український' },
+  { k:'second',    label:'Основна страва', ph:'мʼясо або риба, напр. Котлета з індички' },
+  { k:'side',      label:'Гарнір — варіант А', ph:'напр. Каша гречана' },
+  { k:'side2',     label:'Гарнір — варіант Б', ph:'необовʼязково; заповніть, щоб дати вибір', choice:true },
   { k:'drink',     label:'Напій',         ph:'напр. Компот із сухофруктів' },
   { k:'dessert',   label:'Десерт',        ph:'необовʼязково' },
   { k:'breakfast', label:'🌅 Сніданок',   ph:'окрема позиція; порожньо — сніданків цього дня немає', meal:true },
@@ -172,8 +175,42 @@ export function effectiveMeals(plan, dayOverride, isAbsent, wd){
 // Який варіант основної страви їсть дитина цього дня.
 // null означає, що вибору немає: кухня не заповнила другий варіант.
 // За замовчуванням — «А»: хто не обирав, отримує те, що готують усім.
+
+// Що дає постійний план для цього поля в цей день тижня
+export function plannedValue(plan, field, wd){
+  if(field === 'lunch') return !!(plan && plan.lunch === true);
+  return optionPlanned(plan, field, wd);
+}
+
+// Яку поправку записати на день. null означає «прибрати поправку» —
+// день повертається до постійного плану.
+//
+// НАВІЩО ПРИБИРАТИ, А НЕ ПИСАТИ НУЛЬ. Дитина, яка зазвичай не обідає,
+// разово взяла обід і передумала. Якщо лишити явний нуль, у базі
+// назавжди осяде поправка, яка нічого не змінює, а кухня в звітах
+// побачить «відмову» там, де відмовлятися не було від чого.
+export function dayFieldPatch(plan, field, value, wd){
+  const want = !!value;
+  return want === plannedValue(plan, field, wd) ? null : (want ? 1 : 0);
+}
+
+// Де саме цього дня є вибір із двох страв.
+//
+// СПОЧАТКУ ГАРНІР — так школа працює насправді: друга страва одна, а от
+// каша буває гречана або вівсяна. Але меню, опубліковані раніше, ставили
+// вибір на другу страву, і ті дні мають показуватися як були — інакше
+// журнал замовлень за минулий місяць почне брехати.
+export function choicePair(menuDay){
+  if(!menuDay) return null;
+  const side2 = String(menuDay.side2 || '').trim();
+  if(side2) return { field:'side', a:String(menuDay.side||'').trim(), b:side2, label:'гарнір' };
+  const sec2 = String(menuDay.second2 || '').trim();
+  if(sec2) return { field:'second', a:String(menuDay.second||'').trim(), b:sec2, label:'основну страву' };
+  return null;
+}
+
 export function pickedSecond(menuDay, dayOverride){
-  if(!menuDay || !String(menuDay.second2 || '').trim()) return null;
+  if(!choicePair(menuDay)) return null;
   return (dayOverride && dayOverride.pick === 'b') ? 'b' : 'a';
 }
 // Відсутність будь-де в межах дня знімає дитину з харчування
@@ -357,14 +394,15 @@ export async function loadWeekCounts(){
     const perDay = dates.map((date,di)=>{
       // Канікули чи свято — школа не годує, рахувати нічого
       if(noSchool[date]) return { date, closed: noSchool[date],
-        lunch:0, snack:0, brk:0, pa:0, pb:0, absent:0, off:0, unset:0, classes:{}, skips:[] };
+        lunch:0, snack:0, brk:0, pa:0, pb:0, absent:0, off:0, unset:0, classes:{}, skips:[], extras:[] };
       const overrides = daySnaps[di].exists()?daySnaps[di].val():{};
       const menuDay = menuSnaps[di].exists()?menuSnaps[di].val():{};
-      const hasChoice = !!String(menuDay.second2||'').trim();
+      const choice = choicePair(menuDay);
+      const hasChoice = !!choice;
       const hasBrkMenu = !!String(menuDay.breakfast||'').trim();
       const wd = weekdayIdx(date);
       let lunch=0, snack=0, brk=0, pa=0, pb=0, absent=0, off=0, unset=0;
-      const classes = {}, skips = [];
+      const classes = {}, skips = [], extras = [];
       for(let i=1;i<=11;i++){
         const cls = `class_${i}`;
         if(!students[cls]) continue;
@@ -381,7 +419,11 @@ export async function loadWeekCounts(){
           const e = effectiveMeals(plan, ov, isAbsent, wd);
           if(e.absent){ absent++; continue; }
           const permanentlyOff = plan && plan.lunch === false;
-          if(permanentlyOff && !e.snack){ off++; continue; }
+          // Дитина «не обідає» — але саме сьогодні батьки взяли обід.
+          // Раніше цей рядок обривав підрахунок раніше, ніж доходило до
+          // e.lunch, і разова порція просто не потрапляла на кухню.
+          if(permanentlyOff && !e.lunch && !e.snack && !e.breakfast){ off++; continue; }
+          if(permanentlyOff && e.lunch) extras.push({cls:i, name});
           if(e.lunch){
             lunch++; cl++;
             // Розподіл за варіантами — лише в дні, коли вибір справді є
@@ -402,8 +444,8 @@ export async function loadWeekCounts(){
         if(cl||cs||cb) classes[i] = { lunch:cl, snack:cs, brk:cb, a:ca, b:cbb };
       }
       return { date, lunch, snack, brk, pa, pb, hasChoice, hasBrkMenu,
-               menuA:menuDay.second||'', menuB:menuDay.second2||'',
-               absent, off, unset, classes, skips };
+               menuA:choice?choice.a:'', menuB:choice?choice.b:'',
+               absent, off, unset, classes, skips, extras };
     });
 
     const today = perDay.find(d=>d.date===localDateString) || perDay[0];
@@ -415,7 +457,7 @@ export async function loadWeekCounts(){
           : `<b>${today.lunch}</b><span>обідів на ${escHtml(human(today.date))}</span>
              <div class="k-total-snack">+ ${today.snack} підвечірків</div>`}
       </div>
-      <div class="k-sub">відсутні: ${today.absent} · не харчуються: ${today.off} · відмови: ${today.skips.length}${today.unset ? ` · <b style="color:var(--orange);">батьки не відповіли: ${today.unset}</b>` : ''}</div>
+      <div class="k-sub">відсутні: ${today.absent} · не харчуються: ${today.off} · відмови: ${today.skips.length}${today.extras.length ? ` · <b style="color:var(--green);">разові обіди: ${today.extras.length}</b>` : ''}${today.unset ? ` · <b style="color:var(--orange);">батьки не відповіли: ${today.unset}</b>` : ''}</div>
 
       <table class="k-table"><thead><tr><th>День</th><th>Обіди</th><th>Підвеч.</th><th>Відсутні</th></tr></thead><tbody>
         ${perDay.map((d,i)=>`<tr class="${d.date===localDateString?'k-now':''}${d.closed?' k-closed':''}">
@@ -433,6 +475,8 @@ export async function loadWeekCounts(){
           : `<tr><td colspan="${today.hasChoice?5:4}" class="empty-msg">Немає даних</td></tr>`}
       </tbody></table>
 
+      ${today.extras.length ? `<div class="k-skip-title extra">Разові обіди на ${escHtml(human(today.date))} — діти, які зазвичай не обідають</div>` +
+        today.extras.map(s=>`<div class="k-skip extra">${escHtml(s.name)} <span>${s.cls} кл.</span></div>`).join('') : ''}
       ${today.skips.length ? `<div class="k-skip-title">Відмови на ${escHtml(human(today.date))}</div>` +
         today.skips.map(s=>`<div class="k-skip">${escHtml(s.name)} <span>${s.cls} кл.${s.reason?' · '+escHtml(s.reason):''}</span></div>`).join('') : ''}`;
   }catch(e){
@@ -527,7 +571,8 @@ window.loadClassOrders = async function(){
       get(child(ref(db),`menu/${date}`))
     ]);
     const menuDay = menuSnap.exists()?menuSnap.val():{};
-    const hasChoice = !!String(menuDay.second2||'').trim();
+    const choice = choicePair(menuDay);
+    const hasChoice = !!choice;
     const hasBrkMenu = !!String(menuDay.breakfast||'').trim();
     if(!stSnap.exists()){ box.innerHTML = '<p class="empty-msg">У класі немає учнів.</p>'; return; }
     const plans = plSnap.exists()?plSnap.val():{};
@@ -557,7 +602,7 @@ window.loadClassOrders = async function(){
     box.innerHTML = `
       <div class="k-ord-sum">${hasBrkMenu?`<b>${brk}</b> сніданків · `:''}<b>${lunch}</b> обідів${hasChoice?` <span class="k-ord-ab">А ${pa} / Б ${pb}</span>`:''} · <b>${snack}</b> підвечірків
         <span>${escHtml(cls.replace('class_',''))} клас, ${escHtml(human(date))}</span></div>
-      ${hasChoice?`<div class="k-ord-menu">А — ${escHtml(menuDay.second||'')} · Б — ${escHtml(menuDay.second2||'')}</div>`:''}
+      ${hasChoice?`<div class="k-ord-menu">Вибір на ${escHtml(choice.label)}: А — ${escHtml(choice.a)} · Б — ${escHtml(choice.b)}</div>`:''}
       <table class="k-table k-ord"><thead><tr>
         <th>Учень</th>${hasBrkMenu?'<th>Снід.</th>':''}<th>Обід</th>${hasChoice?'<th>Варіант</th>':''}<th>Підвеч.</th><th>Примітка</th></tr></thead><tbody>
         ${rows.map(r=>`<tr class="${r.absent?'k-ord-abs':''}">
@@ -776,7 +821,7 @@ export async function renderParentMenu(cls, studentKey, date){
     const has = week.map((d,i)=>{
       if(!menus[i].exists()) return false;
       const v = menus[i].val() || {};
-      return !!(v.first || v.second || v.second2 || v.breakfast || v.snack);
+      return !!(v.first || v.second || v.second2 || v.side || v.side2 || v.breakfast || v.snack);
     });
 
     // Якщо день не обирали вручну — відкриваємо сьогоднішній, а як його
@@ -821,20 +866,23 @@ export async function renderParentMenu(cls, studentKey, date){
 
     // Друге виводимо окремо: коли є варіант Б, це вже не рядок меню,
     // а вибір, і виглядати він має інакше.
-    const dishes = ['first','side','drink','dessert']
+    // Страву, на якій цього дня стоїть вибір, зі звичайного переліку
+    // прибираємо — інакше гарнір показався б двічі: рядком і кнопкою
+    const ch = choicePair(m);
+    const dishes = ['first','second','side','drink','dessert']
+      .filter(k => !(ch && k === ch.field))
       .filter(k=>m && m[k]).map(k=>`<div class="pm-dish">${escHtml(m[k])}</div>`).join('');
-    const secondBlock = !m ? '' : (pick
-      ? `<div class="pm-choice">
-           <div class="pm-choice-title">Оберіть основну страву${gate.ok?'':' — вибір закрито'}</div>
-           ${['a','b'].map(v=>`
-             <button type="button" class="pm-opt${pick===v?' on':''}"
-                     ${gate.ok?`onclick="setMealDay('${escJs(cur)}','pick','${v}')"`:'disabled'}>
-               <span class="pm-opt-mark">${v.toUpperCase()}</span>
-               <span class="pm-opt-name">${escHtml(v==='a'?m.second:m.second2)}</span>
-               ${pick===v?'<span class="pm-opt-on">обрано</span>':''}
-             </button>`).join('')}
-         </div>`
-      : (m.second ? `<div class="pm-dish">${escHtml(m.second)}</div>` : ''));
+    const secondBlock = (!m || !ch || !pick) ? '' :
+      `<div class="pm-choice">
+         <div class="pm-choice-title">Оберіть ${escHtml(ch.label)}${gate.ok?'':' — вибір закрито'}</div>
+         ${['a','b'].map(v=>`
+           <button type="button" class="pm-opt${pick===v?' on':''}"
+                   ${gate.ok?`onclick="setMealDay('${escJs(cur)}','pick','${v}')"`:'disabled'}>
+             <span class="pm-opt-mark">${v.toUpperCase()}</span>
+             <span class="pm-opt-name">${escHtml(v==='a'?ch.a:ch.b)}</span>
+             ${pick===v?'<span class="pm-opt-on">обрано</span>':''}
+           </button>`).join('')}
+       </div>`;
 
     // Збираємо рядок стану й кнопки заздалегідь: три рівні вкладених
     // шаблонів у розмітці нечитабельні й ламаються при першій же правці.
@@ -842,13 +890,20 @@ export async function renderParentMenu(cls, studentKey, date){
       `<span class="${on?'pm-on':cls}">${on?textOn:textOff}</span>`;
     const statusLine =
       (hasBrk ? chip(eff.breakfast, '✓ Сніданок', 'без сніданку') : '') +
-      chip(eff.lunch, '✓ Обід',
+      chip(eff.lunch, notEating ? '✓ Обід (разово)' : '✓ Обід',
            noAnswer ? 'Обіди не підтверджені' : (notEating ? 'Обіди не замовлені' : '✕ Без обіду'),
            'pm-off') +
       chip(eff.snack, '✓ Підвечірок', 'без підвечірка');
 
+    // Дитина не обідає постійно — але сьогодні може взяти обід. Без цієї
+    // кнопки батькам лишалося б або вмикати постійні обіди й відмовлятися
+    // щодня, або писати адміністрації. І те, й те — зайва робота для всіх.
+    const oneOff = notEating && !!m
+      ? `<button class="pm-btn ${eff.lunch?'back':'once'}" onclick="setMealDay('${escJs(cur)}','lunch',${eff.lunch?0:1})">${eff.lunch?'Скасувати обід на цей день':'🍽 Беру обід цього дня'}</button>`
+      : '';
     const lunchBtns = gate.ok
-      ? ((notEating || noAnswer) ? '' : `<button class="pm-btn ${eff.lunch?'':'back'}" onclick="setMealDay('${escJs(cur)}','lunch',${eff.lunch?0:1})">${eff.lunch?'Не буде обідати':'Поверну обід'}</button>`)
+      ? (noAnswer ? '' : (notEating ? oneOff
+          : `<button class="pm-btn ${eff.lunch?'':'back'}" onclick="setMealDay('${escJs(cur)}','lunch',${eff.lunch?0:1})">${eff.lunch?'Не буде обідати':'Поверну обід'}</button>`))
         + `<button class="pm-btn snack" onclick="setMealDay('${escJs(cur)}','snack',${eff.snack?0:1})">${eff.snack?'Без підвечірка':'+ Підвечірок'}</button>`
       : `<span class="pm-locked">🔒 ${escHtml(gate.msg)}</span>`;
     const brkBtn = !hasBrk ? ''
@@ -904,8 +959,14 @@ window.setMealDay = async function(date, field, value){
   // У сніданку власний дедлайн: його готують до уроків, тож 09:00 не годиться
   const gate = field === 'breakfast' ? breakfastEditable(date) : mealsEditable(date);
   if(!gate.ok) return alert(gate.msg);
+  const planSnap = await get(child(ref(db), `meal_plan/${cls}/${sid}`));
+  const plan = planSnap.exists() ? planSnap.val() : {};
+  const wd = weekdayIdx(date);
   let reason = '';
-  if(field==='lunch' && !value){
+  // Причину питаємо лише в того, хто обідає постійно: там відмова — подія,
+  // яку кухні корисно розуміти. У дитини, яка зазвичай не обідає, скасування
+  // разового обіду — це просто повернення до звичного стану.
+  if(field === 'lunch' && !value && plannedValue(plan, 'lunch', wd)){
     reason = prompt('Причина (необовʼязково):','') || '';
     if(reason === null) return;
   }
@@ -914,13 +975,22 @@ window.setMealDay = async function(date, field, value){
   const cur = snap.exists()?snap.val():{};
   // pick зберігає літеру варіанта, решта полів — 0/1
   if(field === 'pick') cur.pick = (value === 'b') ? 'b' : 'a';
-  else cur[field] = value ? 1 : 0;
+  else {
+    const patch = dayFieldPatch(plan, field, value, wd);
+    if(patch === null) delete cur[field];
+    else cur[field] = patch;
+  }
   if(reason) cur.reason = reason.trim().slice(0,120);
   cur.by = currentUserData.email || ''; cur.ts = Date.now();
-  await set(ref(db, path), cur);
+  // Порожня поправка — це сміття в базі й фальшивий рядок у звітах кухні
+  const meaningful = ['lunch','snack','breakfast','pick']
+    .some(k => cur[k] !== undefined);
+  if(meaningful) await set(ref(db, path), cur);
+  else await remove(ref(db, path));
   showToast(field === 'pick'
     ? `✓ Обрано варіант ${String(value).toUpperCase()}`
-    : (value ? '✓ Записано' : '✕ Відмову зафіксовано'));
+    : (value ? '✓ Записано'
+             : (plannedValue(plan, field, wd) ? '✕ Відмову зафіксовано' : '✓ Скасовано')));
   renderParentMenu();
 };
 
@@ -1099,7 +1169,7 @@ export async function computeMyMealStats(from, to, cls, sid){
       if(ovs[i] && ovs[i].exists()) ovByDate[date] = ovs[i].val();
       const mv = menus[i] && menus[i].exists() ? (menus[i].val() || {}) : null;
       // День рахуємо лише тоді, коли кухня справді щось готувала.
-      menuByDate[date] = !!(mv && (mv.first || mv.second || mv.second2 || mv.breakfast || mv.snack));
+      menuByDate[date] = !!(mv && (mv.first || mv.second || mv.second2 || mv.side || mv.side2 || mv.breakfast || mv.snack));
     });
   }
 
