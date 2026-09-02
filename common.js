@@ -703,7 +703,82 @@ window.getValidSubjectName=function(item){
 };
 window.isSubjectAllowed=function(cls,subjectName){if(!subjectName)return false;let raw=teacherAccessMatrix[cls]||[];let allowed=Array.isArray(raw)?raw:Object.values(raw);let normAllowed=allowed.map(s=>typeof s==='string'?s.trim():'');if(normAllowed.includes("Всі предмети"))return true;return normAllowed.includes(subjectName.trim());};
 window.getDefaultTeacher=function(clsId,subjName){if(!subjName||!globalTeacherAccess)return null;let nt=subjName.trim().toLowerCase();for(let se in globalTeacherAccess){if(globalTeacherAccess[se][clsId]){let a=globalTeacherAccess[se][clsId];let ok=false;if(Array.isArray(a))ok=a.some(s=>s.trim().toLowerCase()==="всі предмети"||s.trim().toLowerCase()===nt);else ok=Object.values(a).some(s=>s.trim().toLowerCase()==="всі предмети"||s.trim().toLowerCase()===nt);if(ok){let t=window.globalTeachersList.find(t=>t.safeEmail===se);if(t)return{email:t.email,name:t.name};}}}return null;};
-window.loadScheduleScript=function(classId,callback){if(!classId)return;get(child(ref(db),`schedules/${classId}`)).then(snap=>{if(snap.exists()){window.schedule=snap.val().lessons||{};window.clubSchedule=snap.val().clubs||{};}else{window.schedule={};window.clubSchedule={};}if(callback)callback();}).catch(()=>{window.schedule={};window.clubSchedule={};if(callback)callback();});};
+window.loadScheduleScript=function(classId,callback){if(!classId)return;listenAltChoices(classId,()=>{try{if(window.refreshScheduleViews)window.refreshScheduleViews();}catch(e){}});get(child(ref(db),`schedules/${classId}`)).then(snap=>{if(snap.exists()){window.schedule=snap.val().lessons||{};window.clubSchedule=snap.val().clubs||{};}else{window.schedule={};window.clubSchedule={};}if(callback)callback();}).catch(()=>{window.schedule={};window.clubSchedule={};if(callback)callback();});};
+
+// ═══════════════════════════════════════════════════════════════
+//  ЧЕРГУВАННЯ УРОКІВ (один тиждень музика, другий фізкультура)
+//
+// У розкладі такий урок — ОДИН запис із полем alt:['А','Б'], а не два
+// уроки поспіль. Що саме буде цього тижня, вирішує людина: вчитель
+// предмета, класний керівник або директор. Вибір лежить у
+//     schedule_alt/{клас}/{понеділок}/{День}/{номер слота} = 'Назва'
+// Зберігаємо НАЗВУ, а не номер варіанта: якщо школа потім перескладе
+// розклад, назва лишається зрозумілою, а номер став би вказувати кудись не туди.
+//
+// Автоматичного чергування свідомо немає. Канікули, заміни й перенесення
+// збивають будь-яку арифметику по парності тижнів, і тоді портал
+// упевнено показував би неправду. Краще чесне «уточнюється».
+// ═══════════════════════════════════════════════════════════════
+
+// Понеділок того тижня, у який потрапляє дата → 'YYYY-MM-DD'
+export function mondayOf(d){
+  const dt = (d instanceof Date) ? new Date(d.getTime())
+           : new Date(String(d).split('-')[0], String(d).split('-')[1]-1, String(d).split('-')[2]);
+  if(isNaN(dt.getTime())) return '';
+  const dow = dt.getDay() || 7;                 // неділя = 7, а не 0
+  dt.setDate(dt.getDate() - dow + 1);
+  const p2 = n => String(n).padStart(2,'0');
+  return `${dt.getFullYear()}-${p2(dt.getMonth()+1)}-${p2(dt.getDate())}`;
+}
+
+// Варіанти уроку, що чергується, або null для звичайного уроку
+export function altOptions(item){
+  const raw = item && item.alt;
+  if(!raw) return null;
+  const list = (Array.isArray(raw) ? raw : Object.values(raw))
+    .map(x => typeof x === 'string' ? x.trim() : (x && x.ua ? String(x.ua).trim() : ''))
+    .filter(Boolean);
+  return list.length > 1 ? list : null;
+}
+
+// Урок + обрана назва → урок, готовий до показу.
+// _altPending = вибору ще немає, показуємо обидві назви.
+export function resolveAlt(item, chosen){
+  const opts = altOptions(item);
+  if(!opts) return item;
+  const pick = opts.find(o => o === chosen)
+            || opts.find(o => o.toLowerCase() === String(chosen||'').trim().toLowerCase());
+  if(!pick) return { ...item, _altOptions: opts, _altPending: true,
+                     subject: { ua: opts.join(' / '), pl: opts.join(' / ') } };
+  return { ...item, _altOptions: opts, _altPending: false,
+           _altOther: opts.filter(o => o !== pick).join(', '),
+           subject: { ua: pick, pl: pick } };
+}
+
+// window.altChoices[понеділок][День][слот] = 'Назва'
+window.altChoices = {};
+export function altChoiceFor(weekMonday, dayName, slotIdx){
+  const w = window.altChoices && window.altChoices[weekMonday];
+  const d = w && w[dayName];
+  return d ? (d[slotIdx] || d[String(slotIdx)] || '') : '';
+}
+
+// Слухаємо лише тижні від поточного понеділка й далі — минуле нікому
+// не потрібне, а вузол інакше ріс би весь рік.
+let altUnsub = null;
+export function listenAltChoices(classId, onChange){
+  if(altUnsub){ try{ altUnsub(); }catch(e){} altUnsub = null; }
+  window.altChoices = {};
+  if(!classId) return;
+  const from = mondayOf(new Date());
+  try{
+    altUnsub = onValue(query(ref(db, `schedule_alt/${classId}`), orderByKey(), startAt(from)),
+      snap => { window.altChoices = snap.val() || {}; if(onChange) onChange(); },
+      err => console.warn('schedule_alt:', err.message));
+  }catch(e){ console.warn('schedule_alt:', e.message); }
+}
+window.listenAltChoices = listenAltChoices;
+
 // Pure helper shared by director stats/dashboard and parent/student weekly behavior view
 export function getWeekDates(ds){if(!ds)return[];let[y,m,d]=ds.split('-');let dt=new Date(y,m-1,d);let day=dt.getDay()||7;dt.setDate(dt.getDate()-day+1);let dates=[];for(let i=0;i<7;i++){const yy=dt.getFullYear(),mm=String(dt.getMonth()+1).padStart(2,'0'),dd=String(dt.getDate()).padStart(2,'0');dates.push(`${yy}-${mm}-${dd}`);dt.setDate(dt.getDate()+1);}return dates;}
 // Pure helper shared by teacher daily HW list and parent/student daily HW lists
