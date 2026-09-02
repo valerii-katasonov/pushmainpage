@@ -2848,7 +2848,11 @@ window.loadAdminAcademicYear=async function(){
 // порталі 25, і відкривають їх у десятках місць простим style.display.
 // Дописати виклик у кожне — гарантовано забути про якесь. Тому стежимо
 // за самими вікнами: щойно хоч одне стало видимим — блокуємо фон.
-const MODAL_SEL = '.modal-overlay, .cg-back, .sp-back, .chat-back';
+// УВАГА на назви. .cg-back і .sp-back — це справді підкладки вікон.
+// А .chat-back — кнопка «‹ Назад» у шапці чату, а не підкладка: колись
+// вона потрапила сюди за схожою назвою. Поки її display ніхто не чіпав
+// інлайном, шкоди не було, але одного дня кнопка заблокувала б сторінку.
+const MODAL_SEL = '.modal-overlay, .cg-back, .sp-back';
 let _scrollY = 0, _locked = false;
 
 function anyModalOpen(){
