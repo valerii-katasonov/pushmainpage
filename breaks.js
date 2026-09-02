@@ -20,7 +20,7 @@ import { ref, set, get, child, update, remove } from "https://www.gstatic.com/fi
 import { db, currentUserData, showToast, escHtml, escJs, logAction,
          makeBreak, hhmmFromMins, isBreakItem, dayNamesUA } from './common.js';
 
-export const BREAKS_BUILD = '2026-09-02 · breaks v4 (порядок уроків + діагностика)';
+export const BREAKS_BUILD = '2026-09-02 · breaks v5 (час уроків із дзвінків)';
 
 const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 const CLASSES = Array.from({ length: 11 }, (_, i) => `class_${i + 1}`);
@@ -57,6 +57,26 @@ export function breakPlan(bells, names, minMinutes = 5){
   }));
 }
 
+
+// Час уроків із дзвінків: {1:'09:00 - 09:45', ...}
+//
+// НАВІЩО ЦЕ ТУТ. Дзвінки — джерело правди про час, але кожен урок у
+// розкладі зберігає власну копію рядка time. Коли дзвінки міняються
+// (або їх скопіювали з іншого класу), копії лишаються старими. Тоді
+// перерви стають за новим часом, а уроки — за старим, і день
+// розсипається: кабінет батьків просто не показує уроки, час яких
+// не збігається з дзвінками. Тому розстановка перерв зобов'язана
+// оновлювати й час уроків.
+export function lessonTimes(bells){
+  const out = {};
+  Object.values(bells || {}).forEach(sl => {
+    const n = parseInt(sl && sl.number, 10);
+    if(!n || !sl.start || !sl.end) return;
+    out[n] = `${sl.start} - ${sl.end}`;
+  });
+  return out;
+}
+
 // Найбільший номер уроку в слоті — саме після нього ставиться перерва
 export function slotLessonNumber(slot){
   const items = Array.isArray(slot) ? slot : (slot && slot.subject ? [slot] : []);
@@ -84,13 +104,22 @@ export function isBreakSlot(slot){
 // не знайдеться жодного — і кнопка мовчки прибрала б наявні перерви,
 // не поставивши натомість нічого. Тому за відсутності номера беремо
 // порядок уроку в дні: перший урок — перший, і так далі.
-export function applyBreakPlan(day, plan){
+export function applyBreakPlan(day, plan, times){
   const src = (day || []).filter(slot => !isBreakSlot(slot));
   const out = [];
   src.forEach((slot, i) => {
-    out.push(slot);
     const n = slotLessonNumber(slot);
     const eff = (n === null) ? i + 1 : n;
+    // Синхронізуємо час уроку з дзвінками. Без цього перерви й уроки
+    // жили б за різними годинниками — саме так день і розсипається.
+    let fixed = slot;
+    if(times && times[eff]){
+      const items = Array.isArray(slot) ? slot : (slot && slot.subject ? [slot] : []);
+      fixed = items.map(it => (it && it.time !== times[eff])
+        ? { ...it, time: times[eff], number: (it.number === '' || it.number == null) ? eff : it.number }
+        : it);
+    }
+    out.push(fixed);
     const b = plan.find(p => p.after === eff);
     if(b) out.push([ makeBreak(`${b.start} - ${b.end}`, b.name) ]);
   });
@@ -106,20 +135,36 @@ export function numberedLessons(day){
   return { total: src.length, numbered: src.filter(s => slotLessonNumber(s) !== null).length };
 }
 
+// Скільки уроків дня мають час, відмінний від дзвінків
+export function staleTimes(day, times){
+  const src = (day || []).filter(slot => !isBreakSlot(slot));
+  let n = 0;
+  src.forEach((slot, i) => {
+    const num = slotLessonNumber(slot);
+    const eff = (num === null) ? i + 1 : num;
+    const want = times && times[eff];
+    if(!want) return;
+    const items = Array.isArray(slot) ? slot : (slot && slot.subject ? [slot] : []);
+    items.forEach(it => { if(it && it.time !== want) n++; });
+  });
+  return n;
+}
+
 // Скільки перерв додасться і скільки зникне — для чесного попередження
-export function planDiff(lessons, plan){
-  let added = 0, removed = 0, days = 0;
+export function planDiff(lessons, plan, times){
+  let added = 0, removed = 0, days = 0, retimed = 0;
   DAYS.forEach(day => {
     const raw = (lessons || {})[day];
     if(!raw) return;
     const cur = Array.isArray(raw) ? raw : Object.values(raw);
     const before = cur.filter(isBreakSlot).length;
-    const after = applyBreakPlan(cur, plan).filter(isBreakSlot).length;
+    const after = applyBreakPlan(cur, plan, times).filter(isBreakSlot).length;
     if(before !== after) days++;
     added += Math.max(0, after - before);
     removed += Math.max(0, before - after);
+    retimed += staleTimes(cur, times);
   });
-  return { added, removed, days };
+  return { added, removed, days, retimed };
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -209,6 +254,7 @@ window.applyBreaksToClass = async function(){
   const dest = document.getElementById('bk-dest').value;
   const base = dest === 'live' ? `schedules/${cls}` : `schedule_drafts/${dest}/${cls}`;
   const plan = breakPlan(state.bells, state.names);
+  const times = lessonTimes(state.bells);
   bkLogReset();
   bkLog(`Клас ${String(cls).replace('class_','')}, куди: ${dest === 'live' ? 'чинний розклад' : 'чернетка ' + dest}`);
   bkLog(`Перерв у плані: ${plan.length}` + (plan.length ? ` (після уроків ${plan.map(p=>p.after).join(', ')})` : ''));
@@ -240,19 +286,25 @@ window.applyBreaksToClass = async function(){
     const r = numberedLessons(cur);
     tot += r.total; num += r.numbered;
   });
+  bkLog(`Час із дзвінків відомий для уроків: ${Object.keys(times).join(', ') || '—'}`,
+        Object.keys(times).length ? 'ok' : 'bad');
   bkLog(`Уроків у тижні: ${tot}, із заповненим номером: ${num}`
         + (num < tot ? ' → решту прив\'яжу за порядком у дні' : ''), num < tot ? 'bad' : 'ok');
 
-  const d = planDiff(lessons, plan);
-  bkLog(`Порахував: днів торкнеться ${d.days}, перерв додасться ${d.added}, наявних заміниться ${d.removed}`);
-  if(!d.added && !d.removed){
+  const d = planDiff(lessons, plan, times);
+  bkLog(`Порахував: днів торкнеться ${d.days}, перерв додасться ${d.added}, `
+      + `наявних заміниться ${d.removed}, урокам оновиться час ${d.retimed}`);
+  if(!d.added && !d.removed && !d.retimed){
     bkLog('Зупинився: перерви вже стоять саме так, змінювати нічого.', 'ok');
     return alert('Нічого не зміниться: перерви вже стоять саме так.');
   }
   if(!confirm(`Клас ${cls.replace('class_','')}, ${dest === 'live' ? 'ЧИННИЙ розклад' : `чернетка «${dest}»`}.\n\n`
     + `Днів торкнеться: ${d.days}\nПерерв додасться: ${d.added}\n`
     + (d.removed ? `Наявних перерв буде замінено: ${d.removed}\n` : '')
+    + (d.retimed ? `Урокам оновиться час за дзвінками: ${d.retimed}\n` : '')
     + '\nПерерви, розставлені руками, буде замінено на цей набір.'
+    + (d.retimed ? '\nЧас уроків буде взято з розкладу дзвінків цього класу — інакше уроки й '
+                 + 'перерви жили б за різним часом, і батьки перестали б бачити уроки.' : '')
     + (dest === 'live' ? '\nЗміну одразу побачать батьки та вчителі.' : ''))) return;
 
   const patch = {};
@@ -260,7 +312,7 @@ window.applyBreaksToClass = async function(){
     const raw = lessons[day];
     if(!raw) return;
     const cur = Array.isArray(raw) ? raw : Object.values(raw);
-    patch[`${base}/lessons/${day}`] = applyBreakPlan(cur, plan);
+    patch[`${base}/lessons/${day}`] = applyBreakPlan(cur, plan, times);
   });
   bkLog(`Записую днів: ${Object.keys(patch).length}`);
   try{
@@ -273,7 +325,7 @@ window.applyBreaksToClass = async function(){
   }
 
   // Перечитуємо: повідомлення «готово» має спиратися на факт, а не на віру
-  let after = 0;
+  let after = 0, visible = 0;
   try{
     const chk = await get(child(ref(db), `${base}/lessons`));
     const v = chk.exists() ? chk.val() : {};
@@ -282,13 +334,19 @@ window.applyBreaksToClass = async function(){
       if(!raw) return;
       const cur = Array.isArray(raw) ? raw : Object.values(raw);
       after += cur.filter(isBreakSlot).length;
+      cur.filter(x => !isBreakSlot(x)).forEach(slot => {
+        const items = Array.isArray(slot) ? slot : (slot && slot.subject ? [slot] : []);
+        items.forEach(it => { if(it && it.time) visible++; });
+      });
     });
-    bkLog(`перечитав ${base}/lessons: перерв у тижні ${after}`, after ? 'ok' : 'bad');
+    bkLog(`перечитав ${base}/lessons: перерв ${after}, уроків із часом ${visible}`,
+          visible ? 'ok' : 'bad');
+    if(!visible) bkLog('УВАГА: жоден урок не має часу — батьки їх не побачать!', 'bad');
   }catch(e){ bkLog(`не зміг перечитати: ${e.message}`, 'bad'); }
 
   logAction('settings', { value: `перерви розставлено: ${cls}, ${dest}, +${d.added}` });
-  showToast(`✅ Перерв у тижні: ${after}`);
-  bkLog(`Підсумок: у розкладі класу тепер ${after} перерв.`, after ? 'ok' : 'bad');
+  showToast(`✅ Перерв ${after}, уроків із часом ${visible}`);
+  bkLog(`Підсумок: перерв ${after}, уроків із часом ${visible}.`, visible ? 'ok' : 'bad');
 };
 
 window.openBreakCopy = function(){
