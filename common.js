@@ -779,6 +779,75 @@ export function listenAltChoices(classId, onChange){
 }
 window.listenAltChoices = listenAltChoices;
 
+
+// ═══════════════════════════════════════════════════════════════
+//  РЯДКИ РОЗКЛАДУ: вставити, прибрати, розставити перерви
+//
+// День у базі — це масив слотів, а слот — масив уроків (паралельних).
+// Номер слота ніде не зберігається окремо: він і є позицією в масиві.
+// Саме тому «вставити перерву між другим і третім уроком» неможливо
+// зробити правкою однієї клітинки — усе, що нижче, має з'їхати вниз.
+// ═══════════════════════════════════════════════════════════════
+
+export function hhmmFromMins(m){
+  const h = Math.floor(m / 60), mm = m % 60;
+  return `${String(h).padStart(2,'0')}:${String(mm).padStart(2,'0')}`;
+}
+function minsOf(t){
+  const [h, m] = String(t || '').split(':').map(Number);
+  return (isNaN(h) || isNaN(m)) ? null : h * 60 + m;
+}
+// Початок і кінець слота за часом першого уроку в ньому
+export function slotBounds(slot){
+  const items = Array.isArray(slot) ? slot : (slot && slot.subject ? [slot] : []);
+  const withTime = items.filter(i => i && i.time);
+  if(!withTime.length) return null;
+  const [a, b] = String(withTime[0].time).split(' - ');
+  const start = minsOf(a), end = minsOf(b);
+  return (start == null || end == null) ? null : { start, end };
+}
+
+export function makeBreak(time, label){
+  return { number:'', time: time || '', type:'break',
+           subject:{ ua: label, pl: label }, teacherEmail:'', teacherName:'' };
+}
+
+// Вставити порожній рядок (або готовий слот) на позицію at
+export function insertSlot(day, at, slot){
+  const out = (day || []).slice();
+  const pos = Math.max(0, Math.min(at, out.length));
+  out.splice(pos, 0, slot === undefined ? {} : slot);
+  return out;
+}
+
+// Прибрати рядок цілком — те, що нижче, підіймається вгору
+export function removeSlot(day, at){
+  const out = (day || []).slice();
+  if(at < 0 || at >= out.length) return out;
+  out.splice(at, 1);
+  return out;
+}
+
+// Розставити перерви за проміжками між уроками.
+// Перерва народжується тільки там, де між кінцем одного уроку й початком
+// наступного справді є вікно — вигадувати час ми не маємо права.
+export function withBreaks(day, minMinutes = 5){
+  const src = day || [];
+  const out = [];
+  src.forEach((slot, i) => {
+    out.push(slot);
+    const a = slotBounds(slot), b = slotBounds(src[i + 1]);
+    if(!a || !b) return;
+    // Наступний рядок уже перерва — другої не треба
+    const nextItems = Array.isArray(src[i+1]) ? src[i+1] : [src[i+1]];
+    if(nextItems.some(x => x && x.type === 'break')) return;
+    const gap = b.start - a.end;
+    if(gap < minMinutes) return;
+    out.push([ makeBreak(`${hhmmFromMins(a.end)} - ${hhmmFromMins(b.start)}`, `Перерва ${gap} хв`) ]);
+  });
+  return out;
+}
+
 // Pure helper shared by director stats/dashboard and parent/student weekly behavior view
 export function getWeekDates(ds){if(!ds)return[];let[y,m,d]=ds.split('-');let dt=new Date(y,m-1,d);let day=dt.getDay()||7;dt.setDate(dt.getDate()-day+1);let dates=[];for(let i=0;i<7;i++){const yy=dt.getFullYear(),mm=String(dt.getMonth()+1).padStart(2,'0'),dd=String(dt.getDate()).padStart(2,'0');dates.push(`${yy}-${mm}-${dd}`);dt.setDate(dt.getDate()+1);}return dates;}
 // Pure helper shared by teacher daily HW list and parent/student daily HW lists
