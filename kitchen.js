@@ -39,7 +39,7 @@
 //   через stuName(): воно може змінитися, ключ — ні.
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, update } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, currentUserData, showToast, escHtml, escJs, localDateString, logAction, notifyEvent, pushConfigured, renderPushWarning, getSchoolRange, getDateRange, stuName } from './common.js';
+import { db, currentUserData, showToast, escHtml, escJs, localDateString, logAction, notifyEvent, pushConfigured, renderPushWarning, getSchoolRange, sidOf, getDateRange, stuName } from './common.js';
 
 export const MEAL_CUTOFF_HOUR = 9;   // до 09:00 можна відмовитися від сьогоднішнього
 // Сніданок їдять до уроків, тож дедлайн 09:00 для нього безглуздий — його
@@ -335,7 +335,10 @@ export async function loadWeekCounts(){
         let cl=0, cs=0, cb=0, ca=0, cbb=0;
         for(const key in students[cls]){
           const name = students[cls][key];
-          const plan = plans[cls] && plans[cls][key];
+          // Запис міг лягти під імʼям, а не під ідентифікатором — так було
+          // до виправлення ключа. Щоб уже зроблені батьками відповіді не
+          // зникли, шукаємо й за імʼям.
+          const plan = (plans[cls] && (plans[cls][key] || plans[cls][name])) || null;
           const isAbsent = !!absentToday[key];
           const ov = overrides[cls] && overrides[cls][key];
           const e = effectiveMeals(plan, ov, isAbsent, wd);
@@ -429,7 +432,7 @@ export async function loadMealPlans(){
   if(!stSnap.exists()){ box.innerHTML = '<p class="empty-msg">У класі немає учнів.</p>'; return; }
   const plans = plSnap.exists()?plSnap.val():{};
   box.innerHTML = Object.entries(stSnap.val()).sort((a,b)=>String(a[1]).localeCompare(String(b[1]),'uk')).map(([sid,name])=>{
-    const p = plans[sid] || {};
+    const p = plans[sid] || plans[name] || {};
     // Галочка показує РЕАЛЬНИЙ стан. Раніше вона стояла увімкненою і в
     // тих, за кого батьки нічого не обирали, — і персонал бачив клас,
     // де «обідають усі», хоча насправді не відповів ніхто.
@@ -490,7 +493,7 @@ window.loadClassOrders = async function(){
     const wd = weekdayIdx(date);
 
     const rows = Object.entries(stSnap.val()).sort((a,b)=>String(a[1]).localeCompare(String(b[1]),'uk')).map(([sid,name])=>{
-      const plan = plans[sid] || {};
+      const plan = plans[sid] || plans[name] || {};
       const ov = overrides[sid];
       const e = effectiveMeals(plan, ov, !!absent[sid], wd);
       const pick = (e.lunch && hasChoice) ? pickedSecond(menuDay, ov) : null;
@@ -712,7 +715,7 @@ export async function renderParentMenu(cls, studentKey, date){
   const box = document.getElementById('p-menu');
   if(!box) return;
   cls = cls || currentUserData?.class;
-  studentKey = studentKey || currentUserData?.studentId || currentUserData?.studentName;
+  studentKey = studentKey || await mealKey(cls);
   if(!cls || !studentKey) return;
 
   try{
@@ -853,7 +856,7 @@ export async function renderParentMenu(cls, studentKey, date){
 }
 
 window.setMealDay = async function(date, field, value){
-  const cls = currentUserData?.class, sid = currentUserData?.studentId || currentUserData?.studentName;
+  const cls = currentUserData?.class, sid = await mealKey(cls);
   if(!cls || !sid) return;
   // У сніданку власний дедлайн: його готують до уроків, тож 09:00 не годиться
   const gate = field === 'breakfast' ? breakfastEditable(date) : mealsEditable(date);
@@ -878,9 +881,34 @@ window.setMealDay = async function(date, field, value){
   renderParentMenu();
 };
 
+// Під яким ключем зберігати харчування дитини.
+//
+// ПРОБЛЕМА. students_list заповнюється через push(), тож ключ учня — це
+// згенерований ідентифікатор, а не імʼя. Кабінет батька брав
+// studentId, а якщо його не було — підставляв ІМʼЯ. Кухня ж перебирає
+// students_list за ідентифікаторами. У результаті запис «дитина обідає»
+// лягав під імʼям, кухня його не знаходила, і в підрахунку стояв нуль.
+//
+// Тепер ключ шукаємо в довіднику класу за імʼям і кешуємо. Імʼя лишається
+// запасним варіантом — краще записати хоч кудись, ніж втратити відповідь.
+let _mealKey = null, _mealKeyCls = null;
+export async function mealKey(cls){
+  const c = cls || currentUserData?.class;
+  if(!c) return null;
+  if(_mealKey && _mealKeyCls === c) return _mealKey;
+  let key = currentUserData?.studentId || null;
+  if(!key && currentUserData?.studentName){
+    try{ key = await sidOf(c, currentUserData.studentName); }
+    catch(e){ console.warn('sidOf:', e.message); }
+  }
+  _mealKey = key || currentUserData?.studentName || null;
+  _mealKeyCls = c;
+  return _mealKey;
+}
+
 // Постійні налаштування дитини — тут батько може зняти її з харчування зовсім
 window.openMealSettings = async function(){
-  const cls = currentUserData?.class, sid = currentUserData?.studentId || currentUserData?.studentName;
+  const cls = currentUserData?.class, sid = await mealKey(cls);
   if(!cls || !sid) return;
   const snap = await get(child(ref(db),`meal_plan/${cls}/${sid}`));
   const p = snap.exists()?snap.val():{};
@@ -927,7 +955,7 @@ window.msToggleDays = function(){
   set('ms-brk','ms-bdays');
 };
 window.saveMealSettings = async function(){
-  const cls = currentUserData?.class, sid = currentUserData?.studentId || currentUserData?.studentName;
+  const cls = currentUserData?.class, sid = await mealKey(cls);
   if(!cls || !sid) return;
   const snack = document.getElementById('ms-snack').value;
   const brk   = document.getElementById('ms-brk')?.value || 'no';
@@ -953,7 +981,7 @@ window.saveMealSettings = async function(){
 };
 
 window.openMyMealStats = async function(){
-  const cls = currentUserData?.class, sid = currentUserData?.studentId || currentUserData?.studentName;
+  const cls = currentUserData?.class, sid = await mealKey(cls);
   if(!cls || !sid) return;
   const modal = document.getElementById('meal-stats-modal');
   const body  = document.getElementById('meal-stats-body');
@@ -966,7 +994,7 @@ window.openMyMealStats = async function(){
   window.reloadMyMealStats();
 };
 window.reloadMyMealStats = async function(){
-  const cls = currentUserData?.class, sid = currentUserData?.studentId || currentUserData?.studentName;
+  const cls = currentUserData?.class, sid = await mealKey(cls);
   const body = document.getElementById('meal-stats-body');
   const from = document.getElementById('pms-from').value;
   const to   = document.getElementById('pms-to').value;
@@ -1131,7 +1159,7 @@ export async function renderTakeaway(date){
   const box = document.getElementById('p-takeaway');
   if(!box) return;
   const cls = currentUserData?.class;
-  const sid = currentUserData?.studentId || currentUserData?.studentName;
+  const sid = await mealKey(currentUserData?.class);
   if(!cls || !sid){ box.innerHTML = ''; return; }
   const day = date || pmDate || localDateString;
   try{
@@ -1176,7 +1204,7 @@ window.renderTakeaway = renderTakeaway;
 
 window.setTakeaway = async function(date, itemId, qty){
   const cls = currentUserData?.class;
-  const sid = currentUserData?.studentId || currentUserData?.studentName;
+  const sid = await mealKey(currentUserData?.class);
   if(!cls || !sid) return;
   const gate = mealsEditable(date);
   if(!gate.ok) return alert(gate.msg);
@@ -1193,7 +1221,7 @@ window.setTakeaway = async function(date, itemId, qty){
 // задати: set перезаписав би весь вузол.
 window.setLunchPlan = async function(yes){
   const cls = currentUserData?.class;
-  const sid = currentUserData?.studentId || currentUserData?.studentName;
+  const sid = await mealKey(cls);
   if(!cls || !sid) return;
   try{
     await update(ref(db, `meal_plan/${cls}/${sid}`), {
