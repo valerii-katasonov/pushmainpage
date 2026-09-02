@@ -903,6 +903,16 @@
     .mx-mode{padding:9px 12px;border-radius:9px;font-size:.79rem;line-height:1.35;margin-bottom:9px;}
     .mx-mode.live{background:#fff3e0;color:#e65100;border:1px solid #ffb74d;font-weight:600;}
     .mx-mode.draft{background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;}
+    /* Дії над цілим рядком розкладу */
+    .row-tools{margin-top:14px;padding:11px;background:#f3f6f7;border-radius:11px;border:1px solid #dde5e7;}
+    .row-tools-title{font-size:.74rem;font-weight:800;color:#546e7a;text-transform:uppercase;
+                     letter-spacing:.03em;margin-bottom:7px;text-align:left;}
+    .row-tools-btns{display:flex;gap:6px;flex-wrap:wrap;}
+    .row-tools-btns button{width:auto;margin:0;flex:1;min-width:120px;padding:8px 6px;font-size:.75rem;
+                           background:#fff;color:#37474f;border:1px solid #cfd8dc;border-radius:8px;}
+    .row-tools-btns button:hover{background:#eceff1;}
+    .row-tools-auto{width:100%;margin-top:6px;padding:9px;font-size:.76rem;
+                    background:#546e7a;color:#fff;border:none;border-radius:8px;}
     /* Предмети класу та перейменування */
     .sc-list{margin-top:11px;background:#fff;border-radius:10px;border:1px solid #f8bbd0;overflow:hidden;}
     .sc-item{display:flex;align-items:center;gap:8px;padding:8px 11px;border-bottom:1px solid #fdf2f6;font-size:.82rem;}
@@ -950,6 +960,8 @@
     .si-drop{display:block;border:2px dashed #b39ddb;border-radius:10px;padding:16px;text-align:center;
              color:#4527a0;font-size:.84rem;cursor:pointer;margin-top:11px;background:#fff;}
     .si-drop input{display:none;}
+    .si-breaks{display:flex;align-items:flex-start;gap:8px;margin-top:10px;font-size:.78rem;color:#4527a0;cursor:pointer;}
+    .si-breaks input{width:20px;height:20px;flex:none;margin:0;}
     .si-sum{font-size:.8rem;color:#4527a0;font-weight:700;margin:11px 0 7px;}
     .si-scroll{overflow-x:auto;background:#fff;border-radius:9px;border:1px solid #d1c4e9;}
     .si-table{border-collapse:collapse;font-size:.72rem;width:100%;}
@@ -3202,6 +3214,16 @@
       <div style="flex:2;"><label>Час:</label><input type="text" id="cell-time" placeholder="09:00 - 09:45"></div>
     </div>
     <input type="hidden" id="cell-edit-class"><input type="hidden" id="cell-edit-row"><input type="hidden" id="cell-edit-subindex">
+    <div class="row-tools">
+      <div class="row-tools-title">Дії над цілим рядком</div>
+      <div class="row-tools-btns">
+        <button type="button" onclick="insertMatrixRow('above','break')">⬆ Перерва вище</button>
+        <button type="button" onclick="insertMatrixRow('below','break')">⬇ Перерва нижче</button>
+        <button type="button" onclick="insertMatrixRow('below','empty')">＋ Порожній рядок</button>
+        <button type="button" onclick="deleteMatrixRow()">🗑 Прибрати рядок</button>
+      </div>
+      <button type="button" class="row-tools-auto" onclick="autoBreaksForDay()">⏱ Розставити перерви за часом уроків</button>
+    </div>
     <div style="display:flex;gap:9px;margin-top:22px;">
       <button onclick="deleteMatrixCell()" style="background:var(--red);color:#fff;margin-top:0;flex:1;">Очистити</button>
       <button onclick="saveMatrixCell()" style="background:var(--green);color:#fff;margin-top:0;flex:2;">Зберегти</button>
