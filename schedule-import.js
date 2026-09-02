@@ -15,10 +15,10 @@
 // дрібниця: кабінет батьків пропускає уроки без часу — вони просто не
 // показуються. Тому без дзвінків імпорт зупиняється й каже про це.
 import { ref, set, get, child, update } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, currentUserData, showToast, escHtml, escJs, logAction, getClassNum } from './common.js';
+import { db, currentUserData, showToast, escHtml, escJs, logAction, getClassNum, withBreaks } from './common.js';
 import { subjectsInLessons, similarNames, safeKey } from './subjects.js';
 
-export const IMPORT_BUILD = '2026-09-02 · docx v3';
+export const IMPORT_BUILD = '2026-09-02 · docx v4';
 
 // Назви днів у заголовку → ключі, якими користується портал
 const DAY_KEYS = {
@@ -209,6 +209,19 @@ async function renderSchedulePreview(guess){
   }catch(e){ console.warn('bell_schedules:', e.message); }
 
   const built = toSchedule(parsedSchedule, times);
+  // У файлі перерв немає — школа пише в таблицю лише уроки. Дістаємо їх
+  // із проміжків між дзвінками: інакше директору довелося б вставляти
+  // кожну перерву руками вже після імпорту.
+  const wantBreaks = !document.getElementById('si-breaks')
+                   || document.getElementById('si-breaks').checked;
+  let breaksAdded = 0;
+  if(wantBreaks){
+    Object.keys(built.lessons).forEach(day => {
+      const before = built.lessons[day].length;
+      built.lessons[day] = withBreaks(built.lessons[day]);
+      breaksAdded += built.lessons[day].length - before;
+    });
+  }
   window._siBuilt = built;
 
   const DOW = { Monday:'Пн', Tuesday:'Вт', Wednesday:'Ср', Thursday:'Чт', Friday:'Пт', Saturday:'Сб' };
@@ -265,7 +278,12 @@ async function renderSchedulePreview(guess){
     problems.push(`У файлі згадано ${guess} клас, а обрано ${cls.replace('class_','')}. Перевірте, чи це те, що потрібно.`);
 
   box.innerHTML = `
-    <div class="si-sum">Розпізнано: днів ${order.length}, уроків ${parsedSchedule.lessons}</div>
+    <div class="si-sum">Розпізнано: днів ${order.length}, уроків ${parsedSchedule.lessons}${
+      wantBreaks ? `, перерв додано ${breaksAdded}` : ''}</div>
+    <label class="si-breaks">
+      <input type="checkbox" id="si-breaks" ${wantBreaks ? 'checked' : ''} onchange="onSiClassChange()">
+      <span>Додати перерви між уроками — час візьмемо з розкладу дзвінків</span>
+    </label>
     <div class="si-scroll"><table class="si-table"><thead>${head}</thead><tbody>${body}</tbody></table></div>
     ${problems.map(p => `<div class="si-warn">${p}</div>`).join('')}
     <button type="button" id="si-save" onclick="saveImportedSchedule()"
