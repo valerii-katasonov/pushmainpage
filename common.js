@@ -1155,6 +1155,7 @@ window.openFromNotification = function(screenId){
 };
 
 async function initUserSession(){
+  initModalScrollLock();   // фон під вікнами не прокручується (важливо для iPhone)
   // Чинний навчальний рік читаємо ПЕРШИМ. Календар, семестри й табелі
   // залежать від нього, і якщо взяти його пізніше, вони встигнуть
   // прочитати не той вузол — саме так календар і став порожнім 1 вересня.
@@ -2755,3 +2756,71 @@ window.loadAdminAcademicYear=async function(){
   document.addEventListener('DOMContentLoaded', bind);
   bind();
 })();
+
+// ══════════════════════════════════════════════════════════════════
+//  БЛОКУВАННЯ ПРОКРУТКИ ПІД ВІДКРИТИМ ВІКНОМ
+// ══════════════════════════════════════════════════════════════════
+// НА ЩО СКАРЖИЛИСЯ. На iPhone при прокрутці сторінка «роз'їжджалася»:
+// вікно лишалося на місці, а фон під ним їхав, і на екрані виходили
+// дві половини різних екранів. На Android цього немає.
+//
+// ЧОМУ ТАК. Safari на iOS перераховує position:fixed не синхронно з
+// прокруткою тіла сторінки. Поки фон можна крутити, накладка й вміст
+// під нею живуть окремим життям. Лікується не косметикою, а тим, щоб
+// фон під вікном не прокручувався взагалі.
+//
+// ЧОМУ СПОСТЕРІГАЧ, А НЕ ВИКЛИКИ В КОЖНОМУ ВІКНІ. Модальних вікон у
+// порталі 25, і відкривають їх у десятках місць простим style.display.
+// Дописати виклик у кожне — гарантовано забути про якесь. Тому стежимо
+// за самими вікнами: щойно хоч одне стало видимим — блокуємо фон.
+const MODAL_SEL = '.modal-overlay, .cg-back, .sp-back, .chat-back';
+let _scrollY = 0, _locked = false;
+
+function anyModalOpen(){
+  return [...document.querySelectorAll(MODAL_SEL)]
+    .some(el => el.style.display && el.style.display !== 'none');
+}
+
+function applyScrollLock(){
+  const open = anyModalOpen();
+  if(open === _locked) return;
+  _locked = open;
+  const b = document.body;
+  if(open){
+    _scrollY = window.scrollY || window.pageYOffset || 0;
+    b.style.position = 'fixed';
+    b.style.top = `-${_scrollY}px`;
+    b.style.left = '0';
+    b.style.right = '0';
+    b.style.width = '100%';
+    b.style.overflow = 'hidden';
+  }else{
+    b.style.position = '';
+    b.style.top = '';
+    b.style.left = '';
+    b.style.right = '';
+    b.style.width = '';
+    b.style.overflow = '';
+    // Повертаємо туди, де людина була. Без цього закриття вікна
+    // викидало б на початок сторінки.
+    window.scrollTo(0, _scrollY);
+  }
+}
+
+export function initModalScrollLock(){
+  if(!document.body) return;
+  const obs = new MutationObserver(applyScrollLock);
+  document.querySelectorAll(MODAL_SEL).forEach(el =>
+    obs.observe(el, { attributes: true, attributeFilter: ['style', 'class'] }));
+  // Вікна, додані пізніше (наприклад, чат), теж мають потрапити під нагляд
+  new MutationObserver(muts => {
+    muts.forEach(m => m.addedNodes.forEach(n => {
+      if(n.nodeType !== 1) return;
+      if(n.matches && n.matches(MODAL_SEL)) obs.observe(n, { attributes: true, attributeFilter: ['style', 'class'] });
+      n.querySelectorAll && n.querySelectorAll(MODAL_SEL).forEach(x =>
+        obs.observe(x, { attributes: true, attributeFilter: ['style', 'class'] }));
+    }));
+  }).observe(document.body, { childList: true, subtree: true });
+  applyScrollLock();
+}
+window.initModalScrollLock = initModalScrollLock;
