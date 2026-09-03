@@ -212,31 +212,51 @@ function isDir(){ return DIR_ROLES.includes(currentUserData && currentUserData.r
 let plan = null;          // прорахований перенос, чекає підтвердження
 
 // Усі предмети школи — з розкладів і зі списків класів
-async function allSubjects(){
+// Класи, яких торкнеться перейменування. 'all' — уся школа.
+function scopeClasses(scope){
+  return (!scope || scope === 'all') ? CLASSES : [scope];
+}
+
+async function allSubjects(scope){
   const found = new Set();
-  await Promise.all(CLASSES.map(async cls => {
+  await Promise.all(scopeClasses(scope).map(async cls => {
     try{
       const s = await get(child(ref(db), `schedules/${cls}/lessons`));
       if(s.exists()) subjectsInLessons(s.val()).forEach(n => found.add(n));
     }catch(e){}
     try{
-      const c = await get(child(ref(db), `subjects_catalog/${cls}`));
-      if(c.exists()) Object.values(c.val() || {}).forEach(n => { if(n) found.add(String(n).trim()); });
+      const node = await readCatalog(ACTIVE_YEAR, cls);
+      catalogList(node).forEach(e => found.add(e.name));
     }catch(e){}
   }));
   return [...found].sort((a, b) => a.localeCompare(b, 'uk'));
 }
 
 window.openRenameSubject = async function(){
+  const sel = document.getElementById('rs-scope');
+  if(sel && !sel.options.length){
+    sel.innerHTML = '<option value="all">Уся школа</option>'
+      + CLASSES.map((c, i) => `<option value="${c}">Лише ${i + 1} клас</option>`).join('');
+  }
+  renderRenameSubject();
+};
+
+window.renderRenameSubject = async function(){
   const box = document.getElementById('rs-body');
   if(!box || !isDir()) return;
+  const scope = (document.getElementById('rs-scope') || {}).value || 'all';
   box.innerHTML = '<p class="empty-msg">Збираю список предметів...</p>';
-  const names = await allSubjects();
+  const names = await allSubjects(scope);
   if(!names.length){
-    box.innerHTML = '<p class="empty-msg">У школі ще немає жодного предмета в розкладі.</p>';
+    box.innerHTML = scope === 'all'
+      ? '<p class="empty-msg">У школі ще немає жодного предмета в розкладі.</p>'
+      : `<p class="empty-msg">У ${scope.replace('class_','')} класі немає предметів ні в розкладі, ні в списку.</p>`;
     return;
   }
   box.innerHTML = `
+    ${scope === 'all'
+      ? '<div class="rs-warn">Обрано <b>всю школу</b>. Якщо в різних класах предмет свідомо називається по-різному, оберіть конкретний клас — інакше зміните всі одразу.</div>'
+      : `<div class="rs-warn">Обрано <b>лише ${escHtml(scope.replace('class_',''))} клас</b>. В інших класах назва лишиться старою.</div>`}
     <label style="font-size:.8rem;color:#ad1457;font-weight:600;">Який предмет перейменувати:</label>
     <select id="rs-old" style="margin-top:4px;">
       ${names.map(n => `<option value="${escHtml(n)}">${escHtml(n)}</option>`).join('')}
@@ -249,6 +269,8 @@ window.openRenameSubject = async function(){
 };
 
 window.checkRenameSubject = async function(){
+  const scope = (document.getElementById('rs-scope') || {}).value || 'all';
+  const CLS = scopeClasses(scope);
   const oldName = document.getElementById('rs-old').value;
   const newName = (document.getElementById('rs-new').value || '').trim();
   const rep = document.getElementById('rs-report');
@@ -268,7 +290,7 @@ window.checkRenameSubject = async function(){
     // 1. Вузли, де предмет — ключ
     for(const spec of SUBJECT_KEY_NODES){
       let leaves = 0, branches = 0, merged = 0;
-      for(const cls of CLASSES){
+      for(const cls of CLS){
         const snap = await get(child(ref(db), `${spec.node}/${cls}`));
         if(!snap.exists()) continue;
         const r = renameInTree(snap.val(), spec.depth, oldName, newName, spec.kind, `${spec.node}/${cls}`);
@@ -280,7 +302,7 @@ window.checkRenameSubject = async function(){
     }
     // 2. Розклади й чернетки
     let schedHits = 0;
-    for(const cls of CLASSES){
+    for(const cls of CLS){
       const s = await get(child(ref(db), `schedules/${cls}/lessons`));
       if(s.exists()){
         const r = renameInLessons(s.val(), oldName, newName, `schedules/${cls}/lessons`);
@@ -297,6 +319,7 @@ window.checkRenameSubject = async function(){
       Object.entries(drafts.val() || {}).forEach(([name, byClass]) => {
         Object.entries(byClass || {}).forEach(([cls, data]) => {
           if(!data || !data.lessons) return;
+          if(!CLS.includes(cls)) return;
           const r = renameInLessons(data.lessons, oldName, newName, `schedule_drafts/${name}/${cls}/lessons`);
           Object.assign(updates, r.updates); schedHits += r.hits;
         });
@@ -310,12 +333,16 @@ window.checkRenameSubject = async function(){
     if(acc.exists()){
       Object.entries(acc.val() || {}).forEach(([se, byClass]) => {
         Object.entries(byClass || {}).forEach(([cls, list]) => {
+          if(!CLS.includes(cls)) return;
           const r = renameInList(list, oldName, newName, `teacher_access/${se}/${cls}`);
           Object.assign(updates, r.updates); accHits += r.hits;
         });
       });
     }
-    const skills = await get(child(ref(db), 'teacher_skills'));
+    // teacher_skills — це глобальний перелік умінь учителя, не прив'язаний
+    // до класу. Перейменовувати його заради одного класу неправильно:
+    // в інших класах предмет ще називається по-старому.
+    const skills = scope === 'all' ? await get(child(ref(db), 'teacher_skills')) : { exists: () => false };
     if(skills.exists()){
       Object.entries(skills.val() || {}).forEach(([se, rec]) => {
         const r = renameInList(rec && rec.subjects, oldName, newName, `teacher_skills/${se}/subjects`);
@@ -326,13 +353,14 @@ window.checkRenameSubject = async function(){
 
     // 4. Списки предметів класів
     let catHits = 0;
-    for(const cls of CLASSES){
-      const c = await get(child(ref(db), `subjects_catalog/${cls}`));
-      if(!c.exists()) continue;
-      Object.entries(c.val() || {}).forEach(([k, v]) => {
-        if(String(v).trim() !== oldName) return;
-        updates[`subjects_catalog/${cls}/${k}`] = null;
-        updates[`subjects_catalog/${cls}/${safeKey(newName)}`] = newName;
+    for(const cls of CLS){
+      const node = await readCatalog(ACTIVE_YEAR, cls);
+      catalogList(node).forEach(e => {
+        if(e.name !== oldName) return;
+        const base = `subjects_catalog/${ACTIVE_YEAR}/${cls}`;
+        updates[`${base}/${e.key}`] = null;
+        updates[`${base}/${safeKey(newName)}`] =
+          { name: newName, teacherEmail: e.teacherEmail, teacherName: e.teacherName };
         catHits++;
       });
     }
@@ -347,8 +375,8 @@ window.checkRenameSubject = async function(){
     return;
   }
 
-  plan = { oldName, newName, updates, rows };
-  const names = await allSubjects();
+  plan = { oldName, newName, updates, rows, scope };
+  const names = await allSubjects(scope);
   const clash = names.includes(newName);
   rep.innerHTML = `
     <div class="rs-sum">Зміниться записів: ${Object.keys(updates).filter(k => updates[k] !== null).length}</div>
@@ -367,8 +395,9 @@ window.checkRenameSubject = async function(){
 
 window.applyRenameSubject = async function(){
   if(!plan) return;
-  const { oldName, newName, updates } = plan;
-  if(!confirm(`Перейменувати «${oldName}» на «${newName}» у всій школі?\n\n`
+  const { oldName, newName, updates, scope } = plan;
+  const where = (!scope || scope === 'all') ? 'у ВСІЙ ШКОЛІ' : `лише в ${scope.replace('class_','')} класі`;
+  if(!confirm(`Перейменувати «${oldName}» на «${newName}» ${where}?\n\n`
     + `Зміниться записів: ${Object.keys(updates).filter(k => updates[k] !== null).length}.\n`
     + 'Оцінки, домашні завдання й плани залишаться — вони переїдуть під нову назву.')) return;
   const btn = document.getElementById('rs-go');
@@ -377,11 +406,11 @@ window.applyRenameSubject = async function(){
     // Одним update(): або застосується все, або нічого. Часткове
     // перейменування було б найгіршим результатом — дані розлізлися б надвоє.
     await update(ref(db), updates);
-    logAction('settings', { value: `предмет перейменовано: «${oldName}» → «${newName}»` });
+    logAction('settings', { value: `предмет перейменовано: «${oldName}» → «${newName}» (${scope || 'all'})` });
 
     // Перевіряємо, що старої назви більше немає в розкладі
     let left = 0;
-    for(const cls of CLASSES){
+    for(const cls of scopeClasses((document.getElementById('rs-scope') || {}).value)){
       const s = await get(child(ref(db), `schedules/${cls}/lessons`));
       if(s.exists() && subjectsInLessons(s.val()).includes(oldName)) left++;
     }
