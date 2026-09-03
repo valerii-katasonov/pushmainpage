@@ -1106,12 +1106,13 @@ window.openMealSettings = async function(){
   document.getElementById('meal-settings-modal').style.display = 'flex';
 };
 window.msToggleDays = function(){
-  const set = (selId, boxId) => {
+  // Не set: у цьому файлі set — це запис у базу
+  const toggle = (selId, boxId) => {
     const sel = document.getElementById(selId), box = document.getElementById(boxId);
     if(sel && box) box.style.display = sel.value === 'days' ? 'flex' : 'none';
   };
-  set('ms-snack','ms-days');
-  set('ms-brk','ms-bdays');
+  toggle('ms-snack','ms-days');
+  toggle('ms-brk','ms-bdays');
 };
 window.saveMealSettings = async function(){
   const cls = currentUserData?.class, sid = await mealKey(cls);
