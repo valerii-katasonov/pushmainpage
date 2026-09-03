@@ -20,8 +20,9 @@
 // ═══════════════════════════════════════════════════════════════
 import { ref, get, child, update, remove } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { db, currentUserData, showToast, escHtml, escJs, logAction } from './common.js';
+import { ACTIVE_YEAR, getAcademicYearId } from './director.js';
 
-export const SUBJ_BUILD = '2026-09-02 · subjects v1';
+export const SUBJ_BUILD = '2026-09-02 · subjects v2 (каталог за роками)';
 
 // «Безпечний» ключ: так curriculum_plans і textbooks зберігають назву.
 // Крапки й дужки в ключах Firebase заборонені, тому їх колись замінили
@@ -401,106 +402,311 @@ window.applyRenameSubject = async function(){
   }
 };
 
-// ── Список предметів класу ──────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════
+//  КАТАЛОГ ПРЕДМЕТІВ ЗА НАВЧАЛЬНИМИ РОКАМИ
+//
+// ЯК ЛЕЖИТЬ:  subjects_catalog/{рік}/{клас}/{ключ} = {name, teacherEmail, teacherName}
+//
+// ЧОМУ ЗА РОКАМИ. Склад предметів у класі змінюється щороку, і в серпні
+// школа має робити один зрозумілий рух: «перенести з минулого року й
+// поправити». Якщо тримати один спільний список, такого руху немає —
+// є повзуча правка, у якій ніхто не пам'ятає, що змінилося.
+//
+// ЧОМУ ВЧИТЕЛЬ ПИШЕТЬСЯ ЩЕ Й У teacher_access. Права на клас і предмет
+// уже живуть там, і конструктор бере звідти вчителя за замовчуванням.
+// Якби каталог зберігав призначення тільки в себе, у школи з'явилося б
+// друге джерело правди — і воно неминуче розійшлося б із першим. Саме
+// так у нас уже розійшлися дзвінки й час уроків.
+//
+// СТАРИЙ ФОРМАТ. До цього список лежав як subjects_catalog/{клас}/{ключ} =
+// 'Назва'. Такі дані читаємо як запасний варіант, поки рік порожній.
+// ══════════════════════════════════════════════════════════════════
+
+const CLASSES2 = Array.from({ length: 11 }, (_, i) => `class_${i + 1}`);
+const DIR2 = ['director', 'administrator'];
+function isDir2(){ return DIR2.includes(currentUserData && currentUserData.role); }
+
+// Запис каталогу може бути рядком (старий формат) або об'єктом
+export function catalogEntry(raw){
+  if(!raw) return null;
+  if(typeof raw === 'string'){
+    const n = raw.trim();
+    return n ? { name: n, teacherEmail: '', teacherName: '' } : null;
+  }
+  const n = String(raw.name || '').trim();
+  return n ? { name: n, teacherEmail: raw.teacherEmail || '', teacherName: raw.teacherName || '' } : null;
+}
+
+// Вузол каталогу → впорядкований список записів
+export function catalogList(node){
+  return Object.entries(node || {})
+    .map(([key, raw]) => { const e = catalogEntry(raw); return e ? { key, ...e } : null; })
+    .filter(Boolean)
+    .sort((a, b) => a.name.localeCompare(b.name, 'uk'));
+}
+
+// Предмети класу з розкладу + учителі з матриці доступу → готовий каталог.
+// Учителя шукаємо серед тих, кому директор уже дав цей предмет у цьому класі.
+export function catalogFromSchedule(lessons, accessByTeacher, teachers, cls){
+  const out = {};
+  subjectsInLessons(lessons).forEach(name => {
+    let email = '', tname = '';
+    const nl = name.trim().toLowerCase();
+    for(const se in (accessByTeacher || {})){
+      const raw = accessByTeacher[se] && accessByTeacher[se][cls];
+      if(!raw) continue;
+      const list = (Array.isArray(raw) ? raw : Object.values(raw))
+        .map(x => typeof x === 'string' ? x.trim().toLowerCase() : '');
+      // «Всі предмети» — це не призначення на конкретний предмет,
+      // тому такого вчителя за замовчуванням не ставимо
+      if(!list.includes(nl)) continue;
+      const t = (teachers || []).find(t => t.safeEmail === se);
+      if(t){ email = t.email; tname = t.name; break; }
+    }
+    out[safeKey(name)] = { name, teacherEmail: email, teacherName: tname };
+  });
+  return out;
+}
+
+// Минулий навчальний рік: «2026-2027» → «2025-2026»
+export function prevYearId(year){
+  const m = /^(\d{4})-(\d{4})$/.exec(String(year || ''));
+  if(!m) return null;
+  return `${+m[1] - 1}-${+m[2] - 1}`;
+}
+
+let catState = { year: null, cls: null, node: {} };
+
+async function readCatalog(year, cls){
+  const snap = await get(child(ref(db), `subjects_catalog/${year}/${cls}`));
+  if(snap.exists()) return snap.val() || {};
+  // Запасний варіант — старий плаский формат
+  const old = await get(child(ref(db), `subjects_catalog/${cls}`));
+  if(!old.exists()) return {};
+  const v = old.val() || {};
+  // Старі дані могли бути об'єктом років — тоді це не плаский формат
+  if(Object.values(v).some(x => x && typeof x === 'object' && !x.name)) return {};
+  return v;
+}
+
+// Назви предметів класу — цим користується конструктор
+window.catalogNames = async function(cls){
+  try{
+    const node = await readCatalog(ACTIVE_YEAR, cls);
+    return catalogList(node).map(e => e.name);
+  }catch(e){ console.warn('subjects_catalog:', e.message); return []; }
+};
+
+// Додати предмет у каталог поточного року (з конструктора теж)
+window.addCatalogSubject = async function(cls, name, teacherEmail, teacherName){
+  const n = String(name || '').trim();
+  if(!n) return false;
+  if(/[.#$[\]/]/.test(n)){ alert('У назві не можна вживати . # $ [ ] /'); return false; }
+  const rec = { name: n, teacherEmail: teacherEmail || '', teacherName: teacherName || '' };
+  try{
+    await update(ref(db, `subjects_catalog/${ACTIVE_YEAR}/${cls}`), { [safeKey(n)]: rec });
+    if(teacherEmail) await grantSubjectToTeacher(teacherEmail, cls, n);
+    return true;
+  }catch(e){
+    alert('Не вдалося додати предмет: ' + e.message
+      + '\n\nЯкщо тут «PERMISSION_DENIED» — перевірте, чи опубліковано правила бази.');
+    return false;
+  }
+};
+
+// Призначення вчителя = запис у матрицю доступу. Одне джерело правди.
+async function grantSubjectToTeacher(email, cls, subject){
+  const se = String(email).replace(/\./g, '_');
+  const snap = await get(child(ref(db), `teacher_access/${se}/${cls}`));
+  let list = snap.exists() ? snap.val() : [];
+  if(!Array.isArray(list)) list = Object.values(list);
+  list = list.filter(x => typeof x === 'string' && x.trim());
+  if(list.includes('Всі предмети') || list.includes(subject)) return;
+  list.push(subject);
+  await set(ref(db, `teacher_access/${se}/${cls}`), list);
+}
+
+// ── Картка ──────────────────────────────────────────────────────
 
 window.openSubjectsCatalog = async function(){
-  const sel = document.getElementById('sc-class');
-  if(!sel || !isDir()) return;
-  if(!sel.options.length)
-    sel.innerHTML = CLASSES.map((c, i) => `<option value="${c}">${i + 1} клас</option>`).join('');
+  const ys = document.getElementById('sc-year'), cs = document.getElementById('sc-class');
+  if(!ys || !cs || !isDir2()) return;
+  if(!cs.options.length)
+    cs.innerHTML = CLASSES2.map((c, i) => `<option value="${c}">${i + 1} клас</option>`).join('');
+  if(!ys.options.length){
+    const cur = ACTIVE_YEAR || getAcademicYearId();
+    const prev = prevYearId(cur);
+    ys.innerHTML = [cur, prev].filter(Boolean)
+      .map(y => `<option value="${escHtml(y)}">${escHtml(y)}${y === cur ? ' (поточний)' : ''}</option>`).join('');
+  }
   renderSubjectsCatalog();
 };
 
 window.renderSubjectsCatalog = async function(){
   const box = document.getElementById('sc-body');
-  const cls = document.getElementById('sc-class').value;
   if(!box) return;
+  const year = document.getElementById('sc-year').value;
+  const cls = document.getElementById('sc-class').value;
+  catState.year = year; catState.cls = cls;
   box.innerHTML = '<p class="empty-msg">Завантажую...</p>';
-  let listed = {}, inSchedule = [];
+
+  let node = {}, inSchedule = [];
   try{
-    const c = await get(child(ref(db), `subjects_catalog/${cls}`));
-    listed = c.exists() ? (c.val() || {}) : {};
-    const s = await get(child(ref(db), `schedules/${cls}/lessons`));
-    inSchedule = s.exists() ? subjectsInLessons(s.val()) : [];
+    node = await readCatalog(year, cls);
+    const sch = await get(child(ref(db), `schedules/${cls}/lessons`));
+    inSchedule = sch.exists() ? subjectsInLessons(sch.val()) : [];
   }catch(e){
     box.innerHTML = `<p class="empty-msg" style="color:var(--red);">${escHtml(e.message)}</p>`;
     return;
   }
-  const names = Object.values(listed).map(v => String(v).trim()).filter(Boolean)
-    .sort((a, b) => a.localeCompare(b, 'uk'));
+  catState.node = node;
+  const list = catalogList(node);
+  const names = list.map(e => e.name);
   const missing = inSchedule.filter(n => !names.includes(n));
+  const teachers = (window.globalTeachersList || []);
+
+  const teacherSelect = (e) => `<select onchange="setSubjectTeacher('${escJs(e.key)}', this.value)">
+      <option value="">— учитель не призначений —</option>
+      ${teachers.map(t => `<option value="${escHtml(t.email)}"${t.email === e.teacherEmail ? ' selected' : ''}>${escHtml(t.name)}</option>`).join('')}
+    </select>`;
 
   box.innerHTML = `
-    ${names.length
-      ? `<div class="sc-list">${names.map(n => {
-          const dup = similarNames(names, n);
-          return `<div class="sc-item"><span>${escHtml(n)}</span>
-            ${dup.length ? `<i title="Схожа назва: ${escHtml(dup.join(', '))}">⚠️ схоже на ${escHtml(dup.join(', '))}</i>` : ''}
-            <button type="button" onclick="removeSubjectFromCatalog('${escJs(cls)}','${escJs(safeKey(n))}')" title="Прибрати зі списку">×</button>
+    ${list.length
+      ? `<div class="sc-list">${list.map(e => {
+          const dup = similarNames(names, e.name);
+          return `<div class="sc-item">
+            <div class="sc-name">${escHtml(e.name)}
+              ${dup.length ? `<i>⚠️ схоже на ${escHtml(dup.join(', '))}</i>` : ''}</div>
+            ${teacherSelect(e)}
+            <button type="button" onclick="removeSubjectFromCatalog('${escJs(e.key)}')" title="Прибрати зі списку">×</button>
           </div>`;
         }).join('')}</div>`
-      : '<p class="empty-msg">Список порожній.</p>'}
+      : '<p class="empty-msg">Для цього класу й року предметів ще немає.</p>'}
+
     ${missing.length
       ? `<div class="sc-add-hint">У розкладі є ще ${missing.length}, яких немає у списку:
-          ${escHtml(missing.slice(0, 6).join(', '))}${missing.length > 6 ? '…' : ''}
-          <button type="button" onclick="fillCatalogFromSchedule('${escJs(cls)}')">Додати всі</button></div>`
+          ${escHtml(missing.slice(0, 6).join(', '))}${missing.length > 6 ? '…' : ''}</div>`
       : ''}
+
     <div class="sc-add">
-      <input type="text" id="sc-new" placeholder="Нова назва предмета">
-      <button type="button" onclick="addSubjectToCatalog('${escJs(cls)}')">+ Додати</button>
-    </div>`;
+      <input type="text" id="sc-new" placeholder="Новий предмет">
+      <select id="sc-new-teacher">
+        <option value="">— учитель —</option>
+        ${teachers.map(t => `<option value="${escHtml(t.email)}">${escHtml(t.name)}</option>`).join('')}
+      </select>
+      <button type="button" onclick="addSubjectFromCard()">+ Додати</button>
+    </div>
+
+    <div class="sc-tools">
+      <button type="button" onclick="fillCatalogFromSchedule()">📥 Зібрати з розкладу й матриці доступу</button>
+      <button type="button" onclick="carryOverSubjects()">🗓 Перенести з минулого року</button>
+      <button type="button" onclick="copySubjectsFromClass()">📋 Скопіювати з іншого класу</button>
+    </div>
+    <div class="bk-build">версія модуля: ${escHtml(SUBJ_BUILD)}</div>`;
 };
 
-window.addSubjectToCatalog = async function(cls){
+window.addSubjectFromCard = async function(){
   const inp = document.getElementById('sc-new');
-  const name = (inp.value || '').trim();
-  if(!name) return;
-  if(/[.#$[\]/]/.test(name)){ alert('У назві не можна вживати . # $ [ ] /'); return; }
-  try{
-    await update(ref(db, `subjects_catalog/${cls}`), { [safeKey(name)]: name });
-    inp.value = '';
+  const sel = document.getElementById('sc-new-teacher');
+  const t = (window.globalTeachersList || []).find(x => x.email === sel.value);
+  if(await window.addCatalogSubject(catState.cls, inp.value, sel.value, t ? t.name : '')){
+    inp.value = ''; sel.value = '';
     renderSubjectsCatalog();
-  }catch(e){ alert('Не вдалося додати: ' + e.message); }
+  }
 };
 
-window.removeSubjectFromCatalog = async function(cls, key){
-  if(!confirm('Прибрати предмет зі списку?\n\nЦе не чіпає ні розклад, ні оцінки — лише підказки при введенні.')) return;
+window.setSubjectTeacher = async function(key, email){
+  const rec = catalogEntry(catState.node[key]);
+  if(!rec) return;
+  const t = (window.globalTeachersList || []).find(x => x.email === email);
   try{
-    await remove(ref(db, `subjects_catalog/${cls}/${key}`));
+    await update(ref(db, `subjects_catalog/${catState.year}/${catState.cls}/${key}`),
+      { name: rec.name, teacherEmail: email || '', teacherName: t ? t.name : '' });
+    if(email) await grantSubjectToTeacher(email, catState.cls, rec.name);
+    showToast(email ? `✅ ${rec.name} — ${t ? t.name : ''}` : '✅ Учителя знято');
+    renderSubjectsCatalog();
+  }catch(e){ alert('Не вдалося зберегти: ' + e.message); }
+};
+
+window.removeSubjectFromCatalog = async function(key){
+  if(!confirm('Прибрати предмет зі списку?\n\nЦе не чіпає ні розклад, ні оцінки, ні права вчителя — '
+    + 'лише перелік, з якого обирають у конструкторі.')) return;
+  try{
+    await remove(ref(db, `subjects_catalog/${catState.year}/${catState.cls}/${key}`));
     renderSubjectsCatalog();
   }catch(e){ alert('Не вдалося прибрати: ' + e.message); }
 };
 
-window.fillCatalogFromSchedule = async function(cls){
+window.fillCatalogFromSchedule = async function(){
   try{
-    const s = await get(child(ref(db), `schedules/${cls}/lessons`));
-    if(!s.exists()) return;
-    const patch = {};
-    subjectsInLessons(s.val()).forEach(n => { patch[safeKey(n)] = n; });
-    if(!Object.keys(patch).length) return;
-    await update(ref(db, `subjects_catalog/${cls}`), patch);
-    showToast('✅ Список поповнено з розкладу');
+    const [sch, acc] = await Promise.all([
+      get(child(ref(db), `schedules/${catState.cls}/lessons`)),
+      get(child(ref(db), 'teacher_access'))
+    ]);
+    if(!sch.exists()) return alert('У цього класу немає розкладу — збирати нема з чого.');
+    const patch = catalogFromSchedule(sch.val(), acc.exists() ? acc.val() : {},
+                                      window.globalTeachersList || [], catState.cls);
+    const n = Object.keys(patch).length;
+    if(!n) return alert('У розкладі не знайдено жодного предмета.');
+    const withT = Object.values(patch).filter(x => x.teacherEmail).length;
+    if(!confirm(`Додати предметів: ${n}?\n\nІз них із визначеним учителем: ${withT}.\n`
+      + 'Наявні записи цього класу буде оновлено, зайві не зникнуть.')) return;
+    await update(ref(db, `subjects_catalog/${catState.year}/${catState.cls}`), patch);
+    showToast(`✅ Додано предметів: ${n}`);
     renderSubjectsCatalog();
   }catch(e){ alert('Не вдалося зібрати: ' + e.message); }
 };
 
-// Підказки для конструктора розкладу й імпорту: <datalist> з назвами класу.
-// Свідомо саме підказки, а не жорсткий вибір: якщо школа завтра введе
-// новий предмет, ніхто не має впертися в замкнений список.
+window.carryOverSubjects = async function(){
+  const prev = prevYearId(catState.year);
+  if(!prev) return alert('Не можу визначити минулий рік.');
+  try{
+    const snap = await get(child(ref(db), `subjects_catalog/${prev}/${catState.cls}`));
+    if(!snap.exists()) return alert(`За ${prev} у цього класу немає списку предметів.`);
+    const list = catalogList(snap.val());
+    if(!list.length) return alert(`За ${prev} список порожній.`);
+    if(!confirm(`Перенести ${list.length} предметів із ${prev} у ${catState.year}?\n\n`
+      + 'Наявні записи буде оновлено, зайві не зникнуть.')) return;
+    const patch = {};
+    list.forEach(e => { patch[e.key] = { name: e.name, teacherEmail: e.teacherEmail, teacherName: e.teacherName }; });
+    await update(ref(db, `subjects_catalog/${catState.year}/${catState.cls}`), patch);
+    logAction('settings', { value: `предмети перенесено ${prev} → ${catState.year}, ${catState.cls}` });
+    showToast(`✅ Перенесено: ${list.length}`);
+    renderSubjectsCatalog();
+  }catch(e){ alert('Не вдалося перенести: ' + e.message); }
+};
+
+window.copySubjectsFromClass = async function(){
+  const from = prompt('З якого класу скопіювати? Вкажіть номер (1-11):', '');
+  if(from === null) return;
+  const n = parseInt(from, 10);
+  if(!n || n < 1 || n > 11) return alert('Потрібен номер класу від 1 до 11.');
+  const src = `class_${n}`;
+  if(src === catState.cls) return alert('Це той самий клас.');
+  try{
+    const node = await readCatalog(catState.year, src);
+    const list = catalogList(node);
+    if(!list.length) return alert(`У ${n} класу немає списку предметів за ${catState.year}.`);
+    if(!confirm(`Скопіювати ${list.length} предметів із ${n} класу?\n\n`
+      + 'Разом з учителями. Наявні записи буде оновлено, зайві не зникнуть.')) return;
+    const patch = {};
+    list.forEach(e => { patch[e.key] = { name: e.name, teacherEmail: e.teacherEmail, teacherName: e.teacherName }; });
+    await update(ref(db, `subjects_catalog/${catState.year}/${catState.cls}`), patch);
+    for(const e of list) if(e.teacherEmail) await grantSubjectToTeacher(e.teacherEmail, catState.cls, e.name);
+    showToast(`✅ Скопійовано: ${list.length}`);
+    renderSubjectsCatalog();
+  }catch(e){ alert('Не вдалося скопіювати: ' + e.message); }
+};
+
+// Підказки для імпорту розкладу (конструктор тепер має власний список)
 export async function subjectDatalist(cls, id = 'subject-suggestions'){
   let el = document.getElementById(id);
-  if(!el){
-    el = document.createElement('datalist');
-    el.id = id;
-    document.body.appendChild(el);
-  }
-  const set = new Set();
+  if(!el){ el = document.createElement('datalist'); el.id = id; document.body.appendChild(el); }
+  const set = new Set(await window.catalogNames(cls));
   try{
-    const c = await get(child(ref(db), `subjects_catalog/${cls}`));
-    if(c.exists()) Object.values(c.val() || {}).forEach(v => { if(v) set.add(String(v).trim()); });
     const s = await get(child(ref(db), `schedules/${cls}/lessons`));
     if(s.exists()) subjectsInLessons(s.val()).forEach(n => set.add(n));
-  }catch(e){ console.warn('subjects_catalog:', e.message); }
+  }catch(e){ console.warn('subjects:', e.message); }
   el.innerHTML = [...set].sort((a, b) => a.localeCompare(b, 'uk'))
     .map(n => `<option value="${escHtml(n)}"></option>`).join('');
   return el;
