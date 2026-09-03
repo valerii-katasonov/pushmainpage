@@ -18,7 +18,7 @@
 // Саме тому їх можна ганяти тестами, і саме тому перед записом ми вміємо
 // показати директору, скільки записів зміниться.
 // ═══════════════════════════════════════════════════════════════
-import { ref, get, child, update, remove } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+import { ref, set, get, child, update, remove } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { db, currentUserData, showToast, escHtml, escJs, logAction } from './common.js';
 import { ACTIVE_YEAR, getAcademicYearId } from './director.js';
 
@@ -213,18 +213,18 @@ let plan = null;          // прорахований перенос, чекає
 
 // Усі предмети школи — з розкладів і зі списків класів
 async function allSubjects(){
-  const set = new Set();
+  const found = new Set();
   await Promise.all(CLASSES.map(async cls => {
     try{
       const s = await get(child(ref(db), `schedules/${cls}/lessons`));
-      if(s.exists()) subjectsInLessons(s.val()).forEach(n => set.add(n));
+      if(s.exists()) subjectsInLessons(s.val()).forEach(n => found.add(n));
     }catch(e){}
     try{
       const c = await get(child(ref(db), `subjects_catalog/${cls}`));
-      if(c.exists()) Object.values(c.val() || {}).forEach(n => { if(n) set.add(String(n).trim()); });
+      if(c.exists()) Object.values(c.val() || {}).forEach(n => { if(n) found.add(String(n).trim()); });
     }catch(e){}
   }));
-  return [...set].sort((a, b) => a.localeCompare(b, 'uk'));
+  return [...found].sort((a, b) => a.localeCompare(b, 'uk'));
 }
 
 window.openRenameSubject = async function(){
@@ -702,12 +702,14 @@ window.copySubjectsFromClass = async function(){
 export async function subjectDatalist(cls, id = 'subject-suggestions'){
   let el = document.getElementById(id);
   if(!el){ el = document.createElement('datalist'); el.id = id; document.body.appendChild(el); }
-  const set = new Set(await window.catalogNames(cls));
+  // Не називаємо змінну set: у цьому файлі set — це запис у базу,
+  // і локальна змінна з таким іменем ховала б його всередині функції
+  const names = new Set(await window.catalogNames(cls));
   try{
     const s = await get(child(ref(db), `schedules/${cls}/lessons`));
-    if(s.exists()) subjectsInLessons(s.val()).forEach(n => set.add(n));
+    if(s.exists()) subjectsInLessons(s.val()).forEach(n => names.add(n));
   }catch(e){ console.warn('subjects:', e.message); }
-  el.innerHTML = [...set].sort((a, b) => a.localeCompare(b, 'uk'))
+  el.innerHTML = [...names].sort((a, b) => a.localeCompare(b, 'uk'))
     .map(n => `<option value="${escHtml(n)}"></option>`).join('');
   return el;
 }
