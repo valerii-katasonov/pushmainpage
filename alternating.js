@@ -149,7 +149,12 @@ window.openAltCard = async function(){
   if(!DIR_ROLES.includes(role) && !TEACH_ROLES.includes(role)){ box.innerHTML = ''; return; }
 
   box.innerHTML = '<p class="empty-msg">Завантажую...</p>';
-  const cls = altState.cls || getActiveClass();
+  // ЧИЙ КЛАС ПОКАЗУЄМО. У директора є власний список класів усередині
+  // картки, тож його вибір запам'ятовуємо. У вчителя такого списку немає —
+  // клас задає селектор кабінету, і картка мусить іти за ним. Раніше клас
+  // запам'ятовувався при першому відкритті й більше не оновлювався: учитель
+  // перемикався на 3 клас, а картка й далі шукала уроки в першому.
+  const cls = DIR_ROLES.includes(role) ? (altState.cls || getActiveClass()) : getActiveClass();
   altState.cls = cls;
 
   try{
@@ -191,6 +196,7 @@ function renderAltCard(){
          ${Array.from({length:11}, (_,i)=>`<option value="class_${i+1}"${altState.cls===`class_${i+1}`?' selected':''}>${i+1} клас</option>`).join('')}
        </select>`
     : `<div style="font-size:.8rem;color:#4527a0;font-weight:600;margin-bottom:8px;">${escHtml(clsNum)} клас</div>`;
+  // Підпис класу береться з altState.cls — того самого, з якого читали розклад
 
   if(!list.length){
     box.innerHTML = picker
