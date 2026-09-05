@@ -1113,6 +1113,11 @@ window.handleClassChange=function(){
     logAction('settings',{value:`налагодження: перехід у ${ac}`});
   loadStudentsList();loadScheduleScript(ac,()=>handleDateChange());
   checkCurriculumUploadAccess(); /* CURRICULUM v3 */
+  // Картка чергування читає розклад обраного класу, тож після зміни класу
+  // її треба перемалювати. Сама вона про зміну не дізнається: ontoggle
+  // спрацьовує лише коли людина розгортає картку.
+  const altBox=document.getElementById('alt-slot-teacher');
+  if(altBox&&altBox.offsetParent!==null&&window.openAltCard)window.openAltCard();
 };
 
 // Червона смуга вгорі: щоб режим налагодження неможливо було переплутати
