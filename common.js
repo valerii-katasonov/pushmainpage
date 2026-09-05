@@ -177,7 +177,25 @@ export const GRADE_WEIGHTS={'П':1.0,'У':1.0,'ДЗ':0.5,'СР':1.5,'ДК':1.5,'
 // Best-guess full Ukrainian labels used only to seed grade_type_defs on first run —
 // director can rename via delete+recreate in the new "🎯 Типи оцінок" panel if wrong.
 const GRADE_TYPE_LABELS={'П':'Поточна','У':'Усна відповідь','ДЗ':'Домашнє завдання','СР':'Самостійна робота','ДК':'Диктант','ПР':'Практична робота','ПЗ':'Проектне завдання','К':'Контрольна робота'};
+// Скільки наліпок до призу. 30 — лише запасне значення: справжню мету
+// задає класний керівник для свого класу у вузлі sticker_goal/{клас}.
+// Клас класу різниця: у першому й у дев'ятому «багато» — це різні числа.
 export const STICKER_GOAL=30;
+export let stickerGoals={};                 // {class_3: 20}
+export function stickerGoal(cls){
+  const v = parseInt(stickerGoals && stickerGoals[cls], 10);
+  return (Number.isFinite(v) && v > 0) ? v : STICKER_GOAL;
+}
+window.stickerGoal = stickerGoal;
+// Читають усі: батькам і учням треба показати ту саму мету, що й учителю
+export function listenStickerGoals(){
+  try{
+    onValue(ref(db, 'sticker_goal'), snap => {
+      stickerGoals = snap.exists() ? (snap.val() || {}) : {};
+      try{ if(window.refreshStickerViews) window.refreshStickerViews(); }catch(e){}
+    }, err => console.warn('sticker_goal:', err.message));
+  }catch(e){ console.warn('sticker_goal:', e.message); }
+}
 export const dayKeys=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 export const dayNamesUA={Monday:"Понеділок",Tuesday:"Вівторок",Wednesday:"Середа",Thursday:"Четвер",Friday:"П'ятниця"};
 // ══════════ MULTI-ROLE SUPPORT ══════════
@@ -1118,6 +1136,8 @@ window.handleClassChange=function(){
   // спрацьовує лише коли людина розгортає картку.
   const altBox=document.getElementById('alt-slot-teacher');
   if(altBox&&altBox.offsetParent!==null&&window.openAltCard)window.openAltCard();
+  // Поля вкладки «Клас» теж залежать від класу
+  if(window.refreshClassTabPickers)window.refreshClassTabPickers();
 };
 
 // Червона смуга вгорі: щоб режим налагодження неможливо було переплутати
@@ -1402,6 +1422,7 @@ window.openFromNotification = function(screenId){
 async function initUserSession(){
   initModalScrollLock();   // фон під вікнами не прокручується (важливо для iPhone)
   renderMasterBanner();    // червона смуга, якщо ввімкнено режим налагодження
+  listenStickerGoals();    // мета наліпок задається класним керівником
   // Чинний навчальний рік читаємо ПЕРШИМ. Календар, семестри й табелі
   // залежать від нього, і якщо взяти його пізніше, вони встигнуть
   // прочитати не той вузол — саме так календар і став порожнім 1 вересня.
@@ -1446,9 +1467,9 @@ async function initUserSession(){
     document.getElementById('teacher-screen').style.display='block';document.getElementById('teacher-class-selector-box').style.display='block';
     const isArt=r==='art_school_teacher';
     // Майстер-ролі показуємо матрицю розкладу — вона потрібна для налагодження
-    document.getElementById('t-matrix-btn-wrapper').style.display=(isArt||isMasterTeacher(r))?'block':'none';
+    document.getElementById('t-matrix-btn-wrapper').style.display=(isArt||isMasterTeacher(r))?'grid':'none';
     document.getElementById('t-mark-absent-block').style.display=isArt?'none':'flex';
-    document.getElementById('t-exams-journal-btns').style.display=isArt?'none':'flex';
+    document.getElementById('t-exams-journal-btns').style.display=isArt?'none':'grid';
     document.getElementById('t-wrapped-btn').style.display=isArt?'none':'block';
     document.getElementById('t-hw-list-wrapper').style.display=isArt?'none':'block';
     document.getElementById('t-hw-input-wrapper').style.display=isArt?'none':'block';
@@ -1914,18 +1935,25 @@ export async function renderParentsBlock(containerId,cls){
   if(!cls){box.innerHTML='<p class="empty-msg">Оберіть клас.</p>';return;}
   box.innerHTML='<p class="empty-msg">Завантаження...</p>';
   try{
-    const [stSnap,plSnap,usersSnap,slSnap,cardSnap]=await Promise.all([
+    // users і student_links читає лише директор: там персональні дані всіх
+    // людей школи. Вони потрібні тільки для позначки «батьки вже заходили».
+    // Раніше всі п'ять читань стояли в одному Promise.all, тож відмова в
+    // правах валила весь блок — учитель бачив «Permission denied» замість
+    // списку батьків свого класу, який йому цілком доступний.
+    const [stSnap,plSnap,cardSnap]=await Promise.all([
       get(child(ref(db),`students_list/${cls}`)),
       get(child(ref(db),'parent_links')),
-      getUsersSnap(),
-      get(child(ref(db),'student_links')),
       get(child(ref(db),`student_cards/${cls}`))
     ]);
+    let usersSnap=null, slSnap=null, loginInfoDenied=false;
+    try{
+      [usersSnap,slSnap]=await Promise.all([getUsersSnap(), get(child(ref(db),'student_links'))]);
+    }catch(e){ loginInfoDenied=true; }
     const cards=cardSnap.exists()?cardSnap.val():{};
     const students=stSnap.exists()?Object.values(stSnap.val()).sort((a,b)=>String(a).localeCompare(String(b),'uk')):[];
     if(students.length===0){box.innerHTML='<p class="empty-msg">У цьому класі ще немає учнів.</p>';return;}
     const loggedIn=new Set();
-    if(usersSnap.exists()){
+    if(usersSnap&&usersSnap.exists()){
       const u=usersSnap.val();
       for(const uid in u)if(u[uid].email&&u[uid].role==='parent')loggedIn.add(u[uid].email.toLowerCase());
     }
@@ -1946,6 +1974,8 @@ export async function renderParentsBlock(containerId,cls){
     let html=orphans.length
       ? `<div class="bell-missing">⚠️ Без прив'язаних батьків: ${escHtml(orphans.join(', '))}</div>`
       : `<div class="po-ok">✓ У всіх учнів є прив'язані контакти</div>`;
+    if(loginInfoDenied) html += '<p class="empty-msg" style="text-align:left;font-size:.72rem;">'
+      + 'Позначка «вже заходив у портал» доступна лише директору — тут вона не показується.</p>';
     // Ключі учнів потрібні, щоб можна було перейменувати/прибрати учня
     // прямо звідси — окремий «список учнів» більше не потрібен.
     const keyByName={};
@@ -1953,7 +1983,7 @@ export async function renderParentsBlock(containerId,cls){
     // Власний вхід учня: student_links ключується його поштою, тож
     // перевертаємо в «ім'я → email», щоб показати, у кого вхід є, а в кого ні
     const loginByStudent={};
-    if(slSnap.exists()){
+    if(slSnap&&slSnap.exists()){
       const sl=slSnap.val();
       for(const se in sl){
         const v=sl[se];
