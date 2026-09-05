@@ -17,15 +17,57 @@ export let teacherAttendanceListener=null;
 window.myDetailedReactions=[];
 
 // ══════════ TEACHER: TOPIC & HW ══════════
+
+// ═══════════════════════════════════════════════════════════════
+//  ПРЕДМЕТ ПИТАЄМО В САМІЙ ДІЇ
+//
+// Раніше «Швидкий журнал», «Без оцінок» і копіювання ДЗ мовчки брали
+// предмет із селектора на вкладці «Журнал». Учитель натискав кнопку на
+// «Сьогодні» — і дія спиралася на контрол, якого в цю мить не видно.
+// Зміна предмета в журналі непомітно міняла поведінку кнопок на іншій
+// вкладці, і зрозуміти це з екрана було неможливо.
+//
+// Тепер кожне вікно має власний список предметів. Джерело те саме —
+// #t-subject, тобто перелік, дозволений цьому вчителю в цьому класі,
+// — але вибір видно поруч із кнопкою, якою людина зараз користується.
+// ═══════════════════════════════════════════════════════════════
+export function fillActionSubject(selectId, preselect){
+  const sel = document.getElementById(selectId);
+  const src = document.getElementById('t-subject');
+  if(!sel) return '';
+  const opts = src ? Array.from(src.options).map(o => o.value).filter(Boolean) : [];
+  if(!opts.length){ sel.innerHTML = '<option value="">— предметів немає —</option>'; return ''; }
+  const want = opts.includes(preselect) ? preselect : opts[0];
+  sel.innerHTML = opts.map(o =>
+    `<option value="${escHtml(o)}"${o === want ? ' selected' : ''}>${escHtml(o)}</option>`).join('');
+  return want;
+}
+
+// Предмет для дії: беремо з її власного списку, а якщо його ще не
+// наповнено — з журналу. Другий випадок буває лише в першу мить відкриття.
+export function actionSubject(selectId){
+  const sel = document.getElementById(selectId);
+  if(sel && sel.value) return sel.value;
+  const src = document.getElementById('t-subject');
+  return src ? src.value : '';
+}
+
 window.handleSubjectChange=function(){
   loadCurrentTopicAndHW();
   const subj=document.getElementById('t-subject').value;
   ['t-subject-for-comment'].forEach(id=>{const el=document.getElementById(id);if(el)Array.from(el.options).forEach(o=>o.selected=(o.value===subj));});
   loadTextbooksForTeacher();loadCurriculumTopics();
   populateTopicSelector(); /* CURRICULUM v3 */
+  // Список підручників для ДЗ наповнювався ЛИШЕ при розгортанні блока
+  // (ontoggle). Якщо вчитель відкрив його до вибору предмета або змінив
+  // предмет після — там лишалося «спочатку оберіть предмет» назавжди.
+  if(document.getElementById('hw-textbook')) fillHwTextbooks();
 };
 export function loadCurrentTopicAndHW(){
   const date=document.getElementById('global-date').value;const subject=document.getElementById('t-subject').value;const cls=getActiveClass();
+  // Підручники прив'язані до пари «клас + предмет», тож після зміни класу
+  // список теж застаріває
+  if(document.getElementById('hw-textbook')) fillHwTextbooks();
   if(!subject)return;
   if(document.getElementById('t-hw'))document.getElementById('t-hw').value='';
   if(document.getElementById('existing-image-info'))document.getElementById('existing-image-info').style.display='none';
@@ -84,10 +126,12 @@ window.fillHwTextbooks=async function(){
   if(!subj){sel.innerHTML='<option value="">— спочатку оберіть предмет —</option>';return;}
   const snap=await get(ref(db,`textbooks/${getActiveClass()}/${subj.replace(/[.#$[\]]/g,'_')}`));
   let html='<option value="">— не вказувати —</option>';
+  let n=0;
   if(snap.exists()){
     const d=snap.val();
-    for(const k in d)html+=`<option value="${escHtml(d[k].title||d[k].url)}">${escHtml(d[k].title||d[k].url)}</option>`;
+    for(const k in d){ html+=`<option value="${escHtml(d[k].title||d[k].url)}">${escHtml(d[k].title||d[k].url)}</option>`; n++; }
   }
+  if(!n) html='<option value="">— для цього предмета підручників ще не додано —</option>';
   sel.innerHTML=html;
 };
 window.generateHomeworkAI=async function(){
@@ -124,10 +168,9 @@ window.generateHomeworkAI=async function(){
 // і поле оцінки. Зберігається все разом, одним натисканням.
 window.openQuickJournal=async function(){
   const cls=getActiveClass();
-  const subj=document.getElementById('t-subject').value;
+  const subj=fillActionSubject('qj-subject', actionSubject('qj-subject'));
   const date=document.getElementById('global-date').value;
-  if(!subj)return showToast('⚠️ Спочатку оберіть предмет');
-  document.getElementById('qj-subject').textContent=subj;
+  if(!subj)return showToast('⚠️ Для цього класу немає доступних предметів');
   document.getElementById('qj-date').textContent=date.split('-').reverse().join('.');
   const box=document.getElementById('qj-body');
   box.innerHTML='<p class="empty-msg">Завантаження...</p>';
@@ -189,7 +232,8 @@ window.qjSet=function(btn,val){
 window.closeQuickJournal=function(){document.getElementById('quick-journal-modal').style.display='none';};
 window.saveQuickJournal=async function(){
   const cls=getActiveClass();
-  const subj=document.getElementById('t-subject').value;
+  // Саме той предмет, який видно у вікні, а не той, що лишився в журналі
+  const subj=actionSubject('qj-subject');
   const date=document.getElementById('global-date').value;
   const ym=date.slice(0,7);
   const gtype=document.getElementById('qj-type').value;
@@ -284,10 +328,9 @@ window.sendClassBroadcast=async function(){
 // саме з цього предмета.
 window.showUngraded=async function(){
   const cls=getActiveClass();
-  const subj=document.getElementById('t-subject').value;
+  const subj=fillActionSubject('ungraded-subject', actionSubject('ungraded-subject'));
   const box=document.getElementById('ungraded-body');
-  if(!subj)return showToast('⚠️ Спочатку оберіть предмет');
-  document.getElementById('ungraded-subject').textContent=subj;
+  if(!subj)return showToast('⚠️ Для цього класу немає доступних предметів');
   document.getElementById('ungraded-modal').style.display='flex';
   box.innerHTML='<p class="empty-msg">Обчислення...</p>';
   try{
@@ -334,9 +377,9 @@ window.closeUngraded=function(){document.getElementById('ungraded-modal').style.
 // пов'язані з календарним планом і вичиткою годин, і в кожного класу
 // свій прогрес — копіювання їх зіпсувало б лічильники.
 window.openHwCopy=async function(){
-  const subject=document.getElementById('t-subject').value;
+  const subject=fillActionSubject('hw-copy-subject', actionSubject('hw-copy-subject'));
   const box=document.getElementById('hw-copy-classes');
-  if(!subject)return showToast('⚠️ Спочатку оберіть предмет');
+  if(!subject)return showToast('⚠️ Для цього класу немає доступних предметів');
   const cur=getActiveClass();
   // Пропонуємо лише класи, до яких у вчителя є доступ саме з цього предмета
   const mine=Object.keys(teacherAccessMatrix||{}).filter(c=>c!==cur&&window.isSubjectAllowed(c,subject));
@@ -344,12 +387,11 @@ window.openHwCopy=async function(){
   box.innerHTML=mine.map(c=>`<label class="hw-copy-opt">
       <input type="checkbox" value="${escHtml(c)}"> ${escHtml(c.replace('class_',''))} клас
     </label>`).join('');
-  document.getElementById('hw-copy-subject').textContent=subject;
   document.getElementById('hw-copy-modal').style.display='flex';
 };
 window.closeHwCopy=function(){document.getElementById('hw-copy-modal').style.display='none';};
 window.doHwCopy=async function(){
-  const subject=document.getElementById('t-subject').value;
+  const subject=actionSubject('hw-copy-subject');
   const date=document.getElementById('global-date').value;
   const targets=Array.from(document.querySelectorAll('#hw-copy-classes input:checked')).map(i=>i.value);
   if(targets.length===0)return alert('Оберіть хоча б один клас.');
@@ -628,9 +670,13 @@ function buildMarkAbsentLessonOptions(){
       sel.innerHTML+=`<option value="${i+1}">${escHtml(l.number||(i+1))}. ${escHtml(sn)}</option>`;
     });
   } else {
-    const fallbackSubj=document.getElementById('t-subject')?.value;
-    const val=fallbackSubj||'all';
-    sel.innerHTML=`<option value="${val}">${fallbackSubj?fallbackSubj+' (розклад не знайдено)':'Увесь день'}</option>`;
+    // Розкладу на цей день немає — відмічаємо ВЕСЬ день.
+    //
+    // Раніше сюди підставлявся предмет із вкладки «Журнал», і він ставав
+    // ключем уроку в записі про відсутність. Тобто те, що вчитель обрав
+    // на іншому екрані, мовчки визначало, до якого «уроку» прив'яжеться
+    // пропуск. Вигадувати урок, якого немає в розкладі, ми не маємо права.
+    sel.innerHTML = '<option value="all">Увесь день (розкладу на цей день немає)</option>';
   }
 }
 window.teacherMarkAbsent=function(){
@@ -644,7 +690,14 @@ window.teacherMarkAbsent=function(){
     showToast(`✅ ${stuName(getActiveClass(), st)} відмічений.`);
     // Сповіщення батькам — саме заради цього випадку push і потрібен:
     // дитина не дійшла до школи, а сім'я про це ще не знає
-    notifyEvent('absence',{class:getActiveClass(),studentName:stuName(getActiveClass(),st),subject:document.getElementById('t-subject')?.value||''});
+    // Предмет у сповіщенні беремо з обраного УРОКУ, а не з журналу:
+  // інакше батько отримає «відсутній на Читанні» тільки тому, що вчитель
+  // хвилину тому дивився Читання на іншій вкладці.
+  const lessonSel=document.getElementById('t-mark-absent-lesson');
+  const lessonLabel=lessonSel&&lessonSel.selectedIndex>=0
+    ? (lessonSel.options[lessonSel.selectedIndex].text||'').replace(/^\d+\.\s*/,'') : '';
+  notifyEvent('absence',{class:getActiveClass(),studentName:stuName(getActiveClass(),st),
+    subject:(slotKey==='all'?'':lessonLabel)});
     logAction('attendance',{cls:getActiveClass(),target:stuName(getActiveClass(),st),date,value:status,reason:rs});
     document.getElementById('t-mark-absent-student').value='';
   });
