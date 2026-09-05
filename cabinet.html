@@ -1005,6 +1005,38 @@
        предмет із вкладки «Журнал» — з екрана, якого в цю мить не видно. */
     .act-subj{width:auto;max-width:100%;margin:0;padding:5px 9px;font-size:.85rem;
               font-weight:700;color:var(--teal);border:1px solid #b2dfdb;border-radius:8px;background:#fff;}
+    /* Групи всередині вкладки «Урок». Раніше тринадцять блоків ішли
+       суцільним списком, і знайти потрібний можна було лише перебором. */
+    .lg-head{display:flex;align-items:center;gap:9px;margin:20px 0 9px 0;
+             font-size:.82rem;font-weight:800;color:#455a64;text-transform:uppercase;
+             letter-spacing:.03em;border-bottom:2px solid #eceff1;padding-bottom:6px;}
+    .lg-head span{flex:none;width:22px;height:22px;border-radius:50%;background:#455a64;
+                  color:#fff;font-size:.72rem;display:flex;align-items:center;justify-content:center;}
+    /* ── Швидкі дії: одна сітка замість трьох рядів ──
+       Раніше це були три окремі ряди з різними відступами: у першого
+       не було нижнього поля, у другого 14px, у третього верхнє 9px.
+       Через це ряди сходилися впритул і кнопки виглядали накладеними.
+       Сітка сама тримає однакову відстань і по горизонталі, і по
+       вертикалі, а мінімальна ширина не дає підпису переноситися. */
+    .qa-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));
+             gap:9px;margin-bottom:9px;}
+    .qa-grid:last-of-type{margin-bottom:0;}
+    .qa-btn{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .qa-ungraded{background:linear-gradient(135deg,#f39c12,#e67e22);color:#fff;}
+    .qa-quick{background:linear-gradient(135deg,#00c6ff,#0072ff);color:#fff;}
+    .qa-broadcast{background:linear-gradient(135deg,#9b59b6,#8e44ad);color:#fff;}
+    .qa-print{background:#eceff1;color:#37474f;}
+    .qa-matrix{background:linear-gradient(135deg,#1abc9c,#16a085);color:#fff;}
+    @media (max-width:520px){
+      .qa-grid{grid-template-columns:1fr;}
+    }
+    /* Мета наліпок — задає класний керівник свого класу */
+    .sg-box{background:#fff8e1;border:1px solid #ffe0a3;border-radius:11px;padding:11px;margin-bottom:11px;text-align:left;}
+    .sg-box label{display:block;font-size:.78rem;font-weight:700;color:#b26a00;margin-bottom:6px;}
+    .sg-row{display:flex;gap:7px;}
+    .sg-row input{flex:1;margin:0;font-size:.9rem;}
+    .sg-row button{width:auto;margin:0;padding:9px 15px;background:#f39c12;color:#fff;font-size:.82rem;}
+    .sg-note{font-size:.71rem;color:#8d6e63;margin-top:6px;line-height:1.4;}
     /* Уроки, що чергуються */
     .alt-badge{display:inline-block;background:#ede7f6;color:#5e35b1;border-radius:6px;
                padding:1px 6px;font-size:.64rem;font-weight:700;vertical-align:middle;margin-left:5px;}
@@ -2453,7 +2485,8 @@
     <h2 id="teacher-dashboard-title">👨‍🏫 Журнал</h2>
     <div class="dtab-bar" id="teacher-screen-tabs">
       <button class="dtab on" data-t="day" onclick="switchTab('teacher-screen','day',this)">Сьогодні</button>
-      <button class="dtab" data-t="journal" onclick="switchTab('teacher-screen','journal',this)">Журнал</button>
+      <button class="dtab" data-t="lesson" onclick="switchTab('teacher-screen','lesson',this)">Урок</button>
+      <button class="dtab" data-t="class" onclick="switchTab('teacher-screen','class',this)">Клас</button>
       <button class="dtab" data-t="news" onclick="switchTab('teacher-screen','news',this)">Новини<span class="chat-dot"></span></button>
     </div>
     <div id="t-push-invite" style="display:none;"></div>
@@ -2461,18 +2494,18 @@
 
     <section class="screen-section" data-dtab="day">
       <h3>🚀 Швидкі дії</h3>
-      <div id="t-exams-journal-btns" style="display:flex;gap:9px;">
-        <button onclick="openExamsCalendar()" class="qa-btn qa-exams" style="flex:1;min-width:0;">📅 Контрольні</button>
-        <button onclick="openJournalModal('teacher')" class="qa-btn qa-journal" style="flex:1;min-width:0;">📖 Журнал</button>
-        <button onclick="showUngraded()" class="qa-btn" style="flex:1;min-width:0;background:linear-gradient(135deg,#f39c12,#e67e22);color:#fff;">🔍 Без оцінок</button>
+      <div id="t-exams-journal-btns" class="qa-grid">
+        <button onclick="openExamsCalendar()" class="qa-btn qa-exams">📅 Контрольні</button>
+        <button onclick="openJournalModal('teacher')" class="qa-btn qa-journal">📖 Журнал</button>
+        <button onclick="showUngraded()" class="qa-btn qa-ungraded">🔍 Без оцінок</button>
       </div>
-      <div id="t-quick-btns" style="display:flex;gap:9px;margin-bottom:14px;flex-wrap:wrap;">
-        <button onclick="openQuickJournal()" class="qa-btn" style="flex:1;min-width:140px;background:linear-gradient(135deg,#00c6ff,#0072ff);color:#fff;">⚡ Швидкий журнал</button>
-        <button onclick="openClassBroadcast()" class="qa-btn" style="flex:1;min-width:140px;background:linear-gradient(135deg,#9b59b6,#8e44ad);color:#fff;">✉️ Повідомлення класу</button>
-        <button onclick="printClassSchedule()" class="qa-btn" style="flex:1;min-width:140px;background:#eceff1;color:#37474f;">🖨️ Друк розкладу</button>
+      <div id="t-quick-btns" class="qa-grid">
+        <button onclick="openQuickJournal()" class="qa-btn qa-quick">⚡ Швидкий журнал</button>
+        <button onclick="openClassBroadcast()" class="qa-btn qa-broadcast">✉️ Повідомлення класу</button>
+        <button onclick="printClassSchedule()" class="qa-btn qa-print">🖨️ Друк розкладу</button>
       </div>
-      <div id="t-matrix-btn-wrapper" style="display:none;margin-top:9px;">
-        <button onclick="openVisualMatrixModal('live')" style="width:100%;background:linear-gradient(135deg,#1abc9c,#16a085);color:#fff;margin-top:0;padding:11px;">🗓️ Матриця розкладу</button>
+      <div id="t-matrix-btn-wrapper" class="qa-grid" style="display:none;">
+        <button onclick="openVisualMatrixModal('live')" class="qa-btn qa-matrix">🗓️ Матриця розкладу</button>
       </div>
     </section>
 
@@ -2531,10 +2564,12 @@
       <div id="t-news-feed" class="nw-feed"><p class="empty-msg">Завантаження...</p></div>
     </section>
 
-    <section class="screen-section" data-dtab="journal">
-      <h3>✏️ Заповнення журналу</h3>
+    <section class="screen-section" data-dtab="lesson">
+      <h3>✏️ Заповнення уроку</h3>
       <label>Предмет:</label>
       <select id="t-subject" onchange="handleSubjectChange()"></select>
+
+      <div class="lg-head"><span>1</span>Матеріали та плани</div>
       <!-- Підручники -->
       <div style="margin-top:12px;background:#f0f8ff;padding:14px;border-radius:12px;border:1px solid #d0e8f2;">
         <h4 style="margin:0 0 8px 0;color:var(--blue);font-size:.88rem;">📘 Посилання на підручники</h4>
@@ -2603,6 +2638,8 @@
         </details>
       </div>
       <!-- Тема уроку (PHASE 6: до 2 тем на урок, custom dropdown замість <select>) -->
+
+      <div class="lg-head"><span>2</span>Тема, домашнє завдання та оцінки</div>
       <div class="topic-card" id="t-topic-card" style="margin-top:13px;">
         <label>📌 Тема уроку 1:</label>
         <div class="topic-select-wrap">
@@ -2680,7 +2717,7 @@
       <div id="status-msg"></div>
     </section>
 
-    <section class="screen-section half">
+    <section class="screen-section half" data-dtab="class">
       <h3>📝 Оцінювання учня</h3>
       <!-- Оцінка поведінки -->
       <div style="background:#e8eaf6;padding:14px;border-radius:12px;border:1px solid #c5cae9;">
@@ -2697,9 +2734,14 @@
       <!-- Наліпка -->
       <div style="margin-top:13px;background:#fffcf0;padding:14px;border-radius:12px;border:1px solid #fde3a7;">
         <h4 style="margin:0 0 8px 0;color:#d35400;font-size:.88rem;">🌟 Видати наліпку учню</h4>
-        <div style="display:flex;gap:8px;align-items:flex-end;">
-          <select id="t-sticker-student" style="flex:2;margin-top:0;"></select>
-          <button onclick="giveStickerToStudent()" style="flex:1;margin-top:0;background:#f1c40f;color:#333;padding:11px 8px;border-radius:10px;border:none;cursor:pointer;font-weight:800;font-size:.88rem;">🌟 Дати</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
+          <label style="flex:2;min-width:170px;font-size:.74rem;color:#d35400;font-weight:600;">Учень
+            <select id="t-sticker-student" style="margin-top:3px;"></select>
+          </label>
+          <label style="flex:1;min-width:140px;font-size:.74rem;color:#d35400;font-weight:600;">Предмет
+            <select id="t-sticker-subject" style="margin-top:3px;"></select>
+          </label>
+          <button onclick="giveStickerToStudent()" style="flex:none;margin-top:0;background:#f1c40f;color:#333;padding:11px 16px;border-radius:10px;border:none;cursor:pointer;font-weight:800;font-size:.88rem;">🌟 Дати</button>
         </div>
       </div>
       <!-- Коментар -->
@@ -2725,7 +2767,8 @@
       </div>
     </section>
 
-    <section class="screen-section half">
+    <section class="screen-section half" data-dtab="class">
+      <h3>⚙️ Клас і батьки</h3>
       <!-- Управління класом -->
       <details style="background:#fff;padding:14px;border-radius:12px;border:1px solid #ddd;">
         <summary style="font-weight:700;cursor:pointer;color:#7f8c8d;">⚙️ Управління класом</summary>
@@ -3454,6 +3497,14 @@
 <div id="sticker-stats-modal" class="modal-overlay">
   <div class="modal-content" style="max-width:500px;max-height:80vh;display:flex;flex-direction:column;">
     <h3 style="margin-top:0;color:#f39c12;">🌟 Статистика наліпок</h3>
+    <div id="sticker-goal-box" class="sg-box">
+      <label for="sticker-goal-input">Наліпок до призу в цьому класі</label>
+      <div class="sg-row">
+        <input type="number" id="sticker-goal-input" min="1" max="500" step="1">
+        <button type="button" onclick="saveStickerGoal()">Зберегти</button>
+      </div>
+      <div class="sg-note" id="sticker-goal-note"></div>
+    </div>
     <div id="sticker-stats-list" style="overflow-y:auto;text-align:left;padding:9px 0;"></div>
     <button onclick="closeStickerStatsModal()" style="background:#333;color:#fff;margin-top:13px;">Закрити</button>
   </div>
