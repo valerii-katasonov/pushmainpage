@@ -2706,8 +2706,12 @@
       <div style="margin-top:13px;background:#f3e5f5;padding:14px;border-radius:12px;border:1px solid #ce93d8;">
         <h4 style="margin:0 0 8px 0;color:#7b1fa2;font-size:.88rem;">💬 Коментар учню</h4>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
-          <select id="t-student" style="flex:2;margin-top:0;border-color:#a1887f;"><option value="">Учень...</option></select>
-          <select id="t-subject-for-comment" style="flex:1;margin-top:0;border-color:#a1887f;"></select>
+          <label style="flex:2;min-width:180px;font-size:.74rem;color:#7b1fa2;font-weight:600;">Учень
+            <select id="t-student" style="margin-top:3px;border-color:#a1887f;"><option value="">Учень...</option></select>
+          </label>
+          <label style="flex:1;min-width:150px;font-size:.74rem;color:#7b1fa2;font-weight:600;">Предмет
+            <select id="t-subject-for-comment" style="margin-top:3px;border-color:#a1887f;"></select>
+          </label>
         </div>
         <textarea id="t-comment" rows="2" placeholder="Напишіть своїми словами — напр. «не готовий до уроку, заважає»..." style="margin-top:7px;border-color:#a1887f;font-size:.88rem;"></textarea>
         <!-- AI переформулює чернетку вчителя в коректне повідомлення батькам.
