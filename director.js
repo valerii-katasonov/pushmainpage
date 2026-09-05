@@ -1165,6 +1165,12 @@ window.loadAbsenceDay=async function(){
             const sn=typeof l.subject==='string'?l.subject:(l.subject?.ua||'');
             let te=l.teacherEmail;
             if(!te&&sn){const dt=window.getDefaultTeacher(cls,sn);if(dt)te=dt.email;}
+            // Урок-чергування: у навантаження вчителя він має потрапити,
+            // якщо той веде хоч один предмет пари — за повною назвою «А / Б»
+            // не знайшовся б жоден
+            if(!te){const pairs=window.altTeachers(cls,l)||[];
+              const mine=pairs.find(p=>p.teacher&&p.teacher.email&&p.teacher.email.toLowerCase()===email.toLowerCase());
+              if(mine)te=mine.teacher.email;}
             if(!te||te.toLowerCase()!==email.toLowerCase())return;
             const cover=subs[cls]&&subs[cls][idx];
             lessons.push({cls,idx,sn,time:l.time||'',cover});
