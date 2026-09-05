@@ -1172,6 +1172,26 @@ function updateSubjectList(){
     sel.innerHTML=`<option value="" disabled>${msg}</option>`;
   }
 }
+
+// Предмети класу за ВЕСЬ тиждень, дозволені цьому вчителю.
+//
+// НАВІЩО ОКРЕМО ВІД #t-subject. Той список будується з уроків ОБРАНОГО
+// ДНЯ — так і має бути в журналі, бо тему й оцінки ставлять за конкретний
+// урок. Але «Без оцінок» і копіювання ДЗ — це про предмет у класі взагалі.
+// Коли вчитель відкривав їх у суботу, список був порожній, і портал казав
+// «немає доступних предметів», хоча предмети є — просто не сьогодні.
+export function subjectsForClassWeek(cls){
+  const out = new Set();
+  dayKeys.forEach(dn => {
+    (window.getTodayLessonsFlattened(dn) || []).forEach(item => {
+      const n = window.getValidSubjectName(item);
+      if(n && window.isSubjectAllowed(cls, n)) out.add(n);
+    });
+  });
+  return [...out].sort((a, b) => a.localeCompare(b, 'uk'));
+}
+window.subjectsForClassWeek = subjectsForClassWeek;
+
 // ══════════ AUTH ══════════
 onAuthStateChanged(auth,async user=>{
   // Темна тема лише для екранів входу: після входу портал світлий, як і був.
