@@ -7,7 +7,7 @@
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, push, remove, update, onValue } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { renderNewsFeed } from './news.js';
-import { db, auth, CLOUDINARY_URL, UPLOAD_PRESET, getActiveClass, currentUserData, showToast, displayGrade, renderHwItem, dayKeys, formatAttendanceSlotLabel, STICKER_GOAL, escJs, escHtml, safeUrl, normalizeChildren, notifyEvent, logAction, renderBirthdays, teacherAccessMatrix, getUsersSnap, stuName, gradeWritePaths, localDateString, gradeTypesCache} from './common.js';
+import { db, auth, CLOUDINARY_URL, UPLOAD_PRESET, getActiveClass, currentUserData, showToast, displayGrade, renderHwItem, dayKeys, formatAttendanceSlotLabel, STICKER_GOAL, stickerGoal, escJs, escHtml, safeUrl, normalizeChildren, notifyEvent, logAction, renderBirthdays, teacherAccessMatrix, getUsersSnap, stuName, gradeWritePaths, localDateString, gradeTypesCache} from './common.js';
 import { populateTopicSelector, availableTopicsCache } from './curriculum.js';
 
 let currentHwImages=[];
@@ -91,16 +91,26 @@ window.fillCommentSubjects = async function(){
   await fillActionSubject('t-subject-for-comment', keep);
 };
 
+
+// Поля вкладки «Клас» (коментар, наліпка) наповнюються звідси, а не з
+// функцій вкладки «Урок». Вони належать іншому екрану, і чіпати їх звідти
+// означало б знову зробити те, від чого ми щойно пішли: зміна на одному
+// екрані мовчки міняє стан іншого. Викликається зі зміни класу — тобто з
+// глобального селектора, спільного для всіх вкладок.
+window.refreshClassTabPickers = async function(){
+  if(document.getElementById('t-subject-for-comment')) await fillCommentSubjects();
+  if(document.getElementById('t-sticker-subject'))
+    await fillActionSubject('t-sticker-subject', actionSubject('t-sticker-subject'));
+};
+
 window.handleSubjectChange=function(){
   loadCurrentTopicAndHW();
   const subj=document.getElementById('t-subject').value;
-  // Підказуємо той самий предмет, якщо він є у списку коментаря — але не
-  // нав'язуємо: список коментаря ширший, він не залежить від дня
-  const cs=document.getElementById('t-subject-for-comment');
-  if(cs&&Array.from(cs.options).some(o=>o.value===subj)) cs.value=subj;
+  // Поле коментаря живе на вкладці «Клас» і має власний список — звідси
+  // його не чіпаємо взагалі. Інакше вибір на одному екрані мовчки міняв
+  // би стан іншого, якого в цю мить не видно.
   loadTextbooksForTeacher();loadCurriculumTopics();
   populateTopicSelector(); /* CURRICULUM v3 */
-  if(document.getElementById('t-subject-for-comment')) fillCommentSubjects();
   // Список підручників для ДЗ наповнювався ЛИШЕ при розгортанні блока
   // (ontoggle). Якщо вчитель відкрив його до вибору предмета або змінив
   // предмет після — там лишалося «спочатку оберіть предмет» назавжди.
@@ -776,19 +786,29 @@ window.linkParent=async function(){
       return alert(`Ця дитина вже прив'язана.`);
     kids.push({studentId:st,studentName:stNm,class:cls,role});
     await set(ref(db,`parent_links/${e}`),{children:kids});
-    // Якщо батьки вже заходили — оновлюємо і їхній профіль
-    const us=await getUsersSnap();
-    if(us.exists()){
-      const u=us.val();
-      for(const uid in u){
-        if((u[uid].email||'').toLowerCase()===raw&&u[uid].role==='parent'){
-          await update(ref(db,`users/${uid}`),{children:kids});
+    // Якщо батьки вже заходили — оновлюємо і їхній профіль.
+    //
+    // Читати users має право лише директор: там персональні дані всіх
+    // людей школи. Учитель прив'язку зробити може (parent_links він пише),
+    // але оновити чужий профіль — ні. Раніше ця відмова летіла нагору й
+    // прив'язка виглядала як провал, хоча головне вже збереглося.
+    let profileSynced = true;
+    try{
+      const us = await getUsersSnap();
+      if(us.exists()){
+        const u = us.val();
+        for(const uid in u){
+          if((u[uid].email||'').toLowerCase() === raw && u[uid].role === 'parent'){
+            await update(ref(db, `users/${uid}`), { children: kids });
+          }
         }
       }
-    }
-    alert(kids.length>1
+    }catch(e){ profileSynced = false; }
+    const syncNote = profileSynced ? ''
+      : '\n\nПрофіль батьків оновиться, коли вони наступного разу зайдуть у портал.';
+    alert((kids.length>1
       ? `✅ Додано. Тепер до ${raw} прив'язано дітей: ${kids.length}. Батьки зможуть перемикатися між ними у профілі.`
-      : `✅ Email прив'язано!`);
+      : `✅ Email прив'язано!`) + syncNote);
     document.getElementById('parent-email').value='';
   }catch(err){alert('Помилка: '+err.message);}
 };
@@ -854,7 +874,12 @@ export function loadTeacherDashboard(){
   listenTeacherAttendance();
 }
 window.loadTeacherDashboard=loadTeacherDashboard;
-window.giveStickerToStudent=async function(){const st=document.getElementById('t-sticker-student').value;const subj=document.getElementById('t-subject').value;const date=document.getElementById('global-date').value;const cls=getActiveClass();if(!st||!subj){showToast("⚠️ Оберіть учня та переконайтесь що обрано предмет!");return;}await set(ref(db,`stickers/${cls}/${st}/${date}_${subj}`),true);showToast(`🌟 Наліпка: ${st}!`);};
+window.giveStickerToStudent=async function(){const st=document.getElementById('t-sticker-student').value;
+  // Наліпка живе на вкладці «Клас» і не має залежати від предмета, обраного
+  // на вкладці «Урок»: це різні екрани, і людина не бачить того селектора.
+  const subj=actionSubject('t-sticker-subject');
+  const date=document.getElementById('global-date').value;const cls=getActiveClass();
+  if(!st||!subj){showToast("⚠️ Оберіть учня та предмет");return;}await set(ref(db,`stickers/${cls}/${st}/${date}_${subj}`),true);showToast(`🌟 Наліпка: ${st}!`);};
 window.saveComment=async function(){const st=document.getElementById('t-student').value;const subj=document.getElementById('t-subject-for-comment').value;const cm=document.getElementById('t-comment').value.trim();const date=document.getElementById('global-date').value;const cls=getActiveClass();if(!st||!subj){showToast("⚠️ Оберіть учня та предмет!");return;}if(!cm){showToast("⚠️ Введіть коментар!");return;}await set(ref(db,`comments/${cls}/${date}/${subj}/${st}`),cm);document.getElementById('t-comment').value='';showToast(`💬 Коментар збережено: ${st}`);
   // Сам текст коментаря в сповіщення не кладемо — воно видно на екрані
   // блокування, а коментар може бути делікатним
@@ -889,11 +914,13 @@ window.openStickerStatsModal=async function(){
   const students=stuSnap.exists()?Object.entries(stuSnap.val()).map(([sid,nm])=>({sid,nm:String(nm)})):[];
   const stickersData=stSnap.exists()?stSnap.val():{};
   if(students.length===0){list.innerHTML='<p class="empty-msg" style="text-align:center;">Учнів немає.</p>';return;}
+  const goal=stickerGoal(cls);
+  renderStickerGoalBox(cls, goal);
   const stats=students.map(({sid,nm})=>({name:nm,count:stickersData[sid]?Object.keys(stickersData[sid]).length:0}));
   stats.sort((a,b)=>b.count-a.count);
   let h='<ul style="list-style:none;padding:0;margin:0;">';
   stats.forEach((s,i)=>{
-    const pct=Math.min((s.count/STICKER_GOAL)*100,100);
+    const pct=Math.min((s.count/goal)*100,100);
     const medal=i===0?'🥇 ':i===1?'🥈 ':i===2?'🥉 ':'';
     h+=`<li style="background:#fdfbfb;border:1px solid #eee;border-radius:8px;padding:11px;margin-bottom:9px;">
       <div style="display:flex;justify-content:space-between;align-items:center;">
@@ -903,10 +930,56 @@ window.openStickerStatsModal=async function(){
       <div style="background:#eee;border-radius:6px;height:8px;margin-top:7px;overflow:hidden;">
         <div style="background:linear-gradient(90deg,#f39c12,#f1c40f);height:100%;width:${pct}%;"></div>
       </div>
-      <div style="font-size:.72rem;color:#888;margin-top:3px;text-align:right;">${s.count}/${STICKER_GOAL} до призу</div>
+      <div style="font-size:.72rem;color:#888;margin-top:3px;text-align:right;">${s.count}/${goal} до призу</div>
     </li>`;
   });
   h+='</ul>';
   list.innerHTML=h;
 };
+
+// ── МЕТА НАЛІПОК ──────────────────────────────────────────────
+// Скільки наліпок до призу — вирішує класний керівник свого класу.
+// Раніше число 30 було зашите в коді на всю школу, хоча для першого
+// й для дев'ятого класу «багато» — це різні числа.
+//
+// Хто змінює: класний керівник цього класу, директор, майстер-роль.
+// Учитель-предметник бачить число, але не міняє: приз — справа класу.
+function canSetStickerGoal(cls){
+  const role = currentUserData && currentUserData.role;
+  if(['director','administrator','master_class_teacher'].includes(role)) return true;
+  return !!(window.__isClassTeacherOf && window.__isClassTeacherOf === cls);
+}
+
+window.renderStickerGoalBox = function(cls, goal){
+  const box = document.getElementById('sticker-goal-box');
+  const inp = document.getElementById('sticker-goal-input');
+  const note = document.getElementById('sticker-goal-note');
+  if(!box || !inp) return;
+  const may = canSetStickerGoal(cls);
+  inp.value = goal;
+  inp.disabled = !may;
+  const btn = box.querySelector('button');
+  if(btn) btn.style.display = may ? '' : 'none';
+  if(note) note.textContent = may
+    ? 'Це число бачать учні та батьки на смужці прогресу. Змінюється лише для цього класу.'
+    : 'Мету призу задає класний керівник цього класу.';
+};
+
+window.saveStickerGoal = async function(){
+  const cls = getActiveClass();
+  const inp = document.getElementById('sticker-goal-input');
+  const n = parseInt(inp.value, 10);
+  if(!Number.isFinite(n) || n < 1 || n > 500)
+    return alert('Вкажіть число від 1 до 500.');
+  try{
+    await set(ref(db, `sticker_goal/${cls}`), n);
+    logAction('settings', { value: `мета наліпок ${cls}: ${n}` });
+    showToast(`✅ Мета: ${n} наліпок`);
+    openStickerStatsModal();
+  }catch(e){
+    alert('Не вдалося зберегти: ' + e.message
+      + '\n\nЯкщо тут «PERMISSION_DENIED» — перевірте, чи опубліковано правила бази: вузол sticker_goal новий.');
+  }
+};
+
 window.closeStickerStatsModal=function(){document.getElementById('sticker-stats-modal').style.display='none';};
