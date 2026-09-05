@@ -1000,6 +1000,7 @@
     .alt-clear{margin:0;padding:7px 10px;font-size:.8rem;background:#fff;color:#9e9e9e;
                border:1px solid #e0e0e0;border-radius:8px;width:auto;}
     .alt-none{font-size:.68rem;color:#ef6c00;margin-top:5px;}
+    .ug-note{font-size:.72rem;color:#78909c;text-align:center;margin:0 0 9px 0;line-height:1.4;}
     /* Вибір предмета всередині вікна дії. Раніше ці дії мовчки брали
        предмет із вкладки «Журнал» — з екрана, якого в цю мить не видно. */
     .act-subj{width:auto;max-width:100%;margin:0;padding:5px 9px;font-size:.85rem;
@@ -3127,7 +3128,8 @@
   <div class="modal-content" style="max-width:400px;text-align:left;">
     <h2 style="color:var(--blue);margin-top:0;text-align:center;">📋 Скопіювати ДЗ</h2>
     <p style="font-size:.84rem;color:#555;margin:0 0 4px 0;">Предмет:
-      <select id="hw-copy-subject" class="act-subj" onchange="openHwCopy()"></select></p>
+      <select id="hw-copy-subject" class="act-subj" onchange="openHwCopy()"></select>
+      · Дата: <b id="hw-copy-date">—</b></p>
     <p style="font-size:.76rem;color:#888;margin:0 0 10px 0;">
       Копіюється лише домашнє завдання. Теми уроків не переносяться —
       у кожного класу свій прогрес за календарним планом.
