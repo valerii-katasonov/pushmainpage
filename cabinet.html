@@ -903,6 +903,13 @@
     .mx-mode{padding:9px 12px;border-radius:9px;font-size:.79rem;line-height:1.35;margin-bottom:9px;}
     .mx-mode.live{background:#fff3e0;color:#e65100;border:1px solid #ffb74d;font-weight:600;}
     .mx-mode.draft{background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;}
+    /* Смуга режиму налагодження. Навмисно голосна: тимчасова роль із
+       правами класного керівника в усіх класах не має губитися з очей. */
+    #master-mode-banner{position:sticky;top:0;z-index:1200;width:100%;
+      background:repeating-linear-gradient(45deg,#b71c1c,#b71c1c 12px,#8e0000 12px,#8e0000 24px);
+      color:#fff;font-size:.78rem;font-weight:800;text-align:center;padding:7px 12px;
+      letter-spacing:.02em;box-shadow:0 2px 8px rgba(0,0,0,.25);}
+    #master-mode-banner span{display:block;font-weight:400;font-size:.68rem;opacity:.9;}
     /* Перерви класу */
     .bk-list{margin-top:11px;background:#fff;border-radius:10px;border:1px solid #c5cae9;overflow:hidden;}
     .bk-row{display:flex;align-items:center;gap:9px;padding:8px 11px;border-bottom:1px solid #f2f3fa;}
@@ -1990,11 +1997,16 @@
         <div style="margin-top:13px;">
           <input type="email" id="new-staff-email" placeholder="Email співробітника">
           <label style="font-size:.8rem;color:#777;margin-top:8px;">Ролі (можна обрати кілька — Ctrl/Cmd + клік):</label>
-          <select id="new-staff-role" multiple size="5" style="margin-top:4px;">
+          <select id="new-staff-role" multiple size="6" style="margin-top:4px;">
             <option value="teacher">👨‍🏫 Вчитель</option><option value="art_school_teacher">🎨 Вчитель школи мистецтв</option>
             <option value="class_teacher">🎓 Класний керівник</option>
             <option value="director">👔 Директор</option><option value="administrator">🛡️ Секретар (Адміністратор)</option><option value="kitchen">🍽️ Кухня</option>
+            <option value="master_class_teacher">🔧 Майстер-класний керівник (налагодження)</option>
           </select>
+          <div style="font-size:.7rem;color:#b71c1c;margin-top:5px;line-height:1.4;">
+            🔧 Майстер-класний керівник — тимчасова роль для налагодження: права класного
+            керівника в усіх класах. Чужих переписок не бачить. Зніміть її перед передачею порталу школі.
+          </div>
           <button style="background:#c0392b;padding:8px;margin-top:9px;color:#fff;" onclick="grantStaffRole()">Надати доступ</button>
           <div style="margin-top:14px;border-top:1px dashed #ddd;padding-top:12px;">
             <div style="display:flex;justify-content:space-between;align-items:center;">
