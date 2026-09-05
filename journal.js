@@ -658,10 +658,25 @@ window.openVisualMatrixModal=async function(mode){
   say('Завантаження...');
   try{
   let dbPath=mode==='live'?'schedules':`schedule_drafts/${mode}`;
-  const [snap,accSnap,stSnap]=await Promise.all([get(ref(db,dbPath)),get(ref(db,'teacher_access')),get(ref(db,'students_list'))]);
-  globalAllSchedules=snap.exists()?snap.val():{};globalTeacherAccess=accSnap.exists()?accSnap.val():{};globalAllStudents=stSnap.exists()?stSnap.val():{};
+  // МАТРИЦЯ ДОСТУПУ — НЕОБОВ'ЯЗКОВА.
+  //
+  // teacher_access читає лише директор: це документ про всю школу. Раніше
+  // він читався в одному Promise.all із розкладом, тож відмова в правах
+  // валила побудову всієї сітки — «Permission denied. Сітку не побудовано»,
+  // хоча сам розклад людині доступний. Матриця потрібна тільки для того,
+  // щоб підставити ім'я вчителя за замовчуванням; без неї сітка будується,
+  // просто без цих підписів.
+  const [snap,stSnap]=await Promise.all([get(ref(db,dbPath)),get(ref(db,'students_list'))]);
+  let accDenied=false;
+  let accSnap=null;
+  try{ accSnap=await get(ref(db,'teacher_access')); }
+  catch(e){ accDenied=true; }
+  globalAllSchedules=snap.exists()?snap.val():{};
+  globalTeacherAccess=(accSnap&&accSnap.exists())?accSnap.val():{};
+  globalAllStudents=stSnap.exists()?stSnap.val():{};
   const uSnap=await getUsersSnap();window.globalTeachersList=[];
   if(uSnap.exists()){const u=uSnap.val();for(let uid in u){const us=u[uid];const rs=getUserRoles(us);if(rs.some(r=>r==='teacher'||r==='class_teacher'||r==='art_school_teacher'||r==='music_teacher')&&us.email&&!us.disabled){const n=(us.firstName||us.lastName)?`${us.firstName||''} ${us.lastName||''}`.trim():"Ім'я";const se=us.email.replace(/\./g,'_');window.globalTeachersList.push({email:us.email,name:n,safeEmail:se});}}}
+  window._matrixAccDenied=accDenied;
   const title=document.getElementById('matrix-modal-title');const wb=document.getElementById('constructor-warnings');
   // ЧІТКО КАЖЕМО, ЩО САМЕ РЕДАГУЄТЬСЯ.
   //
@@ -692,9 +707,13 @@ window.openVisualMatrixModal=async function(mode){
     const list=Array.isArray(arr)?arr:Object.values(arr||{});
     list.forEach(i=>{ const items=Array.isArray(i)?i:(i&&i.subject?[i]:[]); mon+=items.length; });
   });
-  say(clsKeys.length
+  const accNote = accDenied
+    ? ' Матриця доступу вчителів вам не відкрита, тож імена вчителів за замовчуванням не підставляються — на сам розклад це не впливає.'
+    : '';
+  say((clsKeys.length
     ? `${mode==='live'?'Чинний розклад':'Чернетка «'+mode+'»'}: класів ${clsKeys.length}, уроків у понеділок ${mon}.`
-    : `${mode==='live'?'Чинний розклад':'Чернетка «'+mode+'»'} порожня — жодного класу. Додайте уроки клацанням по клітинці.`);
+    : `${mode==='live'?'Чинний розклад':'Чернетка «'+mode+'»'} порожня — жодного класу. Додайте уроки клацанням по клітинці.`)
+    + accNote);
   }catch(e){
     console.error('openVisualMatrixModal', e);
     say('Не вдалося завантажити: '+e.message+'. Сітку не побудовано.', true);
