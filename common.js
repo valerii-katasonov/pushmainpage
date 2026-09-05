@@ -1465,7 +1465,10 @@ export async function publishContactCard(){
 export function tabFromUrl(search){
   const m = /(?:^|[?&])open=([a-z]+)/i.exec(String(search || ''));
   const v = m ? m[1].toLowerCase() : '';
-  return ['day','grades','school','profile','chat'].includes(v) ? v : null;
+  // Вкладки різних кабінетів. Батьківські: day, grades, school, profile.
+  // Учительські: day, lesson, class, news. Збігається лише «day», і в обох
+  // кабінетах це та сама вкладка «Сьогодні», тож плутанини немає.
+  return ['day','grades','school','profile','chat','lesson','class','news'].includes(v) ? v : null;
 }
 
 window.openFromNotification = function(screenId){
@@ -1564,6 +1567,9 @@ async function initUserSession(){
     window.handleClassChange();
     callWhenReady('initTabs', 0, ['teacher-screen']);
     callWhenReady('renderPushInvite', 600, ['t-push-invite']);
+    // Перехід зі сповіщення: ?open=class відкриває вкладку «Клас», де
+    // й лежать дні народження. Без цього нагадування вело просто в кабінет.
+    callWhenReady('openFromNotification', 500, ['teacher-screen']);
   }
   else if(r==='student'){
     callWhenReady('initTabs', 0, ['student-screen']);
@@ -2257,32 +2263,76 @@ const MONTHS_UA=['січня','лютого','березня','квітня','т
 // Відкрити картки класу батькам не можна, тож поруч тримаємо вузол
 // student_birthdays/{клас}/{учень} = "MM-DD" — тільки день і місяць, без
 // року й без будь-чого іншого. Пише його школа разом із карткою.
-export async function getWeekBirthdays(cls,dateStr){
+// ── Вікно «найближчі N днів» ────────────────────────────────────
+//
+// ЧОМУ НЕ КАЛЕНДАРНИЙ ТИЖДЕНЬ. Раніше список показував Пн–Нд того тижня,
+// у який дивишся. Через це іменинник з понеділка зникав у неділю ввечері —
+// рівно тоді, коли до дня народження лишався один день. А ще список
+// залежав від обраної згори дати: гортаєш журнал на минулий місяць — і
+// «дні народження цього тижня» теж їдуть у минуле.
+//
+// Тепер вікно рухоме: від сьогодні до сьогодні+7. Дитина зʼявляється в
+// списку рівно за тиждень і висить там до самого свята.
+//
+// Рахуємо через справжні дати, а не порівнянням рядків «MM-DD»: інакше
+// кінець грудня ніколи не побачив би початок січня.
+export function upcomingWindow(todayStr,days){
+  const p=String(todayStr||'').split('-');
+  const base=new Date(+p[0],+p[1]-1,+p[2]);
+  if(isNaN(base.getTime()))return[];
+  const p2=n=>String(n).padStart(2,'0');
+  const out=[];
+  for(let i=0;i<=days;i++){
+    const d=new Date(base.getFullYear(),base.getMonth(),base.getDate()+i);
+    out.push({md:`${p2(d.getMonth()+1)}-${p2(d.getDate())}`,offset:i,
+              leap:new Date(d.getFullYear(),1,29).getDate()===29});
+  }
+  return out;
+}
+// «29 лютого» у невисокосний рік: святкуємо 1 березня, щоб дитина не
+// випадала зі списку раз на чотири роки.
+function windowIndex(win,md){
+  const i=win.findIndex(w=>w.md===md);
+  if(i!==-1)return i;
+  if(md!=='02-29')return -1;
+  return win.findIndex(w=>w.md==='03-01'&&!w.leap);
+}
+export function birthdayWhen(offset){
+  if(offset===0)return'сьогодні';
+  if(offset===1)return'завтра';
+  if(offset===2)return'післязавтра';
+  // Вікно не більше тижня, тож досить двох форм: «3 дні» — «5 днів»
+  return`через ${offset} ${offset<5?'дні':'днів'}`;
+}
+export async function getUpcomingBirthdays(cls,todayStr,days){
   const [stSnap,bdSnap]=await Promise.all([
     get(child(ref(db),`students_list/${cls}`)),
     get(child(ref(db),`student_birthdays/${cls}`)).catch(()=>null)
   ]);
   if(!stSnap.exists()||!bdSnap||!bdSnap.exists())return[];
-  const names=stSnap.val(), days=bdSnap.val();
-  // Тиждень Пн–Нд, той самий, що і в решті звітів
-  const week=getWeekDates(dateStr).map(d=>d.slice(5)); // «MM-DD»
+  const names=stSnap.val(), bdays=bdSnap.val();
+  const win=upcomingWindow(todayStr,days==null?7:days);
   const out=[];
   for(const key in names){
-    const md=days[key];                     // «MM-DD»
+    const md=bdays[key];                    // «MM-DD», без року
     if(!md||md.length!==5)continue;
-    const i=week.indexOf(md);
+    const i=windowIndex(win,md);
     if(i===-1)continue;
     const [m,d]=md.split('-');
-    out.push({name:names[key],md,idx:i,label:`${parseInt(d)} ${MONTHS_UA[parseInt(m)-1]}`});
+    out.push({name:names[key],md,idx:i,
+              label:`${parseInt(d)} ${MONTHS_UA[parseInt(m)-1]}`,
+              when:birthdayWhen(i),today:i===0});
   }
   return out.sort((a,b)=>a.idx-b.idx);
 }
-// Один рендер для всіх кабінетів — вчителя, батьків та учня
-export async function renderBirthdays(containerId,cls,dateStr,selfName){
+// Один рендер для всіх кабінетів — вчителя, батьків та учня.
+// Дата НЕ параметр: вікно завжди рахується від сьогодні. Раніше сюди
+// приходила обрана згори дата, і список їздив разом із журналом.
+export async function renderBirthdays(containerId,cls,selfName){
   const box=document.getElementById(containerId);
   if(!box)return;
   try{
-    const list=await getWeekBirthdays(cls,dateStr);
+    const list=await getUpcomingBirthdays(cls,localDateString,7);
     // Поруч може лежати блок порожнього стану — щоб на вкладці не висів
     // самотній заголовок без вмісту. Там, де його немає, нічого не робимо.
     const empty=document.getElementById(containerId+'-empty');
@@ -2293,10 +2343,10 @@ export async function renderBirthdays(containerId,cls,dateStr,selfName){
     }
     if(empty) empty.style.display='none';
     box.style.display='block';
-    box.innerHTML=`<div class="bd-title">🎂 Дні народження цього тижня</div>`+
-      list.map(b=>`<div class="bd-row${b.name===selfName?' me':''}">
-        <span class="bd-name">${escHtml(b.name)}${b.name===selfName?' — це ти!':''}</span>
-        <span class="bd-date">${escHtml(b.label)}</span>
+    box.innerHTML=`<div class="bd-title">🎂 Дні народження — найближчий тиждень</div>`+
+      list.map(b=>`<div class="bd-row${b.name===selfName?' me':''}${b.today?' bd-today':''}">
+        <span class="bd-name">${b.today?'🎉 ':''}${escHtml(b.name)}${b.name===selfName?' — це ти!':''}</span>
+        <span class="bd-date">${escHtml(b.label)} <i class="bd-when">${escHtml(b.when)}</i></span>
       </div>`).join('');
   }catch(e){
     box.style.display='none';
