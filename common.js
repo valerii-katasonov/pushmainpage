@@ -193,10 +193,32 @@ export const ROLE_LABELS={
   director:'👔 Директор', administrator:'🛡️ Секретар (Адміністратор)',
   teacher:'👨‍🏫 Вчитель', class_teacher:'🎓 Класний керівник',
   art_school_teacher:'🎨 Вчитель школи мистецтв', music_teacher:'🎵 Вчитель музики',
+  master_class_teacher:'🔧 Майстер-класний керівник (налагодження)',
   parent:'👪 Батьки', student:'🎒 Учень', kitchen:'🍽️ Кухня'
 };
+// ═══════════════════════════════════════════════════════════════
+//  РОЛЬ ДЛЯ НАЛАГОДЖЕННЯ: master_class_teacher
+//
+// ЩО ЦЕ. Тимчасова роль на час доведення порталу: права класного
+// керівника в БУДЬ-ЯКОМУ класі, щоб розробник міг відтворити те, що
+// бачить і робить класний керівник, не просячи в нього пароль.
+//
+// ЧОГО ВОНА НЕ МОЖЕ. Читати чужі переписки. Доступ до чатів у цій базі
+// дається лише учасникам розмови, і цю роль там свідомо не згадано —
+// щоб «подивитися очима вчителя» ніколи не означало «прочитати його
+// листування».
+//
+// ЯК ПРИБРАТИ ПЕРЕД ПЕРЕДАЧЕЮ ШКОЛІ. Досить прибрати роль у людини:
+// users/{uid}/role і pre_approved_roles/{email}. Код і правила можна
+// лишити — без жодного носія роль ні на що не впливає. Але надійніше
+// прибрати й згадки MASTER у database.rules.gen.py, перегенерувати
+// правила й опублікувати.
+// ═══════════════════════════════════════════════════════════════
+export const MASTER_ROLE='master_class_teacher';
+export function isMasterTeacher(r){return r===MASTER_ROLE;}
+
 // Ролі, для яких потрібна матриця доступу до класів (teacherAccessMatrix)
-export const TEACHER_ROLES=['teacher','class_teacher','art_school_teacher','music_teacher'];
+export const TEACHER_ROLES=['teacher','class_teacher','art_school_teacher','music_teacher',MASTER_ROLE];
 export function isTeacherRole(r){return TEACHER_ROLES.includes(r);}
 // Приводить будь-яке представлення (рядок / масив / об'єкт з Firebase) до масиву
 export function normalizeRoles(raw){
@@ -672,7 +694,7 @@ export function safeHttpUrl(u){
   const s=String(u ?? '').trim();
   return /^https?:\/\//i.test(s)?s:'';
 }
-export function getActiveClass(){if(currentUserData&&(currentUserData.role==='teacher'||currentUserData.role==='class_teacher'||currentUserData.role==='art_school_teacher'||currentUserData.role==='music_teacher'))return document.getElementById('t-class-selector').value;return currentUserData?currentUserData.class:'class_2';}
+export function getActiveClass(){if(currentUserData&&isTeacherRole(currentUserData.role)){const el=document.getElementById('t-class-selector');if(el)return el.value;}return currentUserData?currentUserData.class:'class_2';}
 window.getTodayLessonsFlattened=function(dayName){if(!window.schedule||!window.schedule[dayName])return[];let flat=[];window.schedule[dayName].forEach(slot=>{if(Array.isArray(slot))flat.push(...slot);else if(slot&&Object.keys(slot).length>0)flat.push(slot);});return flat;};
 // Чи цей запис розкладу — перерва, а не урок.
 //
@@ -1060,9 +1082,29 @@ window.handleClassChange=function(){
   const ac=getActiveClass();if(!ac)return;
   const sel=document.getElementById('t-class-selector');const label=sel.options[sel.selectedIndex].text;
   document.getElementById('teacher-dashboard-title').innerText=`👨‍🏫 Журнал: ${label}`;
+  // Кожен перехід майстер-ролі між класами лишає слід. Роль тимчасова й
+  // сильна, тож школа має бачити, куди саме заходили.
+  if(isMasterTeacher(currentUserData&&currentUserData.role))
+    logAction('settings',{value:`налагодження: перехід у ${ac}`});
   loadStudentsList();loadScheduleScript(ac,()=>handleDateChange());
   checkCurriculumUploadAccess(); /* CURRICULUM v3 */
 };
+
+// Червона смуга вгорі: щоб режим налагодження неможливо було переплутати
+// зі звичайною роботою і щоб про нього не забули перед передачею школі.
+export function renderMasterBanner(){
+  const on = isMasterTeacher(currentUserData && currentUserData.role);
+  let el = document.getElementById('master-mode-banner');
+  if(!on){ if(el) el.remove(); return; }
+  if(!el){
+    el = document.createElement('div');
+    el.id = 'master-mode-banner';
+    document.body.insertBefore(el, document.body.firstChild);
+  }
+  el.innerHTML = '🔧 РЕЖИМ НАЛАГОДЖЕННЯ · права класного керівника в усіх класах'
+    + '<span>Тимчасова роль. Перед передачею школі її треба зняти.</span>';
+}
+window.renderMasterBanner = renderMasterBanner;
 // Предмети НЕ зберігаються окремим списком — вони беруться з РОЗКЛАДУ класу
 // (schedules/{clas}/lessons/{день}) і додатково фільтруються матрицею доступу
 // вчителя. Тому «порожньо» означає одне з трьох, і раніше всі три випадки
@@ -1300,6 +1342,7 @@ window.openFromNotification = function(screenId){
 
 async function initUserSession(){
   initModalScrollLock();   // фон під вікнами не прокручується (важливо для iPhone)
+  renderMasterBanner();    // червона смуга, якщо ввімкнено режим налагодження
   // Чинний навчальний рік читаємо ПЕРШИМ. Календар, семестри й табелі
   // залежать від нього, і якщо взяти його пізніше, вони встигнуть
   // прочитати не той вузол — саме так календар і став порожнім 1 вересня.
