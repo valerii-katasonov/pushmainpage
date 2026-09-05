@@ -17,11 +17,11 @@
 // Ключ — понеділок того тижня, тому минулі тижні лишаються в історії,
 // а не перезаписуються.
 // ═══════════════════════════════════════════════════════════════
-import { ref, set, get, child, remove } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+import { ref, set, get, child, remove, update } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { db, currentUserData, getActiveClass, teacherAccessMatrix, showToast,
          escHtml, escJs, mondayOf, altOptions, logAction } from './common.js';
 
-export const ALT_BUILD = '2026-09-02 · alt v1';
+export const ALT_BUILD = '2026-09-05 · alt v2 (пари предметів)';
 
 const DIR_ROLES  = ['director', 'administrator'];
 const TEACH_ROLES = ['teacher', 'class_teacher', 'art_school_teacher', 'music_teacher', 'master_class_teacher'];
@@ -65,6 +65,42 @@ export function altLessons(lessons){
     });
   });
   return out;
+}
+
+// Уроки, що чергуються, згруповані за ПАРОЮ предметів.
+//
+// ЧОМУ ГРУПА, А НЕ ОКРЕМИЙ УРОК. «Музичне / Фізичне» стоїть у тижні
+// кілька разів, і в межах тижня це завжди той самий предмет — не буває
+// так, що в понеділок музика, а в четвер того ж тижня фізкультура.
+// Позначати кожен урок окремо означало б робити ту саму дію двічі й
+// мати шанс помилитися. Одна пара — одне натискання на тиждень.
+export function altGroups(lessons){
+  const byPair = new Map();
+  altLessons(lessons).forEach(L => {
+    const key = L.options.join(' / ');
+    if(!byPair.has(key)) byPair.set(key, { key, options: L.options, slots: [] });
+    byPair.get(key).slots.push({ day: L.day, slot: L.slot, number: L.number, time: L.time });
+  });
+  return [...byPair.values()];
+}
+
+// Що обрано для цієї групи в цьому тижні: назва, '' або 'mixed',
+// якщо слоти однієї пари чомусь розійшлися.
+export function groupChoice(group, weekData){
+  const vals = group.slots.map(sl => {
+    const d = (weekData || {})[sl.day] || {};
+    return d[sl.slot] || d[String(sl.slot)] || '';
+  });
+  const uniq = [...new Set(vals)];
+  if(uniq.length === 1) return uniq[0];
+  return uniq.some(Boolean) ? 'mixed' : '';
+}
+
+// Короткий підпис, де саме ця пара стоїть у тижні
+export function slotsLabel(group, dayNames){
+  return group.slots
+    .map(sl => `${(dayNames || {})[sl.day] || sl.day} ${sl.number} ур.`)
+    .join(' · ');
 }
 
 // Чи може ця людина міняти вибір для такого уроку
@@ -143,28 +179,32 @@ function renderAltCard(){
   if(!list.length){
     box.innerHTML = picker
       + '<p class="empty-msg">У розкладі цього класу немає уроків, що чергуються.<br>'
-      + 'Такі уроки зʼявляються, коли в клітинці розкладу два предмети через косу риску.</p>';
+      + 'Портал вважає урок таким, коли в назві предмета стоять дві назви через '
+      + 'косу риску з пробілами: <b>Музичне мистецтво / Фізичне виховання</b>.</p>';
     return;
   }
 
+  const groups = altGroups(altState.lessons);
   let html = picker;
   altState.weeks.forEach((w, wi) => {
     html += `<div class="alt-week"><div class="alt-week-head">${wi === 0 ? 'Цей тиждень' : 'Наступний тиждень'}
       <span>${escHtml(weekLabel(w))}</span></div>`;
-    list.forEach(L => {
-      const may = canSetAlt(L.options, role, teacherAccessMatrix, altState.cls, altState.isCT);
-      const cur = ((altState.chosen[w] || {})[L.day] || {})[L.slot]
-               || ((altState.chosen[w] || {})[L.day] || {})[String(L.slot)] || '';
+    groups.forEach((G, gi) => {
+      const may = canSetAlt(G.options, role, teacherAccessMatrix, altState.cls, altState.isCT);
+      const cur = groupChoice(G, altState.chosen[w]);
       html += `<div class="alt-row">
-        <div class="alt-when">${escHtml(DAY_UA[L.day] || L.day)}<span>урок ${escHtml(String(L.number))}${L.time ? ' · ' + escHtml(L.time) : ''}</span></div>
+        <div class="alt-when">${escHtml(G.options.join(' / '))}
+          <span>${escHtml(slotsLabel(G, DAY_UA))}</span></div>
         <div class="alt-opts">
-          ${L.options.map(o => `<button type="button" class="alt-opt${o === cur ? ' on' : ''}"
+          ${G.options.map(o => `<button type="button" class="alt-opt${o === cur ? ' on' : ''}"
               ${may ? '' : 'disabled'}
-              onclick="setAltChoice('${escJs(w)}','${escJs(L.day)}',${L.slot},'${escJs(o)}')">${escHtml(o)}</button>`).join('')}
+              onclick="setAltGroup('${escJs(w)}',${gi},'${escJs(o)}')">${escHtml(o)}</button>`).join('')}
           ${cur && may ? `<button type="button" class="alt-clear"
-              onclick="setAltChoice('${escJs(w)}','${escJs(L.day)}',${L.slot},'')" title="Прибрати вибір">×</button>` : ''}
+              onclick="setAltGroup('${escJs(w)}',${gi},'')" title="Прибрати вибір">×</button>` : ''}
         </div>
-        ${cur ? '' : `<div class="alt-none">${may ? 'не позначено — батьки бачать обидві назви' : 'позначає вчитель цього предмета'}</div>`}
+        ${cur === 'mixed'
+          ? '<div class="alt-none">у різних днях позначено по-різному — оберіть заново</div>'
+          : (cur ? '' : `<div class="alt-none">${may ? 'не позначено — батьки бачать обидві назви' : 'позначає вчитель цього предмета'}</div>`)}
       </div>`;
     });
     html += '</div>';
@@ -175,6 +215,34 @@ function renderAltCard(){
 window.changeAltClass = function(cls){
   altState.cls = cls;
   openAltCard();
+};
+
+// Одне натискання — усі уроки цієї пари в цьому тижні
+window.setAltGroup = async function(week, groupIdx, name){
+  const G = altGroups(altState.lessons)[groupIdx];
+  if(!G) return;
+  const cls = altState.cls;
+  try{
+    const patch = {};
+    G.slots.forEach(sl => {
+      patch[`schedule_alt/${cls}/${week}/${sl.day}/${sl.slot}`] = name || null;
+    });
+    await update(ref(db), patch);
+    altState.chosen[week] = altState.chosen[week] || {};
+    G.slots.forEach(sl => {
+      altState.chosen[week][sl.day] = altState.chosen[week][sl.day] || {};
+      if(name) altState.chosen[week][sl.day][sl.slot] = name;
+      else     delete altState.chosen[week][sl.day][sl.slot];
+    });
+    renderAltCard();
+    showToast(name ? `✅ ${name} — уроків: ${G.slots.length}` : '✅ Вибір прибрано');
+    logAction('settings', { value: `чергування ${cls} ${week}: ${G.key} → ${name || 'знято'}` });
+  }catch(e){
+    alert('Не вдалося зберегти: ' + e.message
+      + '\n\nПозначати може вчитель цього предмета, класний керівник або директор.'
+      + '\n\nЯкщо тут «PERMISSION_DENIED» навіть у директора — у базі ще не '
+      + 'опубліковано нові правила (database.rules.json): вузол schedule_alt новий.');
+  }
 };
 
 window.setAltChoice = async function(week, day, slot, name){
