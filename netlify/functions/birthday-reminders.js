@@ -26,6 +26,10 @@
 const crypto = require('crypto');
 const DB = 'https://test-4eb3e-default-rtdb.europe-west1.firebasedatabase.app';
 const SITE = 'https://planlekcjipush.netlify.app';
+// За скільки днів нагадувати. НЕ дорівнює вікну списку в кабінеті
+// (BIRTHDAY_WINDOW_DAYS у common.js — місяць), і це навмисно: список
+// показує, що попереду, а сповіщення каже, що пора діяти. Якщо колись
+// зводитимете ці числа — зводьте свідомо, а не «щоб було однаково».
 const DAYS_BEFORE = 7;
 
 const b64url = (buf) => Buffer.from(buf).toString('base64')
