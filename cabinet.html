@@ -814,6 +814,9 @@
     .bd-row.me{font-weight:800;color:#d35400;}
     .bd-name{color:#444;}
     .bd-date{color:#999;white-space:nowrap;}
+    /* Сьогоднішній іменинник — щоб не загубився серед «через 5 днів» */
+    .bd-row.bd-today{background:#fff2e0;border-radius:6px;padding:3px 6px;font-weight:800;color:#d35400;}
+    .bd-when{color:#c0873f;font-style:normal;font-size:.76rem;}
     /* ── Перемикач сповіщень ── */
     .push-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
     .push-label{flex:1;font-size:.85rem;font-weight:600;color:#555;}
@@ -2553,7 +2556,6 @@
       <!-- ДЗ зведення -->
       <div id="t-hw-list-wrapper" class="data-card" style="border-left-color:var(--blue);background:#f4f9fd;margin:14px 0 0 0;">
         <h4 style="margin-top:0;color:var(--blue);">📋 ДЗ класу сьогодні:</h4>
-        <div id="t-birthdays" class="bd-box" style="display:none;"></div>
         <ul id="t-daily-hw-list" class="list-dash"></ul>
       </div>
     </section>
@@ -2767,6 +2769,13 @@
 
     <section class="screen-section half" data-dtab="class">
       <h3>⚙️ Клас і батьки</h3>
+      <!-- Дні народження.
+           Раніше цей блок висів усередині картки «ДЗ класу сьогодні» на
+           вкладці «Сьогодні» — під заголовком про домашні завдання, з якими
+           він не має нічого спільного. Тут його місце: це про клас, а не
+           про сьогоднішній урок. Сюди ж веде сповіщення-нагадування. -->
+      <div id="t-birthdays" class="bd-box" style="display:none;"></div>
+      <p id="t-birthdays-empty" class="empty-msg">Найближчого тижня іменинників немає.</p>
       <!-- Управління класом -->
       <details style="background:#fff;padding:14px;border-radius:12px;border:1px solid #ddd;">
         <summary style="font-weight:700;cursor:pointer;color:#7f8c8d;">⚙️ Управління класом</summary>
@@ -2900,7 +2909,7 @@
     <section class="screen-section" data-dtab="school">
       <h3>🎂 Дні народження</h3>
       <div id="p-birthdays" class="bd-box" style="display:none;"></div>
-      <p id="p-birthdays-empty" class="empty-msg">Цього тижня іменинників немає.</p>
+      <p id="p-birthdays-empty" class="empty-msg">Найближчого тижня іменинників немає.</p>
     </section>
 
     <!-- ═══════════ НАВЧАННЯ ═══════════ -->
