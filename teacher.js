@@ -78,12 +78,29 @@ export function actionSubject(selectId){
 }
 
 
+// Список предметів для коментаря — з каталогу класу, як і в інших діях.
+//
+// ЧОМУ ОКРЕМО. Раніше це поле наповнювалося разом із журнальним, тобто
+// з уроків ОБРАНОГО ДНЯ. У суботу чи в день без уроків воно лишалося
+// порожнім і без підпису: друге поле незрозуміло навпроти імені учня,
+// у яке нічого не можна обрати.
+window.fillCommentSubjects = async function(){
+  const sel = document.getElementById('t-subject-for-comment');
+  if(!sel) return;
+  const keep = sel.value;
+  await fillActionSubject('t-subject-for-comment', keep);
+};
+
 window.handleSubjectChange=function(){
   loadCurrentTopicAndHW();
   const subj=document.getElementById('t-subject').value;
-  ['t-subject-for-comment'].forEach(id=>{const el=document.getElementById(id);if(el)Array.from(el.options).forEach(o=>o.selected=(o.value===subj));});
+  // Підказуємо той самий предмет, якщо він є у списку коментаря — але не
+  // нав'язуємо: список коментаря ширший, він не залежить від дня
+  const cs=document.getElementById('t-subject-for-comment');
+  if(cs&&Array.from(cs.options).some(o=>o.value===subj)) cs.value=subj;
   loadTextbooksForTeacher();loadCurriculumTopics();
   populateTopicSelector(); /* CURRICULUM v3 */
+  if(document.getElementById('t-subject-for-comment')) fillCommentSubjects();
   // Список підручників для ДЗ наповнювався ЛИШЕ при розгортанні блока
   // (ontoggle). Якщо вчитель відкрив його до вибору предмета або змінив
   // предмет після — там лишалося «спочатку оберіть предмет» назавжди.
@@ -94,6 +111,7 @@ export function loadCurrentTopicAndHW(){
   // Підручники прив'язані до пари «клас + предмет», тож після зміни класу
   // список теж застаріває
   if(document.getElementById('hw-textbook')) fillHwTextbooks();
+  if(document.getElementById('t-subject-for-comment')) fillCommentSubjects();
   if(!subject)return;
   if(document.getElementById('t-hw'))document.getElementById('t-hw').value='';
   if(document.getElementById('existing-image-info'))document.getElementById('existing-image-info').style.display='none';
