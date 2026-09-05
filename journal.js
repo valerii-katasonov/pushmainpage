@@ -690,6 +690,28 @@ window.openVisualMatrixModal=async function(mode){
   const stSnap = await tryGet('students_list', 'список учнів');
   const accSnap = await tryGet('teacher_access', 'матриця доступу вчителів');
   const accDenied = !accSnap;
+
+  // Каталог предметів — друге, доступне всім джерело вчителя за предметом.
+  // Саме воно рятує сітку, коли матриця доступу закрита: у каталозі
+  // вчитель записаний поруч із предметом, і особливих прав він не потребує.
+  window.catalogTeachers = {};
+  try{
+    const cat = await get(ref(db, `subjects_catalog/${ACTIVE_YEAR}`));
+    if(cat.exists()){
+      const all = cat.val() || {};
+      for(const cls in all){
+        const byName = {};
+        for(const key in (all[cls] || {})){
+          const rec = all[cls][key];
+          const name = (rec && typeof rec === 'object') ? rec.name : rec;
+          if(!name) continue;
+          if(rec && rec.teacherName)
+            byName[String(name).trim()] = { email: rec.teacherEmail || '', name: rec.teacherName };
+        }
+        if(Object.keys(byName).length) window.catalogTeachers[cls] = byName;
+      }
+    }
+  }catch(e){ console.warn('subjects_catalog:', e.message); }
   globalAllSchedules=snap.exists()?snap.val():{};
   globalTeacherAccess=(accSnap&&accSnap.exists())?accSnap.val():{};
   globalAllStudents=(stSnap&&stSnap.exists())?stSnap.val():{};
@@ -710,9 +732,13 @@ window.openVisualMatrixModal=async function(mode){
   const mw=document.getElementById('matrix-acc-warn');
   if(mw){
     mw.style.display=accDenied?'block':'none';
-    mw.innerHTML='⚠️ <b>Матриця доступу вчителів недоступна.</b> Там, де вчитель не записаний '
-      + 'у самому уроці, стоїть «?» — це означає «не можу визначити», а не «вчителя немає». '
-      + 'Найімовірніша причина: у Firebase не опубліковано свіжий database.rules.json.';
+    const cats=Object.keys(window.catalogTeachers||{}).length;
+    mw.innerHTML='⚠️ <b>Матриця доступу вчителів недоступна</b> — її читає лише директор. '
+      + (cats
+          ? `Учителів беремо з каталогу предметів (заповнено класів: ${cats}). `
+            + 'Де в каталозі вчителя не вказано, стоїть «?».'
+          : 'Каталог предметів теж порожній, тому вчителів підставити нема звідки. '
+            + 'Заповніть його: кабінет директора → «📗 Предмети класу й учителі».');
   }
   const title=document.getElementById('matrix-modal-title');const wb=document.getElementById('constructor-warnings');
   // ЧІТКО КАЖЕМО, ЩО САМЕ РЕДАГУЄТЬСЯ.
