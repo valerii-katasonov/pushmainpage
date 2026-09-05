@@ -21,7 +21,7 @@ import { ref, set, get, child, remove, update } from "https://www.gstatic.com/fi
 import { db, currentUserData, getActiveClass, teacherAccessMatrix, showToast,
          escHtml, escJs, mondayOf, altOptions, logAction } from './common.js';
 
-export const ALT_BUILD = '2026-09-05 · alt v2 (пари предметів)';
+export const ALT_BUILD = '2026-09-05 · alt v3 (пари предметів, правильний екран)';
 
 const DIR_ROLES  = ['director', 'administrator'];
 const TEACH_ROLES = ['teacher', 'class_teacher', 'art_school_teacher', 'music_teacher', 'master_class_teacher'];
@@ -122,8 +122,24 @@ export function canSetAlt(options, role, matrix, cls, isClassTeacher){
 
 let altState = { cls: null, weeks: [], lessons: {}, chosen: {}, isCT: false };
 
+// З двох можливих місць вибираємо ВИДИМЕ.
+//
+// ЧОМУ ЦЕ ВАЖЛИВО. Картка стоїть і в кабінеті директора, і в кабінеті
+// вчителя. Обидва елементи завжди присутні в документі — екран іншої ролі
+// лише прихований, а не видалений. Попередній варіант брав перший
+// знайдений, тобто ЗАВЖДИ директорський. Тому у вчителя картка лишалася
+// порожньою, хоч би що ми виправляли в логіці чергування.
+export function pickVisible(els){
+  const list = (els || []).filter(Boolean);
+  // offsetParent === null означає, що елемент або його предок прихований
+  return list.find(el => el.offsetParent !== null) || list[0] || null;
+}
+
 function slotEl(){
-  return document.getElementById('alt-slot-dir') || document.getElementById('alt-slot-teacher');
+  return pickVisible([
+    document.getElementById('alt-slot-teacher'),
+    document.getElementById('alt-slot-dir')
+  ]);
 }
 
 window.openAltCard = async function(){
@@ -209,6 +225,7 @@ function renderAltCard(){
     });
     html += '</div>';
   });
+  html += `<div class="alt-build">версія модуля: ${escHtml(ALT_BUILD)}</div>`;
   box.innerHTML = html;
 }
 
