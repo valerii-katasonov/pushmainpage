@@ -2271,11 +2271,17 @@ const MONTHS_UA=['січня','лютого','березня','квітня','т
 // залежав від обраної згори дати: гортаєш журнал на минулий місяць — і
 // «дні народження цього тижня» теж їдуть у минуле.
 //
-// Тепер вікно рухоме: від сьогодні до сьогодні+7. Дитина зʼявляється в
-// списку рівно за тиждень і висить там до самого свята.
+// Тепер вікно рухоме: від сьогодні на місяць уперед. Дитина зʼявляється в
+// списку заздалегідь і висить там до самого свята.
+//
+// ЧОМУ МІСЯЦЬ, А НЕ ТИЖДЕНЬ. Показ і нагадування — різні речі. Push за
+// тиждень — це «пора щось робити»; список — це «що попереду», і за тиждень
+// подарунок чи стінгазету вже не встигнути спланувати. Тому вікно показу
+// ширше за вікно нагадування, і це навмисно.
 //
 // Рахуємо через справжні дати, а не порівнянням рядків «MM-DD»: інакше
 // кінець грудня ніколи не побачив би початок січня.
+export const BIRTHDAY_WINDOW_DAYS = 30;
 export function upcomingWindow(todayStr,days){
   const p=String(todayStr||'').split('-');
   const base=new Date(+p[0],+p[1]-1,+p[2]);
@@ -2297,12 +2303,22 @@ function windowIndex(win,md){
   if(md!=='02-29')return -1;
   return win.findIndex(w=>w.md==='03-01'&&!w.leap);
 }
+// Українська відмінює «день» за останньою цифрою, крім другого десятка:
+// 1 день · 2–4 дні · 5–20 днів · 21 день · 22–24 дні · 25–30 днів.
+// Поки вікно було тижневим, вистачало двох форм. На місяці вилізло б
+// «через 21 днів», тож рахуємо правило повністю.
+export function daysWord(n){
+  const last=n%10, two=n%100;
+  if(two>=11&&two<=14)return'днів';
+  if(last===1)return'день';
+  if(last>=2&&last<=4)return'дні';
+  return'днів';
+}
 export function birthdayWhen(offset){
   if(offset===0)return'сьогодні';
   if(offset===1)return'завтра';
   if(offset===2)return'післязавтра';
-  // Вікно не більше тижня, тож досить двох форм: «3 дні» — «5 днів»
-  return`через ${offset} ${offset<5?'дні':'днів'}`;
+  return`через ${offset} ${daysWord(offset)}`;
 }
 export async function getUpcomingBirthdays(cls,todayStr,days){
   const [stSnap,bdSnap]=await Promise.all([
@@ -2311,7 +2327,7 @@ export async function getUpcomingBirthdays(cls,todayStr,days){
   ]);
   if(!stSnap.exists()||!bdSnap||!bdSnap.exists())return[];
   const names=stSnap.val(), bdays=bdSnap.val();
-  const win=upcomingWindow(todayStr,days==null?7:days);
+  const win=upcomingWindow(todayStr,days==null?BIRTHDAY_WINDOW_DAYS:days);
   const out=[];
   for(const key in names){
     const md=bdays[key];                    // «MM-DD», без року
@@ -2332,7 +2348,7 @@ export async function renderBirthdays(containerId,cls,selfName){
   const box=document.getElementById(containerId);
   if(!box)return;
   try{
-    const list=await getUpcomingBirthdays(cls,localDateString,7);
+    const list=await getUpcomingBirthdays(cls,localDateString,BIRTHDAY_WINDOW_DAYS);
     // Поруч може лежати блок порожнього стану — щоб на вкладці не висів
     // самотній заголовок без вмісту. Там, де його немає, нічого не робимо.
     const empty=document.getElementById(containerId+'-empty');
@@ -2343,10 +2359,12 @@ export async function renderBirthdays(containerId,cls,selfName){
     }
     if(empty) empty.style.display='none';
     box.style.display='block';
-    box.innerHTML=`<div class="bd-title">🎂 Дні народження — найближчий тиждень</div>`+
+    box.innerHTML=`<div class="bd-title">🎂 Дні народження — найближчий місяць</div>`+
+      // Найближчий тиждень виділено: у місячному списку саме він потребує
+      // дій, решта — просто щоб знати наперед.
       list.map(b=>`<div class="bd-row${b.name===selfName?' me':''}${b.today?' bd-today':''}">
         <span class="bd-name">${b.today?'🎉 ':''}${escHtml(b.name)}${b.name===selfName?' — це ти!':''}</span>
-        <span class="bd-date">${escHtml(b.label)} <i class="bd-when">${escHtml(b.when)}</i></span>
+        <span class="bd-date">${escHtml(b.label)} <i class="bd-when${b.idx<=7?' soon':''}">${escHtml(b.when)}</i></span>
       </div>`).join('');
   }catch(e){
     box.style.display='none';
