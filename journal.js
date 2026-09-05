@@ -705,6 +705,15 @@ window.openVisualMatrixModal=async function(mode){
   window.globalTeachersList=[];
   if(uSnap&&uSnap.exists()){const u=uSnap.val();for(let uid in u){const us=u[uid];const rs=getUserRoles(us);if(rs.some(r=>r==='teacher'||r==='class_teacher'||r==='art_school_teacher'||r==='music_teacher')&&us.email&&!us.disabled){const n=(us.firstName||us.lastName)?`${us.firstName||''} ${us.lastName||''}`.trim():"Ім'я";const se=us.email.replace(/\./g,'_');window.globalTeachersList.push({email:us.email,name:n,safeEmail:se});}}}
   window._matrixAccDenied=accDenied;
+  // Помітна смуга просто у вікні: рядок стану внизу легко не помітити,
+  // а наслідок серйозний — половина сітки виглядає як розклад без учителів.
+  const mw=document.getElementById('matrix-acc-warn');
+  if(mw){
+    mw.style.display=accDenied?'block':'none';
+    mw.innerHTML='⚠️ <b>Матриця доступу вчителів недоступна.</b> Там, де вчитель не записаний '
+      + 'у самому уроці, стоїть «?» — це означає «не можу визначити», а не «вчителя немає». '
+      + 'Найімовірніша причина: у Firebase не опубліковано свіжий database.rules.json.';
+  }
   const title=document.getElementById('matrix-modal-title');const wb=document.getElementById('constructor-warnings');
   // ЧІТКО КАЖЕМО, ЩО САМЕ РЕДАГУЄТЬСЯ.
   //
@@ -782,7 +791,20 @@ export function teacherTeaches(email, clsId, subjName){
 }
 
 function hasWC(row,clsId,subIdx){if(currentMatrixMode==='live')return'';const w=draftWarningsCache.find(x=>x.row===row&&x.classId===clsId&&x.subIdx===subIdx);if(!w)return'';return w.type==='conflict'?'cell-warning-conflict':'cell-warning-travel';}
-function rsmcc(lesson,dTName,isOvr,clsId,row,si){const sn=typeof lesson.subject==='string'?lesson.subject:(lesson.subject.ua||'');const ts=lesson.time||'';const isB=isBreakItem(lesson);const isX=lesson.type==='extra';const sl=JSON.stringify(lesson).replace(/'/g,"&apos;").replace(/"/g,"&quot;");const oc=`event.stopPropagation();openCellEditor('${clsId}',${row},${si},${sl})`;const wc=hasWC(row,clsId,si);if(isB)return`<div class="matrix-cell cell-break" onclick="${oc}"><div class="cell-subj">${escHtml(sn)}</div><div class="cell-time">${escHtml(ts)}</div></div>`;if(isX){let xi='';if(lesson.extraData){if(lesson.extraData.format==='individual')xi=`<div class="cell-student-linked">👤${escHtml(lesson.extraData.student||'')}</div>`;else xi=`<div class="cell-student-linked" style="background:#e8f8f5;color:#16a085;">👥Група</div>`;}const th=dTName?`<div class="cell-teacher">👨‍🏫${escHtml(dTName)}${isOvr?' <span title="Веде не той, хто закріплений за предметом — заміна">🔄</span>':''}</div>`:`<div class="cell-teacher" style="color:#aaa;">—</div>`;return`<div class="matrix-cell cell-club ${wc}" onclick="${oc}"><div class="cell-subj">🎸${escHtml(sn)}</div>${th}${xi}<div class="cell-time">🕘${escHtml(ts)}</div></div>`;}const th=dTName?`<div class="cell-teacher">👨‍🏫${escHtml(dTName)}${isOvr?' <span title="Веде не той, хто закріплений за предметом — заміна">🔄</span>':''}</div>`:`<div class="cell-teacher" style="color:#aaa;">—</div>`;return`<div class="matrix-cell cell-lesson ${wc}" onclick="${oc}"><div class="cell-subj">${escHtml(sn)}</div>${th}<div class="cell-time">🕘${escHtml(ts)}</div></div>`;}
+
+// Клітинка без учителя. «—» означає «нікого не призначено», і це факт.
+// Але коли матриця доступу недоступна, ми просто НЕ ЗНАЄМО, хто веде
+// урок: імена звідти й беруться. Показувати в цьому випадку «—» —
+// видавати незнання за факт, і саме на цьому людина втрачає час, шукаючи
+// неіснуючу дірку в розкладі.
+function noTeacherCell(){
+  const known = globalTeacherAccess && Object.keys(globalTeacherAccess).length;
+  return known
+    ? '<div class="cell-teacher" style="color:#aaa;">—</div>'
+    : '<div class="cell-teacher" style="color:#e65100;" title="Учителя визначає матриця доступу, а вона зараз недоступна. Це не означає, що вчителя не призначено.">?</div>';
+}
+
+function rsmcc(lesson,dTName,isOvr,clsId,row,si){const sn=typeof lesson.subject==='string'?lesson.subject:(lesson.subject.ua||'');const ts=lesson.time||'';const isB=isBreakItem(lesson);const isX=lesson.type==='extra';const sl=JSON.stringify(lesson).replace(/'/g,"&apos;").replace(/"/g,"&quot;");const oc=`event.stopPropagation();openCellEditor('${clsId}',${row},${si},${sl})`;const wc=hasWC(row,clsId,si);if(isB)return`<div class="matrix-cell cell-break" onclick="${oc}"><div class="cell-subj">${escHtml(sn)}</div><div class="cell-time">${escHtml(ts)}</div></div>`;if(isX){let xi='';if(lesson.extraData){if(lesson.extraData.format==='individual')xi=`<div class="cell-student-linked">👤${escHtml(lesson.extraData.student||'')}</div>`;else xi=`<div class="cell-student-linked" style="background:#e8f8f5;color:#16a085;">👥Група</div>`;}const th=dTName?`<div class="cell-teacher">👨‍🏫${escHtml(dTName)}${isOvr?' <span title="Веде не той, хто закріплений за предметом — заміна">🔄</span>':''}</div>`:noTeacherCell();return`<div class="matrix-cell cell-club ${wc}" onclick="${oc}"><div class="cell-subj">🎸${escHtml(sn)}</div>${th}${xi}<div class="cell-time">🕘${escHtml(ts)}</div></div>`;}const th=dTName?`<div class="cell-teacher">👨‍🏫${escHtml(dTName)}${isOvr?' <span title="Веде не той, хто закріплений за предметом — заміна">🔄</span>':''}</div>`:noTeacherCell();return`<div class="matrix-cell cell-lesson ${wc}" onclick="${oc}"><div class="cell-subj">${escHtml(sn)}</div>${th}<div class="cell-time">🕘${escHtml(ts)}</div></div>`;}
 window.renderMatrixGrid=function(){const day=document.getElementById('matrix-day-select').value;const th=document.getElementById('matrix-thead-row');const tb=document.getElementById('matrix-tbody');th.innerHTML='<th class="time-col">№/Час</th>';for(let i=1;i<=11;i++)th.innerHTML+=`<th>${i} Кл</th>`;tb.innerHTML='';let maxR=8;for(let i=1;i<=11;i++){const cls=`class_${i}`;maxR=Math.max(maxR,dayArr(globalAllSchedules[cls]?.lessons?.[day]).length);}maxR+=1;let lc=1;for(let row=0;row<maxR;row++){let tr=document.createElement('tr');let bc=0;let lsc=0;for(let c=1;c<=11;c++){const clsId=`class_${c}`;const la=dayArr(globalAllSchedules[clsId]?.lessons?.[day]);const raw=la[row];let items=Array.isArray(raw)?raw:(raw&&raw.subject?[raw]:[]);items.forEach(l=>{if(l&&l.subject){if(isBreakItem(l))bc++;else lsc++;}});}const isB=bc>0&&bc>=lsc;const isE=bc===0&&lsc===0;if(isB)tr.innerHTML='<td class="time-col" style="background:#fce4ec;color:#e91e63;">☕</td>';else if(isE)tr.innerHTML='<td class="time-col" style="color:#ccc;font-size:1.1rem;">+</td>';else tr.innerHTML=`<td class="time-col">Ур.${lc++}</td>`;for(let c=1;c<=11;c++){const clsId=`class_${c}`;const la=dayArr(globalAllSchedules[clsId]?.lessons?.[day]);const raw=la[row];let items=Array.isArray(raw)?raw:(raw&&raw.subject?[raw]:[]);let td=document.createElement('td');let h='';if(items.length>0){h+=`<div class="matrix-cell-container">`;items.forEach((lesson,si)=>{const sn=typeof lesson.subject==='string'?lesson.subject:(lesson.subject.ua||'');const te=lesson.teacherEmail||'';let dn=lesson.teacherName||'';let isOvr=false;const isB2=isBreakItem(lesson);if(!isB2){if(!te&&sn){const dt=window.getDefaultTeacher(clsId,sn);if(dt)dn=dt.name;}else if(te){const known=teacherTeaches(te,clsId,sn);isOvr=(known===false);}
         // Матриці доступу може не бути — тоді підставити ім'я нема звідки.
         // Але воно могло зберегтися в самому уроці, коли розклад складали.
