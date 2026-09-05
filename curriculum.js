@@ -8,7 +8,7 @@
 // XLSX comes from the CDN <script> tag already in <head> (global).
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, update } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, auth, getActiveClass, currentUserData, showToast, localDateString, escHtml, teacherAccessMatrix, withTeachingRole, syncStaffCard, isBreakItem } from './common.js';
+import { db, auth, getActiveClass, currentUserData, showToast, localDateString, escHtml, teacherAccessMatrix, withTeachingRole, syncStaffCard, isBreakItem, isTeacherRole, isMasterTeacher } from './common.js';
 
 let parsedCurriculum=null;        // після парсингу xlsx
 const MAX_TOPICS=250;             // стеля на предмет: захист від зіпсованого файлу
@@ -953,16 +953,19 @@ export async function checkCurriculumUploadAccess(){
     return;
   }
 
-  if(!['teacher','class_teacher','art_school_teacher','music_teacher'].includes(role)){
+  if(!isTeacherRole(role)){
     sec.style.display='none'; return;
   }
   if(dirBox) dirBox.style.display='none';
 
   const cls=getActiveClass();
-  let isClassTeacher=false;
+  // Майстер-роль вважається класним керівником будь-якого класу — заради
+  // цього вона й існує. Перевірку в базі при цьому не обходимо: правила
+  // дозволяють їй запис окремо й явно.
+  let isClassTeacher=isMasterTeacher(role);
   try{
     const snap=await get(ref(db,`class_teachers/${cls}`));
-    isClassTeacher=snap.exists()&&snap.val().teacherEmail===currentUserData.email;
+    isClassTeacher=isClassTeacher||(snap.exists()&&snap.val().teacherEmail===currentUserData.email);
   }catch(e){
     // Не змогли перевірити — не мовчимо. Класним керівником не вважаємо,
     // але предметний доступ нижче все одно спрацює.
