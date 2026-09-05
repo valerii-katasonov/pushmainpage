@@ -24,7 +24,7 @@ import { db, currentUserData, getActiveClass, teacherAccessMatrix, showToast,
 export const ALT_BUILD = '2026-09-02 · alt v1';
 
 const DIR_ROLES  = ['director', 'administrator'];
-const TEACH_ROLES = ['teacher', 'class_teacher', 'art_school_teacher', 'music_teacher'];
+const TEACH_ROLES = ['teacher', 'class_teacher', 'art_school_teacher', 'music_teacher', 'master_class_teacher'];
 const DAY_UA = { Monday:'Понеділок', Tuesday:'Вівторок', Wednesday:'Середа',
                  Thursday:'Четвер', Friday:'Пʼятниця', Saturday:'Субота' };
 const DAY_ORDER = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
@@ -70,6 +70,7 @@ export function altLessons(lessons){
 // Чи може ця людина міняти вибір для такого уроку
 export function canSetAlt(options, role, matrix, cls, isClassTeacher){
   if(DIR_ROLES.includes(role)) return true;
+  if(role === 'master_class_teacher') return true;   // роль для налагодження
   if(isClassTeacher) return true;
   if(!TEACH_ROLES.includes(role)) return false;
   const raw = (matrix || {})[cls];
@@ -105,7 +106,8 @@ window.openAltCard = async function(){
       get(child(ref(db), `class_teachers/${cls}`))
     ]);
     altState.lessons = schedSnap.exists() ? (schedSnap.val().lessons || {}) : {};
-    altState.isCT = ctSnap.exists() && ctSnap.val().teacherEmail === (currentUserData && currentUserData.email);
+    altState.isCT = role === 'master_class_teacher'
+      || (ctSnap.exists() && ctSnap.val().teacherEmail === (currentUserData && currentUserData.email));
   }catch(e){
     box.innerHTML = `<p class="empty-msg" style="color:var(--red);">Не вдалося прочитати розклад: ${escHtml(e.message)}</p>`;
     return;
