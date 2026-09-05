@@ -759,12 +759,33 @@ export function mondayOf(d){
 
 // Варіанти уроку, що чергується, або null для звичайного уроку
 export function altOptions(item){
-  const raw = item && item.alt;
-  if(!raw) return null;
-  const list = (Array.isArray(raw) ? raw : Object.values(raw))
-    .map(x => typeof x === 'string' ? x.trim() : (x && x.ua ? String(x.ua).trim() : ''))
-    .filter(Boolean);
-  return list.length > 1 ? list : null;
+  if(!item) return null;
+  // Поле alt перевіряємо ПЕРШИМ: запис із ним — гарантовано урок, і
+  // питати isBreakItem тут не можна. Той вважає перервою все без назви,
+  // а урок із alt цілком може не мати окремого поля subject.
+  const raw = item.alt;
+  if(raw){
+    const list = (Array.isArray(raw) ? raw : Object.values(raw))
+      .map(x => typeof x === 'string' ? x.trim() : (x && x.ua ? String(x.ua).trim() : ''))
+      .filter(Boolean);
+    if(list.length > 1) return list;
+  }
+  // ЗАПАСНИЙ І НАЙЧАСТІШИЙ ВИПАДОК: чергування записане просто в назві —
+  // «Музичне мистецтво / Фізичне виховання». Поле alt ставить лише імпорт
+  // із Word, а руками в конструкторі й у старих розкладах пишуть косу
+  // риску. Поки ми дивилися тільки на alt, картка чергування була порожня
+  // навіть там, де чергування очевидно є.
+  //
+  // Вимагаємо пробіли навколо риски: «1/2 групи» чи «в/о» — не чергування.
+  if(isBreakItem(item)) return null;
+  const raw2 = typeof item.subject === 'object' ? (item.subject && item.subject.ua) : item.subject;
+  const name = typeof raw2 === 'string' ? raw2.trim() : '';
+  if(!name.includes('/')) return null;
+  const parts = name.split(/\s+\/\s+/).map(x => x.trim()).filter(Boolean);
+  if(parts.length < 2) return null;
+  // Обидві частини мають бути схожі на назву предмета, а не на дріб
+  if(parts.some(x => x.length < 3)) return null;
+  return parts;
 }
 
 // Урок + обрана назва → урок, готовий до показу.
