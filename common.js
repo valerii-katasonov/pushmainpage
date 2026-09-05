@@ -723,7 +723,11 @@ window.getValidSubjectName=function(item){
   const raw = item.subject && item.subject.ua ? item.subject.ua : item.subject;
   return (typeof raw === 'string' && raw.trim()) ? raw.trim() : null;
 };
-window.isSubjectAllowed=function(cls,subjectName){if(!subjectName)return false;let raw=teacherAccessMatrix[cls]||[];let allowed=Array.isArray(raw)?raw:Object.values(raw);let normAllowed=allowed.map(s=>typeof s==='string'?s.trim():'');if(normAllowed.includes("Всі предмети"))return true;return normAllowed.includes(subjectName.trim());};
+window.isSubjectAllowed=function(cls,subjectName){if(!subjectName)return false;
+  // Майстер-роль веде всі предмети в усіх класах — інакше журнал у чужому
+  // класі відкрився б порожнім, і сенс ролі зникає
+  if(isMasterTeacher(currentUserData&&currentUserData.role))return true;
+  let raw=teacherAccessMatrix[cls]||[];let allowed=Array.isArray(raw)?raw:Object.values(raw);let normAllowed=allowed.map(s=>typeof s==='string'?s.trim():'');if(normAllowed.includes("Всі предмети"))return true;return normAllowed.includes(subjectName.trim());};
 window.getDefaultTeacher=function(clsId,subjName){if(!subjName||!globalTeacherAccess)return null;let nt=subjName.trim().toLowerCase();for(let se in globalTeacherAccess){if(globalTeacherAccess[se][clsId]){let a=globalTeacherAccess[se][clsId];let ok=false;if(Array.isArray(a))ok=a.some(s=>s.trim().toLowerCase()==="всі предмети"||s.trim().toLowerCase()===nt);else ok=Object.values(a).some(s=>s.trim().toLowerCase()==="всі предмети"||s.trim().toLowerCase()===nt);if(ok){let t=window.globalTeachersList.find(t=>t.safeEmail===se);if(t)return{email:t.email,name:t.name};}}}return null;};
 window.loadScheduleScript=function(classId,callback){if(!classId)return;listenAltChoices(classId,()=>{try{if(window.refreshScheduleViews)window.refreshScheduleViews();}catch(e){}});get(child(ref(db),`schedules/${classId}`)).then(snap=>{if(snap.exists()){window.schedule=snap.val().lessons||{};window.clubSchedule=snap.val().clubs||{};}else{window.schedule={};window.clubSchedule={};}if(callback)callback();}).catch(()=>{window.schedule={};window.clubSchedule={};if(callback)callback();});};
 
@@ -1071,7 +1075,7 @@ window.removeMySkill=function(i){mySkillsTemp.splice(i,1);renderMySkillsTags();}
 // ══════════ DATE / CLASS CHANGE ══════════
 window.handleDateChange=function(){
   if(!currentUserData)return;
-  if(currentUserData.role==='teacher'||currentUserData.role==='class_teacher'||currentUserData.role==='art_school_teacher'||currentUserData.role==='music_teacher'){updateSubjectList();loadTeacherDashboard();loadCurrentTopicAndHW();listenTeacherAttendance();}
+  if(isTeacherRole(currentUserData.role)){updateSubjectList();loadTeacherDashboard();loadCurrentTopicAndHW();listenTeacherAttendance();}
   else if(currentUserData.role==='director'){loadDirectorDashboard();document.getElementById('d-detail-hw-class')&&(document.getElementById('d-detail-hw-class').value='');}
   else if(currentUserData.role==='kitchen'){/* кухня працює тижнями — має власну навігацію */}
   else if(currentUserData.role==='administrator'){loadAdminDashboard();}
@@ -1383,10 +1387,11 @@ async function initUserSession(){
     checkCurriculumUploadAccess();}
   else if(r==='kitchen'){document.getElementById('kitchen-screen').style.display='block';document.getElementById('teacher-class-selector-box').style.display='none';const gd=document.getElementById('global-date'),gl=document.getElementById('global-date-label');if(gd)gd.style.display='none';if(gl)gl.style.display='none';callWhenReady('refreshKitchen');}
   else if(r==='administrator'){document.getElementById('admin-screen').style.display='block';document.getElementById('teacher-class-selector-box').style.display='none';handleDateChange();}
-  else if(r==='teacher'||r==='class_teacher'||r==='art_school_teacher'||r==='music_teacher'){
+  else if(isTeacherRole(r)){
     document.getElementById('teacher-screen').style.display='block';document.getElementById('teacher-class-selector-box').style.display='block';
     const isArt=r==='art_school_teacher';
-    document.getElementById('t-matrix-btn-wrapper').style.display=isArt?'block':'none';
+    // Майстер-ролі показуємо матрицю розкладу — вона потрібна для налагодження
+    document.getElementById('t-matrix-btn-wrapper').style.display=(isArt||isMasterTeacher(r))?'block':'none';
     document.getElementById('t-mark-absent-block').style.display=isArt?'none':'flex';
     document.getElementById('t-exams-journal-btns').style.display=isArt?'none':'flex';
     document.getElementById('t-wrapped-btn').style.display=isArt?'none':'block';
@@ -1394,7 +1399,13 @@ async function initUserSession(){
     document.getElementById('t-hw-input-wrapper').style.display=isArt?'none':'block';
     document.getElementById('t-topic-card').style.display=isArt?'none':'block';
     const cs=document.getElementById('t-class-selector');cs.innerHTML='';
-    Object.keys(teacherAccessMatrix).forEach(c=>cs.innerHTML+=`<option value="${c}">${c.replace('class_','')} Клас</option>`);
+    if(isMasterTeacher(r)){
+      // Роль для налагодження допущена до всіх класів окремим правилом бази,
+      // записів у teacher_access у неї немає — тож список будуємо самі.
+      for(let i=1;i<=11;i++) cs.innerHTML+=`<option value="class_${i}">${i} Клас</option>`;
+    }else{
+      Object.keys(teacherAccessMatrix).forEach(c=>cs.innerHTML+=`<option value="${c}">${c.replace('class_','')} Клас</option>`);
+    }
     if(cs.options.length===0){
       if(isArt)cs.innerHTML='<option value="class_1">1 Клас</option>';
       else{
