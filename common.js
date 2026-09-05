@@ -1099,7 +1099,8 @@ window.handleClassChange=function(){
 export function renderMasterBanner(){
   const on = isMasterTeacher(currentUserData && currentUserData.role);
   let el = document.getElementById('master-mode-banner');
-  if(!on){ if(el) el.remove(); return; }
+  document.body.classList.toggle('master-mode', on);
+  if(!on){ if(el) el.remove(); document.body.style.paddingTop = ''; return; }
   if(!el){
     el = document.createElement('div');
     el.id = 'master-mode-banner';
@@ -1107,6 +1108,15 @@ export function renderMasterBanner(){
   }
   el.innerHTML = '🔧 РЕЖИМ НАЛАГОДЖЕННЯ · права класного керівника в усіх класах'
     + '<span>Тимчасова роль. Перед передачею школі її треба зняти.</span>';
+  // Відступ під смугу МІРЯЄМО, а не задаємо числом. На вузькому екрані
+  // текст переноситься на два рядки, смуга стає вищою — і будь-яке
+  // вгадане значення почне різати верх сторінки.
+  const fit = () => { document.body.style.paddingTop = el.offsetHeight + 'px'; };
+  fit();
+  if(!el.dataset.fitBound){
+    el.dataset.fitBound = '1';
+    window.addEventListener('resize', fit);
+  }
 }
 window.renderMasterBanner = renderMasterBanner;
 // Предмети НЕ зберігаються окремим списком — вони беруться з РОЗКЛАДУ класу
