@@ -905,11 +905,18 @@
     .mx-mode.draft{background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;}
     /* Смуга режиму налагодження. Навмисно голосна: тимчасова роль із
        правами класного керівника в усіх класах не має губитися з очей. */
-    #master-mode-banner{position:sticky;top:0;z-index:1200;width:100%;
+    /* position:fixed, а не sticky: body тут display:flex із центруванням,
+       і смуга як звичайний елемент ставала колонкою ліворуч замість того,
+       щоб лягти на всю ширину. Фіксоване позиціювання не залежить від
+       розкладки батька. */
+    #master-mode-banner{position:fixed;top:0;left:0;right:0;z-index:1200;
       background:repeating-linear-gradient(45deg,#b71c1c,#b71c1c 12px,#8e0000 12px,#8e0000 24px);
       color:#fff;font-size:.78rem;font-weight:800;text-align:center;padding:7px 12px;
       letter-spacing:.02em;box-shadow:0 2px 8px rgba(0,0,0,.25);}
     #master-mode-banner span{display:block;font-weight:400;font-size:.68rem;opacity:.9;}
+    /* Запасний відступ на випадок, якщо скрипт не встиг поміряти смугу.
+       Точне значення виставляє renderMasterBanner() за реальною висотою. */
+    body.master-mode{padding-top:64px;}
     /* Перерви класу */
     .bk-list{margin-top:11px;background:#fff;border-radius:10px;border:1px solid #c5cae9;overflow:hidden;}
     .bk-row{display:flex;align-items:center;gap:9px;padding:8px 11px;border-bottom:1px solid #f2f3fa;}
