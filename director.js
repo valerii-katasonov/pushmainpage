@@ -1945,11 +1945,19 @@ export function switchTab(screenId, tab, btn){
 window.switchTab = switchTab;
 
 // Відновлюємо останню відкриту вкладку кабінету
+// Вкладки, які колись існували, але були перейменовані. Без цієї карти
+// людина, у якої в пам'яті браузера лишилася стара назва, отримала б
+// порожній кабінет: кнопки з такою назвою вже немає, і нічого не
+// вмикається.
+const RENAMED_TABS = { journal: 'lesson' };
+
 export function initTabs(screenId){
   const bar = document.getElementById(screenId + '-tabs');
   if(!bar) return;
   let tab = null;
   try{ tab = localStorage.getItem('push_school_tab_' + screenId); }catch(e){}
+  if(tab && RENAMED_TABS[tab] && bar.querySelector(`.dtab[data-t="${RENAMED_TABS[tab]}"]`))
+    tab = RENAMED_TABS[tab];
   const btn = (tab && bar.querySelector(`.dtab[data-t="${tab}"]`)) || bar.querySelector('.dtab');
   if(btn) switchTab(screenId, btn.dataset.t, btn);
 }
