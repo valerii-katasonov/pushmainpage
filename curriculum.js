@@ -100,34 +100,57 @@ export function repairTopics(topics){
 // сам рядок заголовка за першу тему: parseInt('Тема уроку') давав NaN,
 // а Firebase відхиляв увесь план помилкою про 't_NaN_0'.
 // Тому дивимося на зміст колонок, а не на точне формулювання.
-export function isSimpleHeader(r){
-  if(!r) return false;
+// Де в цьому заголовку номер, тема й години → {num, title, hours} або null.
+//
+// ЧОМУ ШУКАЄМО, А НЕ РАХУЄМО ПОЗИЦІЇ. Колонки прив'язувалися до місць
+// 0, 1, 2. Поки зайві колонки стояли праворуч, це працювало; варто було
+// вставити одну ліворуч або між номером і темою — і файл переставав
+// впізнаватися. Учителі роблять таблиці по-різному, тож дивимося на
+// підписи колонок, а не на порядок.
+export function headerMap(r){
+  if(!r) return null;
   const c = i => String(r[i] == null ? '' : r[i]).toLowerCase().trim();
-  const first = c(0), second = c(1);
-  // Перша колонка — номер: «№», «№ уроку», «номер», «п/п»
-  const isNum = first.includes('№') || first.includes('номер')
-             || first.includes('уроку') || first.includes('п/п');
-  // Друга — тема
-  const isTopic = second.includes('тема') || second.includes('зміст');
-  return isNum && isTopic;
+  let num = -1, title = -1, hours = -1;
+  for(let i = 0; i < r.length; i++){
+    const v = c(i);
+    if(!v) continue;
+    if(num < 0 && (v.includes('№') || v.includes('номер') || v.includes('п/п')
+                   || (v.includes('уроку') && !v.includes('тема')))) { num = i; continue; }
+    if(title < 0 && (v.includes('тема') || v.includes('зміст'))) { title = i; continue; }
+    if(hours < 0 && (v.includes('год') || v.includes('к-сть'))) { hours = i; continue; }
+  }
+  if(num < 0 || title < 0) return null;
+  return { num, title, hours };
 }
 
+export function isSimpleHeader(r){ return headerMap(r) !== null; }
+
 export function parseSimplePlan(rows){
-  let head = -1;
+  let head = -1, map = null;
   for(let i = 0; i < rows.length; i++){
-    if(isSimpleHeader(rows[i])){ head = i; break; }
+    const m = headerMap(rows[i]);
+    if(m){ head = i; map = m; break; }
   }
   if(head < 0) return null;
 
   const topics = [];
   for(let i = head + 1; i < rows.length; i++){
     const r = rows[i] || [];
-    const title = String(r[1] == null ? '' : r[1]).trim();
-    // Порожній рядок — кінець таблиці. Далі в бланку йдуть пояснення
-    // й приклад із таким самим заголовком; читати їх не можна.
-    if(!title) break;
-    const range = parseLessonRange(r[0]);
-    const hoursCell = Number(String(r[2] == null ? '' : r[2]).replace(',', '.'));
+    const title = String(r[map.title] == null ? '' : r[map.title]).trim();
+    // Порожній рядок зазвичай означає кінець таблиці: далі в бланку йдуть
+    // пояснення й приклад із таким самим заголовком, читати їх не можна.
+    // Але вчителі лишають і порожній рядок просто для відступу. Тому
+    // дивимося на наступний: якщо там є номер уроку — це відступ,
+    // продовжуємо; якщо ні — таблиця справді скінчилася.
+    if(!title){
+      const nxt = rows[i + 1] || [];
+      const nxtTitle = String(nxt[map.title] == null ? '' : nxt[map.title]).trim();
+      if(nxtTitle && parseLessonRange(nxt[map.num])) continue;
+      break;
+    }
+    const range = parseLessonRange(r[map.num]);
+    const hoursCell = map.hours < 0 ? NaN
+      : Number(String(r[map.hours] == null ? '' : r[map.hours]).replace(',', '.'));
     const hours = (hoursCell > 0)
       ? Math.round(hoursCell)
       : (range ? (range.to - range.from + 1) : 1);
