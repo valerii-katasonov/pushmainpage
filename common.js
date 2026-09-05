@@ -746,7 +746,31 @@ window.isSubjectAllowed=function(cls,subjectName){if(!subjectName)return false;
   // класі відкрився б порожнім, і сенс ролі зникає
   if(isMasterTeacher(currentUserData&&currentUserData.role))return true;
   let raw=teacherAccessMatrix[cls]||[];let allowed=Array.isArray(raw)?raw:Object.values(raw);let normAllowed=allowed.map(s=>typeof s==='string'?s.trim():'');if(normAllowed.includes("Всі предмети"))return true;return normAllowed.includes(subjectName.trim());};
-window.getDefaultTeacher=function(clsId,subjName){if(!subjName||!globalTeacherAccess)return null;let nt=subjName.trim().toLowerCase();for(let se in globalTeacherAccess){if(globalTeacherAccess[se][clsId]){let a=globalTeacherAccess[se][clsId];let ok=false;if(Array.isArray(a))ok=a.some(s=>s.trim().toLowerCase()==="всі предмети"||s.trim().toLowerCase()===nt);else ok=Object.values(a).some(s=>s.trim().toLowerCase()==="всі предмети"||s.trim().toLowerCase()===nt);if(ok){let t=window.globalTeachersList.find(t=>t.safeEmail===se);if(t)return{email:t.email,name:t.name};}}}return null;};
+// Каталог предметів класу як джерело вчителя за замовчуванням.
+//
+// НАВІЩО ДРУГЕ ДЖЕРЕЛО. Основне — матриця доступу teacher_access, але її
+// читає лише директор: це документ про всю школу. Тому в кабінеті вчителя
+// половина розкладу виглядала як уроки без учителів. Каталог предметів
+// (subjects_catalog) зберігає вчителя поруч із предметом і відкритий усім
+// авторизованим — там та сама відповідь, і по неї не потрібні особливі права.
+window.catalogTeachers = {};        // {class_3: {'Математика': {email, name}}}
+window.getCatalogTeacher = function(clsId, subjName){
+  const byCls = window.catalogTeachers && window.catalogTeachers[clsId];
+  if(!byCls || !subjName) return null;
+  const n = String(subjName).trim().toLowerCase();
+  for(const k in byCls){
+    if(String(k).trim().toLowerCase() === n && byCls[k] && byCls[k].name) return byCls[k];
+  }
+  return null;
+};
+
+window.getDefaultTeacher=function(clsId,subjName){
+  // Спершу матриця доступу, якщо вона взагалі прочиталася
+  const fromCatalog=window.getCatalogTeacher(clsId,subjName);
+  if(!globalTeacherAccess||!Object.keys(globalTeacherAccess).length) return fromCatalog;
+  const viaMatrix=(function(){let nt=subjName.trim().toLowerCase();for(let se in globalTeacherAccess){if(globalTeacherAccess[se][clsId]){let a=globalTeacherAccess[se][clsId];let ok=false;if(Array.isArray(a))ok=a.some(s=>s.trim().toLowerCase()==="всі предмети"||s.trim().toLowerCase()===nt);else ok=Object.values(a).some(s=>s.trim().toLowerCase()==="всі предмети"||s.trim().toLowerCase()===nt);if(ok){let t=window.globalTeachersList.find(t=>t.safeEmail===se);if(t)return{email:t.email,name:t.name};}}}return null;})();
+  return viaMatrix || fromCatalog;
+};
 window.loadScheduleScript=function(classId,callback){if(!classId)return;listenAltChoices(classId,()=>{try{if(window.refreshScheduleViews)window.refreshScheduleViews();}catch(e){}});get(child(ref(db),`schedules/${classId}`)).then(snap=>{if(snap.exists()){window.schedule=snap.val().lessons||{};window.clubSchedule=snap.val().clubs||{};}else{window.schedule={};window.clubSchedule={};}if(callback)callback();}).catch(()=>{window.schedule={};window.clubSchedule={};if(callback)callback();});};
 
 // ═══════════════════════════════════════════════════════════════
