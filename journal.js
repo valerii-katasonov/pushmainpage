@@ -7,6 +7,11 @@ import { ref, set, get, child, update } from "https://www.gstatic.com/firebasejs
 import { ACTIVE_YEAR } from './director.js';
 import { db, getActiveClass, currentUserData, displayGrade, gradeClass6, calculateStudentWeightedAvg, getClassNum, GRADE_WEIGHTS, dayKeys, dayNamesUA, showToast, localDateString, summarizeAttendanceSlots, gradeTypesCache, escJs, escHtml, notifyEvent, logAction, getUserRoles, getUsersSnap, stuName, gradeWritePaths, isBreakItem, insertSlot, removeSlot, makeBreak, withBreaks, slotBounds, hhmmFromMins } from './common.js';
 
+// Позначка складання: видно в рядку стану матриці. Якщо після викладення
+// вона не змінилася — браузер працює зі старим файлом, і шукати помилку
+// в коді марно.
+export const JOURNAL_BUILD = '2026-09-05 · матриця v2';
+
 // globalTeacherAccess is reassigned only in this file (openVisualMatrixModal)
 // and read from common.js (window.getDefaultTeacher) — plain export/import.
 export let globalTeacherAccess={};
@@ -666,16 +671,39 @@ window.openVisualMatrixModal=async function(mode){
   // хоча сам розклад людині доступний. Матриця потрібна тільки для того,
   // щоб підставити ім'я вчителя за замовчуванням; без неї сітка будується,
   // просто без цих підписів.
-  const [snap,stSnap]=await Promise.all([get(ref(db,dbPath)),get(ref(db,'students_list'))]);
-  let accDenied=false;
-  let accSnap=null;
-  try{ accSnap=await get(ref(db,'teacher_access')); }
-  catch(e){ accDenied=true; }
+  // КОЖНЕ ЧИТАННЯ ОКРЕМО, І КОЖНЕ ЗВІТУЄ ПРО СЕБЕ.
+  //
+  // Це вікно читає чотири вузли з різними правами. Двічі я вирішував, що
+  // винне одне з них, лагодив — і помилка лишалася, бо поруч було інше.
+  // Тепер жодне читання не валить решту, а рядок стану називає конкретний
+  // шлях, у якому відмовлено. Гадати більше не треба ні мені, ні школі.
+  const denied = [];
+  const tryGet = async (path, label) => {
+    try{ return await get(ref(db, path)); }
+    catch(e){ denied.push(`${label} (${path}): ${e.message}`); return null; }
+  };
+  const snap = await tryGet(dbPath, 'розклад');
+  if(!snap){
+    say(`Не вдалося прочитати розклад. ${denied.join(' · ')}`, true);
+    return;
+  }
+  const stSnap = await tryGet('students_list', 'список учнів');
+  const accSnap = await tryGet('teacher_access', 'матриця доступу вчителів');
+  const accDenied = !accSnap;
   globalAllSchedules=snap.exists()?snap.val():{};
   globalTeacherAccess=(accSnap&&accSnap.exists())?accSnap.val():{};
-  globalAllStudents=stSnap.exists()?stSnap.val():{};
-  const uSnap=await getUsersSnap();window.globalTeachersList=[];
-  if(uSnap.exists()){const u=uSnap.val();for(let uid in u){const us=u[uid];const rs=getUserRoles(us);if(rs.some(r=>r==='teacher'||r==='class_teacher'||r==='art_school_teacher'||r==='music_teacher')&&us.email&&!us.disabled){const n=(us.firstName||us.lastName)?`${us.firstName||''} ${us.lastName||''}`.trim():"Ім'я";const se=us.email.replace(/\./g,'_');window.globalTeachersList.push({email:us.email,name:n,safeEmail:se});}}}
+  globalAllStudents=(stSnap&&stSnap.exists())?stSnap.val():{};
+  // СПИСОК УЧИТЕЛІВ — ТЕЖ НЕОБОВ'ЯЗКОВИЙ.
+  //
+  // users читає лише директор — і правильно, там персональні дані всіх
+  // людей школи. Цей запит стояв поза захистом, тож відмова в правах
+  // валила побудову сітки так само, як раніше матриця доступу. Список
+  // потрібен лише для випадайки «хто веде урок» у редакторі клітинки.
+  let uSnap=null, usersDenied=false;
+  try{ uSnap=await getUsersSnap(); }
+  catch(e){ usersDenied=true; denied.push(`список персоналу (users): ${e.message}`); }
+  window.globalTeachersList=[];
+  if(uSnap&&uSnap.exists()){const u=uSnap.val();for(let uid in u){const us=u[uid];const rs=getUserRoles(us);if(rs.some(r=>r==='teacher'||r==='class_teacher'||r==='art_school_teacher'||r==='music_teacher')&&us.email&&!us.disabled){const n=(us.firstName||us.lastName)?`${us.firstName||''} ${us.lastName||''}`.trim():"Ім'я";const se=us.email.replace(/\./g,'_');window.globalTeachersList.push({email:us.email,name:n,safeEmail:se});}}}
   window._matrixAccDenied=accDenied;
   const title=document.getElementById('matrix-modal-title');const wb=document.getElementById('constructor-warnings');
   // ЧІТКО КАЖЕМО, ЩО САМЕ РЕДАГУЄТЬСЯ.
@@ -707,13 +735,14 @@ window.openVisualMatrixModal=async function(mode){
     const list=Array.isArray(arr)?arr:Object.values(arr||{});
     list.forEach(i=>{ const items=Array.isArray(i)?i:(i&&i.subject?[i]:[]); mon+=items.length; });
   });
-  const accNote = accDenied
-    ? ' Матриця доступу вчителів вам не відкрита, тож імена вчителів за замовчуванням не підставляються — на сам розклад це не впливає.'
+  const accNote = denied.length
+    ? ` · Недоступно: ${denied.join(' · ')}. Сітка побудована без цих даних —`
+      + ' імена вчителів не підставляються. Уроки, час і предмети редагуються звично.'
     : '';
   say((clsKeys.length
     ? `${mode==='live'?'Чинний розклад':'Чернетка «'+mode+'»'}: класів ${clsKeys.length}, уроків у понеділок ${mon}.`
     : `${mode==='live'?'Чинний розклад':'Чернетка «'+mode+'»'} порожня — жодного класу. Додайте уроки клацанням по клітинці.`)
-    + accNote);
+    + accNote + `  [журнал ${JOURNAL_BUILD}]`);
   }catch(e){
     console.error('openVisualMatrixModal', e);
     say('Не вдалося завантажити: '+e.message+'. Сітку не побудовано.', true);
