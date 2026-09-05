@@ -1157,10 +1157,9 @@ function updateSubjectList(){
   const allSubjs=[...new Set(flat.map(window.getValidSubjectName).filter(Boolean))];
   const subjs=allSubjs.filter(s=>window.isSubjectAllowed(cls,s));
   const sel=document.getElementById('t-subject');sel.innerHTML='';
-  const sc=document.getElementById('t-subject-for-comment');if(sc)sc.innerHTML='';
-  subjs.forEach(s=>{
-    [sel,sc].forEach(el=>{if(el){const o=document.createElement('option');o.value=s;o.innerText=s;el.appendChild(o.cloneNode(true));}});
-  });
+  // Поле коментаря більше НЕ наповнюємо звідси: воно не про урок дня, а про
+  // предмет узагалі, і має свій список із каталогу класу (fillCommentSubjects).
+  subjs.forEach(s=>{const o=document.createElement('option');o.value=s;o.innerText=s;sel.appendChild(o);});
   if(subjs.length===0){
     // Чи є взагалі розклад у цього класу (хоч на якийсь день тижня)?
     const hasAnySchedule=window.schedule&&Object.keys(window.schedule).length>0&&
