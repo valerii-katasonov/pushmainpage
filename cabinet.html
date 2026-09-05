@@ -2569,77 +2569,7 @@
       <label>Предмет:</label>
       <select id="t-subject" onchange="handleSubjectChange()"></select>
 
-      <div class="lg-head"><span>1</span>Матеріали та плани</div>
-      <!-- Підручники -->
-      <div style="margin-top:12px;background:#f0f8ff;padding:14px;border-radius:12px;border:1px solid #d0e8f2;">
-        <h4 style="margin:0 0 8px 0;color:var(--blue);font-size:.88rem;">📘 Посилання на підручники</h4>
-        <div id="t-textbooks-list" style="margin-bottom:8px;"></div>
-        <div style="display:flex;gap:7px;">
-          <input type="text" id="t-tb-title" placeholder="Назва підручника" style="flex:2;margin-top:0;font-size:.85rem;">
-          <input type="text" id="t-tb-url" placeholder="https://..." style="flex:3;margin-top:0;font-size:.85rem;">
-          <button onclick="saveTextbook()" style="flex:1;margin-top:0;background:var(--blue);color:#fff;padding:10px 6px;font-size:.82rem;">+ Додати</button>
-        </div>
-      </div>
-      <!-- Навчальний план -->
-      <details style="margin-top:14px;background:#f9f4ff;padding:14px;border-radius:12px;border:1px solid #ce93d8;">
-        <summary style="font-weight:700;cursor:pointer;color:#7b1fa2;font-size:.95rem;">📚 Навчальний план (Теми)</summary>
-        <div style="margin-top:12px;">
-          <div id="curriculum-smart-alert" class="smart-alert">
-            ⚠️ <b>Увага!</b> Залишок годин значно перевищує кількість тем. Перевірте план.
-          </div>
-          <div id="curriculum-topics" style="max-height:250px;overflow-y:auto;margin-top:8px;"></div>
-          <div style="display:flex;gap:7px;margin-top:9px;">
-            <input type="text" id="new-topic-title" placeholder="Нова тема..." style="flex:3;margin-top:0;font-size:.85rem;">
-            <input type="number" id="new-topic-hours" placeholder="Год." style="flex:1;margin-top:0;font-size:.85rem;" min="1" max="10">
-            <button onclick="addCurriculumTopic()" style="flex:1;margin-top:0;background:var(--purple);color:#fff;padding:10px 6px;font-size:.82rem;">+ Тема</button>
-          </div>
-        </div>
-      </details>
-      <details style="margin-top:14px;background:#f3e5f5;padding:14px;border-radius:12px;border:1px solid #ce93d8;" ontoggle="if(this.open)openAltCard()">
-        <summary style="font-weight:700;cursor:pointer;color:#6a1b9a;font-size:.95rem;">🔁 Чергування уроків</summary>
-        <div style="margin-top:12px;">
-          <p style="font-size:.78rem;color:#555;">Позначте, що саме буде цього й наступного тижня. Поки не позначено, батьки бачать обидві назви.</p>
-          <div id="alt-slot-teacher"></div>
-        </div>
-      </details>
-      <!-- Curriculum Upload (visible to class_teacher of THIS class or director) -->
-      <div id="curriculum-upload-section" style="display:none;margin-top:18px;background:#e3f2fd;padding:14px;border-radius:12px;border:1px solid #64b5f6;">
-        <h4 style="margin:0 0 8px 0;color:#0d47a1;font-size:.95rem;">📅 Календарне планування <span class="ct-badge">Кл. керівник</span></h4>
-        <p style="font-size:.78rem;color:#555;margin-bottom:10px;">Завантажте Excel-файл — портал збереже теми списком за предметом.
-          Учитель обиратиме їх зі списку, коли заповнює журнал уроку.</p>
-        <div id="curr-sched-warn" class="curr-warn danger" style="display:none;"></div>
-        <div id="curr-dir-class-box" style="display:none;margin-bottom:10px;">
-          <label style="font-size:.8rem;color:#0d47a1;font-weight:600;">Клас, у який зберегти план:</label>
-          <select id="curr-dir-class" onchange="onCurrDirClassChange()" style="margin-top:4px;"></select>
-        </div>
-        <div id="curr-access-hint" class="curr-src" style="margin-bottom:10px;"></div>
-        <label style="font-size:.8rem;color:#0d47a1;font-weight:600;">Предмет, до якого належить план:</label>
-        <select id="curr-subject" onchange="onCurrSubjectChange()" style="margin-top:4px;">
-          <option value="">— оберіть предмет —</option>
-        </select>
-        <input type="text" id="curr-subject-other" placeholder="Назва предмета точно як у розкладі"
-               style="display:none;margin-top:6px;" oninput="onCurrSubjectChange()">
-        <div id="curr-subject-warn" class="curr-warn" style="display:none;"></div>
-        <label class="curr-drop-zone" id="curr-drop-zone-label">
-          <input type="file" id="curr-file-input" accept=".xlsx,.xls">
-          <div id="curr-drop-text">📤 Натисніть або перетягніть Excel файл сюди</div>
-        </label>
-        <div id="curr-preview-section" style="display:none;margin-top:12px;">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-            <b style="color:#0d47a1;">Превʼю плану:</b>
-            <span id="curr-preview-class" style="font-size:.78rem;color:#666;"></span>
-          </div>
-          <div id="curr-preview-content" style="max-height:280px;overflow-y:auto;"></div>
-          <button onclick="saveCurriculumToDb()" id="btn-save-curr" style="background:#0d47a1;color:#fff;padding:11px;margin-top:10px;">💾 Зберегти план у систему</button>
-        </div>
-        <details style="margin-top:10px;">
-          <summary style="cursor:pointer;color:#1565c0;font-size:.82rem;">📥 Поточний план у системі</summary>
-          <div id="current-curriculum-display" style="margin-top:8px;font-size:.82rem;"></div>
-        </details>
-      </div>
-      <!-- Тема уроку (PHASE 6: до 2 тем на урок, custom dropdown замість <select>) -->
-
-      <div class="lg-head"><span>2</span>Тема, домашнє завдання та оцінки</div>
+      <div class="lg-head"><span>1</span>Тема, домашнє завдання та оцінки</div>
       <div class="topic-card" id="t-topic-card" style="margin-top:13px;">
         <label>📌 Тема уроку 1:</label>
         <div class="topic-select-wrap">
@@ -2715,6 +2645,74 @@
         <button class="qa-btn qa-save" onclick="saveTopicAndHW()" id="btn-save-hw">💾 Зберегти тему та ДЗ</button>
       </div>
       <div id="status-msg"></div>
+      <div class="lg-head"><span>2</span>Матеріали та плани</div>
+      <details style="margin-top:14px;background:#f3e5f5;padding:14px;border-radius:12px;border:1px solid #ce93d8;" ontoggle="if(this.open)openAltCard()">
+        <summary style="font-weight:700;cursor:pointer;color:#6a1b9a;font-size:.95rem;">🔁 Чергування уроків</summary>
+        <div style="margin-top:12px;">
+          <p style="font-size:.78rem;color:#555;">Позначте, що саме буде цього й наступного тижня. Поки не позначено, батьки бачать обидві назви.</p>
+          <div id="alt-slot-teacher"></div>
+        </div>
+      </details>
+      <details style="margin-top:14px;background:#f9f4ff;padding:14px;border-radius:12px;border:1px solid #ce93d8;">
+        <summary style="font-weight:700;cursor:pointer;color:#7b1fa2;font-size:.95rem;">📚 Навчальний план (Теми)</summary>
+        <div style="margin-top:12px;">
+          <div id="curriculum-smart-alert" class="smart-alert">
+            ⚠️ <b>Увага!</b> Залишок годин значно перевищує кількість тем. Перевірте план.
+          </div>
+          <div id="curriculum-topics" style="max-height:250px;overflow-y:auto;margin-top:8px;"></div>
+          <div style="display:flex;gap:7px;margin-top:9px;">
+            <input type="text" id="new-topic-title" placeholder="Нова тема..." style="flex:3;margin-top:0;font-size:.85rem;">
+            <input type="number" id="new-topic-hours" placeholder="Год." style="flex:1;margin-top:0;font-size:.85rem;" min="1" max="10">
+            <button onclick="addCurriculumTopic()" style="flex:1;margin-top:0;background:var(--purple);color:#fff;padding:10px 6px;font-size:.82rem;">+ Тема</button>
+          </div>
+        </div>
+      </details>
+      <details id="curriculum-upload-section" style="display:none;margin-top:18px;background:#e3f2fd;padding:14px;border-radius:12px;border:1px solid #64b5f6;">
+        <summary style="font-weight:700;cursor:pointer;color:#0d47a1;font-size:.95rem;">📅 Календарне планування <span class="ct-badge">Кл. керівник</span></summary>
+        <div style="margin-top:12px;">
+        
+        <p style="font-size:.78rem;color:#555;margin-bottom:10px;">Завантажте Excel-файл — портал збереже теми списком за предметом.
+          Учитель обиратиме їх зі списку, коли заповнює журнал уроку.</p>
+        <div id="curr-sched-warn" class="curr-warn danger" style="display:none;"></div>
+        <div id="curr-dir-class-box" style="display:none;margin-bottom:10px;">
+          <label style="font-size:.8rem;color:#0d47a1;font-weight:600;">Клас, у який зберегти план:</label>
+          <select id="curr-dir-class" onchange="onCurrDirClassChange()" style="margin-top:4px;"></select>
+        </div>
+        <div id="curr-access-hint" class="curr-src" style="margin-bottom:10px;"></div>
+        <label style="font-size:.8rem;color:#0d47a1;font-weight:600;">Предмет, до якого належить план:</label>
+        <select id="curr-subject" onchange="onCurrSubjectChange()" style="margin-top:4px;">
+          <option value="">— оберіть предмет —</option>
+        </select>
+        <input type="text" id="curr-subject-other" placeholder="Назва предмета точно як у розкладі"
+               style="display:none;margin-top:6px;" oninput="onCurrSubjectChange()">
+        <div id="curr-subject-warn" class="curr-warn" style="display:none;"></div>
+        <label class="curr-drop-zone" id="curr-drop-zone-label">
+          <input type="file" id="curr-file-input" accept=".xlsx,.xls">
+          <div id="curr-drop-text">📤 Натисніть або перетягніть Excel файл сюди</div>
+        </label>
+        <div id="curr-preview-section" style="display:none;margin-top:12px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <b style="color:#0d47a1;">Превʼю плану:</b>
+            <span id="curr-preview-class" style="font-size:.78rem;color:#666;"></span>
+          </div>
+          <div id="curr-preview-content" style="max-height:280px;overflow-y:auto;"></div>
+          <button onclick="saveCurriculumToDb()" id="btn-save-curr" style="background:#0d47a1;color:#fff;padding:11px;margin-top:10px;">💾 Зберегти план у систему</button>
+        </div>
+        <details style="margin-top:10px;">
+          <summary style="cursor:pointer;color:#1565c0;font-size:.82rem;">📥 Поточний план у системі</summary>
+          <div id="current-curriculum-display" style="margin-top:8px;font-size:.82rem;"></div>
+        </details>
+      </div>
+      </details>
+      <div style="margin-top:12px;background:#f0f8ff;padding:14px;border-radius:12px;border:1px solid #d0e8f2;">
+        <h4 style="margin:0 0 8px 0;color:var(--blue);font-size:.88rem;">📘 Посилання на підручники</h4>
+        <div id="t-textbooks-list" style="margin-bottom:8px;"></div>
+        <div style="display:flex;gap:7px;">
+          <input type="text" id="t-tb-title" placeholder="Назва підручника" style="flex:2;margin-top:0;font-size:.85rem;">
+          <input type="text" id="t-tb-url" placeholder="https://..." style="flex:3;margin-top:0;font-size:.85rem;">
+          <button onclick="saveTextbook()" style="flex:1;margin-top:0;background:var(--blue);color:#fff;padding:10px 6px;font-size:.82rem;">+ Додати</button>
+        </div>
+      </div>
     </section>
 
     <section class="screen-section half" data-dtab="class">
