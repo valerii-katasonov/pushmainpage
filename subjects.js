@@ -19,7 +19,7 @@
 // показати директору, скільки записів зміниться.
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, update, remove } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, currentUserData, showToast, escHtml, escJs, logAction } from './common.js';
+import { db, currentUserData, showToast, escHtml, escJs, logAction, splitAltName } from './common.js';
 import { ACTIVE_YEAR, getAcademicYearId } from './director.js';
 
 export const SUBJ_BUILD = '2026-09-02 · subjects v2 (каталог за роками)';
@@ -188,7 +188,12 @@ export function subjectsInLessons(lessons){
         if(alt && alt.length){ alt.forEach(a => { if(a) out.add(String(a).trim()); }); return; }
         const raw2 = item.subject && typeof item.subject === 'object' ? item.subject.ua : item.subject;
         const n = typeof raw2 === 'string' ? raw2.trim() : '';
-        if(n) out.add(n);
+        if(!n) return;
+        // Чергування, записане просто в назві: у каталог мають потрапити
+        // ОБИДВА предмети окремо, інакше вчителя не призначити ні одному
+        const pair = splitAltName(n);
+        if(pair){ pair.forEach(p => out.add(p)); return; }
+        out.add(n);
       });
     });
   });
