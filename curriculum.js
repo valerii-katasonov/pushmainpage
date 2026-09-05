@@ -57,12 +57,59 @@ export function parseLessonRange(v){
   return null;
 }
 
-// Чи це рядок заголовка простого бланка
-function isSimpleHeader(r){
+
+// Ціле число з клітинки Excel або запасне значення.
+//
+// НАВІЩО ОКРЕМА ФУНКЦІЯ. parseInt('І') і parseInt('1-4') дають NaN, а
+// NaN мовчки доїжджає до бази й падає аж там: «value argument contains
+// NaN in property ...t_NaN_0.lessonNum». Учитель бачить незрозумілу
+// англійську помилку й не знає, який рядок у файлі винен.
+export function intOr(v, fallback){
+  if(v === null || v === undefined) return fallback;
+  const n = parseInt(String(v).replace(/[^\d-]/g, ''), 10);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+// Теми, у яких номер уроку або години не читаються числом.
+// Повертає перелік проблемних рядків, щоб сказати про них людині.
+export function badTopics(topics){
+  const bad = [];
+  (topics || []).forEach((t, i) => {
+    if(!Number.isFinite(t.lessonNum)) bad.push({ row: i + 1, title: t.title || '', field: 'номер уроку' });
+    else if(!Number.isFinite(t.plannedHours) || t.plannedHours < 1)
+      bad.push({ row: i + 1, title: t.title || '', field: 'години' });
+  });
+  return bad;
+}
+
+// Полагодити те, що можна полагодити: номер за порядком, години = 1
+export function repairTopics(topics){
+  return (topics || []).map((t, i) => ({
+    ...t,
+    lessonNum: Number.isFinite(t.lessonNum) ? t.lessonNum : i + 1,
+    plannedHours: (Number.isFinite(t.plannedHours) && t.plannedHours > 0) ? t.plannedHours : 1
+  }));
+}
+
+// Чи це рядок заголовка простого бланка.
+//
+// ЧОМУ ПЕРЕВІРКА ТАКА ТЕРПИМА. Спочатку тут вимагалося слово «уроку» саме
+// в першій колонці — як у бланку «№ уроку | Тема | Години». Але вчителі
+// підписують колонки по-своєму: «№ | Тема уроку | Година». Такий файл не
+// впізнавався, провалювався у старий шестиколонковий розбір, і той брав
+// сам рядок заголовка за першу тему: parseInt('Тема уроку') давав NaN,
+// а Firebase відхиляв увесь план помилкою про 't_NaN_0'.
+// Тому дивимося на зміст колонок, а не на точне формулювання.
+export function isSimpleHeader(r){
   if(!r) return false;
-  const a = String(r[0] || '').toLowerCase();
-  const b = String(r[1] || '').toLowerCase();
-  return a.includes('уроку') && b.includes('тема');
+  const c = i => String(r[i] == null ? '' : r[i]).toLowerCase().trim();
+  const first = c(0), second = c(1);
+  // Перша колонка — номер: «№», «№ уроку», «номер», «п/п»
+  const isNum = first.includes('№') || first.includes('номер')
+             || first.includes('уроку') || first.includes('п/п');
+  // Друга — тема
+  const isTopic = second.includes('тема') || second.includes('зміст');
+  return isNum && isTopic;
 }
 
 export function parseSimplePlan(rows){
@@ -170,22 +217,26 @@ function parseCurriculumWorkbook(wb){
       return;
     }
 
-    const meta={};let dataStartRow=0;
+    const meta={};let dataStartRow=-1;
     for(let i=0;i<rows.length;i++){
       const r=rows[i];if(!r||!r[0])continue;
       const key=String(r[0]).trim().replace(/:$/,'');
       if(key==='Розділ / блок'){dataStartRow=i+1;break;}
       if(r[1]!==null&&r[1]!==undefined)meta[key]=r[1];
     }
+    // Немає маркера «Розділ / блок» — це не старий формат. Раніше тут
+    // стояв нуль, і розбір починався з першого рядка, тобто з'їдав
+    // заголовок як тему. Мовчазне вгадування гірше за чесну відмову.
+    if(dataStartRow < 0) return;
     const topics=[];
     for(let i=dataStartRow;i<rows.length;i++){
       const r=rows[i];if(!r||!r[2])continue;
       topics.push({
         section:r[0]?String(r[0]).trim():'',
-        lessonNum:r[1]?parseInt(r[1]):(topics.length+1),
+        lessonNum:intOr(r[1], topics.length+1),
         title:String(r[2]).trim(),
         plannedDate:excelDateToISO(r[3]),
-        plannedHours:r[4]?parseInt(r[4]):1,
+        plannedHours:intOr(r[4], 1),
         tags:r[5]?String(r[5]).trim():''
       });
     }
@@ -330,6 +381,23 @@ function renderCurriculumPreview(data){
     });
     html+=`</div>`;
   }
+  // Проблемні рядки показуємо ДО збереження. Раніше файл із нечисловим
+  // номером уроку мовчки доходив до бази й падав там незрозумілою
+  // англійською помилкою — учитель не знав, який рядок винен.
+  const problems = [];
+  Object.entries(parsedCurriculum.sheets || {}).forEach(([name, sh]) => {
+    badTopics(sh.topics).forEach(b => problems.push(
+      `${name}, рядок ${b.row}${b.title ? ` («${b.title}»)` : ''}: не читається ${b.field}`));
+  });
+  if(problems.length){
+    html = `<div class="curr-warn danger" style="display:block;">
+      <b>Не всі клітинки читаються числом (${problems.length}).</b><br>
+      ${problems.slice(0, 8).map(p => escHtml(p)).join('<br>')}
+      ${problems.length > 8 ? `<br>…і ще ${problems.length - 8}` : ''}
+      <br><br>Зберегти можна: номер уроку підставимо за порядком, години — 1.
+      Але краще виправити файл, бо номери впливають на порядок тем у журналі.
+    </div>` + html;
+  }
   container.innerHTML=html;
   document.getElementById('curr-preview-section').style.display='block';
 }
@@ -404,17 +472,24 @@ window.saveCurriculumToDb=async function(){
       const existing=existSnap.exists()?existSnap.val():{};
       const existByLesson={};
       for(let id in existing) existByLesson[existing[id].lessonNum]={id,hoursUsed:existing[id].hoursUsed||0};
+      // Останній рубіж: навіть якщо крізь розбір пройшло щось нечислове,
+      // до бази воно не потрапить. Firebase відхиляє NaN цілим записом,
+      // тож один зіпсований рядок інакше губить увесь план.
+      const safeTopics = repairTopics(topicsToSave);
       const newTopics={};
-      topicsToSave.forEach((t,idx)=>{
+      safeTopics.forEach((t,idx)=>{
         const id=`t_${t.lessonNum}_${idx}`;
         const prevHU=existByLesson[t.lessonNum]?.hoursUsed||0;
         newTopics[id]={...t,hoursUsed:Math.min(prevHU,t.plannedHours)};
       });
       await set(ref(db,`curriculum_plans/${cls}/${sk}/topics`),newTopics);
     }
+    let repaired = 0;
+    Object.values(parsedCurriculum.sheets || {}).forEach(sh => { repaired += badTopics(sh.topics).length; });
     showToast(trimmedWarnings.length>0
       ?`✅ План збережено! ⚠️ Перевищено ліміт ${MAX_TOPICS} тем на предмет — не поміщено: ${trimmedWarnings.join(', ')}`
-      :"✅ Календарне планування збережено!");
+      :(repaired ? `✅ План збережено. ${repaired} рядків мали нечислові клітинки — номери проставлено за порядком.`
+                 : "✅ Календарне планування збережено!"));
     parsedCurriculum=null;
     document.getElementById('curr-preview-section').style.display='none';
     document.getElementById('curr-file-input').value='';
