@@ -771,6 +771,35 @@ window.getDefaultTeacher=function(clsId,subjName){
   const viaMatrix=(function(){let nt=subjName.trim().toLowerCase();for(let se in globalTeacherAccess){if(globalTeacherAccess[se][clsId]){let a=globalTeacherAccess[se][clsId];let ok=false;if(Array.isArray(a))ok=a.some(s=>s.trim().toLowerCase()==="всі предмети"||s.trim().toLowerCase()===nt);else ok=Object.values(a).some(s=>s.trim().toLowerCase()==="всі предмети"||s.trim().toLowerCase()===nt);if(ok){let t=window.globalTeachersList.find(t=>t.safeEmail===se);if(t)return{email:t.email,name:t.name};}}}return null;})();
   return viaMatrix || fromCatalog;
 };
+
+// Учитель для уроку-чергування.
+//
+// ЧОМУ ОКРЕМО. У клітинці стоїть пара — «Музичне мистецтво / Фізичне
+// виховання». Такого предмета немає ні в каталозі, ні в матриці доступу,
+// бо це не предмет, а два предмети в одному слоті. Тому пошук за повною
+// назвою нічого не знаходив, і саме ці уроки лишалися без учителя, коли
+// решта вже мала імена.
+//
+// ЩО ПОКАЗУЄМО. Обох, у тому ж порядку, що й предмети: «Іваненко /
+// Петренко». Так видно, хто веде котрий тиждень, а не просто «є вчитель».
+// Якщо для одного предмета вчителя не знайшли — на його місці риска, щоб
+// прогалину було видно, а не приховано чужим прізвищем.
+window.altTeachers = function(clsId, item){
+  const opts = altOptions(item);
+  if(!opts) return null;
+  const found = opts.map(s => window.getDefaultTeacher(clsId, s));
+  if(!found.some(Boolean)) return null;
+  return opts.map((s, i) => ({ subject: s, teacher: found[i] }));
+};
+window.altTeacherLabel = function(clsId, item){
+  const pairs = window.altTeachers(clsId, item);
+  if(!pairs) return null;
+  const names = pairs.map(p => p.teacher ? p.teacher.name : null);
+  // Один учитель на обидва предмети — не дублюємо його прізвище двічі
+  const uniq = [...new Set(names.filter(Boolean))];
+  if(uniq.length === 1 && names.every(Boolean)) return uniq[0];
+  return names.map(n => n || '—').join(' / ');
+};
 window.loadScheduleScript=function(classId,callback){if(!classId)return;listenAltChoices(classId,()=>{try{if(window.refreshScheduleViews)window.refreshScheduleViews();}catch(e){}});get(child(ref(db),`schedules/${classId}`)).then(snap=>{if(snap.exists()){window.schedule=snap.val().lessons||{};window.clubSchedule=snap.val().clubs||{};}else{window.schedule={};window.clubSchedule={};}if(callback)callback();}).catch(()=>{window.schedule={};window.clubSchedule={};if(callback)callback();});};
 
 // ═══════════════════════════════════════════════════════════════
@@ -821,7 +850,17 @@ export function altOptions(item){
   // Вимагаємо пробіли навколо риски: «1/2 групи» чи «в/о» — не чергування.
   if(isBreakItem(item)) return null;
   const raw2 = typeof item.subject === 'object' ? (item.subject && item.subject.ua) : item.subject;
-  const name = typeof raw2 === 'string' ? raw2.trim() : '';
+  return splitAltName(typeof raw2 === 'string' ? raw2 : '');
+}
+
+// «Музика / Фізкультура» → ['Музика','Фізкультура'], інакше null.
+//
+// Винесено окремо, бо ту саму пару треба вміти розібрати і там, де уроку
+// немає — наприклад, коли каталог предметів збирається з розкладу. Поки
+// правило жило тільки всередині altOptions, каталог заводив пару як ОДИН
+// предмет, і жоден із двох справжніх до нього не потрапляв.
+export function splitAltName(raw){
+  const name = typeof raw === 'string' ? raw.trim() : '';
   if(!name.includes('/')) return null;
   const parts = name.split(/\s+\/\s+/).map(x => x.trim()).filter(Boolean);
   if(parts.length < 2) return null;
