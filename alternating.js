@@ -13,13 +13,20 @@
 // ХТО МОЖЕ. Учитель предмета, класний керівник, директор. Те саме
 // перевіряють і правила бази — інтерфейс лише не показує зайвого.
 //
-// ЩО ПИШЕМО. schedule_alt/{клас}/{понеділок}/{День}/{слот} = 'Назва'.
-// Ключ — понеділок того тижня, тому минулі тижні лишаються в історії,
-// а не перезаписуються.
+// ЩО ПИШЕМО. schedule_alt/{клас}/{понеділок}/pairs/{пара} = 'Назва'.
+// Ключ тижня — понеділок, тому минулі тижні лишаються в історії. Ключ
+// усередині тижня — сама пара предметів, а не номер уроку: номери
+// зсуваються від будь-якої правки розкладу (найчастіше — від вставлених
+// перерв), і прив'язаний до них вибір переставав збігатися з уроком.
+// Старий формат {День}/{слот} читається як запасний — див. groupChoice.
+//
+// ТУТ ЖЕ КЛАСНА ГОДИНА (у кінці файлу): та сама задача — сказати класу,
+// що і коли в нього стоїть, і той самий власник — класний керівник.
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, remove, update } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { db, currentUserData, getActiveClass, teacherAccessMatrix, showToast,
-         escHtml, escJs, mondayOf, altOptions, logAction } from './common.js';
+         escHtml, escJs, mondayOf, altOptions, altPairKey, resolveAlt,
+         freeBellSlots, logAction } from './common.js';
 
 export const ALT_BUILD = '2026-09-05 · alt v3 (пари предметів, правильний екран)';
 
@@ -85,8 +92,16 @@ export function altGroups(lessons){
 }
 
 // Що обрано для цієї групи в цьому тижні: назва, '' або 'mixed',
-// якщо слоти однієї пари чомусь розійшлися.
+// якщо старі записи по слотах чомусь розійшлися.
+//
+// Спершу дивимось новий ключ — саму пару. Він не залежить від позиції
+// уроку в дні, тож переставлений розклад чи вставлена перерва його не
+// збивають. Старі записи по слотах читаємо далі, щоб уже позначені
+// школою тижні не зникли.
 export function groupChoice(group, weekData){
+  const byPair = weekData && weekData.pairs
+    && weekData.pairs[altPairKey(group.options)];
+  if(byPair) return byPair;
   const vals = group.slots.map(sl => {
     const d = (weekData || {})[sl.day] || {};
     return d[sl.slot] || d[String(sl.slot)] || '';
@@ -183,6 +198,19 @@ window.openAltCard = async function(){
   renderAltCard();
 };
 
+// Що з цього вибору вийде в кабінеті батьків.
+//
+// НАВІЩО ПОКАЗУВАТИ. Учитель натискав кнопку, бачив «✅ збережено» — і не
+// мав жодного способу дізнатися, що батькам усе одно показуються обидві
+// назви. Розбіжність між «записано» і «показано» коштувала цілого раунду
+// листування. Тепер картка проганяє збережене значення через ту саму
+// функцію, що й кабінет батьків, і пише результат просто в рядку.
+function parentSees(group, chosen){
+  const item = { subject: { ua: group.options.join(' / ') } };
+  const r = resolveAlt(item, chosen);
+  return r._altPending ? 'обидві назви через косу' : (r.subject && r.subject.ua) || '';
+}
+
 function renderAltCard(){
   const box = slotEl();
   if(!box) return;
@@ -226,7 +254,8 @@ function renderAltCard(){
         </div>
         ${cur === 'mixed'
           ? '<div class="alt-none">у різних днях позначено по-різному — оберіть заново</div>'
-          : (cur ? '' : `<div class="alt-none">${may ? 'не позначено — батьки бачать обидві назви' : 'позначає вчитель цього предмета'}</div>`)}
+          : (cur ? `<div class="alt-seen">батьки бачать: <b>${escHtml(parentSees(G, cur))}</b></div>`
+                 : `<div class="alt-none">${may ? 'не позначено — батьки бачать обидві назви' : 'позначає вчитель цього предмета'}</div>`)}
       </div>`;
     });
     html += '</div>';
@@ -245,18 +274,20 @@ window.setAltGroup = async function(week, groupIdx, name){
   const G = altGroups(altState.lessons)[groupIdx];
   if(!G) return;
   const cls = altState.cls;
+  const key = altPairKey(G.options);
   try{
-    const patch = {};
+    // Пишемо за парою — і ОДРАЗУ прибираємо старі записи по слотах для
+    // цих самих уроків. Інакше в базі лишилися б два джерела правди, і
+    // перше ж переставлення розкладу зробило б їх суперечливими.
+    const patch = { [`schedule_alt/${cls}/${week}/pairs/${key}`]: name || null };
     G.slots.forEach(sl => {
-      patch[`schedule_alt/${cls}/${week}/${sl.day}/${sl.slot}`] = name || null;
+      patch[`schedule_alt/${cls}/${week}/${sl.day}/${sl.slot}`] = null;
     });
     await update(ref(db), patch);
-    altState.chosen[week] = altState.chosen[week] || {};
-    G.slots.forEach(sl => {
-      altState.chosen[week][sl.day] = altState.chosen[week][sl.day] || {};
-      if(name) altState.chosen[week][sl.day][sl.slot] = name;
-      else     delete altState.chosen[week][sl.day][sl.slot];
-    });
+    const wk = altState.chosen[week] = altState.chosen[week] || {};
+    wk.pairs = wk.pairs || {};
+    if(name) wk.pairs[key] = name; else delete wk.pairs[key];
+    G.slots.forEach(sl => { if(wk[sl.day]) delete wk[sl.day][sl.slot]; });
     renderAltCard();
     showToast(name ? `✅ ${name} — уроків: ${G.slots.length}` : '✅ Вибір прибрано');
     logAction('settings', { value: `чергування ${cls} ${week}: ${G.key} → ${name || 'знято'}` });
@@ -287,4 +318,120 @@ window.setAltChoice = async function(week, day, slot, name){
       + '\n\nЯкщо тут «PERMISSION_DENIED» навіть у директора — у базі ще не '
       + 'опубліковано нові правила (database.rules.json): вузол schedule_alt новий.');
   }
+};
+
+// ══════════════════════════════════════════════════════════════════
+//  КЛАСНА ГОДИНА
+// ══════════════════════════════════════════════════════════════════
+// Один рядок: день + вільний час. Тут же, поруч із чергуванням, бо це
+// та сама задача — сказати класу, що і коли в нього стоїть.
+//
+// ХТО МОЖЕ: класний керівник свого класу, директор, майстер-роль. Учитель
+// -предметник бачить, але не міняє: це справа класу, а не предмета.
+//
+// ЧОМУ ЧАС ЛИШЕ З ДЗВІНКІВ. Вільний ввід дав би «14.00», «14:0», «о 14»
+// і час, якого в школі не буває. А головне — класна година могла б стати
+// поверх уроку, і ніхто б не помітив, поки клас не прийшов би на два
+// заняття одразу.
+
+let chState = { cls:null, bells:{}, lessons:{}, hour:null, may:false, day:'Monday' };
+
+window.openClassHourCard = async function(){
+  const box = document.getElementById('chour-slot');
+  if(!box) return;
+  box.innerHTML = '<p class="empty-msg">Завантажую...</p>';
+  const role = currentUserData && currentUserData.role;
+  const cls = getActiveClass();
+  chState.cls = cls;
+  try{
+    const [schedSnap, bellSnap, ctSnap, hourSnap] = await Promise.all([
+      get(child(ref(db), `schedules/${cls}`)),
+      get(child(ref(db), `bell_schedules/${cls}`)),
+      get(child(ref(db), `class_teachers/${cls}`)),
+      get(child(ref(db), `class_hour/${cls}`)).catch(() => null)
+    ]);
+    chState.lessons = schedSnap.exists() ? (schedSnap.val().lessons || {}) : {};
+    chState.bells   = bellSnap.exists() ? bellSnap.val() : {};
+    chState.hour    = (hourSnap && hourSnap.exists()) ? hourSnap.val() : null;
+    const isCT = role === 'master_class_teacher'
+      || (ctSnap.exists() && ctSnap.val().teacherEmail === (currentUserData && currentUserData.email));
+    chState.may = DIR_ROLES.includes(role) || isCT;
+    if(chState.hour && chState.hour.day) chState.day = chState.hour.day;
+  }catch(e){
+    box.innerHTML = `<p class="empty-msg" style="color:var(--red);">Не вдалося прочитати: ${escHtml(e.message)}</p>`;
+    return;
+  }
+  renderClassHourCard();
+};
+
+function renderClassHourCard(){
+  const box = document.getElementById('chour-slot');
+  if(!box) return;
+  const H = chState.hour;
+  const cur = H && H.time
+    ? `<div class="ch-cur">Зараз: <b>${escHtml(DAY_UA[H.day] || H.day)}, ${escHtml(H.time)}</b>`
+      + (H.number ? ` <span>(${escHtml(String(H.number))} урок)</span>` : '') + '</div>'
+    : '<div class="ch-cur ch-none">Класну годину ще не поставлено</div>';
+
+  if(!chState.may){
+    box.innerHTML = cur + '<p class="empty-msg">Ставить класний керівник цього класу.</p>';
+    return;
+  }
+
+  const free = freeBellSlots(chState.bells, (chState.lessons || {})[chState.day]);
+  const days = DAY_ORDER.map(d =>
+    `<option value="${d}"${d === chState.day ? ' selected' : ''}>${DAY_UA[d]}</option>`).join('');
+  const times = free.length
+    ? free.map(sl => {
+        const t = `${sl.start} - ${sl.end}`;
+        const on = H && H.day === chState.day && H.time === t;
+        return `<option value="${escHtml(String(sl.number))}"${on ? ' selected' : ''}>${escHtml(t)} · ${sl.number} урок</option>`;
+      }).join('')
+    : '';
+
+  box.innerHTML = cur + `<div class="ch-row">
+      <select id="ch-day" onchange="changeClassHourDay(this.value)">${days}</select>
+      ${free.length
+        ? `<select id="ch-time">${times}</select>
+           <button type="button" class="ch-save" onclick="saveClassHour()">Поставити</button>`
+        : `<span class="ch-full">цього дня вільних уроків немає</span>`}
+      ${H && H.time ? '<button type="button" class="ch-clear" onclick="clearClassHour()" title="Прибрати">×</button>' : ''}
+    </div>`
+    + (Object.keys(chState.bells || {}).length ? ''
+       : '<p class="empty-msg" style="color:#ef6c00;">У цього класу не заповнено розклад дзвінків — директор задає його в кабінеті директора. Без дзвінків немає з чого обирати час.</p>');
+}
+
+window.changeClassHourDay = function(day){ chState.day = day; renderClassHourCard(); };
+
+window.saveClassHour = async function(){
+  const sel = document.getElementById('ch-time');
+  if(!sel || !sel.value) return;
+  const num = parseInt(sel.value, 10);
+  const slot = freeBellSlots(chState.bells, (chState.lessons || {})[chState.day])
+    .find(s => s.number === num);
+  if(!slot) return alert('Цей час уже зайнято — оновіть картку.');
+  const rec = { day: chState.day, number: num, time: `${slot.start} - ${slot.end}` };
+  try{
+    await set(ref(db, `class_hour/${chState.cls}`), rec);
+    chState.hour = rec;
+    renderClassHourCard();
+    showToast(`✅ Класна година: ${DAY_UA[rec.day]}, ${rec.time}`);
+    logAction('settings', { value: `класна година ${chState.cls}: ${rec.day} ${rec.time}` });
+  }catch(e){
+    alert('Не вдалося зберегти: ' + e.message
+      + '\n\nСтавить класний керівник цього класу або директор.'
+      + '\n\nЯкщо тут «PERMISSION_DENIED» навіть у директора — у базі ще не '
+      + 'опубліковано нові правила (database.rules.json): вузол class_hour новий.');
+  }
+};
+
+window.clearClassHour = async function(){
+  if(!confirm('Прибрати класну годину з розкладу класу?')) return;
+  try{
+    await remove(ref(db, `class_hour/${chState.cls}`));
+    chState.hour = null;
+    renderClassHourCard();
+    showToast('✅ Класну годину прибрано');
+    logAction('settings', { value: `класна година ${chState.cls}: знято` });
+  }catch(e){ alert('Не вдалося прибрати: ' + e.message); }
 };
