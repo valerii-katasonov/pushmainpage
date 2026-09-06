@@ -488,7 +488,14 @@ export function loadParentDashboard(){
   loadTodaySubstitutions(cls,date).then(()=>renderDynamicSchedule('parent'));
   renderConsents();
   renderNewsFeed('p-news-feed');
-  renderParentMenu(cls,currentUserData.studentId||currentUserData.studentName,date);
+  // Ключ дитини НЕ передаємо: хай renderParentMenu візьме його через
+  // mealKey(). Раніше тут стояло studentId||studentName — сирий запасний
+  // варіант із профілю. Запис же йшов через mealKey(), який знаходить
+  // справжній ідентифікатор у списку класу. Тож у батька, у профілі якого
+  // ідентифікатора ще не було, показ читав дані під ІМʼЯМ, а збереження
+  // писало під ідентифікатором. Мама відкривала — і бачила порожньо там,
+  // де тато щойно обрав гарнір Б.
+  renderParentMenu(cls,null,date);
   // Grades + comments + behavior
   const ym=date.substring(0,7);
   Promise.all([
