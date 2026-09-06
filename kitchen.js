@@ -1051,13 +1051,30 @@ export async function renderParentMenu(cls, studentKey, date){
     const ci = week.indexOf(cur);
     const m = menus[ci].exists() ? menus[ci].val() : null;
 
-    const [planSnap, daySnap, attSnap] = await Promise.all([
-      get(child(ref(db),`meal_plan/${cls}/${studentKey}`)),
-      get(child(ref(db),`meal_day/${cur}/${cls}/${studentKey}`)),
+    // ЧИТАЄМО ЗА ДВОМА КЛЮЧАМИ — так само, як пишемо.
+    //
+    // Частина відповідей лежить під імʼям: або старі записи, або зроблені
+    // запасним шляхом, коли правила ще не пускають запис за ідентифікатором.
+    // Якщо читати лише за ідентифікатором, батько не побачить власного
+    // щойно збереженого вибору — і це виглядає як «натиснув Б, лишилося А».
+    const altKey = currentUserData?.studentName || '';
+    const both = async (base) => {
+      const [a, b] = await Promise.all([
+        get(child(ref(db), `${base}/${studentKey}`)).catch(()=>null),
+        (altKey && altKey !== studentKey)
+          ? get(child(ref(db), `${base}/${altKey}`)).catch(()=>null) : null
+      ]);
+      if(a && a.exists()) return a.val();
+      if(b && b.exists()) return b.val();
+      return null;
+    };
+    const [planV, dayV, attSnap] = await Promise.all([
+      both(`meal_plan/${cls}`),
+      both(`meal_day/${cur}/${cls}`),
       get(child(ref(db),`attendance/${cls}/${cur}/${studentKey}`))
     ]);
-    const plan = planSnap.exists()?planSnap.val():{};
-    const ov   = daySnap.exists()?daySnap.val():null;
+    const plan = planV || {};
+    const ov   = dayV;
     const isAbsent = attSnap.exists() && Object.values(attSnap.val()||{}).some(r=>r && r.status==='absent');
     const eff  = effectiveMeals(plan, ov, isAbsent, weekdayIdx(cur));
     const gate = mealsEditable(cur);
@@ -1222,9 +1239,31 @@ window.setMealDay = async function(date, field, value){
   // Відмова тут майже завжди означає одне: у профілі users/{uid} записана
   // інша дитина, ніж та, за яку зараз натиснули. Правила бази звіряють
   // саме профіль, тож про це й кажемо прямо.
+  // ЗАПАСНИЙ КЛЮЧ, ЯКЩО ПРАВИЛА ЩЕ НЕ ОПУБЛІКОВАНІ.
+  //
+  // Правильний ключ — постійний ідентифікатор учня. Але старі правила бази
+  // дозволяють сімʼї писати лише під тим ключем, що лежить у її ПРОФІЛІ, а
+  // профіль у частини батьків без ідентифікатора — і дописати його туди теж
+  // не виходить. Для таких батьків будь-яке збереження просто відхиляється.
+  //
+  // Замість того щоб лишати людину ні з чим, пробуємо ще раз під імʼям:
+  // цей шлях старі правила приймають. Кухня вміє читати обидва ключі, тож
+  // відповідь не загубиться. Коли школа опублікує нові правила, перша
+  // спроба почне проходити й запасна більше не знадобиться.
+  const fallbackKey = currentUserData?.studentName || '';
+  const writeAt = async (key) => {
+    const p = `meal_day/${date}/${cls}/${key}`;
+    if(meaningful) await set(ref(db, p), cur);
+    else await remove(ref(db, p));
+  };
   try{
-    if(meaningful) await set(ref(db, path), cur);
-    else await remove(ref(db, path));
+    try{
+      await writeAt(sid);
+    }catch(e1){
+      if(!/permission/i.test(e1.message || '') || !fallbackKey || fallbackKey === sid) throw e1;
+      console.warn('meal_day: запис за ідентифікатором відхилено, пробую за імʼям');
+      await writeAt(fallbackKey);
+    }
   }catch(e){
     const denied = /permission/i.test(e.message || '');
     // Спершу — у саму сторінку: на айфоні alert() з домашнього екрана
