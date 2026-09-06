@@ -753,14 +753,23 @@ window.submitAttendance=function(role='parent'){
   const type=document.getElementById(`${prefix}-att-type`).value;
   const reason=document.getElementById(`${prefix}-att-reason`).value;
   const markedBy=role==='student'?'student':'parent';
+  // Повідомлення про запізнення — те, заради чого батько відкриває портал
+  // о восьмій ранку. Мовчазна відмова тут означає, що вчитель не дізнається
+  // нічого, а батько буде впевнений, що попередив.
   set(ref(db,`attendance/${getActiveClass()}/${date}/${currentUserData.studentId||currentUserData.studentName}/${SELF_REPORT_SLOT}`),{status:type,reason,markedBy}).then(()=>{
     document.getElementById(`${prefix}-att-status`).innerText=`✅ ${type==='late'?'Запізнення':'Відсутність'} (${reason})`;
     document.getElementById(`${prefix}-att-status`).style.display='block';
     checkTeacherAttendanceAlert(role);
+  }).catch(e=>{
+    alert('Не вдалося надіслати: ' + e.message
+      + '\n\nШкола цього не побачила. Спробуйте ще раз або зателефонуйте.');
   });
 };
 window.updateAttOptionsStudent=function(){ fillAttReasons('s'); };
-window.sendReaction=function(date,subject,emoji){if(!currentUserData)return;set(ref(db,`reactions/${getActiveClass()}/${date}/${subject}/${currentUserData.studentId||currentUserData.studentName}`),emoji).then(()=>loadParentDashboard());};
+window.sendReaction=function(date,subject,emoji){if(!currentUserData)return;
+  set(ref(db,`reactions/${getActiveClass()}/${date}/${subject}/${currentUserData.studentId||currentUserData.studentName}`),emoji)
+    .then(()=>loadParentDashboard())
+    .catch(e=>showToast('Не вдалося надіслати: ' + e.message));};
 // ══════════ STUDENT DASHBOARD ══════════
 export function loadStudentDashboard(){
   renderNewsFeed('s-news-feed');
