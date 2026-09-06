@@ -712,6 +712,15 @@ window.openVisualMatrixModal=async function(mode){
       }
     }
   }catch(e){ console.warn('subjects_catalog:', e.message); }
+  // Класні години всіх класів. У сітці їх немає й бути не може: сітка
+  // будується з розкладу, а класна година лежить окремим вузлом, бо розклад
+  // перезаписує імпорт. Але директор, який складає розклад, мусить бачити,
+  // що цей час у класу вже зайнятий — інакше поставить туди урок.
+  window.allClassHours = {};
+  try{
+    const ch = await get(ref(db, 'class_hour'));
+    if(ch.exists()) window.allClassHours = ch.val() || {};
+  }catch(e){ console.warn('class_hour:', e.message); }
   globalAllSchedules=snap.exists()?snap.val():{};
   globalTeacherAccess=(accSnap&&accSnap.exists())?accSnap.val():{};
   globalAllStudents=(stSnap&&stSnap.exists())?stSnap.val():{};
@@ -836,7 +845,29 @@ function noTeacherCell(){
 }
 
 function rsmcc(lesson,dTName,isOvr,clsId,row,si){const sn=typeof lesson.subject==='string'?lesson.subject:(lesson.subject.ua||'');const ts=lesson.time||'';const isB=isBreakItem(lesson);const isX=lesson.type==='extra';const sl=JSON.stringify(lesson).replace(/'/g,"&apos;").replace(/"/g,"&quot;");const oc=`event.stopPropagation();openCellEditor('${clsId}',${row},${si},${sl})`;const wc=hasWC(row,clsId,si);if(isB)return`<div class="matrix-cell cell-break" onclick="${oc}"><div class="cell-subj">${escHtml(sn)}</div><div class="cell-time">${escHtml(ts)}</div></div>`;if(isX){let xi='';if(lesson.extraData){if(lesson.extraData.format==='individual')xi=`<div class="cell-student-linked">👤${escHtml(lesson.extraData.student||'')}</div>`;else xi=`<div class="cell-student-linked" style="background:#e8f8f5;color:#16a085;">👥Група</div>`;}const th=dTName?`<div class="cell-teacher">👨‍🏫${escHtml(dTName)}${isOvr?' <span title="Веде не той, хто закріплений за предметом — заміна">🔄</span>':''}</div>`:noTeacherCell();return`<div class="matrix-cell cell-club ${wc}" onclick="${oc}"><div class="cell-subj">🎸${escHtml(sn)}</div>${th}${xi}<div class="cell-time">🕘${escHtml(ts)}</div></div>`;}const th=dTName?`<div class="cell-teacher">👨‍🏫${escHtml(dTName)}${isOvr?' <span title="Веде не той, хто закріплений за предметом — заміна">🔄</span>':''}</div>`:noTeacherCell();return`<div class="matrix-cell cell-lesson ${wc}" onclick="${oc}"><div class="cell-subj">${escHtml(sn)}</div>${th}<div class="cell-time">🕘${escHtml(ts)}</div></div>`;}
-window.renderMatrixGrid=function(){const day=document.getElementById('matrix-day-select').value;const th=document.getElementById('matrix-thead-row');const tb=document.getElementById('matrix-tbody');th.innerHTML='<th class="time-col">№/Час</th>';for(let i=1;i<=11;i++)th.innerHTML+=`<th>${i} Кл</th>`;tb.innerHTML='';let maxR=8;for(let i=1;i<=11;i++){const cls=`class_${i}`;maxR=Math.max(maxR,dayArr(globalAllSchedules[cls]?.lessons?.[day]).length);}maxR+=1;let lc=1;for(let row=0;row<maxR;row++){let tr=document.createElement('tr');let bc=0;let lsc=0;for(let c=1;c<=11;c++){const clsId=`class_${c}`;const la=dayArr(globalAllSchedules[clsId]?.lessons?.[day]);const raw=la[row];let items=Array.isArray(raw)?raw:(raw&&raw.subject?[raw]:[]);items.forEach(l=>{if(l&&l.subject){if(isBreakItem(l))bc++;else lsc++;}});}const isB=bc>0&&bc>=lsc;const isE=bc===0&&lsc===0;if(isB)tr.innerHTML='<td class="time-col" style="background:#fce4ec;color:#e91e63;">☕</td>';else if(isE)tr.innerHTML='<td class="time-col" style="color:#ccc;font-size:1.1rem;">+</td>';else tr.innerHTML=`<td class="time-col">Ур.${lc++}</td>`;for(let c=1;c<=11;c++){const clsId=`class_${c}`;const la=dayArr(globalAllSchedules[clsId]?.lessons?.[day]);const raw=la[row];let items=Array.isArray(raw)?raw:(raw&&raw.subject?[raw]:[]);let td=document.createElement('td');let h='';if(items.length>0){h+=`<div class="matrix-cell-container">`;items.forEach((lesson,si)=>{const sn=typeof lesson.subject==='string'?lesson.subject:(lesson.subject.ua||'');const te=lesson.teacherEmail||'';let dn=lesson.teacherName||'';let isOvr=false;const isB2=isBreakItem(lesson);if(!isB2){if(!te&&sn){const dt=window.getDefaultTeacher(clsId,sn);if(dt)dn=dt.name;
+// Класні години цього дня — рядком під сіткою.
+//
+// ЧОМУ РЯДКОМ, А НЕ КЛІТИНКОЮ В СІТЦІ. Сітка редагована: натискання на
+// клітинку відкриває редактор і пише в schedules. Класна година там не
+// живе, тож підроблена клітинка або мовчки загубилася б при збереженні,
+// або, гірше, потрапила б у розклад і зникла з першим імпортом.
+window.renderClassHourNote=function(day){
+  const box=document.getElementById('matrix-hours-note');
+  if(!box)return;
+  const all=window.allClassHours||{};
+  const list=[];
+  for(let i=1;i<=11;i++){
+    const h=all[`class_${i}`];
+    if(h&&h.day===day&&h.time) list.push(`${i} кл. — ${h.time}`);
+  }
+  box.style.display=list.length?'block':'none';
+  box.innerHTML=list.length
+    ? `🕘 <b>Класні години цього дня:</b> ${escHtml(list.join(' · '))}<br>
+       <span style="color:#7a8b7c;">Їх немає в сітці — вони зберігаються окремо від розкладу. Не ставте на цей час уроки.</span>`
+    : '';
+};
+
+window.renderMatrixGrid=function(){const day=document.getElementById('matrix-day-select').value;window.renderClassHourNote(day);const th=document.getElementById('matrix-thead-row');const tb=document.getElementById('matrix-tbody');th.innerHTML='<th class="time-col">№/Час</th>';for(let i=1;i<=11;i++)th.innerHTML+=`<th>${i} Кл</th>`;tb.innerHTML='';let maxR=8;for(let i=1;i<=11;i++){const cls=`class_${i}`;maxR=Math.max(maxR,dayArr(globalAllSchedules[cls]?.lessons?.[day]).length);}maxR+=1;let lc=1;for(let row=0;row<maxR;row++){let tr=document.createElement('tr');let bc=0;let lsc=0;for(let c=1;c<=11;c++){const clsId=`class_${c}`;const la=dayArr(globalAllSchedules[clsId]?.lessons?.[day]);const raw=la[row];let items=Array.isArray(raw)?raw:(raw&&raw.subject?[raw]:[]);items.forEach(l=>{if(l&&l.subject){if(isBreakItem(l))bc++;else lsc++;}});}const isB=bc>0&&bc>=lsc;const isE=bc===0&&lsc===0;if(isB)tr.innerHTML='<td class="time-col" style="background:#fce4ec;color:#e91e63;">☕</td>';else if(isE)tr.innerHTML='<td class="time-col" style="color:#ccc;font-size:1.1rem;">+</td>';else tr.innerHTML=`<td class="time-col">Ур.${lc++}</td>`;for(let c=1;c<=11;c++){const clsId=`class_${c}`;const la=dayArr(globalAllSchedules[clsId]?.lessons?.[day]);const raw=la[row];let items=Array.isArray(raw)?raw:(raw&&raw.subject?[raw]:[]);let td=document.createElement('td');let h='';if(items.length>0){h+=`<div class="matrix-cell-container">`;items.forEach((lesson,si)=>{const sn=typeof lesson.subject==='string'?lesson.subject:(lesson.subject.ua||'');const te=lesson.teacherEmail||'';let dn=lesson.teacherName||'';let isOvr=false;const isB2=isBreakItem(lesson);if(!isB2){if(!te&&sn){const dt=window.getDefaultTeacher(clsId,sn);if(dt)dn=dt.name;
         // Урок-чергування: повної назви «А / Б» немає в жодному
         // довіднику, тож шукаємо вчителя окремо для кожного предмета пари.
         else{const al=window.altTeacherLabel(clsId,lesson);if(al)dn=al;}}
