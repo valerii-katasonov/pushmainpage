@@ -5,7 +5,7 @@
 // lives in teacher.js).
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, getActiveClass, currentUserData, STICKER_GOAL, getWeekDates, displayGrade, gradeClass6, showToast, renderHwItem, dayKeys, dayNamesUA, isBreakItem, localDateString, formatAttendanceSlotLabel, renderGradeFormulaInfo, escJs, escHtml, safeUrl, renderBirthdays, stuName, auth, normalizeChildren, gradesFromMirror} from './common.js';
+import { db, getActiveClass, currentUserData, STICKER_GOAL, stickerGoal, getWeekDates, displayGrade, gradeClass6, showToast, renderHwItem, dayKeys, dayNamesUA, isBreakItem, localDateString, formatAttendanceSlotLabel, renderGradeFormulaInfo, escJs, escHtml, safeUrl, renderBirthdays, stuName, auth, normalizeChildren, gradesFromMirror, mondayOf, altChoiceFor, resolveAlt, classHourItem} from './common.js';
 import { ACTIVE_YEAR } from './director.js';
 import { renderParentMenu } from './kitchen.js';
 import { renderNewsFeed } from './news.js';
@@ -59,17 +59,51 @@ async function checkTeacherAttendanceAlert(role='parent'){
 // зберігає заміну за індексом слота, а кабінет раніше шукав її за
 // індексом у відфільтрованому списку. Через кожну перерву на початку дня
 // значок «заміна» зʼїжджав на сусідній урок.
-function buildDynamicSchedule(schedule,dayName,isToday){
+// dateStr потрібен лише урокам, що чергуються: вибір «що саме цього тижня»
+// живе під понеділком того тижня. Без дати просто показуємо обидві назви.
+function buildDynamicSchedule(schedule,dayName,isToday,dateStr){
   if(!schedule||!schedule[dayName])return null;
+  const week = dateStr ? mondayOf(dateStr) : '';
   const out=[];
   (schedule[dayName]||[]).forEach((slot,slotIdx)=>{
     const items=Array.isArray(slot)?slot:(slot&&slot.subject?[slot]:[]);
     items.forEach(l=>{
       if(!l||!l.time||!l.subject)return;
-      out.push({ ...l, _slot:slotIdx, _break:isBreakItem(l) });
+      // Урок передаємо в altChoiceFor: вибір шукається за парою предметів,
+      // і без самого уроку пару не дізнатися.
+      const r = week ? resolveAlt(l, altChoiceFor(week, dayName, slotIdx, l)) : resolveAlt(l, '');
+      out.push({ ...r, _slot:slotIdx, _break:isBreakItem(r) });
     });
   });
-  return out;
+  // Класна година живе окремо від розкладу — розклад цілком перезаписує
+  // імпорт із Word, і дописана туди година зникла б мовчки. Тому підмішуємо
+  // її аж тут, у готовий список для показу.
+  //
+  // ВАЖЛИВО: вставляємо ПІСЛЯ того, як проставлено _slot. Це індекс у
+  // початковому масиві дня, за ним шукається заміна вчителя. Якби класна
+  // година вставлялася раніше, вона зсунула б індекси — і значок «заміна»
+  // поїхав би на сусідній урок. Рівно так колись і ламали перерви.
+  return insertClassHour(out, dayName, window.classHour);
+}
+
+// Вставка в готовий список за часом початку
+export function insertClassHour(list, dayName, hour){
+  const item = (hour && hour.day === dayName) ? classHourItem(hour) : null;
+  if(!item) return list;
+  const mins = (t) => { const m = /(\d{1,2}):(\d{2})/.exec(String(t||'')); return m ? +m[1]*60 + +m[2] : null; };
+  const at = mins(item.time);
+  const row = { ...item, _slot:null, _break:false };
+  if(at == null) return list.concat([row]);
+  const i = list.findIndex(l => { const t = mins(l.time); return t != null && t > at; });
+  if(i === -1) return list.concat([row]);
+  return [...list.slice(0, i), row, ...list.slice(i)];
+}
+
+// Дата, що відстоїть від сьогодні на offset днів → 'YYYY-MM-DD'
+function dateWithOffset(offset){
+  const d = new Date(); d.setDate(d.getDate() + (offset||0));
+  const p2 = n => String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${p2(d.getMonth()+1)}-${p2(d.getDate())}`;
 }
 // Скільки в дні справжніх уроків (без перерв)
 function realLessons(list){ return (list||[]).filter(l=>!l._break).length; }
@@ -126,7 +160,8 @@ function renderDynamicSchedule(role='parent'){
   const todayDow=now.getDay();const todayDayName=dayKeys[todayDow];
   const tomorrowDate=new Date(now);tomorrowDate.setDate(tomorrowDate.getDate()+1);
   const tomorrowDow=tomorrowDate.getDay();const tomorrowDayName=dayKeys[tomorrowDow];
-  const todayLessons=buildDynamicSchedule(window.schedule,todayDayName,true)||[];
+  const todayStr=dateWithOffset(0);
+  const todayLessons=buildDynamicSchedule(window.schedule,todayDayName,true,todayStr)||[];
   const hasLessons=(dn)=>realLessons(buildDynamicSchedule(window.schedule,dn,false))>0;
   const todayDone = realLessons(todayLessons)===0 || dayIsOver(todayLessons,currentMins);
 
@@ -138,7 +173,8 @@ function renderDynamicSchedule(role='parent'){
     : (nextDay.offset===0 ? `📅 Розклад на завтра (${dayNamesUA[targetDayName]||''})`
                           : `📅 Розклад на ${dayNamesUA[targetDayName]||'наступний день'}`);
   const lblEl=document.getElementById(`${prefix}-schedule-day-label`);if(lblEl)lblEl.textContent=label;
-  const lessons=buildDynamicSchedule(window.schedule,targetDayName,!showTomorrow)||[];
+  const lessons=buildDynamicSchedule(window.schedule,targetDayName,!showTomorrow,
+                                    dateWithOffset(showTomorrow?nextDay.offset+1:0))||[];
   const container=document.getElementById(`${prefix}-dynamic-schedule`);if(!container)return;
   if(realLessons(lessons)===0){
     container.innerHTML = todayDone
@@ -167,7 +203,9 @@ function renderDynamicSchedule(role='parent'){
     }
 
     // ── Урок ──
-    num++;
+    // Класна година не забирає номер: інакше наступний урок отримав би
+    // чужий номер, і в щоденнику з розкладом на порталі вони б розійшлися.
+    if(!l._classHour) num++;
     let countdown='', progress=0;
     if(isCurrent){
       countdown = `${b.end-currentMins} хв`;
@@ -176,11 +214,12 @@ function renderDynamicSchedule(role='parent'){
     // Заміну директор зберігає за номером слота в розкладі, а не за
     // порядком у списку — тому шукаємо саме за _slot.
     const sub=todaySubs[l._slot];
-    html+=`<div class="lesson-row${isCurrent?' current':isPassed?' passed':''}">
-      <div class="lesson-num">${num}</div>
+    html+=`<div class="lesson-row${isCurrent?' current':isPassed?' passed':''}${l._classHour?' class-hour':''}">
+      <div class="lesson-num">${l._classHour?'🕘':num}</div>
       <div class="lesson-info">
-        <div class="lesson-subj">${escHtml(sn)}${sub?' <span class="sub-badge">заміна</span>':''}</div>
+        <div class="lesson-subj">${escHtml(sn)}${sub?' <span class="sub-badge">заміна</span>':''}${l._altPending?' <span class="alt-badge pending">🔁 уточнюється</span>':(l._altOptions?' <span class="alt-badge">🔁 чергування</span>':'')}</div>
         <div class="lesson-time">${escHtml(l.time||'—')}${sub&&sub.subName?` · ${escHtml(sub.subName)}`:''}</div>
+        ${l._altPending?`<div class="alt-hint">Учитель ще не позначив, що саме буде цього тижня</div>`:(l._altOther?`<div class="alt-hint">наступного разу: ${escHtml(l._altOther)}</div>`:'')}
         ${isCurrent?`<div class="progress-thin"><div class="progress-thin-fill" style="width:${progress}%"></div></div>`:''}
       </div>
       ${isCurrent?`<div class="lesson-countdown">⏱ ${countdown}</div>`:''}
@@ -437,7 +476,7 @@ export function loadParentDashboard(){
   // Dynamic schedule
   if(window.schedule){renderDynamicSchedule();if(parentLessonInterval)clearInterval(parentLessonInterval);parentLessonInterval=setInterval(renderDynamicSchedule,30000);}
   // Stickers
-  get(child(ref(db),`stickers/${cls}/${currentUserData.studentId||currentUserData.studentName}`)).then(snap=>{const cnt=snap.exists()?Object.keys(snap.val()).length:0;const pct=Math.min((cnt/STICKER_GOAL)*100,100);document.getElementById('p-ribbon-progress').style.width=pct+'%';document.getElementById('p-ribbon-count').innerText=`${cnt} / ${STICKER_GOAL} наліпок до призу`;const me=document.getElementById('p-ribbon-msg');if(me){if(cnt>=STICKER_GOAL){me.innerText="🎉 Ура! Ти досяг мети!";confetti({particleCount:150,spread:80,origin:{y:0.5}});}else me.innerText='';}}).catch(()=>document.getElementById('p-ribbon-count').innerText="Помилка");
+  get(child(ref(db),`stickers/${cls}/${currentUserData.studentId||currentUserData.studentName}`)).then(snap=>{const goal=stickerGoal(cls);const cnt=snap.exists()?Object.keys(snap.val()).length:0;const pct=Math.min((cnt/goal)*100,100);document.getElementById('p-ribbon-progress').style.width=pct+'%';document.getElementById('p-ribbon-count').innerText=`${cnt} / ${goal} наліпок до призу`;const me=document.getElementById('p-ribbon-msg');if(me){if(cnt>=goal){me.innerText="🎉 Ура! Ти досяг мети!";confetti({particleCount:150,spread:80,origin:{y:0.5}});}else me.innerText='';}}).catch(()=>document.getElementById('p-ribbon-count').innerText="Помилка");
   // Att status (self-report confirmation lives under the "all" slot)
   get(child(ref(db),`attendance/${cls}/${date}/${currentUserData.studentId||currentUserData.studentName}/${SELF_REPORT_SLOT}`)).then(snap=>{const se=document.getElementById('p-att-status');if(snap.exists()){const d=snap.val();se.innerText=`✅ Ви повідомили: ${d.status==='late'?'Запізнення':'Відсутність'} (${d.reason})`;se.style.display='block';}else se.style.display='none';});
   // Persistent alert if the teacher marked something the parent hasn't acknowledged
@@ -449,7 +488,7 @@ export function loadParentDashboard(){
   // Textbooks
   loadTextbooksForParent();
   loadAiDayContext('p');
-  renderBirthdays('p-birthdays',cls,date,currentUserData.studentName);
+  renderBirthdays('p-birthdays',cls,currentUserData.studentName);
   renderFinalGrades('p-final-grades',cls,currentUserData.studentName);
   loadTodaySubstitutions(cls,date).then(()=>renderDynamicSchedule('parent'));
   renderConsents();
@@ -726,14 +765,14 @@ export function loadStudentDashboard(){
   if(!currentUserData)return;const date=document.getElementById('global-date').value;const cls=getActiveClass();
   fillAttReasons('s');
   if(window.schedule){renderDynamicSchedule('student');if(parentLessonInterval)clearInterval(parentLessonInterval);parentLessonInterval=setInterval(()=>renderDynamicSchedule('student'),30000);}
-  get(child(ref(db),`stickers/${cls}/${currentUserData.studentId||currentUserData.studentName}`)).then(snap=>{const cnt=snap.exists()?Object.keys(snap.val()).length:0;const pct=Math.min((cnt/STICKER_GOAL)*100,100);document.getElementById('s-ribbon-progress').style.width=pct+'%';document.getElementById('s-ribbon-count').innerText=`${cnt} / ${STICKER_GOAL} наліпок до призу`;});
+  get(child(ref(db),`stickers/${cls}/${currentUserData.studentId||currentUserData.studentName}`)).then(snap=>{const goal=stickerGoal(cls);const cnt=snap.exists()?Object.keys(snap.val()).length:0;const pct=Math.min((cnt/goal)*100,100);document.getElementById('s-ribbon-progress').style.width=pct+'%';document.getElementById('s-ribbon-count').innerText=`${cnt} / ${goal} наліпок до призу`;});
   get(child(ref(db),`attendance/${cls}/${date}/${currentUserData.studentId||currentUserData.studentName}/${SELF_REPORT_SLOT}`)).then(snap=>{const se=document.getElementById('s-att-status');if(snap.exists()){const d=snap.val();se.innerText=`✅ Повідомлено: ${d.status==='late'?'Запізнення':'Відсутність'} (${d.reason})`;se.style.display='block';}else se.style.display='none';});
   checkTeacherAttendanceAlert('student');
   renderParentCalendar('student');loadParentBellSchedule('student');
   get(child(ref(db),`homeworks/${cls}/${date}`)).then(snap=>{const hl=document.getElementById('s-daily-hw-list');hl.innerHTML='';if(snap.exists()){const d=snap.val();for(let s in d)hl.innerHTML+=renderHwItem(s,d[s]);}else hl.innerHTML='<li class="empty-msg">ДЗ не задано.</li>';});
   loadTextbooksForParent('student');
   loadAiDayContext('s');
-  renderBirthdays('s-birthdays',cls,date,currentUserData.studentName);
+  renderBirthdays('s-birthdays',cls,currentUserData.studentName);
   renderFinalGrades('s-final-grades',cls,currentUserData.studentName);
   loadTodaySubstitutions(cls,date).then(()=>renderDynamicSchedule('student'));
   const ym=date.substring(0,7);
@@ -1087,6 +1126,13 @@ const hhmm = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).
 // а на телефоні ще й втрачала місце, де була. Тепер тиждень розгортається
 // тут же, з тих самих даних, які вже завантажені для сьогоднішнього дня:
 // window.schedule приходить одним запитом на вході і містить усі дні.
+// Викликається з common.js, коли прилетів новий вибір чергування
+window.refreshScheduleViews = function(){
+  const role = document.getElementById('student-screen')?.classList.contains('active') ? 'student' : 'parent';
+  try{ renderDynamicSchedule(role); }catch(e){}
+  try{ renderWeekSchedule(role === 'student' ? 's' : 'p'); }catch(e){}
+};
+
 const WEEK_DAYS = [
   { key:'Monday',    label:'Понеділок' },
   { key:'Tuesday',   label:'Вівторок'  },
@@ -1103,12 +1149,13 @@ function renderWeekSchedule(prefix){
     return;
   }
   const todayKey = dayKeys[new Date().getDay()];
+  const weekDates = getWeekDates(dateWithOffset(0));
   let html = '';
   let anyLesson = false;
-  WEEK_DAYS.forEach(d => {
+  WEEK_DAYS.forEach((d, di) => {
     // isToday=false: у тижневому огляді не потрібні заміни й підсвітка уроку,
     // це довідка «що коли», а не годинник
-    const lessons = buildDynamicSchedule(window.schedule, d.key, false) || [];
+    const lessons = buildDynamicSchedule(window.schedule, d.key, false, weekDates[di]) || [];
     if(lessons.length) anyLesson = true;
     html += `<div class="wk-day${d.key===todayKey?' today':''}">
       <div class="wk-day-name">${escHtml(d.label)}${d.key===todayKey?' <span class="wk-today">сьогодні</span>':''}</div>
@@ -1117,8 +1164,8 @@ function renderWeekSchedule(prefix){
             const sn = typeof l.subject==='string' ? l.subject : (l.subject?.ua || '');
             const br = breakAfter(lessons, i);
             return `<div class="wk-row">
-              <span class="wk-num">${i+1}</span>
-              <span class="wk-subj">${escHtml(sn)}</span>
+              <span class="wk-num">${l._classHour?'🕘':i+1}</span>
+              <span class="wk-subj">${escHtml(sn)}${l._altPending?' <i class="alt-mini">🔁 уточнюється</i>':(l._altOptions?' <i class="alt-mini">🔁</i>':'')}</span>
               <span class="wk-time">${escHtml(l.time||'—')}</span>
             </div>`
             + (br ? `<div class="wk-break">
