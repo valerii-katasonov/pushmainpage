@@ -609,7 +609,8 @@ window.loadClassOrders = async function(){
       else if(plan.lunch === false) note = 'не харчується';
       else if(ov && ov.lunch === 0) note = ov.reason ? `відмова · ${ov.reason}` : 'відмова';
       else if(ov && ov.snack !== undefined) note = ov.snack ? 'підвечірок разово' : 'без підвечірка сьогодні';
-      return { name, ...e, pick, note };
+      if(ov && ov.manual) note = (note ? note + ' · ' : '') + 'додано вручну';
+      return { sid, name, ...e, pick, note };
     });
     const lunch = rows.filter(r=>r.lunch).length;
     const snack = rows.filter(r=>r.snack).length;
@@ -626,17 +627,73 @@ window.loadClassOrders = async function(){
         <th>Учень</th>${hasBrkMenu?'<th>Снід.</th>':''}<th>Обід</th>${hasChoice?'<th>Варіант</th>':''}<th>Підвеч.</th><th>Примітка</th></tr></thead><tbody>
         ${rows.map(r=>`<tr class="${r.absent?'k-ord-abs':''}">
           <td>${escHtml(r.name)}</td>
-          ${hasBrkMenu?`<td>${r.breakfast?'<span class="k-yes">✓</span>':'<span class="k-no">—</span>'}</td>`:''}
-          <td>${r.lunch?'<span class="k-yes">✓</span>':'<span class="k-no">—</span>'}</td>
+          ${hasBrkMenu?`<td>${mealCell(cls,r.sid,date,'breakfast',r.breakfast)}</td>`:''}
+          <td>${mealCell(cls,r.sid,date,'lunch',r.lunch)}</td>
           ${hasChoice?`<td>${r.pick?`<span class="k-ab ${r.pick}">${r.pick.toUpperCase()}</span>`:'<span class="k-no">—</span>'}</td>`:''}
-          <td>${r.snack?'<span class="k-yes">✓</span>':'<span class="k-no">—</span>'}</td>
+          <td>${mealCell(cls,r.sid,date,'snack',r.snack)}</td>
           <td class="k-ord-note">${escHtml(r.note)}</td></tr>`).join('')}
       </tbody></table>
+      <p class="k-ord-hint">Натисніть ✓ або —, щоб додати чи зняти порцію вручну. Це для тих,
+        хто звернувся вже після дедлайну; дію буде записано в журнал.</p>
       <button onclick="exportClassOrders()" style="background:#e0f7fa;color:#00838f;border:1px solid #80deea;margin-top:11px;">📄 Вивантажити CSV</button>`;
   }catch(e){
     box.innerHTML = `<p style="color:red;font-size:.8rem;">Помилка: ${escHtml(e.message)}</p>`;
   }
 };
+// ── Ручна порція від кухні ──────────────────────────────────────
+//
+// НАВІЩО. Дитина спізнилася, батьки забули, хтось підійшов до адміністрації
+// вже після дедлайну — і на це не було жодної відповіді в порталі, крім
+// «домовтеся усно». Тепер кухня може дописати чи зняти порцію сама.
+//
+// ДЕДЛАЙНУ ТУТ НЕМАЄ СВІДОМО. 09:00 існує, щоб кухня встигла закупити й
+// порахувати. Кухня — саме той, хто знає, чи ще можна додати; забороняти
+// це їй означало б забороняти саме те, заради чого дедлайн і був.
+//
+// ЗАПИС ІДЕ В ТУ САМУ ГІЛКУ, що й у батьків: meal_day/{дата}/{клас}/{ID}.
+// Друге джерело правди тут завело б облік у безвихідь. Позначка manual
+// лише каже, звідки взялася порція, а не міняє її суть.
+window.kitchenSetMeal = async function(cls, sid, date, field, value){
+  if(!cls || !sid || !date) return;
+  const LABEL = { lunch:'обід', breakfast:'сніданок', snack:'підвечірок' };
+  const name = stuName(cls, sid);
+  if(!confirm(`${value ? 'Додати' : 'Зняти'} ${LABEL[field] || field}: ${name}, ${human(date)}?`)) return;
+  try{
+    const planSnap = await get(child(ref(db), `meal_plan/${cls}/${sid}`));
+    const plan = planSnap.exists() ? planSnap.val() : {};
+    const path = `meal_day/${date}/${cls}/${sid}`;
+    const snap = await get(child(ref(db), path));
+    const cur = snap.exists() ? snap.val() : {};
+    const patch = dayFieldPatch(plan, field, value, weekdayIdx(date));
+    // null означає «збігається з постійним планом» — тоді поправка не
+    // потрібна взагалі, і зайвий запис у базі був би сміттям у звітах
+    if(patch === null) delete cur[field]; else cur[field] = patch;
+    cur.by = currentUserData?.email || '';
+    cur.ts = Date.now();
+    cur.manual = true;
+    const meaningful = ['lunch','snack','breakfast','pick'].some(k => cur[k] !== undefined);
+    if(meaningful) await set(ref(db, path), cur);
+    else await remove(ref(db, path));
+    logAction('meal_day', { date, target:name,
+      value:`кухня: ${LABEL[field]||field} ${value ? 'додано' : 'знято'}` });
+    showToast(value ? `✓ ${LABEL[field]||field} додано` : `✕ ${LABEL[field]||field} знято`);
+    loadClassOrders();
+    // Загальний підрахунок теж міняється — інакше кухня побачила б старе число
+    if(window.refreshKitchen) window.refreshKitchen();
+  }catch(e){
+    alert('Не вдалося змінити: ' + e.message);
+  }
+};
+
+// Клітинка обліку: для кухні це кнопка, для решти — просто позначка
+function mealCell(cls, sid, date, field, on){
+  const mark = on ? '<span class="k-yes">✓</span>' : '<span class="k-no">—</span>';
+  if(currentUserData?.role !== 'kitchen' && currentUserData?.role !== 'director'
+     && currentUserData?.role !== 'administrator') return mark;
+  return `<button type="button" class="k-cell-btn" title="Змінити вручну"
+    onclick="kitchenSetMeal('${escJs(cls)}','${escJs(sid)}','${escJs(date)}','${field}',${on?0:1})">${mark}</button>`;
+}
+
 window.exportClassOrders = function(){
   const o = window.__classOrders;
   if(!o) return;
@@ -969,6 +1026,9 @@ export async function renderParentMenu(cls, studentKey, date){
           ? '<span class="pm-off">Дитина відсутня — харчування цього дня не рахується</span>'
           : statusLine}
       </div>
+      ${(ov && ov.manual && !isAbsent)
+        ? '<div class="pm-manual">Цього дня харчування змінила кухня — напевно, за вашим зверненням.</div>'
+        : ''}
 
       ${isAbsent ? '' : `<div class="pm-act">${actions}</div>`}
 
