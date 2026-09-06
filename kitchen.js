@@ -189,6 +189,25 @@ export function plannedValue(plan, field, wd){
 // разово взяла обід і передумала. Якщо лишити явний нуль, у базі
 // назавжди осяде поправка, яка нічого не змінює, а кухня в звітах
 // побачить «відмову» там, де відмовлятися не було від чого.
+// Запис дитини міг лягти або під постійним ідентифікатором, або під імʼям.
+//
+// ЗВІДКИ ДВА КЛЮЧІ. Донедавна кабінет батьків підставляв імʼя, коли в
+// профілі не було ідентифікатора. Ті записи в базі лишилися — і поки вони
+// там, кухня мусить уміти їх знайти.
+//
+// ЧОМУ ЦЕ КОШТУВАЛО ВАРІАНТА ГАРНІРУ. Постійні плани кухня шукала за обома
+// ключами, а поправки на день (обід/сніданок/вибір А-Б) — лише за
+// ідентифікатором. Тому «дитина обідає» кухня бачила, а «батьки обрали Б» —
+// ні, і в звіті стояв варіант А за замовчуванням. Один довідник у двох
+// місцях, і тільки в одному з них є запасний ключ, — це те, що обовʼязково
+// розійдеться. Тепер пошук один на всіх.
+export function byKeyOrName(map, key, name){
+  if(!map) return null;
+  if(map[key] !== undefined) return map[key];
+  if(name != null && map[name] !== undefined) return map[name];
+  return null;
+}
+
 export function dayFieldPatch(plan, field, value, wd){
   const want = !!value;
   return want === plannedValue(plan, field, wd) ? null : (want ? 1 : 0);
@@ -425,12 +444,9 @@ export async function loadWeekCounts(){
         let cl=0, cs=0, cb=0, ca=0, cbb=0;
         for(const key in students[cls]){
           const name = students[cls][key];
-          // Запис міг лягти під імʼям, а не під ідентифікатором — так було
-          // до виправлення ключа. Щоб уже зроблені батьками відповіді не
-          // зникли, шукаємо й за імʼям.
-          const plan = (plans[cls] && (plans[cls][key] || plans[cls][name])) || null;
-          const isAbsent = !!absentToday[key];
-          const ov = overrides[cls] && overrides[cls][key];
+          const plan = byKeyOrName(plans[cls], key, name);
+          const isAbsent = !!(absentToday[key] || absentToday[name]);
+          const ov = byKeyOrName(overrides[cls], key, name);
           const e = effectiveMeals(plan, ov, isAbsent, wd);
           if(e.absent){ absent++; continue; }
           const permanentlyOff = plan && plan.lunch === false;
@@ -600,9 +616,9 @@ window.loadClassOrders = async function(){
     const wd = weekdayIdx(date);
 
     const rows = Object.entries(stSnap.val()).sort((a,b)=>String(a[1]).localeCompare(String(b[1]),'uk')).map(([sid,name])=>{
-      const plan = plans[sid] || plans[name] || {};
-      const ov = overrides[sid];
-      const e = effectiveMeals(plan, ov, !!absent[sid], wd);
+      const plan = byKeyOrName(plans, sid, name) || {};
+      const ov = byKeyOrName(overrides, sid, name);
+      const e = effectiveMeals(plan, ov, !!(absent[sid] || absent[name]), wd);
       const pick = (e.lunch && hasChoice) ? pickedSecond(menuDay, ov) : null;
       let note = '';
       if(e.absent) note = 'відсутній';
