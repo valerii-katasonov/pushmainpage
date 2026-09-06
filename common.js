@@ -80,16 +80,18 @@ const _stuDir = {};            // cls -> {byId:{sid:name}, byName:{nameLower:sid
 export async function getStudentDir(cls, force){
   if(!force && _stuDir[cls]) return _stuDir[cls];
   const snap = await get(child(ref(db), `students_list/${cls}`));
-  const byId = {}, byName = {};
+  const byId = {}, byName = {}, byLoose = {};
   if(snap.exists()){
     const v = snap.val();
     for(const sid in v){
       const nm = String(v[sid]);
       byId[sid] = nm;
-      byName[nm.replace(/\s+/g,' ').trim().toLowerCase()] = sid;
+      byName[nameKey(nm)] = sid;
+      const lk = nameKeyLoose(nm);
+      byLoose[lk] = (lk in byLoose) ? '__ambiguous__' : sid;
     }
   }
-  _stuDir[cls] = { byId, byName };
+  _stuDir[cls] = { byId, byName, byLoose };
   return _stuDir[cls];
 }
 export function invalidateStudentDir(cls){ if(cls) delete _stuDir[cls]; else Object.keys(_stuDir).forEach(k=>delete _stuDir[k]); }
@@ -99,19 +101,60 @@ window.invalidateStudentDir = invalidateStudentDir;
 // Довідник усіх класів одним читанням на сеанс. students_list маленький
 // (кілька сотень рядків), тож тримати його цілком дешевше, ніж ходити
 // в базу з кожного місця відображення.
+// Як зводимо імʼя до ключа пошуку.
+//
+// НАВІЩО ЦІЛА ФУНКЦІЯ ПІД ЦЕ. Імʼя дитини лежить у двох місцях: у списку
+// класу (students_list) і в прив'язці батьків (parent_links), причому в
+// прив'язці — копія, зроблена в момент прив'язки. Далі вони живуть окремо:
+// класний керівник виправляє список, а копія в батька лишається старою.
+//
+// Якщо звести їх не вдається, портал мовчки починає писати харчування під
+// ІМʼЯМ замість ідентифікатора. Наслідок не косметичний: кухня перебирає
+// список класу за ідентифікаторами, тому такої дитини в підрахунку немає
+// зовсім — вона просто лишиться без обіду. Тому нормалізація тут щедра:
+// краще звести два записи, ніж не звести.
+//
+// Що вирівнюємо: регістр, повторні пробіли, різні апострофи (Мар'я, Марʼя,
+// Мар´я — те саме імʼя) і дефіси.
+export function nameKey(s){
+  return String(s == null ? '' : s)
+    .replace(/[ʼ’‘`´']/g, "'")   // усі апострофи → один
+    .replace(/[‐-―]/g, '-')                      // усі тире → дефіс
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+// Той самий ключ, але зі словами в алфавітному порядку: «Іван Петренко»
+// і «Петренко Іван» дають однакове значення. Використовуємо ЛИШЕ як
+// запасний варіант і лише коли збіг єдиний — інакше двоє дітей з іменами
+// на кшталт «Іван Петренко» й «Петренко Іван» злилися б в одну.
+export function nameKeyLoose(s){
+  return nameKey(s).split(' ').filter(Boolean).sort().join(' ');
+}
 export async function preloadStudentDirs(){
   const snap = await get(child(ref(db), 'students_list'));
   const all = snap.exists() ? snap.val() : {};
   for(const cls in all){
-    const byId = {}, byName = {};
+    const byId = {}, byName = {}, byLoose = {};
     for(const sid in all[cls]){
       const nm = String(all[cls][sid]);
       byId[sid] = nm;
-      byName[nm.replace(/\s+/g,' ').trim().toLowerCase()] = sid;
+      byName[nameKey(nm)] = sid;
+      const lk = nameKeyLoose(nm);
+      // Неоднозначні збіги позначаємо і далі не використовуємо
+      byLoose[lk] = (lk in byLoose) ? '__ambiguous__' : sid;
     }
-    _stuDir[cls] = { byId, byName };
+    _stuDir[cls] = { byId, byName, byLoose };
   }
   return _stuDir;
+}
+// Пошук ідентифікатора за імʼям: точно, потім із переставленими словами.
+export function matchSid(dir, name){
+  if(!dir || !name) return null;
+  const exact = dir.byName[nameKey(name)];
+  if(exact) return exact;
+  const loose = dir.byLoose && dir.byLoose[nameKeyLoose(name)];
+  return (loose && loose !== '__ambiguous__') ? loose : null;
 }
 // Синхронний переклад ідентифікатора в імʼя для відображення.
 // Якщо ключ невідомий — повертаємо як є: це або старий запис за іменем,
@@ -123,17 +166,14 @@ export function stuName(cls, key){
 }
 // Синхронний зворотний переклад — для побудови шляхів
 export function stuId(cls, name){
-  const d = _stuDir[cls];
-  if(!d) return null;
-  return d.byName[String(name).replace(/\s+/g,' ').trim().toLowerCase()] || null;
+  return matchSid(_stuDir[cls], name);
 }
 window.stuName = stuName;
 window.stuId = stuId;
 
 export async function sidOf(cls, name){
   if(!cls || !name) return null;
-  const d = await getStudentDir(cls);
-  return d.byName[String(name).replace(/\s+/g,' ').trim().toLowerCase()] || null;
+  return matchSid(await getStudentDir(cls), name);
 }
 export async function nameOf(cls, sid){
   if(!cls || !sid) return null;
@@ -1704,6 +1744,9 @@ async function initUserSession(){
     loadScheduleScript(currentUserData.class,()=>handleDateChange());
     renderPaymentsMockup();loadTextbooksForParent();
     callWhenReady('caInit');
+    // Другий із батьків міняє харчування — у цього кабінету воно оновиться
+    // саме, без перезаходу
+    callWhenReady('listenMyMeals');
     renderInstallBlock();
     // Згода — після того, як кабінет відкрився: екран накриває його зверху
     // Перехід зі сповіщення: ?open=school|grades|day|chat
