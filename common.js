@@ -2341,6 +2341,39 @@ export async function getUpcomingBirthdays(cls,todayStr,days){
   }
   return out.sort((a,b)=>a.idx-b.idx);
 }
+// ЧОМУ БЛОК ЗГОРТАЄТЬСЯ. Він стоїть найпершим на вкладці «Сьогодні», а
+// вікно — місяць. Якби всі іменинники показувалися одразу, зверху екрана
+// щодня висіло б пів списку класу, здебільшого з датами «через 26 днів»,
+// і найпотрібніше (відвідуваність, розклад) поїхало б униз.
+//
+// Тому розгорнуто лише найближчий тиждень — те, до чого готуватися вже.
+// Коли попереду тиждень порожній, лишається один рядок про найближче свято,
+// решта — під «ще N цього місяця».
+const BD_NEAR_DAYS = 7;
+export function birthdaysHtml(list,selfName){
+  const row = (b,dim) => `<div class="bd-row${b.name===selfName?' me':''}`
+    + `${b.today?' bd-today':''}${dim?' bd-dim':''}">`
+    + `<span class="bd-name">${b.today?'🎉 ':''}${escHtml(b.name)}`
+    + `${b.name===selfName?' — це ти!':''}</span>`
+    + `<span class="bd-date">${escHtml(b.label)} `
+    + `<i class="bd-when${b.idx<=BD_NEAR_DAYS?' soon':''}">${escHtml(b.when)}</i></span></div>`;
+
+  const near = list.filter(b => b.idx <= BD_NEAR_DAYS);
+  let rest = list.filter(b => b.idx > BD_NEAR_DAYS);
+  let head;
+  if(near.length){
+    head = near.map(b => row(b,false)).join('');
+  }else{
+    // Найближче свято показуємо завжди — щоб блок не виглядав порожнім
+    head = rest.length ? row(rest[0],true) : '';
+    rest = rest.slice(1);
+  }
+  const more = rest.length
+    ? `<details class="bd-more"><summary>ще ${rest.length} цього місяця</summary>`
+      + rest.map(b => row(b,true)).join('') + '</details>'
+    : '';
+  return `<div class="bd-title">🎂 Дні народження</div>${head}${more}`;
+}
 // Один рендер для всіх кабінетів — вчителя, батьків та учня.
 // Дата НЕ параметр: вікно завжди рахується від сьогодні. Раніше сюди
 // приходила обрана згори дата, і список їздив разом із журналом.
@@ -2359,13 +2392,7 @@ export async function renderBirthdays(containerId,cls,selfName){
     }
     if(empty) empty.style.display='none';
     box.style.display='block';
-    box.innerHTML=`<div class="bd-title">🎂 Дні народження — найближчий місяць</div>`+
-      // Найближчий тиждень виділено: у місячному списку саме він потребує
-      // дій, решта — просто щоб знати наперед.
-      list.map(b=>`<div class="bd-row${b.name===selfName?' me':''}${b.today?' bd-today':''}">
-        <span class="bd-name">${b.today?'🎉 ':''}${escHtml(b.name)}${b.name===selfName?' — це ти!':''}</span>
-        <span class="bd-date">${escHtml(b.label)} <i class="bd-when${b.idx<=7?' soon':''}">${escHtml(b.when)}</i></span>
-      </div>`).join('');
+    box.innerHTML=birthdaysHtml(list,selfName);
   }catch(e){
     box.style.display='none';
     const empty=document.getElementById(containerId+'-empty');
