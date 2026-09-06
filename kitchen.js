@@ -41,6 +41,11 @@
 import { ref, set, get, child, update, remove, onValue } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { db, auth, currentUserData, showToast, escHtml, escJs, localDateString, logAction, notifyEvent, pushConfigured, renderPushWarning, getSchoolRange, sidOf, getDateRange, stuName } from './common.js';
 
+// Позначка версії модуля. Показується в блоці харчування дрібним рядком.
+// Якщо людина каже «нічого не змінилося», перше питання — який тут рядок:
+// айфон із головного екрана вміє показувати сторінку тижневої давнини.
+export const MEAL_BUILD = '2026-09-06 · харчування v5 (ключ дитини, помилки видимі)';
+
 export const MEAL_CUTOFF_HOUR = 9;   // до 09:00 можна відмовитися від сьогоднішнього
 // Сніданок їдять до уроків, тож дедлайн 09:00 для нього безглуздий — його
 // вже зʼїли. Замовлення й відмова закриваються напередодні о 18:00.
@@ -649,17 +654,34 @@ window.loadClassOrders = async function(){
           <td>${escHtml(r.name)}</td>
           ${hasBrkMenu?`<td>${mealCell(cls,r.sid,date,'breakfast',r.breakfast)}</td>`:''}
           <td>${mealCell(cls,r.sid,date,'lunch',r.lunch)}</td>
-          ${hasChoice?`<td>${r.pick?`<span class="k-ab ${r.pick}">${r.pick.toUpperCase()}</span>`:'<span class="k-no">—</span>'}</td>`:''}
+          ${hasChoice?`<td>${pickCell(cls,r.sid,date,r.pick)}</td>`:''}
           <td>${mealCell(cls,r.sid,date,'snack',r.snack)}</td>
           <td class="k-ord-note">${escHtml(r.note)}</td></tr>`).join('')}
       </tbody></table>
-      <p class="k-ord-hint">Натисніть ✓ або —, щоб додати чи зняти порцію вручну. Це для тих,
-        хто звернувся вже після дедлайну; дію буде записано в журнал.</p>
+      ${orphanBlock(overrides, plans, stSnap.val())}
+      <p class="k-ord-hint">Натисніть ✓ або —, щоб додати чи зняти порцію вручну; А/Б перемикає варіант.
+        Це для тих, хто звернувся вже після дедлайну; дію буде записано в журнал.</p>
       <button onclick="exportClassOrders()" style="background:#e0f7fa;color:#00838f;border:1px solid #80deea;margin-top:11px;">📄 Вивантажити CSV</button>`;
   }catch(e){
     box.innerHTML = `<p style="color:red;font-size:.8rem;">Помилка: ${escHtml(e.message)}</p>`;
   }
 };
+// Підтвердження, яке працює і на планшеті.
+//
+// ЧОМУ НЕ ПРОСТО confirm(). Коли портал відкрито як застосунок з головного
+// екрана (а на кухні це саме планшет), у ряді версій iOS вікна confirm()
+// не показуються — виклик повертає false, і дія тихо не відбувається.
+// Кнопка «додати обід» просто перестає працювати, без жодного пояснення.
+//
+// Усі дії кухні тут зворотні одним натисканням, тож у цьому режимі
+// виконуємо одразу, а що саме сталося — кажемо повідомленням після.
+function askConfirm(msg){
+  const standalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
+    || window.navigator.standalone === true;
+  if(standalone) return true;
+  return confirm(msg);
+}
+
 // ── Ручна порція від кухні ──────────────────────────────────────
 //
 // НАВІЩО. Дитина спізнилася, батьки забули, хтось підійшов до адміністрації
@@ -677,7 +699,7 @@ window.kitchenSetMeal = async function(cls, sid, date, field, value){
   if(!cls || !sid || !date) return;
   const LABEL = { lunch:'обід', breakfast:'сніданок', snack:'підвечірок' };
   const name = stuName(cls, sid);
-  if(!confirm(`${value ? 'Додати' : 'Зняти'} ${LABEL[field] || field}: ${name}, ${human(date)}?`)) return;
+  if(!askConfirm(`${value ? 'Додати' : 'Зняти'} ${LABEL[field] || field}: ${name}, ${human(date)}?`)) return;
   try{
     const planSnap = await get(child(ref(db), `meal_plan/${cls}/${sid}`));
     const plan = planSnap.exists() ? planSnap.val() : {};
@@ -705,11 +727,101 @@ window.kitchenSetMeal = async function(cls, sid, date, field, value){
   }
 };
 
+// ── Записи, які не звелися з жодним учнем класу ─────────────────
+//
+// НАВІЩО ЦЕ ПОКАЗУВАТИ. Відповідь батьків лежить у базі під якимось
+// ключем. Кухня перебирає список класу і шукає запис за ідентифікатором
+// або за імʼям учня. Якщо ключ не збігається ні з тим, ні з тим — запис
+// існує, але його ніхто не бачить: у звіті стоїть варіант за замовчуванням,
+// і всі впевнені, що батьки нічого не обирали.
+//
+// Досі це було невидимо, і причину доводилося вгадувати. Тепер кухня
+// бачить сам ключ — і по ньому одразу зрозуміло, що не так: чуже написання
+// імені, дитина зі старого списку, запис не того класу.
+export function orphanKeys(overrides, plans, students){
+  const known = new Set();
+  for(const sid in (students || {})){
+    known.add(sid);
+    known.add(String(students[sid]));
+  }
+  const out = [];
+  const collect = (node, what) => {
+    for(const k in (node || {})){
+      if(known.has(k)) continue;
+      out.push({ key:k, what, data:node[k] });
+    }
+  };
+  collect(overrides, 'поправка на день');
+  collect(plans, 'постійні налаштування');
+  return out;
+}
+
+function orphanBlock(overrides, plans, students){
+  const list = orphanKeys(overrides, plans, students);
+  if(!list.length) return '';
+  const describe = (o) => {
+    const d = o.data || {};
+    const bits = [];
+    if(d.pick) bits.push(`варіант ${String(d.pick).toUpperCase()}`);
+    if(d.lunch !== undefined) bits.push(d.lunch ? 'обід' : 'без обіду');
+    if(d.breakfast !== undefined) bits.push(d.breakfast ? 'сніданок' : 'без сніданку');
+    if(d.snack !== undefined) bits.push(d.snack ? 'підвечірок' : 'без підвечірка');
+    if(d.lunch === false) bits.push('не харчується');
+    return bits.join(', ') || '—';
+  };
+  return `<div class="k-orphan">
+    <b>⚠️ Записи, які не звелися з учнями класу: ${list.length}</b>
+    <p>Ці відповіді батьків збережені, але кухня їх НЕ рахує: ключ запису не
+       збігається ні з ідентифікатором учня, ні з його імʼям у списку класу.
+       Найчастіша причина — імʼя дитини записане в списку класу інакше, ніж
+       у прив'язці батьків. Покажіть це класному керівнику.</p>
+    <ul>${list.map(o=>`<li><code>${escHtml(o.key)}</code> — ${escHtml(describe(o))}
+      <span>(${escHtml(o.what)})</span></li>`).join('')}</ul>
+  </div>`;
+}
+
+// Варіант А/Б — кухня може перемкнути.
+//
+// НАВІЩО. Дитина підійшла і сказала, що хоче гречку, а не рис; батьки
+// помилилися кнопкою; хтось передумав уже на роздачі. Досі це можна було
+// тільки запамʼятати.
+function pickCell(cls, sid, date, pick){
+  const cur = pick || 'a';
+  if(!canEditMeals()) return `<span class="k-ab ${cur}">${cur.toUpperCase()}</span>`;
+  return ['a','b'].map(v => `<button type="button" class="k-ab-btn${v===cur?' on '+v:''}"
+    onclick="kitchenSetPick('${escJs(cls)}','${escJs(sid)}','${escJs(date)}','${v}')"
+    title="Обрати варіант ${v.toUpperCase()}">${v.toUpperCase()}</button>`).join('');
+}
+
+window.kitchenSetPick = async function(cls, sid, date, value){
+  const name = stuName(cls, sid);
+  const v = value === 'b' ? 'b' : 'a';
+  if(!askConfirm(`Варіант ${v.toUpperCase()} для ${name}, ${human(date)}?`)) return;
+  try{
+    const path = `meal_day/${date}/${cls}/${sid}`;
+    const snap = await get(child(ref(db), path));
+    const cur = snap.exists() ? snap.val() : {};
+    cur.pick = v;
+    cur.by = currentUserData?.email || '';
+    cur.ts = Date.now();
+    cur.manual = true;
+    await set(ref(db, path), cur);
+    logAction('meal_day', { date, target:name, value:`кухня: варіант ${v.toUpperCase()}` });
+    showToast(`✓ Варіант ${v.toUpperCase()}`);
+    loadClassOrders();
+    if(window.refreshKitchen) window.refreshKitchen();
+  }catch(e){ alert('Не вдалося змінити: ' + e.message); }
+};
+
+function canEditMeals(){
+  const r = currentUserData?.role;
+  return r === 'kitchen' || r === 'director' || r === 'administrator';
+}
+
 // Клітинка обліку: для кухні це кнопка, для решти — просто позначка
 function mealCell(cls, sid, date, field, on){
   const mark = on ? '<span class="k-yes">✓</span>' : '<span class="k-no">—</span>';
-  if(currentUserData?.role !== 'kitchen' && currentUserData?.role !== 'director'
-     && currentUserData?.role !== 'administrator') return mark;
+  if(!canEditMeals()) return mark;
   return `<button type="button" class="k-cell-btn" title="Змінити вручну"
     onclick="kitchenSetMeal('${escJs(cls)}','${escJs(sid)}','${escJs(date)}','${field}',${on?0:1})">${mark}</button>`;
 }
@@ -1052,10 +1164,16 @@ export async function renderParentMenu(cls, studentKey, date){
 
       ${isAbsent ? '' : `<div class="pm-act">${actions}</div>`}
 
+      <div id="pm-msg" class="pm-msg" style="display:none;"></div>
+
       <div class="pm-links">
         <a href="#" onclick="event.preventDefault();openMealSettings();">⚙️ Налаштування харчування</a>
         <a href="#" onclick="event.preventDefault();openMyMealStats();">📊 Моя статистика</a>
-      </div>`;
+      </div>
+      <!-- Позначка версії. Айфон уміє тримати стару сторінку днями, і
+           «нічого не змінилося» найчастіше означає саме це. За рядком видно,
+           який код зараз працює. -->
+      <div class="pm-build">${escHtml(MEAL_BUILD)}</div>`;
     renderTakeaway(cur);
   }catch(e){
     box.innerHTML = `<div class="pm-none">Не вдалося завантажити меню: ${escHtml(e.message)}</div>`;
@@ -1109,6 +1227,10 @@ window.setMealDay = async function(date, field, value){
     else await remove(ref(db, path));
   }catch(e){
     const denied = /permission/i.test(e.message || '');
+    // Спершу — у саму сторінку: на айфоні alert() з домашнього екрана
+    // може не показатися зовсім
+    mealMsg('Не вдалося зберегти: ' + e.message
+      + (denied ? ' Схоже, у профілі записана інша дитина — оновіть сторінку.' : ''), true);
     alert('Не вдалося зберегти: ' + e.message + (denied
       ? (_mealKeyProfileErr
           ? '\n\nПортал не зміг записати дитину у ваш профіль (' + _mealKeyProfileErr
@@ -1119,6 +1241,7 @@ window.setMealDay = async function(date, field, value){
       : ''));
     return;
   }
+  mealMsg('');
   showToast(field === 'pick'
     ? `✓ Обрано варіант ${String(value).toUpperCase()}`
     : (value ? '✓ Записано'
@@ -1507,6 +1630,24 @@ export function takeawayEditable(dateStr, now = new Date(), today = localDateStr
 
 const taMoney = (v) => (Math.round(Number(v||0)*100)/100).toFixed(2);
 
+// ── Повідомлення просто в блоці харчування ──────────────────────
+//
+// НАВІЩО, ЯКЩО Є alert(). На айфоні портал часто відкривають як застосунок
+// з головного екрана. У цьому режимі alert(), confirm() і prompt() у ряді
+// версій iOS не показуються взагалі — виклик просто нічого не робить.
+// Через це помилка збереження, яку ми щойно навчилися ловити, лишалася
+// невидимою саме там, де на неї найчастіше й натикаються: «натискаю Б —
+// нічого не змінюється».
+//
+// Тому все, що батько має побачити, малюємо в самій сторінці.
+export function mealMsg(text, bad){
+  const box = document.getElementById('pm-msg');
+  if(!box){ if(text) showToast(text); return; }
+  box.className = 'pm-msg' + (bad ? ' bad' : '');
+  box.textContent = text || '';
+  box.style.display = text ? 'block' : 'none';
+}
+
 // ── Кабінет кухні: список позицій ──
 export async function loadTakeawayItems(){
   const box = document.getElementById('k-ta-items');
@@ -1524,9 +1665,19 @@ export async function loadTakeawayItems(){
           ${it.note?`<span class="ta-item-note">${escHtml(it.note)}</span>`:''}
         </div>
         <span class="ta-price">${taMoney(it.price)} zł</span>
+        <button class="ta-mini" onclick="editTakeawayItem('${escJs(id)}')">✏️</button>
         <button class="ta-mini" onclick="toggleTakeawayItem('${escJs(id)}',${it.active===false})">
           ${it.active===false?'Увімкнути':'Вимкнути'}</button>
         <button class="ta-mini del" onclick="removeTakeawayItem('${escJs(id)}')">✕</button>
+      </div>
+      <div class="ta-edit" id="ta-edit-${escHtml(id)}" style="display:none;">
+        <input type="text" id="ta-e-title-${escHtml(id)}" value="${escHtml(it.title||'')}" placeholder="Назва" maxlength="80">
+        <input type="text" id="ta-e-price-${escHtml(id)}" value="${taMoney(it.price)}" placeholder="Ціна" inputmode="decimal">
+        <input type="text" id="ta-e-note-${escHtml(id)}" value="${escHtml(it.note||'')}" placeholder="Примітка (склад, вага)" maxlength="120">
+        <div class="ta-edit-btns">
+          <button class="ta-mini save" onclick="saveTakeawayItem('${escJs(id)}')">Зберегти</button>
+          <button class="ta-mini" onclick="editTakeawayItem('${escJs(id)}')">Скасувати</button>
+        </div>
       </div>`;
     }).join('') : '<p class="empty-msg">Позицій ще немає.</p>';
   }catch(e){
@@ -1534,6 +1685,38 @@ export async function loadTakeawayItems(){
   }
 }
 window.loadTakeawayItems = loadTakeawayItems;
+
+// Правка позиції: назва, ціна, примітка.
+//
+// ЧОМУ ОНОВЛЕННЯ, А НЕ «ВИДАЛИТИ Й ДОДАТИ ЗАНОВО». Ідентифікатор позиції
+// стоїть у вже зроблених замовленнях (takeaway_orders/.../{itemId}). Нова
+// позиція отримала б новий ідентифікатор, і всі замовлення на неї
+// перетворилися б на рядки без назви. Тому правимо на місці.
+window.editTakeawayItem = function(id){
+  const box = document.getElementById('ta-edit-' + id);
+  if(box) box.style.display = box.style.display === 'none' ? 'flex' : 'none';
+};
+
+window.saveTakeawayItem = async function(id){
+  const title = (document.getElementById('ta-e-title-'+id)?.value || '').trim();
+  const priceRaw = String(document.getElementById('ta-e-price-'+id)?.value || '').replace(',','.');
+  const note = (document.getElementById('ta-e-note-'+id)?.value || '').trim();
+  const price = Number(priceRaw);
+  if(!title) return alert('Назва не може бути порожньою.');
+  if(!(price >= 0)) return alert('Ціна має бути числом.');
+  try{
+    // update, а не set: active, by і ts лишаються як були
+    await update(ref(db, `takeaway_items/${id}`), {
+      title: title.slice(0,80),
+      price: Math.round(price*100)/100,
+      note: note.slice(0,120),
+      by: currentUserData?.email || '', ts: Date.now()
+    });
+    logAction('takeaway', { value:`позицію змінено: ${title} · ${taMoney(price)} zł` });
+    showToast('✅ Позицію змінено');
+    loadTakeawayItems();
+  }catch(e){ alert('Не вдалося зберегти: ' + e.message); }
+};
 
 window.addTakeawayItem = async function(){
   const t = document.getElementById('k-ta-title');
@@ -1685,7 +1868,7 @@ window.kitchenSetTakeaway = async function(cls, sid, itemId, qty){
   const q = Math.max(0, Math.min(TA_MAX_QTY, Number(qty)||0));
   const name = (st.students[cls] && st.students[cls][sid]) || sid;
   const title = (st.items[itemId] || {}).title || itemId;
-  if(q === 0 && !confirm(`Прибрати «${title}» у ${name}?`)) return;
+  if(q === 0 && !askConfirm(`Прибрати «${title}» у ${name}?`)) return;
   try{
     await set(ref(db, `takeaway_orders/${st.date}/${cls}/${sid}/${itemId}`), q > 0 ? q : null);
     logAction('takeaway', { date: st.date, target: name,
