@@ -1403,6 +1403,36 @@ window.reloadMyMealStats = async function(){
 //   takeaway_orders/{дата}/{клас}/{ID}/{itemId} = кількість
 const TA_MAX_QTY = 9;   // більше — це вже опт, домовляються окремо
 
+// ── На який день іде замовлення на винос ────────────────────────
+//
+// ПРАВИЛО ШКОЛИ: приймаємо до 07:00. Замовив о 07:01 — це вже на
+// наступний навчальний день. У вихідні замовлення йде на понеділок.
+//
+// ЧОМУ ПЕРЕВОДИМО, А НЕ ЗАБОРОНЯЄМО. Заборона о 07:00 виглядала б як
+// поломка: людина відкриває портал о восьмій, тисне «+» — нічого не
+// відбувається. Переведення на наступний день — це те, що вона й так
+// зробила б наступною дією, тільки без здогадок.
+//
+// ЧОМУ ОКРЕМИЙ ДЕДЛАЙН, А НЕ 09:00 ВІД ОБІДІВ. Обід готують із того, що
+// вже закуплено, і відмова о 08:59 нікому не шкодить. Позиції на винос
+// пакують до початку уроків, тож для них 09:00 — надто пізно.
+export const TA_CUTOFF_HOUR = 7;
+
+export function takeawayDay(now = new Date(), today = localDateString){
+  const wd = new Date(today + 'T12:00:00').getDay();
+  const weekend = (wd === 0 || wd === 6);
+  return (weekend || now.getHours() >= TA_CUTOFF_HOUR) ? nextWorkday(today) : today;
+}
+
+// Чи можна ще замовляти на цей день
+export function takeawayEditable(dateStr, now = new Date(), today = localDateString){
+  const first = takeawayDay(now, today);
+  if(dateStr >= first) return { ok:true };
+  return { ok:false, msg: dateStr < today
+    ? 'Цей день уже минув.'
+    : `Замовлення на сьогодні приймалися до ${TA_CUTOFF_HOUR}:00. Наступне можливе — на ${human(first)}.` };
+}
+
 const taMoney = (v) => (Math.round(Number(v||0)*100)/100).toFixed(2);
 
 // ── Кабінет кухні: список позицій ──
@@ -1536,7 +1566,13 @@ export async function renderTakeaway(date){
   const cls = currentUserData?.class;
   const sid = await mealKey(currentUserData?.class);
   if(!cls || !sid){ box.innerHTML = ''; return; }
-  const day = date || pmDate || localDateString;
+  // День беремо не менший за перший доступний. Людина гортає меню й може
+  // стояти на сьогоднішньому дні о десятій ранку — замовлення туди вже не
+  // приймаються, тож показуємо найближчий, куди приймаються.
+  const asked = date || pmDate || localDateString;
+  const first = takeawayDay();
+  const day = asked > first ? asked : first;
+  const shifted = day !== asked;
   try{
     const [itSnap, ordSnap] = await Promise.all([
       get(child(ref(db),'takeaway_items')),
@@ -1547,12 +1583,16 @@ export async function renderTakeaway(date){
     const ids = Object.keys(items).filter(id => items[id] && items[id].active !== false);
     if(!ids.length){ box.innerHTML = ''; return; }     // кухня нічого не продає — розділу немає
 
-    const gate = mealsEditable(day);
+    const gate = takeawayEditable(day);
     let sum = 0;
     ids.forEach(id=>{ sum += (Number(mine[id])||0) * Number(items[id].price||0); });
 
     box.innerHTML = `
       <div class="ta-head">🥡 Замовити на винос <span>${escHtml(human(day))}</span></div>
+      ${shifted ? `<div class="ta-shift">Замовлення приймаємо до ${TA_CUTOFF_HOUR}:00.
+        ${asked < localDateString ? 'Той день уже минув.'
+          : (asked === localDateString ? 'На сьогодні вже пізно.' : '')}
+        Це замовлення піде на <b>${escHtml(human(day))}</b>.</div>` : ''}
       ${ids.map(id=>{
         const it = items[id], q = Number(mine[id])||0;
         return `<div class="ta-row${q?' on':''}">
@@ -1570,7 +1610,9 @@ export async function renderTakeaway(date){
       }).join('')}
       <div class="ta-sum">${sum>0?`До сплати: <b>${taMoney(sum)} zł</b>`:'Нічого не замовлено'}
         <span>Оплата — у школі, як завжди</span></div>
-      ${gate.ok ? '' : `<div class="ta-locked">🔒 ${escHtml(gate.msg)}</div>`}`;
+      ${gate.ok
+        ? `<div class="ta-rule">Замовлення на день приймаємо до ${TA_CUTOFF_HOUR}:00. Пізніше — вже на наступний навчальний день.</div>`
+        : `<div class="ta-locked">🔒 ${escHtml(gate.msg)}</div>`}`;
   }catch(e){
     box.innerHTML = `<div class="pm-none">Не вдалося завантажити позиції: ${escHtml(e.message)}`
       + (/permission/i.test(e.message||'') ? ' — оновіть сторінку, портал допише ідентифікатор дитини у профіль' : '')
@@ -1583,8 +1625,10 @@ window.setTakeaway = async function(date, itemId, qty){
   const cls = currentUserData?.class;
   const sid = await mealKey(currentUserData?.class);
   if(!cls || !sid) return;
-  const gate = mealsEditable(date);
-  if(!gate.ok) return alert(gate.msg);
+  // Перевіряємо ще раз тут, а не лише при показі: між відкриттям сторінки
+  // і натисканням могло минути пів дня, і 07:00 уже позаду.
+  const gate = takeawayEditable(date);
+  if(!gate.ok){ alert(gate.msg); return renderTakeaway(); }
   const q = Math.max(0, Math.min(TA_MAX_QTY, Number(qty)||0));
   try{
     // 0 прибирає запис зовсім, щоб у базі не накопичувалися нулі
