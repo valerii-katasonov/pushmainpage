@@ -5,7 +5,7 @@
 // lives in teacher.js).
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, getActiveClass, currentUserData, STICKER_GOAL, stickerGoal, getWeekDates, displayGrade, gradeClass6, showToast, renderHwItem, dayKeys, dayNamesUA, isBreakItem, localDateString, formatAttendanceSlotLabel, renderGradeFormulaInfo, escJs, escHtml, safeUrl, renderBirthdays, stuName, auth, normalizeChildren, gradesFromMirror, mondayOf, altChoiceFor, resolveAlt, classHourItem} from './common.js';
+import { db, getActiveClass, currentUserData, STICKER_GOAL, stickerGoal, getWeekDates, displayGrade, gradeClass6, showToast, renderHwItem, dayKeys, dayNamesUA, isBreakItem, localDateString, formatAttendanceSlotLabel, renderGradeFormulaInfo, escJs, escHtml, safeUrl, renderBirthdays, stuName, auth, normalizeChildren, gradesFromMirror, mondayOf, altChoiceFor, resolveAlt, classHourItem, insertAtTime} from './common.js';
 import { ACTIVE_YEAR } from './director.js';
 import { renderParentMenu } from './kitchen.js';
 import { renderNewsFeed } from './news.js';
@@ -86,17 +86,12 @@ function buildDynamicSchedule(schedule,dayName,isToday,dateStr){
   return insertClassHour(out, dayName, window.classHour);
 }
 
-// Вставка в готовий список за часом початку
+// Вставка в готовий список для показу. Правило місця спільне з друком —
+// див. insertAtTime у common.js.
 export function insertClassHour(list, dayName, hour){
   const item = (hour && hour.day === dayName) ? classHourItem(hour) : null;
   if(!item) return list;
-  const mins = (t) => { const m = /(\d{1,2}):(\d{2})/.exec(String(t||'')); return m ? +m[1]*60 + +m[2] : null; };
-  const at = mins(item.time);
-  const row = { ...item, _slot:null, _break:false };
-  if(at == null) return list.concat([row]);
-  const i = list.findIndex(l => { const t = mins(l.time); return t != null && t > at; });
-  if(i === -1) return list.concat([row]);
-  return [...list.slice(0, i), row, ...list.slice(i)];
+  return insertAtTime(list, { ...item, _slot:null, _break:false }, l => l.time);
 }
 
 // Дата, що відстоїть від сьогодні на offset днів → 'YYYY-MM-DD'
