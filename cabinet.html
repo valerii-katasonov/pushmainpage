@@ -1599,15 +1599,17 @@
 .ta-box{margin-top:12px;background:#fffdf7;border:1px solid #f0e3c8;border-radius:14px;padding:13px;}
 .ta-head{font-weight:800;font-size:.9rem;color:#8a6d1f;margin-bottom:9px;}
 .ta-head span{font-weight:400;color:#b0a184;font-size:.78rem;margin-left:6px;}
-.ta-row{display:flex;align-items:center;gap:10px;background:#fff;border:1px solid #f0e3c8;
-  border-radius:10px;padding:9px 11px;margin-bottom:7px;}
+.ta-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#fff;border:1px solid #f0e3c8;
+  border-radius:10px;padding:10px 12px;margin-bottom:7px;}
 .ta-row.on{border-color:#e0b34a;background:#fffaf0;}
-.ta-row-main{flex:1;min-width:0;}
+/* Те саме, що й у кухні: довгі назви страв не мають ділити рядок з кнопками */
+.ta-row-main{flex:1 1 100%;min-width:0;}
+.ta-row .ta-price{margin-right:auto;}
 .ta-row-main b{display:block;font-size:.86rem;color:#263238;}
 .ta-item-note{display:block;font-size:.74rem;color:#a99b7e;}
 .ta-price{font-size:.82rem;font-weight:700;color:#8a6d1f;white-space:nowrap;}
-.ta-qty{display:flex;align-items:center;gap:8px;}
-.ta-qty button{width:28px;height:28px;border-radius:8px;background:#f5efe0;color:#8a6d1f;
+.ta-qty{display:flex;align-items:center;gap:8px;flex:0 0 auto;}
+.ta-qty button{width:28px;height:28px;margin-top:0;border-radius:8px;background:#f5efe0;color:#8a6d1f;
   font-weight:800;font-size:1rem;line-height:1;padding:0;}
 .ta-qty button:disabled{opacity:.35;}
 .ta-qty span{min-width:14px;text-align:center;font-weight:700;font-size:.88rem;}
@@ -1619,12 +1621,22 @@
 .ta-rule{margin-top:7px;font-size:.73rem;color:#b0a184;}
 .ta-shift{background:#fff8e1;border:1px solid #ffe082;border-radius:9px;padding:8px 10px;
           margin-bottom:9px;font-size:.78rem;color:#8a6d1f;line-height:1.45;}
-/* Кабінет кухні */
-.ta-item{display:flex;align-items:center;gap:9px;background:#fff;border:1px solid #eceff1;
-  border-radius:10px;padding:9px 11px;margin-bottom:7px;}
-.ta-item.off{opacity:.5;}
-.ta-item-main{flex:1;min-width:0;}
-.ta-mini{padding:5px 10px;font-size:.74rem;background:#eceff1;color:#546e7a;border-radius:8px;}
+/* Кабінет кухні.
+   ЧОМУ ТУТ ЯВНО width:auto. У порталі є глобальне правило button{width:100%},
+   зручне для великих кнопок «Зберегти» на всю ширину. Але кожна дрібна
+   кнопка поруч із текстом теж розтягувалася на всю ширину: назва позиції
+   стискалася в стовпчик по одній літері, ціна налазила на неї, і сторінка
+   кухні виглядала розваленою — особливо на телефоні. */
+.ta-item{display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  background:#fff;border:1px solid #eceff1;
+  border-radius:10px;padding:10px 12px;margin-bottom:7px;}
+.ta-item.off{opacity:.55;}
+/* Назва займає окремий рядок: у неї найбільше тексту, і ділити ширину
+   з чотирма кнопками їй нема сенсу */
+.ta-item-main{flex:1 1 100%;min-width:0;}
+.ta-item .ta-price{margin-right:auto;}
+.ta-mini{width:auto;margin-top:0;flex:0 0 auto;border:none;
+  padding:7px 12px;font-size:.74rem;background:#eceff1;color:#546e7a;border-radius:8px;}
 .ta-mini.del{background:#fdecea;color:#c0392b;}
 
 /* Екран згоди при вході */
