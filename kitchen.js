@@ -38,7 +38,7 @@
 //   {ID} — постійний ключ учня зі students_list, а не імʼя. Імʼя показуємо
 //   через stuName(): воно може змінитися, ключ — ні.
 // ═══════════════════════════════════════════════════════════════
-import { ref, set, get, child, update, remove } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+import { ref, set, get, child, update, remove, onValue } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { db, auth, currentUserData, showToast, escHtml, escJs, localDateString, logAction, notifyEvent, pushConfigured, renderPushWarning, getSchoolRange, sidOf, getDateRange, stuName } from './common.js';
 
 export const MEAL_CUTOFF_HOUR = 9;   // до 09:00 можна відмовитися від сьогоднішнього
@@ -470,16 +470,19 @@ export async function loadWeekCounts(){
           ? `<b>—</b><span>${escHtml(human(today.date))}: ${escHtml(today.closed)}</span>
              <div class="k-total-snack">школа не годує цього дня</div>`
           : `<b>${today.lunch}</b><span>обідів на ${escHtml(human(today.date))}</span>
-             <div class="k-total-snack">+ ${today.snack} підвечірків</div>`}
+             <div class="k-total-snack">${today.hasBrkMenu ? `${today.brk} сніданків · ` : ''}+ ${today.snack} підвечірків</div>`}
       </div>
       <div class="k-sub">відсутні: ${today.absent} · не харчуються: ${today.off} · відмови: ${today.skips.length}${today.extras.length ? ` · <b style="color:var(--green);">разові обіди: ${today.extras.length}</b>` : ''}${today.unset ? ` · <b style="color:var(--orange);">батьки не відповіли: ${today.unset}</b>` : ''}</div>
 
-      <table class="k-table"><thead><tr><th>День</th><th>Обіди</th><th>Підвеч.</th><th>Відсутні</th></tr></thead><tbody>
+      <!-- Сніданок у тижневій таблиці нарівні з обідом: його теж треба
+           готувати, і кухня планувала його наосліп — число було лише
+           в розрізі класів нижче. -->
+      <table class="k-table"><thead><tr><th>День</th><th>Снід.</th><th>Обіди</th><th>Підвеч.</th><th>Відсутні</th></tr></thead><tbody>
         ${perDay.map((d,i)=>`<tr class="${d.date===localDateString?'k-now':''}${d.closed?' k-closed':''}">
           <td>${DOW_SHORT[i]} ${escHtml(human(d.date).slice(0,5))}</td>
           ${d.closed
-            ? `<td colspan="3" class="k-closed-cell">${escHtml(d.closed)}</td>`
-            : `<td><b>${d.lunch}</b></td><td>${d.snack||''}</td><td class="k-off">${d.absent||''}</td>`}
+            ? `<td colspan="4" class="k-closed-cell">${escHtml(d.closed)}</td>`
+            : `<td>${d.hasBrkMenu?(d.brk||'0'):'<span class="k-no">—</span>'}</td><td><b>${d.lunch}</b></td><td>${d.snack||''}</td><td class="k-off">${d.absent||''}</td>`}
           </tr>`).join('')}
       </tbody></table>
 
@@ -941,7 +944,17 @@ export async function renderParentMenu(cls, studentKey, date){
         <small>Відповідь можна змінити будь-коли в налаштуваннях харчування.</small>
       </div>`;
 
+    // Дитину не знайдено в списку класу — попереджаємо ЯВНО.
+    // Замовлення тоді лягають під імʼям, а кухня рахує за ідентифікаторами,
+    // тож дитини в її списку немає взагалі. Мовчазний збій тут коштує обіду.
+    const keyWarn = !mealKeyIsName() ? '' : `
+      <div class="pm-warn">⚠️ <b>Дитину не впізнано у списку класу.</b>
+        Ваші відповіді зберігаються, але кухня може їх не побачити.
+        Покажіть це повідомлення класному керівнику — швидше за все,
+        імʼя дитини у списку класу й у вашій прив'язці записані по-різному.</div>`;
+
     box.innerHTML = `
+      ${keyWarn}
       ${askLunch}
       <div class="pm-tabs">${strip}</div>
       <div class="pm-title">${escHtml(DOW[ci])}, ${escHtml(human(cur))}${cur===localDateString?' — сьогодні':''}</div>
@@ -1020,7 +1033,7 @@ window.setMealDay = async function(date, field, value){
 //
 // Тепер ключ шукаємо в довіднику класу за імʼям і кешуємо. Імʼя лишається
 // запасним варіантом — краще записати хоч кудись, ніж втратити відповідь.
-let _mealKey = null, _mealKeyCls = null;
+let _mealKey = null, _mealKeyCls = null, _mealKeyIsName = false;
 export async function mealKey(cls){
   const c = cls || currentUserData?.class;
   if(!c) return null;
@@ -1043,10 +1056,53 @@ export async function mealKey(cls){
       currentUserData.studentId = key;
     }catch(e){ console.warn('studentId у профіль:', e.message); }
   }
+  // ЧИ ЦЕ СПРАВЖНІЙ ІДЕНТИФІКАТОР.
+  //
+  // Коли дитину не вдалося знайти в списку класу, ключем стає імʼя. Запис
+  // тоді хоч кудись потрапляє — але кухня перебирає список за
+  // ідентифікаторами, тож у підрахунку цієї дитини НЕМАЄ. Мовчати про це
+  // не можна: наслідок — дитина без обіду. Тому позначаємо стан і кажемо
+  // про нього в кабінеті.
+  _mealKeyIsName = !key;
   _mealKey = key || currentUserData?.studentName || null;
   _mealKeyCls = c;
   return _mealKey;
 }
+export function mealKeyIsName(){ return _mealKeyIsName; }
+
+// ── Живе оновлення для другого з батьків ────────────────────────
+//
+// НАВІЩО. У дитини двоє батьків, і обидва заходять у портал. Тато обирає
+// гарнір Б — у мами, якщо кабінет уже відкритий, лишається те, що було на
+// момент відкриття. Вона бачить варіант А і вирішує, що вибір не зберігся.
+//
+// Слухаємо рівно дві гілки цієї дитини: постійні налаштування й поправки
+// на дні. Тижневих поправок за раз небагато, тож слухати весь meal_day
+// класу не треба — беремо лише свою дитину.
+let mealUnsub = [];
+export async function listenMyMeals(){
+  mealUnsub.forEach(f => { try{ f(); }catch(e){} });
+  mealUnsub = [];
+  const cls = currentUserData?.class;
+  if(!cls) return;
+  const sid = await mealKey(cls);
+  if(!sid) return;
+  const redraw = () => { try{ renderParentMenu(); }catch(e){} };
+  [`meal_plan/${cls}/${sid}`].forEach(path => {
+    try{ mealUnsub.push(onValue(ref(db, path), redraw,
+      err => console.warn('meal listen:', err.message))); }
+    catch(e){ console.warn('meal listen:', e.message); }
+  });
+  // Поправки на дні лежать під датою, тож слухаємо поточний тиждень
+  try{
+    const monday = mondayOf(localDateString);
+    weekDates(monday).forEach(d => {
+      mealUnsub.push(onValue(ref(db, `meal_day/${d}/${cls}/${sid}`), redraw,
+        err => console.warn('meal listen:', err.message)));
+    });
+  }catch(e){ console.warn('meal listen:', e.message); }
+}
+window.listenMyMeals = listenMyMeals;
 
 // Постійні налаштування дитини — тут батько може зняти її з харчування зовсім
 window.openMealSettings = async function(){
