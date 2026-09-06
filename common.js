@@ -800,7 +800,7 @@ window.altTeacherLabel = function(clsId, item){
   if(uniq.length === 1 && names.every(Boolean)) return uniq[0];
   return names.map(n => n || '—').join(' / ');
 };
-window.loadScheduleScript=function(classId,callback){if(!classId)return;listenAltChoices(classId,()=>{try{if(window.refreshScheduleViews)window.refreshScheduleViews();}catch(e){}});get(child(ref(db),`schedules/${classId}`)).then(snap=>{if(snap.exists()){window.schedule=snap.val().lessons||{};window.clubSchedule=snap.val().clubs||{};}else{window.schedule={};window.clubSchedule={};}if(callback)callback();}).catch(()=>{window.schedule={};window.clubSchedule={};if(callback)callback();});};
+window.loadScheduleScript=function(classId,callback){if(!classId)return;listenAltChoices(classId,()=>{try{if(window.refreshScheduleViews)window.refreshScheduleViews();}catch(e){}});listenClassHour(classId,()=>{try{if(window.refreshScheduleViews)window.refreshScheduleViews();}catch(e){}});get(child(ref(db),`schedules/${classId}`)).then(snap=>{if(snap.exists()){window.schedule=snap.val().lessons||{};window.clubSchedule=snap.val().clubs||{};}else{window.schedule={};window.clubSchedule={};}if(callback)callback();}).catch(()=>{window.schedule={};window.clubSchedule={};if(callback)callback();});};
 
 // ═══════════════════════════════════════════════════════════════
 //  ЧЕРГУВАННЯ УРОКІВ (один тиждень музика, другий фізкультура)
@@ -883,13 +883,112 @@ export function resolveAlt(item, chosen){
            subject: { ua: pick, pl: pick } };
 }
 
-// window.altChoices[понеділок][День][слот] = 'Назва'
+// ── Ключ вибору: ПАРА ПРЕДМЕТІВ, а не номер слота ───────────────
+//
+// ЩО БУЛО НЕ ТАК. Вибір зберігався за номером слота в дні:
+// schedule_alt/{клас}/{тиждень}/{День}/{слот}. Номер слота — це просто
+// позиція в масиві дня, і вона змінюється від будь-якої правки розкладу.
+// Найгірше — вставка перерв: кожна перерва зсуває всі наступні уроки на
+// одиницю. Учитель позначав «цього тижня музика», директор того ж дня
+// розставляв перерви — і збережений вибір починав вказувати на сусідній
+// урок або в порожнечу. Батьки й далі бачили обидві назви через косу,
+// хоча вибір у базі був. Саме на це й скаржилися.
+//
+// ЩО ТЕПЕР. Ключ — сама пара: schedule_alt/{клас}/{тиждень}/pairs/{пара}.
+// Це збігається зі змістом дії: у межах тижня пара завжди одна й та сама
+// в усіх днях (картка й раніше писала однакове значення в усі слоти).
+// Розклад можна переставляти як завгодно — вибір лишається прив'язаним
+// до предметів, а не до позиції.
+//
+// СТАРІ ЗАПИСИ читаються далі, як запасний варіант: у школи вже є
+// позначені тижні, і втрачати їх не можна. Новий формат має пріоритет.
+//
+// «pairs» не може зіткнутися з назвою дня — дні тут Monday…Saturday.
+export function altPairKey(options){
+  return (options || []).map(s => String(s).trim()).join(' / ')
+    .replace(/[.#$[\]/]/g, '_');
+}
+// window.altChoices[понеділок].pairs[пара] = 'Назва'   (новий формат)
+// window.altChoices[понеділок][День][слот] = 'Назва'   (старий)
 window.altChoices = {};
-export function altChoiceFor(weekMonday, dayName, slotIdx){
+export function altChoiceFor(weekMonday, dayName, slotIdx, item){
   const w = window.altChoices && window.altChoices[weekMonday];
-  const d = w && w[dayName];
+  if(!w) return '';
+  const opts = item ? altOptions(item) : null;
+  if(opts && w.pairs){
+    const v = w.pairs[altPairKey(opts)];
+    if(v) return v;
+  }
+  const d = w[dayName];
   return d ? (d[slotIdx] || d[String(slotIdx)] || '') : '';
 }
+
+// ══════════════════════════════════════════════════════════════════
+//  КЛАСНА ГОДИНА
+// ══════════════════════════════════════════════════════════════════
+// Класний керівник ставить її сам: день + вільний час у своєму класі.
+//     class_hour/{клас} = { day:'Tuesday', number:5, time:'13:00 - 13:45' }
+//
+// ЧОМУ ОКРЕМИЙ ВУЗОЛ, А НЕ УРОК У РОЗКЛАДІ. Розклад — документ директора,
+// і його цілком перезаписує імпорт із Word. Класна година, дописана в
+// розклад, зникла б при першому ж імпорті, причому мовчки. Окремий вузол
+// переживає будь-яке перескладання розкладу.
+//
+// ЧОМУ ЛИШЕ ОДНА НА КЛАС. Класна година в тижні одна; список із кількох
+// дав би змогу випадково поставити дві й довго шукати, звідки друга.
+//
+// ЧОМУ ЧАС БЕРЕТЬСЯ З ДЗВІНКІВ. Щоб класна година не наклалася на урок і
+// не стояла в неможливий час. Вибір — тільки з тих номерів дзвінків, які
+// цього дня нічим не зайняті.
+
+// Вільні номери уроків цього дня: усі номери з дзвінків мінус ті, що вже
+// зайняті уроком. Перерви не рахуються — вони не займають номер.
+export function freeBellSlots(bells, dayList){
+  const busy = new Set();
+  (dayList || []).forEach((slot, i) => {
+    const items = Array.isArray(slot) ? slot : (slot && slot.subject ? [slot] : []);
+    items.forEach(l => {
+      if(!l || isBreakItem(l)) return;
+      const n = parseInt(l.number, 10);
+      // Номер у розкладі буває порожнім — тоді орієнтуємось на позицію.
+      // Так само робить розстановка перерв, і це має лишатися однаковим.
+      busy.add(Number.isFinite(n) ? n : i + 1);
+    });
+  });
+  return Object.values(bells || {})
+    .map(sl => ({ number: parseInt(sl && sl.number, 10),
+                  start: (sl && sl.start) || '', end: (sl && sl.end) || '' }))
+    .filter(sl => Number.isFinite(sl.number) && sl.start && sl.end)
+    .filter(sl => !busy.has(sl.number))
+    .sort((a, b) => a.number - b.number);
+}
+
+// Урок-заглушка класної години — щоб її можна було просто підмішати
+// в день і не вчити кожен екран окремого типу запису.
+export function classHourItem(hour){
+  if(!hour || !hour.time) return null;
+  return { subject:{ ua:'Класна година', pl:'Godzina wychowawcza' },
+           time: hour.time, number: hour.number, type:'class_hour', _classHour:true };
+}
+
+// Саму вставку в день робить insertClassHour у parent-student.js — вона
+// працює з уже готовим списком для показу, коли номери слотів початкового
+// розкладу вже проставлені. Вставляти раніше не можна: класна година
+// зсунула б індекси, за якими шукаються заміни вчителів.
+
+window.classHour = {};                     // {class_3: {day, number, time}}
+let chUnsub = null;
+export function listenClassHour(classId, onChange){
+  if(chUnsub){ try{ chUnsub(); }catch(e){} chUnsub = null; }
+  window.classHour = {};
+  if(!classId) return;
+  try{
+    chUnsub = onValue(ref(db, `class_hour/${classId}`),
+      snap => { window.classHour = snap.val() || {}; if(onChange) onChange(); },
+      err => console.warn('class_hour:', err.message));
+  }catch(e){ console.warn('class_hour:', e.message); }
+}
+window.listenClassHour = listenClassHour;
 
 // Слухаємо лише тижні від поточного понеділка й далі — минуле нікому
 // не потрібне, а вузол інакше ріс би весь рік.
