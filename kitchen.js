@@ -1534,7 +1534,9 @@ window.loadTakeawayOrders = async function(){
         }
         if(list.length) rows.push({
           cls: cls.replace('class_',''),
+          clsId: cls, sid,
           name: (students[cls] && students[cls][sid]) || sid,
+          picks,
           what: list.join(', ')
         });
       }
@@ -1542,7 +1544,43 @@ window.loadTakeawayOrders = async function(){
     rows.sort((a,b)=> (a.cls-b.cls) || String(a.name).localeCompare(String(b.name),'uk'));
     const tKeys = Object.keys(totals);
 
-    box.innerHTML = !tKeys.length
+    // Дані для форми «додати замовлення»: список активних позицій і класи
+    window.__taEdit = { date, items, students };
+
+    const activeIds = Object.keys(items).filter(id => items[id] && items[id].active !== false);
+    // Рядок правки: мінус · кількість · плюс для кожної позиції учня.
+    // Кухня редагує вже після дедлайну — це і є сенс правки.
+    const editRow = (r) => Object.keys(r.picks)
+      .filter(id => (Number(r.picks[id])||0) > 0)
+      .map(id => {
+        const q = Number(r.picks[id])||0;
+        const title = escHtml((items[id]||{}).title || id);
+        return `<span class="k-ta-pick">${title}
+          <button onclick="kitchenSetTakeaway('${escJs(r.clsId)}','${escJs(r.sid)}','${escJs(id)}',${q-1})">−</button>
+          <b>${q}</b>
+          <button onclick="kitchenSetTakeaway('${escJs(r.clsId)}','${escJs(r.sid)}','${escJs(id)}',${q+1})" ${q>=TA_MAX_QTY?'disabled':''}>+</button>
+        </span>`;
+      }).join(' ');
+
+    const addForm = !activeIds.length ? '' : `
+      <div class="k-ta-add">
+        <b>Додати замовлення</b>
+        <div class="k-ta-add-row">
+          <select id="k-ta-cls" onchange="kitchenTaStudents()">
+            <option value="">Клас…</option>
+            ${Object.keys(students).sort((a,b)=>parseInt(a.replace('class_',''))-parseInt(b.replace('class_','')))
+              .map(c=>`<option value="${escHtml(c)}">${escHtml(c.replace('class_',''))} клас</option>`).join('')}
+          </select>
+          <select id="k-ta-stu"><option value="">Спершу оберіть клас</option></select>
+          <select id="k-ta-item">
+            ${activeIds.map(id=>`<option value="${escHtml(id)}">${escHtml(items[id].title||id)} · ${taMoney(items[id].price)} zł</option>`).join('')}
+          </select>
+          <button class="k-ta-add-btn" onclick="kitchenAddTakeaway()">Додати</button>
+        </div>
+        <span class="k-ta-note">Дедлайн 07:00 тут не діє: кухня додає те, про що з нею домовилися особисто.</span>
+      </div>`;
+
+    box.innerHTML = (!tKeys.length
       ? '<p class="empty-msg">На цей день замовлень немає.</p>'
       : `<div class="k-ord-sum"><b>${tKeys.reduce((a,k)=>a+totals[k],0)}</b> позицій · ${taMoney(sum)} zł
            <span>${escHtml(human(date))}</span></div>
@@ -1552,11 +1590,71 @@ window.loadTakeawayOrders = async function(){
          </tbody></table>
          <div class="k-skip-title">Хто замовив</div>
          <table class="k-table"><thead><tr><th>Учень</th><th>Кл.</th><th>Замовлення</th></tr></thead><tbody>
-           ${rows.map(r=>`<tr><td>${escHtml(r.name)}</td><td>${escHtml(String(r.cls))}</td><td>${r.what}</td></tr>`).join('')}
-         </tbody></table>`;
+           ${rows.map(r=>`<tr><td>${escHtml(r.name)}</td><td>${escHtml(String(r.cls))}</td>
+             <td class="k-ta-cell">${editRow(r)}</td></tr>`).join('')}
+         </tbody></table>`) + addForm;
   }catch(e){
     box.innerHTML = `<p class="empty-msg" style="color:var(--red);">Не вдалося завантажити: ${escHtml(e.message)}</p>`;
   }
+};
+
+// ── Правка замовлень на винос кухнею ────────────────────────────
+//
+// НАВІЩО. Дедлайн 07:00 закриває замовлення для батьків, і це правильно:
+// після нього кухня вже знає, скільки чого пакувати. Але життя триває —
+// хтось підійшов особисто, хтось передумав, комусь не потрібно. Раніше
+// кухня могла лише дивитися на список, а домовленості жили в записнику.
+//
+// ПИШЕМО В ТУ САМУ ГІЛКУ, що й батьки: takeaway_orders/{дата}/{клас}/{ID}.
+// Окреме «кухонне» сховище означало б два різні числа на одну булку.
+window.kitchenSetTakeaway = async function(cls, sid, itemId, qty){
+  const st = window.__taEdit;
+  if(!st) return;
+  const q = Math.max(0, Math.min(TA_MAX_QTY, Number(qty)||0));
+  const name = (st.students[cls] && st.students[cls][sid]) || sid;
+  const title = (st.items[itemId] || {}).title || itemId;
+  if(q === 0 && !confirm(`Прибрати «${title}» у ${name}?`)) return;
+  try{
+    await set(ref(db, `takeaway_orders/${st.date}/${cls}/${sid}/${itemId}`), q > 0 ? q : null);
+    logAction('takeaway', { date: st.date, target: name,
+      value: `кухня: ${title} → ${q || 'прибрано'}` });
+    showToast(q ? `✓ ${title}: ${q}` : `✕ ${title} прибрано`);
+    loadTakeawayOrders();
+  }catch(e){ alert('Не вдалося зберегти: ' + e.message); }
+};
+
+// Список учнів обраного класу для форми «додати замовлення»
+window.kitchenTaStudents = function(){
+  const st = window.__taEdit;
+  const cls = document.getElementById('k-ta-cls')?.value;
+  const sel = document.getElementById('k-ta-stu');
+  if(!st || !sel) return;
+  const list = (cls && st.students[cls]) || {};
+  const keys = Object.keys(list).sort((a,b)=>String(list[a]).localeCompare(String(list[b]),'uk'));
+  sel.innerHTML = keys.length
+    ? keys.map(k=>`<option value="${escHtml(k)}">${escHtml(list[k])}</option>`).join('')
+    : '<option value="">У класі немає учнів</option>';
+};
+
+window.kitchenAddTakeaway = async function(){
+  const st = window.__taEdit;
+  const cls = document.getElementById('k-ta-cls')?.value;
+  const sid = document.getElementById('k-ta-stu')?.value;
+  const itemId = document.getElementById('k-ta-item')?.value;
+  if(!st || !cls || !sid || !itemId) return alert('Оберіть клас, учня і позицію.');
+  try{
+    // Додаємо до вже наявної кількості, а не замінюємо: кухня натискає
+    // «Додати» двічі саме тоді, коли треба дві штуки.
+    const cur = await get(child(ref(db), `takeaway_orders/${st.date}/${cls}/${sid}/${itemId}`));
+    const was = cur.exists() ? (Number(cur.val())||0) : 0;
+    const q = Math.min(TA_MAX_QTY, was + 1);
+    await set(ref(db, `takeaway_orders/${st.date}/${cls}/${sid}/${itemId}`), q);
+    const name = (st.students[cls] && st.students[cls][sid]) || sid;
+    const title = (st.items[itemId] || {}).title || itemId;
+    logAction('takeaway', { date: st.date, target: name, value: `кухня додала: ${title} → ${q}` });
+    showToast(`✓ ${title} для ${name}: ${q}`);
+    loadTakeawayOrders();
+  }catch(e){ alert('Не вдалося додати: ' + e.message); }
 };
 
 // ── Кабінет батьків: замовлення на обраний день ──
