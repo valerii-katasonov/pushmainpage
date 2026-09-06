@@ -148,6 +148,29 @@ export async function preloadStudentDirs(){
   }
   return _stuDir;
 }
+// Який ключ учня використовувати: з профілю чи знайдений заново.
+//
+// ЦЕ СЕРЦЕ ВСІЄЇ ІСТОРІЇ З ХАРЧУВАННЯМ. Ідентифікатор учня лежить у трьох
+// місцях: у списку класу (джерело правди) і копіями — у профілі
+// користувача та у прив'язці батьків. Копії робилися колись і живуть далі
+// самі по собі.
+//
+// Найгірший випадок — застаріла копія. Правила бази звіряють ключ саме з
+// профілем, тож помилки не буде: портал спокійно читає й пише за ключем,
+// якого в списку класу вже немає. Ніхто нічого не бачить, і виглядає це як
+// «у чоловіка вибір є, у дружини на тій самій дитині немає».
+//
+// Правило просте: копії вірити, лише поки вона збігається зі списком класу.
+export function resolveStudentKey(dir, profileId, name){
+  if(profileId && dir && dir.byId && dir.byId[profileId])
+    return { key: profileId, stale: false, byName: false };
+  const found = matchSid(dir, name);
+  if(found) return { key: found, stale: !!profileId, byName: true };
+  // Не знайшли зовсім: лишається імʼя. Кухня рахує за ідентифікаторами,
+  // тож про це треба сказати вголос — див. mealKeyIsName().
+  return { key: null, stale: !!profileId, byName: false };
+}
+
 // Пошук ідентифікатора за імʼям: точно, потім із переставленими словами.
 export function matchSid(dir, name){
   if(!dir || !name) return null;
@@ -193,9 +216,17 @@ export async function backfillStudentId(){
   try{
     const u = currentUserData;
     if(!u || !u.class || !u.studentName) return;
-    if(u.studentId) return;
-    const sid = await sidOf(u.class, u.studentName);
-    if(!sid) return;
+    // ПЕРЕВІРЯЄМО, А НЕ ПРОСТО «ЧИ Є».
+    //
+    // Раніше тут стояло `if(u.studentId) return;` — наявного ідентифікатора
+    // було досить. Але він міг застаріти: учня перезавели в списку класу, і
+    // ключ став іншим. Тоді кабінет далі спокійно ходив за неіснуючим
+    // ключем — без помилок, просто нічого не знаходив. Один із батьків
+    // бачив відповіді, другий ні.
+    const dir = await getStudentDir(u.class);
+    const res = resolveStudentKey(dir, u.studentId, u.studentName);
+    const sid = res.key;
+    if(!sid || sid === u.studentId) return;
     u.studentId = sid;
     await update(ref(db, `users/${auth.currentUser.uid}`), { studentId: sid });
   }catch(e){ /* не критично: це підготовка, а не робочий шлях */ }
@@ -1193,7 +1224,10 @@ window.switchChild=async function(idx){
   // Знімаємо таймер розкладу попередньої дитини
   if(parentLessonInterval)clearInterval(parentLessonInterval);
   currentUserData.studentName=k.studentName;
-  currentUserData.studentId=k.studentId||stuId(k.class,k.studentName)||null;
+  // Ідентифікатор із прив'язки — теж копія, і теж застаріває, коли учня
+  // перезаводять у списку класу. Список класу тут головніший: беремо з
+  // нього, а копію лишаємо запасним варіантом.
+  currentUserData.studentId=stuId(k.class,k.studentName)||k.studentId||null;
   currentUserData.class=k.class;
   currentUserData.parentRole=k.role||currentUserData.parentRole||'guardian';
   // ПРОФІЛЬ МУСИТЬ ВСТИГНУТИ ЗМІНИТИСЯ, і мовчати про невдачу не можна.
