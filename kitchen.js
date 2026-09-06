@@ -39,12 +39,12 @@
 //   через stuName(): воно може змінитися, ключ — ні.
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, update, remove, onValue } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, auth, currentUserData, showToast, escHtml, escJs, localDateString, logAction, notifyEvent, pushConfigured, renderPushWarning, getSchoolRange, sidOf, getDateRange, stuName } from './common.js';
+import { db, auth, currentUserData, showToast, escHtml, escJs, localDateString, logAction, notifyEvent, pushConfigured, renderPushWarning, getSchoolRange, sidOf, getStudentDir, resolveStudentKey, getDateRange, stuName } from './common.js';
 
 // Позначка версії модуля. Показується в блоці харчування дрібним рядком.
 // Якщо людина каже «нічого не змінилося», перше питання — який тут рядок:
 // айфон із головного екрана вміє показувати сторінку тижневої давнини.
-export const MEAL_BUILD = '2026-09-06 · харчування v7 (відмова в читанні видима)';
+export const MEAL_BUILD = '2026-09-06 · харчування v8 (ідентифікатор звіряється зі списком класу)';
 
 export const MEAL_CUTOFF_HOUR = 9;   // до 09:00 можна відмовитися від сьогоднішнього
 // Сніданок їдять до уроків, тож дедлайн 09:00 для нього безглуздий — його
@@ -1232,7 +1232,11 @@ export async function renderParentMenu(cls, studentKey, date){
       <!-- Позначка версії. Айфон уміє тримати стару сторінку днями, і
            «нічого не змінилося» найчастіше означає саме це. За рядком видно,
            який код зараз працює. -->
-      <div class="pm-build">${escHtml(MEAL_BUILD)}</div>`;
+      <!-- Ключ дитини показуємо навмисно. Саме через невидимість цього
+           рядка з'ясування «чому в мами одне, а в тата інше» зайняло цілий
+           день: обидва кабінети виглядали однаково, а ходили за різними
+           ключами. Тепер це видно за секунду, з двох телефонів поруч. -->
+      <div class="pm-build">${escHtml(MEAL_BUILD)} · ключ: ${escHtml(String(studentKey).slice(0,24))}</div>`;
     renderTakeaway(cur);
   }catch(e){
     box.innerHTML = `<div class="pm-none">Не вдалося завантажити меню: ${escHtml(e.message)}</div>`;
@@ -1366,11 +1370,27 @@ export async function mealKey(cls){
   // а ідентифікатора в профілі може ще не бути — саме його ми й шукаємо.
   const who = `${c}|${currentUserData?.studentId || ''}|${currentUserData?.studentName || ''}`;
   if(_mealKey && _mealKeyFor === who) return _mealKey;
-  let key = currentUserData?.studentId || null;
-  if(!key && currentUserData?.studentName){
-    try{ key = await sidOf(c, currentUserData.studentName); }
-    catch(e){ console.warn('sidOf:', e.message); }
-  }
+  // ІДЕНТИФІКАТОР ІЗ ПРОФІЛЮ ПЕРЕВІРЯЄМО ПО СПИСКУ КЛАСУ.
+  //
+  // Це і є причина найдовшої плутанини: у профілі лежить КОПІЯ
+  // ідентифікатора, зроблена колись при прив'язці. Якщо учня потім
+  // перезавели в списку класу (видалили й додали, перевели з іншого класу),
+  // у списку зʼявився НОВИЙ ключ, а копія в профілі лишилася старою.
+  //
+  // Далі все виглядає справним: правила бази звіряють ключ саме з профілем,
+  // тож ні відмови, ні помилки немає — портал спокійно читає й пише за
+  // ключем, якого в списку класу вже не існує. Батько бачить «нічого не
+  // обрано», кухня не бачить його відповіді, а другий із батьків, у чиєму
+  // профілі ключ правильний, бачить усе як слід. Саме так у чоловіка був
+  // варіант Б, а в дружини на тій самій дитині — А.
+  //
+  // Тому: копії довіряємо лише тоді, коли такий ключ справді є в списку
+  // класу. Інакше шукаємо заново за імʼям.
+  let dir = null;
+  try{ dir = await getStudentDir(c); }catch(e){ console.warn('довідник класу:', e.message); }
+  const res = resolveStudentKey(dir, currentUserData?.studentId, currentUserData?.studentName);
+  if(res.stale) console.warn('studentId із профілю не знайдено у списку класу — шукаю за імʼям');
+  let key = res.key;
   // ЗАПИСУЄМО ЗНАЙДЕНИЙ ІДЕНТИФІКАТОР У ПРОФІЛЬ.
   //
   // Без цього кроку виходить пастка: правила доступу звіряють ключ із
