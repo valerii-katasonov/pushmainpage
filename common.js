@@ -971,10 +971,27 @@ export function classHourItem(hour){
            time: hour.time, number: hour.number, type:'class_hour', _classHour:true };
 }
 
-// Саму вставку в день робить insertClassHour у parent-student.js — вона
-// працює з уже готовим списком для показу, коли номери слотів початкового
-// розкладу вже проставлені. Вставляти раніше не можна: класна година
-// зсунула б індекси, за якими шукаються заміни вчителів.
+// Вставити запис у список на місце за часом початку.
+//
+// ЧОМУ ОКРЕМА СПІЛЬНА ФУНКЦІЯ. Класну годину доводиться домішувати у два
+// різні списки: у плаский список для показу батькам і в масив дня для
+// друку. Написані окремо, ці дві вставки неминуче розійшлися б — і класна
+// година стояла б у розкладі на екрані після математики, а на роздруківці
+// перед нею. Правило місця має бути одне.
+//
+// timeOf — як дістати час із запису конкретного списку: у плоскому це сам
+// урок, у масиві дня — перший елемент слота.
+export function insertAtTime(list, item, timeOf){
+  const mins = (t) => {
+    const m = /(\d{1,2}):(\d{2})/.exec(String(t || ''));
+    return m ? +m[1] * 60 + +m[2] : null;
+  };
+  const at = mins(timeOf(item));
+  const src = list || [];
+  if(at == null) return [...src, item];
+  const i = src.findIndex(x => { const t = mins(timeOf(x)); return t != null && t > at; });
+  return i === -1 ? [...src, item] : [...src.slice(0, i), item, ...src.slice(i)];
+}
 
 window.classHour = {};                     // {class_3: {day, number, time}}
 let chUnsub = null;
@@ -2681,37 +2698,61 @@ window.printClassSchedule=async function(cls){
   if(!cls)return showToast('⚠️ Клас не визначено');
   const holder=document.getElementById('print-area');
   try{
-    const [schedSnap,bellSnap]=await Promise.all([
+    const [schedSnap,bellSnap,hourSnap]=await Promise.all([
       get(child(ref(db),`schedules/${cls}/lessons`)),
-      get(child(ref(db),`bell_schedules/${cls}`))
+      get(child(ref(db),`bell_schedules/${cls}`)),
+      get(child(ref(db),`class_hour/${cls}`)).catch(()=>null)
     ]);
     if(!schedSnap.exists())return showToast('⚠️ Розклад цього класу не заповнено');
     const sched=schedSnap.val();
     const bells=bellSnap.exists()?bellSnap.val():{};
     const days=['Monday','Tuesday','Wednesday','Thursday','Friday'];
+    // Класна година лежить окремо від розкладу — на аркуш, що вішають на
+    // стіну, вона потрібна нарівні з уроками. Вставляємо на місце за часом.
+    const hour=(hourSnap&&hourSnap.exists())?hourSnap.val():null;
+    if(hour&&hour.day&&days.includes(hour.day)){
+      const slotTime=slot=>{const it=Array.isArray(slot)?slot[0]:slot;return it&&it.time;};
+      sched[hour.day]=insertAtTime(
+        Array.isArray(sched[hour.day])?sched[hour.day]:[], [classHourItem(hour)], slotTime);
+    }
     // Скільки рядків потрібно — за найдовшим днем
     let maxRows=0;
     days.forEach(d=>{if(Array.isArray(sched[d]))maxRows=Math.max(maxRows,sched[d].length);});
     if(maxRows===0)return showToast('⚠️ У розкладі немає уроків');
-    const cell=(d,i)=>{
+    const itemsAt=(d,i)=>{
       const slot=(sched[d]||[])[i];
-      const items=Array.isArray(slot)?slot:(slot&&slot.subject?[slot]:[]);
-      return items.map(l=>{
-        const sn=typeof l.subject==='string'?l.subject:(l.subject?.ua||'');
-        if(!sn)return '';
-        const isBreak=sn.toLowerCase().includes('перерва')||sn.toLowerCase().includes('обід');
-        return `<div class="${isBreak?'ps-break':''}">${escHtml(sn)}</div>`;
-      }).join('');
+      return Array.isArray(slot)?slot:(slot&&slot.subject?[slot]:[]);
     };
-    const bellFor=(i)=>{
+    const cell=(d,i)=>itemsAt(d,i).map(l=>{
+      const sn=typeof l.subject==='string'?l.subject:(l.subject?.ua||'');
+      if(!sn)return '';
+      const isBreak=isBreakItem(l);
+      return `<div class="${isBreak?'ps-break':(l.type==='class_hour'?'ps-hour':'')}">${escHtml(sn)}</div>`;
+    }).join('');
+    // ЧАС БЕРЕМО З САМОГО ЗАПИСУ, а не з дзвінків за позицією.
+    //
+    // Раніше рядок i підписувався часом дзвінка i+1. Це вірно лише в дні
+    // без перерв: щойно між уроками зʼявляється перерва, вона займає рядок,
+    // і вся колонка часу зʼїжджає на один урок. У кожного запису час свій
+    // і точний, тож беремо його; дзвінки лишаються запасним варіантом для
+    // старих рядків, у яких часу немає.
+    const timeFor=(i)=>{
+      for(const d of days){
+        const t=(itemsAt(d,i)[0]||{}).time;
+        if(t)return escHtml(String(t).replace(' - ','–'));
+      }
       const b=bells[i+1]||bells[String(i+1)];
       return b&&b.start?`${escHtml(b.start)}–${escHtml(b.end||'')}`:'';
     };
-    let rows='';
+    let rows='', num=0;
     for(let i=0;i<maxRows;i++){
       const filled=days.some(d=>cell(d,i).trim());
       if(!filled)continue;
-      rows+=`<tr><td class="ps-num">${i+1}<div class="ps-time">${bellFor(i)}</div></td>`+
+      // Перерви й класна година номера не забирають — інакше в надрукованому
+      // розкладі номери уроків не збігалися б зі щоденником
+      const service=days.every(d=>{const it=itemsAt(d,i);return !it.length||it.every(l=>isBreakItem(l)||l.type==='class_hour');});
+      if(!service)num++;
+      rows+=`<tr><td class="ps-num">${service?'·':num}<div class="ps-time">${timeFor(i)}</div></td>`+
         days.map(d=>`<td>${cell(d,i)}</td>`).join('')+'</tr>';
     }
     holder.innerHTML=`<div class="ps-sheet">
