@@ -342,7 +342,9 @@ window.saveWeekMenu = async function(){
     (wasPublished ? changedUpd : changedNew).push(date);
   });
   if(!Object.keys(updates).length) return showToast('Змін немає');
-  await update(ref(db), updates);
+  try{
+    await update(ref(db), updates);
+  }catch(e){ return alert('Не вдалося зберегти меню: ' + e.message); }
   logAction('menu',{ date:`${monday} (тиждень)`, value:`оновлено днів: ${changedNew.length+changedUpd.length}` });
   const savedCount = changedNew.length + changedUpd.length;
   showToast(`✅ Збережено днів: ${savedCount}`);
@@ -580,7 +582,9 @@ window.setMealPlan = async function(cls, sid, field, value){
   plan[field] = value;
   if(field==='snack' && value!=='days') delete plan.snackDays;
   plan.by = currentUserData?.email || ''; plan.ts = Date.now();
-  await set(ref(db,`meal_plan/${cls}/${sid}`), plan);
+  try{
+    await set(ref(db,`meal_plan/${cls}/${sid}`), plan);
+  }catch(e){ return alert('Не вдалося зберегти: ' + e.message); }
   logAction('meal_plan',{ date:stuName(cls,sid), value:`${field}=${value}` });
   showToast('✅ Збережено');
   loadWeekCounts();
@@ -1090,8 +1094,31 @@ window.setMealDay = async function(date, field, value){
   // Порожня поправка — це сміття в базі й фальшивий рядок у звітах кухні
   const meaningful = ['lunch','snack','breakfast','pick']
     .some(k => cur[k] !== undefined);
-  if(meaningful) await set(ref(db, path), cur);
-  else await remove(ref(db, path));
+  // ЗБІЙ ЗАПИСУ БІЛЬШЕ НЕ МОВЧИТЬ.
+  //
+  // Раніше тут не було жодного try. Якщо база відмовляла в правах, помилка
+  // просто зникала: кнопка не давала ніякого відгуку, вибір лишався
+  // попереднім, і людина тиснула ще раз. Саме так виглядало «обираю Б,
+  // а лишається А» — портал не показував НІЧОГО.
+  //
+  // Відмова тут майже завжди означає одне: у профілі users/{uid} записана
+  // інша дитина, ніж та, за яку зараз натиснули. Правила бази звіряють
+  // саме профіль, тож про це й кажемо прямо.
+  try{
+    if(meaningful) await set(ref(db, path), cur);
+    else await remove(ref(db, path));
+  }catch(e){
+    const denied = /permission/i.test(e.message || '');
+    alert('Не вдалося зберегти: ' + e.message + (denied
+      ? (_mealKeyProfileErr
+          ? '\n\nПортал не зміг записати дитину у ваш профіль (' + _mealKeyProfileErr
+            + '), а база звіряє саме його. Оновіть сторінку; якщо не мине — '
+            + 'покажіть це повідомлення школі.'
+          : '\n\nСхоже, у вашому профілі записана інша дитина. Перемкніть дитину '
+            + 'угорі сторінки (або оновіть сторінку) і спробуйте ще раз.')
+      : ''));
+    return;
+  }
   showToast(field === 'pick'
     ? `✓ Обрано варіант ${String(value).toUpperCase()}`
     : (value ? '✓ Записано'
@@ -1109,11 +1136,22 @@ window.setMealDay = async function(date, field, value){
 //
 // Тепер ключ шукаємо в довіднику класу за імʼям і кешуємо. Імʼя лишається
 // запасним варіантом — краще записати хоч кудись, ніж втратити відповідь.
-let _mealKey = null, _mealKeyCls = null, _mealKeyIsName = false;
+// КЕШ ПАМʼЯТАЄ ДИТИНУ, А НЕ ЛИШЕ КЛАС.
+//
+// Раніше ключем кешу був клас. У батьків двох дітей в ОДНОМУ класі це
+// означало, що після перемикання дитини повертався ключ попередньої — і
+// обидві відповіді лягали на одну дитину. У мами й тата виходили різні
+// картини: у кого коли перемкнулося.
+let _mealKey = null, _mealKeyFor = null, _mealKeyIsName = false, _mealKeyProfileErr = '';
+export function invalidateMealKey(){ _mealKey = null; _mealKeyFor = null; }
+window.invalidateMealKey = invalidateMealKey;
 export async function mealKey(cls){
   const c = cls || currentUserData?.class;
   if(!c) return null;
-  if(_mealKey && _mealKeyCls === c) return _mealKey;
+  // Дитину впізнаємо за класом РАЗОМ з імʼям: імена в межах класу унікальні,
+  // а ідентифікатора в профілі може ще не бути — саме його ми й шукаємо.
+  const who = `${c}|${currentUserData?.studentId || ''}|${currentUserData?.studentName || ''}`;
+  if(_mealKey && _mealKeyFor === who) return _mealKey;
   let key = currentUserData?.studentId || null;
   if(!key && currentUserData?.studentName){
     try{ key = await sidOf(c, currentUserData.studentName); }
@@ -1126,11 +1164,19 @@ export async function mealKey(cls){
   // зі списку класу. Якщо в профілі його немає, база відповідає
   // «Permission denied» — саме це й ламало налаштування харчування та
   // позиції на винос.
+  _mealKeyProfileErr = '';
   if(key && currentUserData && currentUserData.studentId !== key && auth?.currentUser){
     try{
       await update(ref(db, `users/${auth.currentUser.uid}`), { studentId: key });
       currentUserData.studentId = key;
-    }catch(e){ console.warn('studentId у профіль:', e.message); }
+    }catch(e){
+      // Профіль не оновився — а правила бази звіряють саме його. Далі
+      // будь-яке збереження харчування отримає відмову, тож памʼятаємо
+      // причину, щоб сказати про неї людині, а не показувати голе
+      // «Permission denied».
+      _mealKeyProfileErr = e.message || 'не вдалося оновити профіль';
+      console.warn('studentId у профіль:', e.message);
+    }
   }
   // ЧИ ЦЕ СПРАВЖНІЙ ІДЕНТИФІКАТОР.
   //
@@ -1141,7 +1187,7 @@ export async function mealKey(cls){
   // про нього в кабінеті.
   _mealKeyIsName = !key;
   _mealKey = key || currentUserData?.studentName || null;
-  _mealKeyCls = c;
+  _mealKeyFor = who;
   return _mealKey;
 }
 export function mealKeyIsName(){ return _mealKeyIsName; }
@@ -1266,7 +1312,17 @@ window.saveMealSettings = async function(){
   };
   if(snack === 'days') plan.snackDays = days('ms-d');
   if(brk   === 'days') plan.breakfastDays = days('ms-b');
-  await set(ref(db,`meal_plan/${cls}/${sid}`), plan);
+  // Мовчазний збій тут особливо злий: вікно закривалося, зʼявлявся
+  // «✅ Збережено», а в базі не мінялося нічого.
+  try{
+    await set(ref(db,`meal_plan/${cls}/${sid}`), plan);
+  }catch(e){
+    alert('Не вдалося зберегти налаштування: ' + e.message
+      + (/permission/i.test(e.message||'')
+         ? '\n\nСхоже, у профілі записана інша дитина. Оновіть сторінку і спробуйте ще раз.'
+         : ''));
+    return;
+  }
   document.getElementById('meal-settings-modal').style.display = 'none';
   showToast('✅ Налаштування збережено');
   renderParentMenu();
