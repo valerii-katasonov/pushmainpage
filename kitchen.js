@@ -44,7 +44,7 @@ import { db, auth, currentUserData, showToast, escHtml, escJs, localDateString, 
 // Позначка версії модуля. Показується в блоці харчування дрібним рядком.
 // Якщо людина каже «нічого не змінилося», перше питання — який тут рядок:
 // айфон із головного екрана вміє показувати сторінку тижневої давнини.
-export const MEAL_BUILD = '2026-09-06 · харчування v9 (сніданок до 7:00, кухня причесана)';
+export const MEAL_BUILD = '2026-09-06 · харчування v10 (гарнір лише при обіді, видно «нема відповіді»)';
 
 export const MEAL_CUTOFF_HOUR = 9;   // до 09:00 можна відмовитися від сьогоднішнього
 // Сніданок їдять до уроків, тож дедлайн 09:00 для нього безглуздий — його
@@ -666,7 +666,12 @@ window.loadClassOrders = async function(){
       else if(ov && ov.lunch === 0) note = ov.reason ? `відмова · ${ov.reason}` : 'відмова';
       else if(ov && ov.snack !== undefined) note = ov.snack ? 'підвечірок разово' : 'без підвечірка сьогодні';
       if(ov && ov.manual) note = (note ? note + ' · ' : '') + 'додано вручну';
-      return { sid, name, ...e, pick, note };
+      // Батьки взагалі не відповіли про обіди — це не «не харчується» і не
+      // «відмова», а окремий стан: дитини просто немає в замовленні, і ніхто
+      // цього не вирішував. Кухня має бачити його першим, тому окремо й
+      // помітно.
+      const noReply = !e.absent && !lunchChosen(plan);
+      return { sid, name, ...e, pick, note, noReply };
     });
     const lunch = rows.filter(r=>r.lunch).length;
     const snack = rows.filter(r=>r.snack).length;
@@ -687,7 +692,9 @@ window.loadClassOrders = async function(){
           <td>${mealCell(cls,r.sid,date,'lunch',r.lunch)}</td>
           ${hasChoice?`<td>${pickCell(cls,r.sid,date,r.pick)}</td>`:''}
           <td>${mealCell(cls,r.sid,date,'snack',r.snack)}</td>
-          <td class="k-ord-note">${escHtml(r.note)}</td></tr>`).join('')}
+          <td class="k-ord-note">${r.noReply
+            ? `<b class="k-noreply">Нема відповіді від батьків</b>${r.note?` · ${escHtml(r.note)}`:''}`
+            : escHtml(r.note)}</td></tr>`).join('')}
       </tbody></table>
       ${orphanBlock(overrides, plans, stSnap.val())}
       <p class="k-ord-hint">Натисніть ✓ або —, щоб додати чи зняти порцію вручну; А/Б перемикає варіант.
@@ -816,9 +823,21 @@ function orphanBlock(overrides, plans, students){
 // НАВІЩО. Дитина підійшла і сказала, що хоче гречку, а не рис; батьки
 // помилилися кнопкою; хтось передумав уже на роздачі. Досі це можна було
 // тільки запамʼятати.
+// ЯКЩО ОБІДУ НЕМАЄ — НЕ ПІДСВІЧУЄМО НІЧОГО.
+//
+// Раніше порожній вибір показувався як А: у коді стояло `pick || 'a'`.
+// Для дитини, яка взагалі не обідає, кухня бачила підсвічену А — так,
+// ніби хтось справді обрав рис. Порція від цього не зʼявлялася, але в
+// таблиці, за якою готують, стояла неправда.
+//
+// Тепер А підсвічується лише тоді, коли обід є: або дитина обідає
+// постійно, або взяла обід саме на цей день. Інакше обидві кнопки сірі —
+// і кухня одразу бачить, що вибирати нема кому.
 function pickCell(cls, sid, date, pick){
-  const cur = pick || 'a';
-  if(!canEditMeals()) return `<span class="k-ab ${cur}">${cur.toUpperCase()}</span>`;
+  const cur = pick || '';
+  if(!canEditMeals())
+    return cur ? `<span class="k-ab ${cur}">${cur.toUpperCase()}</span>`
+               : '<span class="k-no">—</span>';
   return ['a','b'].map(v => `<button type="button" class="k-ab-btn${v===cur?' on '+v:''}"
     onclick="kitchenSetPick('${escJs(cls)}','${escJs(sid)}','${escJs(date)}','${v}')"
     title="Обрати варіант ${v.toUpperCase()}">${v.toUpperCase()}</button>`).join('');
@@ -861,7 +880,9 @@ window.exportClassOrders = function(){
   const o = window.__classOrders;
   if(!o) return;
   const csv = ['Учень;Сніданок;Обід;Варіант;Підвечірок;Примітка',
-    ...o.rows.map(r=>`${r.name};${r.breakfast?'так':'ні'};${r.lunch?'так':'ні'};${r.pick?r.pick.toUpperCase():'—'};${r.snack?'так':'ні'};${r.note}`)].join('\n');
+    // У вивантаженні той самий стан, що й на екрані: інакше кухня друкує
+    // список, у якому «нема відповіді» виглядає порожнім рядком
+    ...o.rows.map(r=>`${r.name};${r.breakfast?'так':'ні'};${r.lunch?'так':'ні'};${r.pick?r.pick.toUpperCase():'—'};${r.snack?'так':'ні'};${r.noReply?('НЕМА ВІДПОВІДІ ВІД БАТЬКІВ'+(r.note?' · '+r.note:'')):r.note}`)].join('\n');
   const blob = new Blob(['\ufeff'+csv], {type:'text/csv;charset=utf-8'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
