@@ -562,6 +562,11 @@
     .k-ord td:nth-child(2),.k-ord td:nth-child(3){text-align:center;width:44px;}
     .k-ord-abs td{opacity:.5;}
     .k-ord-note{font-size:.72rem;color:#999;}
+    /* Клітинка обліку як кнопка — кухня дописує порцію після дедлайну */
+    .k-cell-btn{background:none;border:1px dashed transparent;border-radius:7px;
+                padding:2px 8px;margin:0;width:auto;cursor:pointer;font-size:inherit;}
+    .k-cell-btn:hover{border-color:#80deea;background:#e0f7fa;}
+    .k-ord-hint{font-size:.74rem;color:#78909c;margin:8px 0 0 0;line-height:1.45;}
     .k-yes{color:#2e7d32;font-weight:800;}
     .k-no{color:#ccc;}
     /* ── Харчування у батьків ── */
@@ -1109,6 +1114,8 @@
     .k-closed-cell{font-size:.76rem;font-style:italic;text-align:center;}
     .k-day-clear{background:#fdecea;color:#b3261e;border:1px solid #f5c6cb;padding:8px;margin-top:8px;font-size:.8rem;}
     /* Питання «чи обідає дитина» — поки батько не відповів */
+    .pm-manual{font-size:.76rem;color:#00838f;background:#e0f7fa;border-radius:9px;
+               padding:7px 10px;margin-top:7px;}
     .pm-warn{background:#ffebee;border:1px solid #ef9a9a;border-radius:12px;padding:11px 13px;
              margin-bottom:12px;font-size:.8rem;color:#b71c1c;line-height:1.5;}
     .pm-ask{background:#fff8e1;border:1px solid #ffe082;border-radius:12px;padding:12px 14px;margin-bottom:12px;}
