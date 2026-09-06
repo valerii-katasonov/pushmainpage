@@ -44,7 +44,7 @@ import { db, auth, currentUserData, showToast, escHtml, escJs, localDateString, 
 // Позначка версії модуля. Показується в блоці харчування дрібним рядком.
 // Якщо людина каже «нічого не змінилося», перше питання — який тут рядок:
 // айфон із головного екрана вміє показувати сторінку тижневої давнини.
-export const MEAL_BUILD = '2026-09-06 · харчування v5 (ключ дитини, помилки видимі)';
+export const MEAL_BUILD = '2026-09-06 · харчування v6 (свіжіша відповідь перемагає)';
 
 export const MEAL_CUTOFF_HOUR = 9;   // до 09:00 можна відмовитися від сьогоднішнього
 // Сніданок їдять до уроків, тож дедлайн 09:00 для нього безглуздий — його
@@ -208,9 +208,28 @@ export function plannedValue(plan, field, wd){
 // розійдеться. Тепер пошук один на всіх.
 export function byKeyOrName(map, key, name){
   if(!map) return null;
-  if(map[key] !== undefined) return map[key];
-  if(name != null && map[name] !== undefined) return map[name];
-  return null;
+  const a = map[key];
+  const b = (name != null) ? map[name] : undefined;
+  return pickFresher(a, b);
+}
+
+// З двох копій однієї відповіді беремо СВІЖІШУ, а не «ту, що за
+// ідентифікатором».
+//
+// ЧОМУ НЕ ЗА ПРІОРИТЕТОМ КЛЮЧА. Через це й вийшла найдовша плутанина:
+// кухня раніше поставила варіант Б вручну — запис ліг під ідентифікатором.
+// Потім батько обрав А, і його відповідь через права лягла під імʼям.
+// Записів стало два. Хто читав «спершу за ідентифікатором», бачив Б —
+// і батько, і кухня, — хоча остання людська дія була «А».
+//
+// Свіжість визначає ts, який пишеться при кожному збереженні. Запис без ts
+// вважаємо найстарішим: він з тих часів, коли поля ще не було.
+export function pickFresher(a, b){
+  const ok = (x) => x !== undefined && x !== null;
+  if(!ok(a)) return ok(b) ? b : null;
+  if(!ok(b)) return a;
+  const ta = Number(a && a.ts) || 0, tb = Number(b && b.ts) || 0;
+  return tb > ta ? b : a;
 }
 
 export function dayFieldPatch(plan, field, value, wd){
@@ -1064,9 +1083,10 @@ export async function renderParentMenu(cls, studentKey, date){
         (altKey && altKey !== studentKey)
           ? get(child(ref(db), `${base}/${altKey}`)).catch(()=>null) : null
       ]);
-      if(a && a.exists()) return a.val();
-      if(b && b.exists()) return b.val();
-      return null;
+      // Свіжіша з двох — те саме правило, що й у кухні. Інакше батько
+      // й кухня дивилися б на різні копії однієї відповіді.
+      return pickFresher(a && a.exists() ? a.val() : null,
+                         b && b.exists() ? b.val() : null);
     };
     const [planV, dayV, attSnap] = await Promise.all([
       both(`meal_plan/${cls}`),
@@ -1256,13 +1276,23 @@ window.setMealDay = async function(date, field, value){
     if(meaningful) await set(ref(db, p), cur);
     else await remove(ref(db, p));
   };
+  // ДВОХ КОПІЙ БУТИ НЕ МАЄ. Після вдалого запису прибираємо запис під
+  // другим ключем: поки їх дві, будь-яка сторона може дивитися не на ту.
+  // Помилку прибирання ковтаємо свідомо — головна дія вже відбулася, а
+  // прав на чужий ключ може й не бути.
+  const dropOther = async (other) => {
+    if(!other || other === sid && other === fallbackKey) return;
+    try{ await remove(ref(db, `meal_day/${date}/${cls}/${other}`)); }catch(e){}
+  };
   try{
     try{
       await writeAt(sid);
+      if(fallbackKey && fallbackKey !== sid) await dropOther(fallbackKey);
     }catch(e1){
       if(!/permission/i.test(e1.message || '') || !fallbackKey || fallbackKey === sid) throw e1;
       console.warn('meal_day: запис за ідентифікатором відхилено, пробую за імʼям');
       await writeAt(fallbackKey);
+      await dropOther(sid);
     }
   }catch(e){
     const denied = /permission/i.test(e.message || '');
