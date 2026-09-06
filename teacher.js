@@ -254,7 +254,10 @@ window.openQuickJournal=async function(){
     box.innerHTML=students.map((s,i)=>{
       // Поточний статус: беремо будь-яку відмітку на цей день
       let status='';
-      const slots=a[s.sid]||{};
+      // І за ідентифікатором, і за імʼям: повідомлення про запізнення пише
+      // родина, а її записи донедавна лягали під імʼям. Та сама причина, через
+      // яку кухня не бачила обраний гарнір.
+      const slots=a[s.sid]||a[s.nm]||{};
       for(const sk in slots){if(slots[sk]?.status){status=slots[sk].status;break;}}
       return `<div class="qj-row" data-sid="${escHtml(s.sid)}" data-name="${escHtml(s.nm)}">
         <div class="qj-n">${i+1}</div>
