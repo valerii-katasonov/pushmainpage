@@ -1136,6 +1136,25 @@ const WEEK_DAYS = [
   { key:'Friday',    label:'Пʼятниця'  }
 ];
 
+// Номери рядків тижневого огляду.
+//
+// ЩО БУЛО НЕ ТАК. Номер брався просто з позиції в списку (i+1), а в списку
+// поруч з уроками лежать перерви, обід і класна година. Тому в дні з
+// обідом уроки нумерувалися 1, 2, 3, 4, 5 там, де насправді їх було
+// чотири, — і номер у порталі не збігався з номером у щоденнику дитини.
+//
+// Рахуємо лише справжні уроки. Службовим рядкам номер не потрібен: у них
+// і так написано, що це — «Обід», «Перерва», «Класна година».
+export function weekRowNumbers(list){
+  let n = 0;
+  return (list || []).map(l => {
+    if(l && l._classHour) return '🕘';
+    if(l && l._break) return '·';
+    n++;
+    return String(n);
+  });
+}
+
 function renderWeekSchedule(prefix){
   const box = document.getElementById(`${prefix}-week-schedule`);
   if(!box) return;
@@ -1155,11 +1174,12 @@ function renderWeekSchedule(prefix){
     html += `<div class="wk-day${d.key===todayKey?' today':''}">
       <div class="wk-day-name">${escHtml(d.label)}${d.key===todayKey?' <span class="wk-today">сьогодні</span>':''}</div>
       ${lessons.length
-        ? lessons.map((l,i)=>{
+        ? weekRowNumbers(lessons).map((numLabel,i)=>{
+            const l = lessons[i];
             const sn = typeof l.subject==='string' ? l.subject : (l.subject?.ua || '');
             const br = breakAfter(lessons, i);
-            return `<div class="wk-row">
-              <span class="wk-num">${l._classHour?'🕘':i+1}</span>
+            return `<div class="wk-row${l._break?' wk-service':''}">
+              <span class="wk-num">${numLabel}</span>
               <span class="wk-subj">${escHtml(sn)}${l._altPending?' <i class="alt-mini">🔁 уточнюється</i>':(l._altOptions?' <i class="alt-mini">🔁</i>':'')}</span>
               <span class="wk-time">${escHtml(l.time||'—')}</span>
             </div>`
