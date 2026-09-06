@@ -641,22 +641,64 @@ window.removeTextbook=async function(cls,subj,key){
   showToast("🗑️ Видалено");loadTextbooksForTeacher();
 };
 // ══════════ CURRICULUM PLAN (legacy checklist) ══════════
+//
+// ДВА ПЛАНИ В ОДНОМУ ВУЗЛІ. curriculum_plans/{клас}/{предмет} використовують
+// дві різні речі:
+//   • цей простий чекліст — плоско: {pushId: {title, hours, covered}}
+//   • календарне планування з файлу — вкладено: /meta та /topics
+//
+// Чекліст перебирав УСІ ключі вузла поспіль. Коли для предмета завантажено
+// календарний план, у списку зʼявлялися два порожні рядки «1 год.» —
+// це були самі `meta` і `topics`, показані як теми. Ані назви, ані сенсу;
+// картка виглядала зламаною, і саме на це вона й була схожа.
+//
+// Тепер службові ключі відсіюються тут, в одному місці, і рядок без назви
+// не малюється взагалі — хай би звідки він узявся.
+const PLAN_SYS_KEYS = ['meta', 'topics', 'updatedAt', 'author'];
+export function legacyTopics(node){
+  const out = [];
+  for(const k in (node || {})){
+    if(PLAN_SYS_KEYS.includes(k)) continue;
+    const t = node[k];
+    if(!t || typeof t !== 'object') continue;
+    const title = typeof t.title === 'string' ? t.title.trim() : '';
+    if(!title) continue;                       // рядок без назви — не тема
+    out.push({ key:k, title, hours: parseInt(t.hours, 10) || 1, covered: !!t.covered });
+  }
+  return out;
+}
+export function hasCalendarPlan(node){
+  return !!(node && node.topics && Object.keys(node.topics).length);
+}
+
 async function loadCurriculumTopics(){
   const cls=getActiveClass();const subj=document.getElementById('t-subject').value;if(!subj)return;
   const snap=await get(ref(db,`curriculum_plans/${cls}/${subj.replace(/[.#$[\]]/g,'_')}`));
   const container=document.getElementById('curriculum-topics');container.innerHTML='';
-  let topics=snap.exists()?snap.val():{};let totalHours=0;let coveredHours=0;let topicCount=0;let coveredCount=0;
-  for(let k in topics){
-    const t=topics[k];totalHours+=t.hours||1;topicCount++;
-    if(t.covered){coveredHours+=t.hours||1;coveredCount++;}
-    const c=t.covered?'covered':'';
-    container.innerHTML+=`<div class="topic-row ${c}">
-      <input type="checkbox" ${t.covered?'checked':''} onchange="toggleTopicCovered('${cls}','${subj}','${k}',this.checked)">
+  const node=snap.exists()?snap.val():{};
+  const list=legacyTopics(node);
+  let totalHours=0,coveredHours=0,coveredCount=0;
+  const topicCount=list.length;
+  list.forEach(t=>{
+    totalHours+=t.hours;
+    if(t.covered){coveredHours+=t.hours;coveredCount++;}
+    container.innerHTML+=`<div class="topic-row ${t.covered?'covered':''}">
+      <input type="checkbox" ${t.covered?'checked':''} onchange="toggleTopicCovered('${cls}','${escJs(subj)}','${t.key}',this.checked)">
       <span style="flex:1;${t.covered?'text-decoration:line-through;color:#aaa;':''}">${escHtml(t.title)}</span>
-      <span style="font-size:.75rem;color:#888;flex-shrink:0;">${t.hours||1} год.</span>
+      <span style="font-size:.75rem;color:#888;flex-shrink:0;">${t.hours} год.</span>
     </div>`;
+  });
+  // Календарний план — окрема картка нижче. Якщо він є, тут пояснюємо це,
+  // а не мовчимо: інакше «Тем ще не додано» під завантаженим планом
+  // виглядає як втрата даних.
+  if(topicCount===0){
+    container.innerHTML = hasCalendarPlan(node)
+      ? '<p class="empty-msg" style="font-size:.8rem;">Для цього предмета завантажено '
+        + '<b>календарне планування</b> — теми беруться звідти, у картці нижче. '
+        + 'Цей список — простий чекліст на кілька тем, він потрібен лише коли '
+        + 'календарного плану немає.</p>'
+      : '<p class="empty-msg" style="font-size:.8rem;">Тем ще не додано.</p>';
   }
-  if(topicCount===0)container.innerHTML='<p class="empty-msg" style="font-size:.8rem;">Тем ще не додано.</p>';
   // Smart alert: remaining hours >> remaining topics
   const remainingHours=totalHours-coveredHours;const remainingTopics=topicCount-coveredCount;
   const alertEl=document.getElementById('curriculum-smart-alert');
@@ -671,7 +713,10 @@ window.addCurriculumTopic=async function(){
   const title=document.getElementById('new-topic-title').value.trim();const hours=parseInt(document.getElementById('new-topic-hours').value)||1;
   if(!subj||!title){showToast("⚠️ Оберіть предмет і введіть тему!");return;}
   const existSnap=await get(ref(db,`curriculum_plans/${cls}/${subj.replace(/[.#$[\]]/g,'_')}`));
-  const existCount=existSnap.exists()?Object.keys(existSnap.val()).length:0;
+  // Рахуємо САМЕ теми чекліста. Раніше бралися всі ключі вузла, тож
+  // завантажений календарний план додавав до ліміту двійку зі своїх
+  // службових ключів — і п'ять тем перетворювалися на три.
+  const existCount=existSnap.exists()?legacyTopics(existSnap.val()).length:0;
   if(existCount>=5){showToast(`⚠️ Ліміт 5 тем на рік для "${subj}" вже досягнуто!`);return;}
   await push(ref(db,`curriculum_plans/${cls}/${subj.replace(/[.#$[\]]/g,'_')}`),{title,hours,covered:false});
   document.getElementById('new-topic-title').value='';document.getElementById('new-topic-hours').value='';
@@ -870,7 +915,7 @@ export function loadTeacherDashboard(){
     document.getElementById('t-karma-counter').innerText=cnt;
   });
   if(currentUserData.role!=='art_school_teacher'){const date=document.getElementById('global-date').value;get(child(ref(db),`homeworks/${cls}/${date}`)).then(snap=>{const hl=document.getElementById('t-daily-hw-list');hl.innerHTML='';if(snap.exists()){const d=snap.val();for(let s in d)hl.innerHTML+=renderHwItem(s,d[s]);}else hl.innerHTML='<li class="empty-msg">ДЗ не задано.</li>';});}
-  renderBirthdays('t-birthdays',cls,document.getElementById('global-date').value,'');
+  renderBirthdays('t-birthdays',cls,'');
   listenTeacherAttendance();
 }
 window.loadTeacherDashboard=loadTeacherDashboard;
