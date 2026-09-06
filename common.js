@@ -1196,7 +1196,22 @@ window.switchChild=async function(idx){
   currentUserData.studentId=k.studentId||stuId(k.class,k.studentName)||null;
   currentUserData.class=k.class;
   currentUserData.parentRole=k.role||currentUserData.parentRole||'guardian';
-  try{await update(ref(db,`users/${auth.currentUser.uid}`),{studentName:k.studentName,studentId:currentUserData.studentId,class:k.class,parentRole:currentUserData.parentRole});}catch(e){console.error(e);}
+  // ПРОФІЛЬ МУСИТЬ ВСТИГНУТИ ЗМІНИТИСЯ, і мовчати про невдачу не можна.
+  //
+  // Правила бази звіряють, за яку дитину людина пише, саме з users/{uid}.
+  // Якщо цей запис не пройшов, кабінет уже показує другу дитину, а база
+  // приймає тільки першу — і будь-яке збереження тихо відмовляється.
+  try{
+    await update(ref(db,`users/${auth.currentUser.uid}`),
+      {studentName:k.studentName,studentId:currentUserData.studentId,class:k.class,parentRole:currentUserData.parentRole});
+  }catch(e){
+    console.error(e);
+    alert('Не вдалося перемкнути дитину в профілі: ' + e.message
+      + '\n\nЗміни для цієї дитини можуть не зберігатися. Оновіть сторінку.');
+  }
+  // Кеш ключа харчування памʼятає попередню дитину — інакше відповіді
+  // лягли б не на ту, особливо коли обидві діти в одному класі
+  if(window.invalidateMealKey) window.invalidateMealKey();
   // Розклад прив'язаний до класу — перечитуємо під нову дитину
   loadScheduleScript(k.class,()=>{initUserSession();});
   showToast(`👶 Дитина: ${k.studentName}`);
