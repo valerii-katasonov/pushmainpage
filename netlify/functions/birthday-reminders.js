@@ -165,7 +165,9 @@ exports.handler = async () => {
       const body = due.length === 1
         ? `${CLASS_LABEL(cls)}: за тиждень, ${+dd}.${mm}, день народження в одного учня`
         : `${CLASS_LABEL(cls)}: за тиждень, ${+dd}.${mm}, іменинників — ${due.length}`;
-      const url = `${SITE}/cabinet?open=class`;
+      // Блок днів народження стоїть найпершим на вкладці «Сьогодні»,
+      // тож туди й ведемо — не на «Клас», де він був раніше.
+      const url = `${SITE}/cabinet?open=day`;
 
       if (targets.length) {
         const results = await Promise.allSettled([...new Set(targets)].map(t =>
