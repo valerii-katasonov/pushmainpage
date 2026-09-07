@@ -89,6 +89,22 @@ async function findTargets(token, cls, studentName) {
   return [...new Set(out)];
 }
 
+// Домашнє завдання адресоване КЛАСУ, а не окремій дитині: імені учня тут
+// немає й бути не може. Тому окрема вибірка — усі батьки й учні класу.
+async function findClassTargets(token, cls) {
+  const all = await readDb(token, 'push_tokens');
+  if (!all || typeof all !== 'object') return [];
+  const out = [];
+  for (const uid in all) {
+    const t = all[uid];
+    if (!t || !t.token) continue;
+    if (t.role !== 'parent' && t.role !== 'student') continue;
+    if (t.class !== cls) continue;
+    out.push(t.token);
+  }
+  return [...new Set(out)];
+}
+
 // Повідомлення адресоване конкретним людям за поштою, а не класом:
 // у розмові можуть бути і вчитель, і директор, і кілька батьків.
 async function findByEmails(token, emails) {
@@ -167,9 +183,13 @@ exports.handler = async (event) => {
   // Чат адресується поштами (body.to), меню й новини — усій школі.
   // Ні тим, ні тим клас та імʼя учня не потрібні.
   const isBroadcast = body.type === 'menu' || body.type === 'news' || body.type === 'chat';
+  // ДЗ — подія класу: потрібен клас, але не потрібне (і не передається) імʼя учня.
+  const isClassWide = body.type === 'homework';
   const cls = String(body.class || '').slice(0, 20);
   const studentName = String(body.studentName || '').slice(0, 120);
-  if (!isBroadcast && (!cls || !studentName)) return fail(400, 'Не вказано клас або учня', origin);
+  if (isClassWide && !cls) return fail(400, 'Не вказано клас', origin);
+  if (!isBroadcast && !isClassWide && (!cls || !studentName))
+    return fail(400, 'Не вказано клас або учня', origin);
   if (body.type === 'chat' && !(Array.isArray(body.to) && body.to.length))
     return fail(400, 'Не вказано, кому надсилати', origin);
 
@@ -194,8 +214,9 @@ exports.handler = async (event) => {
     }
     const targets = body.type === 'chat'
       ? await findByEmails(token, Array.isArray(body.to) ? body.to.slice(0, 30) : [])
+      : (isClassWide ? await findClassTargets(token, cls)
       : (isBroadcast ? await findMealTargets(token)
-                     : await findTargets(token, cls, studentName));
+                     : await findTargets(token, cls, studentName)));
     if (targets.length === 0)
       return { statusCode: 200, headers: cors(origin), body: JSON.stringify({ sent: 0, note: 'Немає підписників' }) };
 
@@ -210,11 +231,12 @@ exports.handler = async (event) => {
     // Тепер у посиланні є підказка, яку вкладку відкрити. Кабінет її читає
     // й перемикається (див. openFromNotification у common.js).
     const TAB_BY_TYPE = {
-      news:    'school',   // оголошення — вкладка «Школа»
-      grade:   'grades',
-      absence: 'day',
-      menu:    'day',
-      chat:    'chat'      // особливий випадок: відкриваємо саме листування
+      news:     'school',   // оголошення — вкладка «Школа»
+      grade:    'grades',
+      absence:  'day',
+      menu:     'day',
+      homework: 'day',      // ДЗ живе на вкладці «Сьогодні», поруч з уроками
+      chat:     'chat'      // особливий випадок: відкриваємо саме листування
     };
     const tab = TAB_BY_TYPE[body.type] || 'day';
     const url = `https://${ALLOWED_HOSTS[0]}/cabinet?open=${tab}`;
