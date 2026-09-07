@@ -123,6 +123,12 @@ export function loadCurrentTopicAndHW(){
   if(document.getElementById('hw-textbook')) fillHwTextbooks();
   if(document.getElementById('t-subject-for-comment')) fillCommentSubjects();
   if(!subject)return;
+  // ТЕМУ ТЕЖ ПЕРЕЧИТУЄМО. Раніше на зміну дати оновлювалося все, крім теми:
+  // її підвантажував лише обробник зміни ПРЕДМЕТА. Через це, перейшовши на
+  // інший день, учитель бачив тему попереднього дня — або порожнє поле там,
+  // де тема насправді збережена. Звідси й питання «де подивитися, чи вона
+  // збереглася».
+  populateTopicSelector();
   if(document.getElementById('t-hw'))document.getElementById('t-hw').value='';
   if(document.getElementById('existing-image-info'))document.getElementById('existing-image-info').style.display='none';
   currentHwImages=[];
