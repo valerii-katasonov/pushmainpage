@@ -11,7 +11,8 @@
 //   • повторний запуск нічого не дублює — учень, який уже є в списку
 //     класу, не додається вдруге, прив'язка, яка вже є, не повторюється;
 //   • нічого не видаляємо. Якщо в таблиці когось немає, у порталі він
-//     лишається: таблиця може бути частковою, а список класу — ні.
+//     лишається: таблиця може бути частковою, а список класу — ні;
+//   • класи можна вимкнути галочкою перед записом — див. нижче.
 //
 // ПРАВИЛО ПРО ПОШТУ (як просила школа): якщо батьків двоє, а пошта одна,
 // вона дістається ПЕРШОМУ. Другий лишається без доступу — і про це прямо
@@ -26,7 +27,17 @@ import { ref, get, child, update, push } from "https://www.gstatic.com/firebasej
 import { db, escHtml, showToast, logAction, getStudentDir, matchSid,
          nameKey, invalidateStudentDir } from './common.js';
 
-export const SI_BUILD = '2026-09-06 · імпорт учнів v1';
+export const SI_BUILD = '2026-09-07 · імпорт учнів v2';
+
+// ВИБІР КЛАСІВ. Таблиця майже завжди йде на всю школу, з 1 по 11, а
+// заводити треба не всю школу: частина списків уже заповнена руками, і
+// проходити по них імпортом немає сенсу. Тому перед записом школа сама
+// відмічає галочками, які класи брати, — рядки решти лишаються видимими
+// в перегляді, але в базу з них не йде нічого.
+//
+// Нижче — те, що знято за замовчуванням (3 і 5 уже заповнені). Це лише
+// початковий стан галочок: у вікні його можна змінити в будь-який бік.
+export const DEFAULT_SKIP_CLASSES = ['class_3', 'class_5'];
 
 // ── Розбір таблиці (чиста логіка, перевіряється тестами) ────────
 
@@ -85,7 +96,11 @@ export function classId(cell){
 // Рядки таблиці → перелік того, що маємо створити.
 // rows — масив масивів (як віддає SheetJS з header:1).
 export function parseStudentsSheet(rows){
-  const out = { rows: [], problems: [], header: null };
+  const out = { rows: [], problems: [], notes: [], header: null };
+  // problems лишається простим списком рядків (на нього спираються тести
+  // й старий код), notes — той самий текст, але з класом, щоб перегляд міг
+  // сховати зауваження по класах, які школа вимкнула галочкою.
+  const note = (text, cls) => { out.problems.push(text); out.notes.push({ text, cls }); };
   const data = rows || [];
   let hi = -1, map = null;
   for(let i = 0; i < Math.min(data.length, 20); i++){
@@ -93,8 +108,8 @@ export function parseStudentsSheet(rows){
     if(m.name !== undefined && m.cls !== undefined){ hi = i; map = m; break; }
   }
   if(hi === -1){
-    out.problems.push('Не знайдено рядок заголовків. Потрібні колонки з назвами '
-      + '«ПІП учня», «Клас», «ПІП батьків», «Електронна пошта».');
+    note('Не знайдено рядок заголовків. Потрібні колонки з назвами '
+      + '«ПІП учня», «Клас», «ПІП батьків», «Електронна пошта».', null);
     return out;
   }
   out.header = map;
@@ -116,23 +131,36 @@ export function parseStudentsSheet(rows){
 
     out.rows.push({ line:i + 1, name, cls, people,
                     rawCls: String(r[map.cls] == null ? '' : r[map.cls]).trim() });
-    if(!cls) out.problems.push(`Рядок ${i + 1}: не зрозуміло, який клас — «${name}»`);
+
+    // Зауваження прив'язуємо до класу, щоб потім не показувати те, що
+    // стосується вимкнених класів. Порожня пошта — НЕ причина пропустити
+    // учня: дитину заводимо однаково, без доступу лишаються тільки батьки.
+    if(!cls) note(`Рядок ${i + 1}: не зрозуміло, який клас — «${name}»`, null);
     if(!people.some(p => p.email))
-      out.problems.push(`Рядок ${i + 1}: жодної пошти — «${name}», доступу в батьків не буде`);
+      note(`Рядок ${i + 1}: жодної пошти — «${name}». Учня створимо, `
+         + `але доступу в батьків не буде, доки не з'явиться пошта`, cls);
   }
-  if(!out.rows.length) out.problems.push('У таблиці не знайдено жодного учня.');
+  if(!out.rows.length) note('У таблиці не знайдено жодного учня.', null);
   return out;
 }
 
 // Що саме зміниться в базі, з урахуванням того, що там уже є.
 // dirs: {class_1:{byId,byName,byLoose}}, links: {safeEmail:{children:[...]}}
-export function planChanges(parsed, dirs, links){
-  const plan = { addStudents: [], addLinks: [], skipStudents: [], skipLinks: [] };
+// skip: перелік класів, які школа вимкнула («class_3»). Не обов'язковий —
+// без нього беремо всі класи, як було раніше.
+export function planChanges(parsed, dirs, links, skip){
+  const off = skip instanceof Set ? skip : new Set(skip || []);
+  const plan = { addStudents: [], addLinks: [], skipStudents: [], skipLinks: [], skipClass: [] };
   // Учні, яких додамо в межах цього ж імпорту, теж рахуються як наявні —
   // інакше двоє дітей з однаковим імʼям в одному класі створили б два записи
   const pending = {};
   for(const r of parsed.rows){
     if(!r.cls) continue;
+    // Клас вимкнено: ні учня, ні прив'язок — рахуємо й йдемо далі.
+    if(off.has(r.cls)){
+      plan.skipClass.push({ name:r.name, cls:r.cls });
+      continue;
+    }
     const dir = dirs[r.cls] || { byId:{}, byName:{}, byLoose:{} };
     let sid = matchSid(dir, r.name);
     if(!sid) sid = (pending[r.cls] || {})[nameKey(r.name)];
@@ -158,13 +186,17 @@ export function planChanges(parsed, dirs, links){
 // ── Інтерфейс ───────────────────────────────────────────────────
 
 let siParsed = null, siPlan = null;
+// Вимкнені класи + кеш прочитаного з бази. Кеш потрібен, щоб зняття
+// галочки перемальовувало перегляд миттєво, не читаючи базу щоразу.
+let siOff = new Set(), siDirs = null, siLinks = null;
 
 function siBox(){ return document.getElementById('si-body'); }
 
 window.openStudentsImport = function(){
   const box = siBox();
   if(!box) return;
-  siParsed = siPlan = null;
+  siParsed = siPlan = siDirs = siLinks = null;
+  siOff = new Set();
   box.innerHTML = `<p class="empty-msg">Оберіть файл .xlsx зі списком учнів.</p>`;
 };
 
@@ -180,6 +212,11 @@ window.handleStudentsFile = function(input){
       const sheet = wb.Sheets[wb.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json(sheet, { header:1, defval:null });
       siParsed = parseStudentsSheet(rows);
+      siDirs = siLinks = null;
+      // Початковий стан галочок: знімаємо ті класи, що названі в
+      // DEFAULT_SKIP_CLASSES, але тільки якщо вони взагалі є в таблиці.
+      const inSheet = new Set(siParsed.rows.map(r => r.cls).filter(Boolean));
+      siOff = new Set(DEFAULT_SKIP_CLASSES.filter(c => inSheet.has(c)));
       await renderPreview();
     }catch(e){
       box.innerHTML = `<p class="empty-msg" style="color:var(--red);">Не вдалося прочитати файл: ${escHtml(e.message)}</p>`;
@@ -195,36 +232,66 @@ async function renderPreview(){
     box.innerHTML = `<div class="si-warn">${siParsed.problems.map(escHtml).join('<br>')}</div>`;
     return;
   }
-  box.innerHTML = '<p class="empty-msg">Звіряю зі списками класів...</p>';
-  // Читаємо те, що вже є: без цього не відрізнити «додати» від «уже є»
-  const classes = [...new Set(siParsed.rows.map(r => r.cls).filter(Boolean))];
-  const dirs = {};
-  for(const c of classes){
-    try{ dirs[c] = await getStudentDir(c, true); }catch(e){ dirs[c] = { byId:{}, byName:{}, byLoose:{} }; }
+  // Читаємо те, що вже є: без цього не відрізнити «додати» від «уже є».
+  // Читаємо ОДИН раз і по всіх класах таблиці, зокрема вимкнених: галочку
+  // можуть повернути, і тоді дані вже будуть під рукою.
+  if(!siDirs){
+    box.innerHTML = '<p class="empty-msg">Звіряю зі списками класів...</p>';
+    siDirs = {};
+    for(const c of [...new Set(siParsed.rows.map(r => r.cls).filter(Boolean))]){
+      try{ siDirs[c] = await getStudentDir(c, true); }
+      catch(e){ siDirs[c] = { byId:{}, byName:{}, byLoose:{} }; }
+    }
+    siLinks = {};
+    try{
+      const snap = await get(child(ref(db), 'parent_links'));
+      siLinks = snap.exists() ? snap.val() : {};
+    }catch(e){ /* прочитати не вдалося — покажемо все як «додати» */ }
   }
-  let links = {};
-  try{
-    const snap = await get(child(ref(db), 'parent_links'));
-    links = snap.exists() ? snap.val() : {};
-  }catch(e){ /* прочитати не вдалося — покажемо все як «додати» */ }
 
-  siPlan = planChanges(siParsed, dirs, links);
+  siPlan = planChanges(siParsed, siDirs, siLinks, siOff);
 
   const noAccess = [];
-  siParsed.rows.forEach(r => r.people.forEach(p => { if(!p.email && p.name) noAccess.push(`${p.name} (${r.name})`); }));
+  siParsed.rows.forEach(r => { if(siOff.has(r.cls)) return;
+    r.people.forEach(p => { if(!p.email && p.name) noAccess.push(`${p.name} (${r.name})`); }); });
+
+  // Зауваження по вимкнених класах ховаємо — вони ні на що не впливають.
+  const notes = (siParsed.notes && siParsed.notes.length
+      ? siParsed.notes.filter(n => !n.cls || !siOff.has(n.cls)).map(n => n.text)
+      : siParsed.problems);
+
+  // Галочки класів: рахуємо, скільки рядків у таблиці припадає на кожен.
+  const perClass = {};
+  siParsed.rows.forEach(r => { if(r.cls) perClass[r.cls] = (perClass[r.cls] || 0) + 1; });
+  const clsList = Object.keys(perClass)
+    .sort((a,b) => parseInt(a.slice(6),10) - parseInt(b.slice(6),10));
 
   box.innerHTML = `
+    <div class="si-pick">
+      <b>Які класи заводимо:</b>
+      ${clsList.map(c => `<label class="si-chip${siOff.has(c) ? ' off' : ''}">
+        <input type="checkbox" ${siOff.has(c) ? '' : 'checked'}
+               onchange="siToggleClass('${c}')"> ${c.slice(6)} клас
+        <span>${perClass[c]}</span></label>`).join('')}
+      <button type="button" class="si-all" onclick="siToggleClass('*')">
+        ${siOff.size ? 'Відмітити всі' : 'Зняти всі'}</button>
+    </div>
     <div class="si-sum">
       <b>${siPlan.addStudents.length}</b> нових учнів ·
       <b>${siPlan.addLinks.length}</b> нових прив'язок батьків
       <span>уже є: ${siPlan.skipStudents.length} учнів, ${siPlan.skipLinks.length} прив'язок</span>
     </div>
-    ${siParsed.problems.length ? `<div class="si-warn"><b>Зверніть увагу:</b><br>${siParsed.problems.slice(0,12).map(escHtml).join('<br>')}${siParsed.problems.length>12?`<br>…і ще ${siParsed.problems.length-12}`:''}</div>` : ''}
+    ${siOff.size ? `<div class="si-note"><b>Вимкнено ${escHtml([...siOff]
+        .map(c => c.slice(6)).sort((a,b)=>a-b).join(', '))} клас:</b>
+      ${siPlan.skipClass.length} рядків з таблиці пропускаємо — ні учнів,
+      ні прив'язок звідти не записуємо.</div>` : ''}
+    ${notes.length ? `<div class="si-warn"><b>Зверніть увагу:</b><br>${notes.slice(0,12).map(escHtml).join('<br>')}${notes.length>12?`<br>…і ще ${notes.length-12}`:''}</div>` : ''}
     ${noAccess.length ? `<div class="si-note"><b>Без доступу в портал (немає пошти):</b> ${escHtml(noAccess.slice(0,20).join(', '))}${noAccess.length>20?` …і ще ${noAccess.length-20}`:''}</div>` : ''}
     <table class="si-table"><thead><tr><th>Учень</th><th>Клас</th><th>Батьки → пошта</th><th></th></tr></thead><tbody>
       ${siParsed.rows.slice(0,200).map(r => {
+        const isOff = siOff.has(r.cls);
         const isNew = siPlan.addStudents.some(s => s.name === r.name && s.cls === r.cls);
-        return `<tr class="${r.cls ? '' : 'si-bad'}">
+        return `<tr class="${r.cls ? (isOff ? 'si-skip' : '') : 'si-bad'}">
           <td>${escHtml(r.name)}</td>
           <td>${escHtml(r.cls ? r.cls.replace('class_','') : r.rawCls || '—')}</td>
           <td>${r.people.length
@@ -232,7 +299,8 @@ async function renderPreview(){
                 ? `<span class="si-mail">${escHtml(p.email)}</span>`
                 : '<span class="si-nomail">без пошти</span>'}`).join('<br>')
             : '<span class="si-nomail">не вказано</span>'}</td>
-          <td>${isNew ? '<span class="si-new">новий</span>' : '<span class="si-old">уже є</span>'}</td>
+          <td>${isOff ? '<span class="si-old">клас вимкнено</span>'
+            : isNew ? '<span class="si-new">новий</span>' : '<span class="si-old">уже є</span>'}</td>
         </tr>`;
       }).join('')}
     </tbody></table>
@@ -245,8 +313,26 @@ async function renderPreview(){
     <div class="si-build">${escHtml(SI_BUILD)}</div>`;
 }
 
+// Галочка класу. '*' — зняти всі або повернути всі назад.
+// Дані з бази вже в кеші, тож перегляд перемальовується без нових читань.
+window.siToggleClass = function(cls){
+  if(!siParsed) return;
+  if(cls === '*'){
+    if(siOff.size) siOff = new Set();
+    else siOff = new Set(siParsed.rows.map(r => r.cls).filter(Boolean));
+  }
+  else if(siOff.has(cls)) siOff.delete(cls);
+  else siOff.add(cls);
+  renderPreview();
+};
+
 window.applyStudentsImport = async function(){
   if(!siPlan) return;
+  // Останній рубіж: навіть якщо план десь застарів, у вимкнений клас
+  // не піде жодного запису. Дешево, а від прикрої помилки береже.
+  siPlan.addStudents = siPlan.addStudents.filter(s => !siOff.has(s.cls));
+  siPlan.addLinks    = siPlan.addLinks.filter(l => !siOff.has(l.cls));
+  if(!siPlan.addStudents.length && !siPlan.addLinks.length) return;
   const n = siPlan.addStudents.length + siPlan.addLinks.length;
   if(!confirm(`Записати: ${siPlan.addStudents.length} учнів і ${siPlan.addLinks.length} прив'язок батьків?\n\nНічого не видаляється.`)) return;
   const box = siBox();
