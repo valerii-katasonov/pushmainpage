@@ -769,7 +769,10 @@ async function loadAiDayContext(prefix){
   const subjects=Object.keys(aiDayContext);
   sel.innerHTML=subjects.length
     ? subjects.map(s=>`<option value="${escHtml(s)}">${escHtml(s)}</option>`).join('')
-    : '<option value="">Немає уроків на цей день</option>';
+    // Список будується з ДЗ (див. вище), а не з розкладу, тож «немає уроків»
+    // тут було неправдою: уроки є, немає саме завдань. Учитель через це
+    // шукав поламане розкладом, хоча ДЗ просто не збереглося.
+    : '<option value="">На цей день учитель ще не вніс завдань</option>';
 }
 function aiOut(prefix,text,isErr){
   const msg=document.getElementById(`ai-${prefix}-msg`);
