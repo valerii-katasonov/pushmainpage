@@ -5,7 +5,7 @@
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, update } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { ACTIVE_YEAR } from './director.js';
-import { db, getActiveClass, currentUserData, displayGrade, gradeClass6, calculateStudentWeightedAvg, getClassNum, GRADE_WEIGHTS, dayKeys, dayNamesUA, showToast, localDateString, summarizeAttendanceSlots, gradeTypesCache, escJs, escHtml, notifyEvent, logAction, getUserRoles, getUsersSnap, stuName, gradeWritePaths, isBreakItem, insertSlot, removeSlot, makeBreak, withBreaks, slotBounds, hhmmFromMins } from './common.js';
+import { db, getActiveClass, currentUserData, displayGrade, gradeClass6, calculateStudentWeightedAvg, getClassNum, LEVEL_MAX_CLASS, GRADE_WEIGHTS, dayKeys, dayNamesUA, showToast, localDateString, summarizeAttendanceSlots, gradeTypesCache, escJs, escHtml, notifyEvent, logAction, getUserRoles, getUsersSnap, stuName, gradeWritePaths, isBreakItem, insertSlot, removeSlot, makeBreak, withBreaks, slotBounds, hhmmFromMins } from './common.js';
 
 // Позначка складання: видно в рядку стану матриці. Якщо після викладення
 // вона не змінилася — браузер працює зі старим файлом, і шукати помилку
@@ -91,7 +91,7 @@ function renderLevelButtons(cls, current){
   const input = document.getElementById('gep-value');
   const hint = document.getElementById('gep-type-hint');
   if(!box) return;
-  const junior = getClassNum(cls) <= 5;
+  const junior = getClassNum(cls) <= LEVEL_MAX_CLASS;
   box.style.display = junior ? 'flex' : 'none';
   if(input) input.style.display = junior ? 'none' : 'block';
   if(hint) hint.style.display = junior ? 'block' : 'none';
