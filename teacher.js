@@ -189,7 +189,14 @@ window.fillHwTextbooks=async function(){
   let n=0;
   if(snap.exists()){
     const d=snap.val();
-    for(const k in d){ html+=`<option value="${escHtml(d[k].title||d[k].url)}">${escHtml(d[k].title||d[k].url)}</option>`; n++; }
+    // value лишається назвою — на неї спирається підказка для ШІ. Посилання
+    // веземо поруч, у data-url: без нього підручник у ДЗ у батьків був просто
+    // текстом, і відкрити його з завдання було неможливо.
+    for(const k in d){
+      const t=d[k].title||d[k].url;
+      html+=`<option value="${escHtml(t)}" data-url="${escHtml(d[k].url||'')}">${escHtml(t)}</option>`;
+      n++;
+    }
   }
   if(!n) html='<option value="">— для цього предмета підручників ще не додано —</option>';
   sel.innerHTML=html;
@@ -547,12 +554,21 @@ window.saveTopicAndHW=async function(){
   // тема зберігалася, homeworks не писався взагалі (див. умову нижче),
   // портал бадьоро казав «✅ Збережено», а батьки бачили порожньо.
   // Тепер мовчки повз це не пройти.
+  // Обраний підручник разом із посиланням — його прикладаємо до завдання
+  // окремим полем, щоб у батьків він був клікабельний, а не просто назвою.
+  const bookSel=document.getElementById('hw-textbook');
+  const bookOpt=bookSel&&bookSel.selectedIndex>=0?bookSel.options[bookSel.selectedIndex]:null;
+  const bookUrl=bookOpt?(bookOpt.getAttribute('data-url')||''):'';
+  const bookTitle=(document.getElementById('hw-textbook-custom')?.value.trim())
+                 ||(bookSel?bookSel.value:'');
+
   if(!hwText&&!(fileInput&&fileInput.files.length)){
-    const book=(document.getElementById('hw-textbook-custom')?.value.trim())
-              ||(document.getElementById('hw-textbook')?.value||'');
+    const book=bookTitle;
     const pages=document.getElementById('hw-pages')?.value.trim()||'';
     if(book||pages){
-      const composed=[book,pages].filter(Boolean).join(' — ');
+      // Є клікабельний підручник — назву в текст не дублюємо: вона й так
+      // буде поруч окремим посиланням. Інакше поводимося як раніше.
+      const composed=(bookUrl&&pages)?pages:[book,pages].filter(Boolean).join(' — ');
       if(!confirm('Поле «Домашнє завдання» порожнє.\n\n'
         +'Підручник і сторінки — це підказка для ШІ, вона не стає завданням:\n'
         +'батьки побачать лише те, що написано в самому полі ДЗ.\n\n'
@@ -656,7 +672,13 @@ window.saveTopicAndHW=async function(){
   // ts — коли завдання внесли. Дата в ключі каже, НА який день задано,
   // а не коли це зробили. Без позначки часу старий тестовий запис
   // неможливо відрізнити від сьогоднішнього.
-  if(hwText||finalImageUrls.length>0)await set(ref(db,`homeworks/${cls}/${date}/${subject}`),{text:hwText,images:finalImageUrls,ts:Date.now()});
+  if(hwText||finalImageUrls.length>0){
+    const rec={text:hwText,images:finalImageUrls,ts:Date.now()};
+    // book зберігаємо лише з посиланням: назва без URL нічого не додає —
+    // вона вже є в тексті завдання.
+    if(bookTitle&&bookUrl)rec.book={title:bookTitle,url:bookUrl};
+    await set(ref(db,`homeworks/${cls}/${date}/${subject}`),rec);
+  }
   // 7. UI feedback — displays for both slots are refreshed by populateTopicSelector()
   //    below (→ loadSavedTopicForLesson() → applyTopicToSlot()), so no manual per-slot
   //    display update is needed here anymore.
