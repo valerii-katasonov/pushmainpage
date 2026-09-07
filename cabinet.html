@@ -576,6 +576,15 @@
                  background:#e8f5e9;color:#1b5e20;line-height:1.5;}
     .topic-saved.none{background:#f5f5f5;color:#90a4ae;}
     .topic-saved span{font-weight:700;}
+    /* Теми уроків, які вже відбулися — у кабінеті родини */
+    .topics-box{background:#f3f7ff;border:1px solid #d7e3f8;border-radius:12px;
+                padding:11px 13px;margin-bottom:11px;}
+    .topics-box .tb-head{font-size:.84rem;font-weight:800;color:#2b5aa8;margin-bottom:6px;}
+    .topics-row{display:flex;gap:9px;padding:4px 0;border-top:1px dashed #e3ebf8;font-size:.84rem;}
+    .topics-row:first-of-type{border-top:none;}
+    .topics-subj{flex:0 0 38%;color:#5a6b85;font-weight:700;}
+    .topics-what{flex:1;color:#263238;}
+    .lesson-topic{font-size:.76rem;color:#5a6b85;margin-top:3px;}
     /* Клітинка обліку як кнопка — кухня дописує порцію після дедлайну */
     /* Правка замовлень на винос у кабінеті кухні */
     .k-ta-cell{line-height:2;}
@@ -2988,6 +2997,10 @@
 
     <section class="screen-section" data-dtab="day">
       <h3>📚 Задано на сьогодні</h3>
+      <!-- Що вивчали цього дня. Стоїть над домашнім завданням: спершу
+           «що було на уроці», потім «що задано» — саме в такому порядку
+           про це й питають удома. -->
+      <div id="p-day-topics" class="topics-box" style="display:none;"></div>
       <div class="data-card" style="border-left-color:#00b894;background:#f0fff4;margin-top:0;">
         <ul id="p-daily-hw-list" class="list-dash"></ul>
         <!-- AI-поради батькам за темою уроку / домашнім завданням.
@@ -3178,6 +3191,7 @@
       <div class="data-card" style="border-left-color:#00b894;background:#f0fff4;">
         <h4 style="margin-top:0;color:#00b894;">📚 Завдання для мене:</h4>
         <div id="s-final-grades" class="fin-box" style="display:none;"></div>
+        <div id="s-day-topics" class="topics-box" style="display:none;"></div>
         <ul id="s-daily-hw-list" class="list-dash"></ul>
         <!-- Питання для самоперевірки. Свідомо НЕ «поясни тему» і не
              «зроби ДЗ» — модель має підштовхнути до перевірки себе. -->
