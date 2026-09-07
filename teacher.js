@@ -486,9 +486,14 @@ window.doHwCopy=async function(){
   try{
     const payload={text,images:currentHwImages,ts:Date.now()};
     for(const c of targets){
-      await set(ref(db,`homeworks/${c}/${date}/${subject}`),payload);
+      const hwRef=ref(db,`homeworks/${c}/${date}/${subject}`);
+      // Те саме правило, що й при звичайному збереженні: сповіщаємо лише
+      // там, де завдання з цього предмета на цей день ще не було.
+      const existed=(await get(hwRef)).exists();
+      await set(hwRef,payload);
       await set(ref(db,`authors/${c}/${date}/${subject}`),auth.currentUser.uid);
       logAction('homework',{cls:c,subject,date,value:'копія'});
+      if(!existed)notifyEvent('homework',{class:c,subject}).catch(()=>{});
     }
     showToast(`✅ ДЗ скопійовано у ${targets.length} кл.`);
     window.closeHwCopy();
@@ -676,11 +681,18 @@ window.saveTopicAndHW=async function(){
   // а не коли це зробили. Без позначки часу старий тестовий запис
   // неможливо відрізнити від сьогоднішнього.
   if(hwText||finalImageUrls.length>0){
+    const hwRef=ref(db,`homeworks/${cls}/${date}/${subject}`);
+    // Чи це ПЕРШЕ завдання з предмета на цей день. Учитель зберігає той самий
+    // урок по три-чотири рази — виправляє тему, дописує сторінки. Слати push
+    // щоразу означало б навчити батьків не звертати на них уваги.
+    const existed=(await get(hwRef)).exists();
     const rec={text:hwText,images:finalImageUrls,ts:Date.now()};
     // book зберігаємо лише з посиланням: назва без URL нічого не додає —
     // вона вже є в тексті завдання.
     if(bookTitle&&bookUrl)rec.book={title:bookTitle,url:bookUrl};
-    await set(ref(db,`homeworks/${cls}/${date}/${subject}`),rec);
+    await set(hwRef,rec);
+    // Сповіщення не має права зірвати збереження: воно вже відбулося.
+    if(!existed)notifyEvent('homework',{class:cls,subject}).catch(()=>{});
   }
   // 7. UI feedback — displays for both slots are refreshed by populateTopicSelector()
   //    below (→ loadSavedTopicForLesson() → applyTopicToSlot()), so no manual per-slot
