@@ -71,10 +71,48 @@ function renderGradeTypeButtons(){
 // Phase 4b: added presetType param — when a cell has no existing grade_type yet (new grade),
 // the editor now prefills from the date column's pre-set "Тип" (journal_column_types) instead
 // of always defaulting to 'П'.
+// Кнопки рівнів для 1–5 класів.
+//
+// НАВІЩО. Учитель писав рівень у те саме поле, куди старші класи пишуть
+// цифру. Літера туди лягала, але далі її ніхто не чекав: у журналі кожен
+// рівень показувався як «П». А ще в клітинці поруч стоїть ВИД роботи, і
+// його код теж «П» — поточна. Дві різні «П» в одній клітинці.
+//
+// Кнопки прибирають і те, й інше: рівень обирається, а не набирається, і
+// поруч підписано, що це саме рівень.
+const LEVELS = [
+  { v:'П', label:'Початковий' },
+  { v:'С', label:'Середній' },
+  { v:'Д', label:'Достатній' },
+  { v:'В', label:'Високий' }
+];
+function renderLevelButtons(cls, current){
+  const box = document.getElementById('gep-level-btns');
+  const input = document.getElementById('gep-value');
+  const hint = document.getElementById('gep-type-hint');
+  if(!box) return;
+  const junior = getClassNum(cls) <= 5;
+  box.style.display = junior ? 'flex' : 'none';
+  if(input) input.style.display = junior ? 'none' : 'block';
+  if(hint) hint.style.display = junior ? 'block' : 'none';
+  if(!junior){ box.innerHTML=''; return; }
+  const cur = String(current||'').trim().toUpperCase();
+  box.innerHTML = '<div class="gep-hint">Рівень:</div>' + LEVELS.map(L =>
+    `<button type="button" class="level-btn${L.v===cur?' active':''}" data-lv="${L.v}"
+       title="${L.label}" onclick="selectGradeLevel('${L.v}')">${L.v}</button>`).join('');
+}
+window.selectGradeLevel = function(v){
+  const input = document.getElementById('gep-value');
+  if(input) input.value = v;
+  document.querySelectorAll('#gep-level-btns .level-btn')
+    .forEach(b => b.classList.toggle('active', b.dataset.lv === v));
+};
+
 function openGradeEditor(cls,subj,dateStr,student,yMonth,cellEl,existingVal,existingType,presetType){
   gepCls=cls;gepSubj=subj;gepDate=dateStr;gepStudent=student;gepYMonth=yMonth;gepCellEl=cellEl;gepType=existingType||presetType||'П';
   document.getElementById('gep-label').textContent=`${stuName(cls,student)} | ${subj} | ${dateStr.split('-').reverse().join('.')}`;
   document.getElementById('gep-value').value=existingVal||'';
+  renderLevelButtons(cls, existingVal);
   renderGradeTypeButtons();
   selectGradeType(gepType);
   const popup=document.getElementById('grade-editor-popup');popup.style.display='block';
@@ -87,9 +125,15 @@ window.closeGradeEditor=function(){document.getElementById('grade-editor-popup')
 window.confirmGrade=async function(){
   let val=document.getElementById('gep-value').value.trim();
   if(!val)return window.deleteGrade();
-  // validate 1-6 scale
-  const n=parseInt(val);
-  if(!isNaN(n)&&(n<1||n>6)){showToast('⚠️ Оцінка має бути від 1 до 6!');return;}
+  // Рівень зберігаємо великою літерою: інакше в базі опиняться і «в», і «В»,
+  // і будь-яке порівняння почне брехати
+  const up=val.toUpperCase();
+  if(['П','С','Д','В'].includes(up)) val=up;
+  else{
+    // validate 1-6 scale
+    const n=parseInt(val);
+    if(!isNaN(n)&&(n<1||n>6)){showToast('⚠️ Оцінка має бути від 1 до 6!');return;}
+  }
   // Основа і дзеркало — одним атомарним записом
   await update(ref(db), gradeWritePaths(gepCls,gepYMonth,gepSubj,gepDate,gepStudent,val,gepType));
   closeGradeEditor();renderJournalTable();showToast(`✅ ${stuName(gepCls,gepStudent)}: ${displayGrade(val,gepCls)} (${gepType})`);
