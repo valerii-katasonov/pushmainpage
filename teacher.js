@@ -522,6 +522,12 @@ window.saveTopicAndHW=async function(){
   const uid=auth.currentUser.uid;
   if(!subject){alert("Оберіть предмет!");return;}
   btn.disabled=true;btn.innerText="⏳ Збереження...";
+  // Далі йде десяток звернень до бази. Раніше вони не були нічим накриті:
+  // будь-яка відмова (найчастіше PERMISSION_DENIED) обривала функцію, і
+  // кнопка НАЗАВЖДИ лишалася в стані «Збереження...». Учитель бачив вічний
+  // годинник і був певен, що портал висить, — хоча база просто сказала
+  // «не можна». Тепер помилка видно на екрані, а кнопка звільняється завжди.
+  try{
 
   // 1. Прочитати вибір з обох слотів (слот 2 тільки якщо його блок відкритий)
   const slot2Active=document.getElementById('t-topic-slot-2-wrap')&&document.getElementById('t-topic-slot-2-wrap').style.display!=='none';
@@ -610,10 +616,22 @@ window.saveTopicAndHW=async function(){
   //    below (→ loadSavedTopicForLesson() → applyTopicToSlot()), so no manual per-slot
   //    display update is needed here anymore.
   sm.style.color='#1a7d3a';sm.innerText='✅ Збережено!';sm.style.display='block';sm.style.background='#e8f5e9';
-  btn.disabled=false;btn.innerText="💾 Зберегти тему та ДЗ";
   if(fileInput)fileInput.value='';
   populateTopicSelector(); /* refresh both dropdowns — covered topics will disable */
   setTimeout(()=>{sm.style.display='none';loadTeacherDashboard();},2500);
+  }catch(e){
+    console.error('Збереження теми та ДЗ:',e);
+    // PERMISSION_DENIED — це не поломка, а незаповнена матриця доступу.
+    // Кажемо про це людською мовою, інакше вчитель піде «лагодити інтернет».
+    const denied=/permission[_ ]denied/i.test((e&&e.message)||'');
+    sm.style.display='block';sm.style.color='#b71c1c';sm.style.background='#ffebee';
+    sm.innerText=denied
+      ? '⛔ Немає прав на запис у цей клас. Директор має відкрити його вам у «Матриці доступу вчителів».'
+      : ('❌ Не збережено: '+((e&&e.message)||'невідома помилка'));
+    showToast('❌ Не вдалося зберегти');
+  }finally{
+    btn.disabled=false;btn.innerText="💾 Зберегти тему та ДЗ";
+  }
 };
 // ══════════ BEHAVIOR GRADE ══════════
 window.saveBehaviorGrade=async function(){
