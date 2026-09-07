@@ -596,6 +596,23 @@
     .si-table{width:100%;border-collapse:collapse;font-size:.78rem;}
     .si-table th{background:#eef5ff;color:#2b5aa8;text-align:left;padding:6px 8px;}
     .si-table td{padding:6px 8px;border-top:1px solid #eef2f7;vertical-align:top;}
+    /* Поле файлів для ДЗ: нативний input сховано, видима кнопка — label */
+    .hw-file-input{position:absolute;width:1px;height:1px;opacity:0;
+                   overflow:hidden;clip:rect(0 0 0 0);}
+    .hw-file-input:focus + .hw-file-row .hw-file-btn{outline:2px solid var(--teal);
+                   outline-offset:2px;}
+    .hw-file-row{display:flex;align-items:center;gap:9px;margin-top:4px;flex-wrap:wrap;}
+    .hw-file-btn{display:inline-block;cursor:pointer;margin:0;padding:8px 14px;
+                 background:#eef5ff;color:#2b5aa8;border:1px solid #cfe0f5;
+                 border-radius:9px;font-size:.86rem;font-weight:700;
+                 white-space:nowrap;user-select:none;}
+    .hw-file-btn:hover{background:#e2eeff;}
+    .hw-file-name{font-size:.82rem;color:#78909c;overflow-wrap:anywhere;}
+    .hw-file-hint{margin:5px 0 0 0;font-size:.76rem;color:#90a4ae;line-height:1.4;}
+    .hw-doc{display:inline-flex;align-items:center;gap:5px;padding:7px 11px;
+            background:#f4f9ff;border:1px solid #cfe0f5;border-radius:8px;
+            font-size:.8rem;color:#2b5aa8;text-decoration:none;max-width:220px;}
+    .hw-doc span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
     .si-table tr.si-bad td{background:#fff5f5;}
     .si-table tr.si-skip td{background:#f7f8fa;color:#9aa5b1;}
     .si-pick{display:flex;flex-wrap:wrap;gap:6px;align-items:center;
@@ -2812,8 +2829,21 @@
         </div>
         <p class="ai-hw-note" style="margin:4px 0 0 0;">чернетка — перевірте й відредагуйте перед збереженням</p>
         <p id="ai-hw-msg" class="ai-hw-msg" style="display:none;"></p>
-        <label>📸 Фото:</label>
-        <input type="file" id="t-image" accept="image/*" multiple>
+        <label>📎 Додати до завдання:</label>
+        <!-- Кнопку нативного <input type="file"> малює САМ БРАУЗЕР, її напис
+             береться з мови браузера, а не сторінки: в одного вчителя вона
+             українська, в іншого російська чи англійська, і жодним атрибутом
+             це не міняється. Тому input сховано, а видима кнопка — це label,
+             підпис якого вже наш. Клік по label відкриває той самий діалог. -->
+        <input type="file" id="t-image" class="hw-file-input"
+               accept="image/*,.doc,.docx,.xls,.xlsx,.csv" multiple
+               onchange="hwFilesPicked(this)">
+        <div class="hw-file-row">
+          <label for="t-image" class="hw-file-btn">📂 Обрати файли</label>
+          <span id="hw-file-name" class="hw-file-name">Файл не обрано</span>
+        </div>
+        <p class="hw-file-hint">Можна: фото (JPG, PNG, HEIC), документ (DOC, DOCX),
+          таблиця (XLS, XLSX, CSV). До 10 МБ на файл.</p>
         <div id="existing-image-info" style="display:none;font-size:.83rem;color:#e67e22;margin-top:4px;"></div>
       </div>
       <!-- КНОПКИ -->
