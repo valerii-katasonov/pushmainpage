@@ -515,11 +515,11 @@ export function loadParentDashboard(){
     if(cmS.exists())Object.keys(cmS.val()).forEach(s=>subjs.add(s));
     Object.keys(gr).forEach(s=>{if(gr[s][date]&&gr[s][date][sn])subjs.add(s);});
     subjs.forEach(s=>{
-      const cm=cmS.exists()&&cmS.val()[s]&&cmS.val()[s][sn]?cmS.val()[s][sn]:'';
+      const cm=cmS.exists()?(mineOf(cmS.val()[s])||''):'';
       const gv=gr[s]&&gr[s][date]&&gr[s][date][sn]?gr[s][date][sn]:'';
       const gtp=gt[s]&&gt[s][date]&&gt[s][date][sn]?gt[s][date][sn]:'';
       if(cm||gv){
-        hasItems=true;const cr=rx[s]?.[sn]||null;const gc=gradeClass6(gv);const dispVal=displayGrade(gv,cls);
+        hasItems=true;const cr=mineOf(rx[s])||null;const gc=gradeClass6(gv);const dispVal=displayGrade(gv,cls);
         let gHtml=gv?`<span class="g-cell ${gc}" style="display:inline-flex;padding:4px 9px;border-radius:8px;gap:5px;margin-bottom:3px;"><span class="g-val">${dispVal}</span>${gtp?`<span class="g-type">${gtp}</span>`:''}</span>`:'';
         // Retake button
         let retakeBtn='';if(gv){const n=parseInt(gv);if(!isNaN(n)&&n<=3)retakeBtn=`<button class="retake-btn" onclick="sendRetakeRequest('${cls}','${escJs(s)}','${date}','${escJs(currentUserData.studentId||sn)}',${n})" style="margin-left:6px;">🔄 Покращити</button>`;}
@@ -530,7 +530,7 @@ export function loadParentDashboard(){
     if(!hasItems)list.innerHTML+='<li class="empty-msg">Немає оцінок або коментарів.</li>';
     // Behavior
     const bEl=document.getElementById('p-behavior-list');bEl.innerHTML='';
-    if(bhS.exists()){const bd=bhS.val();const wDates=getWeekDates(date);let bh='';wDates.forEach(wd=>{if(bd[wd]&&bd[wd][sn]){const bv=bd[wd][sn];const dispBv=displayGrade(String(bv),cls);const gc=gradeClass6(bv);bh+=`<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px dashed #c5cae9;font-size:.85rem;"><span style="color:#888;flex:1;">${wd.split('-').slice(1).reverse().join('.')}</span><span class="g-cell ${gc}" style="padding:3px 8px;">${dispBv}</span></div>`;}});bEl.innerHTML=bh||'<p class="empty-msg" style="font-size:.82rem;">Оцінок поведінки немає.</p>';}
+    if(bhS.exists()){const bd=bhS.val();const wDates=getWeekDates(date);let bh='';wDates.forEach(wd=>{if(bd[wd]&&mineOf(bd[wd])!==undefined){const bv=mineOf(bd[wd]);const dispBv=displayGrade(String(bv),cls);const gc=gradeClass6(bv);bh+=`<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px dashed #c5cae9;font-size:.85rem;"><span style="color:#888;flex:1;">${wd.split('-').slice(1).reverse().join('.')}</span><span class="g-cell ${gc}" style="padding:3px 8px;">${dispBv}</span></div>`;}});bEl.innerHTML=bh||'<p class="empty-msg" style="font-size:.82rem;">Оцінок поведінки немає.</p>';}
     else bEl.innerHTML='<p class="empty-msg" style="font-size:.82rem;">Оцінок поведінки немає.</p>';
   });
 }
@@ -795,7 +795,7 @@ export function loadStudentDashboard(){
     if(cmS.exists())Object.keys(cmS.val()).forEach(s=>subjs.add(s));
     Object.keys(gr).forEach(s=>{if(gr[s][date]&&gr[s][date][sn])subjs.add(s);});
     subjs.forEach(s=>{
-      const cm=cmS.exists()&&cmS.val()[s]&&cmS.val()[s][sn]?cmS.val()[s][sn]:'';
+      const cm=cmS.exists()?(mineOf(cmS.val()[s])||''):'';
       const gv=gr[s]&&gr[s][date]&&gr[s][date][sn]?gr[s][date][sn]:'';
       const gtp=gt[s]&&gt[s][date]&&gt[s][date][sn]?gt[s][date][sn]:'';
       if(cm||gv){
@@ -807,7 +807,7 @@ export function loadStudentDashboard(){
     });
     if(!hasItems)list.innerHTML+='<li class="empty-msg">Немає оцінок або коментарів.</li>';
     const bEl=document.getElementById('s-behavior-list');bEl.innerHTML='';
-    if(bhS.exists()){const bd=bhS.val();const wDates=getWeekDates(date);let bh='';wDates.forEach(wd=>{if(bd[wd]&&bd[wd][sn]){const bv=bd[wd][sn];const dispBv=displayGrade(String(bv),cls);const gc=gradeClass6(bv);bh+=`<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px dashed #c5cae9;font-size:.85rem;"><span style="color:#888;flex:1;">${wd.split('-').slice(1).reverse().join('.')}</span><span class="g-cell ${gc}" style="padding:3px 8px;">${dispBv}</span></div>`;}});bEl.innerHTML=bh||'<p class="empty-msg" style="font-size:.82rem;">Оцінок поведінки немає.</p>';}
+    if(bhS.exists()){const bd=bhS.val();const wDates=getWeekDates(date);let bh='';wDates.forEach(wd=>{if(bd[wd]&&mineOf(bd[wd])!==undefined){const bv=mineOf(bd[wd]);const dispBv=displayGrade(String(bv),cls);const gc=gradeClass6(bv);bh+=`<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px dashed #c5cae9;font-size:.85rem;"><span style="color:#888;flex:1;">${wd.split('-').slice(1).reverse().join('.')}</span><span class="g-cell ${gc}" style="padding:3px 8px;">${dispBv}</span></div>`;}});bEl.innerHTML=bh||'<p class="empty-msg" style="font-size:.82rem;">Оцінок поведінки немає.</p>';}
     else bEl.innerHTML='<p class="empty-msg" style="font-size:.82rem;">Оцінок поведінки немає.</p>';
   });
 }
@@ -1169,6 +1169,24 @@ export function weekRowNumbers(list){
     n++;
     return String(n);
   });
+}
+
+// Запис ПРО МОЮ ДИТИНУ з вузла, ключованого учнем.
+//
+// ЧОМУ ЦЕ ОКРЕМА ФУНКЦІЯ. Персонал пише за постійним ідентифікатором
+// (він у списку класу), а кабінет родини роками читав за ІМʼЯМ. Поки
+// ідентифікатора в профілі не було, обидва збігалися, і ніхто не помічав.
+// Щойно він зʼявився — реакція зберігалася під ідентифікатором, а
+// зчитувалася під імʼям, тож кнопка лишалася сірою: ніби нічого й не
+// сталося. Так само зникали коментарі вчителя й оцінки поведінки.
+//
+// Дивимося за обома ключами: спершу за ідентифікатором, потім за імʼям.
+function mineOf(map){
+  if(!map) return undefined;
+  const id = mySid();
+  if(id && map[id] !== undefined) return map[id];
+  const nm = currentUserData?.studentName;
+  return (nm && map[nm] !== undefined) ? map[nm] : undefined;
 }
 
 function renderWeekSchedule(prefix){
