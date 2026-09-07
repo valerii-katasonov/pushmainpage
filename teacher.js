@@ -533,13 +533,39 @@ window.saveTopicAndHW=async function(){
   const date=document.getElementById('global-date').value;
   const subject=document.getElementById('t-subject').value;
   const sk=subjKey(subject);
-  const hwText=document.getElementById('t-hw')?document.getElementById('t-hw').value.trim():'';
+  let hwText=document.getElementById('t-hw')?document.getElementById('t-hw').value.trim():'';
   const fileInput=document.getElementById('t-image');
   const cls=getActiveClass();
   const btn=document.getElementById('btn-save-hw');
   const sm=document.getElementById('status-msg');
   const uid=auth.currentUser.uid;
   if(!subject){alert("Оберіть предмет!");return;}
+
+  // ПАСТКА, ЧЕРЕЗ ЯКУ ЗАВДАННЯ ЗНИКАЛИ. Поля «Підручник» і «Сторінки» —
+  // це підказка для ШІ; вони йдуть у генератор і ніде не зберігаються.
+  // Учитель же бачив їх одразу під полем ДЗ і заповнював ЗАМІСТЬ нього:
+  // тема зберігалася, homeworks не писався взагалі (див. умову нижче),
+  // портал бадьоро казав «✅ Збережено», а батьки бачили порожньо.
+  // Тепер мовчки повз це не пройти.
+  if(!hwText&&!(fileInput&&fileInput.files.length)){
+    const book=(document.getElementById('hw-textbook-custom')?.value.trim())
+              ||(document.getElementById('hw-textbook')?.value||'');
+    const pages=document.getElementById('hw-pages')?.value.trim()||'';
+    if(book||pages){
+      const composed=[book,pages].filter(Boolean).join(' — ');
+      if(!confirm('Поле «Домашнє завдання» порожнє.\n\n'
+        +'Підручник і сторінки — це підказка для ШІ, вона не стає завданням:\n'
+        +'батьки побачать лише те, що написано в самому полі ДЗ.\n\n'
+        +'Записати як завдання:\n«'+composed+'»?\n\n'
+        +'Скасувати — повернутися й дописати текст самому.')) {
+        return;
+      }
+      hwText=composed;
+      const area=document.getElementById('t-hw');
+      if(area)area.value=composed;
+    }
+  }
+
   btn.disabled=true;btn.innerText="⏳ Збереження...";
   // Далі йде десяток звернень до бази. Раніше вони не були нічим накриті:
   // будь-яка відмова (найчастіше PERMISSION_DENIED) обривала функцію, і
