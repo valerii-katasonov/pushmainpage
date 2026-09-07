@@ -1224,6 +1224,12 @@ export function renderHwItem(subject,data){
   let att='';
   if(typeof data==='object'){
     att+='<div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:7px;align-items:center;">';
+    // Підручник, обраний учителем: клікабельне посилання, а не просто назва.
+    if(data.book&&data.book.url){
+      const bu=safeHttpUrl(data.book.url);
+      if(bu)att+=`<a class="hw-doc" href="${escHtml(bu)}" target="_blank" rel="noopener noreferrer">`
+               + `📘 <span>${escHtml(data.book.title||bu)}</span></a>`;
+    }
     const add=u=>{
       const su=safeHttpUrl(u);
       if(!su)return;
