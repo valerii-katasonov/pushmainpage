@@ -7,7 +7,7 @@
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, push, remove, update, onValue } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { renderNewsFeed } from './news.js';
-import { db, auth, CLOUDINARY_URL, UPLOAD_PRESET, getActiveClass, currentUserData, showToast, displayGrade, renderHwItem, dayKeys, formatAttendanceSlotLabel, STICKER_GOAL, stickerGoal, escJs, escHtml, safeUrl, normalizeChildren, notifyEvent, logAction, renderBirthdays, teacherAccessMatrix, getUsersSnap, stuName, gradeWritePaths, localDateString, gradeTypesCache} from './common.js';
+import { db, auth, CLOUDINARY_URL, UPLOAD_PRESET, HW_FILE_EXT, HW_FILE_MAX_MB, fileExt, getActiveClass, currentUserData, showToast, displayGrade, renderHwItem, dayKeys, formatAttendanceSlotLabel, STICKER_GOAL, stickerGoal, escJs, escHtml, safeUrl, normalizeChildren, notifyEvent, logAction, renderBirthdays, teacherAccessMatrix, getUsersSnap, stuName, gradeWritePaths, localDateString, gradeTypesCache} from './common.js';
 import { populateTopicSelector, availableTopicsCache } from './curriculum.js';
 
 let currentHwImages=[];
@@ -134,7 +134,7 @@ export function loadCurrentTopicAndHW(){
   currentHwImages=[];
   /* Topic loading is now handled by populateTopicSelector() → loadSavedTopicForLesson() */
   get(ref(db,`homeworks/${cls}/${date}/${subject}`)).then(snap=>{
-    if(snap.exists()){const val=snap.val();if(typeof val==='string'&&document.getElementById('t-hw'))document.getElementById('t-hw').value=val;else{if(document.getElementById('t-hw'))document.getElementById('t-hw').value=val.text||'';if(val.images&&Array.isArray(val.images))currentHwImages=val.images;else if(val.image)currentHwImages=[val.image];if(currentHwImages.length>0&&document.getElementById('existing-image-info')){document.getElementById('existing-image-info').innerText=`📎 Фото: ${currentHwImages.length} шт.`;document.getElementById('existing-image-info').style.display='block';}}}
+    if(snap.exists()){const val=snap.val();if(typeof val==='string'&&document.getElementById('t-hw'))document.getElementById('t-hw').value=val;else{if(document.getElementById('t-hw'))document.getElementById('t-hw').value=val.text||'';if(val.images&&Array.isArray(val.images))currentHwImages=val.images;else if(val.image)currentHwImages=[val.image];if(currentHwImages.length>0&&document.getElementById('existing-image-info')){document.getElementById("existing-image-info").innerText=`📎 Вкладень: ${currentHwImages.length} шт.`;document.getElementById('existing-image-info').style.display='block';}}}
   });
 }
 window.loadCurrentTopicAndHW=loadCurrentTopicAndHW;
@@ -509,6 +509,25 @@ window.improveCommentAI=async function(){
     aiMsg('ai-comment-msg','✨ Варіант готовий. Перевірте формулювання — і збережіть.');
   }catch(e){aiMsg('ai-comment-msg','Не вдалося сформулювати: '+e.message,true);}
   finally{btn.disabled=false;btn.textContent=label;}
+};
+// Перевіряємо файли ОДРАЗУ при виборі, а не при збереженні: інакше вчитель
+// напише завдання, натисне «Зберегти» і аж тоді дізнається, що формат не той.
+window.hwFilesPicked=function(input){
+  const lbl=document.getElementById('hw-file-name');
+  const files=Array.from(input.files||[]);
+  if(!files.length){ if(lbl){lbl.textContent='Файл не обрано';lbl.style.color='#78909c';} return; }
+  const bad=files.filter(f=>!HW_FILE_EXT.includes(fileExt(f.name)));
+  const big=files.filter(f=>f.size>HW_FILE_MAX_MB*1024*1024);
+  if(bad.length||big.length){
+    input.value='';
+    if(lbl){lbl.style.color='#b71c1c';
+      lbl.textContent=bad.length
+        ? `Не підходить: ${bad.map(f=>f.name).join(', ')}. Можна лише ${HW_FILE_EXT.join(', ')}.`
+        : `Завеликий файл: ${big.map(f=>f.name).join(', ')} — понад ${HW_FILE_MAX_MB} МБ.`;}
+    return;
+  }
+  if(lbl){lbl.style.color='#2e7d32';
+    lbl.textContent=files.length===1?files[0].name:`Обрано файлів: ${files.length}`;}
 };
 window.saveTopicAndHW=async function(){
   const date=document.getElementById('global-date').value;
