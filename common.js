@@ -23,7 +23,23 @@ import { loadParentDashboard, loadStudentDashboard, loadTextbooksForParent, rend
 import { globalTeacherAccess } from './journal.js';
 import { checkCurriculumUploadAccess } from './curriculum.js';
 
-export const CLOUD_NAME='duy1qwsqv'; export const UPLOAD_PRESET='ml_default'; export const CLOUDINARY_URL=`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`;
+export const CLOUD_NAME='duy1qwsqv'; export const UPLOAD_PRESET='ml_default';
+// /auto/ замість /image/: до ДЗ тепер можна додати не лише фото, а й документ
+// чи таблицю. Cloudinary сам визначає тип — картинка лишається картинкою,
+// решта лягає як raw. З /image/ будь-який .docx відхилявся ще на завантаженні.
+// УВАГА: у налаштуваннях пресета ml_default має бути дозволено raw-завантаження.
+export const CLOUDINARY_URL=`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/auto/upload`;
+// Що вчитель може прикріпити до ДЗ. Список один на весь портал: його бачить
+// вчитель у підказці під кнопкою і він же перевіряється перед відправкою.
+export const HW_FILE_EXT=['jpg','jpeg','png','gif','webp','heic','heif',
+                          'doc','docx','xls','xlsx','csv'];
+export const HW_FILE_MAX_MB=10;
+const IMG_EXT=['jpg','jpeg','png','gif','webp','heic','heif'];
+export function fileExt(name){
+  const m=/\.([a-z0-9]+)(?:[?#].*)?$/i.exec(String(name||''));
+  return m?m[1].toLowerCase():'';
+}
+export function isImageUrl(u){ return IMG_EXT.includes(fileExt(u)); }
 const firebaseConfig={apiKey:"AIzaSyA3OA9pcR1zscUtEPWD8LEKTKonAN5Y90c",authDomain:"test-4eb3e.firebaseapp.com",databaseURL:"https://test-4eb3e-default-rtdb.europe-west1.firebasedatabase.app",projectId:"test-4eb3e",storageBucket:"test-4eb3e.firebasestorage.app",messagingSenderId:"933339787450",appId:"1:933339787450:web:cc87b850ed3b4903f41283"};
 export const app=initializeApp(firebaseConfig); export const auth=getAuth(app); export const db=getDatabase(app);
 
@@ -1198,7 +1214,36 @@ export function withBreaks(day, minMinutes = 5){
 // Pure helper shared by director stats/dashboard and parent/student weekly behavior view
 export function getWeekDates(ds){if(!ds)return[];let[y,m,d]=ds.split('-');let dt=new Date(y,m-1,d);let day=dt.getDay()||7;dt.setDate(dt.getDate()-day+1);let dates=[];for(let i=0;i<7;i++){const yy=dt.getFullYear(),mm=String(dt.getMonth()+1).padStart(2,'0'),dd=String(dt.getDate()).padStart(2,'0');dates.push(`${yy}-${mm}-${dd}`);dt.setDate(dt.getDate()+1);}return dates;}
 // Pure helper shared by teacher daily HW list and parent/student daily HW lists
-export function renderHwItem(subject,data){let text=typeof data==='string'?data:data.text;let img='';if(typeof data==='object'){img+='<div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:7px;">';const addImg=u=>{const su=safeHttpUrl(u);if(su)img+=`<a href="${escHtml(su)}" target="_blank"><img src="${escHtml(su)}" style="width:90px;height:90px;object-fit:cover;border-radius:7px;"></a>`;};if(data.image)addImg(data.image);if(data.images&&Array.isArray(data.images))data.images.forEach(addImg);img+='</div>';}return `<li><b>${escHtml(subject)}:</b> ${escHtml(text)} ${img}</li>`;}
+// Вкладення ДЗ. Раніше КОЖНЕ посилання малювалося як <img> — відколи до
+// завдання можна додати документ, так уже не можна: браузер показав би
+// «зламану картинку» замість файлу. Тому дивимося на розширення: фото
+// лишається мініатюрою, документ стає посиланням із назвою й іконкою.
+const HW_DOC_ICON={doc:'📄',docx:'📄',xls:'📊',xlsx:'📊',csv:'📊'};
+export function renderHwItem(subject,data){
+  let text=typeof data==='string'?data:data.text;
+  let att='';
+  if(typeof data==='object'){
+    att+='<div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:7px;align-items:center;">';
+    const add=u=>{
+      const su=safeHttpUrl(u);
+      if(!su)return;
+      if(isImageUrl(su)){
+        att+=`<a href="${escHtml(su)}" target="_blank" rel="noopener noreferrer"><img src="${escHtml(su)}" style="width:90px;height:90px;object-fit:cover;border-radius:7px;"></a>`;
+      }else{
+        const ext=fileExt(su);
+        // Ім'я файлу з кінця адреси: учителю зрозуміліше «vprava-3.docx»,
+        // ніж безлике «Завантажити файл».
+        const nm=decodeURIComponent(String(su).split('/').pop().split(/[?#]/)[0])||('файл.'+ext);
+        att+=`<a class="hw-doc" href="${escHtml(su)}" target="_blank" rel="noopener noreferrer" download>`
+           + `${HW_DOC_ICON[ext]||'📎'} <span>${escHtml(nm)}</span></a>`;
+      }
+    };
+    if(data.image)add(data.image);
+    if(data.images&&Array.isArray(data.images))data.images.forEach(add);
+    att+='</div>';
+  }
+  return `<li><b>${escHtml(subject)}:</b> ${escHtml(text)} ${att}</li>`;
+}
 // ══════════ ATTENDANCE (per-lesson schema) ══════════
 // Since attendance/{cls}/{date}/{student} is now {slotKey:{status,reason,markedBy}}
 // instead of a single flat {status,reason} record, these two helpers are shared
