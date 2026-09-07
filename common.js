@@ -643,6 +643,8 @@ export function getClassNum(clsId){return parseInt((clsId||'class_1').replace('c
 // Рівні для 1–5 класів. Літера — це і є оцінка, а не «маска цифри»:
 // саме так учитель її й ставить.
 export const LEVEL_LETTERS = ['П','С','Д','В'];
+// До якого класу включно оцінюють рівнями. Пʼятий уже ні — так у школі.
+export const LEVEL_MAX_CLASS = 4;
 // Літера → число, щоб рахувати середнє. Смуги такі самі, як нижче в
 // displayGrade: П = 1–2, С = 3, Д = 4, В = 5–6.
 export const LEVEL_TO_NUM = { 'П':2, 'С':3, 'Д':4, 'В':5 };
@@ -666,7 +668,9 @@ export function displayGrade(val,clsId){
   if(LEVEL_LETTERS.includes(s)) return s;
   const n=parseInt(val);
   const cn=getClassNum(clsId||getActiveClass());
-  if(cn<=5){
+  // РІВНІ — ЛИШЕ 1–4 КЛАСИ. У пʼятому вже звичайні оцінки; тут довго стояло
+  // «<=5», і цифри пʼятого класу показувалися літерами.
+  if(cn<=LEVEL_MAX_CLASS){
     // цифру показуємо тією ж літерою, що й рівень
     if(isNaN(n)) return String(val);
     if(n>=5) return 'В';
