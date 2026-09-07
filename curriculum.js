@@ -700,6 +700,35 @@ async function loadSavedTopicForLesson(){
   applyTopicToSlot(1,topicsArr[0]||null);
   if(topicsArr[1]){window.showSecondTopicSlot();applyTopicToSlot(2,topicsArr[1]);}
   else window.hideSecondTopicSlot();
+  renderSavedTopicLine(topicsArr, date);
+}
+
+// Рядок «що збережено на цю дату».
+//
+// НАВІЩО ОКРЕМИЙ РЯДОК, ЯКЩО ТЕМА Й ТАК ПІДСТАВЛЯЄТЬСЯ В ПОЛЕ. Учитель
+// питає не «яка тема», а «чи вона ЗБЕРЕГЛАСЯ». Поле введення на це не
+// відповідає: у ньому текст виглядає однаково і до збереження, і після,
+// і після того, як його просто набрали й нікуди не поділи. Тут же —
+// прочитане з бази, з датою, і сумніву не лишається.
+export function renderSavedTopicLine(topicsArr, date){
+  const box = document.getElementById('t-topic-saved');
+  if(!box) return;
+  const d = String(date||'').split('-').reverse().join('.');
+  const names = (topicsArr||[]).map(e => {
+    if(!e) return '';
+    if(e.customText) return e.customText;
+    const t = availableTopicsCache[e.topicId];
+    return t ? `№ ${t.lessonNum}. ${t.title}` : '(тема видалена з плану)';
+  }).filter(Boolean);
+  if(!names.length){
+    box.className = 'topic-saved none';
+    box.innerHTML = `На <b>${escHtml(d)}</b> тему ще не збережено`;
+  }else{
+    box.className = 'topic-saved';
+    box.innerHTML = `✅ Збережено на <b>${escHtml(d)}</b>: `
+      + names.map(n => `<span>${escHtml(n)}</span>`).join(' · ');
+  }
+  box.style.display = 'block';
 }
 // ═══════ Class Teacher Assignment ═══════
 window.assignClassTeacher=async function(){
@@ -997,6 +1026,9 @@ export async function checkCurriculumUploadAccess(){
 
   const allowed=allowedSubjectsFor(cls, role, teacherAccessMatrix, isClassTeacher);
   uploadAccess={allowed, isClassTeacher, cls};
+  // Ким людина є для ЦЬОГО класу — потрібно й іншим карткам (напр. меті
+  // наліпок). Тримаємо в одному місці, щоб не питати базу двічі.
+  window.__isClassTeacherOf = isClassTeacher ? cls : null;
 
   // Немає жодного предмета в цьому класі — картку не показуємо взагалі.
   if(allowed !== null && allowed.length===0){ sec.style.display='none'; return; }
