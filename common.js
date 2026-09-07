@@ -1219,7 +1219,39 @@ export function getWeekDates(ds){if(!ds)return[];let[y,m,d]=ds.split('-');let dt
 // «зламану картинку» замість файлу. Тому дивимося на розширення: фото
 // лишається мініатюрою, документ стає посиланням із назвою й іконкою.
 const HW_DOC_ICON={doc:'📄',docx:'📄',xls:'📊',xlsx:'📊',csv:'📊'};
-export function renderHwItem(subject,data){
+
+// Ключ предмета в textbooks/{клас} — «безпечний», з заміненими крапками.
+export function booksForSubject(allBooks,subject){
+  const k=String(subject||'').replace(/[.#$[\]]/g,'_');
+  const node=(allBooks||{})[k];
+  return node?Object.values(node).filter(b=>b&&b.url&&b.title):[];
+}
+
+// РОБИМО НАЗВУ ПІДРУЧНИКА В ТЕКСТІ ЗАВДАННЯ ПОСИЛАННЯМ.
+// У розділі «Підручники» посилання є, а в самому ДЗ учитель пише назву
+// руками — і батько бачив мертвий текст «Українська мова частина 2, с.4-5».
+// Тому звіряємо текст зі списком підручників класу: збіг назви стає
+// посиланням. Це працює і для завдань, збережених давно, без пересохранення.
+// Приймаємо ВЖЕ екранований текст — інакше вставлений тег знову екранувався б.
+function linkifyBooks(escapedText,books){
+  if(!escapedText||!books||!books.length)return escapedText;
+  // Довші назви перевіряємо першими: «Математика 2 частина 2» має виграти
+  // в «Математика 2», інакше посилання сяде на шматок назви.
+  const sorted=[...books].sort((a,b)=>String(b.title).length-String(a.title).length);
+  for(const b of sorted){
+    const t=escHtml(String(b.title).trim());
+    const u=safeHttpUrl(b.url);
+    if(!t||!u)continue;
+    const i=escapedText.toLowerCase().indexOf(t.toLowerCase());
+    if(i<0)continue;
+    return escapedText.slice(0,i)
+      + `<a class="hw-book-link" href="${escHtml(u)}" target="_blank" rel="noopener noreferrer">📘 ${escapedText.slice(i,i+t.length)}</a>`
+      + escapedText.slice(i+t.length);
+  }
+  return escapedText;
+}
+
+export function renderHwItem(subject,data,books){
   let text=typeof data==='string'?data:data.text;
   let att='';
   if(typeof data==='object'){
@@ -1248,7 +1280,29 @@ export function renderHwItem(subject,data){
     if(data.images&&Array.isArray(data.images))data.images.forEach(add);
     att+='</div>';
   }
-  return `<li><b>${escHtml(subject)}:</b> ${escHtml(text)} ${att}</li>`;
+  // Якщо підручник збережено окремим полем — він уже показаний кнопкою вище,
+  // і вдруге підсвічувати його в тексті не треба.
+  const hasBookChip=typeof data==='object'&&data.book&&data.book.url;
+  const body=hasBookChip?escHtml(text):linkifyBooks(escHtml(text),books);
+  return `<li><b>${escHtml(subject)}:</b> ${body} ${att}</li>`;
+}
+
+// Один список ДЗ на всі три кабінети — учителя, батьків і учня. Раніше цей
+// самий рядок був скопійований у трьох місцях, і будь-яка правка (як оця,
+// з підручниками) вимагала не забути жодного з них.
+export async function renderHwList(cls,date,listId){
+  const hl=document.getElementById(listId);
+  if(!hl)return;
+  const [hwSnap,tbSnap]=await Promise.all([
+    get(child(ref(db),`homeworks/${cls}/${date}`)),
+    // Підручники не критичні: без них просто не буде посилань.
+    get(child(ref(db),`textbooks/${cls}`)).catch(()=>null)
+  ]);
+  hl.innerHTML='';
+  if(!hwSnap.exists()){hl.innerHTML='<li class="empty-msg">ДЗ не задано.</li>';return;}
+  const allBooks=(tbSnap&&tbSnap.exists())?tbSnap.val():{};
+  const d=hwSnap.val();
+  for(const s in d)hl.innerHTML+=renderHwItem(s,d[s],booksForSubject(allBooks,s));
 }
 // ══════════ ATTENDANCE (per-lesson schema) ══════════
 // Since attendance/{cls}/{date}/{student} is now {slotKey:{status,reason,markedBy}}
