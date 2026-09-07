@@ -640,12 +640,35 @@ document.getElementById('global-date').value=localDateString;
 // ══════════ GRADE SYSTEM ══════════
 // 6-бальна шкала. Маскування для 1-5 класу
 export function getClassNum(clsId){return parseInt((clsId||'class_1').replace('class_',''));}
+// Рівні для 1–5 класів. Літера — це і є оцінка, а не «маска цифри»:
+// саме так учитель її й ставить.
+export const LEVEL_LETTERS = ['П','С','Д','В'];
+// Літера → число, щоб рахувати середнє. Смуги такі самі, як нижче в
+// displayGrade: П = 1–2, С = 3, Д = 4, В = 5–6.
+export const LEVEL_TO_NUM = { 'П':2, 'С':3, 'Д':4, 'В':5 };
+export function levelNum(val){
+  const s = String(val == null ? '' : val).trim().toUpperCase();
+  if(LEVEL_TO_NUM[s] !== undefined) return LEVEL_TO_NUM[s];
+  const n = parseFloat(s);
+  return isNaN(n) ? null : n;
+}
+
 export function displayGrade(val,clsId){
   if(!val&&val!==0) return '';
+  // ЛІТЕРУ ПОВЕРТАЄМО ЯК Є.
+  //
+  // Раніше тут стояв лише parseInt. Учитель молодших класів ставить оцінку
+  // ЛІТЕРОЮ — П, С, Д, В, — і parseInt на ній дає NaN. Жодна з умов нижче
+  // не спрацьовувала, і функція повертала 'П' для будь-якого рівня. Тобто
+  // «В» перетворювалося на «П»: і в журналі вчителя, і в кабінеті батьків.
+  // Дитина з високим рівнем виглядала як дитина з початковим.
+  const s = String(val).trim().toUpperCase();
+  if(LEVEL_LETTERS.includes(s)) return s;
   const n=parseInt(val);
   const cn=getClassNum(clsId||getActiveClass());
   if(cn<=5){
-    // маскуємо цифри літерами
+    // цифру показуємо тією ж літерою, що й рівень
+    if(isNaN(n)) return String(val);
     if(n>=5) return 'В';
     if(n===4) return 'Д';
     if(n===3) return 'С';
@@ -654,8 +677,10 @@ export function displayGrade(val,clsId){
   return String(val);
 }
 export function gradeClass6(val){
-  const n=parseInt(val);
-  if(isNaN(n)) return 'g-letter';
+  // Літера-рівень має отримати той самий колір, що й відповідна цифра,
+  // інакше «В» і «5» виглядають у журналі по-різному
+  const n=levelNum(val);
+  if(n===null) return 'g-letter';
   if(n>=6) return 'g6';
   if(n===5) return 'g5';
   if(n===4) return 'g4';
@@ -664,8 +689,8 @@ export function gradeClass6(val){
   return 'g1';
 }
 export function gradeColorInline(val){
-  const n=parseInt(val);
-  if(isNaN(n)) return '#8e44ad';
+  const n=levelNum(val);
+  if(n===null) return '#8e44ad';
   if(n>=5) return '#1565c0';
   if(n===4) return '#2e7d32';
   if(n===3) return '#f57f17';
@@ -715,8 +740,11 @@ export function calculateWeightedAverage(grades,types){
   let totalWeight=0; let totalScore=0;
   for(let date in grades){
     for(let student in grades[date]){
-      const val=parseFloat(grades[date][student]);
-      if(isNaN(val)) continue;
+      // levelNum, а не parseFloat: у 1–5 класах оцінка — літера, і
+      // parseFloat пропускав її повз розрахунок. Середнє в цих класах
+      // рахувалося з порожнечі.
+      const val=levelNum(grades[date][student]);
+      if(val===null) continue;
       const type=(types&&types[date]&&types[date][student])||'П';
       const weight=getGradeWeight(type);
       totalScore+=val*weight; totalWeight+=weight;
@@ -728,7 +756,7 @@ export function calculateWeightedAverage(grades,types){
 export function calculateStudentWeightedAvg(studentGrades,studentTypes){
   let totalW=0; let totalS=0;
   for(let key in studentGrades){
-    const val=parseFloat(studentGrades[key]); if(isNaN(val)) continue;
+    const val=levelNum(studentGrades[key]); if(val===null) continue;
     const type=studentTypes?.[key]||'П'; const w=getGradeWeight(type);
     totalS+=val*w; totalW+=w;
   }
