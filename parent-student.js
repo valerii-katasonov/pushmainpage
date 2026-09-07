@@ -5,7 +5,7 @@
 // lives in teacher.js).
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, getActiveClass, currentUserData, STICKER_GOAL, stickerGoal, getWeekDates, displayGrade, gradeClass6, showToast, renderHwItem, dayKeys, dayNamesUA, isBreakItem, localDateString, formatAttendanceSlotLabel, renderGradeFormulaInfo, escJs, escHtml, safeUrl, renderBirthdays, stuName, auth, normalizeChildren, gradesFromMirror, mondayOf, altChoiceFor, resolveAlt, classHourItem, insertAtTime} from './common.js';
+import { db, getActiveClass, currentUserData, STICKER_GOAL, stickerGoal, getWeekDates, displayGrade, gradeClass6, showToast, renderHwItem, renderHwList, dayKeys, dayNamesUA, isBreakItem, localDateString, formatAttendanceSlotLabel, renderGradeFormulaInfo, escJs, escHtml, safeUrl, renderBirthdays, stuName, auth, normalizeChildren, gradesFromMirror, mondayOf, altChoiceFor, resolveAlt, classHourItem, insertAtTime} from './common.js';
 import { ACTIVE_YEAR } from './director.js';
 import { renderParentMenu } from './kitchen.js';
 import { renderNewsFeed } from './news.js';
@@ -572,7 +572,7 @@ export function loadParentDashboard(){
   // Calendar (holidays/breaks/exams) + bell schedule — Phase 3
   renderParentCalendar('parent');loadParentBellSchedule('parent');
   // HW
-  get(child(ref(db),`homeworks/${cls}/${date}`)).then(snap=>{const hl=document.getElementById('p-daily-hw-list');hl.innerHTML='';if(snap.exists()){const d=snap.val();for(let s in d)hl.innerHTML+=renderHwItem(s,d[s]);}else hl.innerHTML='<li class="empty-msg">ДЗ не задано.</li>';});
+  renderHwList(cls,date,'p-daily-hw-list');
   // Textbooks
   loadTextbooksForParent();
   loadAiDayContext('p');
@@ -877,7 +877,7 @@ export function loadStudentDashboard(){
   get(child(ref(db),`attendance/${cls}/${date}/${currentUserData.studentId||currentUserData.studentName}/${SELF_REPORT_SLOT}`)).then(snap=>{const se=document.getElementById('s-att-status');if(snap.exists()){const d=snap.val();se.innerText=`✅ Повідомлено: ${d.status==='late'?'Запізнення':'Відсутність'} (${d.reason})`;se.style.display='block';}else se.style.display='none';});
   checkTeacherAttendanceAlert('student');
   renderParentCalendar('student');loadParentBellSchedule('student');
-  get(child(ref(db),`homeworks/${cls}/${date}`)).then(snap=>{const hl=document.getElementById('s-daily-hw-list');hl.innerHTML='';if(snap.exists()){const d=snap.val();for(let s in d)hl.innerHTML+=renderHwItem(s,d[s]);}else hl.innerHTML='<li class="empty-msg">ДЗ не задано.</li>';});
+  renderHwList(cls,date,'s-daily-hw-list');
   loadTextbooksForParent('student');
   loadAiDayContext('s');
   renderBirthdays('s-birthdays',cls,currentUserData.studentName);
