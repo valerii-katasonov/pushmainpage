@@ -7,7 +7,7 @@
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, push, remove, update, onValue } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { renderNewsFeed } from './news.js';
-import { db, auth, CLOUDINARY_URL, UPLOAD_PRESET, HW_FILE_EXT, HW_FILE_MAX_MB, fileExt, getActiveClass, currentUserData, showToast, displayGrade, renderHwItem, dayKeys, formatAttendanceSlotLabel, STICKER_GOAL, stickerGoal, escJs, escHtml, safeUrl, normalizeChildren, notifyEvent, logAction, renderBirthdays, teacherAccessMatrix, getUsersSnap, stuName, gradeWritePaths, localDateString, gradeTypesCache} from './common.js';
+import { db, auth, CLOUDINARY_URL, UPLOAD_PRESET, HW_FILE_EXT, HW_FILE_MAX_MB, fileExt, getActiveClass, currentUserData, showToast, displayGrade, renderHwItem, renderHwList, dayKeys, formatAttendanceSlotLabel, STICKER_GOAL, stickerGoal, escJs, escHtml, safeUrl, normalizeChildren, notifyEvent, logAction, renderBirthdays, teacherAccessMatrix, getUsersSnap, stuName, gradeWritePaths, localDateString, gradeTypesCache} from './common.js';
 import { populateTopicSelector, availableTopicsCache } from './curriculum.js';
 
 let currentHwImages=[];
@@ -558,9 +558,12 @@ window.saveTopicAndHW=async function(){
   // окремим полем, щоб у батьків він був клікабельний, а не просто назвою.
   const bookSel=document.getElementById('hw-textbook');
   const bookOpt=bookSel&&bookSel.selectedIndex>=0?bookSel.options[bookSel.selectedIndex]:null;
-  const bookUrl=bookOpt?(bookOpt.getAttribute('data-url')||''):'';
-  const bookTitle=(document.getElementById('hw-textbook-custom')?.value.trim())
-                 ||(bookSel?bookSel.value:'');
+  const bookCustom=document.getElementById('hw-textbook-custom')?.value.trim()||'';
+  // Назва, вписана вручну, НЕ має посилання. Раніше тут бралася назва з
+  // ручного поля, а адреса — з випадайки: у завдання могло потрапити одне
+  // видання з посиланням на зовсім інше.
+  const bookTitle=bookCustom||(bookSel?bookSel.value:'');
+  const bookUrl=bookCustom?'':(bookOpt?(bookOpt.getAttribute('data-url')||''):'');
 
   if(!hwText&&!(fileInput&&fileInput.files.length)){
     const book=bookTitle;
@@ -1008,7 +1011,7 @@ export function loadTeacherDashboard(){
     if(rs.exists()&&as.exists()){const reactions=rs.val();const authors=as.val();const comments=cs.exists()?cs.val():{};for(let d in reactions)for(let s in reactions[d])if(authors[d]&&authors[d][s]===uid)for(let st in reactions[d][s]){cnt++;let emoji=reactions[d][s][st];let cm=(comments[d]&&comments[d][s]&&comments[d][s][st])?comments[d][s][st]:'Без коментаря';window.myDetailedReactions.push({date:d,subject:s,student:st,emoji,comment:cm});}window.myDetailedReactions.sort((a,b)=>new Date(b.date)-new Date(a.date));}
     document.getElementById('t-karma-counter').innerText=cnt;
   });
-  if(currentUserData.role!=='art_school_teacher'){const date=document.getElementById('global-date').value;get(child(ref(db),`homeworks/${cls}/${date}`)).then(snap=>{const hl=document.getElementById('t-daily-hw-list');hl.innerHTML='';if(snap.exists()){const d=snap.val();for(let s in d)hl.innerHTML+=renderHwItem(s,d[s]);}else hl.innerHTML='<li class="empty-msg">ДЗ не задано.</li>';});}
+  if(currentUserData.role!=='art_school_teacher'){const date=document.getElementById('global-date').value;renderHwList(cls,date,'t-daily-hw-list');}
   renderBirthdays('t-birthdays',cls,'');
   listenTeacherAttendance();
 }
