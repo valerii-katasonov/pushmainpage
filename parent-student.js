@@ -112,6 +112,98 @@ export async function loadTodaySubstitutions(cls,date){
     todaySubs=snap.exists()?snap.val():{};
   }catch(e){todaySubs={};}
 }
+
+// ── Теми уроків, які вже відбулися ──────────────────────────────
+//
+// НАВІЩО. Батьки бачили домашнє завдання, але не бачили, ЩО саме дитина
+// проходила. «Що було в школі?» — «Не памʼятаю». Тему вчитель і так
+// записує в журнал, і показати її родині нічого не коштує.
+//
+// ПОКАЗУЄМО ЛИШЕ ЗА УРОКИ, ЩО МИНУЛИ. Тема, яку вчитель вписав наперед, —
+// це план, а не факт; показувати її як «вивчали» було б неправдою.
+//
+// ЧОМУ ЧИТАЄМО ВЕСЬ ВУЗОЛ КЛАСУ. Теми лежать як {предмет}/{дата}, тож
+// дістати всі предмети за один день інакше не можна: Firebase не вміє
+// шукати за внуком. Вузол невеликий — рядок теми на урок.
+// Запис теми → рядок для показу.
+//
+// ФОРМА ЗАПИСУ МІНЯЛАСЯ ТРИЧІ: спершу просто рядок, потім один обʼєкт
+// {topicId|customText}, тепер масив із двох тем. У базі лежать усі три —
+// давні уроки ніхто не переписував. Читаємо всі, інакше в батьків
+// частина тем буде порожня без жодної причини.
+export function topicNames(rec, planForSubject){
+  if(!rec) return '';
+  let list = [];
+  if(typeof rec === 'string') list = [{ customText: rec }];
+  else if(Array.isArray(rec.topics)) list = rec.topics;
+  else if(rec.topicId || rec.customText) list = [rec];
+  const topics = (planForSubject && planForSubject.topics) || {};
+  return list.map(e => {
+    if(!e) return '';
+    if(e.customText) return String(e.customText).trim();
+    const t = topics[e.topicId];
+    return t ? String(t.title || '').trim() : '';
+  }).filter(Boolean).join(' · ');
+}
+let dayTopics = {};
+export async function loadDayTopics(cls, date){
+  dayTopics = {};
+  if(!cls || !date) return;
+  try{
+    const [topSnap, planSnap] = await Promise.all([
+      get(child(ref(db), `lesson_topics/${cls}`)),
+      get(child(ref(db), `curriculum_plans/${cls}`)).catch(()=>null)
+    ]);
+    if(!topSnap.exists()) return;
+    const byKey = topSnap.val() || {};
+    const plans = (planSnap && planSnap.exists()) ? planSnap.val() : {};
+    for(const sk in byKey){
+      const rec = byKey[sk] && byKey[sk][date];
+      if(!rec) continue;
+      const names = topicNames(rec, plans[sk]);
+      if(names) dayTopics[sk] = names;
+    }
+  }catch(e){ dayTopics = {}; }
+}
+// Ключ предмета в lesson_topics «безпечний»: крапки й слеші замінені
+function topicFor(subjectName){
+  const sk = String(subjectName || '').replace(/[.#$[\]/]/g, '_').trim();
+  return dayTopics[sk] || '';
+}
+
+// Список «що вивчали» за обрану дату.
+//
+// ЧОМУ ОКРЕМО ВІД РОЗКЛАДУ. Блок розкладу завжди показує сьогодні або
+// завтра — він про «коли йти», а не про «що було». А дата згори керує
+// оцінками й домашнім завданням, і саме там людина гортає минулі дні.
+// Тому теми за обрану дату живуть поруч із домашнім завданням.
+export function renderDayTopics(prefix, dateStr){
+  const box = document.getElementById(`${prefix}-day-topics`);
+  if(!box) return;
+  const keys = Object.keys(dayTopics);
+  if(!keys.length){ box.style.display = 'none'; box.innerHTML = ''; return; }
+  // Показуємо назву предмета в тому вигляді, як її бачить сімʼя: у ключі
+  // крапки замінені, і «Я і Україна_ 3 кл» виглядало б дивно. Беремо
+  // назву з розкладу дня, а до ключа звертаємось лише як до ключа.
+  const nice = {};
+  Object.values(window.schedule || {}).forEach(day => {
+    (Array.isArray(day) ? day : Object.values(day || {})).forEach(slot => {
+      const items = Array.isArray(slot) ? slot : (slot && slot.subject ? [slot] : []);
+      items.forEach(l => {
+        const nm = typeof l?.subject === 'string' ? l.subject : (l?.subject?.ua || '');
+        if(nm) nice[String(nm).replace(/[.#$[\]/]/g,'_').trim()] = nm;
+      });
+    });
+  });
+  const d = String(dateStr || '').split('-').reverse().join('.');
+  box.innerHTML = `<div class="tb-head">📘 Що вивчали ${escHtml(d)}</div>`
+    + keys.sort((a,b)=>String(nice[a]||a).localeCompare(String(nice[b]||b),'uk'))
+        .map(k => `<div class="topics-row">
+          <span class="topics-subj">${escHtml(nice[k] || k)}</span>
+          <span class="topics-what">${escHtml(dayTopics[k])}</span>
+        </div>`).join('');
+  box.style.display = 'block';
+}
 // ── Коли показувати завтрашній розклад ──
 //
 // ЩО БУЛО. Перемикання спрацьовувало лише за трьох умов одразу: сьогодні
@@ -215,6 +307,7 @@ function renderDynamicSchedule(role='parent'){
         <div class="lesson-subj">${escHtml(sn)}${sub?' <span class="sub-badge">заміна</span>':''}${l._altPending?' <span class="alt-badge pending">🔁 уточнюється</span>':(l._altOptions?' <span class="alt-badge">🔁 чергування</span>':'')}</div>
         <div class="lesson-time">${escHtml(l.time||'—')}${sub&&sub.subName?` · ${escHtml(sub.subName)}`:''}</div>
         ${l._altPending?`<div class="alt-hint">Учитель ще не позначив, що саме буде цього тижня</div>`:(l._altOther?`<div class="alt-hint">наступного разу: ${escHtml(l._altOther)}</div>`:'')}
+        ${isPassed&&topicFor(sn)?`<div class="lesson-topic">📘 ${escHtml(topicFor(sn))}</div>`:''}
         ${isCurrent?`<div class="progress-thin"><div class="progress-thin-fill" style="width:${progress}%"></div></div>`:''}
       </div>
       ${isCurrent?`<div class="lesson-countdown">⏱ ${countdown}</div>`:''}
@@ -485,7 +578,8 @@ export function loadParentDashboard(){
   loadAiDayContext('p');
   renderBirthdays('p-birthdays',cls,currentUserData.studentName);
   renderFinalGrades('p-final-grades',cls,currentUserData.studentName);
-  loadTodaySubstitutions(cls,date).then(()=>renderDynamicSchedule('parent'));
+  Promise.all([loadTodaySubstitutions(cls,date),loadDayTopics(cls,date)])
+    .then(()=>{renderDynamicSchedule('parent');renderDayTopics('p',date);});
   renderConsents();
   renderNewsFeed('p-news-feed');
   // Ключ дитини НЕ передаємо: хай renderParentMenu візьме його через
@@ -785,7 +879,8 @@ export function loadStudentDashboard(){
   loadAiDayContext('s');
   renderBirthdays('s-birthdays',cls,currentUserData.studentName);
   renderFinalGrades('s-final-grades',cls,currentUserData.studentName);
-  loadTodaySubstitutions(cls,date).then(()=>renderDynamicSchedule('student'));
+  Promise.all([loadTodaySubstitutions(cls,date),loadDayTopics(cls,date)])
+    .then(()=>{renderDynamicSchedule('student');renderDayTopics('s',date);});
   const ym=date.substring(0,7);
   Promise.all([get(child(ref(db),`comments/${cls}/${date}`)),get(child(ref(db),`student_grades/${cls}/${mySid()}/${ym}`)),get(child(ref(db),`behavior_grades/${cls}/${ym}`))]).then(([cmS,mirS,bhS])=>{
     const list=document.getElementById('s-daily-comments-list');list.innerHTML=renderGradeFormulaInfo();let hasItems=false;
