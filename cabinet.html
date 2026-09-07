@@ -565,6 +565,17 @@
     /* Немає відповіді про обіди — не «відмова» і не «не харчується»,
        а стан, який має впадати в око: дитина просто випала із замовлення */
     .k-noreply{color:#c0392b;font-weight:800;}
+    /* Рівень у редакторі оцінки (1–5 класи) */
+    .level-btns{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px;}
+    .level-btn{width:auto;margin-top:0;flex:0 0 auto;padding:9px 14px;border:1px solid #cfd8dc;
+               background:#fff;color:#546e7a;border-radius:9px;font-weight:800;font-size:.95rem;cursor:pointer;}
+    .level-btn.active{background:var(--teal);border-color:var(--teal);color:#fff;}
+    .gep-hint{width:100%;font-size:.7rem;color:#90a4ae;margin:0 0 3px 0;font-weight:600;}
+    /* Що збережено на цю дату — відповідь на питання «чи записалася тема» */
+    .topic-saved{margin-top:10px;padding:9px 12px;border-radius:10px;font-size:.82rem;
+                 background:#e8f5e9;color:#1b5e20;line-height:1.5;}
+    .topic-saved.none{background:#f5f5f5;color:#90a4ae;}
+    .topic-saved span{font-weight:700;}
     /* Клітинка обліку як кнопка — кухня дописує порцію після дедлайну */
     /* Правка замовлень на винос у кабінеті кухні */
     .k-ta-cell{line-height:2;}
@@ -1703,7 +1714,11 @@
 <!-- GRADE EDITOR POPUP -->
 <div id="grade-editor-popup" class="grade-editor-popup">
   <div style="font-size:.73rem;color:#666;margin-bottom:5px;" id="gep-label">Учень | Предмет | Дата</div>
+  <!-- Для 1–5 класів сюди підставляються кнопки рівнів П · С · Д · В:
+       у цих класах оцінка і є літера, і набирати її вручну ніде не треба. -->
+  <div class="level-btns" id="gep-level-btns" style="display:none;"></div>
   <input type="text" id="gep-value" placeholder="1-6" autocomplete="off">
+  <div class="gep-hint" id="gep-type-hint">Вид роботи:</div>
   <div class="type-btns" id="gep-type-btns"></div>
   <div class="editor-actions">
     <button class="btn-confirm" onclick="confirmGrade()">✔ Зберегти</button>
@@ -2673,6 +2688,10 @@
       <select id="t-subject" onchange="handleSubjectChange()"></select>
 
       <div class="lg-head"><span>1</span>Тема, домашнє завдання та оцінки</div>
+      <!-- Що вже збережено на цю дату. Раніше після «Зберегти» тема зникала
+           з очей: у кабінеті вчителя її ніде не було видно, і перевірити,
+           чи вона взагалі записалася, було ніяк. -->
+      <div id="t-topic-saved" class="topic-saved" style="display:none;"></div>
       <div class="topic-card" id="t-topic-card" style="margin-top:13px;">
         <label>📌 Тема уроку 1:</label>
         <div class="topic-select-wrap">
