@@ -97,19 +97,13 @@ export async function renderActivities(boxId){
     return;
   }
 
-  // СПЕРШУ МАЛЮЄМО, ПОТІМ ЧИТАЄМО.
+  // НІЧОГО НЕ МАЛЮЄМО, ПОКИ НЕ ПРОЧИТАЛИ.
   //
-  // Спочатку було навпаки — і блок намертво завис на «Завантаження...»,
-  // бо запит до бази не повертався ні відповіддю, ні помилкою. Батько
-  // дивився на смужку, яка нічого не робить.
-  //
-  // Насправді екран не має чекати на базу взагалі. Поки відповіді немає,
-  // показувати треба рівно те саме, що й коли її немає в базі, — питання.
-  // Тому малюємо одразу з порожнім станом, а прочитане просто уточнює
-  // картинку, коли (і якщо) приходить. Зависнути тут більше нічому.
-  actPlan = null; actWeek = null;
-  safeDraw(box, wk);
-
+  // У розмітці вже лежать обидва питання з робочими кнопками — саме те,
+  // що треба показати людині, яка ще не відповідала. Тому чіпати блок до
+  // приходу даних не потрібно й шкідливо: будь-яка помилка тут лишила б
+  // порожню смужку замість готового вмісту. Замінюємо його лише тоді,
+  // коли справді є що показати.
   try{
     const [pSnap, wSnap] = await Promise.all([
       get(child(ref(db), `activity_plan/${cls}/${sid}`)),
@@ -133,18 +127,20 @@ export async function renderActivities(boxId){
   }
 }
 
-// Малювання не має права залишити екран у стані «нічого». Якщо тут щось
-// впаде, показуємо помилку, а не порожню синю смужку.
+// Малювання не має права залишити екран порожнім. Готуємо розмітку в
+// рядку й підставляємо ЛИШЕ якщо вона справді щось містить — інакше
+// краще лишити те, що вже стоїть у сторінці, ніж стерти його на порожнє.
 function safeDraw(box, wk){
-  try{ drawActivities(box, wk); }
-  catch(e){
+  try{
+    const html = buildActivitiesHtml(wk);
+    if(html && html.trim()) box.innerHTML = html;
+  }catch(e){
     console.error('[Push School] Басейн/автобус — показ:', e);
-    box.innerHTML = `<div class="act-warn">Не вдалося показати: ${escHtml((e&&e.message)||'')}</div>`;
   }
 }
 window.renderActivities = renderActivities;
 
-function drawActivities(box, wk){
+function buildActivitiesHtml(wk){
   const poolAnswered = actPlan && typeof actPlan.pool === 'boolean';
   const busAnswered  = actPlan && typeof actPlan.bus  === 'boolean';
   const goes = goesThisWeek(actWeek ? { me:actWeek } : null, 'me');
@@ -201,7 +197,7 @@ function drawActivities(box, wk){
       <small>Питання оновлюється щопонеділка. Змінити відповідь можна в будь-який день тижня.</small>
     </div>` : '';
 
-  box.innerHTML = `<h4 class="act-title">🏊 Басейн і 🚌 автобус</h4>${poolBlock}${busBlock}${weekBlock}`;
+  return `<h4 class="act-title">🏊 Басейн і 🚌 автобус</h4>${poolBlock}${busBlock}${weekBlock}`;
 }
 
 // Постійна відповідь. update, а не set: два питання живуть в одному вузлі,
@@ -215,7 +211,7 @@ window.setActivityPlan = async function(key, val){
     actPlan = Object.assign({}, actPlan, { [key]: !!val });
     logAction('activity', { cls, value:`${key}: ${val?'так':'ні'}` });
     showToast(val ? '✅ Записали: так' : '✅ Записали: ні');
-    drawActivities(document.getElementById('p-activities'), weekKey());
+    safeDraw(document.getElementById('p-activities'), weekKey());
   }catch(e){
     alert('Не вдалося зберегти: ' + e.message);
   }
@@ -239,7 +235,7 @@ window.setPoolWeek = async function(going){
     }
     logAction('activity', { cls, value:`басейн ${wk}: ${going?'буде':'не буде'}` });
     showToast(going ? '✅ Буде на басейні' : '✅ Попередили про пропуск');
-    drawActivities(document.getElementById('p-activities'), wk);
+    safeDraw(document.getElementById('p-activities'), wk);
   }catch(e){
     alert('Не вдалося зберегти: ' + e.message);
   }
