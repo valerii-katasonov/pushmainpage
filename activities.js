@@ -90,47 +90,54 @@ export async function renderActivities(boxId){
     return;
   }
   box.style.display = 'block';
-  // Версія прямо в написі. Виглядає технічно, але коштує рівно одного
-  // погляду там, де інакше доводиться гадати: «а нова версія взагалі
-  // виїхала, чи браузер віддає стару з кешу?». Прибрати, коли вляжеться.
-  box.innerHTML = `<p class="empty-msg">Завантаження... <small>${escHtml(ACT_BUILD)}</small></p>`;
 
   const wk = weekKey();
-  // Понеділок не порахувався — далі не йдемо: у шляху утворився б порожній
-  // сегмент (pool_week/class_1//sid), і запит просто впав би незрозуміло.
   if(!wk){
     box.innerHTML = `<div class="act-warn">Не вдалося визначити тиждень. Перевірте дату вгорі сторінки.</div>`;
     return;
   }
+
+  // СПЕРШУ МАЛЮЄМО, ПОТІМ ЧИТАЄМО.
+  //
+  // Спочатку було навпаки — і блок намертво завис на «Завантаження...»,
+  // бо запит до бази не повертався ні відповіддю, ні помилкою. Батько
+  // дивився на смужку, яка нічого не робить.
+  //
+  // Насправді екран не має чекати на базу взагалі. Поки відповіді немає,
+  // показувати треба рівно те саме, що й коли її немає в базі, — питання.
+  // Тому малюємо одразу з порожнім станом, а прочитане просто уточнює
+  // картинку, коли (і якщо) приходить. Зависнути тут більше нічому.
+  actPlan = null; actWeek = null;
+  safeDraw(box, wk);
+
   try{
-    // Тайм-аут обов'язковий. Без нього мовчазне «Завантаження...» тривало б
-    // вічно, і людина не знала б, зламалося чи просто повільно. Так само
-    // зроблено в кабінеті доступу дитини — і не випадково.
-    const [pSnap, wSnap] = await Promise.race([
-      Promise.all([
-        get(child(ref(db), `activity_plan/${cls}/${sid}`)),
-        get(child(ref(db), `pool_week/${cls}/${wk}/${sid}`))
-      ]),
-      new Promise((_, rej) => setTimeout(
-        () => rej(new Error('база не відповіла за 10 секунд')), 10000))
+    const [pSnap, wSnap] = await Promise.all([
+      get(child(ref(db), `activity_plan/${cls}/${sid}`)),
+      get(child(ref(db), `pool_week/${cls}/${wk}/${sid}`))
     ]);
     actPlan = pSnap.exists() ? (pSnap.val()||{}) : null;
     actWeek = wSnap.exists() ? (wSnap.val()||{}) : null;
+    safeDraw(box, wk);
   }catch(e){
+    // Читання не вдалося — питання лишаються на екрані, бо відповісти на
+    // них людина може й так. Просто чесно попереджаємо, що збереження
+    // може не пройти, і не ховаємо блок.
     console.error('[Push School] Басейн/автобус — читання:', e);
-    const denied = /permission[_ ]denied/i.test((e&&e.message)||'');
-    box.innerHTML = `<div class="act-warn">${denied
-      ? '⛔ Немає прав на читання. Адміністратор має опублікувати нові правила бази '
-        + '(вузли <code>activity_plan</code> і <code>pool_week</code>).'
-      : `Не вдалося прочитати: ${escHtml((e&&e.message)||'невідома помилка')}`}
-      <br><small>Шлях: activity_plan/${escHtml(cls)}/${escHtml(sid)}</small></div>`;
-    return;
+    const note = document.createElement('div');
+    note.className = 'act-warn';
+    note.style.marginTop = '9px';
+    note.textContent = /permission[_ ]denied/i.test((e&&e.message)||'')
+      ? 'Збережені раніше відповіді прочитати не вдалося: немає прав. Адміністратор має опублікувати правила бази.'
+      : 'Збережені раніше відповіді прочитати не вдалося: ' + ((e&&e.message)||'невідома помилка');
+    box.appendChild(note);
   }
-  // Малювання теж під наглядом: помилка тут раніше лишала «Завантаження...»
-  // назавжди, бо innerHTML просто не встигав перезаписатися.
-  try{
-    drawActivities(box, wk);
-  }catch(e){
+}
+
+// Малювання не має права залишити екран у стані «нічого». Якщо тут щось
+// впаде, показуємо помилку, а не порожню синю смужку.
+function safeDraw(box, wk){
+  try{ drawActivities(box, wk); }
+  catch(e){
     console.error('[Push School] Басейн/автобус — показ:', e);
     box.innerHTML = `<div class="act-warn">Не вдалося показати: ${escHtml((e&&e.message)||'')}</div>`;
   }
@@ -194,8 +201,7 @@ function drawActivities(box, wk){
       <small>Питання оновлюється щопонеділка. Змінити відповідь можна в будь-який день тижня.</small>
     </div>` : '';
 
-  box.innerHTML = `<h4 class="act-title">🏊 Басейн і 🚌 автобус</h4>${poolBlock}${busBlock}${weekBlock}
-    <div class="act-build">${escHtml(ACT_BUILD)}</div>`;
+  box.innerHTML = `<h4 class="act-title">🏊 Басейн і 🚌 автобус</h4>${poolBlock}${busBlock}${weekBlock}`;
 }
 
 // Постійна відповідь. update, а не set: два питання живуть в одному вузлі,
