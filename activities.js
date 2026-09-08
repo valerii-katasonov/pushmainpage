@@ -137,7 +137,10 @@ export async function renderActivities(boxId){
 function safeDraw(box, wk){
   try{
     const html = buildActivitiesHtml(wk);
-    if(html && html.trim()) box.innerHTML = html;
+    // Порожньо буває законно: на все відповіли, на басейн дитина не ходить.
+    // Тоді ховаємо блок цілком, а не лишаємо порожню рамку.
+    if(html && html.trim()){ box.innerHTML = html; box.style.display='block'; }
+    else { box.innerHTML = ''; box.style.display='none'; }
   }catch(e){
     console.error('[Push School] Басейн/автобус — показ:', e);
   }
@@ -149,43 +152,48 @@ function buildActivitiesHtml(wk){
   const busAnswered  = actPlan && typeof actPlan.bus  === 'boolean';
   const goes = goesThisWeek(actWeek ? { me:actWeek } : null, 'me');
 
-  // Поки не відповіли — питання помітне, а не рядок у налаштуваннях:
-  // саме на цьому спотикалося харчування, поки не зробили так само.
-  const ask = (key, title, note, yes, no) => `
+  // ПИТАННЯ БЕЗ ПІДКАЗАНОЇ ВІДПОВІДІ. Обидві кнопки однакові на вигляд:
+  // варіант, підсвічений кольором, читається як «правильний», і батько
+  // тисне його не думаючи. Тут потрібна саме свідома відповідь.
+  const ask = (key, title, note, a, b) => `
     <div class="pm-ask">
       <b>${title}</b>
       <span>${note}</span>
-      <div class="pm-ask-btns">
-        <button type="button" class="pm-ask-yes" onclick="setActivityPlan('${key}',1)">${yes}</button>
-        <button type="button" class="pm-ask-no"  onclick="setActivityPlan('${key}',0)">${no}</button>
+      <div class="act-choice">
+        <button type="button" onclick="setActivityPlan('${key}',1)">${a}</button>
+        <button type="button" onclick="setActivityPlan('${key}',0)">${b}</button>
       </div>
-      <small>Відповідь можна змінити будь-коли — тут же.</small>
     </div>`;
 
-  // Уже відповіли — показуємо стан і одну кнопку «змінити на протилежне».
-  const row = (key, icon, label, on, onText, offText, flip) => `
-    <div class="act-row">
-      <div class="act-state ${on?'yes':'no'}">${icon} <b>${label}</b>
-        <span>${on ? onText : offText}</span></div>
-      <button type="button" class="pm-btn ${on?'':'back'}"
-              onclick="setActivityPlan('${key}',${on?0:1})">${flip}</button>
-    </div>`;
+  const poolBlock = poolAnswered ? '' : ask('pool',
+    '🏊 Чи буде дитина ходити на басейн?',
+    'Поки ви не відповіли, школа не знає, чи рахувати дитину.',
+    'Так, буде', 'Ні, не буде');
 
-  const poolBlock = !poolAnswered
-    ? ask('pool','🏊 Дитина ходить на басейн?',
-          'Поки ви не відповіли, школа не знає, чи рахувати дитину.',
-          'Так, ходить','Ні, не ходить')
-    : row('pool','🏊','Басейн', actPlan.pool,
-          'ходить', 'не ходить',
-          actPlan.pool ? 'Більше не ходить' : 'Буде ходити');
+  const busBlock = busAnswered ? '' : ask('bus',
+    '🚌 Як дитина добиратиметься до школи?',
+    'Школа має знати, кого чекає автобус, а кого привозять батьки.',
+    'Шкільним автобусом', 'Привозимо самі');
 
-  const busBlock = !busAnswered
-    ? ask('bus','🚌 Дитина їздить шкільним автобусом?',
-          'Потрібно, щоб школа знала, кого чекає автобус, а кого забирають батьки.',
-          'Так, шкільним автобусом','Ні, привозимо самі')
-    : row('bus','🚌','Шкільний автобус', actPlan.bus,
-          'їздить автобусом', 'привозять батьки',
-          actPlan.bus ? 'Возитимемо самі' : 'Пересадити на автобус');
+  // ВІДПОВІЛИ — ПИТАННЯ ЗНИКАЄ. Далі воно живе в налаштуваннях, як і
+  // харчування: щодня бачити «дитина ходить на басейн» немає потреби,
+  // а змінити відповідь треба мати змогу будь-коли.
+  const opt = (key, val, on, text) =>
+    `<button type="button" class="act-opt${on?' on':''}"
+             onclick="setActivityPlan('${key}',${val})">${text}</button>`;
+  const settings = (poolAnswered || busAnswered) ? `
+    <details class="act-more">
+      <summary>⚙️ Налаштування басейну й автобуса</summary>
+      ${poolAnswered ? `<div class="act-set">
+        <b>🏊 Басейн</b>
+        <div class="act-choice">${opt('pool',1,actPlan.pool,'Ходить')}${opt('pool',0,!actPlan.pool,'Не ходить')}</div>
+      </div>` : ''}
+      ${busAnswered ? `<div class="act-set">
+        <b>🚌 Дорога до школи</b>
+        <div class="act-choice">${opt('bus',1,actPlan.bus,'Шкільний автобус')}${opt('bus',0,!actPlan.bus,'Привозимо самі')}</div>
+      </div>` : ''}
+      <p class="act-hint">Зміни діють одразу. Школа побачить їх у своєму зведенні.</p>
+    </details>` : '';
 
   // Тижнева відмітка з'являється лише тим, хто взагалі ходить на басейн:
   // питати «чи буде цього тижня» в того, хто не ходить, безглуздо.
@@ -201,7 +209,12 @@ function buildActivitiesHtml(wk){
       <small>Питання оновлюється щопонеділка. Змінити відповідь можна в будь-який день тижня.</small>
     </div>` : '';
 
-  return `<h4 class="act-title">🏊 Басейн і 🚌 автобус</h4>${poolBlock}${busBlock}${weekBlock}`;
+  const body = `${poolBlock}${busBlock}${weekBlock}${settings}`;
+  // Показувати нема чого — на басейн не ходить, на все відповіли. Віддаємо
+  // порожній рядок: renderActivities сховає блок, щоб не висіла смужка ні
+  // з чим. Заголовок теж не потрібен, якщо всередині лише налаштування.
+  if(!poolBlock && !busBlock && !weekBlock) return settings ? `${settings}` : '';
+  return `<h4 class="act-title">🏊 Басейн і 🚌 автобус</h4>${body}`;
 }
 
 // Постійна відповідь. update, а не set: два питання живуть в одному вузлі,
