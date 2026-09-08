@@ -28,7 +28,7 @@ import { ref, set, get, child, update } from "https://www.gstatic.com/firebasejs
 import { db, currentUserData, getActiveClass, showToast, escHtml,
          logAction, mondayOf, localDateString } from './common.js';
 
-export const ACT_BUILD = '2026-09-08 · басейн і автобус v1';
+export const ACT_BUILD = '2026-09-08 · басейн і автобус v3';
 // Рядок у консолі — щоб на питання «а нова версія взагалі виїхала?»
 // можна було відповісти за секунду, а не здогадуватися.
 console.info('[Push School] activities.js —', ACT_BUILD);
@@ -90,7 +90,10 @@ export async function renderActivities(boxId){
     return;
   }
   box.style.display = 'block';
-  box.innerHTML = '<p class="empty-msg">Завантаження...</p>';
+  // Версія прямо в написі. Виглядає технічно, але коштує рівно одного
+  // погляду там, де інакше доводиться гадати: «а нова версія взагалі
+  // виїхала, чи браузер віддає стару з кешу?». Прибрати, коли вляжеться.
+  box.innerHTML = `<p class="empty-msg">Завантаження... <small>${escHtml(ACT_BUILD)}</small></p>`;
 
   const wk = weekKey();
   // Понеділок не порахувався — далі не йдемо: у шляху утворився б порожній
