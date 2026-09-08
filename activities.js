@@ -93,18 +93,44 @@ export async function renderActivities(boxId){
   box.innerHTML = '<p class="empty-msg">Завантаження...</p>';
 
   const wk = weekKey();
+  // Понеділок не порахувався — далі не йдемо: у шляху утворився б порожній
+  // сегмент (pool_week/class_1//sid), і запит просто впав би незрозуміло.
+  if(!wk){
+    box.innerHTML = `<div class="act-warn">Не вдалося визначити тиждень. Перевірте дату вгорі сторінки.</div>`;
+    return;
+  }
   try{
-    const [pSnap, wSnap] = await Promise.all([
-      get(child(ref(db), `activity_plan/${cls}/${sid}`)),
-      get(child(ref(db), `pool_week/${cls}/${wk}/${sid}`))
+    // Тайм-аут обов'язковий. Без нього мовчазне «Завантаження...» тривало б
+    // вічно, і людина не знала б, зламалося чи просто повільно. Так само
+    // зроблено в кабінеті доступу дитини — і не випадково.
+    const [pSnap, wSnap] = await Promise.race([
+      Promise.all([
+        get(child(ref(db), `activity_plan/${cls}/${sid}`)),
+        get(child(ref(db), `pool_week/${cls}/${wk}/${sid}`))
+      ]),
+      new Promise((_, rej) => setTimeout(
+        () => rej(new Error('база не відповіла за 10 секунд')), 10000))
     ]);
     actPlan = pSnap.exists() ? (pSnap.val()||{}) : null;
     actWeek = wSnap.exists() ? (wSnap.val()||{}) : null;
   }catch(e){
-    box.innerHTML = `<div class="act-warn">Не вдалося прочитати: ${escHtml(e.message)}</div>`;
+    console.error('[Push School] Басейн/автобус — читання:', e);
+    const denied = /permission[_ ]denied/i.test((e&&e.message)||'');
+    box.innerHTML = `<div class="act-warn">${denied
+      ? '⛔ Немає прав на читання. Адміністратор має опублікувати нові правила бази '
+        + '(вузли <code>activity_plan</code> і <code>pool_week</code>).'
+      : `Не вдалося прочитати: ${escHtml((e&&e.message)||'невідома помилка')}`}
+      <br><small>Шлях: activity_plan/${escHtml(cls)}/${escHtml(sid)}</small></div>`;
     return;
   }
-  drawActivities(box, wk);
+  // Малювання теж під наглядом: помилка тут раніше лишала «Завантаження...»
+  // назавжди, бо innerHTML просто не встигав перезаписатися.
+  try{
+    drawActivities(box, wk);
+  }catch(e){
+    console.error('[Push School] Басейн/автобус — показ:', e);
+    box.innerHTML = `<div class="act-warn">Не вдалося показати: ${escHtml((e&&e.message)||'')}</div>`;
+  }
 }
 window.renderActivities = renderActivities;
 
