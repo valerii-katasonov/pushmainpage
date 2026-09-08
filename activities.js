@@ -77,7 +77,15 @@ export async function renderActivities(boxId){
   // дитину, приймає він. Учень бачить результат у розкладі, але не змінює.
   if(!currentUserData || currentUserData.role !== 'parent'){ box.style.display='none'; return; }
   const { cls, sid } = myKid();
-  if(!cls || !sid){ box.style.display='none'; return; }
+  // Дитина не визначена — мовчки ховати не можна: батько вирішив би, що
+  // так і має бути, і питання про басейн просто не дійшло б до нього.
+  if(!cls || !sid){
+    box.style.display='block';
+    box.innerHTML = `<div class="act-warn">Не вдалося визначити дитину, тож питання про
+      басейн і автобус не показані. Зверніться до класного керівника —
+      можливо, дитину ще не прив'язано до вашої пошти.</div>`;
+    return;
+  }
   box.style.display = 'block';
   box.innerHTML = '<p class="empty-msg">Завантаження...</p>';
 
