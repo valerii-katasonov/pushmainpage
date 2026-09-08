@@ -558,6 +558,12 @@ window.sendRetakeRequest=sendRetakeRequest;
 // ══════════ PARENT DASHBOARD ══════════
 export function loadParentDashboard(){
   if(!currentUserData)return;const date=document.getElementById('global-date').value;const cls=getActiveClass();
+  // Басейн і автобус — ПЕРШИМ ділом і під власним try. Спершу цей виклик
+  // стояв у кінці функції, і будь-яка помилка вище (розклад, наліпки,
+  // підручники) забирала його з собою: блок просто не з'являвся, мовчки.
+  // Питання до батьків не має залежати від того, чи завантажилися наліпки.
+  try{ if(window.renderActivities) window.renderActivities('p-activities'); }
+  catch(e){ console.error('Басейн/автобус:', e); }
   // Список причин будується тут, а не лише в onchange: інакше до першої
   // зміни типу в полі висів би єдиний варіант, зашитий у розмітці.
   fillAttReasons('p');
