@@ -2894,6 +2894,12 @@
           <div id="t-topic-display-2" style="display:none;" class="topic-display"></div>
           <button type="button" onclick="hideSecondTopicSlot()" style="margin-top:5px;background:none;color:var(--red);width:auto;padding:2px;">✖ Прибрати</button>
         </div>
+        <!-- Своя кнопка на тему. Раніше тема й ДЗ зберігалися однією
+             кнопкою внизу, і це плутало: учитель заповнював тільки тему,
+             а натискав «Зберегти тему та ДЗ» — і не розумів, чи записалося
+             щось зайве. Тепер кожен блок зберігається окремо. -->
+        <button type="button" class="qa-btn qa-save" id="btn-save-topic"
+                onclick="saveLessonTopic()" style="margin-top:11px;">💾 Зберегти тему</button>
       </div>
       <!-- ДЗ + Фото -->
       <div id="t-hw-input-wrapper">
@@ -2901,12 +2907,17 @@
         <textarea id="t-hw" rows="2" placeholder="Введіть ДЗ..."></textarea>
         <!-- AI-чернетка ДЗ за темою уроку. Предмет, тему і клас система бере
              сама — вчителю не треба нічого формулювати. -->
-        <!-- Необов'язковий контекст для AI: підручник, сторінки, текст вправи -->
+        <!-- Контекст уроку: підручник, сторінки, текст вправи. Служить двом
+             цілям одразу — це і підказка генератору ДЗ, і саме завдання,
+             якщо поле ДЗ лишили порожнім (див. saveHomework). Тому в
+             підписі його НЕ називаємо «для ШІ»: учитель заповнює ці поля
+             замість тексту завдання, і це нормальний спосіб задати ДЗ. -->
         <details class="ai-ctx" ontoggle="if(this.open)fillHwTextbooks()">
-          <summary>➕ Підказка для ШІ: підручник, сторінки, текст вправи</summary>
+          <summary>➕ Додати контекст: підручник, сторінки, текст вправи</summary>
           <p style="margin:7px 0 0 0;font-size:.76rem;color:#90a4ae;line-height:1.4;">
-            Це поля <b>для генератора</b>, а не саме завдання. Батьки бачать лише те,
-            що написано у полі «Домашнє завдання» вгорі.</p>
+            Якщо поле «Домашнє завдання» лишиться порожнім, підручник і сторінки
+            стануть завданням самі. Обраний зі списку підручник батьки побачать
+            клікабельним посиланням.</p>
           <div style="margin-top:9px;">
             <label for="hw-textbook">📘 Підручник</label>
             <select id="hw-textbook" style="margin-top:3px;">
@@ -2947,11 +2958,12 @@
         <p class="hw-file-hint">Можна: фото (JPG, PNG, HEIC), документ (DOC, DOCX),
           таблиця (XLS, XLSX, CSV). До 10 МБ на файл.</p>
         <div id="existing-image-info" style="display:none;font-size:.83rem;color:#e67e22;margin-top:4px;"></div>
+        <button type="button" class="qa-btn qa-save" id="btn-save-hw"
+                onclick="saveHomework()" style="margin-top:11px;">💾 Зберегти ДЗ</button>
       </div>
       <!-- КНОПКИ -->
       <div class="qa-row" style="margin-top:13px;">
         <button class="qa-btn qa-grades" onclick="openJournalForGrading()">📊 Виставити оцінки</button>
-        <button class="qa-btn qa-save" onclick="saveTopicAndHW()" id="btn-save-hw">💾 Зберегти тему та ДЗ</button>
       </div>
       <div id="status-msg"></div>
       <div class="lg-head"><span>2</span>Матеріали та плани</div>
