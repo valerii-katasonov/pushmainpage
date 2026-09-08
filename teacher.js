@@ -955,11 +955,16 @@ function buildMarkAbsentLessonOptions(){
     // свої уроки — див. myAttendanceSlots.
     if(!mine) sel.innerHTML='<option value="all">Увесь день</option>';
 
-    // Відмічати можна лише на своєму уроці — інакше вчитель фізкультури
-    // міг поставити пропуск «на математиці».
-    const shown=flat.map((l,i)=>({l,i})).filter(({i})=>!mine||mine.has(String(i+1)));
-    shown.forEach(({l,i})=>{
-      const sn=window.getValidSubjectName(l)||'Урок';
+    // ПЕРЕРВИ У СПИСОК НЕ ЙДУТЬ. getValidSubjectName повертає для них null,
+    // а запасне «Урок» перетворювало кожну перерву на пункт меню: між
+    // математикою та читанням висіли «2. Урок», «4. Урок», ще й із чужими
+    // номерами (у перерви свого номера немає, тож підставлявся порядковий).
+    // Та сама умова стоїть у myAttendanceSlots — обидва місця мають
+    // однаково розуміти, що таке урок.
+    const shown=flat.map((l,i)=>({l,i,sn:window.getValidSubjectName(l)}))
+      .filter(({sn})=>!!sn)
+      .filter(({i})=>!mine||mine.has(String(i+1)));
+    shown.forEach(({l,i,sn})=>{
       sel.innerHTML+=`<option value="${i+1}">${escHtml(l.number||(i+1))}. ${escHtml(sn)}</option>`;
     });
     if(!shown.length&&mine)
