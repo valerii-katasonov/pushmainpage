@@ -265,36 +265,41 @@ window.setPoolWeek = async function(going){
 // керівника лише до свого класу, тож зайвий запит просто впаде.
 
 // Зводимо сирі вузли в числа й списки. Чиста функція — її перевіряють тести.
+// Кожна цифра має за собою СПИСОК. Раніше числа були просто числами, і
+// на питання «а хто саме?» доводилося йти в базу. Тепер збираємо імена
+// одразу — рахувати їх однаково доводиться, а показати можна за кліком.
+export const ACT_GROUPS = {
+  pool:       'Ходять на басейн',
+  skipping:   'Не буде на басейні цього тижня',
+  bus:        'Їздять шкільним автобусом',
+  noBus:      'Привозять батьки',
+  noPool:     'Не ходять на басейн',
+  unanswered: 'Батьки ще не відповіли'
+};
+
 export function summarize(classes, plans, weeks, names){
-  const out = { pool:0, noPool:0, bus:0, noBus:0, unanswered:0,
-                skipping:[], busList:[], byClass:{} };
+  const empty = () => ({ pool:[], noPool:[], bus:[], noBus:[], unanswered:[], skipping:[] });
+  const out = Object.assign(empty(), { byClass:{} });
   for(const cls of classes){
     const plan = (plans||{})[cls] || {};
     const week = (weeks||{})[cls] || {};
     const roster = (names||{})[cls] || {};
-    const c = { pool:0, noPool:0, bus:0, noBus:0, unanswered:0, skipping:[], busList:[] };
+    const c = empty();
     // Ідемо по СПИСКУ КЛАСУ, а не по відповідях: інакше ті, хто не
     // відповів, просто зникли б зі зведення — а це найважливіші люди.
     for(const sid in roster){
-      const nm = roster[sid];
+      const who = { cls, sid, name:roster[sid] };
       const p = plan[sid];
-      if(!p || typeof p.pool !== 'boolean'){ c.unanswered++; }
+      if(!p || typeof p.pool !== 'boolean') c.unanswered.push(who);
       else if(p.pool){
-        c.pool++;
-        if(!goesThisWeek(week, sid)) c.skipping.push({ cls, sid, name:nm });
+        c.pool.push(who);
+        if(!goesThisWeek(week, sid)) c.skipping.push(who);
       }
-      else c.noPool++;
-      if(p && typeof p.bus === 'boolean'){
-        if(p.bus){ c.bus++; c.busList.push({ cls, sid, name:nm }); }
-        else c.noBus++;
-      }
+      else c.noPool.push(who);
+      if(p && typeof p.bus === 'boolean') (p.bus ? c.bus : c.noBus).push(who);
     }
     out.byClass[cls] = c;
-    out.pool += c.pool; out.noPool += c.noPool;
-    out.bus  += c.bus;  out.noBus  += c.noBus;
-    out.unanswered += c.unanswered;
-    out.skipping.push(...c.skipping);
-    out.busList.push(...c.busList);
+    for(const k in ACT_GROUPS) out[k].push(...c[k]);
   }
   return out;
 }
@@ -325,28 +330,57 @@ export async function renderActivitySummary(boxId, scope){
     if(n&&n.exists()) names[cls]=n.val();
   }));
 
-  const s = summarize(classes, plans, weeks, names);
-  const list = (items, empty) => items.length
+  actSummary = summarize(classes, plans, weeks, names);
+  actScope = scope;
+  actBoxId = boxId;
+  actOpen = 'skipping';   // одразу розгорнуто найпотрібніше — хто не йде
+  drawSummary();
+}
+window.renderActivitySummary = renderActivitySummary;
+
+// Стан зведення тримаємо тут: перемикання групи не має ходити в базу
+// вдруге — усі списки вже пораховані.
+let actSummary=null, actScope='school', actBoxId='', actOpen='skipping';
+
+// Натиснули на цифру. Та сама група вдруге — згортаємо.
+window.actShowList = function(key){
+  actOpen = (actOpen === key) ? '' : key;
+  drawSummary();
+};
+
+function drawSummary(){
+  const box = document.getElementById(actBoxId);
+  if(!box || !actSummary) return;
+  const s = actSummary, wk = weekKey();
+
+  // Цифра — це кнопка. Раніше числа були мертві, і на питання «а хто саме?»
+  // відповіді на екрані не було: два списки показувалися завжди, решта
+  // груп не показувалася ніяк.
+  const num = (key, label, warn) => `
+    <button type="button" class="act-num${warn?' warn':''}${actOpen===key?' open':''}"
+            onclick="actShowList('${key}')">
+      <b>${s[key].length}</b><span>${label}</span></button>`;
+
+  const items = actOpen ? (s[actOpen]||[]) : [];
+  const listHtml = !actOpen ? '' : (items.length
     ? `<ul class="act-list">${items
-        .sort((a,b)=>clsNum(a.cls)-clsNum(b.cls)||String(a.name).localeCompare(String(b.name)))
-        .map(x=>`<li>${scope==='school'
+        .slice()
+        .sort((a,b)=>clsNum(a.cls)-clsNum(b.cls)||String(a.name).localeCompare(String(b.name),'uk'))
+        .map(x=>`<li>${actScope==='school'
           ? `<span class="act-cls">${escHtml(String(clsNum(x.cls)))} кл</span> `:''}${escHtml(x.name)}</li>`)
         .join('')}</ul>`
-    : `<p class="empty-msg">${empty}</p>`;
+    : `<p class="empty-msg">Порожньо.</p>`);
 
   box.innerHTML = `
     <div class="act-sum">
-      <div class="act-num"><b>${s.pool}</b><span>ходять на басейн</span></div>
-      <div class="act-num"><b>${s.skipping.length}</b><span>не буде цього тижня</span></div>
-      <div class="act-num"><b>${s.bus}</b><span>їздять автобусом</span></div>
-      ${s.unanswered?`<div class="act-num warn"><b>${s.unanswered}</b><span>без відповіді</span></div>`:''}
+      ${num('pool','ходять на басейн')}
+      ${num('skipping','не буде цього тижня')}
+      ${num('bus','їздять автобусом')}
+      ${num('noBus','привозять батьки')}
+      ${s.unanswered.length ? num('unanswered','без відповіді', true) : ''}
     </div>
-    <div class="act-week-cap">Тиждень ${escHtml(weekLabel(wk))}</div>
-    <h5 class="act-h">🏊 Не буде на басейні цього тижня</h5>
-    ${list(s.skipping,'Усі, хто ходить, будуть на басейні.')}
-    <h5 class="act-h">🚌 Їздять шкільним автобусом</h5>
-    ${list(s.busList,'Автобусом ніхто не їздить.')}
-    ${s.unanswered?`<p class="act-hint">${s.unanswered} батьків ще не відповіли —
-      поки відповіді немає, дитина не потрапляє в жоден зі списків.</p>`:''}`;
+    <div class="act-week-cap">Тиждень ${escHtml(weekLabel(wk))} · натисніть на цифру, щоб побачити список</div>
+    ${actOpen ? `<h5 class="act-h">${escHtml(ACT_GROUPS[actOpen]||'')} — ${items.length}</h5>${listHtml}` : ''}
+    ${s.unanswered.length?`<p class="act-hint">Поки батьки не відповіли, дитина не потрапляє
+      ні в список басейну, ні в список автобуса.</p>`:''}`;
 }
-window.renderActivitySummary = renderActivitySummary;
