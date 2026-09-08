@@ -147,7 +147,7 @@ window.loadCurrentTopicAndHW=loadCurrentTopicAndHW;
 // Gemini напряму: ключ до AI не має потрапляти в браузер.
 // У запит іде ЛИШЕ предмет, тема і номер класу — жодних даних про учнів.
 function readCurrentTopicText(){
-  // Тема береться так само, як у saveTopicAndHW: спершу обрана з плану,
+  // Тема береться так само, як у saveLessonTopic: спершу обрана з плану,
   // інакше — введена вручну.
   const idEl=document.getElementById('t-topic-value-1');
   const selectedId=idEl?idEl.value:'__custom__';
@@ -541,172 +541,201 @@ window.hwFilesPicked=function(input){
   if(lbl){lbl.style.color='#2e7d32';
     lbl.textContent=files.length===1?files[0].name:`Обрано файлів: ${files.length}`;}
 };
-window.saveTopicAndHW=async function(){
-  const date=document.getElementById('global-date').value;
+// ── ЗБЕРЕЖЕННЯ УРОКУ: ТЕМА Й ДЗ ОКРЕМО ──────────────────────────
+//
+// Раніше це була одна кнопка «Зберегти тему та ДЗ». Учитель заповнював
+// щось одне, а натискав кнопку про двоє, і не було зрозуміло, що саме
+// пішло в базу. Тепер у кожного блоку своя кнопка, і кожна відповідає
+// рівно за своє.
+const BTN_TOPIC = '💾 Зберегти тему';
+const BTN_HW    = '💾 Зберегти ДЗ';
+
+// Що зараз редагується. Предмет обов'язковий обом кнопкам: без нього
+// невідомо, до чого чіпляти запис.
+function lessonCtx(){
   const subject=document.getElementById('t-subject').value;
-  const sk=subjKey(subject);
-  let hwText=document.getElementById('t-hw')?document.getElementById('t-hw').value.trim():'';
-  const fileInput=document.getElementById('t-image');
-  const cls=getActiveClass();
-  const btn=document.getElementById('btn-save-hw');
-  const sm=document.getElementById('status-msg');
-  const uid=auth.currentUser.uid;
-  if(!subject){alert("Оберіть предмет!");return;}
+  if(!subject){ alert('Оберіть предмет!'); return null; }
+  return { date:document.getElementById('global-date').value,
+           subject, sk:subjKey(subject), cls:getActiveClass(),
+           uid:auth.currentUser.uid, sm:document.getElementById('status-msg') };
+}
 
-  // Обраний підручник разом із посиланням — його прикладаємо до завдання
-  // окремим полем, щоб у батьків він був клікабельний, а не просто назвою.
-  const bookSel=document.getElementById('hw-textbook');
-  const bookOpt=bookSel&&bookSel.selectedIndex>=0?bookSel.options[bookSel.selectedIndex]:null;
-  const bookCustom=document.getElementById('hw-textbook-custom')?.value.trim()||'';
-  // Назва, вписана вручну, НЕ має посилання. Раніше тут бралася назва з
-  // ручного поля, а адреса — з випадайки: у завдання могло потрапити одне
-  // видання з посиланням на зовсім інше.
-  const bookTitle=bookCustom||(bookSel?bookSel.value:'');
-  const bookUrl=bookCustom?'':(bookOpt?(bookOpt.getAttribute('data-url')||''):'');
-
-  // ПОЛЕ ДЗ ПОРОЖНЄ, АЛЕ ВКАЗАНО ПІДРУЧНИК І СТОРІНКИ — це і є завдання.
-  //
-  // Спершу тут стояло питання «записати як завдання?». Воно було зайвим:
-  // учитель уже все заповнив, батькам цього досить, і зайвий крок лише
-  // дратував. Тому просто складаємо текст і зберігаємо мовчки.
-  //
-  // (Колись ці поля не зберігалися взагалі — вони призначені генератору
-  // ШІ. Через це завдання зникали: тема лишалася, ДЗ ні. Тепер не зникають.)
-  if(!hwText&&!(fileInput&&fileInput.files.length)){
-    const pages=document.getElementById('hw-pages')?.value.trim()||'';
-    if(bookTitle||pages){
-      // Є клікабельний підручник — назву в текст не дублюємо: вона й так
-      // буде поруч окремим посиланням. Інакше поводимося як раніше.
-      hwText=(bookUrl&&pages)?pages:[bookTitle,pages].filter(Boolean).join(' — ');
-      const area=document.getElementById('t-hw');
-      if(area)area.value=hwText;
-    }
-  }
-
-  btn.disabled=true;btn.innerText="⏳ Збереження...";
-  // Далі йде десяток звернень до бази. Раніше вони не були нічим накриті:
-  // будь-яка відмова (найчастіше PERMISSION_DENIED) обривала функцію, і
-  // кнопка НАЗАВЖДИ лишалася в стані «Збереження...». Учитель бачив вічний
-  // годинник і був певен, що портал висить, — хоча база просто сказала
-  // «не можна». Тепер помилка видно на екрані, а кнопка звільняється завжди.
+// Спільна обгортка: зайнятий стан, ловля помилок, звільнення кнопки.
+// Кнопок тепер дві, і писати цей код двічі означало б рано чи пізно
+// забути finally в одній із них — саме через це кнопка колись назавжди
+// лишалася в стані «Збереження...».
+async function runSave(btnId, label, sm, job){
+  const btn=document.getElementById(btnId);
+  if(btn){ btn.disabled=true; btn.innerText='⏳ Збереження...'; }
   try{
-
-  // 1. Прочитати вибір з обох слотів (слот 2 тільки якщо його блок відкритий)
-  const slot2Active=document.getElementById('t-topic-slot-2-wrap')&&document.getElementById('t-topic-slot-2-wrap').style.display!=='none';
-  const slotInputs=[1,...(slot2Active?[2]:[])].map(n=>({
-    selectedId:document.getElementById(`t-topic-value-${n}`)?document.getElementById(`t-topic-value-${n}`).value:'__custom__',
-    customText:document.getElementById(`t-topic-${n}`)?document.getElementById(`t-topic-${n}`).value.trim():''
-  }));
-
-  // 2. Прочитати попередній стан (нормалізуємо будь-яку стару форму запису до масиву)
-  const prevSnap=await get(ref(db,`lesson_topics/${cls}/${sk}/${date}`));
-  let prevTopics=[];
-  if(prevSnap.exists()){
-    const v=prevSnap.val();
-    if(typeof v==='string')prevTopics=[{customText:v}];
-    else if(Array.isArray(v.topics))prevTopics=v.topics;
-    else if(v.topicId||v.customText)prevTopics=[v];
-  }
-
-  // 3. Сформувати новий масив тем, перевіряючи ліміт годин для КОЖНОЇ нової теми окремо
-  let newTopics=[];
-  for(let i=0;i<slotInputs.length;i++){
-    const {selectedId,customText}=slotInputs[i];
-    if(selectedId==='__custom__'){
-      if(customText)newTopics.push({customText});
-      continue;
+    const msg=await job();
+    if(msg!==false&&sm){
+      sm.style.display='block'; sm.style.color='#1a7d3a'; sm.style.background='#e8f5e9';
+      sm.innerText=msg||'✅ Збережено!';
+      setTimeout(()=>{ sm.style.display='none'; },2500);
     }
-    const prevTopicId=prevTopics[i]?.topicId||null;
-    if(selectedId!==prevTopicId){
-      const newTSnap=await get(ref(db,`curriculum_plans/${cls}/${sk}/topics/${selectedId}`));
-      if(newTSnap.exists()){
-        const t=newTSnap.val();
-        if((t.hoursUsed||0)>=t.plannedHours){
-          showToast(`⚠️ Усі години теми "${t.title}" вже використано!`);
-          btn.disabled=false;btn.innerText="💾 Зберегти тему та ДЗ";return;
+  }catch(e){
+    console.error(label+':',e);
+    // PERMISSION_DENIED — це не поломка, а незаповнена матриця доступу.
+    const denied=/permission[_ ]denied/i.test((e&&e.message)||'');
+    if(sm){
+      sm.style.display='block'; sm.style.color='#b71c1c'; sm.style.background='#ffebee';
+      sm.innerText=denied
+        ? '⛔ Немає прав на запис у цей клас. Директор має відкрити його вам у «Матриці доступу вчителів».'
+        : ('❌ Не збережено: '+((e&&e.message)||'невідома помилка'));
+    }
+    showToast('❌ Не вдалося зберегти');
+  }finally{
+    if(btn){ btn.disabled=false; btn.innerText=label; }
+  }
+}
+
+// ── ТЕМА УРОКУ ──────────────────────────────────────────────────
+window.saveLessonTopic=function(){
+  const c=lessonCtx(); if(!c) return;
+  return runSave('btn-save-topic', BTN_TOPIC, c.sm, async()=>{
+    const {cls,sk,date}=c;
+
+    // 1. Вибір з обох слотів (слот 2 — лише якщо його блок відкритий)
+    const slot2Active=document.getElementById('t-topic-slot-2-wrap')&&document.getElementById('t-topic-slot-2-wrap').style.display!=='none';
+    const slotInputs=[1,...(slot2Active?[2]:[])].map(n=>({
+      selectedId:document.getElementById(`t-topic-value-${n}`)?document.getElementById(`t-topic-value-${n}`).value:'__custom__',
+      customText:document.getElementById(`t-topic-${n}`)?document.getElementById(`t-topic-${n}`).value.trim():''
+    }));
+
+    // 2. Попередній стан (будь-яку стару форму запису зводимо до масиву)
+    const prevSnap=await get(ref(db,`lesson_topics/${cls}/${sk}/${date}`));
+    let prevTopics=[];
+    if(prevSnap.exists()){
+      const v=prevSnap.val();
+      if(typeof v==='string')prevTopics=[{customText:v}];
+      else if(Array.isArray(v.topics))prevTopics=v.topics;
+      else if(v.topicId||v.customText)prevTopics=[v];
+    }
+
+    // 3. Новий масив тем; ліміт годин перевіряємо для КОЖНОЇ нової окремо
+    let newTopics=[];
+    for(let i=0;i<slotInputs.length;i++){
+      const {selectedId,customText}=slotInputs[i];
+      if(selectedId==='__custom__'){ if(customText)newTopics.push({customText}); continue; }
+      const prevTopicId=prevTopics[i]?.topicId||null;
+      if(selectedId!==prevTopicId){
+        const newTSnap=await get(ref(db,`curriculum_plans/${cls}/${sk}/topics/${selectedId}`));
+        if(newTSnap.exists()){
+          const t=newTSnap.val();
+          if((t.hoursUsed||0)>=t.plannedHours){
+            showToast(`⚠️ Усі години теми "${t.title}" вже використано!`);
+            return false;                       // не помилка — свідома відмова
+          }
+        }
+      }
+      newTopics.push({topicId:selectedId});
+    }
+    if(newTopics.length===2&&newTopics[0].topicId&&newTopics[0].topicId===newTopics[1].topicId){
+      showToast('⚠️ Тема 1 і Тема 2 не можуть збігатися!');
+      return false;
+    }
+
+    // 4. Запис або видалення теми
+    if(newTopics.length>0) await set(ref(db,`lesson_topics/${cls}/${sk}/${date}`),{topics:newTopics});
+    else await remove(ref(db,`lesson_topics/${cls}/${sk}/${date}`));
+
+    // 5. hoursUsed — окремо для кожної позиції масиву (слот 1 порівнюється
+    //    лише зі слотом 1, слот 2 — лише зі слотом 2)
+    const maxLen=Math.max(prevTopics.length,newTopics.length);
+    for(let i=0;i<maxLen;i++){
+      const prevId=prevTopics[i]?.topicId||null;
+      const newId=newTopics[i]?.topicId||null;
+      if(prevId===newId)continue;
+      if(prevId){
+        const pSnap=await get(ref(db,`curriculum_plans/${cls}/${sk}/topics/${prevId}`));
+        if(pSnap.exists()){
+          const t=pSnap.val();
+          await set(ref(db,`curriculum_plans/${cls}/${sk}/topics/${prevId}/hoursUsed`),Math.max(0,(t.hoursUsed||0)-1));
+        }
+      }
+      if(newId){
+        const nSnap=await get(ref(db,`curriculum_plans/${cls}/${sk}/topics/${newId}`));
+        if(nSnap.exists()){
+          const t=nSnap.val();
+          await set(ref(db,`curriculum_plans/${cls}/${sk}/topics/${newId}/hoursUsed`),(t.hoursUsed||0)+1);
         }
       }
     }
-    newTopics.push({topicId:selectedId});
-  }
-  if(newTopics.length===2&&newTopics[0].topicId&&newTopics[0].topicId===newTopics[1].topicId){
-    showToast('⚠️ Тема 1 і Тема 2 не можуть збігатися!');
-    btn.disabled=false;btn.innerText="💾 Зберегти тему та ДЗ";return;
-  }
+    populateTopicSelector();   // перемальовує обидві випадайки
+    return newTopics.length ? '✅ Тему збережено' : '✅ Тему прибрано';
+  });
+};
 
-  // 4. Зберегти / видалити lesson_topic
-  if(newTopics.length>0) await set(ref(db,`lesson_topics/${cls}/${sk}/${date}`),{topics:newTopics});
-  else await remove(ref(db,`lesson_topics/${cls}/${sk}/${date}`));
+// ── ДОМАШНЄ ЗАВДАННЯ ────────────────────────────────────────────
+window.saveHomework=function(){
+  const c=lessonCtx(); if(!c) return;
+  return runSave('btn-save-hw', BTN_HW, c.sm, async()=>{
+    const {cls,date,subject,uid,sm}=c;
+    let hwText=document.getElementById('t-hw')?document.getElementById('t-hw').value.trim():'';
+    const fileInput=document.getElementById('t-image');
 
-  // 5. Декремент/інкремент hoursUsed — окремо для кожної позиції масиву (слот 1
-  //    порівнюється лише зі слотом 1, слот 2 — лише зі слотом 2)
-  const maxLen=Math.max(prevTopics.length,newTopics.length);
-  for(let i=0;i<maxLen;i++){
-    const prevId=prevTopics[i]?.topicId||null;
-    const newId=newTopics[i]?.topicId||null;
-    if(prevId===newId)continue;
-    if(prevId){
-      const pSnap=await get(ref(db,`curriculum_plans/${cls}/${sk}/topics/${prevId}`));
-      if(pSnap.exists()){
-        const t=pSnap.val();
-        const newHU=Math.max(0,(t.hoursUsed||0)-1);
-        await set(ref(db,`curriculum_plans/${cls}/${sk}/topics/${prevId}/hoursUsed`),newHU);
+    // Обраний підручник разом із посиланням — прикладаємо окремим полем,
+    // щоб у батьків він був клікабельний, а не просто назвою.
+    const bookSel=document.getElementById('hw-textbook');
+    const bookOpt=bookSel&&bookSel.selectedIndex>=0?bookSel.options[bookSel.selectedIndex]:null;
+    const bookCustom=document.getElementById('hw-textbook-custom')?.value.trim()||'';
+    // Назва, вписана вручну, НЕ має посилання: інакше в завдання могло б
+    // потрапити одне видання з посиланням на зовсім інше.
+    const bookTitle=bookCustom||(bookSel?bookSel.value:'');
+    const bookUrl=bookCustom?'':(bookOpt?(bookOpt.getAttribute('data-url')||''):'');
+
+    // Поле ДЗ порожнє, але вказано підручник і сторінки — це і є завдання.
+    if(!hwText&&!(fileInput&&fileInput.files.length)){
+      const pages=document.getElementById('hw-pages')?.value.trim()||'';
+      if(bookTitle||pages){
+        // Є клікабельний підручник — назву в текст не дублюємо.
+        hwText=(bookUrl&&pages)?pages:[bookTitle,pages].filter(Boolean).join(' — ');
+        const area=document.getElementById('t-hw');
+        if(area)area.value=hwText;
       }
     }
-    if(newId){
-      const nSnap=await get(ref(db,`curriculum_plans/${cls}/${sk}/topics/${newId}`));
-      if(nSnap.exists()){
-        const t=nSnap.val();
-        await set(ref(db,`curriculum_plans/${cls}/${sk}/topics/${newId}/hoursUsed`),(t.hoursUsed||0)+1);
-      }
-    }
-  }
 
-  // 6. Author + HW (без змін)
-  await set(ref(db,`authors/${cls}/${date}/${subject}`),uid);
-  let finalImageUrls=[...currentHwImages];
-  if(fileInput&&fileInput.files.length>0){
-    sm.style.display='block';sm.innerText='⏳ Завантаження фото...';sm.style.color='#f39c12';sm.style.background='#fff8e1';finalImageUrls=[];
-    try{finalImageUrls=await Promise.all(Array.from(fileInput.files).map(async file=>{const fd=new FormData();fd.append('file',file);fd.append('upload_preset',UPLOAD_PRESET);const r=await fetch(CLOUDINARY_URL,{method:'POST',body:fd});const d=await r.json();return d.secure_url;}));}
-    catch(e){alert("Помилка фото: "+e.message);btn.disabled=false;btn.innerText="💾 Зберегти тему та ДЗ";return;}
-  }
-  // ts — коли завдання внесли. Дата в ключі каже, НА який день задано,
-  // а не коли це зробили. Без позначки часу старий тестовий запис
-  // неможливо відрізнити від сьогоднішнього.
-  if(hwText||finalImageUrls.length>0){
+    let finalImageUrls=[...currentHwImages];
+    if(fileInput&&fileInput.files.length>0){
+      sm.style.display='block';sm.innerText='⏳ Завантаження файлів...';
+      sm.style.color='#f39c12';sm.style.background='#fff8e1';
+      finalImageUrls=await Promise.all(Array.from(fileInput.files).map(async file=>{
+        const fd=new FormData(); fd.append('file',file); fd.append('upload_preset',UPLOAD_PRESET);
+        const r=await fetch(CLOUDINARY_URL,{method:'POST',body:fd});
+        const d=await r.json();
+        if(!d.secure_url) throw new Error('файл не завантажився: '+(d.error&&d.error.message||'невідома причина'));
+        return d.secure_url;
+      }));
+    }
+
+    if(!hwText&&finalImageUrls.length===0){
+      showToast('⚠️ Завдання порожнє — нічого зберігати');
+      return false;
+    }
+
+    // Автора пишемо тільки разом із завданням: сам по собі запис про те,
+    // хто відкривав урок, нікому не потрібен.
+    await set(ref(db,`authors/${cls}/${date}/${subject}`),uid);
+
     const hwRef=ref(db,`homeworks/${cls}/${date}/${subject}`);
-    // Чи це ПЕРШЕ завдання з предмета на цей день. Учитель зберігає той самий
-    // урок по три-чотири рази — виправляє тему, дописує сторінки. Слати push
-    // щоразу означало б навчити батьків не звертати на них уваги.
+    // Чи це ПЕРШЕ завдання з предмета на цей день. Учитель зберігає той
+    // самий урок по три-чотири рази — виправляє текст, дописує сторінки.
+    // Слати push щоразу означало б навчити батьків не звертати уваги.
     const existed=(await get(hwRef)).exists();
+    // ts — коли завдання внесли. Дата в ключі каже, НА який день задано.
     const rec={text:hwText,images:finalImageUrls,ts:Date.now()};
-    // book зберігаємо лише з посиланням: назва без URL нічого не додає —
-    // вона вже є в тексті завдання.
     if(bookTitle&&bookUrl)rec.book={title:bookTitle,url:bookUrl};
     await set(hwRef,rec);
     // Сповіщення не має права зірвати збереження: воно вже відбулося.
     if(!existed)notifyEvent('homework',{class:cls,subject}).catch(()=>{});
-  }
-  // 7. UI feedback — displays for both slots are refreshed by populateTopicSelector()
-  //    below (→ loadSavedTopicForLesson() → applyTopicToSlot()), so no manual per-slot
-  //    display update is needed here anymore.
-  sm.style.color='#1a7d3a';sm.innerText='✅ Збережено!';sm.style.display='block';sm.style.background='#e8f5e9';
-  if(fileInput)fileInput.value='';
-  populateTopicSelector(); /* refresh both dropdowns — covered topics will disable */
-  setTimeout(()=>{sm.style.display='none';loadTeacherDashboard();},2500);
-  }catch(e){
-    console.error('Збереження теми та ДЗ:',e);
-    // PERMISSION_DENIED — це не поломка, а незаповнена матриця доступу.
-    // Кажемо про це людською мовою, інакше вчитель піде «лагодити інтернет».
-    const denied=/permission[_ ]denied/i.test((e&&e.message)||'');
-    sm.style.display='block';sm.style.color='#b71c1c';sm.style.background='#ffebee';
-    sm.innerText=denied
-      ? '⛔ Немає прав на запис у цей клас. Директор має відкрити його вам у «Матриці доступу вчителів».'
-      : ('❌ Не збережено: '+((e&&e.message)||'невідома помилка'));
-    showToast('❌ Не вдалося зберегти');
-  }finally{
-    btn.disabled=false;btn.innerText="💾 Зберегти тему та ДЗ";
-  }
+
+    if(fileInput)fileInput.value='';
+    const lbl=document.getElementById('hw-file-name');
+    if(lbl){lbl.textContent='Файл не обрано';lbl.style.color='#78909c';}
+    setTimeout(()=>loadTeacherDashboard(),300);
+    return '✅ ДЗ збережено';
+  });
 };
 // ══════════ BEHAVIOR GRADE ══════════
 window.saveBehaviorGrade=async function(){
