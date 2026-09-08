@@ -3134,7 +3134,33 @@
       <!-- Басейн і шкільний автобус — одразу під запізненнями й відсутністю.
            Сусідство не випадкове: це той самий жанр «попередити школу
            заздалегідь», і батько шукає його там само. -->
-      <div id="p-activities" class="act-box" style="display:none;"></div>
+      <!-- Питання лежать ПРЯМО В РОЗМІТЦІ, а не малюються скриптом.
+           Так було не одразу: спершу блок наповнював JS, і коли щось у
+           ланцюжку не спрацьовувало, батько бачив порожню синю смужку й
+           не розумів, що це. Тепер найгірше, що може статися, — тут
+           лишиться саме те, що написано нижче: два питання з кнопками.
+           Скрипт лише замінює це на збережений стан, коли прочитає базу. -->
+      <div id="p-activities" class="act-box">
+        <h4 class="act-title">🏊 Басейн і 🚌 автобус</h4>
+        <div class="pm-ask">
+          <b>🏊 Дитина ходить на басейн?</b>
+          <span>Поки ви не відповіли, школа не знає, чи рахувати дитину.</span>
+          <div class="pm-ask-btns">
+            <button type="button" class="pm-ask-yes" onclick="setActivityPlan('pool',1)">Так, ходить</button>
+            <button type="button" class="pm-ask-no"  onclick="setActivityPlan('pool',0)">Ні, не ходить</button>
+          </div>
+          <small>Відповідь можна змінити будь-коли — тут же.</small>
+        </div>
+        <div class="pm-ask">
+          <b>🚌 Дитина їздить шкільним автобусом?</b>
+          <span>Потрібно, щоб школа знала, кого чекає автобус, а кого забирають батьки.</span>
+          <div class="pm-ask-btns">
+            <button type="button" class="pm-ask-yes" onclick="setActivityPlan('bus',1)">Так, шкільним автобусом</button>
+            <button type="button" class="pm-ask-no"  onclick="setActivityPlan('bus',0)">Ні, привозимо самі</button>
+          </div>
+          <small>Відповідь можна змінити будь-коли — тут же.</small>
+        </div>
+      </div>
     </section>
     <section class="screen-section" data-dtab="day">
       <!-- Дні народження. Після блоку запізнень: той стоїть першим навмисно,
