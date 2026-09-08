@@ -1277,12 +1277,20 @@
     .act-box{background:#fff;border:1px solid #b3e5fc;border-left:4px solid #0288d1;
              border-radius:12px;padding:13px 15px;margin-bottom:13px;}
     .act-title{margin:0 0 10px 0;color:#0277bd;font-size:.95rem;}
-    .act-row{display:flex;align-items:center;gap:11px;flex-wrap:wrap;
-             padding:8px 0;border-bottom:1px dashed #e1f5fe;}
-    .act-row:last-of-type{border-bottom:0;}
-    .act-state{flex:1;min-width:150px;font-size:.85rem;color:#37474f;}
-    .act-state span{display:block;font-size:.76rem;color:#78909c;}
-    .act-state.no span{color:#b0846a;}
+    /* Пара рівноцінних варіантів. Жоден не підсвічений — щоб відповідь була
+       свідомою, а не «натиснув зелену». Обраний виділяється вже потім,
+       у налаштуваннях, класом .on. */
+    .act-choice{display:flex;gap:8px;flex-wrap:wrap;}
+    .act-choice button{flex:1;min-width:130px;margin:0;padding:11px 12px;
+             border:1.5px solid #b0bec5;background:#fff;color:#37474f;
+             border-radius:10px;font-size:.85rem;font-weight:700;cursor:pointer;}
+    .act-choice button:hover{border-color:#0288d1;color:#0277bd;background:#f5fbff;}
+    .act-opt.on{background:#0288d1;border-color:#0288d1;color:#fff;}
+    .act-opt.on:hover{background:#0277bd;color:#fff;}
+    .act-more{margin-top:11px;border-top:1px dashed #e1f5fe;padding-top:9px;}
+    .act-more>summary{cursor:pointer;font-size:.82rem;color:#0277bd;font-weight:700;}
+    .act-set{margin-top:11px;}
+    .act-set>b{display:block;font-size:.83rem;color:#37474f;margin-bottom:6px;}
     .act-week{margin-top:11px;background:#e1f5fe;border:1px solid #81d4fa;
               border-radius:10px;padding:11px 13px;}
     .act-week.off{background:#fff3e0;border-color:#ffcc80;}
@@ -3143,22 +3151,20 @@
       <div id="p-activities" class="act-box">
         <h4 class="act-title">🏊 Басейн і 🚌 автобус</h4>
         <div class="pm-ask">
-          <b>🏊 Дитина ходить на басейн?</b>
+          <b>🏊 Чи буде дитина ходити на басейн?</b>
           <span>Поки ви не відповіли, школа не знає, чи рахувати дитину.</span>
-          <div class="pm-ask-btns">
-            <button type="button" class="pm-ask-yes" onclick="setActivityPlan('pool',1)">Так, ходить</button>
-            <button type="button" class="pm-ask-no"  onclick="setActivityPlan('pool',0)">Ні, не ходить</button>
+          <div class="act-choice">
+            <button type="button" onclick="setActivityPlan('pool',1)">Так, буде</button>
+            <button type="button" onclick="setActivityPlan('pool',0)">Ні, не буде</button>
           </div>
-          <small>Відповідь можна змінити будь-коли — тут же.</small>
         </div>
         <div class="pm-ask">
-          <b>🚌 Дитина їздить шкільним автобусом?</b>
-          <span>Потрібно, щоб школа знала, кого чекає автобус, а кого забирають батьки.</span>
-          <div class="pm-ask-btns">
-            <button type="button" class="pm-ask-yes" onclick="setActivityPlan('bus',1)">Так, шкільним автобусом</button>
-            <button type="button" class="pm-ask-no"  onclick="setActivityPlan('bus',0)">Ні, привозимо самі</button>
+          <b>🚌 Як дитина добиратиметься до школи?</b>
+          <span>Школа має знати, кого чекає автобус, а кого привозять батьки.</span>
+          <div class="act-choice">
+            <button type="button" onclick="setActivityPlan('bus',1)">Шкільним автобусом</button>
+            <button type="button" onclick="setActivityPlan('bus',0)">Привозимо самі</button>
           </div>
-          <small>Відповідь можна змінити будь-коли — тут же.</small>
         </div>
       </div>
     </section>
