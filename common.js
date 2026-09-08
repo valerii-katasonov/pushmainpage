@@ -2010,7 +2010,37 @@ let swRegistration=null;
 // ані встановлення застосунку на телефон. Раніше він не реєструвався
 // взагалі, тож PWA фактично не працював.
 if('serviceWorker' in navigator){
-  window.addEventListener('load',()=>{
+  window.addEventListener('load',async ()=>{
+    // ПРИБИРАЄМО СТАРІ ВОРКЕРИ. Колись портал реєстрував sw.js, а той
+    // працює за принципом «спершу кеш»:
+    //     caches.match(request) || fetch(request)
+    // Тобто один раз завантажений файл віддається з кешу НАЗАВЖДИ. У
+    // браузерах, які встигли його зареєструвати, він живий досі — і люди
+    // бачать стару версію порталу, скільки б ми не деплоїли. Симптом
+    // підступний: нові файли підтягуються (їх у кеші немає), а змінені —
+    // ні, тож портал виглядає наполовину оновленим.
+    //
+    // Лишаємо тільки firebase-messaging-sw.js: він потрібен для push і
+    // нічого не кешує.
+    try{
+      const regs=await navigator.serviceWorker.getRegistrations();
+      for(const r of regs){
+        const url=(r.active&&r.active.scriptURL)||(r.installing&&r.installing.scriptURL)||'';
+        if(url&&!/firebase-messaging-sw\.js/.test(url)){
+          await r.unregister();
+          console.warn('[Push School] Прибрано застарілий Service Worker:',url);
+        }
+      }
+      // Разом із воркером прибираємо і його кеш — інакше файли лишаться
+      // лежати, а наступний воркер міг би їх підхопити.
+      if(window.caches){
+        for(const k of await caches.keys()){
+          if(/^push-school/.test(k)){ await caches.delete(k);
+            console.warn('[Push School] Очищено застарілий кеш:',k); }
+        }
+      }
+    }catch(e){ console.warn('Прибирання Service Worker:',e.message); }
+
     navigator.serviceWorker.register('firebase-messaging-sw.js')
       .then(r=>{swRegistration=r;})
       .catch(e=>console.warn('SW не зареєстровано:',e.message));
