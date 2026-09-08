@@ -3131,6 +3131,10 @@
         <button onclick="submitAttendance()" style="background:var(--red);padding:11px;color:#fff;margin-top:11px;width:100%;">Відправити</button>
         <p id="p-att-status" style="font-size:.83rem;color:var(--green);font-weight:700;margin-top:9px;display:none;">✅ Сповіщення надіслано!</p>
       </div>
+      <!-- Басейн і шкільний автобус — одразу під запізненнями й відсутністю.
+           Сусідство не випадкове: це той самий жанр «попередити школу
+           заздалегідь», і батько шукає його там само. -->
+      <div id="p-activities" class="act-box" style="display:none;"></div>
     </section>
     <section class="screen-section" data-dtab="day">
       <!-- Дні народження. Після блоку запізнень: той стоїть першим навмисно,
@@ -3167,7 +3171,6 @@
            про це й питають удома. -->
       <!-- Басейн і шкільний автобус. Стоїть тут, а не в налаштуваннях:
            поки батько не відповів, школа не знає, чи чекати дитину. -->
-      <div id="p-activities" class="act-box" style="display:none;"></div>
       <div id="p-day-topics" class="topics-box" style="display:none;"></div>
       <div class="data-card" style="border-left-color:#00b894;background:#f0fff4;margin-top:0;">
         <ul id="p-daily-hw-list" class="list-dash"></ul>
