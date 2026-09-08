@@ -1303,12 +1303,17 @@
     .act-warn{background:#ffebee;color:#b71c1c;border-radius:8px;padding:9px;font-size:.8rem;}
     /* Зведення для директора / класного керівника */
     .act-sum{display:flex;gap:9px;flex-wrap:wrap;margin-bottom:9px;}
+    /* Цифра — це кнопка: натиснув і побачив, хто саме за нею стоїть */
     .act-num{flex:1;min-width:92px;background:#e1f5fe;border-radius:10px;
-             padding:9px 11px;text-align:center;}
+             padding:9px 11px;text-align:center;border:2px solid transparent;
+             cursor:pointer;margin:0;font-family:inherit;}
+    .act-num:hover{border-color:#81d4fa;}
+    .act-num.open{border-color:#0288d1;background:#b3e5fc;}
     .act-num b{display:block;font-size:1.35rem;color:#0277bd;line-height:1.1;}
-    .act-num span{font-size:.71rem;color:#546e7a;}
+    .act-num span{font-size:.71rem;color:#546e7a;display:block;}
     .act-num.warn{background:#fff3e0;}
     .act-num.warn b{color:#e65100;}
+    .act-num.warn.open{border-color:#e65100;background:#ffe0b2;}
     .act-week-cap{font-size:.76rem;color:#90a4ae;margin-bottom:9px;}
     .act-h{margin:11px 0 5px 0;font-size:.83rem;color:#37474f;}
     .act-list{list-style:none;padding:0;margin:0;font-size:.82rem;}
