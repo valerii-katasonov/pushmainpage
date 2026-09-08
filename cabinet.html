@@ -519,6 +519,42 @@
     .k-table td{padding:5px 6px;border-bottom:1px solid #f0f0f0;text-align:center;}
     .k-table td:first-child{text-align:left;font-weight:700;}
     .k-table tr.k-now td{background:#fffde7;}
+
+    /* ДОСТУПНІСТЬ ТАБЛИЦЬ КУХНІ ПРИ ЗБІЛЬШЕНОМУ ШРИФТІ.
+       У html,body стоїть overflow-x:hidden — це рятує сторінку від з'їзду
+       вбік, але водночас ОБРІЗАЄ широку таблицю: вона йде за екран, і
+       дотягнутися до неї неможливо. Людині зі слабким зором, у якої в
+       телефоні збільшений шрифт, просто не видно колонки «Варіант».
+       Тому кожна таблиця отримує власну прокрутку. */
+    .k-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;
+              overscroll-behavior-x:contain;}
+
+    /* А це головне. Брейкпойнт у em, а не в px, — і це навмисно: em
+       рахується від розміру шрифту, тож умова спрацьовує саме тоді, коли
+       текст завеликий для екрана, а не просто «телефон вузький». При
+       звичайному шрифті таблиця лишається таблицею; коли людина збільшує
+       шрифт у налаштуваннях — вона розкладається на картки, по одному
+       учню в кожній, і горизонтальна прокрутка стає не потрібна взагалі. */
+       Поріг 21em підібрано за розрахунком: при звичайному шрифті найвужчий
+       телефон (360px) дає 22.5em — тобто лишається таблицею; варто людині
+       підняти шрифт хоча б на 15% — і вмикаються картки. Ширші екрани при
+       великому шрифті потрапляють сюди теж. Проміжні випадки прикриває
+       .k-scroll вище: обрізаним не лишиться ніщо. */
+    @media (max-width:21em){
+      .k-ord thead{display:none;}
+      .k-ord,.k-ord tbody,.k-ord tr,.k-ord td{display:block;width:100%;}
+      .k-ord tr{border:1px solid #b2ebf2;border-radius:12px;
+                margin-bottom:11px;padding:9px 11px;background:#fff;}
+      .k-ord tr.k-ord-abs{background:#fafafa;opacity:.75;}
+      .k-ord td{text-align:left;border:0;padding:5px 0;
+                display:flex;justify-content:space-between;align-items:center;gap:12px;}
+      .k-ord td::before{content:attr(data-l);font-weight:700;color:#00838f;
+                        font-size:.85em;flex:0 0 auto;}
+      .k-ord td:first-child{font-size:1.1em;padding-bottom:8px;margin-bottom:4px;
+                border-bottom:1px solid #e0f2f1;display:block;}
+      .k-ord td:first-child::before{content:none;}
+      .k-scroll{overflow-x:visible;}
+    }
     .k-off{color:#bbb;}
     .k-skip-title{font-size:.8rem;font-weight:800;color:#00838f;margin:14px 0 5px 0;}
     .k-skip-title.extra{color:#2e7d32;}
