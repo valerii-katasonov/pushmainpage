@@ -7,7 +7,7 @@
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, push, remove, update, onValue } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { renderNewsFeed } from './news.js';
-import { db, auth, CLOUDINARY_URL, UPLOAD_PRESET, HW_FILE_EXT, HW_FILE_MAX_MB, fileExt, getActiveClass, currentUserData, showToast, displayGrade, renderHwItem, renderHwList, dayKeys, formatAttendanceSlotLabel, STICKER_GOAL, stickerGoal, escJs, escHtml, safeUrl, normalizeChildren, notifyEvent, logAction, renderBirthdays, teacherAccessMatrix, getUsersSnap, stuName, gradeWritePaths, localDateString, gradeTypesCache} from './common.js';
+import { db, auth, CLOUDINARY_URL, UPLOAD_PRESET, HW_FILE_EXT, HW_FILE_MAX_MB, fileExt, getActiveClass, currentUserData, showToast, displayGrade, renderHwItem, renderHwList, dayKeys, formatAttendanceSlotLabel, STICKER_GOAL, stickerGoal, escJs, escHtml, safeUrl, normalizeChildren, notifyEvent, logAction, renderBirthdays, teacherAccessMatrix, getUsersSnap, stuName, gradeWritePaths, localDateString, isMasterTeacher, gradeTypesCache} from './common.js';
 import { populateTopicSelector, availableTopicsCache } from './curriculum.js';
 
 let currentHwImages=[];
@@ -877,18 +877,81 @@ window.loadStudentsList=function(){get(child(ref(db),`students_list/${getActiveC
 // for their own lesson instead of the whole day. Falls back to the
 // currently selected subject (or a generic "all") when no schedule is
 // loaded for the date.
+// ── ЧИЇ ЦЕ УРОКИ ────────────────────────────────────────────────
+// Учитель математики бачив відсутніх з УСІХ уроків класу — і з читання, і
+// з фізкультури. Це і зайве, і збиває: він відповідає за свій урок.
+// Класний керівник, навпаки, має бачити весь день.
+
+// Заміни на обрану дату: substitutions/{дата}/{клас}/{слот}. Тримаємо поруч,
+// бо урок за заміною — це теж «мій урок», хоч у матриці доступу його немає.
+let attSubs={};
+async function loadAttSubs(cls,date){
+  try{
+    const s=await get(child(ref(db),`substitutions/${date}/${cls}`));
+    attSubs=s.exists()?(s.val()||{}):{};
+  }catch(e){ attSubs={}; }
+}
+
+// getTodayLessonsFlattened РОЗГОРТАЄ слоти, у яких кілька уроків (підгрупи),
+// тому порядковий номер у пласкому списку не дорівнює номеру слота. Ключем
+// відсутності служить перший, ключем заміни — другий. Тримаємо обидва.
+function daySlotPairs(dayName){
+  const out=[];
+  const day=(window.schedule&&window.schedule[dayName])||[];
+  day.forEach((slot,slotIdx)=>{
+    const items=Array.isArray(slot)?slot:((slot&&Object.keys(slot).length>0)?[slot]:[]);
+    items.forEach(item=>out.push({item,slotIdx,flatIdx:out.length}));
+  });
+  return out;
+}
+
+// Набір ключів уроків цього вчителя. null — обмежувати не треба.
+function myAttendanceSlots(cls){
+  const role=currentUserData&&currentUserData.role;
+  if(role==='class_teacher'||isMasterTeacher(role))return null;
+  const dateStr=document.getElementById('global-date').value;
+  const [y,m,d]=dateStr.split('-');
+  const dn=dayKeys[new Date(y,m-1,d).getDay()];
+  const me=String((currentUserData&&currentUserData.email)||'').toLowerCase();
+  const anySub=attSubs.any;   // заміна «на предмет», без прив'язки до слота
+  const slots=new Set();
+  daySlotPairs(dn).forEach(({item,slotIdx,flatIdx})=>{
+    const sn=window.getValidSubjectName(item);
+    if(!sn)return;
+    const key=String(flatIdx+1);
+    const sub=attSubs[slotIdx];
+    if(sub){
+      // Урок веде заміна: він у того, кого призначили, і НЕ у заміненого.
+      if(String(sub.subEmail||'').toLowerCase()===me)slots.add(key);
+      return;
+    }
+    if(anySub&&String(anySub.subject||'').trim().toLowerCase()===sn.trim().toLowerCase()){
+      if(String(anySub.subEmail||'').toLowerCase()===me)slots.add(key);
+      return;
+    }
+    if(window.isSubjectAllowed(cls,sn))slots.add(key);
+  });
+  return slots;
+}
+
 function buildMarkAbsentLessonOptions(){
   const sel=document.getElementById('t-mark-absent-lesson');
   if(!sel)return;
   const dateStr=document.getElementById('global-date').value;
   const [y,m,d]=dateStr.split('-');const dv=new Date(y,m-1,d);const dn=dayKeys[dv.getDay()];
   const flat=window.getTodayLessonsFlattened(dn);
+  const mine=myAttendanceSlots(getActiveClass());
   sel.innerHTML='';
   if(flat.length>0){
-    flat.forEach((l,i)=>{
+    // Відмічати можна лише на своєму уроці — інакше вчитель фізкультури
+    // міг поставити пропуск «на математиці».
+    const shown=flat.map((l,i)=>({l,i})).filter(({i})=>!mine||mine.has(String(i+1)));
+    shown.forEach(({l,i})=>{
       const sn=window.getValidSubjectName(l)||'Урок';
       sel.innerHTML+=`<option value="${i+1}">${escHtml(l.number||(i+1))}. ${escHtml(sn)}</option>`;
     });
+    if(!shown.length)
+      sel.innerHTML='<option value="all">Увесь день (ваших уроків цього дня немає)</option>';
   } else {
     // Розкладу на цей день немає — відмічаємо ВЕСЬ день.
     //
@@ -966,9 +1029,27 @@ window.linkParent=async function(){
     document.getElementById('parent-email').value='';
   }catch(err){alert('Помилка: '+err.message);}
 };
-export function listenTeacherAttendance(){
+// Підпис над списком. Раніше тут завжди стояло «сьогодні», навіть коли
+// вгорі обрано інший день, — учитель бачив чуже слово й вирішував, що
+// минулу дату відмітити не можна. Тепер дата видно прямо в заголовку.
+function setAttHeader(limited){
+  const h=document.getElementById('t-att-header');
+  const hint=document.getElementById('t-att-hint');
+  const d=document.getElementById('global-date').value;
+  const human=d?d.split('-').reverse().join('.'):'';
+  const isToday=d===localDateString(new Date());
+  if(h)h.innerText=`🚨 Відвідуваність ${limited?'на ваших уроках':'класу'} — `
+    +(isToday?`сьогодні, ${human}`:human);
+  if(hint)hint.innerHTML='Щоб відмітити за інший день — змініть дату вгорі сторінки, у полі «📅 Оберіть дату».'
+    +(limited?' Показано лише ваші уроки; класний керівник бачить усі.':'');
+}
+
+export async function listenTeacherAttendance(){
   const date=document.getElementById('global-date').value;const list=document.getElementById('t-attendance-list');
   if(teacherAttendanceListener)teacherAttendanceListener();
+  // Заміни читаємо ДО побудови списків: без них учитель, поставлений на
+  // заміну, не побачив би уроку, який сьогодні веде саме він.
+  await loadAttSubs(getActiveClass(),date);
   buildMarkAbsentLessonOptions();
   if(currentUserData.role==='art_school_teacher'){
     document.getElementById('t-att-header').innerText="🚨 Відсутні (Вся школа):";
@@ -1007,8 +1088,13 @@ export function listenTeacherAttendance(){
     }
     teacherAttendanceListener = () => unsubs.forEach(u=>u());
   }else{
-    const cls=getActiveClass();document.getElementById('t-att-header').innerText="🚨 Відвідуваність сьогодні:";
-    teacherAttendanceListener=onValue(ref(db,`attendance/${cls}/${date}`),snap=>{list.innerHTML='';if(snap.exists()){const d=snap.val();let h='';for(let st in d){const slots=d[st];for(let sk in slots){const r=slots[sk];if(!r?.status)continue;const bc=r.status==='late'?'badge-late':'badge-absent';const lb=r.status==='late'?'Запізнення':'Відсутність';const markerIcon=r.markedBy==='teacher'?'👨‍🏫':(r.markedBy==='student'?'🎒':'👪');h+=`<li style="margin-bottom:7px;border-bottom:1px dashed #eee;padding-bottom:4px;"><b>${escHtml(stuName(cls, st))}</b> <span class="badge ${bc}">${lb}</span> <span style="font-size:.72rem;color:#888;">${escHtml(formatAttendanceSlotLabel(sk))} ${markerIcon}</span> <i style="font-size:.78rem;color:#666;">(${escHtml(r.reason)})</i></li>`;}}list.innerHTML=h||'<li class="empty-msg">Усі на місці.</li>';}else list.innerHTML='<li class="empty-msg">Усі на місці.</li>';}, err=>{list.innerHTML=`<li class="empty-msg" style="color:var(--red);">Не вдалося прочитати відвідуваність: ${escHtml(err.message||'')}</li>`;});
+    const cls=getActiveClass();
+    const mine=myAttendanceSlots(cls);
+    setAttHeader(!!mine);
+    teacherAttendanceListener=onValue(ref(db,`attendance/${cls}/${date}`),snap=>{list.innerHTML='';if(snap.exists()){const d=snap.val();let h='';for(let st in d){const slots=d[st];for(let sk in slots){const r=slots[sk];if(!r?.status)continue;
+      // Чужий урок ховаємо. «all» лишаємо всім: це заявка батьків на цілий
+      // день — дитини не буде і на вашому уроці теж.
+      if(mine&&sk!=='all'&&!mine.has(String(sk)))continue;const bc=r.status==='late'?'badge-late':'badge-absent';const lb=r.status==='late'?'Запізнення':'Відсутність';const markerIcon=r.markedBy==='teacher'?'👨‍🏫':(r.markedBy==='student'?'🎒':'👪');h+=`<li style="margin-bottom:7px;border-bottom:1px dashed #eee;padding-bottom:4px;"><b>${escHtml(stuName(cls, st))}</b> <span class="badge ${bc}">${lb}</span> <span style="font-size:.72rem;color:#888;">${escHtml(formatAttendanceSlotLabel(sk))} ${markerIcon}</span> <i style="font-size:.78rem;color:#666;">(${escHtml(r.reason)})</i></li>`;}}list.innerHTML=h||'<li class="empty-msg">Усі на місці.</li>';}else list.innerHTML='<li class="empty-msg">Усі на місці.</li>';}, err=>{list.innerHTML=`<li class="empty-msg" style="color:var(--red);">Не вдалося прочитати відвідуваність: ${escHtml(err.message||'')}</li>`;});
   }
 }
 window.listenTeacherAttendance=listenTeacherAttendance;
