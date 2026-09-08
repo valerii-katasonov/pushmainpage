@@ -943,6 +943,18 @@ function buildMarkAbsentLessonOptions(){
   const mine=myAttendanceSlots(getActiveClass());
   sel.innerHTML='';
   if(flat.length>0){
+    // «УВЕСЬ ДЕНЬ» — ПЕРШИМ ПУНКТОМ, і саме класному керівникові.
+    //
+    // Дитини часто немає не на уроці, а взагалі: захворіла, поїхала. Тоді
+    // відмічати по одному уроку — безглузда робота. Раніше цей варіант
+    // з'являвся, лише якщо на день немає розкладу, тож у звичайний день
+    // його просто не існувало.
+    //
+    // Предметникові його не даємо: пропуск усього дня — це рішення про
+    // весь день дитини, а він відповідає за свій урок. Він і бачить лише
+    // свої уроки — див. myAttendanceSlots.
+    if(!mine) sel.innerHTML='<option value="all">Увесь день</option>';
+
     // Відмічати можна лише на своєму уроці — інакше вчитель фізкультури
     // міг поставити пропуск «на математиці».
     const shown=flat.map((l,i)=>({l,i})).filter(({i})=>!mine||mine.has(String(i+1)));
@@ -950,7 +962,7 @@ function buildMarkAbsentLessonOptions(){
       const sn=window.getValidSubjectName(l)||'Урок';
       sel.innerHTML+=`<option value="${i+1}">${escHtml(l.number||(i+1))}. ${escHtml(sn)}</option>`;
     });
-    if(!shown.length)
+    if(!shown.length&&mine)
       sel.innerHTML='<option value="all">Увесь день (ваших уроків цього дня немає)</option>';
   } else {
     // Розкладу на цей день немає — відмічаємо ВЕСЬ день.
