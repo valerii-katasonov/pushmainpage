@@ -3163,14 +3163,10 @@
             <button type="button" onclick="setActivityPlan('pool',0)">Ні, не буде</button>
           </div>
         </div>
-        <div class="pm-ask">
-          <b>🚌 Як дитина добиратиметься до школи?</b>
-          <span>Школа має знати, кого чекає автобус, а кого привозять батьки.</span>
-          <div class="act-choice">
-            <button type="button" onclick="setActivityPlan('bus',1)">Шкільним автобусом</button>
-            <button type="button" onclick="setActivityPlan('bus',0)">Привозимо самі</button>
-          </div>
-        </div>
+        <!-- Питання про автобус тут НЕМАЄ навмисно: автобус возить на
+             басейн, тож воно з'являється лише після відповіді «так, буде»
+             — і малює його вже скрипт. Питати про дорогу на басейн того,
+             хто на басейн не ходить, немає сенсу. -->
       </div>
     </section>
     <section class="screen-section" data-dtab="day">
