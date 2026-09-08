@@ -170,8 +170,11 @@ function buildActivitiesHtml(wk){
     'Поки ви не відповіли, школа не знає, чи рахувати дитину.',
     'Так, буде', 'Ні, не буде');
 
-  const busBlock = busAnswered ? '' : ask('bus',
-    '🚌 Як дитина добиратиметься до школи?',
+  // ПРО АВТОБУС ПИТАЄМО ЛИШЕ ТИХ, ХТО ХОДИТЬ. Автобус возить саме на
+  // басейн, тож родині, яка на басейн не ходить, це питання ні до чого —
+  // і відповідь на нього нічого не означала б.
+  const busBlock = (!poolAnswered || !actPlan.pool || busAnswered) ? '' : ask('bus',
+    '🚌 Як дитина добиратиметься на басейн?',
     'Школа має знати, кого чекає автобус, а кого привозять батьки.',
     'Шкільним автобусом', 'Привозимо самі');
 
@@ -181,15 +184,15 @@ function buildActivitiesHtml(wk){
   const opt = (key, val, on, text) =>
     `<button type="button" class="act-opt${on?' on':''}"
              onclick="setActivityPlan('${key}',${val})">${text}</button>`;
-  const settings = (poolAnswered || busAnswered) ? `
+  const settings = poolAnswered ? `
     <details class="act-more">
       <summary>⚙️ Налаштування басейну й автобуса</summary>
       ${poolAnswered ? `<div class="act-set">
         <b>🏊 Басейн</b>
         <div class="act-choice">${opt('pool',1,actPlan.pool,'Ходить')}${opt('pool',0,!actPlan.pool,'Не ходить')}</div>
       </div>` : ''}
-      ${busAnswered ? `<div class="act-set">
-        <b>🚌 Дорога до школи</b>
+      ${(busAnswered && actPlan.pool) ? `<div class="act-set">
+        <b>🚌 Дорога на басейн</b>
         <div class="act-choice">${opt('bus',1,actPlan.bus,'Шкільний автобус')}${opt('bus',0,!actPlan.bus,'Привозимо самі')}</div>
       </div>` : ''}
       <p class="act-hint">Зміни діють одразу. Школа побачить їх у своєму зведенні.</p>
@@ -223,9 +226,16 @@ window.setActivityPlan = async function(key, val){
   const { cls, sid } = myKid();
   if(!cls || !sid) return;
   try{
-    await update(ref(db, `activity_plan/${cls}/${sid}`),
-      { [key]: !!val, ts: Date.now(), by: (currentUserData&&currentUserData.email)||'' });
+    const patch = { [key]: !!val, ts: Date.now(),
+                    by: (currentUserData&&currentUserData.email)||'' };
+    // ВІДМОВИЛИСЯ ВІД БАСЕЙНУ — ПРИБИРАЄМО Й ВІДПОВІДЬ ПРО АВТОБУС.
+    // Автобус возить саме на басейн, тож без басейну ця відповідь ні про
+    // що. Якщо її лишити, дитина й далі рахувалася б у списку автобуса —
+    // водій чекав би на того, хто вже не їздить.
+    if(key === 'pool' && !val) patch.bus = null;
+    await update(ref(db, `activity_plan/${cls}/${sid}`), patch);
     actPlan = Object.assign({}, actPlan, { [key]: !!val });
+    if(key === 'pool' && !val) delete actPlan.bus;
     logAction('activity', { cls, value:`${key}: ${val?'так':'ні'}` });
     showToast(val ? '✅ Записали: так' : '✅ Записали: ні');
     safeDraw(document.getElementById('p-activities'), weekKey());
@@ -271,8 +281,8 @@ window.setPoolWeek = async function(going){
 export const ACT_GROUPS = {
   pool:       'Ходять на басейн',
   skipping:   'Не буде на басейні цього тижня',
-  bus:        'Їздять шкільним автобусом',
-  noBus:      'Привозять батьки',
+  bus:        'Їдуть автобусом на басейн',
+  noBus:      'На басейн привозять батьки',
   noPool:     'Не ходять на басейн',
   unanswered: 'Батьки ще не відповіли'
 };
@@ -296,7 +306,11 @@ export function summarize(classes, plans, weeks, names){
         if(!goesThisWeek(week, sid)) c.skipping.push(who);
       }
       else c.noPool.push(who);
-      if(p && typeof p.bus === 'boolean') (p.bus ? c.bus : c.noBus).push(who);
+      // Автобус рахуємо ЛИШЕ серед тих, хто ходить на басейн: він і возить
+      // саме туди. Стара відповідь у того, хто вже не ходить, до списку
+      // не потрапляє — інакше водій чекав би на зайвих.
+      if(p && p.pool === true && typeof p.bus === 'boolean')
+        (p.bus ? c.bus : c.noBus).push(who);
     }
     out.byClass[cls] = c;
     for(const k in ACT_GROUPS) out[k].push(...c[k]);
@@ -375,7 +389,7 @@ function drawSummary(){
     <div class="act-sum">
       ${num('pool','ходять на басейн')}
       ${num('skipping','не буде цього тижня')}
-      ${num('bus','їздять автобусом')}
+      ${num('bus','їдуть автобусом')}
       ${num('noBus','привозять батьки')}
       ${s.unanswered.length ? num('unanswered','без відповіді', true) : ''}
     </div>
