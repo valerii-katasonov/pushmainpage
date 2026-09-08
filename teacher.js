@@ -1037,7 +1037,7 @@ function setAttHeader(limited){
   const hint=document.getElementById('t-att-hint');
   const d=document.getElementById('global-date').value;
   const human=d?d.split('-').reverse().join('.'):'';
-  const isToday=d===localDateString(new Date());
+  const isToday=d===localDateString;   // це рядок дати, а не функція
   if(h)h.innerText=`🚨 Відвідуваність ${limited?'на ваших уроках':'класу'} — `
     +(isToday?`сьогодні, ${human}`:human);
   if(hint)hint.innerHTML='Щоб відмітити за інший день — змініть дату вгорі сторінки, у полі «📅 Оберіть дату».'
@@ -1111,6 +1111,14 @@ export function loadTeacherDashboard(){
   });
   if(currentUserData.role!=='art_school_teacher'){const date=document.getElementById('global-date').value;renderHwList(cls,date,'t-daily-hw-list');}
   renderBirthdays('t-birthdays',cls,'');
+  // Зведення по басейну й автобусу — справа класного керівника: він веде
+  // клас. Предметникові воно ні до чого, та й правила бази його не пустять.
+  const actCard=document.getElementById('t-activities-card');
+  if(actCard){
+    const isCT=currentUserData.role==='class_teacher'||isMasterTeacher(currentUserData.role);
+    actCard.style.display=isCT?'block':'none';
+    if(isCT&&window.renderActivitySummary)window.renderActivitySummary('t-activities','class');
+  }
   listenTeacherAttendance();
 }
 window.loadTeacherDashboard=loadTeacherDashboard;
