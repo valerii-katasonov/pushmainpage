@@ -151,6 +151,29 @@
     /* ── GRADE EDITOR POPUP ── */
     .grade-editor-popup{position:fixed;z-index:5000;background:#fff;border-radius:13px;box-shadow:0 8px 30px rgba(0,0,0,.25);padding:13px;display:none;min-width:210px;border:2px solid var(--teal);animation:popIn .15s ease-out;}
     .grade-editor-popup input[type=text]{width:100%;padding:8px 12px;border:2px solid var(--teal);border-radius:8px;font-size:1.1rem;font-weight:800;text-align:center;color:var(--teal);margin-top:0;}
+    /* ПІДКАЗКИ БЕЗ ЗАТРИМКИ.
+       Нативний title браузер показує приблизно через секунду, і змінити
+       це неможливо — ні CSS, ні скриптом. У редакторі оцінки кнопок два
+       десятки («П», «ДК», «ЛР»...), учитель веде по них мишею, і кожна
+       відповідає з паузою: здається, що портал гальмує. Тому підпис
+       лежить у data-tip, а показуємо його самі — миттєво. */
+    [data-tip]{position:relative;}
+    [data-tip]:hover::after,[data-tip]:focus-visible::after{
+      content:attr(data-tip);position:absolute;bottom:calc(100% + 6px);left:50%;
+      transform:translateX(-50%);background:#37474f;color:#fff;
+      padding:5px 9px;border-radius:6px;font-size:.72rem;font-weight:600;
+      white-space:nowrap;z-index:60;pointer-events:none;
+      box-shadow:0 3px 10px rgba(0,0,0,.22);}
+    /* Хвостик, щоб було видно, до якої саме кнопки належить підказка */
+    [data-tip]:hover::before,[data-tip]:focus-visible::before{
+      content:'';position:absolute;bottom:calc(100% + 1px);left:50%;
+      transform:translateX(-50%);border:5px solid transparent;
+      border-top-color:#37474f;z-index:60;pointer-events:none;}
+    /* На дотику підказка не має сенсу — і не має перекривати сусідні
+       кнопки після натискання, коли :hover «залипає» на мобільному. */
+    @media (hover:none){
+      [data-tip]:hover::after,[data-tip]:hover::before{display:none;}
+    }
     .type-btns{display:flex;gap:4px;margin-top:8px;flex-wrap:wrap;}
     .type-btn{flex:1;min-width:38px;padding:6px 3px;border:2px solid #ddd;border-radius:7px;background:#f8f9fa;cursor:pointer;font-size:.7rem;font-weight:800;transition:.15s;margin:0;}
     .type-btn.active{border-color:var(--teal);background:#e0f2f1;color:var(--teal);}
