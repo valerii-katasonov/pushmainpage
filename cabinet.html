@@ -1273,6 +1273,41 @@
     .pm-ask b{display:block;color:#e65100;font-size:.92rem;margin-bottom:3px;}
     .pm-ask span{display:block;font-size:.79rem;color:#8d6e63;margin-bottom:9px;}
     .pm-ask small{display:block;font-size:.72rem;color:#a1887f;margin-top:7px;}
+    /* Басейн і автобус */
+    .act-box{background:#fff;border:1px solid #b3e5fc;border-left:4px solid #0288d1;
+             border-radius:12px;padding:13px 15px;margin-bottom:13px;}
+    .act-title{margin:0 0 10px 0;color:#0277bd;font-size:.95rem;}
+    .act-row{display:flex;align-items:center;gap:11px;flex-wrap:wrap;
+             padding:8px 0;border-bottom:1px dashed #e1f5fe;}
+    .act-row:last-of-type{border-bottom:0;}
+    .act-state{flex:1;min-width:150px;font-size:.85rem;color:#37474f;}
+    .act-state span{display:block;font-size:.76rem;color:#78909c;}
+    .act-state.no span{color:#b0846a;}
+    .act-week{margin-top:11px;background:#e1f5fe;border:1px solid #81d4fa;
+              border-radius:10px;padding:11px 13px;}
+    .act-week.off{background:#fff3e0;border-color:#ffcc80;}
+    .act-week-head{font-weight:700;color:#0277bd;font-size:.87rem;margin-bottom:3px;}
+    .act-week-head span{font-weight:400;color:#78909c;font-size:.78rem;}
+    .act-week.off .act-week-head{color:#e65100;}
+    .act-week-state{font-size:.8rem;color:#455a64;margin-bottom:9px;}
+    .act-week small{display:block;font-size:.71rem;color:#90a4ae;margin-top:7px;}
+    .act-build{font-size:.68rem;color:#cfd8dc;margin-top:9px;text-align:right;}
+    .act-warn{background:#ffebee;color:#b71c1c;border-radius:8px;padding:9px;font-size:.8rem;}
+    /* Зведення для директора / класного керівника */
+    .act-sum{display:flex;gap:9px;flex-wrap:wrap;margin-bottom:9px;}
+    .act-num{flex:1;min-width:92px;background:#e1f5fe;border-radius:10px;
+             padding:9px 11px;text-align:center;}
+    .act-num b{display:block;font-size:1.35rem;color:#0277bd;line-height:1.1;}
+    .act-num span{font-size:.71rem;color:#546e7a;}
+    .act-num.warn{background:#fff3e0;}
+    .act-num.warn b{color:#e65100;}
+    .act-week-cap{font-size:.76rem;color:#90a4ae;margin-bottom:9px;}
+    .act-h{margin:11px 0 5px 0;font-size:.83rem;color:#37474f;}
+    .act-list{list-style:none;padding:0;margin:0;font-size:.82rem;}
+    .act-list li{padding:5px 0;border-bottom:1px solid #f0f4f8;}
+    .act-cls{display:inline-block;background:#0288d1;color:#fff;border-radius:4px;
+             padding:1px 5px;font-size:.7rem;font-weight:700;margin-right:5px;}
+    .act-hint{font-size:.75rem;color:#90a4ae;margin-top:9px;}
     .pm-ask-btns{display:flex;gap:8px;}
     .pm-ask-btns button{flex:1;margin:0;padding:11px;border-radius:10px;font-size:.86rem;}
     .pm-ask-yes{background:var(--green);color:#fff;}
@@ -2194,6 +2229,11 @@
         <h4 id="d-att-header" style="margin-top:0;color:var(--red);">🚨 Відсутні та Запізнення</h4>
         <ul id="d-unified-att-list" class="list-dash" style="padding-left:0;list-style:none;"><li class="empty-msg">Завантаження...</li></ul>
       </div>
+      <!-- Басейн і автобус по всій школі -->
+      <div class="data-card" style="border-left-color:#0288d1;background:#f5fbff;">
+        <h4 style="margin-top:0;color:#0277bd;">🏊 Басейн і 🚌 автобус — уся школа</h4>
+        <div id="d-activities"><p class="empty-msg">Завантаження...</p></div>
+      </div>
     </section>
 
     <section class="screen-section" data-dtab="rozklad">
@@ -2721,6 +2761,13 @@
     <section class="screen-section" data-dtab="day">
       <!-- Дні народження. Найперше на вкладці. Розгорнуто лише найближчий тиждень, решта — під «ще N». -->
       <div id="t-birthdays" class="bd-box" style="display:none;"></div>
+      <!-- Басейн і автобус. Показуємо лише класному керівникові: у нього
+           свій клас, і правила бази до чужих його однаково не пустять. -->
+      <div class="data-card" id="t-activities-card"
+           style="border-left-color:#0288d1;background:#f5fbff;display:none;">
+        <h4 style="margin-top:0;color:#0277bd;">🏊 Басейн і 🚌 автобус — ваш клас</h4>
+        <div id="t-activities"><p class="empty-msg">Завантаження...</p></div>
+      </div>
       <h3>🚀 Швидкі дії</h3>
       <div id="t-exams-journal-btns" class="qa-grid">
         <button onclick="openExamsCalendar()" class="qa-btn qa-exams">📅 Контрольні</button>
@@ -3118,6 +3165,9 @@
       <!-- Що вивчали цього дня. Стоїть над домашнім завданням: спершу
            «що було на уроці», потім «що задано» — саме в такому порядку
            про це й питають удома. -->
+      <!-- Басейн і шкільний автобус. Стоїть тут, а не в налаштуваннях:
+           поки батько не відповів, школа не знає, чи чекати дитину. -->
+      <div id="p-activities" class="act-box" style="display:none;"></div>
       <div id="p-day-topics" class="topics-box" style="display:none;"></div>
       <div class="data-card" style="border-left-color:#00b894;background:#f0fff4;margin-top:0;">
         <ul id="p-daily-hw-list" class="list-dash"></ul>
@@ -3870,6 +3920,7 @@ document.addEventListener('DOMContentLoaded', function(){
 <script type="module" src="students-import.js"></script>
 <script type="module" src="schedule-import.js"></script>
 <script type="module" src="consent.js"></script>
+<script type="module" src="activities.js"></script>
 
   <!-- ═══ ЕКРАН ЗГОДИ ПРИ ВХОДІ ═══
        Модалка без кнопки закриття: GDPR вимагає поінформувати ДО обробки,
