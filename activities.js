@@ -29,6 +29,9 @@ import { db, currentUserData, getActiveClass, showToast, escHtml,
          logAction, mondayOf, localDateString } from './common.js';
 
 export const ACT_BUILD = '2026-09-08 · басейн і автобус v1';
+// Рядок у консолі — щоб на питання «а нова версія взагалі виїхала?»
+// можна було відповісти за секунду, а не здогадуватися.
+console.info('[Push School] activities.js —', ACT_BUILD);
 
 // Ключ дитини в базі. Скрізь у порталі перевага в studentId — імена
 // повторюються й міняються (заміжжя, зміна документів), ідентифікатор ні.
