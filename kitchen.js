@@ -44,7 +44,7 @@ import { db, auth, currentUserData, showToast, escHtml, escJs, localDateString, 
 // Позначка версії модуля. Показується в блоці харчування дрібним рядком.
 // Якщо людина каже «нічого не змінилося», перше питання — який тут рядок:
 // айфон із головного екрана вміє показувати сторінку тижневої давнини.
-export const MEAL_BUILD = '2026-09-06 · харчування v10 (гарнір лише при обіді, видно «нема відповіді»)';
+export const MEAL_BUILD = '2026-09-06 · харчування v10 · оцінки v2 (рівні 1–4 класи, реакції й коментарі за ключем дитини)';
 
 export const MEAL_CUTOFF_HOUR = 9;   // до 09:00 можна відмовитися від сьогоднішнього
 // Сніданок їдять до уроків, тож дедлайн 09:00 для нього безглуздий — його
@@ -531,21 +531,21 @@ export async function loadWeekCounts(){
       <!-- Сніданок у тижневій таблиці нарівні з обідом: його теж треба
            готувати, і кухня планувала його наосліп — число було лише
            в розрізі класів нижче. -->
-      <table class="k-table"><thead><tr><th>День</th><th>Снід.</th><th>Обіди</th><th>Підвеч.</th><th>Відсутні</th></tr></thead><tbody>
+      <div class="k-scroll"><table class="k-table"><thead><tr><th>День</th><th>Снід.</th><th>Обіди</th><th>Підвеч.</th><th>Відсутні</th></tr></thead><tbody>
         ${perDay.map((d,i)=>`<tr class="${d.date===localDateString?'k-now':''}${d.closed?' k-closed':''}">
           <td>${DOW_SHORT[i]} ${escHtml(human(d.date).slice(0,5))}</td>
           ${d.closed
             ? `<td colspan="4" class="k-closed-cell">${escHtml(d.closed)}</td>`
             : `<td>${d.hasBrkMenu?(d.brk||'0'):'<span class="k-no">—</span>'}</td><td><b>${d.lunch}</b></td><td>${d.snack||''}</td><td class="k-off">${d.absent||''}</td>`}
           </tr>`).join('')}
-      </tbody></table>
+      </tbody></table></div>
 
       <div class="k-skip-title">По класах — ${escHtml(human(today.date))}</div>
-      <table class="k-table"><thead><tr><th>Клас</th><th>Снід.</th><th>Обіди</th>${today.hasChoice?'<th>А / Б</th>':''}<th>Підвеч.</th></tr></thead><tbody>
+      <div class="k-scroll"><table class="k-table"><thead><tr><th>Клас</th><th>Снід.</th><th>Обіди</th>${today.hasChoice?'<th>А / Б</th>':''}<th>Підвеч.</th></tr></thead><tbody>
         ${Object.keys(today.classes).length
           ? Object.keys(today.classes).map(c=>`<tr><td>${c}</td><td>${today.classes[c].brk||''}</td><td><b>${today.classes[c].lunch}</b></td>${today.hasChoice?`<td>${today.classes[c].a||0} / ${today.classes[c].b||0}</td>`:''}<td>${today.classes[c].snack||''}</td></tr>`).join('')
           : `<tr><td colspan="${today.hasChoice?5:4}" class="empty-msg">Немає даних</td></tr>`}
-      </tbody></table>
+      </tbody></table></div>
 
       ${nameList('warn', `Батьки ще не відповіли про обіди (${today.unanswered.length})`, today.unanswered,
           'Ці діти не потрапляють у замовлення, доки батьки не натиснуть «Так, обідає» або «Ні, не обідає».', false)}
@@ -684,18 +684,24 @@ window.loadClassOrders = async function(){
       <div class="k-ord-sum">${hasBrkMenu?`<b>${brk}</b> сніданків · `:''}<b>${lunch}</b> обідів${hasChoice?` <span class="k-ord-ab">А ${pa} / Б ${pb}</span>`:''} · <b>${snack}</b> підвечірків
         <span>${escHtml(cls.replace('class_',''))} клас, ${escHtml(human(date))}</span></div>
       ${hasChoice?`<div class="k-ord-menu">Вибір на ${escHtml(choice.label)}: А — ${escHtml(choice.a)} · Б — ${escHtml(choice.b)}</div>`:''}
+      <!-- data-l на кожній клітинці — це підпис колонки. Коли шрифт великий,
+           таблиця розкладається на картки (див. @media у cabinet.html), шапка
+           ховається, і без цих підписів не було б зрозуміло, де обід, а де
+           підвечірок. У звичайному вигляді атрибут просто не використовується. -->
+      <div class="k-scroll">
       <table class="k-table k-ord"><thead><tr>
         <th>Учень</th>${hasBrkMenu?'<th>Снід.</th>':''}<th>Обід</th>${hasChoice?'<th>Варіант</th>':''}<th>Підвеч.</th><th>Примітка</th></tr></thead><tbody>
         ${rows.map(r=>`<tr class="${r.absent?'k-ord-abs':''}">
-          <td>${escHtml(r.name)}</td>
-          ${hasBrkMenu?`<td>${mealCell(cls,r.sid,date,'breakfast',r.breakfast)}</td>`:''}
-          <td>${mealCell(cls,r.sid,date,'lunch',r.lunch)}</td>
-          ${hasChoice?`<td>${pickCell(cls,r.sid,date,r.pick)}</td>`:''}
-          <td>${mealCell(cls,r.sid,date,'snack',r.snack)}</td>
-          <td class="k-ord-note">${r.noReply
+          <td data-l="Учень">${escHtml(r.name)}</td>
+          ${hasBrkMenu?`<td data-l="Сніданок">${mealCell(cls,r.sid,date,'breakfast',r.breakfast)}</td>`:''}
+          <td data-l="Обід">${mealCell(cls,r.sid,date,'lunch',r.lunch)}</td>
+          ${hasChoice?`<td data-l="Варіант">${pickCell(cls,r.sid,date,r.pick)}</td>`:''}
+          <td data-l="Підвечірок">${mealCell(cls,r.sid,date,'snack',r.snack)}</td>
+          <td class="k-ord-note" data-l="Примітка">${r.noReply
             ? `<b class="k-noreply">Нема відповіді від батьків</b>${r.note?` · ${escHtml(r.note)}`:''}`
             : escHtml(r.note)}</td></tr>`).join('')}
       </tbody></table>
+      </div>
       ${orphanBlock(overrides, plans, stSnap.val())}
       <p class="k-ord-hint">Натисніть ✓ або —, щоб додати чи зняти порцію вручну; А/Б перемикає варіант.
         Це для тих, хто звернувся вже після дедлайну; дію буде записано в журнал.</p>
@@ -909,14 +915,14 @@ window.loadMealStats = async function(){
       <div class="k-total"><b>${tot.lunch}</b><span>людино-днів з обідом</span>
         <div class="k-total-snack">${tot.brk?`${tot.brk} зі сніданком · `:''}+ ${tot.snack} з підвечірком</div></div>
       <div class="k-sub">${escHtml(human(from))} — ${escHtml(human(to))}</div>
-      <table class="k-table"><thead><tr><th>Клас</th><th>Снід.</th><th>Обіди</th><th>Підвеч.</th></tr></thead><tbody>
+      <div class="k-scroll"><table class="k-table"><thead><tr><th>Клас</th><th>Снід.</th><th>Обіди</th><th>Підвеч.</th></tr></thead><tbody>
         ${Object.keys(byClass).sort((a,b)=>a-b).map(c=>`<tr><td>${c}</td><td>${byClass[c].brk||''}</td><td><b>${byClass[c].lunch}</b></td><td>${byClass[c].snack||''}</td></tr>`).join('')}
-      </tbody></table>
+      </tbody></table></div>
       <div class="k-skip-title">Поіменно</div>
-      <table class="k-table"><thead><tr><th>Учень</th><th>Кл.</th><th>Снід.</th><th>Обіди</th><th>Підвеч.</th></tr></thead><tbody>
+      <div class="k-scroll"><table class="k-table"><thead><tr><th>Учень</th><th>Кл.</th><th>Снід.</th><th>Обіди</th><th>Підвеч.</th></tr></thead><tbody>
         ${rows.sort((a,b)=>b.lunch-a.lunch || a.name.localeCompare(b.name,'uk'))
               .map(r=>`<tr><td>${escHtml(r.name)}</td><td>${r.cls}</td><td>${r.brk||''}</td><td><b>${r.lunch}</b></td><td>${r.snack||''}</td></tr>`).join('')}
-      </tbody></table>
+      </tbody></table></div>
       <button onclick="exportMealStats()" style="background:#e0f7fa;color:#00838f;border:1px solid #80deea;margin-top:11px;">📄 Вивантажити CSV</button>`;
     window.__mealStats = { from, to, rows };
   }catch(e){
@@ -1983,15 +1989,15 @@ window.loadTakeawayOrders = async function(){
       ? '<p class="empty-msg">На цей день замовлень немає.</p>'
       : `<div class="k-ord-sum"><b>${tKeys.reduce((a,k)=>a+totals[k],0)}</b> позицій · ${taMoney(sum)} zł
            <span>${escHtml(human(date))}</span></div>
-         <table class="k-table"><thead><tr><th>Позиція</th><th>К-сть</th><th>Сума</th></tr></thead><tbody>
+         <div class="k-scroll"><table class="k-table"><thead><tr><th>Позиція</th><th>К-сть</th><th>Сума</th></tr></thead><tbody>
            ${tKeys.map(k=>`<tr><td>${escHtml((items[k]||{}).title||k)}</td><td><b>${totals[k]}</b></td>
              <td>${taMoney(totals[k]*Number((items[k]||{}).price||0))} zł</td></tr>`).join('')}
-         </tbody></table>
+         </tbody></table></div>
          <div class="k-skip-title">Хто замовив</div>
-         <table class="k-table"><thead><tr><th>Учень</th><th>Кл.</th><th>Замовлення</th></tr></thead><tbody>
+         <div class="k-scroll"><table class="k-table"><thead><tr><th>Учень</th><th>Кл.</th><th>Замовлення</th></tr></thead><tbody>
            ${rows.map(r=>`<tr><td>${escHtml(r.name)}</td><td>${escHtml(String(r.cls))}</td>
              <td class="k-ta-cell">${editRow(r)}</td></tr>`).join('')}
-         </tbody></table>`) + addForm;
+         </tbody></table></div>`) + addForm;
   }catch(e){
     box.innerHTML = `<p class="empty-msg" style="color:var(--red);">Не вдалося завантажити: ${escHtml(e.message)}</p>`;
   }
