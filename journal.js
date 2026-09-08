@@ -65,7 +65,12 @@ function renderGradeTypeButtons(){
   c.innerHTML=codes.map(code=>{
     const shortLabel=(gradeTypesCache[code]&&gradeTypesCache[code].shortLabel)||code;
     const label=(gradeTypesCache[code]&&gradeTypesCache[code].label)||code;
-    return `<button type="button" class="type-btn" data-type="${code}" title="${label}" onclick="selectGradeType('${code}')">${shortLabel}</button>`;
+    // data-tip замість title: нативну підказку браузер показує приблизно
+    // через секунду, і цю затримку не змінити ні CSS, ні скриптом. Учитель
+    // же водить мишею по десятку кнопок поспіль, і кожна відповідає з
+    // паузою — виглядає як гальмування порталу. Своя підказка з'являється
+    // одразу (див. [data-tip] у cabinet.html).
+    return `<button type="button" class="type-btn" data-type="${code}" data-tip="${escHtml(label)}" onclick="selectGradeType('${code}')">${shortLabel}</button>`;
   }).join('');
 }
 // Phase 4b: added presetType param — when a cell has no existing grade_type yet (new grade),
@@ -99,7 +104,7 @@ function renderLevelButtons(cls, current){
   const cur = String(current||'').trim().toUpperCase();
   box.innerHTML = '<div class="gep-hint">Рівень:</div>' + LEVELS.map(L =>
     `<button type="button" class="level-btn${L.v===cur?' active':''}" data-lv="${L.v}"
-       title="${L.label}" onclick="selectGradeLevel('${L.v}')">${L.v}</button>`).join('');
+       data-tip="${escHtml(L.label)}" onclick="selectGradeLevel('${L.v}')">${L.v}</button>`).join('');
 }
 window.selectGradeLevel = function(v){
   const input = document.getElementById('gep-value');
