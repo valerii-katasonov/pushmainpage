@@ -553,12 +553,6 @@ window.saveTopicAndHW=async function(){
   const uid=auth.currentUser.uid;
   if(!subject){alert("Оберіть предмет!");return;}
 
-  // ПАСТКА, ЧЕРЕЗ ЯКУ ЗАВДАННЯ ЗНИКАЛИ. Поля «Підручник» і «Сторінки» —
-  // це підказка для ШІ; вони йдуть у генератор і ніде не зберігаються.
-  // Учитель же бачив їх одразу під полем ДЗ і заповнював ЗАМІСТЬ нього:
-  // тема зберігалася, homeworks не писався взагалі (див. умову нижче),
-  // портал бадьоро казав «✅ Збережено», а батьки бачили порожньо.
-  // Тепер мовчки повз це не пройти.
   // Обраний підручник разом із посиланням — його прикладаємо до завдання
   // окремим полем, щоб у батьків він був клікабельний, а не просто назвою.
   const bookSel=document.getElementById('hw-textbook');
@@ -570,23 +564,22 @@ window.saveTopicAndHW=async function(){
   const bookTitle=bookCustom||(bookSel?bookSel.value:'');
   const bookUrl=bookCustom?'':(bookOpt?(bookOpt.getAttribute('data-url')||''):'');
 
+  // ПОЛЕ ДЗ ПОРОЖНЄ, АЛЕ ВКАЗАНО ПІДРУЧНИК І СТОРІНКИ — це і є завдання.
+  //
+  // Спершу тут стояло питання «записати як завдання?». Воно було зайвим:
+  // учитель уже все заповнив, батькам цього досить, і зайвий крок лише
+  // дратував. Тому просто складаємо текст і зберігаємо мовчки.
+  //
+  // (Колись ці поля не зберігалися взагалі — вони призначені генератору
+  // ШІ. Через це завдання зникали: тема лишалася, ДЗ ні. Тепер не зникають.)
   if(!hwText&&!(fileInput&&fileInput.files.length)){
-    const book=bookTitle;
     const pages=document.getElementById('hw-pages')?.value.trim()||'';
-    if(book||pages){
+    if(bookTitle||pages){
       // Є клікабельний підручник — назву в текст не дублюємо: вона й так
       // буде поруч окремим посиланням. Інакше поводимося як раніше.
-      const composed=(bookUrl&&pages)?pages:[book,pages].filter(Boolean).join(' — ');
-      if(!confirm('Поле «Домашнє завдання» порожнє.\n\n'
-        +'Підручник і сторінки — це підказка для ШІ, вона не стає завданням:\n'
-        +'батьки побачать лише те, що написано в самому полі ДЗ.\n\n'
-        +'Записати як завдання:\n«'+composed+'»?\n\n'
-        +'Скасувати — повернутися й дописати текст самому.')) {
-        return;
-      }
-      hwText=composed;
+      hwText=(bookUrl&&pages)?pages:[bookTitle,pages].filter(Boolean).join(' — ');
       const area=document.getElementById('t-hw');
-      if(area)area.value=composed;
+      if(area)area.value=hwText;
     }
   }
 
