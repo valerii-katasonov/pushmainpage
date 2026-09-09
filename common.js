@@ -35,6 +35,28 @@ export const HW_FILE_EXT=['jpg','jpeg','png','gif','webp','heic','heif',
                           'doc','docx','xls','xlsx','csv'];
 export const HW_FILE_MAX_MB=10;
 const IMG_EXT=['jpg','jpeg','png','gif','webp','heic','heif'];
+
+// HEIC — формат, у якому знімає айфон. Учителька фотографує вправу, файл
+// лягає в базу як .heic, і в браузері не показується НІЧОГО: HEIC уміє
+// лише Safari. Батько бачить порожню рамку замість завдання.
+//
+// Лагодиться не завантаженням, а адресою. Cloudinary перетворює картинку
+// на льоту: досить дописати f_auto — і він віддасть той формат, який
+// розуміє браузер (webp, jpg). Працює і для вже збережених посилань, тож
+// нічого перезавантажувати не треба.
+//
+// tr — додаткові перетворення. Для мініатюри просимо ще й обрізку до
+// потрібного розміру: возити чотиримегабайтне фото, щоб показати його
+// квадратиком 90×90, немає сенсу.
+export function cldImage(url, tr){
+  const u=safeHttpUrl(url);
+  if(!u) return '';
+  // Чіпаємо лише картинки Cloudinary. Raw-файли (docx, xlsx) лежать за
+  // /raw/upload/ — їх перетворювати не можна й не треба.
+  if(!/^https:\/\/res\.cloudinary\.com\/[^/]+\/image\/upload\//.test(u)) return u;
+  if(/\/image\/upload\/[^/]*f_auto/.test(u)) return u;      // вже оброблено
+  return u.replace('/image/upload/', `/image/upload/${tr?tr+',':''}f_auto,q_auto/`);
+}
 export function fileExt(name){
   const m=/\.([a-z0-9]+)(?:[?#].*)?$/i.exec(String(name||''));
   return m?m[1].toLowerCase():'';
@@ -1266,7 +1288,18 @@ export function renderHwItem(subject,data,books){
       const su=safeHttpUrl(u);
       if(!su)return;
       if(isImageUrl(su)){
-        att+=`<a href="${escHtml(su)}" target="_blank" rel="noopener noreferrer"><img src="${escHtml(su)}" style="width:90px;height:90px;object-fit:cover;border-radius:7px;"></a>`;
+        // Мініатюра — обрізана й полегшена, посилання — повний знімок.
+        // Обидва через cldImage, інакше HEIC не покажеться ні там, ні там.
+        const thumb=cldImage(su,'c_fill,w_180,h_180');
+        const full=cldImage(su);
+        // onerror — остання лінія. Якщо перетворення чомусь не спрацювало
+        // (фото не з Cloudinary, старе посилання), батько побачить не
+        // порожню рамку, а клікабельний рядок: відкрити фото він зможе
+        // однаково, просто в окремій вкладці.
+        att+=`<a class="hw-photo" href="${escHtml(full)}" target="_blank" rel="noopener noreferrer">`
+           + `<img src="${escHtml(thumb)}" loading="lazy" alt="Фото до завдання"`
+           + ` style="width:90px;height:90px;object-fit:cover;border-radius:7px;"`
+           + ` onerror="this.parentNode.classList.add('hw-doc');this.replaceWith(document.createTextNode('📷 Відкрити фото'))"></a>`;
       }else{
         const ext=fileExt(su);
         // Ім'я файлу з кінця адреси: учителю зрозуміліше «vprava-3.docx»,
