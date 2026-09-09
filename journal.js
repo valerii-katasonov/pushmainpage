@@ -139,8 +139,18 @@ window.confirmGrade=async function(){
     const n=parseInt(val);
     if(!isNaN(n)&&(n<1||n>6)){showToast('⚠️ Оцінка має бути від 1 до 6!');return;}
   }
-  // Основа і дзеркало — одним атомарним записом
-  await update(ref(db), gradeWritePaths(gepCls,gepYMonth,gepSubj,gepDate,gepStudent,val,gepType));
+  // Основа і дзеркало — одним атомарним записом.
+  // Під try: якщо запис не пройде, вікно не має закриватися з бадьорим
+  // «✅» — учитель піде далі, певний, що оцінка стоїть, а її немає.
+  try{
+    await update(ref(db), gradeWritePaths(gepCls,gepYMonth,gepSubj,gepDate,gepStudent,val,gepType));
+  }catch(e){
+    console.error('Виставлення оцінки:',e);
+    showToast(/permission[_ ]denied/i.test(e.message||'')
+      ? '⛔ Немає прав виставляти оцінку в цьому класі'
+      : '❌ Оцінку не збережено: '+(e.message||''));
+    return;
+  }
   closeGradeEditor();renderJournalTable();showToast(`✅ ${stuName(gepCls,gepStudent)}: ${displayGrade(val,gepCls)} (${gepType})`);
   // Сповіщаємо батьків/учня. Оцінку показуємо у вигляді, який бачить сім'я
   // (для 1-5 класів — літерою, а не цифрою).
@@ -148,7 +158,13 @@ window.confirmGrade=async function(){
   logAction('grade_set',{cls:gepCls,target:stuName(gepCls,gepStudent),subject:gepSubj,date:gepDate,value:val,gtype:gepType});
 };
 window.deleteGrade=async function(){
-  await update(ref(db), gradeWritePaths(gepCls,gepYMonth,gepSubj,gepDate,gepStudent,null,null));
+  try{
+    await update(ref(db), gradeWritePaths(gepCls,gepYMonth,gepSubj,gepDate,gepStudent,null,null));
+  }catch(e){
+    console.error('Видалення оцінки:',e);
+    showToast('❌ Не видалено: '+(e.message||''));
+    return;
+  }
   closeGradeEditor();renderJournalTable();showToast('🗑️ Оцінку видалено');
   logAction('grade_del',{cls:gepCls,target:stuName(gepCls,gepStudent),subject:gepSubj,date:gepDate});
 };
@@ -165,6 +181,7 @@ document.addEventListener('click',function(e){const p=document.getElementById('g
 // semester_grades/{cls}/{semId}/{subject}/{ІМ'Я} = {value, auto, by, ts}
 let semCache={};
 window.openSemesterGrades=async function(){
+  try{
   const cls=document.getElementById('j-class-select').value;
   const subj=document.getElementById('j-subj-select').value;
   if(!cls||!subj)return showToast('⚠️ Спочатку оберіть клас і предмет');
@@ -185,6 +202,13 @@ window.openSemesterGrades=async function(){
     return;
   }
   window.renderSemesterTable();
+  }catch(err){
+    // Читання не вдалося. Без цього блоку на екрані назавжди лишався б
+    // напис-заглушка, і людина не знала б, зламалося чи просто повільно.
+    console.error("journal.js → sem-period", err);
+    const _b=document.getElementById("sem-period");
+    if(_b)_b.innerHTML='<option value="">Не вдалося завантажити</option>';
+  }
 };
 window.closeSemesterGrades=function(){document.getElementById('semester-modal').style.display='none';};
 // Місяці «yyyy-MM», що потрапляють у діапазон семестру
@@ -247,7 +271,7 @@ window.renderSemesterTable=async function(){
         <td class="sem-auto">${auto?escHtml(displayGrade(auto,cls)):'—'}</td>
         <td><input type="text" class="sem-in" id="sem-${escHtml(st.sid)}" value="${escHtml(cur||auto)}"
              data-auto="${escHtml(auto)}" data-sid="${escHtml(st.sid)}" data-name="${escHtml(st.nm)}" maxlength="1"></td>
-        <td class="sem-flag">${changed?'<span title="Відрізняється від запропонованої">✎</span>':''}</td>
+        <td class="sem-flag">${changed?'<span data-tip="Відрізняється від запропонованої">✎</span>':''}</td>
       </tr>`;
     });
     box.innerHTML=`<p class="sem-info">Період: ${escHtml(sem.startDate.split('-').reverse().join('.'))} — ${escHtml(sem.endDate.split('-').reverse().join('.'))} · виставлено: <b>${filled} з ${students.length}</b></p>
@@ -330,6 +354,7 @@ window.openJournalForGrading=function(){
   setTimeout(()=>{const s=document.getElementById('j-subj-select');if(subj&&Array.from(s.options).some(o=>o.value===subj))s.value=subj;renderJournalTable();},300);
 };
 window.updateJournalSubjects=function(){
+  try{
   const cls=document.getElementById('j-class-select').value;const ss=document.getElementById('j-subj-select');
   if(!cls){ss.innerHTML='<option value="">Спочатку клас</option>';return;}
   ss.innerHTML='<option value="">Завантаження...</option>';
@@ -338,6 +363,13 @@ window.updateJournalSubjects=function(){
     if(unique.size===0){get(child(ref(db),`grades/${cls}`)).then(snap=>{if(snap.exists()){const md=snap.val();for(let m in md)for(let s in md[m])unique.add(s);}finishJournalSubjectsRender(unique,cls,ss);});return;}
     finishJournalSubjectsRender(unique,cls,ss);
   });
+  }catch(err){
+    // Читання не вдалося. Без цього блоку на екрані назавжди лишався б
+    // напис-заглушка, і людина не знала б, зламалося чи просто повільно.
+    console.error("journal.js → j-subj-select", err);
+    const _b=document.getElementById("j-subj-select");
+    if(_b)_b.innerHTML='<option value="">Не вдалося завантажити</option>';
+  }
 };
 function finishJournalSubjectsRender(unique,cls,ss){
   if(currentUserData.role==='teacher'||currentUserData.role==='art_school_teacher')unique=new Set([...unique].filter(s=>window.isSubjectAllowed(cls,s)));
@@ -476,7 +508,7 @@ window.renderJournalTable=async function(){
       if(canEdit){
         // Phase 8: use this column's own source month (`ym`), not a single outer
         // yMonth — the range can now span several Firebase month-keys at once.
-        typeCell=`<br><select class="jct-type-select" onclick="event.stopPropagation();" onchange="setJournalColumnType('${cls}','${escJs(subj)}','${ym}','${ds}',this.value)" title="Тип оцінки на цю дату">
+        typeCell=`<br><select class="jct-type-select" onclick="event.stopPropagation();" onchange="setJournalColumnType('${cls}','${escJs(subj)}','${ym}','${ds}',this.value)" data-tip="Тип оцінки на цю дату">
           <option value="">—</option>
           ${typeCodes.map(t=>`<option value="${t}" ${presetType===t?'selected':''}>${t} ×${weightOf(t)}</option>`).join('')}
         </select>`;
@@ -517,7 +549,7 @@ window.renderJournalTable=async function(){
         } else if(canEdit){
           cell+=`<span class="g-cell g-empty" onclick="handleGradeClick(event,'${cls}','${escJs(subj)}','${ds}','${escJs(st.sid)}','${ym}','','','${presetType}')">＋</span>`;
         }
-        if(attInfo){const ac=attInfo.status==='absent'?'att-absent':'att-late';const al=attInfo.status==='absent'?'н':'з';cell+=`<span class="${ac}" title="${attInfo.reason}">${al}</span>`;}
+        if(attInfo){const ac=attInfo.status==='absent'?'att-absent':'att-late';const al=attInfo.status==='absent'?'н':'з';cell+=`<span class="${ac}" data-tip="${attInfo.reason}">${al}</span>`;}
         rowHtml+=`<td class="${isToday?'today-col':''}">${cell}</td>`;
       });
       const avgGc=avg!==null?gradeClass6(Math.round(avg)):'';
@@ -890,10 +922,10 @@ function noTeacherCell(){
   const known = globalTeacherAccess && Object.keys(globalTeacherAccess).length;
   return known
     ? '<div class="cell-teacher" style="color:#aaa;">—</div>'
-    : '<div class="cell-teacher" style="color:#e65100;" title="Учителя визначає матриця доступу, а вона зараз недоступна. Це не означає, що вчителя не призначено.">?</div>';
+    : '<div class="cell-teacher" style="color:#e65100;" data-tip="Учителя визначає матриця доступу, а вона зараз недоступна. Це не означає, що вчителя не призначено.">?</div>';
 }
 
-function rsmcc(lesson,dTName,isOvr,clsId,row,si){const sn=typeof lesson.subject==='string'?lesson.subject:(lesson.subject.ua||'');const ts=lesson.time||'';const isB=isBreakItem(lesson);const isX=lesson.type==='extra';const sl=JSON.stringify(lesson).replace(/'/g,"&apos;").replace(/"/g,"&quot;");const oc=`event.stopPropagation();openCellEditor('${clsId}',${row},${si},${sl})`;const wc=hasWC(row,clsId,si);if(isB)return`<div class="matrix-cell cell-break" onclick="${oc}"><div class="cell-subj">${escHtml(sn)}</div><div class="cell-time">${escHtml(ts)}</div></div>`;if(isX){let xi='';if(lesson.extraData){if(lesson.extraData.format==='individual')xi=`<div class="cell-student-linked">👤${escHtml(lesson.extraData.student||'')}</div>`;else xi=`<div class="cell-student-linked" style="background:#e8f8f5;color:#16a085;">👥Група</div>`;}const th=dTName?`<div class="cell-teacher">👨‍🏫${escHtml(dTName)}${isOvr?' <span title="Веде не той, хто закріплений за предметом — заміна">🔄</span>':''}</div>`:noTeacherCell();return`<div class="matrix-cell cell-club ${wc}" onclick="${oc}"><div class="cell-subj">🎸${escHtml(sn)}</div>${th}${xi}<div class="cell-time">🕘${escHtml(ts)}</div></div>`;}const th=dTName?`<div class="cell-teacher">👨‍🏫${escHtml(dTName)}${isOvr?' <span title="Веде не той, хто закріплений за предметом — заміна">🔄</span>':''}</div>`:noTeacherCell();return`<div class="matrix-cell cell-lesson ${wc}" onclick="${oc}"><div class="cell-subj">${escHtml(sn)}</div>${th}<div class="cell-time">🕘${escHtml(ts)}</div></div>`;}
+function rsmcc(lesson,dTName,isOvr,clsId,row,si){const sn=typeof lesson.subject==='string'?lesson.subject:(lesson.subject.ua||'');const ts=lesson.time||'';const isB=isBreakItem(lesson);const isX=lesson.type==='extra';const sl=JSON.stringify(lesson).replace(/'/g,"&apos;").replace(/"/g,"&quot;");const oc=`event.stopPropagation();openCellEditor('${clsId}',${row},${si},${sl})`;const wc=hasWC(row,clsId,si);if(isB)return`<div class="matrix-cell cell-break" onclick="${oc}"><div class="cell-subj">${escHtml(sn)}</div><div class="cell-time">${escHtml(ts)}</div></div>`;if(isX){let xi='';if(lesson.extraData){if(lesson.extraData.format==='individual')xi=`<div class="cell-student-linked">👤${escHtml(lesson.extraData.student||'')}</div>`;else xi=`<div class="cell-student-linked" style="background:#e8f8f5;color:#16a085;">👥Група</div>`;}const th=dTName?`<div class="cell-teacher">👨‍🏫${escHtml(dTName)}${isOvr?' <span data-tip="Веде не той, хто закріплений за предметом — заміна">🔄</span>':''}</div>`:noTeacherCell();return`<div class="matrix-cell cell-club ${wc}" onclick="${oc}"><div class="cell-subj">🎸${escHtml(sn)}</div>${th}${xi}<div class="cell-time">🕘${escHtml(ts)}</div></div>`;}const th=dTName?`<div class="cell-teacher">👨‍🏫${escHtml(dTName)}${isOvr?' <span data-tip="Веде не той, хто закріплений за предметом — заміна">🔄</span>':''}</div>`:noTeacherCell();return`<div class="matrix-cell cell-lesson ${wc}" onclick="${oc}"><div class="cell-subj">${escHtml(sn)}</div>${th}<div class="cell-time">🕘${escHtml(ts)}</div></div>`;}
 // Класні години цього дня — рядком під сіткою.
 //
 // ЧОМУ РЯДКОМ, А НЕ КЛІТИНКОЮ В СІТЦІ. Сітка редагована: натискання на
