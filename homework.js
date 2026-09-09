@@ -258,6 +258,22 @@ window.hwHelp = async function(subject, topic, homework, id){
   if(out.style.display === 'block'){ out.style.display = 'none'; return; }
   if(out.dataset.done === '1'){ out.style.display = 'block'; return; }
 
+  // ЗБЕРЕЖЕНА ВІДПОВІДЬ. Ліміт запитів до Gemini спільний на всю школу
+  // (один ключ), а кнопка тепер стоїть під кожним завданням — спокуса
+  // натиснути велика. Пам'ять у вузлі сторінки живе лише до наступного
+  // перемальовування: варто перемкнути тиждень і повернутися — і те саме
+  // питання пішло б у сервіс удруге. Тому тримаємо відповідь у браузері.
+  const cacheKey = 'hwhelp:' + getActiveClass() + ':' + subject + ':' + (homework||'').slice(0,80);
+  try{
+    const saved = localStorage.getItem(cacheKey);
+    if(saved){
+      out.textContent = saved;
+      out.dataset.done = '1';
+      out.style.display = 'block';
+      return;
+    }
+  }catch(e){ /* приватний режим — просто питаємо заново */ }
+
   if(!topic && !homework){
     out.textContent = 'Учитель ще не вказав ні теми, ні завдання — підказати нема з чого.';
     out.style.display = 'block';
@@ -276,8 +292,10 @@ window.hwHelp = async function(subject, topic, homework, id){
     });
     const data = await r.json().catch(()=>({}));
     if(!r.ok) throw new Error(data.error || `Помилка ${r.status}`);
-    out.textContent = (data.text||'') + '\n\n💡 Це загальні поради — орієнтуйтесь на свою дитину.';
+    const full = (data.text||'') + '\n\n💡 Це загальні поради — орієнтуйтесь на свою дитину.';
+    out.textContent = full;
     out.dataset.done = '1';
+    try{ localStorage.setItem(cacheKey, full); }catch(e){ /* сховище повне — не біда */ }
   }catch(e){
     // Помилку показуємо на місці, а не тостом: людина дивиться сюди.
     out.textContent = 'Не вдалося отримати відповідь: ' + (e.message||'');
