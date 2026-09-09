@@ -1500,7 +1500,12 @@ window.switchChild=async function(idx){
   // лягли б не на ту, особливо коли обидві діти в одному класі
   if(window.invalidateMealKey) window.invalidateMealKey();
   // Розклад прив'язаний до класу — перечитуємо під нову дитину
-  loadScheduleScript(k.class,()=>{initUserSession();});
+  loadScheduleScript(k.class,()=>{
+    initUserSession();
+    // Вкладка ДЗ живе окремо від дашборда й сама не оновиться. Раніше
+    // після перемикання дитини на ній висіла домашка попередньої.
+    if(window.refreshHwTabIfOpen) window.refreshHwTabIfOpen();
+  });
   showToast(`👶 Дитина: ${k.studentName}`);
 };
 // Перемикач кабінетів — показується лише тим, у кого призначено >1 ролі.
@@ -1635,6 +1640,11 @@ window.removeMySkill=function(i){mySkillsTemp.splice(i,1);renderMySkillsTags();}
 // ══════════ DATE / CLASS CHANGE ══════════
 window.handleDateChange=function(){
   if(!currentUserData)return;
+  // Вкладка «ДЗ на день» і вкладка ДЗ у батьків живуть окремо від
+  // дашборда й самі не оновлюються. Оновлюємо їх лише коли вони відкриті:
+  // інакше кожна зміна дати тягла б зайве читання у фоні.
+  if(window.refreshHwDayIfOpen) window.refreshHwDayIfOpen();
+  if(window.refreshHwTabIfOpen) window.refreshHwTabIfOpen();
   if(isTeacherRole(currentUserData.role)){updateSubjectList();loadTeacherDashboard();loadCurrentTopicAndHW();listenTeacherAttendance();}
   else if(currentUserData.role==='director'){loadDirectorDashboard();document.getElementById('d-detail-hw-class')&&(document.getElementById('d-detail-hw-class').value='');}
   else if(currentUserData.role==='kitchen'){/* кухня працює тижнями — має власну навігацію */}
