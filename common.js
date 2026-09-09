@@ -3740,7 +3740,31 @@ window.requestPasswordReset=async function(){
 // Сумісність зі старими викликами
 window.loginUser=()=>window.submitLogin();
 window.registerUser=()=>window.showFirstLoginScreen();
-window.logoutUser=function(){if(window.stopWatchUnread)window.stopWatchUnread();if(teacherAttendanceListener)teacherAttendanceListener();if(parentLessonInterval)clearInterval(parentLessonInterval);document.getElementById('profile-bar').style.display='none';signOut(auth);};
+window.logoutUser=async function(){
+  if(window.stopWatchUnread)window.stopWatchUnread();
+  if(teacherAttendanceListener)teacherAttendanceListener();
+  if(parentLessonInterval)clearInterval(parentLessonInterval);
+  document.getElementById('profile-bar').style.display='none';
+
+  // ТОКЕН СПОВІЩЕНЬ ПРИБИРАЄМО ПРИ ВИХОДІ.
+  //
+  // У документі про захист даних школа обіцяє батькам, що токен пристрою
+  // зберігається «до виходу з акаунта». Насправді він лишався назавжди.
+  //
+  // Це не лише формальність. Телефон у сім'ї часто спільний: мама вийшла
+  // з порталу, а сповіщення про чужу дитину далі падають їй на екран
+  // блокування. Так само з телефоном, який передали іншій людині.
+  //
+  // Видаляємо ДО signOut: після виходу правила бази вже не дадуть
+  // торкнутися власного вузла. Помилку тут ковтаємо свідомо — вихід не
+  // має зірватися через те, що не вдалося прибрати токен.
+  try{
+    const uid = auth.currentUser && auth.currentUser.uid;
+    if(uid) await remove(ref(db, `push_tokens/${uid}`));
+  }catch(e){ console.warn('Токен сповіщень не прибрано:', e.message); }
+
+  signOut(auth);
+};
 // ══════════ ADMIN DASHBOARD ══════════
 window.loadAdminDashboard=async function(){try{const date=document.getElementById('global-date').value;document.getElementById('a-att-header').innerText=`🚨 Відсутні (${date.split('-').reverse().slice(0,2).join('.')})`;const wd=getWeekDates(date);let wl=0,wa=0,hw=0,com=0;const _lo=wd[0]<date?wd[0]:date, _hi=wd[wd.length-1]>date?wd[wd.length-1]:date;const[_ad,_hd,_cd]=await Promise.all([getSchoolRange('attendance',_lo,_hi),getSchoolRange('homeworks',_lo,_hi),getSchoolRange('comments',_lo,_hi)]);const s={exists:()=>true,val:()=>_ad},hwS={exists:()=>true,val:()=>_hd},comS={exists:()=>true,val:()=>_cd};let h='';if(s.exists()){const d=s.val();for(let i=1;i<=11;i++){const c=`class_${i}`;if(d[c]&&d[c][date])for(let st in d[c][date]){const slots=d[c][date][st];for(let sk in slots){const r=slots[sk];if(r?.status){const bc=r.status==='late'?'badge-late':'badge-absent';const markerIcon=r.markedBy==='teacher'?'👨‍🏫':(r.markedBy==='student'?'🎒':(r.markedBy==='administrator'?'🛡️':'👪'));h+=`<li style="margin-bottom:9px;border-bottom:1px solid #eee;padding-bottom:4px;"><span style="font-size:.72rem;background:var(--teal);color:#fff;padding:2px 5px;border-radius:4px;margin-right:4px;">${i} Кл</span> <b>${escHtml(stuName(c, st))}</b> <span class="badge ${bc}">${r.status==='late'?'Запізнення':'Відсутність'}</span> <span style="font-size:.72rem;color:#888;">${escHtml(formatAttendanceSlotLabel(sk))} ${markerIcon}</span></li>`;}}}
     // Week counters (same aggregation the director dashboard does)
