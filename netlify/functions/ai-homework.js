@@ -21,7 +21,16 @@
 // оточення: якщо колись знову прийде повідомлення «model is no longer
 // available», достатньо змінити GEMINI_MODEL у Netlify і зробити redeploy —
 // без правок коду.
-const MODEL = process.env.GEMINI_MODEL || 'gemini-3.6-flash';
+// ЧОМУ САМЕ 2.5-flash ЗА ЗАМОВЧУВАННЯМ, А НЕ НАЙНОВІША МОДЕЛЬ.
+//
+// У найновіших моделей безкоштовний тариф символічний: gemini-3.6-flash
+// дає 20 запитів НА ДОБУ на весь проєкт. Для школи це ніщо — кілька
+// батьків натиснули «Як допомогти», і до кінця дня функція мертва.
+// У 2.5-flash та 2.5-flash-lite ліміт на три порядки більший.
+//
+// Це лише запасне значення: у Netlify задають GEMINI_MODEL, і воно
+// головніше. Але запасне має бути таким, на якому портал працює.
+const MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 const API = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
 
 // Домени, з яких приймаємо запити. Проста перешкода для чужих сайтів, які
