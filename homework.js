@@ -17,9 +17,10 @@
 // ═══════════════════════════════════════════════════════════════
 import { ref, get, child, query, orderByKey, startAt, endAt }
   from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, currentUserData, getActiveClass, escHtml, mondayOf, localDateString,
+import { db, currentUserData, getActiveClass, escHtml, escJs, mondayOf, localDateString,
          renderHwItem, booksForSubject, nextLessonDate, dayNamesUA, dayKeys }
   from './common.js';
+import { topicNames } from './parent-student.js';
 import { ACTIVE_YEAR } from './director.js';
 
 export const HW_BUILD = '2026-09-09 · вкладка ДЗ v1';
@@ -89,17 +90,24 @@ export async function renderHwWeekView(boxId, weekStart){
   }
 
   box.innerHTML = '<p class="empty-msg">Завантаження...</p>';
-  let byDate = {}, books = {}, skip = new Set();
+  let byDate = {}, books = {}, topics = {}, plans = {}, skip = new Set();
   try{
     // Один запит на весь тиждень замість п'яти по днях.
-    const [hwSnap, tbSnap, sk] = await Promise.all([
+    const [hwSnap, tbSnap, topSnap, planSnap, sk] = await Promise.all([
       get(query(child(ref(db),`homeworks/${cls}`), orderByKey(),
                 startAt(days[0]), endAt(days[4]+''))),
       get(child(ref(db),`textbooks/${cls}`)).catch(()=>null),
+      // Теми уроків лежать інакше: спершу предмет, потім дата. Тижневим
+      // діапазоном їх не візьмеш, тож читаємо вузол класу цілком — одним
+      // запитом на весь показ, а не по запиту на кожен предмет.
+      get(child(ref(db),`lesson_topics/${cls}`)).catch(()=>null),
+      get(child(ref(db),`curriculum_plans/${cls}`)).catch(()=>null),
       loadSkipDates()
     ]);
     byDate = hwSnap.exists() ? (hwSnap.val()||{}) : {};
     books  = (tbSnap&&tbSnap.exists()) ? tbSnap.val() : {};
+    topics = (topSnap&&topSnap.exists()) ? topSnap.val() : {};
+    plans  = (planSnap&&planSnap.exists()) ? planSnap.val() : {};
     skip   = sk;
   }catch(e){
     console.error('[Push School] ДЗ за тиждень:', e);
@@ -127,7 +135,7 @@ export async function renderHwWeekView(boxId, weekStart){
     const subjects = byDate[ds] || {};
     const names = Object.keys(subjects);
     if(!names.length) return '';          // порожній день не показуємо
-    const items = names.sort((a,b)=>a.localeCompare(b,'uk')).map(subj=>{
+    const items = names.sort((a,b)=>a.localeCompare(b,'uk')).map((subj,idx)=>{
       const rec = subjects[subj];
       // «Зробити до» — наступний урок цього ж предмета за розкладом.
       //
@@ -143,9 +151,35 @@ export async function renderHwWeekView(boxId, weekStart){
       // Дописуємо в кінець <li>, який повернув renderHwItem. Через
       // lastIndexOf, а не replace: якщо колись усередині завдання
       // з'явиться свій список, перший </li> виявиться чужим.
+      // ТЕМА УРОКУ поруч із завданням. Батько питає не лише «що робити»,
+      // а й «що вони проходили» — без цього допомогти важко.
+      // Ключ предмета в lesson_topics «безпечний»: крапки й слеші замінені.
+      const sk2 = String(subj).replace(/[.#$[\]/]/g,'_').trim();
+      const topic = topicNames((topics[sk2]||{})[ds], plans[sk2]);
+      const topicTxt = topic
+        ? `<div class="hw-topic"><b>Тема уроку:</b> ${escHtml(topic)}</div>` : '';
+
+      // ПОМІЧНИК ПРИ КОЖНОМУ ЗАВДАННІ, а не один на всю вкладку.
+      // Раніше внизу сторінки стояла випадайка предметів: батько мусив
+      // обрати те, що й так бачить перед собою. Тепер предмет, тема й
+      // текст завдання беруться з цього самого рядка.
+      // Ідентифікатор — за НОМЕРОМ, а не за назвою предмета. Назви в нас
+      // кирилицею, а в id безпечні лише латиниця й цифри: після заміни
+      // «Математика» і «Читання» перетворювалися на однакові рядки з
+      // підкреслень, і помічник писав відповідь у чужий блок.
+      const hid = 'hwai-' + ds.replace(/-/g,'') + '-' + idx;
+      const helpTxt = `
+        <div class="hw-help">
+          <button type="button" class="hw-help-btn" id="${hid}-btn"
+            onclick="hwHelp('${escJs(subj)}','${escJs(topic)}','${escJs(String((rec&&rec.text)||''))}','${hid}')">
+            💡 Як допомогти</button>
+          <div class="hw-help-out" id="${hid}-out" style="display:none;"></div>
+        </div>`;
+
       const li = renderHwItem(subj, rec, booksForSubject(books, subj));
+      const extra = topicTxt + dueTxt + helpTxt;
       const cut = li.lastIndexOf('</li>');
-      return cut < 0 ? li + dueTxt : li.slice(0,cut) + dueTxt + li.slice(cut);
+      return cut < 0 ? li + extra : li.slice(0,cut) + extra + li.slice(cut);
     }).join('');
     return `<div class="hw-day${ds===today?' today':''}">
         <div class="hw-day-head">${escHtml(dayTitle(ds))}${ds===today?' <span>сьогодні</span>':''}</div>
@@ -202,4 +236,52 @@ function hwVisible(){
 }
 window.refreshHwTabIfOpen = function(){
   if(hwVisible()) renderHwWeekView(hwBoxId());
+};
+
+// ── «ЯК ДОПОМОГТИ» ПРИ КОЖНОМУ ЗАВДАННІ ─────────────────────────
+//
+// Раніше помічник жив унизу вкладки «Сьогодні»: випадайка предметів плюс
+// кнопка. Батько мусив обрати предмет, який і так бачив перед собою, —
+// зайвий крок рівно там, де людина вже знає, чого хоче.
+//
+// Тепер кнопка стоїть під кожним завданням, а предмет, тема й текст
+// беруться з того самого рядка. Відповідь розгортається тут же.
+//
+// ПРИВАТНІСТЬ. У сервіс іде лише предмет, тема, текст завдання й номер
+// класу — так само, як було. Імені дитини не передаємо й не передавали.
+window.hwHelp = async function(subject, topic, homework, id){
+  const btn = document.getElementById(id+'-btn');
+  const out = document.getElementById(id+'-out');
+  if(!btn || !out) return;
+
+  // Друге натискання згортає — щоб не питати те саме двічі.
+  if(out.style.display === 'block'){ out.style.display = 'none'; return; }
+  if(out.dataset.done === '1'){ out.style.display = 'block'; return; }
+
+  if(!topic && !homework){
+    out.textContent = 'Учитель ще не вказав ні теми, ні завдання — підказати нема з чого.';
+    out.style.display = 'block';
+    return;
+  }
+
+  const classNum = parseInt(String(getActiveClass()||'').replace('class_',''), 10);
+  const label = btn.textContent;
+  btn.disabled = true; btn.textContent = '⏳ Хвилинку...';
+  out.style.display = 'block';
+  out.textContent = '';
+  try{
+    const r = await fetch('/.netlify/functions/ai-assist', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ task:'parentHelp', subject, topic, homework, classNum })
+    });
+    const data = await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error(data.error || `Помилка ${r.status}`);
+    out.textContent = (data.text||'') + '\n\n💡 Це загальні поради — орієнтуйтесь на свою дитину.';
+    out.dataset.done = '1';
+  }catch(e){
+    // Помилку показуємо на місці, а не тостом: людина дивиться сюди.
+    out.textContent = 'Не вдалося отримати відповідь: ' + (e.message||'');
+  }finally{
+    btn.disabled = false; btn.textContent = label;
+  }
 };
