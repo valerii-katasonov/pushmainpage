@@ -200,10 +200,23 @@ exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: cors(origin) };
   if (event.httpMethod !== 'POST') return fail(405, 'Метод не підтримується', origin);
 
-  if (origin) {
+  // ORIGIN ОБОВ'ЯЗКОВИЙ, А НЕ «ЯКЩО Є».
+  //
+  // Раніше перевірка стояла під `if (origin)`, тобто запит БЕЗ цього
+  // заголовка проходив без питань. Браузер шле Origin завжди, а от curl,
+  // бот чи будь-який скрипт — ні. Виходило, що адресу функції достатньо
+  // знати, щоб безкоштовно витрачати квоту школи на Gemini (а на платному
+  // тарифі — і гроші). Саме такий доступ найлегше знайти перебором:
+  // адреси netlify-функцій передбачувані.
+  //
+  // Тепер відсутність Origin — теж відмова. Це не броня (заголовок можна
+  // підробити), але прибирає найпростіший спосіб зловживання. Надійне
+  // рішення — перевірка idToken, як у child-access.js.
+  {
     let host = '';
-    try { host = new URL(origin).hostname; } catch (e) { /* ignore */ }
-    if (!ALLOWED_HOSTS.includes(host)) return fail(403, 'Запит із невідомого джерела', origin);
+    try { host = new URL(origin || '').hostname; } catch (e) { /* ignore */ }
+    if (!host || !ALLOWED_HOSTS.includes(host))
+      return fail(403, 'Запит із невідомого джерела', origin);
   }
 
   const key = process.env.GEMINI_API_KEY;
