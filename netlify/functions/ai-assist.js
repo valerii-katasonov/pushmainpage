@@ -19,16 +19,20 @@
 // МОДЕЛЬ виносена у GEMINI_MODEL: Google періодично закриває старі моделі,
 // і тоді достатньо змінити змінну без правок коду.
 
-// ЧОМУ САМЕ 2.5-flash ЗА ЗАМОВЧУВАННЯМ, А НЕ НАЙНОВІША МОДЕЛЬ.
+// ПРО ВИБІР МОДЕЛІ — І ЧОМУ ЦЕ ЖИВЕ У ЗМІННІЙ.
 //
-// У найновіших моделей безкоштовний тариф символічний: gemini-3.6-flash
-// дає 20 запитів НА ДОБУ на весь проєкт. Для школи це ніщо — кілька
-// батьків натиснули «Як допомогти», і до кінця дня функція мертва.
-// У 2.5-flash та 2.5-flash-lite ліміт на три порядки більший.
+// Google закриває моделі кілька разів на рік: 2.0 прибрали влітку 2026,
+// 2.5 закривають у жовтні. Тому назва моделі — у GEMINI_MODEL, і зміна
+// не потребує правок коду.
 //
-// Це лише запасне значення: у Netlify задають GEMINI_MODEL, і воно
-// головніше. Але запасне має бути таким, на якому портал працює.
-const MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+// ВАЖЛИВО ПРО ЛІМІТИ. У найновіших моделей безкоштовний тариф
+// символічний: gemini-3.6-flash дає 20 запитів НА ДОБУ на весь проєкт —
+// для школи це ніщо. Молодші Flash дають на три порядки більше.
+// Тобто вибирати треба не «найновіше», а те, у чого прийнятна квота.
+//
+// Якщо модель закриють, функція САМА запитає в Google список доступних
+// і назве їх у повідомленні про помилку — вгадувати не доведеться.
+const MODEL = process.env.GEMINI_MODEL || 'gemini-3.5-flash';
 const API = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
 const ALLOWED_HOSTS = ['planlekcjipush.netlify.app', 'localhost', '127.0.0.1'];
 
@@ -287,8 +291,33 @@ exports.handler = async (event) => {
           + `без безкоштовного тарифу; змініть GEMINI_MODEL на Flash.`
           + (quotaId ? ` [${quotaId}]` : ''), origin);
       }
-      if (/no longer available|not found|is not supported/i.test(msg))
-        return fail(r.status, `Модель «${MODEL}» більше не доступна. Адміністратору: змініть змінну GEMINI_MODEL у Netlify.`, origin);
+      // МОДЕЛЬ ЗАКРИЛИ — ПИТАЄМО GOOGLE, ЩО ЗАЛИШИЛОСЯ.
+      //
+      // Google закриває моделі кілька разів на рік, і кожного разу школа
+      // впирається в те саме: «змініть GEMINI_MODEL» — а на що саме?
+      // Вгадувати назву по документації означає вгадувати ще й ліміти.
+      // Тому просто запитуємо список у самого ключа: він знає точно.
+      if (/no longer available|not found|is not supported|deprecat/i.test(msg)) {
+        let names = [];
+        try {
+          const lr = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(key)}`);
+          const ld = await lr.json();
+          names = (ld?.models || [])
+            // Лише ті, що вміють відповідати текстом, і лише робочі
+            // (preview і exp закриваються так само раптово).
+            .filter(m => (m.supportedGenerationMethods || []).includes('generateContent'))
+            .map(m => String(m.name || '').replace('models/', ''))
+            .filter(n => /flash/i.test(n) && !/preview|exp|thinking|image|tts|live/i.test(n));
+        } catch (e) { /* список не дістали — впораємося без нього */ }
+        console.error('[AI] Модель недоступна:', MODEL, '· доступні:', names.join(', '));
+        return fail(r.status,
+          `Модель «${MODEL}» більше не доступна.`
+          + (names.length
+              ? ` Адміністратору: у Netlify → GEMINI_MODEL постав одну з доступних — `
+                + names.slice(0, 6).join(', ') + '.'
+              : ' Адміністратору: змініть змінну GEMINI_MODEL у Netlify.'), origin);
+      }
       return fail(r.status, msg, origin);
     }
 
