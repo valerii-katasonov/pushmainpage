@@ -13,7 +13,7 @@ import { db, auth, getActiveClass, currentUserData, showToast, localDateString, 
 let parsedCurriculum=null;        // після парсингу xlsx
 const MAX_TOPICS=250;             // стеля на предмет: захист від зіпсованого файлу
 // availableTopicsCache is reassigned only here (populateTopicSelector)
-// and read (property access) from teacher.js (saveTopicAndHW) — plain
+// and read (property access) from teacher.js (saveLessonTopic) — plain
 // export/import.
 export let availableTopicsCache={};
 let currentClassTeacherEmail=null;
@@ -107,7 +107,11 @@ export function repairTopics(topics){
 // вставити одну ліворуч або між номером і темою — і файл переставав
 // впізнаватися. Учителі роблять таблиці по-різному, тож дивимося на
 // підписи колонок, а не на порядок.
-export function headerMap(r){
+// Заголовки КАЛЕНДАРНОГО ПЛАНУ (№ / тема / години). Однойменна функція в
+// students-import.js розбирає зовсім іншу таблицю — списки учнів. Назви
+// різні навмисно: однакове імʼя для різних речей плутає більше, ніж
+// допомагає, і колись хтось «звів би дублікат» до однієї реалізації.
+export function planHeaderMap(r){
   if(!r) return null;
   const c = i => String(r[i] == null ? '' : r[i]).toLowerCase().trim();
   let num = -1, title = -1, hours = -1;
@@ -123,12 +127,12 @@ export function headerMap(r){
   return { num, title, hours };
 }
 
-export function isSimpleHeader(r){ return headerMap(r) !== null; }
+export function isSimpleHeader(r){ return planHeaderMap(r) !== null; }
 
 export function parseSimplePlan(rows){
   let head = -1, map = null;
   for(let i = 0; i < rows.length; i++){
-    const m = headerMap(rows[i]);
+    const m = planHeaderMap(rows[i]);
     if(m){ head = i; map = m; break; }
   }
   if(head < 0) return null;
@@ -557,8 +561,19 @@ window.toggleTopicDropdown=function(slot){
 document.addEventListener('click',function(e){
   if(!e.target.closest('.topic-dropdown'))document.querySelectorAll('.topic-dropdown-list').forEach(l=>l.style.display='none');
 });
-window.selectTopicOption=function(slot,value,disabled){
-  if(disabled){showToast('⚠️ Усі години цієї теми вже використано!');return;}
+// ПОВТОРНЕ ВИКОРИСТАННЯ ТЕМИ ДОЗВОЛЕНЕ.
+//
+// Раніше тема, у якої вичерпані години, просто не натискалася. Учителі
+// попросили це прибрати, і слушно: план — орієнтир, а не заборона.
+// Клас не зрозумів, тему треба повторити; урок випав через свято й
+// матеріал доводиться добирати; контрольна показала прогалину. У всіх
+// цих випадках заборона змушувала писати тему «вручну», і план
+// переставав відповідати тому, що насправді відбувалося на уроках.
+//
+// Тепер тему можна взяти ще раз, а перевитрата годин видно кольором
+// (див. renderTopicOptionsList) — це чесніше, ніж не дати натиснути.
+window.selectTopicOption=function(slot,value,reused){
+  if(reused) showToast('↻ Тема вже пройдена — використовуємо повторно');
   const valueInput=document.getElementById(`t-topic-value-${slot}`);
   const trigger=document.getElementById(`t-topic-trigger-${slot}`);
   const customInput=document.getElementById(`t-topic-${slot}`);
@@ -598,13 +613,20 @@ function renderTopicOptionsList(slot,topicsObj){
   const sorted=Object.entries(topicsObj).sort((a,b)=>(a[1].lessonNum||0)-(b[1].lessonNum||0));
   sorted.forEach(([id,t])=>{
     const hu=t.hoursUsed||0;
-    const isCovered=hu>=t.plannedHours;
-    // Phase 6 color rule: green = untouched, yellow = partially used, red = fully used
-    const colorClass=isCovered?'topic-opt-red':(hu>0?'topic-opt-yellow':'topic-opt-green');
+    const planned=t.plannedHours||0;
+    const isCovered=hu>=planned;
+    const isReused=hu>planned;          // взяли більше разів, ніж у плані
+    // Кольори: зелений — не починали, жовтий — у роботі, червоний —
+    // пройдено рівно за планом, БЛАКИТНИЙ — брали повторно. Червоний
+    // більше не означає «не можна»: він означає «за планом уже все».
+    const colorClass=isReused?'topic-opt-blue'
+                    :(isCovered?'topic-opt-red':(hu>0?'topic-opt-yellow':'topic-opt-green'));
     const tag=t.tags?` [${escHtml(t.tags)}]`:'';
-    const label=isCovered
-      ?`✅ № ${escHtml(t.lessonNum)}. ${escHtml(t.title)} — пройдено (${hu}/${escHtml(t.plannedHours)} год.)`
-      :`№ ${escHtml(t.lessonNum)}. ${escHtml(t.title)} (${hu}/${escHtml(t.plannedHours)} год.${tag}, залишилось ${t.plannedHours-hu})`;
+    const label=isReused
+      ?`↻ № ${escHtml(t.lessonNum)}. ${escHtml(t.title)} — повторно (${hu}/${escHtml(planned)} год.)`
+      :(isCovered
+        ?`✅ № ${escHtml(t.lessonNum)}. ${escHtml(t.title)} — пройдено (${hu}/${escHtml(planned)} год.)`
+        :`№ ${escHtml(t.lessonNum)}. ${escHtml(t.title)} (${hu}/${escHtml(planned)} год.${tag}, залишилось ${planned-hu})`);
     html+=`<div class="topic-opt ${colorClass}" onclick="selectTopicOption(${slot},'${id}',${isCovered})">${label}</div>`;
   });
   list.innerHTML=html;
@@ -641,7 +663,8 @@ export async function populateTopicSelector(){
     statusLine.style.display='flex';
     document.getElementById('topic-status-text').innerText=`📚 ${subj}`;
     document.getElementById('topic-status-count').innerText=`${coveredTopics}/${totalTopics} пройдено`;
-    const pct=totalTopics>0?(coveredTopics/totalTopics)*100:0;
+    // Обмежуємо сотнею: з повторними темами лічильник може перевищити план.
+    const pct=totalTopics>0?Math.min(100,(coveredTopics/totalTopics)*100):0;
     document.getElementById('topic-progress-fill').style.width=pct+'%';
   } else if(statusLine) statusLine.style.display='none';
   await loadSavedTopicForLesson();
