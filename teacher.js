@@ -1415,7 +1415,11 @@ export async function renderTeacherHwDay(){
     hwDayState={};
     box.innerHTML=lessons.map((l,i)=>{
       const rec=saved[l.subject]||null;
-      hwDayState[l.subject]={saved:!!rec, dirty:false};
+      // Наявні вкладення тримаємо в стані рядка. Інакше при повторному
+      // збереженні вони б зникли: запис іде цілком, і порожній список
+      // фото затер би те, що вчитель приклав учора.
+      const have=(rec&&Array.isArray(rec.images))?rec.images:[];
+      hwDayState[l.subject]={saved:!!rec, dirty:false, images:have};
       const id=`hwd-${i}`;
       const books=(function(){
         const k=String(l.subject).replace(/[.#$[\]]/g,'_');
@@ -1444,6 +1448,20 @@ export async function renderTeacherHwDay(){
           <label>📄 Сторінки / вправи</label>
           <input type="text" id="${id}-pages" placeholder="напр. с. 45, вправи 3–5"
                  value="${escHtml(rec?(rec.pages||''):'')}" oninput="hwdDirty('${id}')">
+          <label>📎 Фото або файл</label>
+          <!-- Нативну кнопку вибору файлу малює браузер, і напис на ній —
+               мовою браузера. Тому input сховано, а видима кнопка — label. -->
+          <input type="file" id="${id}-file" class="hw-file-input" multiple
+                 accept="image/*,.doc,.docx,.xls,.xlsx,.csv"
+                 onchange="hwdFilesPicked('${id}')">
+          <div class="hw-file-row">
+            <label for="${id}-file" class="hw-file-btn">📂 Обрати файли</label>
+            <span id="${id}-fname" class="hw-file-name">${have.length
+              ? `Уже додано: ${have.length} шт. — нові замінять їх`
+              : 'Файл не обрано'}</span>
+          </div>
+          <p class="hw-file-hint">Фото (JPG, PNG, HEIC), документ (DOC, DOCX),
+            таблиця (XLS, XLSX, CSV). До ${HW_FILE_MAX_MB} МБ на файл.</p>
           <div class="hwd-actions">
             <span class="hwd-dirty" id="${id}-dirty"></span>
             <button type="button" class="qa-btn qa-save" id="${id}-save"
@@ -1452,7 +1470,7 @@ export async function renderTeacherHwDay(){
         </div>
       </div>`;
     }).join('') + `<p class="hwd-hint">Заповнене позначається галочкою й згортається.
-        Тема уроку та файли — на вкладці «Урок».</p>`;
+        Тема уроку — на вкладці «Урок».</p>`;
   }catch(e){
     console.error('ДЗ на день:',e);
     box.innerHTML=`<p class="empty-msg" style="color:var(--red);">Не вдалося завантажити: ${escHtml(e.message||'')}</p>`;
@@ -1476,6 +1494,28 @@ window.hwdDirty=function(id){
            if(hwDayState[s]) hwDayState[s].dirty=true; }
 };
 
+// Перевірка файлів одразу при виборі — щоб не дізнатися про неправильний
+// формат уже після того, як завдання написане й натиснуто «Зберегти».
+window.hwdFilesPicked=function(id){
+  const input=document.getElementById(id+'-file');
+  const lbl=document.getElementById(id+'-fname');
+  const files=Array.from((input&&input.files)||[]);
+  if(!files.length){ if(lbl){lbl.textContent='Файл не обрано';lbl.style.color='#78909c';} return; }
+  const bad=files.filter(f=>!HW_FILE_EXT.includes(fileExt(f.name)));
+  const big=files.filter(f=>f.size>HW_FILE_MAX_MB*1024*1024);
+  if(bad.length||big.length){
+    input.value='';
+    if(lbl){ lbl.style.color='#b71c1c';
+      lbl.textContent=bad.length
+        ? `Не підходить: ${bad.map(f=>f.name).join(', ')}`
+        : `Завеликий файл: ${big.map(f=>f.name).join(', ')} — понад ${HW_FILE_MAX_MB} МБ`; }
+    return;
+  }
+  if(lbl){ lbl.style.color='#2e7d32';
+    lbl.textContent=files.length===1?files[0].name:`Обрано файлів: ${files.length}`; }
+  hwdDirty(id);
+};
+
 window.hwdSave=function(id){
   const row=document.getElementById(id+'-row');
   if(!row) return;
@@ -1495,11 +1535,29 @@ window.hwdSave=function(id){
     let hwText=text;
     if(!hwText&&(bookTitle||pages))
       hwText=(bookUrl&&pages)?pages:[bookTitle,pages].filter(Boolean).join(' — ');
-    if(!hwText){ showToast('⚠️ Завдання порожнє'); return false; }
+
+    // Вкладення: нові замінюють старі, а якщо нових немає — лишаються ті,
+    // що вже були. Порожній список тут означав би «стерти прикріплене».
+    const fileInput=document.getElementById(id+'-file');
+    let images=(hwDayState[subject]&&hwDayState[subject].images)||[];
+    if(fileInput&&fileInput.files.length>0){
+      const dm=document.getElementById(id+'-dirty');
+      if(dm) dm.textContent='⏳ Завантаження файлів...';
+      images=await Promise.all(Array.from(fileInput.files).map(async file=>{
+        const fd=new FormData(); fd.append('file',file); fd.append('upload_preset',UPLOAD_PRESET);
+        const r=await fetch(CLOUDINARY_URL,{method:'POST',body:fd});
+        const d=await r.json();
+        if(!d.secure_url) throw new Error('файл не завантажився: '+((d.error&&d.error.message)||'невідома причина'));
+        return d.secure_url;
+      }));
+    }
+
+    // Саме завдання може бути й самим фото — тоді текст не обов'язковий.
+    if(!hwText&&images.length===0){ showToast('⚠️ Завдання порожнє'); return false; }
 
     const hwRef=ref(db,`homeworks/${cls}/${date}/${subject}`);
     const existed=(await get(hwRef)).exists();
-    const rec={text:hwText, images:[], ts:Date.now()};
+    const rec={text:hwText, images, ts:Date.now()};
     if(bookTitle&&bookUrl) rec.book={title:bookTitle,url:bookUrl};
     if(pages) rec.pages=pages;
     await set(hwRef,rec);
@@ -1508,7 +1566,13 @@ window.hwdSave=function(id){
 
     // Успіх: галочка, згортаємо, знімаємо позначку про зміни.
     row.classList.add('done'); row.classList.remove('dirty');
-    hwDayState[subject]={saved:true,dirty:false};
+    hwDayState[subject]={saved:true, dirty:false, images};
+    // Поле вибору очищаємо, а підпис показує, скільки тепер прикріплено:
+    // інакше при наступному збереженні ті самі файли завантажилися б удруге.
+    if(fileInput) fileInput.value='';
+    const fn=document.getElementById(id+'-fname');
+    if(fn){ fn.style.color='#78909c';
+      fn.textContent=images.length?`Уже додано: ${images.length} шт. — нові замінять їх`:'Файл не обрано'; }
     const mk=row.querySelector('.hwd-mark'); if(mk) mk.textContent='✓';
     const st=document.getElementById(id+'-state'); if(st) st.textContent='задано';
     const dm=document.getElementById(id+'-dirty'); if(dm) dm.textContent='';
