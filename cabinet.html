@@ -720,6 +720,19 @@
     /* «Зробити до …» — головна відповідь на питання батька */
     .hw-due{display:block;margin-top:5px;font-size:.78rem;font-weight:700;color:#2e7d32;}
     .hw-due.none{color:#b0bec5;font-weight:400;font-style:italic;}
+    /* Тема уроку під завданням: батько питає і «що робити», і «що проходили» */
+    .hw-topic{margin-top:5px;font-size:.82rem;color:#5e35b1;
+              background:#f3e5f5;border-radius:7px;padding:5px 9px;}
+    .hw-topic b{color:#4527a0;}
+    /* Помічник — при кожному завданні, а не один на всю вкладку */
+    .hw-help{margin-top:7px;}
+    .hw-help-btn{width:auto;margin:0;padding:6px 12px;font-size:.76rem;font-weight:700;
+                 background:#fff8e1;color:#8a6d1f;border:1px solid #ffe082;
+                 border-radius:8px;cursor:pointer;}
+    .hw-help-btn:hover{background:#fff3cd;}
+    .hw-help-out{margin-top:7px;font-size:.83rem;line-height:1.5;color:#37474f;
+                 background:#fffdf5;border:1px solid #ffe082;border-radius:9px;
+                 padding:10px 12px;white-space:pre-wrap;}
     .si-table tr.si-bad td{background:#fff5f5;}
     .si-table tr.si-skip td{background:#f7f8fa;color:#9aa5b1;}
     .si-pick{display:flex;flex-wrap:wrap;gap:6px;align-items:center;
@@ -3212,6 +3225,7 @@
     <div class="dtab-bar" id="parent-screen-tabs">
       <button class="dtab on" data-t="day" onclick="switchTab('parent-screen','day',this)">Сьогодні</button>
       <button class="dtab" data-t="hw" onclick="switchTab('parent-screen','hw',this);openHwTab()">📚 ДЗ</button>
+      <button class="dtab" data-t="meals" onclick="switchTab('parent-screen','meals',this)">🍽️ Їжа</button>
       <button class="dtab" data-t="grades" onclick="switchTab('parent-screen','grades',this)">Оцінки</button>
       <button class="dtab" data-t="school" onclick="switchTab('parent-screen','school',this)">Школа</button>
       <button class="dtab" data-t="profile" onclick="switchTab('parent-screen','profile',this)">Профіль</button>
@@ -3285,7 +3299,7 @@
       </div>
     </section>
 
-    <section class="screen-section" data-dtab="day">
+    <section class="screen-section" data-dtab="meals">
       <h3>🍽️ Харчування</h3>
       <div id="p-menu" class="pm-box"><p class="empty-msg">Завантаження...</p></div>
       <div id="p-takeaway" class="ta-box"></div>
