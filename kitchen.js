@@ -1143,11 +1143,21 @@ export async function renderParentMenu(cls, studentKey, date){
     //
     // Тепер запасний варіант — СЬОГОДНІ (а на вихідних найближчий робочий
     // день), бо саме сьогоднішній день людині й потрібен.
-    const todayInWeek = week.includes(localDateString) ? localDateString : null;
-    const fallback = todayInWeek || week.find(d => d >= localDateString) || week[0];
+    // ОРІЄНТИР — anchor, а не «сьогодні».
+    //
+    // Тут була справжня причина, чому вечірній зсув не працював: anchor
+    // визначав лише, який ТИЖДЕНЬ завантажити, а день нижче обирався
+    // окремо й завжди тягнувся до localDateString. О 23:00 середи людина
+    // й далі бачила середу, хоч anchor уже вказував на четвер.
+    //
+    // Тепер обидва рішення спираються на одне значення. Усе, що в ньому
+    // враховано — вихідні, вечір після 17:00, вручну обрана дата, —
+    // автоматично діє й на вибір дня.
+    const wantDay = week.includes(anchor) ? anchor : null;
+    const fallback = wantDay || week.find(d => d >= anchor) || week[0];
     let cur = pmDate && week.includes(pmDate) ? pmDate
-            : (todayInWeek && has[week.indexOf(todayInWeek)] ? todayInWeek
-            : (week.find((d,i)=>has[i] && d >= localDateString) || week.find((d,i)=>has[i]) || fallback));
+            : (wantDay && has[week.indexOf(wantDay)] ? wantDay
+            : (week.find((d,i)=>has[i] && d >= anchor) || week.find((d,i)=>has[i]) || fallback));
     pmDate = cur;
     const ci = week.indexOf(cur);
     const m = menus[ci].exists() ? menus[ci].val() : null;
