@@ -135,6 +135,25 @@ export async function getStudentDir(cls, force){
 export function invalidateStudentDir(cls){ if(cls) delete _stuDir[cls]; else Object.keys(_stuDir).forEach(k=>delete _stuDir[k]); }
 window.invalidateStudentDir = invalidateStudentDir;
 
+// ── КЕШ parent_links ────────────────────────────────────────────
+//
+// Вузол читався ЦІЛКОМ у дев'яти місцях: кабінет учителя, чотири екрани
+// директора, чат, імпорт списків. Це контакти всіх батьків школи —
+// кілька сотень записів щоразу, і найчастіше в межах одного відкриття
+// сторінки поспіль. З телефона це помітно.
+//
+// Тримаємо один знімок на сеанс, як для students_list. Скидається
+// примусово там, де прив'язки міняються (див. invalidateParentLinks).
+let _parentLinks = null;
+export async function getParentLinks(force){
+  if(!force && _parentLinks) return _parentLinks;
+  const snap = await get(child(ref(db), 'parent_links'));
+  _parentLinks = snap.exists() ? (snap.val() || {}) : {};
+  return _parentLinks;
+}
+export function invalidateParentLinks(){ _parentLinks = null; }
+window.invalidateParentLinks = invalidateParentLinks;
+
 
 // Довідник усіх класів одним читанням на сеанс. students_list маленький
 // (кілька сотень рядків), тож тримати його цілком дешевше, ніж ходити
@@ -343,6 +362,11 @@ export const ROLE_LABELS={
 // ═══════════════════════════════════════════════════════════════
 export const MASTER_ROLE='master_class_teacher';
 export function isMasterTeacher(r){return r===MASTER_ROLE;}
+
+// Адміністрація школи. Була окремою копією у breaks.js і subjects.js —
+// однакова в обох, тож рано чи пізно хтось поправив би одну з двох.
+export const DIR_ROLES=['director','administrator'];
+export function isDirectorRole(r){ return DIR_ROLES.includes(r); }
 
 // Ролі, для яких потрібна матриця доступу до класів (teacherAccessMatrix)
 export const TEACHER_ROLES=['teacher','class_teacher','art_school_teacher','music_teacher',MASTER_ROLE];
@@ -1178,7 +1202,7 @@ export function hhmmFromMins(m){
   const h = Math.floor(m / 60), mm = m % 60;
   return `${String(h).padStart(2,'0')}:${String(mm).padStart(2,'0')}`;
 }
-function minsOf(t){
+export function minsOf(t){
   const [h, m] = String(t || '').split(':').map(Number);
   return (isNaN(h) || isNaN(m)) ? null : h * 60 + m;
 }
@@ -2422,17 +2446,17 @@ window.addEventListener('unhandledrejection', (ev) => {
 // ── Дрібниці оформлення чату ──
 // Ініціали й колір аватара рахуємо з імені: однакова людина завжди
 // того самого кольору, і список читається швидше за текст.
-function initials(name){
+export function initials(name){
   const p = String(name||'').trim().split(/\s+/);
   return ((p[0]||'')[0] || '?').toUpperCase() + ((p[1]||'')[0] || '').toUpperCase();
 }
 const AV_COLORS = ['#5c6bc0','#26a69a','#ef6c00','#8e24aa','#00838f','#c2185b','#558b2f','#4527a0'];
-function avatarColor(name){
+export function avatarColor(name){
   let h = 0; const s = String(name||'');
   for(let i=0;i<s.length;i++) h = (h*31 + s.charCodeAt(i)) >>> 0;
   return AV_COLORS[h % AV_COLORS.length];
 }
-function chatTime(ts){
+export function chatTime(ts){
   if(!ts) return '';
   const d = new Date(ts), now = new Date();
   if(d.toDateString() === now.toDateString())
@@ -2441,7 +2465,7 @@ function chatTime(ts){
   if(d.toDateString() === y.toDateString()) return 'вчора';
   return d.toLocaleDateString('uk-UA',{day:'numeric',month:'short'});
 }
-function chatDayLabel(ts){
+export function chatDayLabel(ts){
   const d = new Date(ts), now = new Date();
   if(d.toDateString() === now.toDateString()) return 'Сьогодні';
   const y = new Date(now); y.setDate(y.getDate()-1);
@@ -2465,9 +2489,11 @@ export async function renderParentsBlock(containerId,cls){
     // Раніше всі п'ять читань стояли в одному Promise.all, тож відмова в
     // правах валила весь блок — учитель бачив «Permission denied» замість
     // списку батьків свого класу, який йому цілком доступний.
-    const [stSnap,plSnap,cardSnap]=await Promise.all([
+    // parent_links беремо з кешу: це контакти всіх батьків школи, і в
+    // межах одного відкриття кабінету вони не міняються.
+    const [stSnap,plVal,cardSnap]=await Promise.all([
       get(child(ref(db),`students_list/${cls}`)),
-      get(child(ref(db),'parent_links')),
+      getParentLinks(),
       get(child(ref(db),`student_cards/${cls}`))
     ]);
     let usersSnap=null, slSnap=null, loginInfoDenied=false;
@@ -2483,8 +2509,8 @@ export async function renderParentsBlock(containerId,cls){
       for(const uid in u)if(u[uid].email&&u[uid].role==='parent')loggedIn.add(u[uid].email.toLowerCase());
     }
     const byChild={};
-    if(plSnap.exists()){
-      const pl=plSnap.val();
+    if(plVal && Object.keys(plVal).length){
+      const pl=plVal;
       for(const safeEmail in pl){
         const rec=pl[safeEmail];
         const email=safeEmail.replace(/_/g,'.');
@@ -3240,6 +3266,7 @@ window.setParentChildRole=async function(safeEmail,idx,role){
   if(!kids[idx])return;
   kids[idx].role=role;
   await update(ref(db,`parent_links/${safeEmail}`),{children:kids});
+  invalidateParentLinks();
   await syncParentUserChildren(safeEmail,kids);
   showToast('✅ Роль оновлено');
   const {containerId,cls}=parentEditorTarget;
@@ -3251,6 +3278,7 @@ window.unlinkParentChild=async function(safeEmail,idx,name){
   const kids=normalizeChildren(snap.exists()?snap.val():{});
   kids.splice(idx,1);
   await update(ref(db,`parent_links/${safeEmail}`),{children:kids});
+  invalidateParentLinks();
   await syncParentUserChildren(safeEmail,kids);
   logAction('parent_unlink',{target:name,value:safeEmail.replace(/_/g,'.')});
   showToast(`🔓 ${name} відв'язаний`);
@@ -3269,6 +3297,7 @@ window.changeParentEmail=async function(oldSafe){
     const snap=await get(child(ref(db),`parent_links/${oldSafe}`));
     await set(ref(db,`parent_links/${newSafe}`),snap.exists()?snap.val():{});
     await remove(ref(db,`parent_links/${oldSafe}`));
+    invalidateParentLinks();
     logAction('parent_email',{from:oldSafe.replace(/_/g,'.'),target:raw});
     showToast('✉️ Запис перенесено на нову адресу');
     window.closeParentEditor();
