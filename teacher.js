@@ -1493,6 +1493,23 @@ export async function renderTeacherHwDay(){
 }
 window.renderTeacherHwDay=renderTeacherHwDay;
 
+// ── ОНОВЛЕННЯ ПРИ ЗМІНІ ДАТИ ЧИ КЛАСУ ───────────────────────────
+//
+// Сторінка малювалася лише при натисканні на вкладку. Тож змінивши дату
+// або клас, учитель лишався з уроками попереднього дня — і мусив піти на
+// іншу вкладку й повернутися, щоб побачити правильні.
+//
+// Перемальовуємо тільки коли вкладку ВИДНО: інакше кожна зміна дати
+// тягла б зайве читання в фоні. А якщо в рядках є незбережене —
+// попереджаємо, бо перемальовування його втратить.
+window.refreshHwDayIfOpen=function(){
+  const box=document.getElementById('t-hw-day');
+  if(!box||box.offsetParent===null) return;
+  if(Object.values(hwDayState).some(v=>v&&v.dirty))
+    showToast('⚠️ Незбережені зміни в ДЗ скинуто');
+  renderTeacherHwDay();
+};
+
 window.hwdToggle=function(id){
   const b=document.getElementById(id+'-body');
   if(!b) return;
