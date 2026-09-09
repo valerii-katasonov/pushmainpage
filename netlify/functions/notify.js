@@ -167,9 +167,14 @@ exports.handler = async (event) => {
   const origin = event.headers.origin || event.headers.Origin || '';
   if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: cors(origin) };
   if (event.httpMethod !== 'POST') return fail(405, 'Метод не підтримується', origin);
-  if (origin) {
-    let host = ''; try { host = new URL(origin).hostname; } catch (e) {}
-    if (!ALLOWED_HOSTS.includes(host)) return fail(403, 'Запит із невідомого джерела', origin);
+  // Origin ОБОВ'ЯЗКОВИЙ. Раніше перевірка стояла під `if (origin)`, тож
+  // запит без цього заголовка проходив: браузер його шле завжди, а curl
+  // чи бот — ні. Для розсилки сповіщень це особливо неприємно: чужий
+  // скрипт міг надіслати push усім батькам школи.
+  {
+    let host = ''; try { host = new URL(origin || '').hostname; } catch (e) {}
+    if (!host || !ALLOWED_HOSTS.includes(host))
+      return fail(403, 'Запит із невідомого джерела', origin);
   }
   const raw = process.env.FIREBASE_SERVICE_ACCOUNT;
   if (!raw) return fail(500, 'Сповіщення не налаштовані: потрібна змінна FIREBASE_SERVICE_ACCOUNT', origin);
