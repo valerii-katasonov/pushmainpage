@@ -1259,6 +1259,51 @@ export function withBreaks(day, minMinutes = 5){
 
 // Pure helper shared by director stats/dashboard and parent/student weekly behavior view
 export function getWeekDates(ds){if(!ds)return[];let[y,m,d]=ds.split('-');let dt=new Date(y,m-1,d);let day=dt.getDay()||7;dt.setDate(dt.getDate()-day+1);let dates=[];for(let i=0;i<7;i++){const yy=dt.getFullYear(),mm=String(dt.getMonth()+1).padStart(2,'0'),dd=String(dt.getDate()).padStart(2,'0');dates.push(`${yy}-${mm}-${dd}`);dt.setDate(dt.getDate()+1);}return dates;}
+// ── «ЗАДАНО … — ЗРОБИТИ ДО …» ───────────────────────────────────
+//
+// У базі в ключа завдання лежить дата УРОКУ, на якому його задали.
+// Батькові цього мало: він питає не «коли задали», а «на коли зробити».
+// Відповідь — наступний урок того самого предмета за розкладом.
+//
+// Чиста функція, без бази: розклад і перелік невчальних днів приходять
+// ззовні. Так її можна перевірити тестами, і так вона однаково працює
+// в кабінеті батьків, учня й учителя.
+//
+//   schedule  — window.schedule: { Monday:[{subject,...}], ... }
+//   subject   — назва предмета так, як вона в розкладі
+//   from      — дата уроку, на якому задали («2026-09-08»)
+//   skipDates — Set дат, коли школа не працює (свята, канікули).
+//               Не обов'язковий: без нього рахуємо лише за розкладом.
+//   horizon   — скільки днів уперед шукати; далі здаємося й повертаємо ''
+export function nextLessonDate(schedule, subject, from, skipDates, horizon){
+  if(!schedule || !subject || !from) return '';
+  const want = String(subject).trim().toLowerCase();
+  const skip = skipDates instanceof Set ? skipDates : new Set(skipDates || []);
+  const [y,m,d] = String(from).split('-').map(Number);
+  if(!y || !m || !d) return '';
+  const dt = new Date(y, m-1, d);
+  const p2 = n => String(n).padStart(2,'0');
+  const max = horizon || 21;          // три тижні: довше шукати немає сенсу
+  for(let i=1; i<=max; i++){
+    dt.setDate(dt.getDate()+1);
+    const ds = `${dt.getFullYear()}-${p2(dt.getMonth()+1)}-${p2(dt.getDate())}`;
+    if(skip.has(ds)) continue;                       // свято чи канікули
+    const dayName = dayKeys[dt.getDay()];
+    const slots = schedule[dayName];
+    if(!slots) continue;
+    // Слот може містити кілька уроків (підгрупи) — розгортаємо.
+    const flat = [];
+    slots.forEach(s => Array.isArray(s) ? flat.push(...s) : (s && flat.push(s)));
+    const hit = flat.some(l => {
+      if(!l || isBreakItem(l)) return false;
+      const raw = (l.subject && l.subject.ua) ? l.subject.ua : l.subject;
+      return typeof raw === 'string' && raw.trim().toLowerCase() === want;
+    });
+    if(hit) return ds;
+  }
+  return '';
+}
+
 // Pure helper shared by teacher daily HW list and parent/student daily HW lists
 // Вкладення ДЗ. Раніше КОЖНЕ посилання малювалося як <img> — відколи до
 // завдання можна додати документ, так уже не можна: браузер показав би
