@@ -27,8 +27,7 @@
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, push, update, onValue }
   from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, auth, currentUserData, showToast, escHtml, escJs,
-         isTeacherRole, getUsersSnap, logAction, notifyEvent } from './common.js';
+import { db, auth, currentUserData, showToast, escHtml, escJs, isTeacherRole, getUsersSnap, logAction, notifyEvent, initials, avatarColor, chatTime, chatDayLabel, getParentLinks } from './common.js';
 
 const safe  = e => String(e||'').toLowerCase().replace(/\./g,'_');
 const unsafe = se => String(se||'').replace(/_/g,'.');
@@ -162,8 +161,8 @@ export async function contactDirectory(){
   if(isAdmin){
     // Директор читає першоджерела — там дані свіжіші за довідник
     try{
-      const [usersSnap, plSnap] = await Promise.all([
-        getUsersSnap(), get(child(ref(db),'parent_links'))
+      const [usersSnap, plVal] = await Promise.all([
+        getUsersSnap(), getParentLinks()      // контакти батьків — з кешу
       ]);
       const users = usersSnap.exists() ? usersSnap.val() : {};
       for(const uid in users){
@@ -179,7 +178,7 @@ export async function contactDirectory(){
         put(safe(u.email), [u.firstName,u.lastName].filter(Boolean).join(' '), roleLabel(u.role), 'staff',
             { role: u.role, photo: (ph && !/flaticon/.test(ph)) ? ph : '' });
       }
-      const pls = plSnap.exists() ? plSnap.val() : {};
+      const pls = plVal || {};
       for(const se in pls){
         const p = pls[se] || {};
         const kids = p.children || [];
@@ -542,32 +541,7 @@ window.createChatFromPicker = async function(){
 };
 
 // ── Оформлення ──
-function initials(name){
-  const p = String(name||'').trim().split(/\s+/);
-  return ((p[0]||'')[0] || '?').toUpperCase() + ((p[1]||'')[0] || '').toUpperCase();
-}
 const AV = ['#5c6bc0','#26a69a','#ef6c00','#8e24aa','#00838f','#c2185b','#558b2f','#4527a0'];
-function avatarColor(name){
-  let h = 0; const s = String(name||'');
-  for(let i=0;i<s.length;i++) h = (h*31 + s.charCodeAt(i)) >>> 0;
-  return AV[h % AV.length];
-}
-function chatTime(ts){
-  if(!ts) return '';
-  const d = new Date(ts), now = new Date();
-  if(d.toDateString() === now.toDateString())
-    return d.toLocaleTimeString('uk-UA',{hour:'2-digit',minute:'2-digit'});
-  const y = new Date(now); y.setDate(y.getDate()-1);
-  if(d.toDateString() === y.toDateString()) return 'вчора';
-  return d.toLocaleDateString('uk-UA',{day:'numeric',month:'short'});
-}
-function chatDayLabel(ts){
-  const d = new Date(ts), now = new Date();
-  if(d.toDateString() === now.toDateString()) return 'Сьогодні';
-  const y = new Date(now); y.setDate(y.getDate()-1);
-  if(d.toDateString() === y.toDateString()) return 'Вчора';
-  return d.toLocaleDateString('uk-UA',{day:'numeric',month:'long'});
-}
 
 // ══════════ ЗНАЧОК НЕПРОЧИТАНИХ ══════════
 // Рахуємо не за повідомленнями, а за зліпком lastMsg: інакше довелося б
