@@ -1316,12 +1316,22 @@ export function renderHwItem(subject,data,books){
   // Якщо підручник збережено окремим полем — він уже показаний кнопкою вище,
   // і вдруге підсвічувати його в тексті не треба.
   const hasBookChip=typeof data==='object'&&data.book&&data.book.url;
-  // Текст порожній, а сторінки збережені — показуємо сторінки. Так буває,
-  // коли завдання перезбережене з порожнім полем ДЗ: у тексті лишалася
-  // сама назва підручника, і батько бачив підручник без жодних сторінок.
-  if(!text&&typeof data==='object'&&data.pages) text=data.pages;
+  const pages=(typeof data==='object'&&data.pages)?String(data.pages).trim():'';
+  // Текст порожній — сторінки стають текстом.
+  if(!text&&pages) text=pages;
   const body=hasBookChip?escHtml(text):linkifyBooks(escHtml(text),books);
-  return `<li><b>${escHtml(subject)}:</b> ${body} ${att}</li>`;
+
+  // СТОРІНКИ ПОКАЗУЄМО ЗАВЖДИ, а не лише коли поле ДЗ порожнє.
+  //
+  // Учитель пише в ДЗ «додаткова картка, пишемо в тоненький зошит», а в
+  // сторінках — «с.24 номер 5». Це не одне й те саме й не заміна одне
+  // одному: перше пояснює, друге каже, що робити. Раніше сторінки
+  // враховувалися ЛИШЕ при порожньому полі ДЗ, тож у цьому — звичайному —
+  // випадку батько їх не бачив узагалі.
+  const pagesLine=(pages && !String(text||'').includes(pages))
+    ? `<div class="hw-pages">📄 ${escHtml(pages)}</div>` : '';
+
+  return `<li><b>${escHtml(subject)}:</b> ${body}${pagesLine}${att}</li>`;
 }
 
 // Один список ДЗ на всі три кабінети — учителя, батьків і учня. Раніше цей
