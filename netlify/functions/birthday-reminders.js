@@ -107,6 +107,43 @@ const CLASS_LABEL = (cls) => {
   return m ? `${m[1]} клас` : (cls || 'клас');
 };
 
+
+// ── СТРОК ЗБЕРІГАННЯ ЖУРНАЛУ ДІЙ ────────────────────────────────
+//
+// У документі про захист даних школа обіцяє батькам: журнал дій
+// персоналу зберігається ОДИН РІК. Механізму, який це виконує, не було —
+// записи просто накопичувалися. Обіцянка без виконання гірша за
+// відсутність обіцянки: під час перевірки її звірять із базою.
+//
+// Чому саме тут. Правила бази дозволяють клієнтові лише ДОПИСУВАТИ в
+// журнал (щоб ніхто не міг стерти слід своїх дій), тож видаляти з
+// браузера не можна за задумом. Ця функція ходить зі службовим ключем і
+// вже працює щодня — інших щоденних запусків у порталі немає.
+//
+// Розбивка audit_log на місяці (audit_log/{РРРР-ММ}) робить прибирання
+// безпечним: видаляємо ЦІЛІ місяці, старші за рік, і не перебираємо
+// записи по одному.
+const AUDIT_KEEP_MONTHS = 12;
+
+async function pruneAuditLog(token) {
+  const all = await readDb(token, 'audit_log').catch(() => null);
+  if (!all || typeof all !== 'object') return 0;
+  const now = new Date();
+  const edge = new Date(now.getFullYear(), now.getMonth() - AUDIT_KEEP_MONTHS, 1);
+  const edgeKey = `${edge.getFullYear()}-${String(edge.getMonth() + 1).padStart(2, '0')}`;
+  let removed = 0;
+  for (const ym of Object.keys(all)) {
+    // Ключі виду «2026-09». Усе, що не схоже на місяць, не чіпаємо.
+    if (!/^\d{4}-\d{2}$/.test(ym)) continue;
+    if (ym >= edgeKey) continue;
+    const r = await fetch(`${DB}/audit_log/${ym}.json?access_token=${encodeURIComponent(token)}`,
+      { method: 'DELETE' });
+    if (r.ok) { removed++; console.log('[Журнал] Видалено місяць', ym); }
+    else console.error('[Журнал] Не вдалося видалити', ym, r.status);
+  }
+  return removed;
+}
+
 exports.handler = async () => {
   const raw = process.env.FIREBASE_SERVICE_ACCOUNT;
   if (!raw) {
@@ -192,7 +229,15 @@ exports.handler = async () => {
       for (const key of due) await writeDb(token, `birthday_notices/${cls}/${key}`, target.iso);
     }
 
-    const note = `дата ${target.iso}, надіслано ${sent}, вже було ${skipped}`;
+    // Прибирання журналу — окремою справою і під власним try: воно не
+    // має жодного стосунку до нагадувань, і його збій не повинен
+    // виглядати як «нагадування не надіслалися».
+    let pruned = 0;
+    try { pruned = await pruneAuditLog(token); }
+    catch (e) { console.log('Прибирання журналу — помилка: ' + e.message); }
+
+    const note = `дата ${target.iso}, надіслано ${sent}, вже було ${skipped}`
+      + (pruned ? `, журнал: видалено місяців ${pruned}` : '');
     console.log('Нагадування про дні народження: ' + note);
     return { statusCode: 200, body: note };
   } catch (e) {
