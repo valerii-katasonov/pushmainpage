@@ -1701,11 +1701,34 @@ window.renderMasterBanner = renderMasterBanner;
 // вчителя. Тому «порожньо» означає одне з трьох, і раніше всі три випадки
 // показувались однаковим текстом «Немає предметів на цей день», через що
 // незрозуміло, що робити. Тепер розрізняємо.
+// РОЗГОРТАЄМО ЧЕРГУВАННЯ В ОКРЕМІ ПРЕДМЕТИ.
+//
+// У розкладі є клітинки «Plastyka / Technika», «Українська мова/Читання» —
+// це один урок, який тиждень одне, тиждень інше (див. altOptions).
+// Для показу розкладу так і треба. Але назва предмета йде В КЛЮЧ БАЗИ, а
+// в Firebase «/» — роздільник шляху. Тобто запис
+//
+//     homeworks/class_3/2026-09-08/Українська мова/Читання
+//
+// лягав НЕ в один ключ, а на рівень глибше. Читання дня потім повертало
+// {«Українська мова»: {«Читання»: {...}}}, і показ бачив завдання без
+// тексту. Те саме стосувалося оцінок, коментарів і наліпок.
+//
+// Тому там, де вчитель ОБИРАЄ предмет, показуємо обидві половинки
+// окремо: він і так знає, який у нього урок, а в базу піде чиста назва.
+export function expandAltSubjects(item){
+  const opts = altOptions(item);
+  if(opts && opts.length > 1) return opts;
+  const n = window.getValidSubjectName(item);
+  return n ? [n] : [];
+}
+window.expandAltSubjects = expandAltSubjects;
+
 function updateSubjectList(){
   const cls=getActiveClass();const dateStr=document.getElementById('global-date').value;
   const [y,m,d]=dateStr.split('-');const dv=new Date(y,m-1,d);const dn=dayKeys[dv.getDay()];
   const flat=window.getTodayLessonsFlattened(dn);
-  const allSubjs=[...new Set(flat.map(window.getValidSubjectName).filter(Boolean))];
+  const allSubjs=[...new Set(flat.flatMap(expandAltSubjects))];
   const subjs=allSubjs.filter(s=>window.isSubjectAllowed(cls,s));
   const sel=document.getElementById('t-subject');sel.innerHTML='';
   // Поле коментаря більше НЕ наповнюємо звідси: воно не про урок дня, а про
@@ -1734,8 +1757,9 @@ export function subjectsForClassWeek(cls){
   const out = new Set();
   dayKeys.forEach(dn => {
     (window.getTodayLessonsFlattened(dn) || []).forEach(item => {
-      const n = window.getValidSubjectName(item);
-      if(n && window.isSubjectAllowed(cls, n)) out.add(n);
+      expandAltSubjects(item).forEach(n => {
+        if(window.isSubjectAllowed(cls, n)) out.add(n);
+      });
     });
   });
   return [...out].sort((a, b) => a.localeCompare(b, 'uk'));
