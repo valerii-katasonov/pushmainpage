@@ -695,9 +695,43 @@ let mySkillsTemp=[]; // for profile modal
 // Chat/Inbox local state
 let currentChatId = null;
 
-const today=new Date();
-export const localDateString=today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-'+String(today.getDate()).padStart(2,'0');
+// ── СЬОГОДНІШНЯ ДАТА, ЯКА НЕ ЗАСТРЯГАЄ ──────────────────────────
+//
+// Значення обчислювалося РАЗ при завантаженні модуля. А портал тримають
+// відкритим добами: учитель лишає вкладку на ніч, батько — застосунок на
+// телефоні. Опівночі рядок лишався вчорашнім, і разом із ним «застрягало»
+// все, що на нього спирається (а таких місць 67): підсвітка «сьогодні»,
+// тижневий ключ басейну, заголовок відвідуваності, вкладка ДЗ.
+// Помилка тиха — портал упевнено показує вчорашній день як сьогоднішній.
+//
+// Тому `let`, а не `const`: у модулях це «живе» звʼязування, і всі, хто
+// імпортував значення, побачать нове без жодних правок у себе.
+function todayString(){
+  const d=new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')
+        +'-'+String(d.getDate()).padStart(2,'0');
+}
+export let localDateString=todayString();
 document.getElementById('global-date').value=localDateString;
+
+// Перевіряємо раз на хвилину й щоразу, коли вкладку повертають на екран
+// (телефон із засинанням таймерів інакше пропустив би зміну доби).
+function refreshToday(){
+  const now=todayString();
+  if(now===localDateString) return;
+  const wasShowing=localDateString;
+  localDateString=now;
+  // Поле дати переводимо на нову добу ЛИШЕ якщо людина його не чіпала:
+  // інакше ми б висмикнули з-під неї день, який вона сама обрала.
+  const el=document.getElementById('global-date');
+  if(el && el.value===wasShowing){
+    el.value=now;
+    if(window.handleDateChange) window.handleDateChange();
+  }
+  console.info('[Push School] Настала нова доба:',now);
+}
+setInterval(refreshToday, 60000);
+document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) refreshToday(); });
 
 // ══════════ GRADE SYSTEM ══════════
 // 6-бальна шкала. Маскування для 1-5 класу
