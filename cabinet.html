@@ -1465,7 +1465,14 @@
     .topic-opt:hover{background:#f5f5f5;}
     .topic-opt-green{border-left:4px solid #2ecc71;}
     .topic-opt-yellow{border-left:4px solid #f39c12;background:#fffdf5;}
-    .topic-opt-red{border-left:4px solid #e74c3c;background:#fdf2f0;color:#999;cursor:not-allowed;}
+    /* Червоний більше НЕ означає «не можна» — лише «за планом уже все».
+       Тому прибрано cursor:not-allowed і сірий текст: тему можна взяти
+       повторно, і виглядати вона має як робочий варіант, а не як мертвий. */
+    .topic-opt-red{border-left:4px solid #e74c3c;background:#fdf2f0;}
+    /* Блакитний — тему брали ПОНАД план. Окремий колір потрібен, щоб
+       відрізняти «пройдено рівно» від «повторювали»: перше нормально,
+       друге варто помітити при звірці плану. */
+    .topic-opt-blue{border-left:4px solid #29b6f6;background:#f0f9ff;color:#0277bd;}
     .topic-opt-custom{border-left:4px solid #9575cd;font-style:italic;}
     /* ═══════════════════════════════════════════════════════
        RESPONSIVE — MOBILE / TABLET / DESKTOP
