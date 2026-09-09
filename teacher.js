@@ -976,33 +976,48 @@ function daySlotPairs(dayName){
   return out;
 }
 
+// Уроки цього дня, які веде САМЕ цей учитель, з урахуванням замін.
+// Одне джерело правди на дві потреби: список для відміток відсутності
+// (там потрібні ключі уроків) і сторінка ДЗ (там потрібні предмети).
+// Раніше правило «чий це урок» існувало лише всередині myAttendanceSlots,
+// і сторінці ДЗ довелося б його переписати — тобто завести другу копію.
+//
+// mine=false у результаті означає «веде хтось інший»: класному керівнику
+// показуємо всі уроки, але позначаємо, які з них його власні.
+export function myLessonsForDay(cls){
+  const role=currentUserData&&currentUserData.role;
+  const seesAll=(role==='class_teacher'||isMasterTeacher(role));
+  const dateStr=document.getElementById('global-date').value;
+  const [y,m,d]=String(dateStr||'').split('-');
+  if(!y) return [];
+  const dn=dayKeys[new Date(y,m-1,d).getDay()];
+  const me=String((currentUserData&&currentUserData.email)||'').toLowerCase();
+  const anySub=attSubs.any;   // заміна «на предмет», без прив'язки до слота
+  const out=[];
+  daySlotPairs(dn).forEach(({item,slotIdx,flatIdx})=>{
+    const sn=window.getValidSubjectName(item);
+    if(!sn)return;                                   // перерва
+    const key=String(flatIdx+1);
+    const sub=attSubs[slotIdx];
+    let mine, viaSub=false;
+    if(sub){
+      // Урок веде заміна: він у того, кого призначили, і НЕ у заміненого.
+      mine=(String(sub.subEmail||'').toLowerCase()===me); viaSub=true;
+    }else if(anySub&&String(anySub.subject||'').trim().toLowerCase()===sn.trim().toLowerCase()){
+      mine=(String(anySub.subEmail||'').toLowerCase()===me); viaSub=true;
+    }else{
+      mine=!!window.isSubjectAllowed(cls,sn);
+    }
+    out.push({subject:sn, key, number:item.number||(flatIdx+1), time:item.time||'', mine, viaSub, seesAll});
+  });
+  return out;
+}
+
 // Набір ключів уроків цього вчителя. null — обмежувати не треба.
 function myAttendanceSlots(cls){
   const role=currentUserData&&currentUserData.role;
   if(role==='class_teacher'||isMasterTeacher(role))return null;
-  const dateStr=document.getElementById('global-date').value;
-  const [y,m,d]=dateStr.split('-');
-  const dn=dayKeys[new Date(y,m-1,d).getDay()];
-  const me=String((currentUserData&&currentUserData.email)||'').toLowerCase();
-  const anySub=attSubs.any;   // заміна «на предмет», без прив'язки до слота
-  const slots=new Set();
-  daySlotPairs(dn).forEach(({item,slotIdx,flatIdx})=>{
-    const sn=window.getValidSubjectName(item);
-    if(!sn)return;
-    const key=String(flatIdx+1);
-    const sub=attSubs[slotIdx];
-    if(sub){
-      // Урок веде заміна: він у того, кого призначили, і НЕ у заміненого.
-      if(String(sub.subEmail||'').toLowerCase()===me)slots.add(key);
-      return;
-    }
-    if(anySub&&String(anySub.subject||'').trim().toLowerCase()===sn.trim().toLowerCase()){
-      if(String(anySub.subEmail||'').toLowerCase()===me)slots.add(key);
-      return;
-    }
-    if(window.isSubjectAllowed(cls,sn))slots.add(key);
-  });
-  return slots;
+  return new Set(myLessonsForDay(cls).filter(l=>l.mine).map(l=>l.key));
 }
 
 function buildMarkAbsentLessonOptions(){
@@ -1348,3 +1363,163 @@ window.saveStickerGoal = async function(){
 };
 
 window.closeStickerStatsModal=function(){document.getElementById('sticker-stats-modal').style.display='none';};
+
+// ══════════════════════════════════════════════════════════════════
+//  ДЗ НА ДЕНЬ: усі уроки вчителя одним екраном
+// ══════════════════════════════════════════════════════════════════
+//
+// НАВІЩО. Учитель заповнює не «урок», а кінець дня: у нього чотири уроки,
+// і він хоче пройти їх поспіль. Досі для кожного треба було перемикати
+// предмет угорі, заповнювати, зберігати й перемикати знову — при чотирьох
+// уроках це чотири кола по тій самій сторінці.
+//
+// Тут усі його уроки цього дня — згорнутими рядками. Заповнене позначено
+// галочкою, після збереження рядок згортається сам. Тема уроку лишається
+// на подробній сторінці: вона тягне за собою план і облік годин з
+// лімітами, а це обережна операція, і мішати її зі швидким заповненням
+// не варто.
+//
+// ЩО ТУТ НЕОЧЕВИДНОГО. Якщо відкрити три рядки, поправити всі три й
+// зберегти один — два лишаться незбереженими. Тому кожен рядок стежить за
+// змінами й показує «змінено, не збережено», а сторінка попереджає при
+// спробі піти.
+
+let hwDayState = {};   // {предмет: {saved:bool, dirty:bool}}
+
+export async function renderTeacherHwDay(){
+  const box=document.getElementById('t-hw-day');
+  if(!box) return;
+  const cls=getActiveClass();
+  const date=document.getElementById('global-date').value;
+  if(!cls||!date){ box.innerHTML='<p class="empty-msg">Оберіть клас і дату.</p>'; return; }
+  box.innerHTML='<p class="empty-msg">Завантаження...</p>';
+
+  try{
+    // Заміни потрібні ДО побудови списку: учитель на заміні має бачити
+    // урок, який сьогодні веде саме він.
+    await loadAttSubs(cls,date);
+    const lessons=myLessonsForDay(cls).filter(l=>l.mine);
+    if(!lessons.length){
+      box.innerHTML='<p class="empty-msg">Цього дня у вас немає уроків у цьому класі.</p>';
+      return;
+    }
+    // Одне читання на весь день і одне на підручники — замість читання
+    // на кожен предмет окремо.
+    const [hwSnap,tbSnap]=await Promise.all([
+      get(child(ref(db),`homeworks/${cls}/${date}`)),
+      get(child(ref(db),`textbooks/${cls}`)).catch(()=>null)
+    ]);
+    const saved=hwSnap.exists()?(hwSnap.val()||{}):{};
+    const allBooks=(tbSnap&&tbSnap.exists())?tbSnap.val():{};
+
+    hwDayState={};
+    box.innerHTML=lessons.map((l,i)=>{
+      const rec=saved[l.subject]||null;
+      hwDayState[l.subject]={saved:!!rec, dirty:false};
+      const id=`hwd-${i}`;
+      const books=(function(){
+        const k=String(l.subject).replace(/[.#$[\]]/g,'_');
+        const node=allBooks[k]||{};
+        return Object.entries(node).map(([key,b])=>({key,...b})).filter(b=>b.title);
+      })();
+      const bookOpts=['<option value="">— не вказувати —</option>']
+        .concat(books.map(b=>`<option value="${escHtml(b.title)}" data-url="${escHtml(b.url||'')}"${
+          rec&&rec.book&&rec.book.title===b.title?' selected':''}>${escHtml(b.title)}</option>`)).join('');
+
+      return `
+      <div class="hwd-row${rec?' done':''}" id="${id}-row" data-subject="${escHtml(l.subject)}">
+        <button type="button" class="hwd-head" onclick="hwdToggle('${id}')">
+          <span class="hwd-mark">${rec?'✓':'○'}</span>
+          <span class="hwd-name">${escHtml(l.number)}. ${escHtml(l.subject)}</span>
+          ${l.viaSub?'<span class="hwd-sub">заміна</span>':''}
+          <span class="hwd-state" id="${id}-state">${rec?'задано':'не задано'}</span>
+          <span class="hwd-chev">▾</span>
+        </button>
+        <div class="hwd-body" id="${id}-body" style="display:none;">
+          <label>Домашнє завдання</label>
+          <textarea id="${id}-text" rows="2" placeholder="Введіть ДЗ..."
+                    oninput="hwdDirty('${id}')">${escHtml(rec?(rec.text||''):'')}</textarea>
+          <label>📘 Підручник</label>
+          <select id="${id}-book" onchange="hwdDirty('${id}')">${bookOpts}</select>
+          <label>📄 Сторінки / вправи</label>
+          <input type="text" id="${id}-pages" placeholder="напр. с. 45, вправи 3–5"
+                 value="${escHtml(rec?(rec.pages||''):'')}" oninput="hwdDirty('${id}')">
+          <div class="hwd-actions">
+            <span class="hwd-dirty" id="${id}-dirty"></span>
+            <button type="button" class="qa-btn qa-save" id="${id}-save"
+                    onclick="hwdSave('${id}')">💾 Зберегти</button>
+          </div>
+        </div>
+      </div>`;
+    }).join('') + `<p class="hwd-hint">Заповнене позначається галочкою й згортається.
+        Тема уроку та файли — на вкладці «Урок».</p>`;
+  }catch(e){
+    console.error('ДЗ на день:',e);
+    box.innerHTML=`<p class="empty-msg" style="color:var(--red);">Не вдалося завантажити: ${escHtml(e.message||'')}</p>`;
+  }
+}
+window.renderTeacherHwDay=renderTeacherHwDay;
+
+window.hwdToggle=function(id){
+  const b=document.getElementById(id+'-body');
+  if(!b) return;
+  b.style.display = b.style.display==='none' ? 'block' : 'none';
+};
+
+// Позначка «змінено, не збережено». Без неї відкриті рядки виглядають
+// однаково, і людина йде зі сторінки, впевнена, що все записала.
+window.hwdDirty=function(id){
+  const row=document.getElementById(id+'-row');
+  const mark=document.getElementById(id+'-dirty');
+  if(mark) mark.textContent='● змінено, не збережено';
+  if(row){ row.classList.add('dirty'); const s=row.dataset.subject;
+           if(hwDayState[s]) hwDayState[s].dirty=true; }
+};
+
+window.hwdSave=function(id){
+  const row=document.getElementById(id+'-row');
+  if(!row) return;
+  const subject=row.dataset.subject;
+  const cls=getActiveClass();
+  const date=document.getElementById('global-date').value;
+  const text=(document.getElementById(id+'-text')?.value||'').trim();
+  const pages=(document.getElementById(id+'-pages')?.value||'').trim();
+  const sel=document.getElementById(id+'-book');
+  const opt=sel&&sel.selectedIndex>=0?sel.options[sel.selectedIndex]:null;
+  const bookTitle=sel?sel.value:'';
+  const bookUrl=opt?(opt.getAttribute('data-url')||''):'';
+
+  return runSave(id+'-save','💾 Зберегти', null, async()=>{
+    // Те саме правило, що й на подробній сторінці: якщо поле ДЗ порожнє,
+    // а підручник зі сторінками вказані — вони і є завдання.
+    let hwText=text;
+    if(!hwText&&(bookTitle||pages))
+      hwText=(bookUrl&&pages)?pages:[bookTitle,pages].filter(Boolean).join(' — ');
+    if(!hwText){ showToast('⚠️ Завдання порожнє'); return false; }
+
+    const hwRef=ref(db,`homeworks/${cls}/${date}/${subject}`);
+    const existed=(await get(hwRef)).exists();
+    const rec={text:hwText, images:[], ts:Date.now()};
+    if(bookTitle&&bookUrl) rec.book={title:bookTitle,url:bookUrl};
+    if(pages) rec.pages=pages;
+    await set(hwRef,rec);
+    await set(ref(db,`authors/${cls}/${date}/${subject}`),auth.currentUser.uid);
+    if(!existed) notifyEvent('homework',{class:cls,subject}).catch(()=>{});
+
+    // Успіх: галочка, згортаємо, знімаємо позначку про зміни.
+    row.classList.add('done'); row.classList.remove('dirty');
+    hwDayState[subject]={saved:true,dirty:false};
+    const mk=row.querySelector('.hwd-mark'); if(mk) mk.textContent='✓';
+    const st=document.getElementById(id+'-state'); if(st) st.textContent='задано';
+    const dm=document.getElementById(id+'-dirty'); if(dm) dm.textContent='';
+    const body=document.getElementById(id+'-body'); if(body) body.style.display='none';
+    showToast(`✅ ${subject}: ДЗ збережено`);
+    return false;                     // власне повідомлення вже показали
+  });
+};
+
+// Попередження при спробі піти з незбереженими змінами. Браузер показує
+// своє вікно; текст задати не можна, але сам факт зупинки — головне.
+window.addEventListener('beforeunload',(e)=>{
+  if(Object.values(hwDayState).some(v=>v&&v.dirty)){ e.preventDefault(); e.returnValue=''; }
+});
