@@ -676,6 +676,28 @@
     /* Сторінки — окремим рядком під текстом завдання: це те, що дитина
        відкриває в підручнику, і воно має бути помітним, а не губитися. */
     .hw-pages{margin-top:5px;font-size:.87rem;font-weight:700;color:#2b5aa8;}
+    /* Вкладка «Домашні»: навігація по тижнях */
+    .hw-nav{display:flex;align-items:center;gap:10px;margin-bottom:12px;}
+    .hw-nav button{width:auto;margin:0;padding:9px 15px;font-size:1.05rem;font-weight:800;
+                   background:#eef5ff;color:#2b5aa8;border:1px solid #cfe0f5;border-radius:10px;cursor:pointer;}
+    .hw-nav button:hover{background:#e2eeff;}
+    .hw-nav-mid{flex:1;text-align:center;line-height:1.25;}
+    .hw-nav-mid b{display:block;font-size:.95rem;color:#37474f;}
+    .hw-nav-mid span{font-size:.76rem;color:#90a4ae;}
+    .hw-today{width:100%;margin:0 0 12px 0;padding:8px;font-size:.8rem;
+              background:none;border:1px dashed #cfe0f5;border-radius:9px;color:#2b5aa8;cursor:pointer;}
+    .hw-day{margin-bottom:14px;background:#fff;border:1px solid #eef2f7;
+            border-left:4px solid #cfd8dc;border-radius:11px;padding:11px 13px;}
+    .hw-day.today{border-left-color:#2b5aa8;background:#f7fbff;}
+    .hw-day-head{font-weight:800;font-size:.9rem;color:#37474f;margin-bottom:7px;}
+    .hw-day-head span{font-weight:400;font-size:.74rem;color:#2b5aa8;
+                      background:#e3f2fd;border-radius:5px;padding:1px 6px;margin-left:5px;}
+    .hw-day-list{list-style:none;padding-left:0;margin:0;}
+    .hw-day-list li{padding:7px 0;border-bottom:1px dashed #eef2f7;font-size:.88rem;}
+    .hw-day-list li:last-child{border-bottom:0;}
+    /* «Зробити до …» — головна відповідь на питання батька */
+    .hw-due{display:block;margin-top:5px;font-size:.78rem;font-weight:700;color:#2e7d32;}
+    .hw-due.none{color:#b0bec5;font-weight:400;font-style:italic;}
     .si-table tr.si-bad td{background:#fff5f5;}
     .si-table tr.si-skip td{background:#f7f8fa;color:#9aa5b1;}
     .si-pick{display:flex;flex-wrap:wrap;gap:6px;align-items:center;
@@ -3156,6 +3178,7 @@
   <div id="parent-screen" class="panel">
     <div class="dtab-bar" id="parent-screen-tabs">
       <button class="dtab on" data-t="day" onclick="switchTab('parent-screen','day',this)">Сьогодні</button>
+      <button class="dtab" data-t="hw" onclick="switchTab('parent-screen','hw',this);openHwTab()">📚 Домашні</button>
       <button class="dtab" data-t="grades" onclick="switchTab('parent-screen','grades',this)">Оцінки</button>
       <button class="dtab" data-t="school" onclick="switchTab('parent-screen','school',this)">Школа</button>
       <button class="dtab" data-t="profile" onclick="switchTab('parent-screen','profile',this)">Профіль</button>
@@ -3256,6 +3279,14 @@
           <div id="ai-parent-out" class="ai-out" style="display:none;"></div>
         </div>
       </div>
+    </section>
+
+        <!-- ВКЛАДКА «ДОМАШНІ». Своя навігація по тижнях: загальна дата вгорі
+         сторінки керує розкладом, відвідуваністю й меню, і крутити її
+         заради домашки означало зсувати все інше. -->
+    <section class="screen-section" data-dtab="hw">
+      <h3>📚 Домашні завдання</h3>
+      <div id="p-hw-week"><p class="empty-msg">Завантаження...</p></div>
     </section>
 
     <section class="screen-section" data-dtab="grades">
@@ -3370,6 +3401,7 @@
   <div id="student-screen" class="panel">
     <div class="dtab-bar" id="student-screen-tabs">
       <button class="dtab on" data-t="day" onclick="switchTab('student-screen','day',this)">Сьогодні</button>
+      <button class="dtab" data-t="hw" onclick="switchTab('student-screen','hw',this);openHwTab()">📚 Домашні</button>
       <button class="dtab" data-t="news" onclick="switchTab('student-screen','news',this)">Новини<span class="chat-dot"></span></button>
       <button class="dtab" data-t="study" onclick="switchTab('student-screen','study',this)">Навчання</button>
     </div>
@@ -3414,6 +3446,14 @@
       <h3>📣 Новини школи</h3>
       
       <div id="s-news-feed" class="nw-feed"><p class="empty-msg">Завантаження...</p></div>
+    </section>
+
+        <!-- ВКЛАДКА «ДОМАШНІ». Своя навігація по тижнях: загальна дата вгорі
+         сторінки керує розкладом, відвідуваністю й меню, і крутити її
+         заради домашки означало зсувати все інше. -->
+    <section class="screen-section" data-dtab="hw">
+      <h3>📚 Домашні завдання</h3>
+      <div id="s-hw-week"><p class="empty-msg">Завантаження...</p></div>
     </section>
 
     <section class="screen-section" data-dtab="study">
@@ -3995,6 +4035,7 @@ document.addEventListener('DOMContentLoaded', function(){
 <script type="module" src="schedule-import.js"></script>
 <script type="module" src="consent.js"></script>
 <script type="module" src="activities.js"></script>
+<script type="module" src="homework.js"></script>
 
   <!-- ═══ ЕКРАН ЗГОДИ ПРИ ВХОДІ ═══
        Модалка без кнопки закриття: GDPR вимагає поінформувати ДО обробки,
