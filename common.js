@@ -1316,6 +1316,10 @@ export function renderHwItem(subject,data,books){
   // Якщо підручник збережено окремим полем — він уже показаний кнопкою вище,
   // і вдруге підсвічувати його в тексті не треба.
   const hasBookChip=typeof data==='object'&&data.book&&data.book.url;
+  // Текст порожній, а сторінки збережені — показуємо сторінки. Так буває,
+  // коли завдання перезбережене з порожнім полем ДЗ: у тексті лишалася
+  // сама назва підручника, і батько бачив підручник без жодних сторінок.
+  if(!text&&typeof data==='object'&&data.pages) text=data.pages;
   const body=hasBookChip?escHtml(text):linkifyBooks(escHtml(text),books);
   return `<li><b>${escHtml(subject)}:</b> ${body} ${att}</li>`;
 }
@@ -1378,7 +1382,7 @@ function renderChildSwitcher(){
   const kids=currentUserData?.role==='parent'?getUserChildren(currentUserData):[];
   if(kids.length<2){box.style.display='none';box.innerHTML='';return;}
   box.style.display='block';
-  box.innerHTML=`<select id="pb-child-select" title="Переключити дитину">
+  box.innerHTML=`<select id="pb-child-select" data-tip="Переключити дитину">
     ${kids.map((k,i)=>`<option value="${i}" ${k.studentName===currentUserData.studentName&&k.class===currentUserData.class?'selected':''}>👶 ${escHtml(k.studentName)} (${escHtml(String(k.class||'').replace('class_',''))} кл.)</option>`).join('')}
   </select>`;
   document.getElementById('pb-child-select').addEventListener('change',e=>window.switchChild(parseInt(e.target.value,10)));
@@ -1427,7 +1431,7 @@ function renderRoleSwitcher(){
   const roles=getUserRoles(currentUserData);
   if(roles.length<2){box.style.display='none';box.innerHTML='';return;}
   box.style.display='block';
-  box.innerHTML=`<select id="pb-role-select" title="Переключити кабінет">
+  box.innerHTML=`<select id="pb-role-select" data-tip="Переключити кабінет">
     ${roles.map(r=>`<option value="${escHtml(r)}" ${r===currentUserData.role?'selected':''}>${escHtml(ROLE_LABELS[r]||r)}</option>`).join('')}
   </select>`;
   document.getElementById('pb-role-select').addEventListener('change',e=>window.switchRole(e.target.value));
@@ -2359,6 +2363,40 @@ export function renderPushWarning(containerId){
 }
 window.renderPushWarning=renderPushWarning;
 window.notifyEvent=notifyEvent;
+
+// ══════════ СПІЛЬНА СІТКА ПІД УСІ ЗАПИСИ В БАЗУ ══════════
+//
+// НАВІЩО. У порталі десятки місць виду `set(ref(db,...), value)` без
+// жодного .catch(). Поки база все дозволяє, це непомітно. Але варто їй
+// відмовити — і обіцянка просто відхиляється в порожнечу: людина
+// натиснула, нічого не сталося, і жодного натяку чому. Найгірший різновид
+// поломки: портал виглядає справним.
+//
+// Обійти всі місця по одному — робота на день і шанс щось пропустити.
+// Тому ловимо на рівні сторінки: браузер повідомляє про КОЖНУ відхилену
+// обіцянку, яку ніхто не обробив. Це не замінює нормальної обробки там,
+// де вона потрібна, але прибирає саме мовчання.
+//
+// ЩО НЕ ЛОВИМО. Скасовані запити й помилки мережі при вимкненому
+// інтернеті — про них портал і так каже своїми засобами, а зайвий тост
+// під час поганого зв'язку тільки дратуватиме.
+window.addEventListener('unhandledrejection', (ev) => {
+  const err = ev && ev.reason;
+  const msg = String((err && (err.message || err.code)) || err || '');
+  if(!msg) return;
+  if(/aborted|cancell?ed|network error|failed to fetch/i.test(msg)) return;
+
+  if(/permission[_ ]denied/i.test(msg)){
+    showToast('⛔ Немає прав на цю дію. Зверніться до директора.');
+    console.error('[Push School] Відмова прав:', err);
+    return;
+  }
+  // Решта — показуємо коротко, щоб було з чим прийти по допомогу.
+  if(/firebase|database|\bset\b|\bupdate\b/i.test(msg)){
+    showToast('❌ Не збережено: ' + msg.slice(0, 90));
+    console.error('[Push School] Необроблена помилка запису:', err);
+  }
+});
 // Сповіщення, коли портал відкритий: системне вікно браузер не показує,
 // тому показуємо власний тост — інакше подія просто зникне непоміченою.
 (async()=>{
@@ -2477,13 +2515,13 @@ export async function renderParentsBlock(containerId,cls){
           ${(cards[sk]&&cards[sk].allergies)
             // Позначка про алергію видна всім, хто бачить список: на уроці це
             // питання безпеки. Самі медичні деталі — лише в картці, під правами.
-            ? `<span class="po-allergy" title="${escHtml(cards[sk].allergies)}">⚠️ Алергія</span>`:''}
+            ? `<span class="po-allergy" data-tip="${escHtml(cards[sk].allergies)}">⚠️ Алергія</span>`:''}
           <span class="po-child-acts">
-            <button class="po-edit" title="Картка учня" onclick="openStudentCard('${escJs(cls)}','${escJs(sk)}','${escJs(st)}')">📋</button>
-            <button class="po-edit" title="Табель (PDF)" onclick="downloadReportCard('${escJs(cls)}','${escJs(st)}')">📄</button>
-            <button class="po-edit" title="Змінити ПІБ учня" onclick="editStudentName('${escJs(cls)}','${escJs(sk)}','${escJs(st)}')">✏️</button>
-            <button class="po-edit" title="Вхід учня (email)" onclick="openStudentLogin('${escJs(cls)}','${escJs(st)}','${escJs(loginByStudent[st]||'')}')">🔑</button>
-            <button class="po-edit po-del" title="Прибрати зі списку" onclick="removeStudent('${escJs(cls)}','${escJs(sk)}','${escJs(st)}')">🗑</button>
+            <button class="po-edit" data-tip="Картка учня" onclick="openStudentCard('${escJs(cls)}','${escJs(sk)}','${escJs(st)}')">📋</button>
+            <button class="po-edit" data-tip="Табель (PDF)" onclick="downloadReportCard('${escJs(cls)}','${escJs(st)}')">📄</button>
+            <button class="po-edit" data-tip="Змінити ПІБ учня" onclick="editStudentName('${escJs(cls)}','${escJs(sk)}','${escJs(st)}')">✏️</button>
+            <button class="po-edit" data-tip="Вхід учня (email)" onclick="openStudentLogin('${escJs(cls)}','${escJs(st)}','${escJs(loginByStudent[st]||'')}')">🔑</button>
+            <button class="po-edit po-del" data-tip="Прибрати зі списку" onclick="removeStudent('${escJs(cls)}','${escJs(sk)}','${escJs(st)}')">🗑</button>
           </span>
         </div>
         <div class="po-parents">`;
@@ -2496,7 +2534,7 @@ export async function renderParentsBlock(containerId,cls){
             <span class="po-role">${escHtml(PARENT_ROLE_LABELS[p.role]||p.role)}</span>
             <b class="po-name">${escHtml(nm)}</b>
             ${!loggedIn.has(p.email.toLowerCase())?'<span class="po-new">ще не входив</span>':''}
-            <button class="po-edit" onclick="openParentEditor('${escJs(p.safeEmail)}')" title="Редагувати контакти">✏️</button>
+            <button class="po-edit" onclick="openParentEditor('${escJs(p.safeEmail)}')" data-tip="Редагувати контакти">✏️</button>
           </div>
           <div class="po-contacts">
             <span class="po-email">${escHtml(p.email)}</span>
@@ -2584,6 +2622,7 @@ async function loadClassTeacherCache(){
 }
 let cardTarget={cls:'',key:'',name:''};
 window.openStudentCard=async function(cls,key,name){
+  try{
   cardTarget={cls,key,name};
   await loadClassTeacherCache();
   const editable=canEditCard(cls);
@@ -2608,6 +2647,13 @@ window.openStudentCard=async function(cls,key,name){
           : `<input type="${f.type||'text'}" id="sc-${f.k}" value="${escHtml(c[f.k]||'')}" placeholder="${escHtml(f.ph||'')}" ${ro?'readonly':''}>`}`;
       }).join('')}
     </div>`).join('');
+  }catch(err){
+    // Читання не вдалося. Без цього блоку на екрані назавжди лишався б
+    // напис-заглушка, і людина не знала б, зламалося чи просто повільно.
+    console.error("common.js → sc-fields", err);
+    const _b=document.getElementById("sc-fields");
+    if(_b)_b.innerHTML='<p class="empty-msg" style="color:var(--red);">Не вдалося завантажити: '+((err&&err.message)||'невідома помилка')+'</p>';
+  }
 };
 window.closeStudentCard=function(){document.getElementById('student-card-modal').style.display='none';};
 // Батьки відкривають картку своєї активної дитини зі свого кабінету.
@@ -3115,6 +3161,7 @@ window.removeStudentLogin=async function(){
 // Хто саме зараз відкрив редактор і куди повертатися після збереження
 let parentEditorTarget={safeEmail:'',containerId:'',cls:''};
 window.openParentEditor=async function(safeEmail){
+  try{
   // Запам'ятовуємо, який список оновити після збереження
   const teacherBox=document.getElementById('t-parents-list');
   const visibleTeacher=teacherBox&&teacherBox.offsetParent!==null;
@@ -3136,6 +3183,13 @@ window.openParentEditor=async function(safeEmail){
     <label for="pe-${f.k}">${f.label}</label>
     <input type="${f.type||'text'}" id="pe-${f.k}" value="${escHtml(profile[f.k])}" placeholder="${escHtml(f.ph)}">
   `).join('')+renderParentKids(safeEmail,kids)+renderEmailChange(safeEmail);
+  }catch(err){
+    // Читання не вдалося. Без цього блоку на екрані назавжди лишався б
+    // напис-заглушка, і людина не знала б, зламалося чи просто повільно.
+    console.error("common.js → pe-fields", err);
+    const _b=document.getElementById("pe-fields");
+    if(_b)_b.innerHTML='<p class="empty-msg" style="color:var(--red);">Не вдалося завантажити: '+((err&&err.message)||'невідома помилка')+'</p>';
+  }
 };
 // Прив'язані діти: можна змінити роль або відв'язати
 function renderParentKids(safeEmail,kids){
@@ -3147,7 +3201,7 @@ function renderParentKids(safeEmail,kids){
     h+=`<div class="pe-kid">
       <span class="pe-kid-name">${escHtml(k.studentName)} <span style="color:#999;">(${escHtml(String(k.class||'').replace('class_',''))} кл.)</span></span>
       <select onchange="setParentChildRole('${escJs(safeEmail)}',${i},this.value)">${opts(k.role||'guardian')}</select>
-      <button class="pe-unlink" onclick="unlinkParentChild('${escJs(safeEmail)}',${i},'${escJs(k.studentName)}')" title="Відв'язати">✖</button>
+      <button class="pe-unlink" onclick="unlinkParentChild('${escJs(safeEmail)}',${i},'${escJs(k.studentName)}')" data-tip="Відв'язати">✖</button>
     </div>`;
   });
   return h+'</div>';
@@ -3551,6 +3605,7 @@ window.loadAdminDashboard=async function(){try{const date=document.getElementByI
 // class is picked explicitly. markedBy:'administrator' distinguishes these
 // entries in every list that renders an origin icon.
 window.loadAdminStudentsForClass=async function(){
+  try{
   const cls=document.getElementById('a-mark-class').value;
   const sel=document.getElementById('a-mark-student');
   if(!cls){sel.innerHTML='<option value="">Спочатку клас</option>';return;}
@@ -3559,6 +3614,13 @@ window.loadAdminStudentsForClass=async function(){
   sel.innerHTML='<option value="">Учень...</option>';
   if(snap.exists())Object.entries(snap.val()).sort((a,b)=>String(a[1]).localeCompare(String(b[1]),'uk')).forEach(([sid,nm])=>{const o=document.createElement('option');o.value=sid;o.innerText=nm;sel.appendChild(o);});
   else sel.innerHTML='<option value="" disabled>Учнів немає</option>';
+  }catch(err){
+    // Читання не вдалося. Без цього блоку на екрані назавжди лишався б
+    // напис-заглушка, і людина не знала б, зламалося чи просто повільно.
+    console.error("common.js → a-mark-student", err);
+    const _b=document.getElementById("a-mark-student");
+    if(_b)_b.innerHTML='<option value="">Не вдалося завантажити</option>';
+  }
 };
 window.adminMarkAbsent=async function(){
   const cls=document.getElementById('a-mark-class').value;
@@ -3573,6 +3635,7 @@ window.adminMarkAbsent=async function(){
 };
 // ══════════ ADMIN — read-only reference views ══════════
 window.loadAdminBellSchedule=async function(){
+  try{
   const cls=document.getElementById('a-bell-class').value;
   const box=document.getElementById('a-bell-view');
   if(!box)return;
@@ -3584,8 +3647,16 @@ window.loadAdminBellSchedule=async function(){
   const rows=Object.keys(d).sort((a,b)=>(parseInt(a)||0)-(parseInt(b)||0))
     .map(k=>`<div style="display:flex;justify-content:space-between;padding:6px 9px;background:#fff;border:1px solid #e8eaf6;border-radius:7px;margin-bottom:5px;font-size:.85rem;"><b>Урок ${escHtml(d[k].number??k)}</b><span style="color:#555;">${escHtml(d[k].start||'—')} – ${escHtml(d[k].end||'—')}</span></div>`).join('');
   box.innerHTML=rows||'<p class="empty-msg">Уроків немає.</p>';
+  }catch(err){
+    // Читання не вдалося. Без цього блоку на екрані назавжди лишався б
+    // напис-заглушка, і людина не знала б, зламалося чи просто повільно.
+    console.error("common.js → a-bell-view", err);
+    const _b=document.getElementById("a-bell-view");
+    if(_b)_b.innerHTML='<p class="empty-msg" style="color:var(--red);">Не вдалося завантажити: '+((err&&err.message)||'невідома помилка')+'</p>';
+  }
 };
 window.loadAdminAcademicYear=async function(){
+  try{
   const box=document.getElementById('a-academic-view');
   if(!box)return;
   box.innerHTML='<p class="empty-msg">Завантаження...</p>';
@@ -3602,6 +3673,13 @@ window.loadAdminAcademicYear=async function(){
     section('Семестри',y.semesters,s=>`<b>${escHtml(s.name||'—')}</b><br><span style="color:#666;">${escHtml(s.start||'')} – ${escHtml(s.end||'')}</span>`)+
     section('Канікули',y.breaks,b=>`<b>${escHtml(b.title||'—')}</b><br><span style="color:#666;">${escHtml(b.start||'')} – ${escHtml(b.end||'')}</span>`)+
     section('Свята',y.holidays,h=>`<b>${escHtml(h.title||'—')}</b><br><span style="color:#666;">${escHtml(h.date||'')}</span>`);
+  }catch(err){
+    // Читання не вдалося. Без цього блоку на екрані назавжди лишався б
+    // напис-заглушка, і людина не знала б, зламалося чи просто повільно.
+    console.error("common.js → a-academic-view", err);
+    const _b=document.getElementById("a-academic-view");
+    if(_b)_b.innerHTML='<p class="empty-msg" style="color:var(--red);">Не вдалося завантажити: '+((err&&err.message)||'невідома помилка')+'</p>';
+  }
 };
 // ══════════ UNIFIED INBOX (Chat) ══════════
 // Used by director-screen, teacher-screen and parent/student-screen alike,
