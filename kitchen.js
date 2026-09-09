@@ -39,7 +39,7 @@
 //   через stuName(): воно може змінитися, ключ — ні.
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, update, remove, onValue } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, auth, currentUserData, showToast, escHtml, escJs, localDateString, logAction, notifyEvent, pushConfigured, renderPushWarning, getSchoolRange, sidOf, getStudentDir, resolveStudentKey, getDateRange, stuName } from './common.js';
+import { db, auth, currentUserData, showToast, escHtml, escJs, localDateString, logAction, notifyEvent, pushConfigured, renderPushWarning, getSchoolRange, sidOf, getStudentDir, resolveStudentKey, getDateRange, stuName, mondayOf } from './common.js';
 
 // Позначка версії модуля. Показується в блоці харчування дрібним рядком.
 // Якщо людина каже «нічого не змінилося», перше питання — який тут рядок:
@@ -52,6 +52,17 @@ export const MEAL_CUTOFF_HOUR = 9;   // до 09:00 можна відмовити
 // позицій на винос. Обід лишається з власним, пізнішим дедлайном (09:00) —
 // його готують із уже закупленого, і відмова о 08:59 нікому не шкодить.
 export const BREAKFAST_CUTOFF_HOUR = 7;
+
+// О КОТРІЙ БАТЬКАМ ПОКАЗУВАТИ ВЖЕ ЗАВТРАШНЄ МЕНЮ.
+//
+// Після сімнадцятої сьогоднішній обід давно з'їдено, і питання в батька
+// одне: що буде завтра й чи треба щось замовити. Показувати йому меню
+// дня, який скінчився, — марно займати екран.
+//
+// Це стосується ЛИШЕ того, який день відкривається за замовчуванням.
+// Дедлайни замовлення живуть окремо (див. BREAKFAST_CUTOFF_HOUR вище) —
+// плутати одне з одним не можна.
+export const MENU_NEXT_DAY_HOUR = 17;
 const DOW = ['Понеділок','Вівторок','Середа','Четвер','Пʼятниця'];
 // Не slice(0,2) від повної назви: так виходило «По», «Ві», «Пʼ».
 const DOW_SHORT = ['Пн','Вт','Ср','Чт','Пт'];
@@ -75,12 +86,6 @@ export const MENU_FIELDS = [
 // ── ДАТИ ──
 const iso = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 const human = s => s.split('-').reverse().join('.');
-function mondayOf(dateStr){
-  const d = new Date(dateStr+'T12:00:00');
-  const wd = d.getDay() || 7;              // неділю (0) вважаємо 7-м днем
-  d.setDate(d.getDate() - (wd - 1));
-  return iso(d);
-}
 function weekDates(monday){
   const out=[], d=new Date(monday+'T12:00:00');
   for(let i=0;i<5;i++){ out.push(iso(d)); d.setDate(d.getDate()+1); }
@@ -316,6 +321,7 @@ window.kitchenThisWeek = function(){
 
 // ── Редактор меню на тиждень ──
 export async function loadWeekMenu(){
+  try{
   const box = document.getElementById('k-menu-week');
   if(!box) return;
   const monday = currentMonday(), dates = weekDates(monday);
@@ -342,6 +348,13 @@ export async function loadWeekMenu(){
       </div>
     </details>`;
   }).join('');
+  }catch(err){
+    // Читання не вдалося. Без цього блоку на екрані назавжди лишався б
+    // напис-заглушка, і людина не знала б, зламалося чи просто повільно.
+    console.error("kitchen.js → k-menu-week", err);
+    const _b=document.getElementById("k-menu-week");
+    if(_b)_b.innerHTML='<p class="empty-msg" style="color:var(--red);">Не вдалося завантажити: '+((err&&err.message)||'невідома помилка')+'</p>';
+  }
 }
 
 // Зберігаємо весь тиждень одним рухом, але сповіщаємо лише про ті дні,
@@ -580,6 +593,7 @@ window.refreshKitchen = function(){
 
 // ── Хто харчується (кухня / адміністрація) ──
 export async function loadMealPlans(){
+  try{
   const cls = document.getElementById('k-plan-class')?.value;
   const box = document.getElementById('k-plan-list');
   if(!box) return;
@@ -610,6 +624,13 @@ export async function loadMealPlans(){
       </select>
     </div>`;
   }).join('');
+  }catch(err){
+    // Читання не вдалося. Без цього блоку на екрані назавжди лишався б
+    // напис-заглушка, і людина не знала б, зламалося чи просто повільно.
+    console.error("kitchen.js → k-plan-list", err);
+    const _b=document.getElementById("k-plan-list");
+    if(_b)_b.innerHTML='<p class="empty-msg" style="color:var(--red);">Не вдалося завантажити: '+((err&&err.message)||'невідома помилка')+'</p>';
+  }
 }
 window.loadMealPlans = loadMealPlans;
 window.setMealPlan = async function(cls, sid, field, value){
@@ -846,7 +867,7 @@ function pickCell(cls, sid, date, pick){
                : '<span class="k-no">—</span>';
   return ['a','b'].map(v => `<button type="button" class="k-ab-btn${v===cur?' on '+v:''}"
     onclick="kitchenSetPick('${escJs(cls)}','${escJs(sid)}','${escJs(date)}','${v}')"
-    title="Обрати варіант ${v.toUpperCase()}">${v.toUpperCase()}</button>`).join('');
+    data-tip="Обрати варіант ${v.toUpperCase()}">${v.toUpperCase()}</button>`).join('');
 }
 
 window.kitchenSetPick = async function(cls, sid, date, value){
@@ -878,7 +899,7 @@ function canEditMeals(){
 function mealCell(cls, sid, date, field, on){
   const mark = on ? '<span class="k-yes">✓</span>' : '<span class="k-no">—</span>';
   if(!canEditMeals()) return mark;
-  return `<button type="button" class="k-cell-btn" title="Змінити вручну"
+  return `<button type="button" class="k-cell-btn" data-tip="Змінити вручну"
     onclick="kitchenSetMeal('${escJs(cls)}','${escJs(sid)}','${escJs(date)}','${field}',${on?0:1})">${mark}</button>`;
 }
 
@@ -1062,6 +1083,15 @@ window.checkNotifySetup = async function(){
 // порожній блок і враження, що кухня нічого не опублікувала. Тепер показуємо
 // смужку робочих днів тижня і самі перемикаємось на найближчий день із меню.
 let pmDate = null;   // який день зараз відкритий у блоці харчування
+
+// Який день показати батькам за замовчуванням. Чиста функція від дати й
+// години — щоб її можна було перевірити тестами, а не чекати вечора.
+export function menuAnchor(dateStr, hour){
+  return hour >= MENU_NEXT_DAY_HOUR ? nextWorkday(dateStr) : dateStr;
+}
+function menuAnchorDay(){
+  return menuAnchor(localDateString, new Date().getHours());
+}
 window.pmShowDay = function(d){ pmDate = d; renderParentMenu(); renderTakeaway(d); };
 
 // Другий аргумент — КЛЮЧ учня (постійний ідентифікатор), а не імʼя
@@ -1075,8 +1105,10 @@ export async function renderParentMenu(cls, studentKey, date){
   try{
     // Явно передана дата (зміна дати в кабінеті) скидає ручний вибір дня
     if(date) pmDate = null;
-    // Вихідний зсуваємо на найближчий робочий день, інакше тижня просто немає
-    const anchor = date || pmDate || localDateString;
+    // Вихідний зсуваємо на найближчий робочий день, інакше тижня просто немає.
+    // Після 17:00 так само зсуваємо на завтра: сьогоднішній обід уже позаду.
+    // У пʼятницю ввечері nextWorkday сам перестрибне вихідні на понеділок.
+    const anchor = date || pmDate || menuAnchorDay();
     const wda = weekdayIdx(anchor);
     const monday = mondayOf(wda===0 || wda===6 ? nextWorkday(anchor) : anchor);
     const week = weekDates(monday);
