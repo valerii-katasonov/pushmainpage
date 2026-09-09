@@ -514,7 +514,18 @@ window.doHwCopy=async function(){
   const btn=document.getElementById('btn-hw-copy-do');
   btn.disabled=true;btn.textContent='⏳ Копіюю...';
   try{
+    // Копія має бути ПОВНОЮ. Раніше сюди клалися лише текст і фото, тож
+    // у паралельному класі зникали сторінки й посилання на підручник —
+    // хоча вчитель бачив їх на екрані й був певен, що копіює все.
     const payload={text,images:currentHwImages,ts:Date.now()};
+    const pagesRaw=document.getElementById('hw-pages')?.value.trim()||'';
+    if(pagesRaw)payload.pages=pagesRaw;
+    const bSel=document.getElementById('hw-textbook');
+    const bOpt=bSel&&bSel.selectedIndex>=0?bSel.options[bSel.selectedIndex]:null;
+    const bCustom=document.getElementById('hw-textbook-custom')?.value.trim()||'';
+    const bTitle=bCustom||(bSel?bSel.value:'');
+    const bUrl=bCustom?'':(bOpt?(bOpt.getAttribute('data-url')||''):'');
+    if(bTitle&&bUrl)payload.book={title:bTitle,url:bUrl};
     for(const c of targets){
       const hwRef=ref(db,`homeworks/${c}/${date}/${subject}`);
       // Те саме правило, що й при звичайному збереженні: сповіщаємо лише
@@ -995,9 +1006,14 @@ export function myLessonsForDay(cls){
   const anySub=attSubs.any;   // заміна «на предмет», без прив'язки до слота
   const out=[];
   daySlotPairs(dn).forEach(({item,slotIdx,flatIdx})=>{
-    const sn=window.getValidSubjectName(item);
-    if(!sn)return;                                   // перерва
+    // Чергування розгортаємо: «Plastyka / Technika» — це два предмети, і
+    // в базу має піти той, який учитель насправді веде. Комбінована назва
+    // містить «/» і розірвала б шлях у Firebase (див. expandAltSubjects).
+    const names=window.expandAltSubjects?window.expandAltSubjects(item)
+                                        :[window.getValidSubjectName(item)].filter(Boolean);
+    if(!names.length)return;                         // перерва
     const key=String(flatIdx+1);
+    names.forEach(sn=>{
     const sub=attSubs[slotIdx];
     let mine, viaSub=false;
     if(sub){
@@ -1008,7 +1024,8 @@ export function myLessonsForDay(cls){
     }else{
       mine=!!window.isSubjectAllowed(cls,sn);
     }
-    out.push({subject:sn, key, number:item.number||(flatIdx+1), time:item.time||'', mine, viaSub, seesAll});
+      out.push({subject:sn, key, number:item.number||(flatIdx+1), time:item.time||'', mine, viaSub, seesAll});
+    });
   });
   return out;
 }
