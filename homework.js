@@ -186,3 +186,20 @@ window.openHwTab = function(){
   hwWeek = hwWeek || mondayOf(localDateString);
   renderHwWeekView(hwBoxId());
 };
+
+// ── ОНОВЛЕННЯ ПРИ ЗМІНІ КОНТЕКСТУ ───────────────────────────────
+//
+// Вкладка малювалася ЛИШЕ при натисканні на неї. Тож коли батько з двома
+// дітьми перемикав дитину, залишаючись на цій вкладці, на екрані висіла
+// домашка попередньої: доводилося піти на іншу вкладку й повернутися.
+// Так само було б і з будь-якою іншою зміною класу.
+//
+// Тепер вкладка сама перемальовується — але тільки якщо її ВИДНО.
+// Інакше кожне перемикання дитини тягло б зайве читання тижня в фоні.
+function hwVisible(){
+  const b = document.getElementById(hwBoxId());
+  return !!(b && b.offsetParent !== null);
+}
+window.refreshHwTabIfOpen = function(){
+  if(hwVisible()) renderHwWeekView(hwBoxId());
+};
