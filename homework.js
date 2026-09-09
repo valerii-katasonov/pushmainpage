@@ -109,6 +109,7 @@ export async function renderHwWeekView(boxId, weekStart){
 
   const today = localDateString;
   const total = days.reduce((n,d)=>n+Object.keys(byDate[d]||{}).length, 0);
+  const hasSchedule = !!(window.schedule && Object.keys(window.schedule).length);
 
   const nav = `
     <div class="hw-nav">
@@ -129,12 +130,22 @@ export async function renderHwWeekView(boxId, weekStart){
     const items = names.sort((a,b)=>a.localeCompare(b,'uk')).map(subj=>{
       const rec = subjects[subj];
       // «Зробити до» — наступний урок цього ж предмета за розкладом.
-      const due = nextLessonDate(window.schedule, subj, ds, skip);
-      const dueTxt = due
-        ? `<span class="hw-due">зробити до ${escHtml(human(due))}${due===today?' — сьогодні!':''}</span>`
-        : '<span class="hw-due none">наступний урок за розкладом не знайдено</span>';
-      return renderHwItem(subj, rec, booksForSubject(books, subj))
-             .replace('</li>', `${dueTxt}</li>`);
+      //
+      // Розклад і його відсутність — різні речі, і плутати їх не можна:
+      // «не знайдено» під кожним завданням виглядає як поломка, хоча
+      // насправді розклад ще не приїхав.
+      const due = hasSchedule ? nextLessonDate(window.schedule, subj, ds, skip) : '';
+      const dueTxt = !hasSchedule
+        ? '<span class="hw-due none">розклад ще завантажується</span>'
+        : (due
+            ? `<span class="hw-due">зробити до ${escHtml(human(due))}${due===today?' — сьогодні!':''}</span>`
+            : '<span class="hw-due none">наступного уроку в розкладі немає</span>');
+      // Дописуємо в кінець <li>, який повернув renderHwItem. Через
+      // lastIndexOf, а не replace: якщо колись усередині завдання
+      // з'явиться свій список, перший </li> виявиться чужим.
+      const li = renderHwItem(subj, rec, booksForSubject(books, subj));
+      const cut = li.lastIndexOf('</li>');
+      return cut < 0 ? li + dueTxt : li.slice(0,cut) + dueTxt + li.slice(cut);
     }).join('');
     return `<div class="hw-day${ds===today?' today':''}">
         <div class="hw-day-head">${escHtml(dayTitle(ds))}${ds===today?' <span>сьогодні</span>':''}</div>
@@ -160,9 +171,14 @@ window.hwShiftWeek = function(delta){
   renderHwWeekView(hwBoxId());
 };
 
-// Вкладка є і в батьків, і в учня — кабінети різні, розмітка однакова.
+// Вкладка є і в батьків, і в учня. Обидві панелі лежать у розмітці
+// ОДНОЧАСНО — просто одна прихована. Тому «взяти той елемент, що існує»
+// не працює: для учня теж знаходився батьківський блок, і малювання
+// йшло в приховану панель — учень бачив порожню вкладку.
+// Питаємо роль, а не наявність елемента.
 function hwBoxId(){
-  return document.getElementById('p-hw-week') ? 'p-hw-week' : 's-hw-week';
+  return (currentUserData && currentUserData.role === 'student')
+    ? 's-hw-week' : 'p-hw-week';
 }
 
 // Викликається при перемиканні на вкладку: показуємо поточний тиждень.
