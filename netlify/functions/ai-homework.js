@@ -1,163 +1,23 @@
-// ══════════════════════════════════════════════════════════════════
-//  Push School — генерація домашнього завдання через Gemini
-// ══════════════════════════════════════════════════════════════════
-// НАВІЩО ЦЕ СЕРВЕРНА ФУНКЦІЯ, А НЕ ВИКЛИК З БРАУЗЕРА:
-// ключ до Gemini не можна тримати в клієнтському JS — його видно кожному,
-// хто відкриє вихідний код сторінки. Тут ключ живе у змінних оточення
-// Netlify (Site settings → Environment variables → GEMINI_API_KEY) і
-// в браузер ніколи не потрапляє.
+// ═══════════════════════════════════════════════════════════════
+// ai-homework.js — ВИМКНЕНО. Функція більше не використовується.
 //
-// НАЛАШТУВАННЯ (один раз):
-//   1. https://aistudio.google.com → Get API key → скопіювати
-//   2. Netlify → Site configuration → Environment variables →
-//      Add: GEMINI_API_KEY = <ключ>
-//   3. Redeploy сайту
+// ЩО СТАЛОСЯ. Усі AI-можливості порталу переїхали в ai-assist.js: там
+// одна обв'язка (ключ, перевірка джерела, ліміти, повтори, обробка
+// помилок) на всі задачі, і нова можливість — це новий блок у PROMPTS.
+// Ця функція лишилася з тих часів, коли генерація ДЗ була окремою.
 //
-// Безкоштовний тариф Gemini обмежений кількістю запитів на хвилину та на добу.
-// Для школи з ~20 вчителями цього вистачає із запасом.
+// ЧОМУ НЕ ПРОСТО ВИДАЛИТИ ФАЙЛ. Поки він лежить у netlify/functions, за
+// адресою /.netlify/functions/ai-homework живе РОБОЧИЙ вхід до Gemini з
+// ключем школи. Ніхто з порталу його не викликає — а отже, ніхто й не
+// помітив би, якби ним почали користуватися сторонні. Квота у школи
+// спільна, і ми вже бачили, як швидко вона закінчується.
 //
-// МОДЕЛЬ. Google час від часу припиняє підтримку старих моделей для нових
-// проєктів (так сталося з gemini-2.5-flash). Тому назва винесена в змінну
-// оточення: якщо колись знову прийде повідомлення «model is no longer
-// available», достатньо змінити GEMINI_MODEL у Netlify і зробити redeploy —
-// без правок коду.
-// ПРО ВИБІР МОДЕЛІ — І ЧОМУ ЦЕ ЖИВЕ У ЗМІННІЙ.
-//
-// Google закриває моделі кілька разів на рік: 2.0 прибрали влітку 2026,
-// 2.5 закривають у жовтні. Тому назва моделі — у GEMINI_MODEL, і зміна
-// не потребує правок коду.
-//
-// ВАЖЛИВО ПРО ЛІМІТИ. У найновіших моделей безкоштовний тариф
-// символічний: gemini-3.6-flash дає 20 запитів НА ДОБУ на весь проєкт —
-// для школи це ніщо. Молодші Flash дають на три порядки більше.
-// Тобто вибирати треба не «найновіше», а те, у чого прийнятна квота.
-//
-// ЧОМУ САМЕ «-latest». Це псевдонім: Google сам тримає його на чинній
-// моделі. Конкретні назви (2.0, 2.5, 3.5) закриваються по черзі, і школа
-// щоразу впирається в «модель більше не доступна» посеред тижня.
-// Псевдонім знімає це назавжди — ціною того, що модель може змінитися
-// без попередження. Для коротких порад батькам це прийнятний обмін.
-//
-// Якщо модель усе-таки закриють, функція САМА запитає в Google список
-// доступних і назве їх у повідомленні про помилку.
-const MODEL = process.env.GEMINI_MODEL || 'gemini-flash-lite-latest';
-const API = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
-
-// Домени, з яких приймаємо запити. Проста перешкода для чужих сайтів, які
-// могли б витрачати нашу квоту. Це не повноцінна автентифікація — за потреби
-// пізніше додамо перевірку Firebase-токена вчителя.
-const ALLOWED_HOSTS = ['planlekcjipush.netlify.app', 'localhost', '127.0.0.1'];
-
-function cors(origin) {
-  return {
-    'Access-Control-Allow-Origin': origin || '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Content-Type': 'application/json; charset=utf-8'
-  };
-}
-const fail = (code, msg, origin) => ({
-  statusCode: code,
-  headers: cors(origin),
-  body: JSON.stringify({ error: msg })
+// Тому файл віддає 410 і нікуди не ходить. Видалити його можна буде,
+// коли переконаєтесь, що адресу більше ніхто не смикає (Netlify →
+// Functions → ai-homework → Logs: має бути порожньо).
+// ═══════════════════════════════════════════════════════════════
+exports.handler = async () => ({
+  statusCode: 410,
+  headers: { 'Content-Type': 'application/json; charset=utf-8' },
+  body: JSON.stringify({ error: 'Функція вимкнена. Використовуйте ai-assist.' })
 });
-
-exports.handler = async (event) => {
-  const origin = event.headers.origin || event.headers.Origin || '';
-
-  if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: cors(origin) };
-  if (event.httpMethod !== 'POST') return fail(405, 'Метод не підтримується', origin);
-
-  // Перевірка джерела запиту
-  if (origin) {
-    let host = '';
-    try { host = new URL(origin).hostname; } catch (e) { /* ignore */ }
-    if (!ALLOWED_HOSTS.includes(host)) return fail(403, 'Запит із невідомого джерела', origin);
-  }
-
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) return fail(500, 'AI не налаштовано: адміністратору потрібно додати GEMINI_API_KEY у Netlify', origin);
-
-  let body;
-  try { body = JSON.parse(event.body || '{}'); }
-  catch (e) { return fail(400, 'Некоректний запит', origin); }
-
-  // Обрізаємо вхідні дані — і від помилок, і від спроб «розкрутити» модель
-  const subject = String(body.subject || '').trim().slice(0, 100);
-  const topic   = String(body.topic   || '').trim().slice(0, 300);
-  const classNum = parseInt(body.classNum, 10);
-
-  if (!subject) return fail(400, 'Не вказано предмет', origin);
-  if (!topic)   return fail(400, 'Не вказано тему уроку', origin);
-  if (!(classNum >= 1 && classNum <= 11)) return fail(400, 'Некоректний клас', origin);
-
-  // ВАЖЛИВО: жодних персональних даних учнів сюди не передаємо — лише
-  // предмет, тема і номер класу.
-  const prompt = [
-    `Ти — досвідчений український учитель. Склади домашнє завдання для учнів ${classNum} класу.`,
-    `Предмет: ${subject}`,
-    `Тема уроку: ${topic}`,
-    '',
-    'Вимоги до відповіді:',
-    '- українською мовою;',
-    `- складність відповідає ${classNum} класу;`,
-    '- 2–4 конкретні завдання, кожне з нового рядка, пронумеровані;',
-    '- завдання мають бути виконувані вдома без спеціального обладнання;',
-    '- обсяг реалістичний: приблизно 20–30 хвилин роботи;',
-    '- без вступу, без пояснень і без побажань — лише сам текст завдання;',
-    '- не використовуй розмітку Markdown (ні зірочок, ні решіток).'
-  ].join('\n');
-
-  // Сучасні моделі Gemini за замовчуванням «розмірковують» перед відповіддю,
-  // і ці внутрішні токени рахуються в maxOutputTokens. Через це відповідь
-  // обривалася на півслові: майже весь бюджет ішов на роздуми.
-  // Для складання ДЗ глибокі роздуми не потрібні — вимикаємо їх
-  // (thinkingBudget: 0) і піднімаємо ліміт виводу.
-  const callGemini = (cfg) => fetch(`${API}?key=${encodeURIComponent(key)}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: cfg })
-  });
-
-  try {
-    // Спроба 1: з вимкненими роздумами — так увесь бюджет іде на сам текст.
-    let r = await callGemini({ temperature: 0.7, maxOutputTokens: 2048, thinkingConfig: { thinkingBudget: 0 } });
-    let data = await r.json();
-
-    // Спроба 2: не всі моделі приймають thinkingConfig, і Google при цьому
-    // відповідає загальним «invalid argument» без згадки причини. Тому на
-    // БУДЬ-ЯКУ 400 повторюємо запит без цього параметра, компенсуючи
-    // збільшеним лімітом виводу (роздуми з'їдять частину — має вистачити).
-    if (!r.ok && r.status === 400) {
-      r = await callGemini({ temperature: 0.7, maxOutputTokens: 4096 });
-      data = await r.json();
-    }
-
-    if (!r.ok) {
-      const msg = data?.error?.message || 'Помилка сервісу Gemini';
-      // 429 — вичерпано безкоштовну квоту; повідомляємо зрозуміло
-      if (r.status === 429) return fail(429, 'Ліміт запитів до AI на сьогодні вичерпано. Спробуйте завтра.', origin);
-      // Модель припинили підтримувати — підказуємо адміністратору, що робити
-      if (/no longer available|not found|is not supported/i.test(msg))
-        return fail(r.status, `Модель «${MODEL}» більше не доступна. Адміністратору: змініть змінну GEMINI_MODEL у Netlify. Відповідь Google: ${msg}`, origin);
-      return fail(r.status, msg, origin);
-    }
-
-    const cand = data?.candidates?.[0];
-    // Частини можуть приходити кількома шматками — склеюємо всі, інакше
-    // втрачається хвіст відповіді.
-    const text = (cand?.content?.parts || []).map(p => p?.text || '').join('').trim();
-    if (!text) return fail(502, 'AI не повернув відповіді. Спробуйте ще раз.', origin);
-
-    // Якщо модель уперлася в ліміт — чесно кажемо, що текст неповний,
-    // а не віддаємо обрізаний шматок як готовий результат.
-    const truncated = cand?.finishReason === 'MAX_TOKENS';
-    return {
-      statusCode: 200,
-      headers: cors(origin),
-      body: JSON.stringify({ text, truncated })
-    };
-  } catch (e) {
-    return fail(500, 'Не вдалося звернутися до AI: ' + e.message, origin);
-  }
-};
