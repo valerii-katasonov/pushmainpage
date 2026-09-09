@@ -676,6 +676,27 @@
     /* Сторінки — окремим рядком під текстом завдання: це те, що дитина
        відкриває в підручнику, і воно має бути помітним, а не губитися. */
     .hw-pages{margin-top:5px;font-size:.87rem;font-weight:700;color:#2b5aa8;}
+    /* ДЗ на день у вчителя: згорнуті рядки по уроках */
+    .hwd-cap{font-size:.8rem;color:#90a4ae;margin:-6px 0 12px 0;}
+    .hwd-row{border:1px solid #e0e6ed;border-left:4px solid #cfd8dc;border-radius:11px;
+             margin-bottom:9px;background:#fff;overflow:hidden;}
+    .hwd-row.done{border-left-color:#2e7d32;background:#f6fbf7;}
+    .hwd-row.dirty{border-left-color:#e65100;background:#fffaf3;}
+    .hwd-head{display:flex;align-items:center;gap:9px;width:100%;margin:0;
+              padding:12px 14px;background:none;border:0;cursor:pointer;text-align:left;font-family:inherit;}
+    .hwd-mark{font-size:1.1rem;color:#b0bec5;flex:0 0 auto;}
+    .hwd-row.done .hwd-mark{color:#2e7d32;font-weight:800;}
+    .hwd-name{flex:1;font-weight:700;font-size:.92rem;color:#37474f;}
+    .hwd-sub{font-size:.68rem;background:#fff3e0;color:#e65100;border-radius:5px;padding:1px 6px;}
+    .hwd-state{font-size:.74rem;color:#90a4ae;}
+    .hwd-row.done .hwd-state{color:#2e7d32;}
+    .hwd-chev{color:#b0bec5;font-size:.8rem;}
+    .hwd-body{padding:0 14px 13px 14px;border-top:1px dashed #eef2f7;}
+    .hwd-body label{display:block;margin-top:9px;font-size:.8rem;color:#546e7a;font-weight:700;}
+    .hwd-actions{display:flex;align-items:center;gap:10px;margin-top:11px;}
+    .hwd-dirty{flex:1;font-size:.76rem;color:#e65100;font-weight:700;}
+    .hwd-actions .qa-btn{width:auto;margin:0;padding:9px 16px;}
+    .hwd-hint{font-size:.76rem;color:#90a4ae;margin-top:10px;}
     /* Вкладка «Домашні»: навігація по тижнях */
     .hw-nav{display:flex;align-items:center;gap:10px;margin-bottom:12px;}
     .hw-nav button{width:auto;margin:0;padding:9px 15px;font-size:1.05rem;font-weight:800;
@@ -2813,6 +2834,7 @@
     <div class="dtab-bar" id="teacher-screen-tabs">
       <button class="dtab on" data-t="day" onclick="switchTab('teacher-screen','day',this)">Сьогодні</button>
       <button class="dtab" data-t="lesson" onclick="switchTab('teacher-screen','lesson',this)">Урок</button>
+      <button class="dtab" data-t="hwday" onclick="switchTab('teacher-screen','hwday',this);renderTeacherHwDay()">📚 ДЗ на день</button>
       <button class="dtab" data-t="class" onclick="switchTab('teacher-screen','class',this)">Клас</button>
       <button class="dtab" data-t="news" onclick="switchTab('teacher-screen','news',this)">Новини<span class="chat-dot"></span></button>
     </div>
@@ -3091,6 +3113,16 @@
           <button onclick="saveTextbook()" style="flex:1;margin-top:0;background:var(--blue);color:#fff;padding:10px 6px;font-size:.82rem;">+ Додати</button>
         </div>
       </div>
+    </section>
+
+        <!-- ДЗ НА ДЕНЬ. Усі уроки вчителя цього дня одним екраном: він
+         заповнює не «урок», а кінець дня. Тема лишається на вкладці
+         «Урок» — вона тягне облік годин, і це обережна операція. -->
+    <section class="screen-section" data-dtab="hwday">
+      <h3>📚 Домашні завдання на день</h3>
+      <p class="hwd-cap">Показано ваші уроки в цьому класі на обрану дату.
+         Дата й клас — угорі сторінки.</p>
+      <div id="t-hw-day"><p class="empty-msg">Завантаження...</p></div>
     </section>
 
     <section class="screen-section half" data-dtab="class">
