@@ -671,15 +671,21 @@ window.saveLessonTopic=function(){
     for(let i=0;i<slotInputs.length;i++){
       const {selectedId,customText}=slotInputs[i];
       if(selectedId==='__custom__'){ if(customText)newTopics.push({customText}); continue; }
+      // ЛІМІТ ГОДИН БІЛЬШЕ НЕ ЗАБОРОНЯЄ, А ПОПЕРЕДЖАЄ.
+      //
+      // Раніше тут стояла відмова: години теми вичерпані — зберегти не
+      // можна. Учителі попросили прибрати, і слушно: клас не зрозумів
+      // матеріал, урок випав через свято, контрольна показала прогалину.
+      // Заборона змушувала вписувати ту саму тему «вручну», і план
+      // переставав відповідати тому, що було на уроках, — тобто ставав
+      // менш точним саме там, де мав бути точним.
       const prevTopicId=prevTopics[i]?.topicId||null;
       if(selectedId!==prevTopicId){
         const newTSnap=await get(ref(db,`curriculum_plans/${cls}/${sk}/topics/${selectedId}`));
         if(newTSnap.exists()){
           const t=newTSnap.val();
-          if((t.hoursUsed||0)>=t.plannedHours){
-            showToast(`⚠️ Усі години теми "${t.title}" вже використано!`);
-            return false;                       // не помилка — свідома відмова
-          }
+          if((t.hoursUsed||0)>=(t.plannedHours||0))
+            showToast(`↻ Тема "${t.title}" береться повторно — години понад план`);
         }
       }
       newTopics.push({topicId:selectedId});
