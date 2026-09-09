@@ -55,7 +55,8 @@ export function weekKey(dateStr){
 // не каже батькові, який відкрив портал у четвер.
 const MONTHS_UA = ['січня','лютого','березня','квітня','травня','червня',
                    'липня','серпня','вересня','жовтня','листопада','грудня'];
-export function weekLabel(monday){
+// Понеділок–неділя: тижнева відмітка басейну діє на весь тиждень.
+export function fullWeekLabel(monday){
   const [y,m,d] = String(monday).split('-').map(Number);
   if(!y) return '';
   const a = new Date(y, m-1, d), b = new Date(y, m-1, d+6);
@@ -202,7 +203,7 @@ function buildActivitiesHtml(wk){
   // питати «чи буде цього тижня» в того, хто не ходить, безглуздо.
   const weekBlock = (poolAnswered && actPlan.pool) ? `
     <div class="act-week ${goes?'':'off'}">
-      <div class="act-week-head">🗓️ Басейн цього тижня <span>${escHtml(weekLabel(wk))}</span></div>
+      <div class="act-week-head">🗓️ Басейн цього тижня <span>${escHtml(fullWeekLabel(wk))}</span></div>
       <div class="act-week-state">${goes
         ? 'Дитина <b>буде</b> на басейні — окремо підтверджувати не треба.'
         : 'Ви попередили, що дитини <b>не буде</b> на басейні цього тижня.'}</div>
@@ -279,11 +280,15 @@ window.setPoolWeek = async function(going){
 // на питання «а хто саме?» доводилося йти в базу. Тепер збираємо імена
 // одразу — рахувати їх однаково доводиться, а показати можна за кліком.
 export const ACT_GROUPS = {
+  // Дві РІЗНІ відмови, і плутати їх не можна:
+  //   noPool   — «дитина на басейн не ходить» узагалі, постійна відповідь;
+  //   skipping — ходить, але саме цього тижня не буде.
+  // Перше потрібне при формуванні груп, друге — тренерові в п'ятницю.
   pool:       'Ходять на басейн',
-  skipping:   'Не буде на басейні цього тижня',
+  noPool:     'Не ходять на басейн (відмовилися)',
+  skipping:   'Ходять, але цього тижня не буде',
   bus:        'Їдуть автобусом на басейн',
   noBus:      'На басейн привозять батьки',
-  noPool:     'Не ходять на басейн',
   unanswered: 'Батьки ще не відповіли'
 };
 
@@ -388,12 +393,13 @@ function drawSummary(){
   box.innerHTML = `
     <div class="act-sum">
       ${num('pool','ходять на басейн')}
+      ${num('noPool','не ходять')}
       ${num('skipping','не буде цього тижня')}
       ${num('bus','їдуть автобусом')}
       ${num('noBus','привозять батьки')}
       ${s.unanswered.length ? num('unanswered','без відповіді', true) : ''}
     </div>
-    <div class="act-week-cap">Тиждень ${escHtml(weekLabel(wk))} · натисніть на цифру, щоб побачити список</div>
+    <div class="act-week-cap">Тиждень ${escHtml(fullWeekLabel(wk))} · натисніть на цифру, щоб побачити список</div>
     ${actOpen ? `<h5 class="act-h">${escHtml(ACT_GROUPS[actOpen]||'')} — ${items.length}</h5>${listHtml}` : ''}
     ${s.unanswered.length?`<p class="act-hint">Поки батьки не відповіли, дитина не потрапляє
       ні в список басейну, ні в список автобуса.</p>`:''}`;
