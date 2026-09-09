@@ -5,7 +5,7 @@
 // review, class/attendance management, teacher dashboard counters,
 // exams calendar, and reactions/weekly-wrapped.
 // ═══════════════════════════════════════════════════════════════
-import { ref, set, get, child, push, remove, update, onValue } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+import { ref, set, get, child, push, remove, update, onValue, runTransaction } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { renderNewsFeed } from './news.js';
 import { db, auth, CLOUDINARY_URL, UPLOAD_PRESET, HW_FILE_EXT, HW_FILE_MAX_MB, fileExt, getActiveClass, currentUserData, showToast, displayGrade, renderHwItem, renderHwList, dayKeys, formatAttendanceSlotLabel, STICKER_GOAL, stickerGoal, escJs, escHtml, safeUrl, normalizeChildren, notifyEvent, logAction, renderBirthdays, teacherAccessMatrix, getUsersSnap, stuName, gradeWritePaths, localDateString, isMasterTeacher, gradeTypesCache} from './common.js';
 import { populateTopicSelector, availableTopicsCache } from './curriculum.js';
@@ -304,7 +304,7 @@ window.openQuickJournal=async function(){
       for(const sk in slots){if(slots[sk]?.status){status=slots[sk].status;break;}}
       return `<div class="qj-row" data-sid="${escHtml(s.sid)}" data-name="${escHtml(s.nm)}">
         <div class="qj-n">${i+1}</div>
-        <div class="qj-name">${escHtml(s.nm)}${allerg[s.sid]?` <span class="po-allergy" title="${escHtml(allerg[s.sid])}">⚠️</span>`:''}</div>
+        <div class="qj-name">${escHtml(s.nm)}${allerg[s.sid]?` <span class="po-allergy" data-tip="${escHtml(allerg[s.sid])}">⚠️</span>`:''}</div>
         <div class="qj-att">
           <button type="button" class="qj-b ok${status===''?' on':''}"   onclick="qjSet(this,'')">✓</button>
           <button type="button" class="qj-b lt${status==='late'?' on':''}" onclick="qjSet(this,'late')">З</button>
@@ -1057,7 +1057,11 @@ window.teacherMarkAbsent=function(){
   const date=document.getElementById('global-date').value;
   if(!st)return alert('Оберіть учня!');
   const status=rs==='запізнення'?'late':'absent';
-  set(ref(db,`attendance/${getActiveClass()}/${date}/${st}/${slotKey}`),{status,reason:rs,markedBy:'teacher'}).then(()=>{
+  // .catch обов'язковий: якщо відмітка не запишеться, учитель має це
+  // побачити одразу — інакше він певен, що батьків уже сповістили.
+  set(ref(db,`attendance/${getActiveClass()}/${date}/${st}/${slotKey}`),{status,reason:rs,markedBy:'teacher'})
+  .catch(e=>{alert('Не вдалося відмітити: '+e.message);throw e;})
+  .then(()=>{
     showToast(`✅ ${stuName(getActiveClass(), st)} відмічений.`);
     // Сповіщення батькам — саме заради цього випадку push і потрібен:
     // дитина не дійшла до школи, а сім'я про це ще не знає
@@ -1084,13 +1088,30 @@ window.linkParent=async function(){
   const role=document.getElementById('t-parent-role').value;
   if(!e||!st)return alert("Оберіть учня та Email");
   try{
-    const snap=await get(child(ref(db),`parent_links/${e}`));
-    const kids=snap.exists()?normalizeChildren(snap.val()):[];
     const stNm=stuName(cls,st);
-    if(kids.some(k=>k.studentId===st||(k.studentName===stNm&&k.class===cls)))
-      return alert(`Ця дитина вже прив'язана.`);
-    kids.push({studentId:st,studentName:stNm,class:cls,role});
-    await set(ref(db,`parent_links/${e}`),{children:kids});
+    // ТРАНЗАКЦІЯ, а не «прочитати → дописати → записати».
+    //
+    // Тут живе список ДІТЕЙ батька, і writes йдуть на весь вузол. Між
+    // читанням і записом є проміжок: якщо в цю мить хтось прив'яже другу
+    // дитину (директор, імпорт списків), вона зникне — і батько втратить
+    // доступ, а причини не знайде ніхто. Транзакція виконує читання й
+    // запис як одну дію: Firebase сам повторить її, якщо дані змінилися.
+    let already=false;
+    const res=await runTransaction(ref(db,`parent_links/${e}`), cur=>{
+      const kids=normalizeChildren(cur||{});
+      if(kids.some(k=>k.studentId===st||(k.studentName===stNm&&k.class===cls))){
+        already=true;
+        return cur;                       // нічого не міняємо
+      }
+      kids.push({studentId:st,studentName:stNm,class:cls,role});
+      // Зберігаємо решту полів вузла (profile тощо) — раніше вони гинули.
+      return Object.assign({}, cur||{}, {children:kids});
+    });
+    if(already||!res.committed) return alert(`Ця дитина вже прив'язана.`);
+    if(window.invalidateParentLinks) window.invalidateParentLinks();
+    // Підсумковий список — уже той, що ліг у базу (транзакція могла
+    // побачити свіжіші дані, ніж ми на початку).
+    const kids=normalizeChildren(res.snapshot.val()||{});
     // Якщо батьки вже заходили — оновлюємо і їхній профіль.
     //
     // Читати users має право лише директор: там персональні дані всіх
@@ -1229,7 +1250,7 @@ window.manageDayExams=function(ds){const cls=getActiveClass();const dd=document.
 window.addExam=function(ds){const s=document.getElementById('exam-add-subj').value;if(!s)return;const cls=getActiveClass();const ym=ds.substring(0,7);get(child(ref(db),`exams/${cls}/${ym}/${ds}`)).then(snap=>{let cnt=snap.exists()?Object.keys(snap.val()).length:0;if(cnt>=2)return alert('❌ Ліміт: більше 2 контрольних не можна!');set(ref(db,`exams/${cls}/${ym}/${ds}/${s}`),auth.currentUser.uid).then(()=>{renderExamsCalendar();manageDayExams(ds);});});};
 window.deleteExam=function(ds,s){const cls=getActiveClass();remove(ref(db,`exams/${cls}/${ds.substring(0,7)}/${ds}/${s}`)).then(()=>{renderExamsCalendar();manageDayExams(ds);});};
 // ══════════ REACTIONS & WRAPPED (teacher side) ══════════
-window.showReactionsDetails=function(){document.getElementById('reactions-modal').style.display='flex';const list=document.getElementById('reactions-list');list.innerHTML='';if(!window.myDetailedReactions?.length){list.innerHTML='<p class="empty-msg" style="text-align:center;">Немає реакцій.</p>';return;}let h='<ul style="list-style:none;padding:0;margin:0;">';window.myDetailedReactions.forEach(r=>{const[y,m,d]=r.date.split('-');h+=`<li style="background:#fdfbfb;border:1px solid #eee;border-radius:8px;padding:11px;margin-bottom:9px;"><div style="display:flex;justify-content:space-between;border-bottom:1px dashed #ddd;padding-bottom:4px;margin-bottom:7px;"><span style="font-weight:700;color:var(--teal);">${r.student}</span><span style="font-size:1.3rem;">${r.emoji}</span></div><div style="font-size:.78rem;color:#888;margin-bottom:4px;">📅 ${d}.${m}.${y} | 📚 ${r.subject}</div><div style="font-size:.88rem;color:#444;background:#f0f8ff;padding:7px;border-radius:6px;font-style:italic;">"${r.comment}"</div></li>`;});h+='</ul>';list.innerHTML=h;};
+window.showReactionsDetails=function(){document.getElementById('reactions-modal').style.display='flex';const list=document.getElementById('reactions-list');list.innerHTML='';if(!window.myDetailedReactions?.length){list.innerHTML='<p class="empty-msg" style="text-align:center;">Немає реакцій.</p>';return;}let h='<ul style="list-style:none;padding:0;margin:0;">';window.myDetailedReactions.forEach(r=>{const[y,m,d]=r.date.split('-');h+=`<li style="background:#fdfbfb;border:1px solid #eee;border-radius:8px;padding:11px;margin-bottom:9px;"><div style="display:flex;justify-content:space-between;border-bottom:1px dashed #ddd;padding-bottom:4px;margin-bottom:7px;"><span style="font-weight:700;color:var(--teal);">${r.student}</span><span style="font-size:1.3rem;">${r.emoji}</span></div><div style="font-size:.78rem;color:#888;margin-bottom:4px;">📅 ${d}.${m}.${y} | 📚 ${escHtml(r.subject)}</div><div style="font-size:.88rem;color:#444;background:#f0f8ff;padding:7px;border-radius:6px;font-style:italic;">"${escHtml(r.comment)}"</div></li>`;});h+='</ul>';list.innerHTML=h;};
 window.closeReactionsModal=function(){document.getElementById('reactions-modal').style.display='none';};
 window.showWeeklyWrapped=function(){confetti({particleCount:200,spread:90,origin:{y:0.6},zIndex:2000});document.getElementById('wrapped-modal').style.display='flex';document.body.style.overflow='hidden';const uid=auth.currentUser.uid;const cls=getActiveClass();Promise.all([get(child(ref(db),`homeworks/${cls}`)),get(child(ref(db),`comments/${cls}`)),get(child(ref(db),`stickers/${cls}`)),get(child(ref(db),`authors/${cls}`))]).then(([hs,cs,ss,as])=>{const a=as.exists()?as.val():{};let hw=0;if(hs.exists()){const d=hs.val();for(let dt in d)for(let s in d[dt])if(a[dt]&&a[dt][s]===uid)hw++;}document.getElementById('w-hw').innerText=hw;let com=0;if(cs.exists()){const d=cs.val();for(let dt in d)for(let s in d[dt])if(a[dt]&&a[dt][s]===uid)com+=Object.keys(d[dt][s]).length;}document.getElementById('w-com').innerText=com;let st=0;if(ss.exists()){const d=ss.val();for(let student in d)for(let k in d[student]){const[dt,s]=k.split('_');if(a[dt]&&a[dt][s]===uid)st++;}}document.getElementById('w-st').innerText=st;});};
 window.closeModal=function(){document.getElementById('wrapped-modal').style.display='none';document.body.style.overflow='';};
@@ -1239,6 +1260,7 @@ window.closeModal=function(){document.getElementById('wrapped-modal').style.disp
 // instead of per-student calls — Object.keys(stickersData[student]||{}).length is
 // the same "count all keys" the prompt asks for, just batched.
 window.openStickerStatsModal=async function(){
+  try{
   document.getElementById('sticker-stats-modal').style.display='flex';
   const list=document.getElementById('sticker-stats-list');
   list.innerHTML='<p class="empty-msg" style="text-align:center;">⏳ Завантаження...</p>';
@@ -1271,6 +1293,13 @@ window.openStickerStatsModal=async function(){
   });
   h+='</ul>';
   list.innerHTML=h;
+  }catch(err){
+    // Читання не вдалося. Без цього блоку на екрані назавжди лишався б
+    // напис-заглушка, і людина не знала б, зламалося чи просто повільно.
+    console.error("teacher.js → sticker-stats-list", err);
+    const _b=document.getElementById("sticker-stats-list");
+    if(_b)_b.innerHTML='<p class="empty-msg" style="color:var(--red);">Не вдалося завантажити: '+((err&&err.message)||'невідома помилка')+'</p>';
+  }
 };
 
 // ── МЕТА НАЛІПОК ──────────────────────────────────────────────
