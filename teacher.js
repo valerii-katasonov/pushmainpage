@@ -1398,7 +1398,21 @@ export async function renderTeacherHwDay(){
     // Заміни потрібні ДО побудови списку: учитель на заміні має бачити
     // урок, який сьогодні веде саме він.
     await loadAttSubs(cls,date);
-    const lessons=myLessonsForDay(cls).filter(l=>l.mine);
+    // СПАРЕНІ УРОКИ — ОДИН РЯДОК.
+    //
+    // Математика двічі поспіль — звична річ. Але завдання в базі лежить
+    // за предметом і датою: homeworks/{клас}/{дата}/{предмет}, тобто
+    // місце для нього ОДНЕ. Два рядки писали б у той самий вузол і тихо
+    // затирали один одного, а вчитель бачив би два однакових бланки й не
+    // розумів, чому зникає введене. Тому зводимо в один рядок і показуємо
+    // обидва номери уроків.
+    const byName=new Map();
+    myLessonsForDay(cls).filter(l=>l.mine).forEach(l=>{
+      const prev=byName.get(l.subject);
+      if(prev){ prev.numbers.push(l.number); prev.viaSub=prev.viaSub||l.viaSub; }
+      else byName.set(l.subject, {...l, numbers:[l.number]});
+    });
+    const lessons=[...byName.values()];
     if(!lessons.length){
       box.innerHTML='<p class="empty-msg">Цього дня у вас немає уроків у цьому класі.</p>';
       return;
@@ -1434,7 +1448,8 @@ export async function renderTeacherHwDay(){
       <div class="hwd-row${rec?' done':''}" id="${id}-row" data-subject="${escHtml(l.subject)}">
         <button type="button" class="hwd-head" onclick="hwdToggle('${id}')">
           <span class="hwd-mark">${rec?'✓':'○'}</span>
-          <span class="hwd-name">${escHtml(l.number)}. ${escHtml(l.subject)}</span>
+          <span class="hwd-name">${escHtml(l.numbers.join(', '))}. ${escHtml(l.subject)}${
+            l.numbers.length>1?' <span class="hwd-dbl">спарені</span>':''}</span>
           ${l.viaSub?'<span class="hwd-sub">заміна</span>':''}
           <span class="hwd-state" id="${id}-state">${rec?'задано':'не задано'}</span>
           <span class="hwd-chev">▾</span>
