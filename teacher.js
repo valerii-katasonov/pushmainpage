@@ -132,9 +132,39 @@ export function loadCurrentTopicAndHW(){
   if(document.getElementById('t-hw'))document.getElementById('t-hw').value='';
   if(document.getElementById('existing-image-info'))document.getElementById('existing-image-info').style.display='none';
   currentHwImages=[];
+  // Поля контексту теж СКИДАЄМО. Вони не скидалися ніколи, тож перейшовши
+  // з математики на читання, учитель ніс із собою сторінки з математики —
+  // і вони мовчки потрапляли в чуже завдання.
+  const pagesEl=document.getElementById('hw-pages');
+  const bookCustomEl=document.getElementById('hw-textbook-custom');
+  if(pagesEl)pagesEl.value='';
+  if(bookCustomEl)bookCustomEl.value='';
   /* Topic loading is now handled by populateTopicSelector() → loadSavedTopicForLesson() */
   get(ref(db,`homeworks/${cls}/${date}/${subject}`)).then(snap=>{
-    if(snap.exists()){const val=snap.val();if(typeof val==='string'&&document.getElementById('t-hw'))document.getElementById('t-hw').value=val;else{if(document.getElementById('t-hw'))document.getElementById('t-hw').value=val.text||'';if(val.images&&Array.isArray(val.images))currentHwImages=val.images;else if(val.image)currentHwImages=[val.image];if(currentHwImages.length>0&&document.getElementById('existing-image-info')){document.getElementById("existing-image-info").innerText=`📎 Вкладень: ${currentHwImages.length} шт.`;document.getElementById('existing-image-info').style.display='block';}}}
+    if(!snap.exists())return;
+    const val=snap.val();
+    const hwEl=document.getElementById('t-hw');
+    if(typeof val==='string'){ if(hwEl)hwEl.value=val; return; }
+    if(hwEl)hwEl.value=val.text||'';
+    // Повертаємо у форму те, з чого завдання складали: інакше наступне
+    // збереження зібрало б текст із порожніх полів і затерло сторінки.
+    if(pagesEl&&val.pages)pagesEl.value=val.pages;
+    if(val.book&&val.book.title){
+      const sel=document.getElementById('hw-textbook');
+      // Випадайка заповнюється окремо й асинхронно, тож обираємо збережений
+      // підручник тоді, коли варіанти вже на місці.
+      const pick=()=>{ if(!sel)return false;
+        const o=[...sel.options].find(x=>x.value===val.book.title);
+        if(o){sel.value=val.book.title;return true;} return false; };
+      if(!pick())setTimeout(pick,400);
+    }
+    if(val.images&&Array.isArray(val.images))currentHwImages=val.images;
+    else if(val.image)currentHwImages=[val.image];
+    const info=document.getElementById('existing-image-info');
+    if(currentHwImages.length>0&&info){
+      info.innerText=`📎 Вкладень: ${currentHwImages.length} шт.`;
+      info.style.display='block';
+    }
   });
 }
 window.loadCurrentTopicAndHW=loadCurrentTopicAndHW;
@@ -593,6 +623,18 @@ async function runSave(btnId, label, sm, job){
 // ── ТЕМА УРОКУ ──────────────────────────────────────────────────
 window.saveLessonTopic=function(){
   const c=lessonCtx(); if(!c) return;
+  // Кнопок тепер дві, а раніше була одна — «Зберегти тему та ДЗ». За
+  // звичкою натискають першу й вважають, що збережено все. Тема при цьому
+  // лягає в базу, завдання — ні, і батьки бачать вчорашнє. Тож коли в
+  // полях ДЗ щось є, попереджаємо про це прямо.
+  const hw=document.getElementById('t-hw')?.value.trim()||'';
+  const pages=document.getElementById('hw-pages')?.value.trim()||'';
+  const files=document.getElementById('t-image')?.files.length||0;
+  if(hw||pages||files){
+    if(!confirm('Ця кнопка зберігає ЛИШЕ тему уроку.\n\n'
+      +'Домашнє завдання нижче не збережеться — для нього є окрема кнопка '
+      +'«💾 Зберегти ДЗ».\n\nЗберегти саму тему?')) return;
+  }
   return runSave('btn-save-topic', BTN_TOPIC, c.sm, async()=>{
     const {cls,sk,date}=c;
 
@@ -726,6 +768,13 @@ window.saveHomework=function(){
     // ts — коли завдання внесли. Дата в ключі каже, НА який день задано.
     const rec={text:hwText,images:finalImageUrls,ts:Date.now()};
     if(bookTitle&&bookUrl)rec.book={title:bookTitle,url:bookUrl};
+    // Сторінки зберігаємо ОКРЕМИМ полем, хоч вони вже є в тексті.
+    // Поля контексту ніде не зберігалися, тож при повторному відкритті
+    // уроку вони були порожні: учитель правив щось одне, натискав
+    // «Зберегти ДЗ» — і сторінки зникали, бо складати текст не було з чого.
+    // Тепер їх можна відновити у формі.
+    const pagesRaw=document.getElementById('hw-pages')?.value.trim()||'';
+    if(pagesRaw)rec.pages=pagesRaw;
     await set(hwRef,rec);
     // Сповіщення не має права зірвати збереження: воно вже відбулося.
     if(!existed)notifyEvent('homework',{class:cls,subject}).catch(()=>{});
