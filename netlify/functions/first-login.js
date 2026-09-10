@@ -266,8 +266,47 @@ async function sendPasswordLetter(token, email, mode) {
       console.error('[first-login] посилання не отримали:', e && e.message);
     }
   }
-  await sendFirebaseLetter(email);
-  return { via: 'firebase', why, mailStatus };
+  // ЗАПАСНИЙ ШЛЯХ НЕ МАЄ ПРАВА ВАЛИТИ ЗАПИТ.
+  //
+  // Було: `await sendFirebaseLetter(email)` без нічого. Поки Brevo
+  // мовчав, а Firebase слав — усе виглядало добре. Але щойно не стало
+  // й другого, виключення пішло вгору, і на екран вилетіла 500.
+  //
+  // Найгірше в тому падінні — що воно з'їдало саме ту причину, заради
+  // якої все й затівалося: `why` і `mailStatus` уже були в руках, але
+  // до відповіді не доходили, і в консолі лишалася гола 500 без натяку,
+  // що почалося все з Brevo.
+  //
+  // Тепер обидві причини повертаються нагору, а рішення, що з ними
+  // робити, ухвалює той, хто бачить запит цілком.
+  try {
+    await sendFirebaseLetter(email);
+    return { via: 'firebase', why, mailStatus };
+  } catch (e) {
+    const fbWhy = e && e.message || 'лист не надіслано';
+    console.error('[first-login] і запасний лист не пішов:', fbWhy);
+    return { via: 'none', why, mailStatus, fbWhy };
+  }
+}
+
+// Обидва поштарі мовчать — і причини в них різні.
+//
+// «Спробуйте за хвилину» тут була б неправдою: TOO_MANY_ATTEMPTS —
+// це не збій, а лічильник, і хвилина його не скидає. Людина натисне
+// ще раз, отримає те саме й вирішить, що портал зламаний, — хоча
+// треба було просто зачекати.
+function mailFailure(sentBy) {
+  const throttled = /TOO_MANY_ATTEMPTS|QUOTA_EXCEEDED|RESET_PASSWORD_EXCEED/i
+    .test(sentBy.fbWhy || '');
+  return {
+    code: throttled ? 'too-many' : 'no-mail',
+    msg: throttled
+      ? 'Забагато спроб поспіль — Firebase тимчасово притримує листи на цю адресу. '
+        + 'Зачекайте пів години й спробуйте ще раз; уже надісланий раніше лист '
+        + 'при цьому лишається дійсним.'
+      : 'Списки школи прочитано, але жоден із поштових сервісів не прийняв лист. '
+        + 'Зверніться до адміністрації.'
+  };
 }
 
 // Пароль, якого ніхто не знає й не побачить: потрібен лише щоб акаунт
@@ -365,6 +404,15 @@ exports.handler = async (event) => {
     }
     stage = 'letter';
     const sentBy = await sendPasswordLetter(token, email, mode);
+    // Не пішло нічого — так і кажемо. Відповісти «sent: true» було б
+    // найгіршим із можливих варіантів: людина пішла б чекати лист,
+    // якого немає, і поверталася б до скриньки замість того, щоб
+    // подзвонити в школу.
+    if (sentBy.via === 'none') {
+      const f = mailFailure(sentBy);
+      return fail(502, f.msg, origin,
+        { code: f.code, why: sentBy.why, mailStatus: sentBy.mailStatus });
+    }
     return ok({ sent: true, hadAccount, via: sentBy.via,
                 why: sentBy.why, mailStatus: sentBy.mailStatus }, origin);
   } catch (e) {
