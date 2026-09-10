@@ -135,6 +135,19 @@ export async function getStudentDir(cls, force){
 export function invalidateStudentDir(cls){ if(cls) delete _stuDir[cls]; else Object.keys(_stuDir).forEach(k=>delete _stuDir[k]); }
 window.invalidateStudentDir = invalidateStudentDir;
 
+// ── КЛЮЧ ПРЕДМЕТА В БАЗІ ────────────────────────────────────────
+//
+// Назва предмета стає ключем у Firebase, а там заборонені . # $ [ ] і — 
+// найпідступніше — «/», бо це роздільник шляху. Назва «Українська
+// мова/Читання» без очищення розривала запис на два рівні, і дані ставали
+// невидимими (див. РЕВІЗІЯ-4).
+//
+// Функція жила в curriculum.js як window.subjKey, а половина коду мала
+// власні копії регулярки — і половина копій була НЕПОВНОЮ, без «/».
+// Тепер джерело одне.
+export function subjKey(s){ return String(s||'').replace(/[.#$[\]/]/g,'_').trim(); }
+window.subjKey = subjKey;
+
 // ── КЕШ parent_links ────────────────────────────────────────────
 //
 // Вузол читався ЦІЛКОМ у дев'яти місцях: кабінет учителя, чотири екрани
@@ -1345,9 +1358,11 @@ export function nextLessonDate(schedule, subject, from, skipDates, horizon){
 // лишається мініатюрою, документ стає посиланням із назвою й іконкою.
 const HW_DOC_ICON={doc:'📄',docx:'📄',xls:'📊',xlsx:'📊',csv:'📊'};
 
-// Ключ предмета в textbooks/{клас} — «безпечний», з заміненими крапками.
+// Ключ предмета в textbooks/{клас} — через спільну subjKey. Раніше тут
+// була власна копія регулярки БЕЗ «/», тож підручники предметів на кшталт
+// «Українська мова/Читання» лягали на рівень глибше й не знаходилися.
 export function booksForSubject(allBooks,subject){
-  const k=String(subject||'').replace(/[.#$[\]]/g,'_');
+  const k=subjKey(subject);
   const node=(allBooks||{})[k];
   return node?Object.values(node).filter(b=>b&&b.url&&b.title):[];
 }
