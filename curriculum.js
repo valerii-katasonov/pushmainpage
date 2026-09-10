@@ -7,8 +7,8 @@
 // physically grouped in the original script).
 // XLSX comes from the CDN <script> tag already in <head> (global).
 // ═══════════════════════════════════════════════════════════════
-import { ref, set, get, child, update } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, auth, getActiveClass, currentUserData, showToast, localDateString, escHtml, teacherAccessMatrix, withTeachingRole, syncStaffCard, isBreakItem, isTeacherRole, isMasterTeacher } from './common.js';
+import { ref, set, get, child, update, remove } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+import { db, auth, getActiveClass, currentUserData, showToast, localDateString, escHtml, teacherAccessMatrix, withTeachingRole, syncStaffCard, isBreakItem, isTeacherRole, isMasterTeacher, escJs, logAction, subjKey } from './common.js';
 
 let parsedCurriculum=null;        // після парсингу xlsx
 const MAX_TOPICS=250;             // стеля на предмет: захист від зіпсованого файлу
@@ -18,7 +18,6 @@ const MAX_TOPICS=250;             // стеля на предмет: захис�
 export let availableTopicsCache={};
 let currentClassTeacherEmail=null;
 // Helper: безпечний ключ предмету
-window.subjKey=function(s){return (s||'').replace(/[.#$[\]/]/g,'_').trim();};
 // Helper: Excel serial → ISO дата
 function excelDateToISO(val){
   if(val instanceof Date) return val.toISOString().slice(0,10);
@@ -482,7 +481,7 @@ window.saveCurriculumToDb=async function(){
     let trimmedWarnings=[];
     for(let sheetName in parsedCurriculum.sheets){
       const s=parsedCurriculum.sheets[sheetName];
-      const sk=window.subjKey(s.meta.subject);
+      const sk=subjKey(s.meta.subject);
       let topicsToSave=s.topics;
       if(topicsToSave.length>MAX_TOPICS){
         const cut=topicsToSave.length-MAX_TOPICS;
@@ -494,19 +493,44 @@ window.saveCurriculumToDb=async function(){
         uploadedBy:auth.currentUser.uid,
         uploadedAt:localDateString
       });
-      // Зберігаємо існуючі hoursUsed якщо план перезавантажують
+      // ПЕРЕНОСИМО ВИТРАЧЕНІ ГОДИНИ — СПЕРШУ ЗА НАЗВОЮ, ПОТІМ ЗА НОМЕРОМ.
+      //
+      // Раніше зіставлення йшло ЛИШЕ за номером уроку. Через це найчастіша
+      // правка плану — вставити забуту тему в середину — тихо ламала облік:
+      // номери всіх наступних тем зсувалися на одиницю, і години сідали на
+      // сусідні теми. Учитель бачив, що «Додавання» раптом пройдено на
+      // третину, а «Віднімання» — взагалі з нуля.
+      //
+      // Назва теми зсуву не має. Тому головне зіставлення — за нею, а
+      // номер лишається запасним: для перейменованих тем і для планів, де
+      // назви повторюються.
       const existSnap=await get(ref(db,`curriculum_plans/${cls}/${sk}/topics`));
       const existing=existSnap.exists()?existSnap.val():{};
-      const existByLesson={};
-      for(let id in existing) existByLesson[existing[id].lessonNum]={id,hoursUsed:existing[id].hoursUsed||0};
+      const existByLesson={}, existByTitle={};
+      const norm = s => String(s||'').replace(/\s+/g,' ').trim().toLowerCase();
+      for(let id in existing){
+        const t=existing[id]||{};
+        const hu=t.hoursUsed||0;
+        existByLesson[t.lessonNum]={id,hoursUsed:hu};
+        const key=norm(t.title);
+        // Якщо назва повторюється, за нею зіставляти не можна — лишаємо
+        // мітку, щоб такі теми пішли запасним шляхом, за номером.
+        if(key) existByTitle[key] = (key in existByTitle) ? null : {id,hoursUsed:hu};
+      }
       // Останній рубіж: навіть якщо крізь розбір пройшло щось нечислове,
       // до бази воно не потрапить. Firebase відхиляє NaN цілим записом,
       // тож один зіпсований рядок інакше губить увесь план.
       const safeTopics = repairTopics(topicsToSave);
       const newTopics={};
+      // Назву використали — більше нікому її не віддаємо: інакше дві теми
+      // з однаковим текстом забрали б ті самі години двічі.
+      const takenTitles=new Set();
       safeTopics.forEach((t,idx)=>{
         const id=`t_${t.lessonNum}_${idx}`;
-        const prevHU=existByLesson[t.lessonNum]?.hoursUsed||0;
+        const key=norm(t.title);
+        const byTitle=(key && !takenTitles.has(key)) ? existByTitle[key] : null;
+        if(byTitle) takenTitles.add(key);
+        const prevHU=(byTitle || existByLesson[t.lessonNum])?.hoursUsed||0;
         newTopics[id]={...t,hoursUsed:Math.min(prevHU,t.plannedHours)};
       });
       await set(ref(db,`curriculum_plans/${cls}/${sk}/topics`),newTopics);
@@ -646,7 +670,7 @@ export async function populateTopicSelector(){
     [1,2].forEach(slot=>applyTopicToSlot(slot,null));
     return;
   }
-  const sk=window.subjKey(subj);
+  const sk=subjKey(subj);
   const snap=await get(ref(db,`curriculum_plans/${cls}/${sk}/topics`));
   availableTopicsCache={};
   let totalTopics=0;let coveredTopics=0;
@@ -707,7 +731,7 @@ async function loadSavedTopicForLesson(){
   const subj=document.getElementById('t-subject')?document.getElementById('t-subject').value:'';
   const date=document.getElementById('global-date').value;
   if(!subj)return;
-  const sk=window.subjKey(subj);
+  const sk=subjKey(subj);
   const snap=await get(ref(db,`lesson_topics/${cls}/${sk}/${date}`));
   if(!document.getElementById('t-topic-list-1'))return;
   // Normalize every legacy shape (plain string / single {topicId}|{customText} record)
@@ -942,12 +966,24 @@ async function fillSubjectSelect(cls){
   onCurrSubjectChange();
 }
 
+
+// Редактор плану оновлюємо ЛИШЕ коли він розгорнутий. Без цього виходив
+// той самий узор, на якому портал спотикався вже двічі: людина міняє
+// предмет, а на екрані лишається план попереднього. Ознака відкритості —
+// видимість вузла, а не окрема змінна: так стан не може розійтися з тим,
+// що людина бачить.
+function refreshPlanEditorIfOpen(){
+  const box=document.getElementById('plan-editor');
+  if(box && box.offsetParent!==null && window.renderPlanEditor) window.renderPlanEditor();
+}
+
 window.onCurrSubjectChange = function(){
   const sel = document.getElementById('curr-subject');
   const other = document.getElementById('curr-subject-other');
   const warn = document.getElementById('curr-subject-warn');
   if(other) other.style.display = (sel && sel.value === '__other__') ? 'block' : 'none';
   const subj = chosenSubject();
+  refreshPlanEditorIfOpen();
   if(warn){
     // Назва не з розкладу — найчастіша причина «теми не показуються»
     const off = subj && scheduleSubjects.length
@@ -1087,6 +1123,7 @@ window.onCurrDirClassChange=function(){
   const cls=currClass();
   uploadAccess.cls=cls;
   loadCurrentCurriculumDisplay();
+  refreshPlanEditorIfOpen();
   warnIfNoSchedule(cls);
   // ЦЬОГО РЯДКА БРАКУВАЛО. Список предметів заповнювався один раз при
   // відкритті картки — для того класу, що стояв першим. Директор обирав
@@ -1111,3 +1148,156 @@ setTimeout(()=>{
     setTimeout(loadClassTeacherInfo,500);
   }
 },1500);
+
+// ══════════════════════════════════════════════════════════════════
+//  РЕДАГУВАННЯ КАЛЕНДАРНОГО ПЛАНУ ПО ОДНІЙ ТЕМІ
+// ══════════════════════════════════════════════════════════════════
+//
+// НАВІЩО. Досі план можна було тільки завантажити файлом цілком. Щоб
+// виправити описку в назві теми чи додати забуту, доводилося правити
+// Excel і заливати наново — на весь предмет. Це довго, а головне ризиковано:
+// перезавантаження зачіпає всі теми предмета одразу.
+//
+// ЩО НЕ ЧІПАЄМО. Витрачені години (hoursUsed) редагуванню не підлягають:
+// вони рахуються від реальних уроків, і правити їх руками означало б
+// розсинхронити план із журналом. Змінити можна назву, кількість
+// запланованих годин і склад тем.
+//
+// ПРАВА. Ті самі, що на завантаження плану, — картка живе всередині того
+// самого блоку, який показується лише тим, кому можна.
+
+// Куди пишемо: клас і «безпечний» ключ предмета.
+function planPath(){
+  const cls = currClass();
+  const subj = chosenSubject();
+  if(!cls || !subj) return null;
+  // subjKey, а не власна копія регулярки: завантаження плану рахує ключ
+  // саме нею. Дві однакові з вигляду регулярки — це те, що рано чи пізно
+  // розходиться, і тоді редактор писав би в сусідній вузол, а вчитель
+  // бачив би, що правки «не зберігаються».
+  return { cls, subj, sk: subjKey(subj) };
+}
+
+export async function renderPlanEditor(){
+  const box = document.getElementById('plan-editor');
+  if(!box) return;
+  const p = planPath();
+  if(!p){ box.innerHTML = '<p class="empty-msg">Спершу оберіть клас і предмет вище.</p>'; return; }
+  box.innerHTML = '<p class="empty-msg">Завантаження...</p>';
+  try{
+    const snap = await get(ref(db, `curriculum_plans/${p.cls}/${p.sk}/topics`));
+    const topics = snap.exists() ? (snap.val() || {}) : {};
+    const rows = Object.entries(topics)
+      .sort((a,b) => (a[1].lessonNum||0) - (b[1].lessonNum||0));
+
+    box.innerHTML = `
+      <div class="pe-head">${escHtml(p.subj)} · ${escHtml(String(p.cls).replace('class_',''))} клас
+        <span>${rows.length} тем</span></div>
+      ${rows.length ? rows.map(([id,t]) => {
+        const hu = t.hoursUsed || 0;
+        return `
+        <div class="pe-row" id="pe-${escHtml(id)}">
+          <input type="number" class="pe-num" value="${escHtml(t.lessonNum||0)}" min="1" title="№ уроку">
+          <input type="text" class="pe-title" value="${escHtml(t.title||'')}" placeholder="Назва теми">
+          <input type="number" class="pe-hours" value="${escHtml(t.plannedHours||1)}" min="1" title="Годин за планом">
+          <span class="pe-used" title="Витрачено — рахується від уроків, вручну не змінюється">${hu} вик.</span>
+          <button type="button" class="pe-save" onclick="savePlanTopic('${escJs(id)}')">💾</button>
+          <button type="button" class="pe-del" onclick="deletePlanTopic('${escJs(id)}','${escJs(t.title||'')}',${hu})">✕</button>
+        </div>`;
+      }).join('') : '<p class="empty-msg">У цього предмета ще немає плану. Завантажте файл вище.</p>'}
+      <div class="pe-add">
+        <input type="number" id="pe-new-num" placeholder="№" min="1" style="width:70px;">
+        <input type="text" id="pe-new-title" placeholder="Назва нової теми">
+        <input type="number" id="pe-new-hours" placeholder="год." min="1" value="1" style="width:70px;">
+        <button type="button" onclick="addPlanTopic()">➕ Додати</button>
+      </div>
+      <p class="pe-hint">«вик.» — скільки годин теми вже відпрацьовано на уроках.
+         Це рахується автоматично й редагуванню не підлягає.</p>`;
+  }catch(e){
+    console.error('Редактор плану:', e);
+    box.innerHTML = `<p class="empty-msg" style="color:var(--red);">Не вдалося завантажити: ${escHtml(e.message||'')}</p>`;
+  }
+}
+window.renderPlanEditor = renderPlanEditor;
+
+
+// Чи є вже тема з таким номером уроку. Не забороняємо — попереджаємо:
+// у плані буває два записи на один урок, і рішення тут за вчителем.
+// Але мовчки плодити однакові номери теж не можна: список сортується
+// саме за ними, і два «№ 3» виглядають як помилка портала.
+async function warnDuplicateNum(p, lessonNum, exceptId){
+  try{
+    const snap = await get(ref(db, `curriculum_plans/${p.cls}/${p.sk}/topics`));
+    const all = snap.exists() ? (snap.val() || {}) : {};
+    const clash = Object.entries(all)
+      .filter(([id,t]) => id !== exceptId && (t.lessonNum|0) === (lessonNum|0))
+      .map(([,t]) => t.title);
+    if(!clash.length) return true;
+    return confirm(`Урок № ${lessonNum} уже зайнятий темою «${clash[0]}».\n\n`
+      + 'Це буває, коли на один урок припадає дві теми. Продовжити?');
+  }catch(e){ return true; }   // не змогли перевірити — не заважаємо працювати
+}
+
+window.savePlanTopic = async function(id){
+  const p = planPath(); if(!p) return;
+  const row = document.getElementById('pe-' + id); if(!row) return;
+  const title = row.querySelector('.pe-title').value.trim();
+  // Обмежуємо знизу. HTML min="1" підказує, але не заважає ввести -5
+  // вручну чи вставити з буфера, а від'ємні години ламають і сортування,
+  // і смужку прогресу.
+  const lessonNum = Math.max(1, parseInt(row.querySelector('.pe-num').value, 10) || 1);
+  const plannedHours = Math.max(1, parseInt(row.querySelector('.pe-hours').value, 10) || 1);
+  if(!title) return showToast('⚠️ Назва теми не може бути порожньою');
+  if(!await warnDuplicateNum(p, lessonNum, id)) return;
+  try{
+    // update, а не set: hoursUsed лишається таким, яким його порахували уроки.
+    await update(ref(db, `curriculum_plans/${p.cls}/${p.sk}/topics/${id}`),
+      { title, lessonNum, plannedHours });
+    logAction('curriculum', { cls:p.cls, subject:p.subj, value:`правка теми: ${title}` });
+    showToast('✅ Тему збережено');
+    renderPlanEditor();
+    if(window.populateTopicSelector) window.populateTopicSelector();
+  }catch(e){ alert('Не вдалося зберегти: ' + e.message); }
+};
+
+window.deletePlanTopic = async function(id, title, hoursUsed){
+  const p = planPath(); if(!p) return;
+  // Тема з відпрацьованими годинами — це вже частина історії уроків.
+  // Попереджаємо окремо: після видалення теми уроки, де вона стояла,
+  // лишаться без назви теми.
+  const warn = hoursUsed > 0
+    ? `\n\nУВАГА: за цією темою вже відпрацьовано ${hoursUsed} год. Уроки, `
+      + `де вона вказана, лишаться без теми.`
+    : '';
+  if(!confirm(`Видалити тему «${title}»?${warn}`)) return;
+  try{
+    await remove(ref(db, `curriculum_plans/${p.cls}/${p.sk}/topics/${id}`));
+    logAction('curriculum', { cls:p.cls, subject:p.subj, value:`видалено тему: ${title}` });
+    showToast('🗑️ Тему видалено');
+    renderPlanEditor();
+    if(window.populateTopicSelector) window.populateTopicSelector();
+  }catch(e){ alert('Не вдалося видалити: ' + e.message); }
+};
+
+window.addPlanTopic = async function(){
+  const p = planPath(); if(!p) return;
+  const title = document.getElementById('pe-new-title').value.trim();
+  const lessonNum = Math.max(0, parseInt(document.getElementById('pe-new-num').value, 10) || 0);
+  const plannedHours = Math.max(1, parseInt(document.getElementById('pe-new-hours').value, 10) || 1);
+  if(!title) return showToast('⚠️ Введіть назву теми');
+  if(!lessonNum) return showToast('⚠️ Вкажіть номер уроку');
+  if(!await warnDuplicateNum(p, lessonNum, null)) return;
+  try{
+    // Ключ у тому ж вигляді, що й у завантаженні файлу, — щоб теми з
+    // обох джерел виглядали однаково й сортувалися разом.
+    const id = `t_${lessonNum}_${Date.now().toString(36)}`;
+    await set(ref(db, `curriculum_plans/${p.cls}/${p.sk}/topics/${id}`),
+      { title, lessonNum, plannedHours, hoursUsed: 0 });
+    logAction('curriculum', { cls:p.cls, subject:p.subj, value:`додано тему: ${title}` });
+    showToast('✅ Тему додано');
+    document.getElementById('pe-new-title').value = '';
+    document.getElementById('pe-new-num').value = '';
+    renderPlanEditor();
+    if(window.populateTopicSelector) window.populateTopicSelector();
+  }catch(e){ alert('Не вдалося додати: ' + e.message); }
+};
