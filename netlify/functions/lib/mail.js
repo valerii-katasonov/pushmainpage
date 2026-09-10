@@ -144,10 +144,13 @@ async function sendMail(to, letter) {
     });
     if (r.ok) return { sent: true };
     const body = await r.text().catch(() => '');
-    // Найчастіша причина — адресу відправника не підтверджено в Brevo.
-    return { sent: false, why: `brevo ${r.status}: ${body.slice(0, 200)}` };
+    // Код віддаємо окремо від тексту. Текст іде лише в лог функції —
+    // у ньому буває адреса відправника, — а голий номер відповіді можна
+    // показати й у консолі порталу: він нічого не розкриває, зате
+    // одразу каже, що саме лагодити.
+    return { sent: false, status: r.status, why: `brevo ${r.status}: ${body.slice(0, 200)}` };
   } catch (e) {
-    return { sent: false, why: 'brevo: ' + (e && e.message || 'немає звʼязку') };
+    return { sent: false, status: 0, why: 'brevo: ' + (e && e.message || 'немає звʼязку') };
   }
 }
 
