@@ -30,6 +30,7 @@
 const crypto = require('crypto');
 
 const ALLOWED_HOSTS = ['planlekcjipush.netlify.app', 'localhost', '127.0.0.1'];
+const PROJECT_ID = 'test-4eb3e';
 const DB = 'https://test-4eb3e-default-rtdb.europe-west1.firebasedatabase.app';
 const IDT = 'https://identitytoolkit.googleapis.com/v1';
 const WEB_API_KEY = process.env.FIREBASE_WEB_API_KEY || 'AIzaSyA3OA9pcR1zscUtEPWD8LEKTKonAN5Y90c';
@@ -111,7 +112,9 @@ async function listAllUsers(token){
   const out = [];
   let pageToken = '';
   for(let i = 0; i < MAX_PAGES; i++){
-    const r = await fetch(`${IDT}/projects/-/accounts:batchGet?maxResults=${PAGE}`
+    // projects/{projectId}, а не projects/-: «-» розуміє лише емулятор,
+    // живий сервіс на нього відповідає помилкою.
+    const r = await fetch(`${IDT}/projects/${PROJECT_ID}/accounts:batchGet?maxResults=${PAGE}`
       + (pageToken ? `&nextPageToken=${encodeURIComponent(pageToken)}` : ''), {
       headers: { Authorization: 'Bearer ' + token }
     });
