@@ -18,7 +18,7 @@
 import { ref, get, child, query, orderByKey, startAt, endAt }
   from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { db, currentUserData, getActiveClass, escHtml, escJs, mondayOf, localDateString,
-         renderHwItem, booksForSubject, nextLessonDate, dayNamesUA, dayKeys }
+         renderHwItem, booksForSubject, nextLessonDate, dayNamesUA, dayKeys, subjKey }
   from './common.js';
 import { topicNames } from './parent-student.js';
 import { ACTIVE_YEAR } from './director.js';
@@ -154,7 +154,7 @@ export async function renderHwWeekView(boxId, weekStart){
       // ТЕМА УРОКУ поруч із завданням. Батько питає не лише «що робити»,
       // а й «що вони проходили» — без цього допомогти важко.
       // Ключ предмета в lesson_topics «безпечний»: крапки й слеші замінені.
-      const sk2 = String(subj).replace(/[.#$[\]/]/g,'_').trim();
+      const sk2 = subjKey(subj);
       const topic = topicNames((topics[sk2]||{})[ds], plans[sk2]);
       const topicTxt = topic
         ? `<div class="hw-topic"><b>Тема уроку:</b> ${escHtml(topic)}</div>` : '';
