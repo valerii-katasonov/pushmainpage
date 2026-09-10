@@ -5,7 +5,7 @@
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, update } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { ACTIVE_YEAR } from './director.js';
-import { db, getActiveClass, currentUserData, displayGrade, gradeClass6, calculateStudentWeightedAvg, getClassNum, LEVEL_MAX_CLASS, GRADE_WEIGHTS, dayKeys, dayNamesUA, showToast, localDateString, summarizeAttendanceSlots, gradeTypesCache, escJs, escHtml, notifyEvent, logAction, getUserRoles, getUsersSnap, stuName, gradeWritePaths, isBreakItem, insertSlot, removeSlot, makeBreak, withBreaks, slotBounds, hhmmFromMins } from './common.js';
+import { db, getActiveClass, currentUserData, displayGrade, gradeClass6, calculateStudentWeightedAvg, getClassNum, LEVEL_MAX_CLASS, GRADE_WEIGHTS, dayKeys, dayNamesUA, showToast, normalizeTimeRange, localDateString, summarizeAttendanceSlots, gradeTypesCache, escJs, escHtml, notifyEvent, logAction, getUserRoles, getUsersSnap, stuName, gradeWritePaths, isBreakItem, insertSlot, removeSlot, makeBreak, withBreaks, slotBounds, hhmmFromMins } from './common.js';
 
 // Позначка складання: видно в рядку стану матриці. Якщо після викладення
 // вона не змінилася — браузер працює зі старим файлом, і шукати помилку
@@ -1092,7 +1092,7 @@ window.insertMatrixRow = async function(where, what){
     if(name === null) return;
     const t = prompt('Час (напр. 11:35 - 11:55). Можна лишити порожнім:', time);
     if(t === null) return;
-    slot = [ makeBreak(t.trim(), name.trim() || 'Перерва') ];
+    slot = [ makeBreak(normalizeTimeRange(t), name.trim() || 'Перерва') ];
   }
   await writeDay(clsId, day, insertSlot(cur, at, slot));
   closeEditCellModal();
@@ -1128,7 +1128,7 @@ window.autoBreaksForDay = async function(){
 window.closeEditCellModal=function(){document.getElementById('edit-cell-modal').style.display='none';};
 window.saveMatrixCell=async function(){
   const clsId=document.getElementById('cell-edit-class').value;const ri=parseInt(document.getElementById('cell-edit-row').value);const sis=document.getElementById('cell-edit-subindex').value;const day=document.getElementById('matrix-day-select').value;
-  const type=document.getElementById('cell-type-select').value;const subj=document.getElementById('cell-subj-ua').value.trim();const time=document.getElementById('cell-time').value.trim();const num=type==='break'?'':document.getElementById('cell-number').value.trim();
+  const type=document.getElementById('cell-type-select').value;const subj=document.getElementById('cell-subj-ua').value.trim();const time=normalizeTimeRange(document.getElementById('cell-time').value);   /* «13:55-14:40» і «13:55 - 14:40» — той самий урок. Різнобій у базі колись зламав кабінет 5 класу: кінець уроку не розбирався, і день «закінчувався» за останньою перервою. */const num=type==='break'?'':document.getElementById('cell-number').value.trim();
   const ts=document.getElementById('cell-teacher-select');const te=type==='break'?'':ts.value;const tn=te?ts.options[ts.selectedIndex].text.split(' (')[0]:'';
   let ed=null;if(type==='extra'){const fmt=document.getElementById('cell-extra-format').value;ed={format:fmt};if(fmt==='individual')ed.student=document.getElementById('extra-ind-student').value;else{ed.groupType=document.getElementById('extra-group-type').value;const opts=ed.groupType==='classes'?document.getElementById('extra-group-classes').selectedOptions:document.getElementById('extra-group-students').selectedOptions;ed[ed.groupType==='classes'?'classes':'students']=Array.from(opts).map(o=>o.value);}}
   const nc={number:num,time,subject:{ua:subj,pl:subj},teacherEmail:te,teacherName:tn,type,extraData:ed};
