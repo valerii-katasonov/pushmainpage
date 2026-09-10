@@ -13,7 +13,7 @@
 // bindings. Everything else uses normal export/import.
 // ═══════════════════════════════════════════════════════════════
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, updatePassword, sendPasswordResetEmail, verifyPasswordResetCode, confirmPasswordReset, onAuthStateChanged, signOut, deleteUser } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, updatePassword, sendPasswordResetEmail, verifyPasswordResetCode, confirmPasswordReset, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
 import { getMessaging, getToken, onMessage, isSupported as messagingSupported } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-messaging.js";
 import { getDatabase, ref, set, get, child, push, onValue, remove, update, query, orderByKey, startAt, endAt } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 
@@ -2151,7 +2151,6 @@ onAuthStateChanged(auth,async user=>{
       // Правильна відповідь тут одна: сказати як є. Пошта в школі відома,
       // дитини до неї не привʼязано — це виправляє класний керівник.
       if(!kids.length){
-        const wasNew = firstLoginJustCreated;
         firstLoginJustCreated = false;
         const say = () => {
           if(window.showLoginScreen){
@@ -2160,8 +2159,7 @@ onAuthStateChanged(auth,async user=>{
               + 'Зверніться до класного керівника — він додасть її за хвилину.');
           } else alert('Вашу пошту школа знає, але дитину до неї ще не привʼязано.');
         };
-        if(wasNew) await deleteUser(user).catch(()=>signOut(auth));
-        else await signOut(auth);
+        await signOut(auth);   // акаунт лишаємо — див. пояснення нижче
         say();
         return;
       }
@@ -2180,22 +2178,28 @@ onAuthStateChanged(auth,async user=>{
       //
       // Давній акаунт не чіпаємо: доступ могли відкликати тимчасово, і
       // видаляти його за людину ми не маємо права.
-      const created = firstLoginJustCreated;
+      // АКАУНТ НЕ ВИДАЛЯЄМО. Спершу я зробив навпаки — прибирав щойно
+      // створений акаунт, щоб людина не застрягла між «такий email вже
+      // існує» і «цей email ще не додано школою». Виявилося, що ліки
+      // гірші за хворобу, і от чому.
+      //
+      // Видалення знищує єдиний слід того, що сталося. Збоку виходить
+      // нерозв'язна картина: портал каже «акаунт уже існує», в
+      // Authentication порожньо, лист для відновлення не приходить —
+      // бо приходити нема на що. Людина й адміністратор гадають, а
+      // насправді акаунт створюється й зникає при кожній спробі.
+      // (Якщо натиснути двічі поспіль, друга спроба ще й потрапляє у
+      //  вікно між створенням і видаленням — звідси «вже існує».)
+      //
+      // Застрягання, заради якого це робилося, тепер розв'язане інакше:
+      // при «вже існує» портал сам пробує увійти введеним паролем, а
+      // «Забули пароль?» працює, бо акаунт на місці.
       firstLoginJustCreated = false;
-      const finish = () => {
-        if(window.showFirstLoginScreen){
-          window.showFirstLoginScreen();
-          setMsg('fl-error','Цей email ще не додано школою. Зверніться до класного керівника або директора.','login-err');
-        } else alert('Цей email ще не додано школою. Зверніться до класного керівника або директора.');
-      };
-      if(created){
-        deleteUser(user)
-          .catch(e => { console.warn('акаунт без доступу не прибрано:', e.message);
-                        return signOut(auth); })
-          .then(finish);
-      } else {
-        signOut(auth).then(finish);
-      }
+      await signOut(auth);
+      if(window.showFirstLoginScreen){
+        window.showFirstLoginScreen();
+        setMsg('fl-error','Цей email ще не додано школою. Зверніться до класного керівника або директора.','login-err');
+      } else alert('Цей email ще не додано школою. Зверніться до класного керівника або директора.');
     }}}}
   }else{
     document.getElementById('login-screen').style.display='block';
