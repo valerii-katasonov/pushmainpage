@@ -147,18 +147,31 @@ async function readDb(token, path) {
   return t === 'null' ? null : JSON.parse(t);
 }
 
+// ПРОЄКТ У ШЛЯХУ НАЗИВАЄМО ЯВНО.
+//
+// Тут стояло `projects/-`. Так пишуть для емулятора, і в документації
+// Identity Platform такого варіанта немає: шлях — projects/{projectId}.
+// Живий сервіс на «-» відповідає помилкою.
+//
+// Помітити це на стенді було неможливо: мережа підмінена, і підміна
+// однаково відповідала на будь-який шлях. Тому нижче в тестах тепер
+// перевіряється сама адреса запиту, а не лише результат.
 async function findUserByEmail(token, email) {
-  const r = await fetch(`${IDT}/projects/-/accounts:lookup`, {
+  const r = await fetch(`${IDT}/projects/${PROJECT_ID}/accounts:lookup`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
     body: JSON.stringify({ email: [email] })
   });
   const j = await r.json();
+  // Помилку не ковтаємо. Раніше будь-яка відмова виглядала як «акаунта
+  // немає», і функція йшла створювати другий — а справжня причина
+  // (немає прав, не той проєкт) не з'являлася ніде.
+  if (j.error) throw new Error('lookup: ' + (j.error.message || 'відмова'));
   return (j.users && j.users[0]) || null;
 }
 
 async function createUser(token, email, password) {
-  const r = await fetch(`${IDT}/projects/-/accounts`, {
+  const r = await fetch(`${IDT}/projects/${PROJECT_ID}/accounts`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
     body: JSON.stringify({ email, password, emailVerified: false })
@@ -296,8 +309,20 @@ exports.handler = async (event) => {
   try { sa = JSON.parse(raw); }
   catch (e) { return fail(503, 'Перевірка списків недоступна', origin, { code: 'no-service-account' }); }
 
+  // НА ЯКОМУ КРОЦІ ЗЛАМАЛОСЯ.
+  //
+  // Текст помилки людині показуємо загальний — і правильно. Але сьогодні
+  // це вилізло боком: «Не вдалося перевірити списки школи» бачили і тоді,
+  // коли списки якраз прочиталися, а впав наступний крок. Довелося
+  // здогадуватися.
+  //
+  // Тому поруч із загальним текстом віддаємо назву кроку. Це не таємниця
+  // (сюди доходить лише той, кого школа вже внесла) і не про конкретну
+  // людину — зате видно одразу, куди дивитися.
+  let stage = 'token';
   try {
     const token = await getAccessToken(sa);
+    stage = 'school-lists';
     const where = await knownToSchool(token, emailKey(email));
 
     // НЕ РОЗКРИВАЄМО ЗАЙВОГО. Якщо пошти в школі немає, відповідь одна
@@ -309,9 +334,11 @@ exports.handler = async (event) => {
         + 'або директора.', origin, { code: 'not-in-school' });
 
     // Пошта в школі є — тут уже можна говорити прямо: людина своя.
+    stage = 'lookup';
     const existing = await findUserByEmail(token, email);
     let hadAccount = !!existing;
     if (!existing) {
+      stage = 'create';
       try {
         await createUser(token, email, throwawayPassword());
       } catch (e) {
@@ -321,14 +348,20 @@ exports.handler = async (event) => {
         hadAccount = true;
       }
     }
+    stage = 'letter';
     const via = await sendPasswordLetter(token, email, mode);
     return ok({ sent: true, hadAccount, via }, origin);
   } catch (e) {
     // Подробиці — у лог функції, людині загальний текст. У повідомленні
     // помилки бази трапляється шлях вузла, і показувати його назовні
     // немає жодної причини.
-    console.error('[first-login]', e && e.message);
-    return fail(500, 'Не вдалося перевірити списки школи. Спробуйте за хвилину '
-      + 'або зверніться до адміністрації.', origin, { code: 'check-failed' });
+    console.error(`[first-login] крок ${stage}:`, e && e.message);
+    // Текст залежить від кроку: сказати «не вдалося перевірити списки»
+    // там, де списки вже прочитані, — гірше, ніж не сказати нічого.
+    const msg = stage === 'school-lists' || stage === 'token'
+      ? 'Не вдалося перевірити списки школи. Спробуйте за хвилину або зверніться до адміністрації.'
+      : 'Списки школи прочитано, але надіслати лист не вдалося. Спробуйте за хвилину '
+        + 'або зверніться до адміністрації.';
+    return fail(500, msg, origin, { code: 'check-failed', stage });
   }
 };
