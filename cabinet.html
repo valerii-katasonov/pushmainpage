@@ -686,7 +686,7 @@
               padding:12px 14px;background:none;border:0;cursor:pointer;text-align:left;font-family:inherit;}
     .hwd-mark{font-size:1.1rem;color:#b0bec5;flex:0 0 auto;}
     .hwd-row.done .hwd-mark{color:#2e7d32;font-weight:800;}
-    .hwd-name{flex:1;font-weight:700;font-size:.92rem;color:#37474f;}
+    .hwd-name{flex:1;min-width:0;overflow-wrap:anywhere;font-weight:700;font-size:.92rem;color:#37474f;}
     .hwd-sub{font-size:.68rem;background:#fff3e0;color:#e65100;border-radius:5px;padding:1px 6px;}
     .hwd-dbl{font-size:.66rem;background:#ede7f6;color:#5e35b1;border-radius:5px;padding:1px 5px;font-weight:400;}
     .hwd-state{font-size:.74rem;color:#90a4ae;}
@@ -695,7 +695,7 @@
     .hwd-body{padding:0 14px 13px 14px;border-top:1px dashed #eef2f7;}
     .hwd-body label{display:block;margin-top:9px;font-size:.8rem;color:#546e7a;font-weight:700;}
     .hwd-actions{display:flex;align-items:center;gap:10px;margin-top:11px;}
-    .hwd-dirty{flex:1;font-size:.76rem;color:#e65100;font-weight:700;}
+    .hwd-dirty{flex:1;min-width:0;font-size:.76rem;color:#e65100;font-weight:700;}
     .hwd-actions .qa-btn{width:auto;margin:0;padding:9px 16px;}
     .hwd-hint{font-size:.76rem;color:#90a4ae;margin-top:10px;}
     /* Вкладка «Домашні»: навігація по тижнях */
@@ -703,7 +703,7 @@
     .hw-nav button{width:auto;margin:0;padding:9px 15px;font-size:1.05rem;font-weight:800;
                    background:#eef5ff;color:#2b5aa8;border:1px solid #cfe0f5;border-radius:10px;cursor:pointer;}
     .hw-nav button:hover{background:#e2eeff;}
-    .hw-nav-mid{flex:1;text-align:center;line-height:1.25;}
+    .hw-nav-mid{flex:1;min-width:0;text-align:center;line-height:1.25;}
     .hw-nav-mid b{display:block;font-size:.95rem;color:#37474f;}
     .hw-nav-mid span{font-size:.76rem;color:#90a4ae;}
     .hw-today{width:100%;margin:0 0 12px 0;padding:8px;font-size:.8rem;
@@ -1473,6 +1473,40 @@
        відрізняти «пройдено рівно» від «повторювали»: перше нормально,
        друге варто помітити при звірці плану. */
     .topic-opt-blue{border-left:4px solid #29b6f6;background:#f0f9ff;color:#0277bd;}
+    /* Редактор календарного плану по темах */
+    .pe-head{font-weight:700;color:#0d47a1;font-size:.84rem;margin-bottom:8px;}
+    .pe-head span{font-weight:400;color:#78909c;font-size:.76rem;margin-left:6px;}
+    /* ПЕРЕНОС ОБОВ'ЯЗКОВИЙ.
+       Рядку потрібно щонайменше 371px, а на телефоні картці лишається
+       300–370px. Без переносу останні елементи — саме кнопки збереження
+       й видалення — виїжджали за екран, а html,body{overflow-x:hidden}
+       їх обрізав: натиснути неможливо. Та сама вада, що колись була в
+       таблицях кухні; тут вона з'явилася знову, бо рядок будувався
+       «в один рядок» за звичкою. */
+    .pe-row{display:flex;gap:5px;align-items:center;margin-bottom:5px;flex-wrap:wrap;}
+    .pe-row input{margin:0;padding:6px 8px;font-size:.8rem;border:1px solid #cfd8dc;border-radius:7px;}
+    .pe-num{width:56px;text-align:center;}
+    .pe-title{flex:1;min-width:90px;}
+    .pe-hours{width:60px;text-align:center;}
+    /* На вузькому екрані (і при збільшеному шрифті — тому в em) назва
+       займає свій рядок, а номер, години й кнопки стають під нею. */
+    @media (max-width:30em){
+      .pe-row{border-bottom:1px dashed #eceff1;padding-bottom:6px;}
+      .pe-title{flex:1 1 100%;order:-1;}
+      .pe-used{flex:1;text-align:left;}
+    }
+    .pe-used{font-size:.7rem;color:#90a4ae;white-space:nowrap;min-width:52px;text-align:right;}
+    .pe-row button{width:auto;margin:0;padding:6px 9px;font-size:.8rem;border-radius:7px;cursor:pointer;border:1px solid transparent;}
+    .pe-save{background:#e8f5e9;color:#1b5e20;border-color:#a5d6a7 !important;}
+    .pe-del{background:#ffebee;color:#b71c1c;border-color:#ef9a9a !important;}
+    .pe-add{display:flex;gap:5px;align-items:center;margin-top:10px;flex-wrap:wrap;
+            border-top:1px dashed #cfd8dc;padding-top:10px;}
+    .pe-add input{margin:0;padding:6px 8px;font-size:.8rem;border:1px solid #cfd8dc;border-radius:7px;}
+    .pe-add input[type=text]{flex:1;min-width:90px;}
+    @media (max-width:30em){ .pe-add input[type=text]{flex:1 1 100%;order:-1;} }
+    .pe-add button{width:auto;margin:0;padding:6px 12px;font-size:.8rem;
+                   background:#0d47a1;color:#fff;border-radius:7px;cursor:pointer;white-space:nowrap;}
+    .pe-hint{font-size:.72rem;color:#90a4ae;margin-top:8px;line-height:1.4;}
     .topic-opt-custom{border-left:4px solid #9575cd;font-style:italic;}
     /* ═══════════════════════════════════════════════════════
        RESPONSIVE — MOBILE / TABLET / DESKTOP
@@ -3122,6 +3156,15 @@
         <details style="margin-top:10px;">
           <summary style="cursor:pointer;color:#1565c0;font-size:.82rem;">📥 Поточний план у системі</summary>
           <div id="current-curriculum-display" style="margin-top:8px;font-size:.82rem;"></div>
+        </details>
+        <!-- РЕДАГУВАННЯ ПЛАНУ ПО ОДНІЙ ТЕМІ.
+             Досі виправити описку чи додати забуту тему можна було лише
+             перезаливкою всього файлу — а це ще й ризик зсунути години. -->
+        <details style="margin-top:10px;" ontoggle="if(this.open)renderPlanEditor()">
+          <summary style="cursor:pointer;color:#1565c0;font-size:.82rem;">✏️ Редагувати план по темах</summary>
+          <div id="plan-editor" style="margin-top:8px;">
+            <p class="empty-msg">Оберіть предмет вище.</p>
+          </div>
         </details>
       </div>
       </details>
