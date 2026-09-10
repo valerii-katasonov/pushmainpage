@@ -1528,13 +1528,29 @@ export function mealKeyIsName(){ return _mealKeyIsName; }
 // на дні. Тижневих поправок за раз небагато, тож слухати весь meal_day
 // класу не треба — беремо лише свою дитину.
 let mealUnsub = [];
-export async function listenMyMeals(){
+export function stopMyMeals(){
   mealUnsub.forEach(f => { try{ f(); }catch(e){} });
   mealUnsub = [];
+}
+window.stopMyMeals = stopMyMeals;
+
+// ЛІЧИЛЬНИК ПОКОЛІНЬ. Між зняттям старих підписок і створенням нових є
+// await: ключ дитини читається з бази. Батько з двома дітьми смикає
+// перемикач туди-сюди — і два виклики переплітаються так, що обидва
+// встигають «прибрати» порожній список, а потім обидва наповнюють його
+// своїми підписками. У кабінеті лишаються слухачі на харчування дитини,
+// яку вже не показують.
+//
+// Виправляється не блокуванням, а перевіркою: якщо поки ми читали ключ,
+// почався новіший виклик — цей мовчки виходить, нічого не підписавши.
+let mealGen = 0;
+export async function listenMyMeals(){
+  const gen = ++mealGen;
+  stopMyMeals();
   const cls = currentUserData?.class;
   if(!cls) return;
   const sid = await mealKey(cls);
-  if(!sid) return;
+  if(!sid || gen !== mealGen) return;
   const redraw = () => { try{ renderParentMenu(); }catch(e){} };
   [`meal_plan/${cls}/${sid}`].forEach(path => {
     try{ mealUnsub.push(onValue(ref(db, path), redraw,
