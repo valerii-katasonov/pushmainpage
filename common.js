@@ -4043,9 +4043,47 @@ window.submitFirstLogin=async function(ev){
 // видалення й повторне створення email+ролі в «Управлінні персоналом» пароль
 // не змінює — акаунт лишається зі старим паролем. Єдиний коректний шлях —
 // лист для відновлення (або скидання вручну у Firebase Console).
-export async function sendPasswordReset(rawEmail){
+// ЛИСТ СКЛАДАЄ НАШ СЕРВЕР, А НЕ FIREBASE.
+//
+// Firebase заблокував редагування шаблонів для цього проєкту, тому його
+// власний лист лишається англійським і веде на firebaseapp.com. Функція
+// first-login уміє те саме, але листом нашого вигляду й із посиланням на
+// портал, тож і скидання пароля йде через неї — інакше в школі ходили б
+// два різні листи про одну й ту саму дію.
+//
+// opts.silentUnknown — для екрана входу. Там не можна казати «такої
+// адреси в школі немає»: форма стала б способом перевіряти, чи вчиться
+// в школі така родина. Директору, навпаки, причину показуємо: він для
+// того й натискає.
+export async function sendPasswordReset(rawEmail, opts){
   const email=String(rawEmail||'').trim().toLowerCase();
   if(!email)throw new Error('Вкажіть email.');
+  const silentUnknown = !!(opts && opts.silentUnknown);
+  try{
+    const r = await fetch('/.netlify/functions/first-login', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ email, mode:'reset' })
+    });
+    if(r.ok) return email;
+    const d = await r.json().catch(()=>({}));
+    if(d.code === 'not-in-school'){
+      if(silentUnknown) return email;
+      throw new Error(d.error || 'Цієї адреси немає у списках школи.');
+    }
+    // 404 — функцію ще не викладено. Тоді працюємо як раніше: лист від
+    // Firebase негарний, але скидання пароля важливіше за вигляд.
+    if(r.status !== 404 && d.code !== 'no-service-account')
+      throw new Error(d.error || 'Не вдалося надіслати лист.');
+  }catch(e){
+    // Кидати далі треба лише свою помилку. Обрив звʼязку — привід
+    // спробувати запасний шлях, а не здаватися.
+    if(e && e.message && !/Failed to fetch|NetworkError|Load failed/i.test(e.message)) throw e;
+  }
+  // ── ЗАПАСНИЙ ШЛЯХ: лист від самого Firebase ──
+  // Сюди доходимо, лише якщо функція недоступна. Лист англійський і веде
+  // на firebaseapp.com, зате скидання пароля не залежить від того, чи
+  // все вже викладено.
+  //
   // continueUrl додає в лист кнопку «Продовжити», яка повертає людину на
   // портал. Але Firebase приймає його ЛИШЕ якщо домен є в
   // Authentication → Settings → Authorized domains, інакше кидає
@@ -4072,8 +4110,13 @@ export async function sendPasswordReset(rawEmail){
   return email;
 }
 // ══════════ СТОРІНКА ВСТАНОВЛЕННЯ НОВОГО ПАРОЛЯ ══════════
-// Працює, коли у Firebase Console → Authentication → Templates задано
-// "Customize action URL" на адресу цієї сторінки. Тоді посилання з листа веде
+// Наш власний лист веде сюди завжди: посилання будує сервер, підставляючи
+// адресу порталу замість адреси Firebase. Налаштування в консолі для
+// цього не потрібне — і добре, бо редагування шаблонів нам заблокували.
+//
+// Нижческазане стосується лише запасного шляху — листа від самого
+// Firebase. Він веде сюди, коли у Firebase Console → Authentication →
+// Templates задано "Customize action URL". Тоді посилання з листа веде
 // СЮДИ (з параметрами ?mode=resetPassword&oobCode=...), і людина взагалі не
 // потрапляє на сторінку Firebase — усе відбувається на порталі, українською.
 // Поки custom action URL не налаштований, цей код просто не спрацьовує.
@@ -4135,7 +4178,7 @@ window.requestPasswordReset=async function(){
     return;
   }
   try{
-    await sendPasswordReset(email);
+    await sendPasswordReset(email, { silentUnknown:true });
     // Нейтральне формулювання: Firebase із захистом від перебору не повідомляє,
     // чи існує акаунт, тому не стверджуємо це і ми.
     setMsg('login-hint',`📧 Якщо акаунт із адресою <b>${escHtml(email)}</b> існує, ми надіслали на неї лист для встановлення нового пароля.<br><span style="font-size:.76rem;">Перевірте також папку «Спам». Лист дійсний обмежений час.</span>`,'login-hint');
