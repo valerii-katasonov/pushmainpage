@@ -5,7 +5,7 @@
 // lives in teacher.js).
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, getActiveClass, currentUserData, STICKER_GOAL, stickerGoal, getWeekDates, displayGrade, gradeClass6, showToast, renderHwItem, renderHwList, dayKeys, dayNamesUA, isBreakItem, localDateString, formatAttendanceSlotLabel, renderGradeFormulaInfo, escJs, escHtml, safeUrl, renderBirthdays, stuName, auth, normalizeChildren, gradesFromMirror, mondayOf, altChoiceFor, resolveAlt, classHourItem, insertAtTime, minsOf, subjKey } from './common.js';
+import { db, getActiveClass, currentUserData, STICKER_GOAL, stickerGoal, getWeekDates, displayGrade, gradeClass6, showToast, renderHwItem, renderHwList, dayKeys, dayNamesUA, isBreakItem, parseTimeRange, fmtTimeRange, localDateString, formatAttendanceSlotLabel, renderGradeFormulaInfo, escJs, escHtml, safeUrl, renderBirthdays, stuName, auth, normalizeChildren, gradesFromMirror, mondayOf, altChoiceFor, resolveAlt, classHourItem, insertAtTime, minsOf, subjKey } from './common.js';
 import { ACTIVE_YEAR } from './director.js';
 import { renderParentMenu } from './kitchen.js';
 import { renderNewsFeed } from './news.js';
@@ -20,7 +20,7 @@ export let parentLessonInterval=null;
 // Мітка збірки. Потрібна не для краси: коли людина каже «не полагодилося»,
 // перше питання — чи виїхала взагалі нова версія. Рядок у консолі
 // відповідає на нього за секунду.
-export const PS_BUILD = '2026-09-10 · розклад v2 (уроки без часу, пояснення переходу на завтра)';
+export const PS_BUILD = '2026-09-10 · розклад v3 (час без пробілів навколо дефіса)';
 console.info('[Push School] parent-student.js —', PS_BUILD);
 
 const SELF_REPORT_SLOT='all';
@@ -92,7 +92,11 @@ function buildDynamicSchedule(schedule,dayName,isToday,dateStr){
       // Урок передаємо в altChoiceFor: вибір шукається за парою предметів,
       // і без самого уроку пару не дізнатися.
       const r = week ? resolveAlt(l, altChoiceFor(week, dayName, slotIdx, l)) : resolveAlt(l, '');
-      out.push({ ...r, _slot:slotIdx, _break:isBreakItem(r), _noTime:!r.time });
+      // _noTime — саме «час не читається», а не «рядок порожній»: після
+      // терпимого розбору порожнє і «14:00 приблизно» для нас однакові —
+      // ні там, ні там немає меж уроку.
+      out.push({ ...r, _slot:slotIdx, _break:isBreakItem(r),
+                 _noTime: parseTimeRange(r.time).start == null });
     });
   });
   // Класна година живе окремо від розкладу — розклад цілком перезаписує
@@ -250,10 +254,9 @@ export function renderDayTopics(prefix, dateStr){
 export function lastEndLabel(lessons){
   let last = 0;
   (lessons || []).forEach(l => {
-    const end = String(l && l.time || '').split(' - ')[1];
-    if(!end) return;
-    const [h, m] = end.split(':').map(Number);
-    if(!isNaN(h) && !isNaN(m)) last = Math.max(last, h*60 + m);
+    const { end } = parseTimeRange(l && l.time);
+    if(end == null) return;
+    last = Math.max(last, end);
   });
   return last ? `${String(Math.floor(last/60)).padStart(2,'0')}:${String(last%60).padStart(2,'0')}` : '—';
 }
@@ -262,17 +265,14 @@ export function dayIsOver(lessons, currentMins){
   const list = lessons || [];
   let last = 0, lastIdx = -1;
   list.forEach((l, i) => {
-    const end = String(l && l.time || '').split(' - ')[1];
-    if(!end) return;
-    const [h, m] = end.split(':').map(Number);
-    if(isNaN(h) || isNaN(m)) return;
-    const mins = h * 60 + m;
-    if(mins >= last){ last = mins; lastIdx = i; }
+    const { end } = parseTimeRange(l && l.time);
+    if(end == null) return;
+    if(end >= last){ last = end; lastIdx = i; }
   });
   if(!last) return false;          // часу не знаємо — не вгадуємо
   // Перерва без часу нічого не означає — рахуємо лише уроки.
   const tailUntimed = list.slice(lastIdx + 1)
-    .some(l => l && !l._break && !String(l.time || '').includes(':'));
+    .some(l => l && !l._break && parseTimeRange(l.time).end == null);
   if(tailUntimed) return false;
   return currentMins >= last;
 }
@@ -375,7 +375,7 @@ function renderDynamicSchedule(role='parent'){
   let num = 0;                      // нумеруємо ЛИШЕ уроки, перерви — ні
   lessons.forEach((l,i)=>{
     const sn=typeof l.subject==='string'?l.subject:(l.subject.ua||'');
-    const [startStr,endStr]=(l.time||'').split(' - ');
+    const [startStr,endStr]=fmtTimeRange(l.time).split(' – ');
     const b=lessonBounds(l);
     const live = !showTomorrow && b.start!=null && b.end!=null;
     const isCurrent = live && currentMins>=b.start && currentMins<b.end;
@@ -1320,8 +1320,8 @@ window.caRender = caRenderLocal;
 // кінцем одного уроку і початком наступного, тож рахуємо її самі, а не
 // просимо школу заповнювати ще одну таблицю.
 function lessonBounds(l){
-  const [a,b] = String(l && l.time || '').split(' - ');
-  return { start: minsOf(a), end: minsOf(b) };
+  const { start, end } = parseTimeRange(l && l.time);
+  return { start, end };
 }
 // Проміжок між уроками i та i+1 у хвилинах; null, якщо часу немає або
 // уроки йдуть впритул
