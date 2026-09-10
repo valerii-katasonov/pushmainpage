@@ -13,7 +13,7 @@
 // bindings. Everything else uses normal export/import.
 // ═══════════════════════════════════════════════════════════════
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, updatePassword, sendPasswordResetEmail, verifyPasswordResetCode, confirmPasswordReset, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, updatePassword, sendPasswordResetEmail, verifyPasswordResetCode, confirmPasswordReset, onAuthStateChanged, signOut, deleteUser } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
 import { getMessaging, getToken, onMessage, isSupported as messagingSupported } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-messaging.js";
 import { getDatabase, ref, set, get, child, push, onValue, remove, update, query, orderByKey, startAt, endAt } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 
@@ -1951,6 +1951,15 @@ export function subjectsForClassWeek(cls){
 window.subjectsForClassWeek = subjectsForClassWeek;
 
 // ══════════ AUTH ══════════
+// ЧИ СТВОРЕНО АКАУНТ ПРЯМО ЗАРАЗ ФОРМОЮ ПЕРШОГО ВХОДУ.
+//
+// Потрібно, щоб відрізнити дві різні ситуації в обробнику входу:
+//   • людина щойно натиснула «Встановити пароль», а її пошти в школі
+//     немає — акаунт створився дарма й має зникнути;
+//   • людина з давнім акаунтом, якій директор відкликав доступ, —
+//     її акаунт чіпати не можна, доступ можуть повернути.
+let firstLoginJustCreated = false;
+
 // ЗАПОБІЖНИК: якщо Firebase не відповів.
 //
 // Форма входу тепер прихована до перевірки сеансу — щоб той, хто вже
@@ -2066,12 +2075,36 @@ onAuthStateChanged(auth,async user=>{
       const kids=normalizeChildren(ls.val());
       const first=kids[0]||{studentName:'',class:'class_2',role:'guardian'};
       const nd={role:"parent",children:kids,studentName:first.studentName,studentId:first.studentId||null,class:first.class,parentRole:first.role||'guardian',email:user.email};
-      await set(ref(db,`users/${user.uid}`),nd);currentUserData=nd;await loadGradeTypesCache();initUserSession();}else{const sls=await get(child(ref(db),`student_links/${se}`));if(sls.exists()){const sd=sls.val();const nd={role:"student",studentName:sd.studentName,studentId:sd.studentId||null,class:sd.class,email:user.email};await set(ref(db,`users/${user.uid}`),nd);currentUserData=nd;await loadGradeTypesCache();initUserSession();}else{signOut(auth).then(()=>{
-      if(window.showFirstLoginScreen){
-        window.showFirstLoginScreen();
-        setMsg('fl-error','Цей email ще не додано школою. Зверніться до класного керівника або директора.','login-err');
-      } else alert('Цей email ще не додано школою. Зверніться до класного керівника або директора.');
-    });}}}}
+      await set(ref(db,`users/${user.uid}`),nd);currentUserData=nd;await loadGradeTypesCache();initUserSession();}else{const sls=await get(child(ref(db),`student_links/${se}`));if(sls.exists()){const sd=sls.val();const nd={role:"student",studentName:sd.studentName,studentId:sd.studentId||null,class:sd.class,email:user.email};await set(ref(db,`users/${user.uid}`),nd);currentUserData=nd;await loadGradeTypesCache();initUserSession();}else{
+      // ПОШТИ НЕМАЄ В ЖОДНОМУ СПИСКУ ШКОЛИ.
+      //
+      // Якщо акаунт щойно створила форма «Перший вхід» — прибираємо його.
+      // Інакше людина застрягає намертво: акаунт у Firebase уже існує,
+      // тож «Перший вхід» відповідає «такий email вже є», вхід паролем
+      // щоразу викидає сюди ж, і єдине, що лишається натиснути, —
+      // «Забули пароль?». Лист приходить, пароль міняється, результат той
+      // самий. Збоку це й виглядало як «встановлюю пароль, а мене кидає
+      // на відновлення й шле листа».
+      //
+      // Давній акаунт не чіпаємо: доступ могли відкликати тимчасово, і
+      // видаляти його за людину ми не маємо права.
+      const created = firstLoginJustCreated;
+      firstLoginJustCreated = false;
+      const finish = () => {
+        if(window.showFirstLoginScreen){
+          window.showFirstLoginScreen();
+          setMsg('fl-error','Цей email ще не додано школою. Зверніться до класного керівника або директора.','login-err');
+        } else alert('Цей email ще не додано школою. Зверніться до класного керівника або директора.');
+      };
+      if(created){
+        deleteUser(user)
+          .catch(e => { console.warn('акаунт без доступу не прибрано:', e.message);
+                        return signOut(auth); })
+          .then(finish);
+      } else {
+        signOut(auth).then(finish);
+      }
+    }}}}
   }else{
     document.getElementById('login-screen').style.display='block';
     // Підпис малюємо разом з екраном входу, а не при завантаженні
@@ -3784,6 +3817,7 @@ window.submitLogin=async function(ev){
   return false;
 };
 // ── ПЕРШИЙ ВХІД (створення пароля) ──
+
 window.submitFirstLogin=async function(ev){
   if(ev&&ev.preventDefault)ev.preventDefault();
   const email=document.getElementById('fl-email').value.trim().toLowerCase();
@@ -3798,12 +3832,17 @@ window.submitFirstLogin=async function(ev){
     // Список дозволених пошт лежить у базі, а читати її можна лише після
     // входу. Тому спершу створюємо акаунт, а перевірку робить обробник
     // входу — він побачить, що пошти немає, і коректно завершить сеанс.
+    firstLoginJustCreated = true;
     await createUserWithEmailAndPassword(auth,email,p1);
   }catch(err){
     setBusy('btn-fl-submit',false,'Встановити пароль і увійти');
     const code=err&&err.code||'';
     if(code==='auth/email-already-in-use'){
-      window.showLoginScreen(email,'Акаунт із таким email вже існує — увійдіть своїм паролем.');
+      firstLoginJustCreated = false;
+      // Не «увійдіть своїм паролем» — людина прийшла саме тому, що
+      // пароля не знає. Кажемо, куди натиснути далі.
+      window.showLoginScreen(email,'Пароль для цієї адреси вже створено раніше. '
+        + 'Увійдіть ним — або натисніть «Забули пароль?», щоб задати новий.');
       return false;
     }
     setMsg('fl-error',AUTH_ERRORS[code]||('Помилка: '+(err.message||code)),'login-err');
