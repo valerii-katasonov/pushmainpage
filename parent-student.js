@@ -5,7 +5,7 @@
 // lives in teacher.js).
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, getActiveClass, currentUserData, STICKER_GOAL, stickerGoal, getWeekDates, displayGrade, gradeClass6, showToast, renderHwItem, renderHwList, dayKeys, dayNamesUA, isBreakItem, localDateString, formatAttendanceSlotLabel, renderGradeFormulaInfo, escJs, escHtml, safeUrl, renderBirthdays, stuName, auth, normalizeChildren, gradesFromMirror, mondayOf, altChoiceFor, resolveAlt, classHourItem, insertAtTime} from './common.js';
+import { db, getActiveClass, currentUserData, STICKER_GOAL, stickerGoal, getWeekDates, displayGrade, gradeClass6, showToast, renderHwItem, renderHwList, dayKeys, dayNamesUA, isBreakItem, localDateString, formatAttendanceSlotLabel, renderGradeFormulaInfo, escJs, escHtml, safeUrl, renderBirthdays, stuName, auth, normalizeChildren, gradesFromMirror, mondayOf, altChoiceFor, resolveAlt, classHourItem, insertAtTime, minsOf, subjKey } from './common.js';
 import { ACTIVE_YEAR } from './director.js';
 import { renderParentMenu } from './kitchen.js';
 import { renderNewsFeed } from './news.js';
@@ -68,11 +68,25 @@ function buildDynamicSchedule(schedule,dayName,isToday,dateStr){
   (schedule[dayName]||[]).forEach((slot,slotIdx)=>{
     const items=Array.isArray(slot)?slot:(slot&&slot.subject?[slot]:[]);
     items.forEach(l=>{
-      if(!l||!l.time||!l.subject)return;
+      // УРОК БЕЗ ЧАСУ ПОКАЗУЄМО, А НЕ ВИКИДАЄМО.
+      //
+      // Раніше умова була `!l.time || !l.subject` — і урок, якому не
+      // проставили час, зникав з кабінету цілком. Батько бачив або
+      // порожньо, або чужий день, і жодного натяку, що урок узагалі є.
+      //
+      // Час береться з дзвінків класу за номером уроку. У старших класах
+      // уроків більше, ніж рядків у розкладі дзвінків, — і саме останні
+      // уроки дня лишалися без часу. Через це день «закінчувався»
+      // раніше, ніж насправді (див. dayIsOver), і кабінет перемикався на
+      // завтра, поки урок ще йшов.
+      //
+      // Тепер такий урок видно, він позначений «час не вказано» і не
+      // бере участі в підрахунку поточного/минулого.
+      if(!l||!l.subject)return;
       // Урок передаємо в altChoiceFor: вибір шукається за парою предметів,
       // і без самого уроку пару не дізнатися.
       const r = week ? resolveAlt(l, altChoiceFor(week, dayName, slotIdx, l)) : resolveAlt(l, '');
-      out.push({ ...r, _slot:slotIdx, _break:isBreakItem(r) });
+      out.push({ ...r, _slot:slotIdx, _break:isBreakItem(r), _noTime:!r.time });
     });
   });
   // Класна година живе окремо від розкладу — розклад цілком перезаписує
@@ -167,7 +181,7 @@ export async function loadDayTopics(cls, date){
 }
 // Ключ предмета в lesson_topics «безпечний»: крапки й слеші замінені
 function topicFor(subjectName){
-  const sk = String(subjectName || '').replace(/[.#$[\]/]/g, '_').trim();
+  const sk = subjKey(subjectName);
   return dayTopics[sk] || '';
 }
 
@@ -191,7 +205,7 @@ export function renderDayTopics(prefix, dateStr){
       const items = Array.isArray(slot) ? slot : (slot && slot.subject ? [slot] : []);
       items.forEach(l => {
         const nm = typeof l?.subject === 'string' ? l.subject : (l?.subject?.ua || '');
-        if(nm) nice[String(nm).replace(/[.#$[\]/]/g,'_').trim()] = nm;
+        if(nm) nice[subjKey(nm)] = nm;
       });
     });
   });
@@ -216,15 +230,32 @@ export function renderDayTopics(prefix, dateStr){
 // Якщо часу немає в жодного уроку — покладатися нема на що, лишаємо
 // сьогодні. Якщо уроків сьогодні немає взагалі — одразу шукаємо
 // найближчий навчальний день.
+// ДОПОВНЕНО. Мало перевірити час останнього уроку, У ЯКОГО він є: у
+// старших класах уроків на день більше, ніж рядків у розкладі дзвінків,
+// і без часу лишаються саме ОСТАННІ уроки. Виходило, що о 13:20
+// закінчувався останній «відомий» урок — і кабінет оголошував день
+// завершеним, хоча в класі ще два уроки попереду. Батько бачив завтрашній
+// розклад і жодної смужки поточного уроку.
+//
+// Тепер: якщо після останнього уроку з часом стоїть хоч один справжній
+// урок без часу — день не завершений. Коли він закінчиться, ми не знаємо,
+// а вгадувати тут гірше, ніж зачекати до півночі.
 export function dayIsOver(lessons, currentMins){
-  let last = 0;
-  (lessons || []).forEach(l => {
+  const list = lessons || [];
+  let last = 0, lastIdx = -1;
+  list.forEach((l, i) => {
     const end = String(l && l.time || '').split(' - ')[1];
     if(!end) return;
     const [h, m] = end.split(':').map(Number);
-    if(!isNaN(h) && !isNaN(m)) last = Math.max(last, h * 60 + m);
+    if(isNaN(h) || isNaN(m)) return;
+    const mins = h * 60 + m;
+    if(mins >= last){ last = mins; lastIdx = i; }
   });
   if(!last) return false;          // часу не знаємо — не вгадуємо
+  // Перерва без часу нічого не означає — рахуємо лише уроки.
+  const tailUntimed = list.slice(lastIdx + 1)
+    .some(l => l && !l._break && !String(l.time || '').includes(':'));
+  if(tailUntimed) return false;
   return currentMins >= last;
 }
 
@@ -264,9 +295,17 @@ function renderDynamicSchedule(role='parent'){
                                     dateWithOffset(showTomorrow?nextDay.offset+1:0))||[];
   const container=document.getElementById(`${prefix}-dynamic-schedule`);if(!container)return;
   if(realLessons(lessons)===0){
-    container.innerHTML = todayDone
-      ? '<div class="no-lessons-msg">🎉 Уроків цього тижня більше немає</div>'
-      : '<div class="no-lessons-msg">🎉 Уроків немає — вихідний!</div>';
+    // Три різні причини порожнього списку — і три різні відповіді.
+    // Раніше «розкладу класу немає в базі» виглядало як «уроків цього
+    // тижня більше немає»: батько другої дитини бачив бадьоре 🎉 і не
+    // здогадувався, що школі просто не завели розклад його класу.
+    const noSchedule = !window.schedule || !Object.keys(window.schedule).length;
+    container.innerHTML = noSchedule
+      ? '<div class="no-lessons-msg">📋 Розклад цього класу ще не заведено в порталі.'
+        + '<br><span style="font-size:.78rem;opacity:.8;">Зверніться до класного керівника.</span></div>'
+      : (todayDone
+          ? '<div class="no-lessons-msg">🎉 Уроків цього тижня більше немає</div>'
+          : '<div class="no-lessons-msg">🎉 Уроків немає — вихідний!</div>');
     return;
   }
   let html='';
@@ -305,7 +344,9 @@ function renderDynamicSchedule(role='parent'){
       <div class="lesson-num">${l._classHour?'🕘':num}</div>
       <div class="lesson-info">
         <div class="lesson-subj">${escHtml(sn)}${sub?' <span class="sub-badge">заміна</span>':''}${l._altPending?' <span class="alt-badge pending">🔁 уточнюється</span>':(l._altOptions?' <span class="alt-badge">🔁 чергування</span>':'')}</div>
-        <div class="lesson-time">${escHtml(l.time||'—')}${sub&&sub.subName?` · ${escHtml(sub.subName)}`:''}</div>
+        <div class="lesson-time${l._noTime?' lesson-notime':''}">${l._noTime
+            ? 'час не вказано'
+            : escHtml(l.time)}${sub&&sub.subName?` · ${escHtml(sub.subName)}`:''}</div>
         ${l._altPending?`<div class="alt-hint">Учитель ще не позначив, що саме буде цього тижня</div>`:(l._altOther?`<div class="alt-hint">наступного разу: ${escHtml(l._altOther)}</div>`:'')}
         ${isPassed&&topicFor(sn)?`<div class="lesson-topic">📘 ${escHtml(topicFor(sn))}</div>`:''}
         ${isCurrent?`<div class="progress-thin"><div class="progress-thin-fill" style="width:${progress}%"></div></div>`:''}
@@ -762,7 +803,7 @@ async function loadAiDayContext(prefix){
   if(topSnap.exists()){
     const byKey=topSnap.val();
     for(const s in aiDayContext){
-      const sk=String(s).replace(/[.#$[\]/]/g,'_').trim();
+      const sk=subjKey(s);
       const rec=byKey[sk]&&byKey[sk][date];
       if(!rec)continue;
       let t='';
@@ -1215,11 +1256,6 @@ window.caRender = caRenderLocal;
 // У базі лежать лише уроки з їхнім часом. Перерва — це проміжок між
 // кінцем одного уроку і початком наступного, тож рахуємо її самі, а не
 // просимо школу заповнювати ще одну таблицю.
-function minsOf(hhmm){
-  const [h,m] = String(hhmm||'').split(':');
-  const n = parseInt(h)*60 + parseInt(m);
-  return isNaN(n) ? null : n;
-}
 function lessonBounds(l){
   const [a,b] = String(l && l.time || '').split(' - ');
   return { start: minsOf(a), end: minsOf(b) };
@@ -1319,7 +1355,7 @@ function renderWeekSchedule(prefix){
             return `<div class="wk-row${l._break?' wk-service':''}">
               <span class="wk-num">${numLabel}</span>
               <span class="wk-subj">${escHtml(sn)}${l._altPending?' <i class="alt-mini">🔁 уточнюється</i>':(l._altOptions?' <i class="alt-mini">🔁</i>':'')}</span>
-              <span class="wk-time">${escHtml(l.time||'—')}</span>
+              <span class="wk-time${l._noTime?' lesson-notime':''}">${l._noTime?'без часу':escHtml(l.time)}</span>
             </div>`
             + (br ? `<div class="wk-break">
                  <span class="wk-break-label">перерва ${br.mins} хв</span>
@@ -1443,7 +1479,7 @@ async function renderYearCalendar(role){
       const kinds = byDay[ds];
       let c = '';
       if(kinds) c = kinds.size > 1 ? 'yc-multi' : ('yc-' + [...kinds][0]);
-      h += `<i class="${c}" title="${kinds ? escHtml([...kinds].join(', ')) : ''}">${d}</i>`;
+      h += `<i class="${c}" data-tip="${kinds ? escHtml([...kinds].join(', ')) : ''}">${d}</i>`;
     }
     h += '</div></div>';
   });
