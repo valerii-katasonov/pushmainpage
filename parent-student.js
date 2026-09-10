@@ -17,6 +17,12 @@ export let parentLessonInterval=null;
 // "all" is the reserved slotKey that submitAttendance() below writes under —
 // it represents a whole-day self-report from the parent/student (they don't
 // pick a specific lesson), as opposed to teacher's per-lesson slotKeys.
+// Мітка збірки. Потрібна не для краси: коли людина каже «не полагодилося»,
+// перше питання — чи виїхала взагалі нова версія. Рядок у консолі
+// відповідає на нього за секунду.
+export const PS_BUILD = '2026-09-10 · розклад v2 (уроки без часу, пояснення переходу на завтра)';
+console.info('[Push School] parent-student.js —', PS_BUILD);
+
 const SELF_REPORT_SLOT='all';
 // Checks today's attendance/{cls}/{date}/{student} slot-map for teacher-marked
 // entries that the parent/student hasn't acknowledged (no "all" self-report
@@ -240,6 +246,18 @@ export function renderDayTopics(prefix, dateStr){
 // Тепер: якщо після останнього уроку з часом стоїть хоч один справжній
 // урок без часу — день не завершений. Коли він закінчиться, ми не знаємо,
 // а вгадувати тут гірше, ніж зачекати до півночі.
+// Час, яким у розкладі закінчується день, — для пояснення на екрані.
+export function lastEndLabel(lessons){
+  let last = 0;
+  (lessons || []).forEach(l => {
+    const end = String(l && l.time || '').split(' - ')[1];
+    if(!end) return;
+    const [h, m] = end.split(':').map(Number);
+    if(!isNaN(h) && !isNaN(m)) last = Math.max(last, h*60 + m);
+  });
+  return last ? `${String(Math.floor(last/60)).padStart(2,'0')}:${String(last%60).padStart(2,'0')}` : '—';
+}
+
 export function dayIsOver(lessons, currentMins){
   const list = lessons || [];
   let last = 0, lastIdx = -1;
@@ -281,7 +299,27 @@ function renderDynamicSchedule(role='parent'){
   const todayStr=dateWithOffset(0);
   const todayLessons=buildDynamicSchedule(window.schedule,todayDayName,true,todayStr)||[];
   const hasLessons=(dn)=>realLessons(buildDynamicSchedule(window.schedule,dn,false))>0;
-  const todayDone = realLessons(todayLessons)===0 || dayIsOver(todayLessons,currentMins);
+  const noToday   = realLessons(todayLessons)===0;
+  const over      = !noToday && dayIsOver(todayLessons,currentMins);
+  const todayDone = noToday || over;
+
+  // ПОЯСНЮЄМО РІШЕННЯ. Кабінет мовчки перемикався на завтра, і зрозуміти
+  // чому було неможливо: чи розклад порожній, чи час минув, чи дані не ті.
+  // Тепер причина лежить у консолі одним рядком — і в підказці на екрані.
+  window.__schedWhy = {
+    клас: (window.currentUserData && window.currentUserData.class) || '—',
+    день: todayDayName,
+    зараз: `${String(Math.floor(currentMins/60)).padStart(2,'0')}:${String(currentMins%60).padStart(2,'0')}`,
+    слотівУРозкладі: ((window.schedule||{})[todayDayName]||[]).length,
+    уроківПісляРозбору: realLessons(todayLessons),
+    безЧасу: todayLessons.filter(l=>!l._break && l._noTime).length,
+    часи: todayLessons.filter(l=>!l._break).map(l=>l.time||'без часу'),
+    деньЗавершено: todayDone,
+    причина: noToday ? 'у розкладі немає жодного уроку на сьогодні'
+           : over    ? 'минув час останнього уроку'
+                     : 'день триває'
+  };
+  console.info('[Push School] розклад:', window.__schedWhy);
 
   // Шукаємо з завтрашнього дня — сьогоднішній уже або порожній, або минув
   const nextDay = todayDone ? nextSchoolDay(dayKeys, (todayDow+1)%7, hasLessons) : null;
@@ -290,7 +328,32 @@ function renderDynamicSchedule(role='parent'){
   const label = !showTomorrow ? '📅 Розклад на сьогодні'
     : (nextDay.offset===0 ? `📅 Розклад на завтра (${dayNamesUA[targetDayName]||''})`
                           : `📅 Розклад на ${dayNamesUA[targetDayName]||'наступний день'}`);
-  const lblEl=document.getElementById(`${prefix}-schedule-day-label`);if(lblEl)lblEl.textContent=label;
+  // Коли показуємо не сьогодні — кажемо, чому. Батько, у якого дитина
+  // зараз на уроці, має побачити не мовчазне «розклад на завтра», а
+  // причину: тоді видно, що саме в школі заповнено не так.
+  const lblEl=document.getElementById(`${prefix}-schedule-day-label`);
+  if(lblEl){
+    lblEl.textContent = label;
+    const why = showTomorrow
+      ? (noToday ? 'сьогодні уроків у розкладі немає'
+                 : `сьогоднішні уроки в розкладі закінчилися о ${lastEndLabel(todayLessons)}`)
+      : '';
+    lblEl.title = why;
+    const hintId = `${prefix}-schedule-why`;
+    let hint = document.getElementById(hintId);
+    if(why){
+      if(!hint){
+        hint = document.createElement('div');
+        hint.id = hintId; hint.className = 'sched-why';
+        lblEl.insertAdjacentElement('afterend', hint);
+      }
+      // Дві різні причини, і батько має розуміти, з чим іти до школи:
+      // або урок узагалі не внесли в розклад класу, або йому не дісталося
+      // часу з розкладу дзвінків.
+      hint.textContent = why + '. Якщо урок зараз іде — школа не внесла його '
+        + 'в розклад класу або в розкладі дзвінків бракує рядка на цей номер уроку.';
+    }else if(hint) hint.remove();
+  }
   const lessons=buildDynamicSchedule(window.schedule,targetDayName,!showTomorrow,
                                     dateWithOffset(showTomorrow?nextDay.offset+1:0))||[];
   const container=document.getElementById(`${prefix}-dynamic-schedule`);if(!container)return;
