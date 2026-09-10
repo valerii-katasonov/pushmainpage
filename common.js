@@ -23,6 +23,51 @@ import { loadParentDashboard, loadStudentDashboard, loadTextbooksForParent, rend
 import { globalTeacherAccess } from './journal.js';
 import { checkCurriculumUploadAccess } from './curriculum.js';
 
+// ══════════════════════════════════════════════════════════════════
+//  ХТО ЗРОБИВ ПОРТАЛ
+// ══════════════════════════════════════════════════════════════════
+//
+// Одне місце на весь проєкт. Підпис показується внизу екрана входу —
+// його бачать щодня, але він не заважає входити.
+//
+// ЧОМУ НЕ В РОЗМІТЦІ. Портал розрахований на кілька шкіл: назва школи
+// зміниться, підпис розробника — ні. Тримати його в HTML означало б
+// правити розмітку кожної установки.
+//
+// Порожній name або url — блок не показується взагалі. Це не заглушка
+// «поки що», а робочий стан: школа, яка веде портал сама, підпису не
+// має мати.
+export const VENDOR = {
+  product: 'Push School',        // ← робоча назва порталу; змінюється тут
+  name:    'Valerii Katasonov',                   // ← імʼя або назва розробника
+  url:     'https://www.linkedin.com/in/valeriikatasonov/',                   // ← посилання (LinkedIn, сайт)
+  note:    ''
+};
+
+// Тільки http(s) і тільки на дозволені домени: підпис — це посилання, яке
+// бачить кожен, хто відкриває портал, і воно не має вести кудись іще.
+const VENDOR_HOSTS = ['linkedin.com','www.linkedin.com','github.com','www.github.com'];
+export function vendorLinkOk(url){
+  try{
+    const u = new URL(String(url||''));
+    if(u.protocol !== 'https:') return false;
+    return VENDOR_HOSTS.includes(u.hostname) || u.hostname.endsWith('.linkedin.com');
+  }catch(e){ return false; }
+}
+
+export function renderVendorCredit(){
+  const box = document.getElementById('vendor-credit');
+  if(!box) return;
+  if(!VENDOR.name){ box.style.display = 'none'; return; }
+  const link = vendorLinkOk(VENDOR.url)
+    ? ` · <a href="${escHtml(VENDOR.url)}" target="_blank" rel="noopener noreferrer">LinkedIn</a>`
+    : '';
+  box.style.display = 'block';
+  box.innerHTML = `${escHtml(VENDOR.note || '')}<br>`
+    + `Розробка — <span class="vc-name">${escHtml(VENDOR.name)}</span>${link}`;
+}
+window.renderVendorCredit = renderVendorCredit;
+
 export const CLOUD_NAME='duy1qwsqv'; export const UPLOAD_PRESET='ml_default';
 // /auto/ замість /image/: до ДЗ тепер можна додати не лише фото, а й документ
 // чи таблицю. Cloudinary сам визначає тип — картинка лишається картинкою,
@@ -1885,7 +1930,28 @@ export function subjectsForClassWeek(cls){
 window.subjectsForClassWeek = subjectsForClassWeek;
 
 // ══════════ AUTH ══════════
+// ЗАПОБІЖНИК: якщо Firebase не відповів.
+//
+// Форма входу тепер прихована до перевірки сеансу — щоб той, хто вже
+// увійшов, не бачив її спалаху перед своїм кабінетом. Але якщо скрипт
+// Firebase не завантажився (немає мережі, заблокований домен), відповіді
+// не буде ніколи, і людина лишиться перед порожнім темним екраном.
+//
+// Тому через дві з половиною секунди показуємо форму входу самі. Якщо
+// сеанс усе ж знайдеться пізніше, onAuthStateChanged сховає її разом з
+// рештою панелей — зайвого кроку це не створює.
+let authAnswered = false;
+setTimeout(() => {
+  if(authAnswered) return;
+  const scr = document.getElementById('login-screen');
+  if(scr && scr.style.display === 'none'){
+    scr.style.display = 'block';
+    renderVendorCredit();
+  }
+}, 2500);
+
 onAuthStateChanged(auth,async user=>{
+  authAnswered = true;
   // Темна тема лише для екранів входу: після входу портал світлий, як і був.
   document.body.classList.toggle('auth-mode',!user);
   // Людина перейшла за посиланням із листа відновлення пароля — показуємо
@@ -1985,7 +2051,13 @@ onAuthStateChanged(auth,async user=>{
         setMsg('fl-error','Цей email ще не додано школою. Зверніться до класного керівника або директора.','login-err');
       } else alert('Цей email ще не додано школою. Зверніться до класного керівника або директора.');
     });}}}}
-  }else document.getElementById('login-screen').style.display='block';
+  }else{
+    document.getElementById('login-screen').style.display='block';
+    // Підпис малюємо разом з екраном входу, а не при завантаженні
+    // сторінки: до перевірки сеансу екран прихований, і рядок під ним
+    // ніхто б не побачив.
+    renderVendorCredit();
+  }
 });
 async function fetchTeacherAccess(se){const s=await get(child(ref(db),`teacher_access/${se}`));teacherAccessMatrix=s.exists()?s.val():{};}
 
@@ -3576,6 +3648,7 @@ window.showFirstLoginScreen=function(prefillEmail,hint){
 window.showLoginScreen=function(prefillEmail,hint){
   document.getElementById('first-login-screen').style.display='none';
   document.getElementById('login-screen').style.display='block';
+  renderVendorCredit();
   const em=document.getElementById('email');
   if(em&&prefillEmail)em.value=String(prefillEmail).trim().toLowerCase();
   setMsg('login-error','');
