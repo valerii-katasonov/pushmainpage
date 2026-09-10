@@ -97,7 +97,7 @@ export async function renderNewsFeed(containerId){
         <div class="nw-head">
           ${badge}
           ${a.important ? '<span class="nw-tag imp">Важливе</span>' : ''}
-          ${isNew ? '<span class="nw-dot" title="Нове"></span>' : ''}
+          ${isNew ? '<span class="nw-dot" data-tip="Нове"></span>' : ''}
           <span class="nw-time">${escHtml(timeAgo(a.ts||0))}</span>
         </div>
         ${a.title ? `<h4 class="nw-title">${escHtml(a.title)}</h4>` : ''}
@@ -114,6 +114,95 @@ export async function renderNewsFeed(containerId){
   }
 }
 window.renderNewsFeed = renderNewsFeed;
+
+// ══════════════════════════════════════════════════════════════════
+//  СВІЖІ ОГОЛОШЕННЯ НАГОРІ ВКЛАДКИ «СЬОГОДНІ»
+// ══════════════════════════════════════════════════════════════════
+//
+// НАВІЩО ОКРЕМО ВІД СТРІЧКИ. Стрічка у вкладці «Школа» — це архів: туди
+// заходять, коли шукають щось конкретне. А оголошення на кшталт «завтра
+// урочиста лінійка о 9:00» має потрапити на очі тому, хто просто відкрив
+// портал уранці. Тому нагорі — короткий блок, і лише те, що ще актуальне.
+//
+// ЧОМУ ТИЖДЕНЬ. Оголошення в школі живе рівно доти, доки подія не минула;
+// тиждень — розумна межа, після якої напис перетворюється на шум і його
+// перестають читати разом з усім блоком.
+//
+// НІЧОГО НЕ ВИДАЛЯЄМО. Стрічка у «Школа» показує все як показувала, у базі
+// теж усе лишається: сховати з очей і стерти — різні речі, і друга
+// незворотна.
+export const FRESH_DAYS = 7;
+export function isFresh(a, now){
+  const ts = (a && a.ts) || 0;
+  if(!ts) return false;                       // без дати — не вгадуємо
+  return (now - ts) < FRESH_DAYS * 24 * 60 * 60 * 1000;
+}
+
+// Скільки днів лишилося висіти. Показуємо це автору й директору: інакше
+// незрозуміло, чому оголошення зникло з головної, хоча його не чіпали.
+export function daysLeft(a, now){
+  const ts = (a && a.ts) || 0;
+  if(!ts) return 0;
+  const left = FRESH_DAYS * 24*60*60*1000 - (now - ts);
+  return left <= 0 ? 0 : Math.ceil(left / (24*60*60*1000));
+}
+
+export async function renderFreshNews(containerId){
+  const box = document.getElementById(containerId);
+  if(!box) return;
+  try{
+    const all  = await loadNews();
+    const role = currentUserData?.role;
+    const cls  = currentUserData?.class || getActiveClass?.();
+    const now  = Date.now();
+    const list = all.filter(a => visibleTo(a, role, cls) && isFresh(a, now));
+
+    // Немає свіжих — блок ховаємо цілком. Порожня рамка з написом
+    // «оголошень немає» щодня нагорі кабінету — це шум, а не інформація.
+    if(!list.length){ box.style.display = 'none'; box.innerHTML = ''; return; }
+    box.style.display = 'block';
+
+    box.innerHTML = `<div class="fn-head">📣 Оголошення школи</div>` + list.map(a => {
+      const left = daysLeft(a, now);
+      const badge = a.scope === 'school'
+        ? '<span class="nw-tag school">Вся школа</span>'
+        : `<span class="nw-tag cls">${escHtml(String(a.class||'').replace('class_',''))} клас</span>`;
+      return `<article class="fn-item${a.important?' imp':''}">
+        <div class="nw-head">
+          ${badge}
+          ${a.important ? '<span class="nw-tag imp">Важливе</span>' : ''}
+          <span class="nw-time">${escHtml(timeAgo(a.ts||0))}</span>
+        </div>
+        ${a.title ? `<h4 class="nw-title">${escHtml(a.title)}</h4>` : ''}
+        <div class="nw-text">${escHtml(a.text).replace(/\n/g,'<br>')}</div>
+        <div class="fn-foot">
+          <span>${escHtml(a.authorName || 'Школа')}</span>
+          <span class="fn-left" data-tip="Далі оголошення лишиться у вкладці «Школа»">${
+            left === 1 ? 'зникне звідси завтра' : `ще ${left} дн тут`}</span>
+        </div>
+      </article>`;
+    }).join('')
+    + `<button type="button" class="fn-all" onclick="goToNewsFeed()">Усі оголошення →</button>`;
+  }catch(e){
+    // Оголошення — не те, заради чого варто лякати людину червоним
+    // написом на головній. Мовчки ховаємо; повна стрічка у «Школа»
+    // покаже ту саму помилку тому, хто справді по неї прийшов.
+    console.warn('[Push School] свіжі оголошення:', e.message);
+    box.style.display = 'none';
+  }
+}
+window.renderFreshNews = renderFreshNews;
+
+// «Усі оголошення →» веде до повної стрічки. Вкладку шукаємо кнопкою в
+// панелі, а не смикаємо switchTab з зашитою назвою екрана: у кабінеті
+// три різні екрани (батько, учень, персонал), і зашите ім'я тут уже
+// колись відправляло людину не туди.
+window.goToNewsFeed = function(){
+  const btn = document.querySelector('.dtab[data-t="school"]');
+  if(btn){ btn.click(); return; }
+  const feed = document.getElementById('p-news-feed') || document.getElementById('s-news-feed');
+  if(feed) feed.scrollIntoView({ behavior:'smooth', block:'start' });
+};
 
 // Скільки непрочитаних — для значка на вкладці
 export async function countUnreadNews(){
