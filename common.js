@@ -13,7 +13,7 @@
 // bindings. Everything else uses normal export/import.
 // ═══════════════════════════════════════════════════════════════
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, updatePassword, sendPasswordResetEmail, verifyPasswordResetCode, confirmPasswordReset, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+import { getAuth, signInWithEmailAndPassword, updatePassword, sendPasswordResetEmail, verifyPasswordResetCode, confirmPasswordReset, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
 import { getMessaging, getToken, onMessage, isSupported as messagingSupported } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-messaging.js";
 import { getDatabase, ref, set, get, child, push, onValue, remove, update, query, orderByKey, startAt, endAt } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 
@@ -2002,14 +2002,6 @@ export function subjectsForClassWeek(cls){
 window.subjectsForClassWeek = subjectsForClassWeek;
 
 // ══════════ AUTH ══════════
-// ЧИ СТВОРЕНО АКАУНТ ПРЯМО ЗАРАЗ ФОРМОЮ ПЕРШОГО ВХОДУ.
-//
-// Потрібно, щоб відрізнити дві різні ситуації в обробнику входу:
-//   • людина щойно натиснула «Встановити пароль», а її пошти в школі
-//     немає — акаунт створився дарма й має зникнути;
-//   • людина з давнім акаунтом, якій директор відкликав доступ, —
-//     її акаунт чіпати не можна, доступ можуть повернути.
-let firstLoginJustCreated = false;
 
 // ЗАПОБІЖНИК: якщо Firebase не відповів.
 //
@@ -2151,7 +2143,6 @@ onAuthStateChanged(auth,async user=>{
       // Правильна відповідь тут одна: сказати як є. Пошта в школі відома,
       // дитини до неї не привʼязано — це виправляє класний керівник.
       if(!kids.length){
-        firstLoginJustCreated = false;
         const say = () => {
           if(window.showLoginScreen){
             window.showLoginScreen(user.email,
@@ -2194,7 +2185,6 @@ onAuthStateChanged(auth,async user=>{
       // Застрягання, заради якого це робилося, тепер розв'язане інакше:
       // при «вже існує» портал сам пробує увійти введеним паролем, а
       // «Забули пароль?» працює, бо акаунт на місці.
-      firstLoginJustCreated = false;
       await signOut(auth);
       if(window.showFirstLoginScreen){
         window.showFirstLoginScreen();
@@ -3849,7 +3839,11 @@ function setMsg(id,msg,cls){
 // «Забули пароль?».
 function resetAuthButtons(){
   setBusy('btn-login-submit', false, 'Увійти');
-  setBusy('btn-fl-submit',    false, 'Встановити пароль і увійти');
+  // Напис має збігатися з тим, що стоїть у cabinet.html. Тут лишався
+  // старий — «Встановити пароль і увійти», — а showFirstLoginScreen
+  // викликає цю функцію щоразу при відкритті екрана, тож розмітку він
+  // перебивав одразу: людина бачила кнопку, яка обіцяє не те, що робить.
+  setBusy('btn-fl-submit',    false, 'Надіслати лист для входу');
   setBusy('btn-rp-submit',    false, 'Зберегти новий пароль');
 }
 
@@ -3862,7 +3856,8 @@ window.showFirstLoginScreen=function(prefillEmail,hint){
   if(em&&src)em.value=String(src).trim().toLowerCase();
   setMsg('fl-error','');
   setMsg('fl-hint',hint||'','login-hint');
-  (em&&!em.value?em:document.getElementById('fl-pass'))?.focus();
+  // Поля пароля тут більше немає — фокус завжди на адресі.
+  em?.focus();
 };
 window.showLoginScreen=function(prefillEmail,hint){
   resetAuthButtons();
@@ -3904,7 +3899,13 @@ const AUTH_ERRORS={
   'auth/too-many-requests':'Забагато спроб. Спробуйте за кілька хвилин.',
   'auth/network-request-failed':"Немає зв'язку із сервером. Перевірте інтернет.",
   'auth/user-disabled':'Цей акаунт відключено. Зверніться до адміністрації.',
-  'auth/weak-password':'Пароль занадто простий (мінімум 6 символів).'
+  'auth/weak-password':'Пароль занадто простий (мінімум 6 символів).',
+  // Зʼявляється, коли у Firebase знято «Enable create (sign-up)», а
+  // серверна функція першого входу недоступна. Для людини це не помилка
+  // введення, тому й текст не про пароль.
+  'auth/admin-restricted-operation':
+    'Створення пароля тимчасово недоступне. Спробуйте за кілька хвилин '
+    + 'або зверніться до адміністрації школи.'
 };
 // ── ВХІД ЗА НІКНЕЙМОМ ──
 // Firebase Authentication уміє входити лише за поштою. Але в молодших
@@ -3960,7 +3961,8 @@ window.submitLogin=async function(ev){
       }
       const approved=await isEmailApproved(email);
       if(approved!==false)
-        window.showFirstLoginScreen(email,'Схоже, це ваш <b>перший вхід</b> — акаунта ще немає. Придумайте пароль нижче.');
+        window.showFirstLoginScreen(email,'Схоже, це ваш <b>перший вхід</b> — акаунта ще немає. '
+          + 'Натисніть кнопку нижче, і ми надішлемо лист із посиланням на встановлення пароля.');
       else
         setMsg('login-error','Цей email не зареєстровано у школі.','login-err');
       return false;
@@ -3983,80 +3985,56 @@ window.submitLogin=async function(ev){
 };
 // ── ПЕРШИЙ ВХІД (створення пароля) ──
 
+// ── ПЕРШИЙ ВХІД: НАДСИЛАЄМО ЛИСТ ──
+//
+// Поля пароля тут більше немає. Раніше пароль до адреси зі списку школи
+// міг задати будь-хто, хто цю адресу знає, — а адреси вчителів лежать у
+// класних чатах і на сайті. Тепер пароль задає лише той, хто читає цю
+// скриньку: портал просить сервер надіслати лист із посиланням.
+//
+// Запасного шляху через браузер більше немає — і це навмисно. Раніше він
+// прикривав невиклад функції, але водночас лишав відчиненими ті самі
+// двері. Якщо функція не відповідає, чесніше сказати про це, ніж тихо
+// створити акаунт в обхід перевірки.
 window.submitFirstLogin=async function(ev){
   if(ev&&ev.preventDefault)ev.preventDefault();
   const email=document.getElementById('fl-email').value.trim().toLowerCase();
-  const p1=document.getElementById('fl-pass').value;
-  const p2=document.getElementById('fl-pass2').value;
-  setMsg('fl-error','');
-  if(!email||!p1){setMsg('fl-error','Заповніть email і пароль.','login-err');return false;}
-  // Учень вводить НІКНЕЙМ, а не пошту, і акаунт йому створюють батьки.
-  // Без цієї перевірки Firebase відповідав «Невірний формат email», з чого
-  // дитині незрозуміло ні що не так, ні до кого йти.
+  setMsg('fl-error','');setMsg('fl-hint','','login-hint');
+  if(!email){setMsg('fl-error','Введіть email.','login-err');return false;}
   if(!email.includes('@')){
     setMsg('fl-error','Схоже, це нікнейм, а не email. Учні тут пароль не створюють — '
       + 'його задають батьки у своєму кабінеті, розділ «Доступ дитини до порталу».','login-err');
     return false;
   }
-  if(p1.length<6){setMsg('fl-error','Пароль має бути не коротшим за 6 символів.','login-err');return false;}
-  if(p1!==p2){setMsg('fl-error','Паролі не збігаються.','login-err');return false;}
   setBusy('btn-fl-submit',true);
   try{
-    // Список дозволених пошт лежить у базі, а читати її можна лише після
-    // входу. Тому спершу створюємо акаунт, а перевірку робить обробник
-    // входу — він побачить, що пошти немає, і коректно завершить сеанс.
-    firstLoginJustCreated = true;
-    await createUserWithEmailAndPassword(auth,email,p1);
-  }catch(err){
-    // Створення не вдалося — отже, акаунта ми не створювали, і прибирати
-    // згодом нічого. Без цього рядка прапорець лишався б піднятим після,
-    // скажімо, «занадто простий пароль», і наступний вхід під ІНШИМ,
-    // давнім акаунтом без доступу видалив би його.
-    firstLoginJustCreated = false;
-    setBusy('btn-fl-submit',false,'Встановити пароль і увійти');
-    const code=err&&err.code||'';
-    if(code==='auth/email-already-in-use'){
-      firstLoginJustCreated = false;
-      // НЕ ПЕРЕКАЗУЄМО ВІДПОВІДЬ FIREBASE — ПЕРЕВІРЯЄМО ЇЇ.
-      //
-      // «Акаунт уже існує» саме по собі глухий кут: людина прийшла
-      // створити пароль, а їй кажуть увійти паролем, якого вона не знає.
-      // Причому найчастіший випадок — вона вже реєструвалася раніше й
-      // набрала ТОЙ САМИЙ пароль. Тоді достатньо просто увійти.
-      //
-      // Тож пробуємо вхід тим, що вона щойно ввела. Три результати:
-      //   • вийшло          → кабінет відкриється сам, нічого не кажемо;
-      //   • пароль інший    → кажемо саме це й ведемо на відновлення;
-      //   • акаунта немає   → Firebase суперечить сам собі. Такого не
-      //     має бути, тому показуємо обидва коди: без них розбиратися
-      //     неможливо, а мовчазне «спробуйте ще» нічого не дає.
-      setBusy('btn-fl-submit',true);
-      try{
-        await signInWithEmailAndPassword(auth,email,p1);
-        return false;                       // далі все зробить onAuthStateChanged
-      }catch(e2){
-        setBusy('btn-fl-submit',false,'Встановити пароль і увійти');
-        const c2=e2&&e2.code||'';
-        if(c2==='auth/invalid-credential'||c2==='auth/wrong-password'){
-          // Проєкт у підказці не для краси: саме тут виникає суперечка
-          // «в Authentication її немає». Її немає в тому проєкті, який
-          // відкрито в консолі, — а сайт говорить ось із цим.
-          window.showLoginScreen(email,'Для цієї адреси пароль уже створювали раніше, '
-            + 'і він інший. Натисніть «Забули пароль?» — прийде лист, і ви задасте новий.'
-            + `<br><span style="font-size:.72rem;opacity:.75;">акаунт шукайте у проєкті ${escHtml(PROJECT_ID)}</span>`);
-        }else if(c2==='auth/user-not-found'){
-          setMsg('fl-error','Firebase каже, що акаунт із такою адресою вже існує, '
-            + 'і водночас що його немає. Це збій на боці сервера входу — '
-            + 'зверніться до адміністрації школи та передайте цей рядок: '
-            + `створення → auth/email-already-in-use, вхід → auth/user-not-found, проєкт → ${PROJECT_ID}.`,'login-err');
-        }else{
-          setMsg('fl-error',(AUTH_ERRORS[c2]||('Не вдалося увійти: '+(e2.message||c2)))
-            + ` (створення: ${code}, вхід: ${c2||'—'})`,'login-err');
-        }
-        return false;
-      }
+    const r = await fetch('/.netlify/functions/first-login', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ email })
+    });
+    const d = await r.json().catch(()=>({}));
+    setBusy('btn-fl-submit',false,'Надіслати лист для входу');
+    if(r.ok){
+      // Про те, чи був акаунт раніше, не згадуємо: людині це байдуже,
+      // а стороннім знати не варто.
+      setMsg('fl-hint',`📧 Лист надіслано на <b>${escHtml(email)}</b>.<br>`
+        + '<span style="font-size:.78rem;">Відкрийте його й задайте пароль. '
+        + 'Перевірте також теку «Спам» — лист дійсний обмежений час.</span>','login-hint');
+      return false;
     }
-    setMsg('fl-error',AUTH_ERRORS[code]||('Помилка: '+(err.message||code)),'login-err');
+    if(d && d.code === 'not-in-school'){
+      setMsg('fl-error', d.error, 'login-err');
+      return false;
+    }
+    if(d && d.code === 'no-service-account'){
+      setMsg('fl-error','Надсилання листів ще не налаштоване на сервері. '
+        + 'Зверніться до адміністрації школи.','login-err');
+      return false;
+    }
+    setMsg('fl-error', (d && d.error) || 'Не вдалося надіслати лист. Спробуйте за хвилину.','login-err');
+  }catch(e){
+    setBusy('btn-fl-submit',false,'Надіслати лист для входу');
+    setMsg('fl-error','Немає звʼязку із сервером. Перевірте інтернет і спробуйте ще раз.','login-err');
   }
   return false;
 };
