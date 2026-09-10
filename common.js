@@ -2131,7 +2131,35 @@ onAuthStateChanged(auth,async user=>{
       // Дітей може бути кілька; studentName/class зберігаємо як АКТИВНУ дитину,
       // щоб уся наявна логіка (getActiveClass, дашборди) працювала без змін.
       const kids=normalizeChildren(ls.val());
-      const first=kids[0]||{studentName:'',class:'class_2',role:'guardian'};
+      // ЗАПИС Є, А ДИТИНИ В НЬОМУ НЕМАЄ.
+      //
+      // Так буває, коли привʼязку почали й не завершили: пошту внесли,
+      // дитину не додали, або її потім відвʼязали й лишився порожній
+      // вузол. Раніше тут підставлялася заглушка
+      // {studentName:'', class:'class_2'} — жорстко зашитий другий клас.
+      // Далі одне з двох, і обидва погані: або правила відхиляли запис
+      // (бо порожнє імʼя не збігається з привʼязкою) і людина бачила
+      // незрозумілу відмову в правах, або запис проходив — і батько
+      // опинявся в кабінеті ЧУЖОГО другого класу.
+      //
+      // Правильна відповідь тут одна: сказати як є. Пошта в школі відома,
+      // дитини до неї не привʼязано — це виправляє класний керівник.
+      if(!kids.length){
+        const wasNew = firstLoginJustCreated;
+        firstLoginJustCreated = false;
+        const say = () => {
+          if(window.showLoginScreen){
+            window.showLoginScreen(user.email,
+              'Вашу пошту школа знає, але дитину до неї ще не привʼязано. '
+              + 'Зверніться до класного керівника — він додасть її за хвилину.');
+          } else alert('Вашу пошту школа знає, але дитину до неї ще не привʼязано.');
+        };
+        if(wasNew) await deleteUser(user).catch(()=>signOut(auth));
+        else await signOut(auth);
+        say();
+        return;
+      }
+      const first=kids[0];
       const nd={role:"parent",children:kids,studentName:first.studentName,studentId:first.studentId||null,class:first.class,parentRole:first.role||'guardian',email:user.email};
       await set(ref(db,`users/${user.uid}`),nd);currentUserData=nd;await loadGradeTypesCache();initUserSession();}else{const sls=await get(child(ref(db),`student_links/${se}`));if(sls.exists()){const sd=sls.val();const nd={role:"student",studentName:sd.studentName,studentId:sd.studentId||null,class:sd.class,email:user.email};await set(ref(db,`users/${user.uid}`),nd);currentUserData=nd;await loadGradeTypesCache();initUserSession();}else{
       // ПОШТИ НЕМАЄ В ЖОДНОМУ СПИСКУ ШКОЛИ.
