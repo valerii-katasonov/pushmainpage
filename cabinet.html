@@ -1507,6 +1507,51 @@
     .pe-add button{width:auto;margin:0;padding:6px 12px;font-size:.8rem;
                    background:#0d47a1;color:#fff;border-radius:7px;cursor:pointer;white-space:nowrap;}
     .pe-hint{font-size:.72rem;color:#90a4ae;margin-top:8px;line-height:1.4;}
+    /* ── Перетягування тем ──
+       Ручка окремою кнопкою, а не «тягнемо весь рядок»: у рядку три поля
+       вводу, і тягнути за них означало б неможливість виділити текст.
+       touch-action:none — щоб палець на ручці тягнув тему, а не гортав
+       сторінку; на решті рядка гортання лишається звичайним.
+       Курсор grab/grabbing — єдина підказка миші, що елемент рухомий. */
+    .pe-grip{flex:0 0 auto;width:24px;align-self:stretch;min-height:32px;
+             display:flex;align-items:center;justify-content:center;
+             color:#b0bec5;font-size:.95rem;line-height:1;cursor:grab;
+             user-select:none;-webkit-user-select:none;touch-action:none;
+             border-radius:6px;background:#f5f7f8;}
+    .pe-grip:hover{background:#eceff1;color:#78909c;}
+    .pe-grip:active{cursor:grabbing;}
+    .pe-list.pe-moving{user-select:none;-webkit-user-select:none;}
+    /* КОПІЯ, ЩО ЇДЕ ЗА ПАЛЬЦЕМ. Сам рядок тягнути марно: палець його
+       накриває, і не видно, що саме несеш. pointer-events:none —
+       обов'язково, інакше привид перехоплював би пошук рядка під
+       вказівником і жоден перенос не спрацював би. */
+    .pe-ghost{position:fixed;z-index:9000;pointer-events:none;margin:0;
+              background:#fff;border:2px solid #1976d2;border-radius:9px;
+              padding:5px 7px;box-shadow:0 10px 24px rgba(13,71,161,.28);
+              transform:rotate(-1deg);opacity:.97;}
+    .pe-ghost .pe-grip{background:#1976d2;color:#fff;}
+    /* МІСЦЕ, КУДИ ТЕМА ЛЯЖЕ. Той самий рядок, тільки порожній: він
+       їде списком услід за пальцем і показує майбутню позицію. */
+    .pe-row.pe-slot{background:#e3f2fd;border:2px dashed #64b5f6;border-radius:9px;}
+    .pe-row.pe-slot > *{visibility:hidden;}
+    /* Номер, який зміниться, якщо натиснути «Зберегти порядок». */
+    .pe-num.pe-changed{background:#fff8e1;border-color:#ffb300 !important;font-weight:700;}
+    /* Смужка підтвердження. sticky — бо в списку буває 140 тем, і кнопка
+       десь унизу сторінки означала б «її ніхто не знайде». */
+    .pe-bar{position:sticky;bottom:6px;z-index:20;display:flex;gap:7px;align-items:center;
+            flex-wrap:wrap;margin-top:9px;padding:9px 11px;border-radius:11px;
+            background:#fff8e1;border:1px solid #ffca28;
+            box-shadow:0 3px 12px rgba(0,0,0,.12);}
+    .pe-bar[hidden]{display:none;}
+    #pe-bar-txt{flex:1 1 100%;font-size:.76rem;color:#7a5900;line-height:1.35;}
+    .pe-bar button{width:auto;margin:0;padding:7px 13px;font-size:.8rem;
+                   border-radius:8px;cursor:pointer;border:1px solid transparent;white-space:nowrap;}
+    .pe-bar-save{background:#1b5e20;color:#fff;flex:1;}
+    .pe-bar-undo{background:#fff;color:#5d4037;border-color:#d7ccc8 !important;}
+    /* Поки триває запис нової нумерації — список не чіпаємо: другий
+       перенос поверх незавершеного дав би дві різні відповіді на питання
+       «який зараз порядок». */
+    .pe-list.pe-busy{opacity:.55;pointer-events:none;}
     .topic-opt-custom{border-left:4px solid #9575cd;font-style:italic;}
     /* ═══════════════════════════════════════════════════════
        RESPONSIVE — MOBILE / TABLET / DESKTOP
