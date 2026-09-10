@@ -252,13 +252,14 @@ async function sendPasswordLetter(token, email, mode) {
   //   link-failed — Firebase не віддав посилання;
   //   send-failed — Brevo не прийняв лист (найчастіше відправника не
   //                 підтверджено).
-  let why = 'mailer-off';
+  let why = 'mailer-off', mailStatus;
   if (mailConfigured()) {
     try {
       const link = await getPasswordLink(token, email);
       const res = await sendMail(email, passwordLetter(link, mode, email));
       if (res.sent) return { via: 'brevo' };
       why = 'send-failed';
+      mailStatus = res.status;
       console.error('[first-login] свій лист не пішов:', res.why);
     } catch (e) {
       why = 'link-failed';
@@ -266,7 +267,7 @@ async function sendPasswordLetter(token, email, mode) {
     }
   }
   await sendFirebaseLetter(email);
-  return { via: 'firebase', why };
+  return { via: 'firebase', why, mailStatus };
 }
 
 // Пароль, якого ніхто не знає й не побачить: потрібен лише щоб акаунт
@@ -364,7 +365,8 @@ exports.handler = async (event) => {
     }
     stage = 'letter';
     const sentBy = await sendPasswordLetter(token, email, mode);
-    return ok({ sent: true, hadAccount, via: sentBy.via, why: sentBy.why }, origin);
+    return ok({ sent: true, hadAccount, via: sentBy.via,
+                why: sentBy.why, mailStatus: sentBy.mailStatus }, origin);
   } catch (e) {
     // Подробиці — у лог функції, людині загальний текст. У повідомленні
     // помилки бази трапляється шлях вузла, і показувати його назовні
