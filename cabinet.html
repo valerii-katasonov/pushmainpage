@@ -204,6 +204,22 @@
     .lesson-notime{color:#c77800;font-style:italic;}
     .sched-why{font-size:.7rem;color:#8d6e63;background:#fff8e1;border-radius:8px;
                padding:6px 9px;margin:5px 0 8px;line-height:1.35;}
+    /* ── Свіжі оголошення нагорі «Сьогодні» ──
+       Синій, а не жовтий: жовтим у кабінеті вже позначені попередження
+       (незбережене, «щось не так»). Оголошення — не попередження. */
+    .fn-box{background:#e8f2fe;border:1px solid #b6d4fb;border-radius:14px;
+            padding:12px 13px;margin-bottom:15px;}
+    .fn-head{font-weight:800;color:#0d47a1;font-size:.92rem;margin-bottom:9px;}
+    .fn-item{background:#fff;border-radius:11px;padding:10px 12px;margin-bottom:8px;
+             border-left:4px solid #64b5f6;}
+    .fn-item.imp{border-left-color:var(--red);}
+    .fn-item .nw-title{margin:5px 0 4px;font-size:.88rem;}
+    .fn-item .nw-text{font-size:.83rem;line-height:1.45;color:#37474f;}
+    .fn-foot{display:flex;justify-content:space-between;align-items:center;gap:8px;
+             flex-wrap:wrap;margin-top:7px;font-size:.7rem;color:#90a4ae;}
+    .fn-left{font-style:italic;}
+    .fn-all{width:100%;margin:2px 0 0;padding:8px;font-size:.8rem;border-radius:9px;
+            background:#fff;color:#0d47a1;border:1px solid #b6d4fb;cursor:pointer;}
     .lesson-countdown{font-size:.75rem;font-weight:700;color:var(--green);background:#e8f5e9;padding:2px 8px;border-radius:12px;white-space:nowrap;}
     .progress-thin{width:100%;height:4px;background:#eee;border-radius:2px;margin-top:4px;overflow:hidden;}
     .progress-thin-fill{height:100%;background:linear-gradient(90deg,var(--green),var(--accent));border-radius:2px;transition:width 1s linear;}
@@ -3339,9 +3355,21 @@
     <div id="p-push-invite" style="display:none;"></div>
 
     <!-- ═══════════ СЬОГОДНІ ═══════════ -->
-    <!-- Першою на вкладці навмисно: запізнення й хвороба — те, чим батько
-         користується вранці найчастіше, і шукати це внизу списку незручно. -->
+    <!-- ОГОЛОШЕННЯ — НАД УСІМ. Це єдиний блок, який батько не шукає сам:
+         він має потрапити на очі тому, хто просто відкрив портал уранці.
+         Показуються лише свіжі (до тижня); старіші лишаються у вкладці
+         «Школа». Порожній блок ховається цілком — рамка з написом
+         «оголошень немає» щодня нагорі це шум, а не інформація. -->
+    <!-- Далі запізнення й хвороба: те, чим батько користується вранці
+         найчастіше, і шукати це внизу списку незручно. -->
     <section class="screen-section" data-dtab="day">
+      <!-- Блок оголошень лежить УСЕРЕДИНІ цієї секції, над її заголовком,
+           а не окремою секцією. Причина технічна: switchTab при переході
+           на вкладку виставляє секціям display:'' — тобто примусово
+           показав би порожню рамку, яку ми щойно сховали. Вкладені
+           елементи він не чіпає, тож ховати можна спокійно.
+           Заразом зникає й порожній відступ від секції без вмісту. -->
+      <div id="p-fresh-news" class="fn-box" style="display:none;"></div>
       <h3>🕒 Запізнення та відсутність</h3>
       <div id="p-teacher-att-alert" style="display:none;background:#fff3cd;border:1px solid #ffeeba;color:#856404;padding:11px 14px;border-radius:12px;margin-bottom:12px;font-size:.85rem;"></div>
       <div class="data-card att-quick" style="border-left-color:var(--red);background:#fdfbfb;margin-top:0;">
@@ -3406,26 +3434,24 @@
       <div id="p-takeaway" class="ta-box"></div>
     </section>
 
+    <!-- ═══════════ КАЛЕНДАР ═══════════
+         Переїхав сюди з вкладки «Школа». Причина проста: «Задано на
+         сьогодні» тут дублювало вкладку «📚 ДЗ» — там і тижнева навігація,
+         і теми уроків, і «Як допомогти» по кожному предмету окремо. Місце
+         звільнилося, а канікули й контрольні — це якраз те, що дивляться
+         разом із сьогоднішнім днем, а не в архіві.
+         У «Школа» календаря більше немає: два однакові блоки в одному
+         кабінеті — це питання «а який із них правильний». -->
     <section class="screen-section" data-dtab="day">
-      <h3>📚 Задано на сьогодні</h3>
-      <!-- Що вивчали цього дня. Стоїть над домашнім завданням: спершу
-           «що було на уроці», потім «що задано» — саме в такому порядку
-           про це й питають удома. -->
-      <!-- Басейн і шкільний автобус. Стоїть тут, а не в налаштуваннях:
-           поки батько не відповів, школа не знає, чи чекати дитину. -->
-      <div id="p-day-topics" class="topics-box" style="display:none;"></div>
-      <div class="data-card" style="border-left-color:#00b894;background:#f0fff4;margin-top:0;">
-        <ul id="p-daily-hw-list" class="list-dash"></ul>
-        <!-- AI-поради батькам за темою уроку / домашнім завданням.
-             У сервіс іде лише предмет, тема, ДЗ і номер класу. -->
-        <div class="ai-help-box">
-          <div class="ai-hw-row">
-            <select id="p-help-subject" style="flex:1;min-width:140px;margin-top:0;font-size:.82rem;"></select>
-            <button type="button" id="btn-ai-parent" onclick="parentHelpAI()">🏠 Як допомогти вдома</button>
-          </div>
-          <p id="ai-parent-msg" class="ai-hw-msg" style="display:none;"></p>
-          <div id="ai-parent-out" class="ai-out" style="display:none;"></div>
-        </div>
+      <h3>📅 Календар школи</h3>
+      <div class="data-card" style="border-left-color:var(--orange);background:#fffcf0;margin-top:0;">
+        <p class="cal-hint">Свята, канікули та контрольні цього місяця — списком нижче.</p>
+        <input type="month" id="p-cal-month-select" onchange="renderParentCalendar('parent')"
+               style="margin-top:0;font-size:.85rem;">
+        <div id="p-cal-grid"><p class="empty-msg">⏳ Завантаження...</p></div>
+        <button type="button" id="p-cal-year-btn" onclick="toggleYearCalendar('parent')" style="background:#eceff1;color:#37474f;margin-top:10px;">📅 Показати весь навчальний рік</button>
+        <div id="p-cal-year" style="display:none;margin-top:10px;"></div>
+        <div id="p-cal-day-details" style="display:none;margin-top:10px;background:#fff;border-radius:8px;padding:9px;border:1px dashed var(--orange);font-size:.82rem;"></div>
       </div>
     </section>
 
@@ -3451,20 +3477,8 @@
       <div id="p-news-feed" class="nw-feed"><p class="empty-msg">Завантаження...</p></div>
     </section>
 
-        <section class="screen-section" data-dtab="school">
-      <h3>📅 Календар класу</h3>
-<div class="data-card" style="border-left-color:var(--orange);background:#fffcf0;">
-        <h4 style="margin-top:0;color:var(--orange);">📅 Календар класу</h4>
-        <p class="cal-hint">Свята, канікули та контрольні цього місяця — списком нижче.</p>
-        <input type="month" id="p-cal-month-select" onchange="renderParentCalendar('parent')"
-               style="margin-top:0;font-size:.85rem;">
-        <div id="p-cal-grid"><p class="empty-msg">⏳ Завантаження...</p></div>
-        <button type="button" id="p-cal-year-btn" onclick="toggleYearCalendar('parent')" style="background:#eceff1;color:#37474f;margin-top:10px;">📅 Показати весь навчальний рік</button>
-        <div id="p-cal-year" style="display:none;margin-top:10px;"></div>
+    <!-- Календар переїхав на вкладку «Сьогодні» — див. коментар там. -->
 
-        <div id="p-cal-day-details" style="display:none;margin-top:10px;background:#fff;border-radius:8px;padding:9px;border:1px dashed var(--orange);font-size:.82rem;"></div>
-      </div>
-    </section>
 
     <!-- ═══════════ НАВЧАННЯ ═══════════ -->
     <section class="screen-section" data-dtab="grades">
