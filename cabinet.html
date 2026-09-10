@@ -202,6 +202,17 @@
        відкрито: мовчазне зникнення такого уроку з кабінету колись і
        створило враження, ніби в класі вже все закінчилося. */
     .lesson-notime{color:#c77800;font-style:italic;}
+    /* Звірка доступів */
+    .aa-group{margin-top:12px;}
+    .aa-group h4{margin:0 0 6px;font-size:.84rem;color:#37474f;}
+    .aa-note{font-size:.72rem;color:#78909c;margin:0 0 7px;line-height:1.4;}
+    .aa-row{display:flex;gap:8px;align-items:baseline;padding:6px 9px;border-radius:8px;
+            background:#fff;border:1px solid #e8eaf6;margin-bottom:4px;font-size:.8rem;
+            flex-wrap:wrap;}
+    .aa-row b{font-weight:600;color:#283593;overflow-wrap:anywhere;}
+    .aa-row span{font-size:.72rem;color:#78909c;}
+    .aa-empty{font-size:.78rem;color:#2e7d32;background:#e8f5e9;border-radius:8px;padding:7px 10px;}
+    .aa-count{font-size:.72rem;color:#78909c;margin-top:9px;}
     .sched-why{font-size:.7rem;color:#8d6e63;background:#fff8e1;border-radius:8px;
                padding:6px 9px;margin:5px 0 8px;line-height:1.35;}
     /* ── Свіжі оголошення нагорі «Сьогодні» ──
@@ -2131,26 +2142,21 @@
     <div class="auth-brand"><img src="logo.png" alt="Push School Warsaw" class="auth-logo"></div>
     <h2>Перший вхід</h2>
     <p class="fl-intro">
-      Якщо школа вже додала вашу електронну адресу, тут ви <b>створюєте власний пароль</b>.
-      Надалі входитимете з ним на головному екрані.
+      Якщо школа вже додала вашу електронну адресу, ми надішлемо на неї лист
+      із посиланням — за ним ви <b>задасте собі пароль</b>. Надалі
+      входитимете з ним на головному екрані.
     </p>
     <form id="first-login-form" novalidate
           onsubmit="event.preventDefault();if(window.submitFirstLogin)window.submitFirstLogin(event);return false;">
       <label for="fl-email">Email, який вам видала школа</label>
       <input type="email" id="fl-email" name="email" autocomplete="username"
              placeholder="ім'я@пошта.com" autocapitalize="none" spellcheck="false" required>
-      <label for="fl-pass">Новий пароль (мінімум 6 символів)</label>
-      <div class="pass-wrap">
-        <input type="password" id="fl-pass" name="new-password" autocomplete="new-password"
-               placeholder="Придумайте пароль" required>
-        <button type="button" class="pass-toggle" id="fl-pass-toggle"
-                onclick="togglePassVisibility('fl-pass','fl-pass-toggle')" aria-label="Показати пароль">👁</button>
-      </div>
-      <label for="fl-pass2">Повторіть пароль</label>
-      <input type="password" id="fl-pass2" name="confirm-password" autocomplete="new-password"
-             placeholder="Ще раз той самий пароль" required>
       <p id="fl-hint" class="login-hint" style="display:none;"></p>
-      <button type="submit" class="btn-login" id="btn-fl-submit">Встановити пароль і увійти</button>
+      <!-- ПОЛЯ ПАРОЛЯ ТУТ БІЛЬШЕ НЕМАЄ.
+           Пароль задають за посиланням із листа. Доти його міг задати
+           будь-хто, хто знає адресу зі списку школи, — а адреса вчителя
+           не таємниця. -->
+      <button type="submit" class="btn-login" id="btn-fl-submit">Надіслати лист для входу</button>
       <p id="fl-error" class="login-err" style="display:none;"></p>
     </form>
     <button type="button" class="link-btn" onclick="showLoginScreen()">← Назад до входу</button>
@@ -2522,6 +2528,22 @@
           </div>
         </div>
       </details>
+    </section>
+
+    <!-- ЗВІРКА ДОСТУПІВ.
+         Портал знає свої списки, Firebase — свої, і донедавна зіставити
+         їх не було чим. Через це один випадок «людина є в Authentication,
+         а в порталі її немає» розбирали цілий день. Тепер це видно
+         одним натисканням. -->
+    <section class="screen-section half" data-dtab="staff">
+      <h3>🔑 Доступи</h3>
+      <div class="data-card" style="border-left-color:#5c6bc0;background:#f5f6fd;margin-top:0;">
+        <p class="cal-hint">Порівнює акаунти входу зі списками школи. Показує тих,
+           хто ще жодного разу не заходив, і акаунти, яких у списках немає.</p>
+        <button type="button" id="aa-run" onclick="runAccessAudit()"
+                style="background:#5c6bc0;color:#fff;">🔍 Звірити доступи</button>
+        <div id="aa-out" style="margin-top:11px;"></div>
+      </div>
     </section>
 
     <section class="screen-section half">
