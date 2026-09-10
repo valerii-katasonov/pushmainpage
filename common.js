@@ -37,11 +37,33 @@ import { checkCurriculumUploadAccess } from './curriculum.js';
 // Порожній name або url — блок не показується взагалі. Це не заглушка
 // «поки що», а робочий стан: школа, яка веде портал сама, підпису не
 // має мати.
+// ВЕРСІЯ ПОРТАЛА — ОДНА НА ВЕСЬ ПРОЄКТ.
+//
+// Раніше кожен модуль ніс власну мітку, і вони світилися просто в
+// інтерфейсі: «версія модуля: 2026-09-05 · alt v3» під чергуваннями,
+// під перервами, у чаті, в імпорті. Чотирнадцять місць, з яких людині
+// не потрібне жодне, а в харчуванні поруч ще й показувався внутрішній
+// ключ учня.
+//
+// Мітки писалися не просто так: коли вчитель каже «не полагодилося»,
+// перше питання — чи виїхав новий код узагалі. Тому можливість лишаємо,
+// але одну й тиху: рядок унизу «Профілю» та біля кнопки виходу.
+//
+// Дату ставимо руками при випуску. Автоматично її взяти нізвідки:
+// збірки як такої немає, файли викладаються як є.
+export const APP_VERSION = '2026-09-10';
+
+export function renderAppVersion(){
+  const txt = `Портал ${VENDOR.product} · версія ${APP_VERSION}`;
+  document.querySelectorAll('.app-version').forEach(el => { el.textContent = txt; });
+}
+window.renderAppVersion = renderAppVersion;
+
 export const VENDOR = {
   product: 'Push School',        // ← робоча назва порталу; змінюється тут
-  name:    'Valerii Katasonov',                   // ← імʼя або назва розробника
-  url:     'https://www.linkedin.com/in/valeriikatasonov/',                   // ← посилання (LinkedIn, сайт)
-  note:    ''
+  name:    '',                   // ← імʼя або назва розробника
+  url:     '',                   // ← посилання (LinkedIn, сайт)
+  note:    'Хочете такий портал для своєї школи?'
 };
 
 // Тільки http(s) і тільки на дозволені домени: підпис — це посилання, яке
@@ -801,7 +823,6 @@ function refreshToday(){
     el.value=now;
     if(window.handleDateChange) window.handleDateChange();
   }
-  console.info('[Push School] Настала нова доба:',now);
 }
 setInterval(refreshToday, 60000);
 document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) refreshToday(); });
@@ -2170,6 +2191,7 @@ window.openFromNotification = function(screenId){
 async function initUserSession(){
   initModalScrollLock();   // фон під вікнами не прокручується (важливо для iPhone)
   renderMasterBanner();    // червона смуга, якщо ввімкнено режим налагодження
+  renderAppVersion();      // один рядок версії під кнопкою виходу
   listenStickerGoals();    // мета наліпок задається класним керівником
   // Чинний навчальний рік читаємо ПЕРШИМ. Календар, семестри й табелі
   // залежать від нього, і якщо взяти його пізніше, вони встигнуть
