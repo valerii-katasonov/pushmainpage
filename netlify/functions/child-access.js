@@ -31,6 +31,16 @@
 const crypto = require('crypto');
 
 const ALLOWED_HOSTS = ['planlekcjipush.netlify.app', 'localhost', '127.0.0.1'];
+// ПРОЄКТ У ШЛЯХАХ IDENTITY TOOLKIT НАЗИВАЄМО ЯВНО.
+//
+// Тут стояло projects/-. Так пишуть для емулятора; у документації
+// Identity Platform шлях один — projects/{projectId}. Живий сервіс на «-»
+// відповідає помилкою, і в first-login це коштувало дня розбору: читання
+// бази проходили, а все, що стосується акаунтів, тихо відмовляло.
+//
+// Тут та сама помилка була в трьох місцях — тобто створення нікнейма
+// дитині не працювало теж, просто про це ще ніхто не повідомив.
+const PROJECT_ID = 'test-4eb3e';
 const DB = 'https://test-4eb3e-default-rtdb.europe-west1.firebasedatabase.app';
 const WEB_API_KEY = process.env.FIREBASE_WEB_API_KEY || 'AIzaSyA3OA9pcR1zscUtEPWD8LEKTKonAN5Y90c';
 const IDT = 'https://identitytoolkit.googleapis.com/v1';
@@ -122,7 +132,7 @@ async function verifyIdToken(idToken) {
 }
 
 async function findUserByEmail(token, email) {
-  const r = await fetch(`${IDT}/projects/-/accounts:lookup`, {
+  const r = await fetch(`${IDT}/projects/${PROJECT_ID}/accounts:lookup`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
     body: JSON.stringify({ email: [email] })
@@ -132,7 +142,7 @@ async function findUserByEmail(token, email) {
 }
 
 async function createUser(token, email, password) {
-  const r = await fetch(`${IDT}/projects/-/accounts`, {
+  const r = await fetch(`${IDT}/projects/${PROJECT_ID}/accounts`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
     body: JSON.stringify({ email, password, emailVerified: false })
@@ -143,7 +153,7 @@ async function createUser(token, email, password) {
 }
 
 async function updateUser(token, localId, fields) {
-  const r = await fetch(`${IDT}/projects/-/accounts:update`, {
+  const r = await fetch(`${IDT}/projects/${PROJECT_ID}/accounts:update`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
     body: JSON.stringify(Object.assign({ localId }, fields))
