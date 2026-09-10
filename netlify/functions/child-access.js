@@ -212,8 +212,19 @@ exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: cors(origin), body: '' };
   if (event.httpMethod !== 'POST') return fail(405, 'Тільки POST', origin);
 
-  // Функція міняє паролі, тож приймаємо запити лише зі свого сайту
-  if (origin && !ALLOWED_HOSTS.some(h => origin.includes(h)))
+  // Функція міняє паролі, тож приймаємо запити лише зі свого сайту.
+  //
+  // Порівнюємо імʼя вузла ЦІЛКОМ. Було origin.includes(host) — і цього
+  // замало: «planlekcjipush.netlify.app» міститься в
+  // «planlekcjipush.netlify.app.evil.com», а «localhost» — у
+  // «evil-localhost.attacker.io». До того ж умова `origin && …` взагалі
+  // не спрацьовувала, коли заголовка Origin немає (curl його не шле).
+  //
+  // Головний захист тут — звіряння idToken нижче, тож дірою це не було.
+  // Але другий рубіж має або працювати, або не вдавати, що працює.
+  let originHost = '';
+  try{ originHost = origin ? new URL(origin).hostname : ''; }catch(e){ originHost = ''; }
+  if (!originHost || !ALLOWED_HOSTS.includes(originHost))
     return fail(403, 'Запит не з порталу', origin);
 
   let body;
