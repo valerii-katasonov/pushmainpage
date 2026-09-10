@@ -60,10 +60,10 @@ export function renderAppVersion(){
 window.renderAppVersion = renderAppVersion;
 
 export const VENDOR = {
-  product: 'Push School Warsaw',        // ← робоча назва порталу; змінюється тут
-  name:    'Valerii Katasonov',                   // ← імʼя або назва розробника
-  url:     'https://www.linkedin.com/in/valeriikatasonov/',                   // ← посилання (LinkedIn, сайт)
-  note:    ''
+  product: 'Push School',        // ← робоча назва порталу; змінюється тут
+  name:    '',                   // ← імʼя або назва розробника
+  url:     '',                   // ← посилання (LinkedIn, сайт)
+  note:    'Хочете такий портал для своєї школи?'
 };
 
 // Тільки http(s) і тільки на дозволені домени: підпис — це посилання, яке
@@ -89,6 +89,26 @@ export function renderVendorCredit(){
     + `Розробка — <span class="vc-name">${escHtml(VENDOR.name)}</span>${link}`;
 }
 window.renderVendorCredit = renderVendorCredit;
+
+// ══════════════════════════════════════════════════════════════════
+//  ПОШТА → КЛЮЧ У БАЗІ
+// ══════════════════════════════════════════════════════════════════
+//
+// РЕГІСТР ОБОВʼЯЗКОВО ВНИЗ. Firebase Auth зберігає пошту малими літерами,
+// тож при вході ключ завжди виходить малим. А школа вносить адреси
+// руками й файлами — і Excel сам робить першу літеру великою:
+// «Kateryna.Norkina@gmail.com». Якщо записати такий ключ як є, вийде
+// Kateryna_Norkina@gmail_com, а при вході шукатиметься
+// kateryna_norkina@gmail_com. Різні комірки. Людина створює пароль,
+// заходить — і чує «цей email ще не додано школою», хоча в списку
+// персоналу вона є і директор її там бачить.
+//
+// Ключ будувався в тридцяти місцях, і половина з них регістр не чіпала.
+// Тепер спосіб один.
+export function emailKey(e){
+  return String(e||'').trim().toLowerCase().replace(/\./g,'_');
+}
+window.emailKey = emailKey;
 
 export const CLOUD_NAME='duy1qwsqv'; export const UPLOAD_PRESET='ml_default';
 // /auto/ замість /image/: до ДЗ тепер можна додати не лише фото, а й документ
@@ -668,7 +688,7 @@ async function photoOf(se, prev){
     const users = us.exists() ? us.val() : {};
     for(const uid in users){
       const u = users[uid] || {};
-      if(String(u.email || '').toLowerCase().replace(/\./g, '_') === se)
+      if(emailKey(u.email || '') === se)
         return u.photoURL && String(u.photoURL).length <= 60000 ? u.photoURL : '';
     }
   }catch(e){ /* немає доступу до users — не біда */ }
@@ -708,7 +728,7 @@ export async function syncStaffCard(se){
       const users = us.exists() ? us.val() : {};
       for(const uid in users){
         const u = users[uid] || {};
-        if(String(u.email || '').toLowerCase().replace(/\./g, '_') === se){
+        if(emailKey(u.email || '') === se){
           name = [u.firstName, u.lastName].filter(Boolean).join(' ') || u.email;
           break;
         }
@@ -1743,7 +1763,7 @@ window.switchRole=async function(newRole){
     if(window.renderRoleSwitcher) window.renderRoleSwitcher();
     return;
   }
-  if(isTeacherRole(newRole))await fetchTeacherAccess(currentUserData.email.replace(/\./g,'_'));
+  if(isTeacherRole(newRole))await fetchTeacherAccess(emailKey(currentUserData.email));
   initUserSession();
   showToast(`🔄 Кабінет: ${ROLE_LABELS[newRole]||newRole}`);
 };
@@ -1755,7 +1775,7 @@ window.openProfileModal=async function(){
   const isTeacher=currentUserData.role==='teacher'||currentUserData.role==='art_school_teacher';
   document.getElementById('t-skills-section').style.display=isTeacher?'block':'none';
   if(isTeacher){
-    const se=currentUserData.email?.replace(/\./g,'_');
+    const se=emailKey(currentUserData.email);
     const snap=await get(ref(db,`teacher_skills/${se}/subjects`));
     mySkillsTemp=snap.exists()?Object.values(snap.val()):[];renderMySkillsTags();
   }
@@ -1777,7 +1797,7 @@ window.openProfileModal=async function(){
     const nameBlock=document.getElementById('profile-name-block');
     if(nameBlock)nameBlock.style.display=isParent?'none':'block';
     if(isParent){
-      const se=(currentUserData.email||'').replace(/\./g,'_');
+      const se=emailKey(currentUserData.email);
       const snap=await get(child(ref(db),`parent_links/${se}`));
       const profile=getParentProfile(snap.exists()?snap.val():{});
       // Якщо контактів ще немає — підставляємо ім'я з профілю порталу
@@ -1822,7 +1842,7 @@ window.saveProfile=async function(){
         const el=document.getElementById('pc-'+f.k);
         profile[f.k]=el?el.value.trim():'';
       });
-      const se=(currentUserData.email||'').replace(/\./g,'_');
+      const se=emailKey(currentUserData.email);
       // update, а не set: у цьому ж вузлі лежать children
       await update(ref(db,`parent_links/${se}`),{profile});
       finalFirst=profile.firstName;finalLast=profile.lastName;
@@ -1831,7 +1851,7 @@ window.saveProfile=async function(){
     currentUserData.firstName=finalFirst;currentUserData.lastName=finalLast;currentUserData.photoURL=photoURL;
     // Save skills
     const isTeacher=currentUserData.role==='teacher'||currentUserData.role==='art_school_teacher';
-    if(isTeacher){const se=currentUserData.email?.replace(/\./g,'_');await set(ref(db,`teacher_skills/${se}/subjects`),mySkillsTemp);}
+    if(isTeacher){const se=emailKey(currentUserData.email);await set(ref(db,`teacher_skills/${se}/subjects`),mySkillsTemp);}
     // Довідник чату оновлюємо тут-таки. Раніше картка публікувалася лише
     // при вході, тому щойно завантажене фото зʼявлялося в чаті аж після
     // наступного входу — виглядало так, ніби воно взагалі не збереглося.
@@ -2027,7 +2047,7 @@ onAuthStateChanged(auth,async user=>{
   try{
   document.querySelectorAll('.panel').forEach(p=>p.style.display='none');document.getElementById('calendar-block').style.display='none';document.getElementById('profile-bar').style.display='none';
   if(user){
-    const se=user.email.replace(/\./g,'_');
+    const se=emailKey(user.email);
     const snap=await get(child(ref(db),`users/${user.uid}`));
     if(snap.exists()){
       currentUserData=snap.val();
@@ -2181,7 +2201,7 @@ async function healStaffRegistry(){
     if(!roles.length) return;
     const isAdmin = roles.includes('director') || roles.includes('administrator');
     if(!isAdmin) return;                       // тільки адміністрація має право запису
-    const se = u.email.toLowerCase().replace(/\./g,'_');
+    const se = emailKey(u.email);
     const snap = await get(child(ref(db), `pre_approved_roles/${se}`));
     if(snap.exists()) return;
     await set(ref(db, `pre_approved_roles/${se}`), roles.length > 1 ? roles : roles[0]);
@@ -2200,7 +2220,7 @@ export async function publishContactCard(){
   try{
     const u = currentUserData;
     if(!u || !u.email) return 'немає даних користувача';
-    const se = u.email.toLowerCase().replace(/\./g,'_');
+    const se = emailKey(u.email);
     const name = [u.firstName, u.lastName].filter(Boolean).join(' ') || u.email;
     const roles = getUserRoles(u);
     const role = roles[0] || u.role || '';
@@ -3542,7 +3562,7 @@ window.saveStudentLogin=async function(){
   if(!raw)return alert('Введіть email або натисніть «Прибрати вхід».');
   if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(raw))return alert('Схоже, це не email.');
   if(raw===oldEmail)return window.closeStudentLogin();
-  const newSafe=raw.replace(/\./g,'_');
+  const newSafe=emailKey(raw);
   try{
     const busy=await get(child(ref(db),`student_links/${newSafe}`));
     if(busy.exists()){
@@ -3551,7 +3571,7 @@ window.saveStudentLogin=async function(){
     }
     await set(ref(db,`student_links/${newSafe}`),{studentName:name,class:cls});
     // Стару прив'язку прибираємо, інакше учень зможе заходити з обох адрес
-    if(oldEmail)await remove(ref(db,`student_links/${oldEmail.replace(/\./g,'_')}`));
+    if(oldEmail)await remove(ref(db,`student_links/${emailKey(oldEmail)}`));
     logAction(oldEmail?'student_email':'student_login',{cls,target:name,value:raw,from:oldEmail||''});
     showToast(oldEmail?`✉️ Вхід змінено на ${raw}`:`🔑 Вхід створено: ${raw}`);
     window.closeStudentLogin();
@@ -3563,7 +3583,7 @@ window.removeStudentLogin=async function(){
   if(!oldEmail)return;
   if(!confirm(`Прибрати вхід для ${name}?\n\nУчень більше не зможе заходити у портал самостійно.\nОцінки та всі його дані залишаться недоторканими,\nбатьки бачитимуть їх як і раніше.\n\nПродовжити?`))return;
   try{
-    await remove(ref(db,`student_links/${oldEmail.replace(/\./g,'_')}`));
+    await remove(ref(db,`student_links/${emailKey(oldEmail)}`));
     logAction('student_login_del',{cls,target:name,value:oldEmail});
     showToast('🔒 Вхід прибрано');
     window.closeStudentLogin();
@@ -3655,16 +3675,22 @@ window.unlinkParentChild=async function(safeEmail,idx,name){
   kids.splice(idx,1);
   await update(ref(db,`parent_links/${safeEmail}`),{children:kids});
   invalidateParentLinks();
-  await syncParentUserChildren(safeEmail,kids);
+  const failed = await syncParentUserChildren(safeEmail,kids);
   logAction('parent_unlink',{target:name,value:safeEmail.replace(/_/g,'.')});
-  showToast(`🔓 ${name} відв'язаний`);
+  // Якщо профіль оновити не вдалося — привʼязку прибрано, але доступ у
+  // батьків лишається до втручання адміністрації. Мовчати про це не можна:
+  // людина вважатиме, що доступ закрито.
+  if(failed) alert(`Привʼязку прибрано, але профіль батьків оновити не вдалося: `
+    + `бракує прав.\n\nДоступ до класу в них залишиться, доки це не зробить `
+    + `адміністрація школи. Передайте їй: ${safeEmail.replace(/_/g,'.')}.`);
+  else showToast(`🔓 ${name} відвʼязаний`);
   refreshParentEditorAndList(safeEmail);
 };
 window.changeParentEmail=async function(oldSafe){
   const raw=document.getElementById('pe-new-email').value.trim().toLowerCase();
   if(!raw)return alert('Введіть нову адресу.');
   if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(raw))return alert('Схоже, це не email.');
-  const newSafe=raw.replace(/\./g,'_');
+  const newSafe=emailKey(raw);
   if(newSafe===oldSafe)return alert('Це та сама адреса.');
   const exists=await get(child(ref(db),`parent_links/${newSafe}`));
   if(exists.exists())return alert(`На ${raw} уже є запис. Об'єднання адрес робиться вручну.`);
@@ -3674,6 +3700,16 @@ window.changeParentEmail=async function(oldSafe){
     await set(ref(db,`parent_links/${newSafe}`),snap.exists()?snap.val():{});
     await remove(ref(db,`parent_links/${oldSafe}`));
     invalidateParentLinks();
+    // СТАРА АДРЕСА МАЄ ВТРАТИТИ ДОСТУП.
+    //
+    // Вузол parent_links перенесено, але акаунт зі старою поштою нікуди
+    // не подівся: у його users/{uid} лишався клас, а правила бази пускають
+    // родину до даних саме за ним. Виходило, що після «перенесення» стара
+    // адреса й далі читала оцінки й домашку класу — попри те, що вікно
+    // підтвердження прямо обіцяло зворотне.
+    const lost = await syncParentUserChildren(oldSafe, []);
+    if(lost) alert('Запис перенесено, але profile старої адреси оновити не вдалося: '
+      + 'бракує прав. Доступ по ній лишиться, доки це не зробить адміністрація.');
     logAction('parent_email',{from:oldSafe.replace(/_/g,'.'),target:raw});
     showToast('✉️ Запис перенесено на нову адресу');
     window.closeParentEditor();
@@ -3682,19 +3718,43 @@ window.changeParentEmail=async function(oldSafe){
   }catch(e){alert('Помилка: '+e.message);}
 };
 // Якщо батьки вже заходили — тримаємо їхній профіль у синхроні
+
 async function syncParentUserChildren(safeEmail,kids){
-  const email=safeEmail.replace(/_/g,'.').toLowerCase();
   const us=await getUsersSnap();
   if(!us.exists())return;
   const u=us.val();
+  let failed=0;
   for(const uid in u){
-    if((u[uid].email||'').toLowerCase()!==email||u[uid].role!=='parent')continue;
+    // Порівнюємо КЛЮЧІ, а не відновлену адресу. Зворотне перетворення
+    // «підкреслення → крапка» бреше на адресах, де підкреслення справжнє:
+    // i_petrenko@szkola.pl перетворилося б на i.petrenko@szkola.pl, і
+    // потрібного користувача ми б не знайшли взагалі.
+    if(emailKey(u[uid].email||'')!==safeEmail||u[uid].role!=='parent')continue;
     const patch={children:kids};
-    // Активна дитина зникла зі списку — перемикаємо на першу доступну
     const still=kids.find(k=>k.studentName===u[uid].studentName&&k.class===u[uid].class);
-    if(!still&&kids[0]){patch.studentName=kids[0].studentName;patch.class=kids[0].class;patch.parentRole=kids[0].role||'guardian';}
-    await update(ref(db,`users/${uid}`),patch);
+    if(!still&&kids[0]){
+      // Активна дитина зникла зі списку — перемикаємо на першу доступну
+      patch.studentName=kids[0].studentName;patch.class=kids[0].class;
+      patch.parentRole=kids[0].role||'guardian';
+    } else if(!kids.length){
+      // ДІТЕЙ НЕ ЛИШИЛОСЯ — ПРИБИРАЄМО Й КЛАС.
+      //
+      // Раніше тут не робилося нічого: писався лише порожній children, а
+      // studentName і class лишалися старими. Але саме за class правила
+      // бази й пускають родину до даних: «$cls === users/{uid}/class».
+      // Тобто відвʼязані батьки далі читали оцінки, домашку й розклад
+      // усього класу — попри те, що вікно підтвердження обіцяло
+      // протилежне: «зникне лише доступ цих батьків до неї».
+      patch.studentName=null;patch.class=null;patch.studentId=null;
+    }
+    // Писати в чужий users/{uid} має право лише адміністрація. Класний
+    // керівник відвʼязати може (parent_links його), а профіль оновити —
+    // ні. Раніше ця відмова летіла нагору й ламала всю дію після того,
+    // як привʼязку вже прибрано.
+    try{ await update(ref(db,`users/${uid}`),patch); }
+    catch(e){ failed++; console.warn('профіль батьків не оновлено:', e.message); }
   }
+  return failed;
 }
 window.closeParentEditor=function(){document.getElementById('parent-edit-modal').style.display='none';};
 window.saveParentProfile=async function(){
@@ -3726,7 +3786,6 @@ window.saveParentProfile=async function(){
 // не виконався — інакше пароль потрапляє в адресний рядок.
 // email скрізь у нижньому регістрі: директор зберігає pre_approved_roles через
 // .toLowerCase(), тож "Ivan@School.com" інакше не знаходив свій дозвіл.
-const emailKey=e=>String(e||'').trim().toLowerCase().replace(/\./g,'_');
 function setBusy(btnId,on,label){
   const b=document.getElementById(btnId);
   if(!b)return;
