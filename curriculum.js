@@ -974,7 +974,14 @@ async function fillSubjectSelect(cls){
 // що людина бачить.
 function refreshPlanEditorIfOpen(){
   const box=document.getElementById('plan-editor');
-  if(box && box.offsetParent!==null && window.renderPlanEditor) window.renderPlanEditor();
+  if(!(box && box.offsetParent!==null && window.renderPlanEditor)) return;
+  // Переставляння, яке ще не зберегли, зникне разом зі списком. Мовчки
+  // викидати роботу не можна: перемкнути предмет мишею легко, а
+  // відновити порядок зі 140 тем по пам'яті — ні.
+  const pending = window.planOrderPending ? window.planOrderPending() : 0;
+  if(pending && !confirm(`Порядок тем змінено, але не збережено (тем на нових місцях: ${pending}).\n\n`
+    + 'Перехід до іншого предмета або класу поверне старий порядок.\n\nПродовжити?')) return;
+  window.renderPlanEditor();
 }
 
 window.onCurrSubjectChange = function(){
@@ -1212,6 +1219,11 @@ export async function renderPlanEditor(){
           <button type="button" class="pe-del" onclick="deletePlanTopic('${escJs(id)}','${escJs(t.title||'')}',${hu})">✕</button>
         </div>`;
       }).join('') + `</div>` : '<p class="empty-msg">У цього предмета ще немає плану. Завантажте файл вище.</p>'}
+      <div class="pe-bar" id="pe-bar" hidden>
+        <span id="pe-bar-txt"></span>
+        <button type="button" class="pe-bar-save" onclick="savePlanOrder()">💾 Зберегти порядок</button>
+        <button type="button" class="pe-bar-undo" onclick="cancelPlanOrder()">↩ Скасувати</button>
+      </div>
       <div class="pe-add">
         <input type="number" id="pe-new-num" placeholder="№" min="1" style="width:70px;">
         <input type="text" id="pe-new-title" placeholder="Назва нової теми">
@@ -1221,10 +1233,12 @@ export async function renderPlanEditor(){
       <p class="pe-hint">«вик.» — скільки годин теми вже відпрацьовано на уроках.
          Це рахується автоматично й редагуванню не підлягає.<br>
          ⠿ — потягніть за цей значок, щоб посунути тему вище або нижче.
-         Номери уроків при цьому лишаються на своїх місцях: міняється те,
-         яка тема на якому уроці. Якщо перетягувати незручно (миша,
-         читалка екрана), той самий результат дає зміна № вручну.</p>`;
-    wirePlanDrag();
+         Номери уроків лишаються на своїх місцях: міняється те, яка тема
+         на якому уроці. <b>Само нічого не зберігається</b> — після
+         переставляння внизу з'явиться кнопка «Зберегти порядок», поруч
+         з нею «Скасувати». Якщо перетягувати незручно, той самий
+         результат дає зміна № вручну і 💾 в рядку.</p>`;
+    planOrderSnapshot();
   }catch(e){
     console.error('Редактор плану:', e);
     box.innerHTML = `<p class="empty-msg" style="color:var(--red);">Не вдалося завантажити: ${escHtml(e.message||'')}</p>`;
@@ -1234,121 +1248,173 @@ window.renderPlanEditor = renderPlanEditor;
 
 
 // ══════════════════════════════════════════════════════════════════
-//  ПЕРЕТЯГУВАННЯ ТЕМ У СПИСКУ
+//  ПЕРЕСТАВЛЯННЯ ТЕМ ПЕРЕТЯГУВАННЯМ
 // ══════════════════════════════════════════════════════════════════
 //
 // ЩО САМЕ РУХАЄТЬСЯ. Не номери уроків, а теми між ними. Послідовність
 // номерів лишається такою, якою була: якщо в плані є два записи на урок
-// № 7, після переносу їх так само буде два. Тема, яку перетягнули,
+// № 7, після переставляння їх так само буде два. Тема, яку перетягнули,
 // отримує номер того місця, куди її поклали, а теми між старим і новим
-// місцем зсуваються на одну позицію. Теми поза цим проміжком не
-// чіпаються взагалі.
+// місцем зсуваються на одну позицію.
+//
+// НІЧОГО НЕ ЗБЕРІГАЄТЬСЯ САМО. Перетягування лише готує новий порядок;
+// у базу він потрапляє тільки після натискання «Зберегти порядок».
+// Поки не натиснули — унизу списку висить смужка з кнопкою «Скасувати»,
+// яка повертає все як було. Помилитися мишею на списку зі 140 тем надто
+// легко, щоб кожен зрив пальця одразу переписував план.
+//
+// ЩО ВИДНО ПІД ЧАС ПЕРЕТЯГУВАННЯ:
+//   • копія рядка їде за пальцем (не сам рядок — його палець накриває);
+//   • на місці, куди тема ляже, лишається пунктирна рамка;
+//   • номери в списку одразу перераховуються, тож видно результат.
 //
 // ЧОМУ НЕ HTML5 drag-and-drop. Він не працює на сенсорних екранах, а
 // портал відкривають переважно з телефона. Pointer Events — одні й ті
 // самі для миші, пальця й стилуса.
-//
-// ЗАПИС. Один update на весь список: або нова нумерація стала цілком,
-// або не стала зовсім. Порядок, у якому теми потрапили б у базу
-// по одній, посеред обриву зв'язку лишив би план із дірками.
 
 let peDrag = null;        // стан поточного перетягування
 let peScroll = null;      // таймер автопрокрутки біля краю екрана
+let peBase = null;        // {ids, nums} — порядок і номери, які лежать у базі
 
 function peRows(list){ return Array.from(list.querySelectorAll('.pe-row')); }
+function peList(){ return document.getElementById('pe-list'); }
 
-// Скільки рядків користувач змінив, але не зберіг. Перенос перемальовує
-// список, тому мовчки втратити ці правки не можна.
-//
-// Числа порівнюємо числами, а не рядками: «2» і 2 — те саме значення, і
-// показувати через таку різницю попередження про втрату правок означало б
-// привчити людину тиснути «Так» не читаючи.
-function peDirtyCount(list){
-  const numChanged = (v, orig) => Number(v) !== Number(orig);
-  return peRows(list).filter(r =>
-       r.querySelector('.pe-title').value !== r.dataset.origTitle
-    || numChanged(r.querySelector('.pe-num').value,   r.dataset.origNum)
-    || numChanged(r.querySelector('.pe-hours').value, r.dataset.origHours)
-  ).length;
-}
-
-function peRestoreOrder(list, ids){
-  const byId = new Map(peRows(list).map(r => [r.dataset.id, r]));
-  ids.forEach(id => { const r = byId.get(id); if(r) list.appendChild(r); });
-}
-
-function wirePlanDrag(){
-  const list = document.getElementById('pe-list');
-  if(!list) return;
+// Викликається наприкінці малювання списку: запам'ятовуємо те, що в базі.
+// Від цього знімка рахується і «що змінилося», і «скасувати».
+function planOrderSnapshot(){
+  const list = peList();
+  if(!list){ peBase = null; return; }
+  const rows = peRows(list);
+  peBase = {
+    ids:  rows.map(r => r.dataset.id),
+    nums: rows.map(r => parseInt(r.dataset.origNum, 10) || 0)
+  };
   list.addEventListener('pointerdown', peDown);
+  peRefreshBar();
 }
+
+// Чи є непідтверджене переставляння. Читають і смужка, і перемикання класу.
+export function planOrderPending(){
+  const list = peList();
+  if(!list || !peBase) return 0;
+  const ids = peRows(list).map(r => r.dataset.id);
+  let n = 0;
+  ids.forEach((id, i) => { if(id !== peBase.ids[i]) n++; });
+  return n;
+}
+window.planOrderPending = planOrderPending;
+
+// Перерахувати номери за поточним порядком і показати/сховати смужку.
+// Номери переписуємо одразу: інакше після переставляння в стовпчику «№»
+// стояло б 1, 2, 4, 3 — і вчитель не зрозумів би, що саме збережеться.
+function peApplyPending(){
+  const list = peList();
+  if(!list || !peBase) return;
+  peRows(list).forEach((r, i) => {
+    const want = peBase.nums[i];
+    const inp = r.querySelector('.pe-num');
+    if(!inp) return;
+    if(String(want) !== inp.value) inp.value = want;
+    inp.classList.toggle('pe-changed', String(want) !== r.dataset.origNum);
+  });
+  peRefreshBar();
+}
+
+function peRefreshBar(){
+  const bar = document.getElementById('pe-bar');
+  if(!bar) return;
+  const n = planOrderPending();
+  bar.hidden = !n;
+  const txt = document.getElementById('pe-bar-txt');
+  if(txt) txt.textContent = n
+    ? `Порядок змінено: тем на нових місцях — ${n}. У базі поки що старий.`
+    : '';
+}
+
+// Повернути список у той вигляд, який лежить у базі.
+window.cancelPlanOrder = function(){
+  const list = peList();
+  if(!list || !peBase) return;
+  const byId = new Map(peRows(list).map(r => [r.dataset.id, r]));
+  peBase.ids.forEach(id => { const r = byId.get(id); if(r) list.appendChild(r); });
+  peRows(list).forEach(r => {
+    const inp = r.querySelector('.pe-num');
+    if(inp){ inp.value = r.dataset.origNum; inp.classList.remove('pe-changed'); }
+  });
+  peRefreshBar();
+};
+
+// ── сам жест ──
 
 function peDown(e){
   const grip = e.target.closest && e.target.closest('.pe-grip');
   if(!grip) return;
   if(e.pointerType === 'mouse' && e.button !== 0) return;
   const row  = grip.closest('.pe-row');
-  // currentTarget, а не getElementById: слухач висить на конкретному
-  // списку, і саме в ньому лежить рядок. Пошук за id знайшов би новий
-  // список після перемальовування, а рядок лишився б від старого — і
-  // жодне перенесення не спрацювало б, мовчки.
   const list = e.currentTarget;
   if(!row || !list || peDrag) return;
   e.preventDefault();
-  clearInterval(peScroll); peScroll = null;   // хвіст від обірваного перенесення
+  clearInterval(peScroll); peScroll = null;   // хвіст від обірваного жесту
 
+  const rect = row.getBoundingClientRect();
   peDrag = {
     row, list,
-    // Порядок і нумерація ДО переносу — саме в тому вигляді, як лежить
-    // у базі, а не як зараз у полях: у полі може бути незбережена правка.
-    ids0:  peRows(list).map(r => r.dataset.id),
-    nums0: peRows(list).map(r => parseInt(r.dataset.origNum, 10) || 0),
-    moved: false
+    ids0: peRows(list).map(r => r.dataset.id),   // для скасування самого жесту
+    moved: false,
+    pid: e.pointerId,
+    dx: e.clientX - rect.left,
+    dy: e.clientY - rect.top,
+    ghost: peMakeGhost(row, rect)
   };
-  row.classList.add('pe-drag');
-  // Поки тягнемо — не даємо виділятися тексту в полях сусідніх рядків:
-  // довгий рух пальцем інакше лишає за собою синю смугу виділення.
+  // Оригінал лишається в списку й далі рухається — але вже як порожня
+  // пунктирна рамка. Це і є відповідь на «куди я це тягну».
+  row.classList.add('pe-slot');
   list.classList.add('pe-moving');
-  // Захоплюємо вказівник списком, а не ручкою. Ручка їздить разом із
-  // рядком, а переміщення вузла в DOM браузер вважає видаленням і
-  // захоплення знімає — палець «зривався» б з теми на першому ж кроці.
-  // Список під час перенесення не рухається.
-  peDrag.pid = e.pointerId;
+
+  // Захоплюємо вказівник списком, а не ручкою: ручка їде разом із рядком,
+  // а переміщення вузла в DOM браузер вважає видаленням і захоплення
+  // знімає — палець «зривався» б з теми на першому ж кроці.
   try{ list.setPointerCapture(e.pointerId); }catch(_){}
   list.addEventListener('pointermove',   peMove);
   list.addEventListener('pointerup',     peUp);
-  list.addEventListener('pointercancel', peCancel);
-  // Страховка: якщо захоплення все ж загубиться (перемикання вікна,
-  // системний жест), перенесення має завершитися, а не зависнути
-  // з таймером автопрокрутки, що крутиться далі.
-  window.addEventListener('pointerup', peUp);
+  list.addEventListener('pointercancel', peCancelGesture);
+  window.addEventListener('pointerup',   peUp);   // якщо захоплення загубиться
 
-  // Автопрокрутка: у плані буває півтори сотні тем, і перенести тему на
-  // десять рядків вище без прокрутки неможливо — палець упирається в край.
-  //
-  // Після кожного зсуву сторінки переставляємо рядок заново. Спершу я
-  // цього не робив, і виходило безглуздо: сторінка їде, а тема стоїть на
-  // місці, доки палець не смикнеться. Прокрутка під нерухомим пальцем —
-  // це рух списку відносно нього, тобто те саме, що рух пальця.
   peScroll = setInterval(() => {
     if(!peDrag || peDrag.lastY == null) return;
     const y = peDrag.lastY, h = window.innerHeight;
-    const before = window.scrollY;
+    const was = window.scrollY;
     if(y < 90)        window.scrollBy(0, -12);
     else if(y > h-90) window.scrollBy(0,  12);
-    if(window.scrollY !== before) peReposition(peDrag.lastX, y);
+    if(window.scrollY !== was) peReposition(peDrag.lastX, y);
   }, 16);
 }
 
-// Куди покласти рядок при поточному положенні вказівника.
+// Копія рядка, що їде за пальцем. Сам рядок тягнути не можна: палець
+// його накриває, і людина не бачить, що саме несе.
+function peMakeGhost(row, rect){
+  const g = row.cloneNode(true);
+  // У клоні значення полів беруться з атрибутів, а не з того, що зараз
+  // на екрані. Переносимо вручну, інакше в копії була б стара назва.
+  const src = row.querySelectorAll('input'), dst = g.querySelectorAll('input');
+  src.forEach((el, i) => { if(dst[i]) dst[i].value = el.value; });
+  g.classList.add('pe-ghost');
+  g.classList.remove('pe-slot');
+  g.style.width = rect.width + 'px';
+  g.style.left  = rect.left + 'px';
+  g.style.top   = rect.top + 'px';
+  document.body.appendChild(g);
+  return g;
+}
+
+// Куди покласти рамку при поточному положенні вказівника.
 function peReposition(x, y){
   if(!peDrag || x == null || y == null) return;
-  const el = document.elementFromPoint(x, y);
+  const el = document.elementFromPoint(x, y);   // привид не заважає: pointer-events:none
   const over = el && el.closest ? el.closest('.pe-row') : null;
   if(!over || over === peDrag.row || over.parentNode !== peDrag.list) return;
   const r = over.getBoundingClientRect();
-  const before = y < r.top + r.height / 2;
-  peDrag.list.insertBefore(peDrag.row, before ? over : over.nextSibling);
+  peDrag.list.insertBefore(peDrag.row, (y < r.top + r.height / 2) ? over : over.nextSibling);
   peDrag.moved = true;
 }
 
@@ -1357,68 +1423,59 @@ function peMove(e){
   e.preventDefault();
   peDrag.lastX = e.clientX;
   peDrag.lastY = e.clientY;
+  if(peDrag.ghost){
+    peDrag.ghost.style.left = (e.clientX - peDrag.dx) + 'px';
+    peDrag.ghost.style.top  = (e.clientY - peDrag.dy) + 'px';
+  }
   peReposition(e.clientX, e.clientY);
 }
 
-// Спільне завершення: знімаємо слухачі, захоплення й таймер. Повертає
-// стан, що був, — далі викликач вирішує, зберігати чи відкотити.
-function peFinish(e){
+// Прибрати слухачі, захоплення, таймер і привида. Повертає стан жесту.
+function peFinish(){
   const st = peDrag;
   if(!st) return null;
-  const { row, list, pid } = st;
+  const { row, list, pid, ghost } = st;
   list.removeEventListener('pointermove',   peMove);
   list.removeEventListener('pointerup',     peUp);
-  list.removeEventListener('pointercancel', peCancel);
+  list.removeEventListener('pointercancel', peCancelGesture);
   window.removeEventListener('pointerup',   peUp);
   try{ if(list.hasPointerCapture(pid)) list.releasePointerCapture(pid); }catch(_){}
   clearInterval(peScroll); peScroll = null;
-  row.classList.remove('pe-drag');
+  if(ghost) ghost.remove();
+  row.classList.remove('pe-slot');
   list.classList.remove('pe-moving');
   peDrag = null;
   return st;
 }
 
 // Жест перервала система — вхідний дзвінок, перемикання застосунку.
-// Людина нічого не «поклала», тому нічого й не зберігаємо: повертаємо
-// список у той вигляд, у якому вона його бачила до захоплення.
-function peCancel(e){
-  const st = peFinish(e);
-  if(st && st.moved) peRestoreOrder(st.list, st.ids0);
+// Людина нічого не клала, тож повертаємо рядок туди, звідки взяли.
+function peCancelGesture(){
+  const st = peFinish();
+  if(!st || !st.moved) return;
+  const byId = new Map(peRows(st.list).map(r => [r.dataset.id, r]));
+  st.ids0.forEach(id => { const r = byId.get(id); if(r) st.list.appendChild(r); });
 }
 
-async function peUp(e){
-  const st = peFinish(e);
-  if(!st) return;
-  const { list, ids0, nums0, moved } = st;
-
-  if(!moved) return;
-  const ids1 = peRows(list).map(r => r.dataset.id);
-  // Список могли перемалювати просто під час перенесення — наприклад,
-  // вчитель перемкнув клас. Тоді порядок на екрані вже не стосується
-  // того плану, який ми збиралися записати.
-  if(!list.isConnected) return;
-  const SEP = String.fromCharCode(0);   // роздільник, якого точно немає в ключах
-  if(ids1.join(SEP) === ids0.join(SEP)) return;   // повернули на місце
-
-  const dirty = peDirtyCount(list);
-  if(dirty && !confirm(
-      `У списку є незбережені правки (рядків: ${dirty}).\n\n`
-    + 'Після переносу список перечитається з бази і ці правки зникнуть.\n'
-    + 'Перенести?')){
-    peRestoreOrder(list, ids0);
-    return;
-  }
-  await savePlanOrder(list, ids0, nums0, ids1);
+function peUp(){
+  const st = peFinish();
+  if(!st || !st.moved) return;
+  if(!st.list.isConnected) return;   // список перемалювали просто під час жесту
+  peApplyPending();                  // тільки перерахунок на екрані — не запис
 }
 
-// Чистий перерахунок номерів: що саме треба записати, щоб теми стали в
-// новому порядку. Винесено окремо й покрито тестами, бо помилка тут
-// зіпсувала б нумерацію всього предмета одним записом, а перевірити її
-// на око в списку зі 140 тем неможливо.
+// ══════════════════════════════════════════════════════════════════
+//  ЗБЕРЕЖЕННЯ НОВОГО ПОРЯДКУ
+// ══════════════════════════════════════════════════════════════════
+
+// Чистий перерахунок: що саме треба записати, щоб теми стали в новому
+// порядку. Винесено окремо й покрито тестами, бо помилка тут зіпсувала б
+// нумерацію всього предмета одним записом, а перевірити її на око в
+// списку зі 140 тем неможливо.
 //
-//   ids0, nums0 — порядок і номери до переносу (номер nums0[i] належить
-//                 темі ids0[i]);
-//   ids1        — порядок після переносу.
+//   ids0, nums0 — порядок і номери до переставляння (номер nums0[i]
+//                 належить темі ids0[i]);
+//   ids1        — порядок після.
 // Номери лишаються на своїх позиціях: тема, що стала i-ю, дістає nums0[i].
 export function reorderTopicNums(ids0, nums0, ids1){
   const was = {};
@@ -1430,20 +1487,38 @@ export function reorderTopicNums(ids0, nums0, ids1){
   return updates;
 }
 
-async function savePlanOrder(list, ids0, nums0, ids1){
+// Скільки рядків людина змінила руками й не зберегла кнопкою 💾 у рядку.
+// Числа порівнюємо числами: «2» і 2 — те саме значення, і попереджати
+// через таку різницю означало б привчити тиснути «Так» не читаючи.
+// Поле «№» пропускаємо: його переписує саме переставляння.
+function peHandEdits(list){
+  return peRows(list).filter(r =>
+       r.querySelector('.pe-title').value !== r.dataset.origTitle
+    || Number(r.querySelector('.pe-hours').value) !== Number(r.dataset.origHours)
+  ).length;
+}
+
+window.savePlanOrder = async function(){
+  const list = peList();
   const p = planPath();
-  if(!p){ peRestoreOrder(list, ids0); return; }
-  const updates = reorderTopicNums(ids0, nums0, ids1);
+  if(!list || !peBase || !p) return;
+  const ids1 = peRows(list).map(r => r.dataset.id);
+  const updates = reorderTopicNums(peBase.ids, peBase.nums, ids1);
+
   // Порядок на екрані змінився, а писати нічого — значить теми, які
   // помінялися місцями, стоять під одним номером уроку. Між рівними
   // номерами порядок задає база, і зберегти його ніде. Мовчати тут не
-  // можна: вчитель побачив би переставлені рядки, які після оновлення
-  // сторінки повернуться назад.
+  // можна: інакше вчитель побачив би переставлені рядки, які після
+  // оновлення сторінки повернуться назад.
   if(!Object.keys(updates).length){
-    peRestoreOrder(list, ids0);
-    showToast('ℹ️ У цих тем однаковий № уроку — порядок між ними не зберігається');
-    return;
+    window.cancelPlanOrder();
+    return showToast('ℹ️ У цих тем однаковий № уроку — порядок між ними не зберігається');
   }
+
+  const hand = peHandEdits(list);
+  if(hand && !confirm(`У списку є незбережені правки назв або годин (рядків: ${hand}).\n\n`
+    + 'Збереження порядку перечитає список із бази, і ці правки зникнуть.\n'
+    + 'Спершу збережіть їх кнопкою 💾 у самому рядку.\n\nВсе одно зберегти порядок?')) return;
 
   list.classList.add('pe-busy');
   try{
@@ -1460,14 +1535,13 @@ async function savePlanOrder(list, ids0, nums0, ids1){
     if(window.populateTopicSelector) window.populateTopicSelector();
   }catch(err){
     // Не залишаємо на екрані порядок, якого немає в базі: інакше вчитель
-    // піде далі в переконанні, що перенос відбувся.
+    // піде далі в переконанні, що зміни лягли.
     alert('Не вдалося зберегти порядок: ' + err.message);
-    peRestoreOrder(list, ids0);
+    window.cancelPlanOrder();
   }finally{
     list.classList.remove('pe-busy');
   }
-}
-
+};
 
 // Чи є вже тема з таким номером уроку. Не забороняємо — попереджаємо:
 // у плані буває два записи на один урок, і рішення тут за вчителем.
