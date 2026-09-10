@@ -1704,6 +1704,8 @@ function renderRoleSwitcher(){
   </select>`;
   document.getElementById('pb-role-select').addEventListener('change',e=>window.switchRole(e.target.value));
 }
+window.renderRoleSwitcher = renderRoleSwitcher;
+
 // ══════════ ПЕРЕКЛЮЧЕННЯ РОЛІ ══════════
 // Активна роль зберігається в users/{uid}/role, тому після перезаходу людина
 // опиняється в тому ж кабінеті, де працювала останній раз.
@@ -1716,8 +1718,31 @@ window.switchRole=async function(newRole){
   // писати у DOM, якого вже немає на екрані.
   if(teacherAttendanceListener)teacherAttendanceListener();
   if(parentLessonInterval)clearInterval(parentLessonInterval);
-  currentUserData.role=newRole;
-  try{await update(ref(db,`users/${auth.currentUser.uid}`),{role:newRole});}catch(e){console.error(e);}
+  // ЗАПИС МУСИТЬ ПРОЙТИ, І МОВЧАТИ ПРО НЕВДАЧУ НЕ МОЖНА.
+  //
+  // Правила бази звіряють роль саме з users/{uid}. Раніше роль мінялася
+  // спершу локально, а помилку запису ковтав console.error — і виходило
+  // найгірше поєднання: на екрані вже кабінет батьків, а база вважає
+  // людину вчителем, тож будь-яке збереження тихо відхиляється.
+  //
+  // Найчастіша причина відмови — перехід у роль «parent» в акаунта, де в
+  // профілі немає дитини: правило вимагає, щоб імʼя й клас збігалися з
+  // привʼязкою. Тому при невдачі повертаємо роль назад.
+  //
+  // Та сама вада вже ловилася в перемикачі дітей; тут вона лишалася.
+  const prevRole = currentUserData.role;
+  currentUserData.role = newRole;
+  try{
+    await update(ref(db,`users/${auth.currentUser.uid}`),{role:newRole});
+  }catch(e){
+    currentUserData.role = prevRole;
+    console.error('switchRole:', e);
+    alert('Не вдалося перемкнути кабінет: ' + (e.message || e)
+      + '\n\nЯкщо ви переходите в кабінет батьків — можливо, до вашої пошти '
+      + 'не привʼязано дитину. Зверніться до класного керівника.');
+    if(window.renderRoleSwitcher) window.renderRoleSwitcher();
+    return;
+  }
   if(isTeacherRole(newRole))await fetchTeacherAccess(currentUserData.email.replace(/\./g,'_'));
   initUserSession();
   showToast(`🔄 Кабінет: ${ROLE_LABELS[newRole]||newRole}`);
@@ -1987,6 +2012,19 @@ onAuthStateChanged(auth,async user=>{
   // Людина перейшла за посиланням із листа відновлення пароля — показуємо
   // сторінку встановлення нового пароля і не чіпаємо звичайний вхід.
   if(hasPendingAuthAction()){document.body.classList.add('auth-mode');initPasswordResetScreen();return;}
+  // ВЕСЬ РОЗБІР ВХОДУ — ПІД ОДНИМ try.
+  //
+  // Тут шість читань бази поспіль, і жодне не було захищене. Якщо
+  // будь-яке впаде — немає мережі, правила не опубліковані, вузол
+  // недоступний — обробник обривався мовчки. А панелі до цього вже
+  // сховано, тож людина лишалася перед порожнім темним екраном: ні
+  // кабінету, ні форми входу, ні пояснення.
+  //
+  // Запобіжник на 2.5 секунди тут не рятує: authAnswered піднімається
+  // найпершим рядком, тобто ще до першого читання. Раніше це хоч якось
+  // прикривала форма входу, видима з першого кадру, — але тепер вона
+  // прихована до відповіді Firebase, і збій став видно на повний зріст.
+  try{
   document.querySelectorAll('.panel').forEach(p=>p.style.display='none');document.getElementById('calendar-block').style.display='none';document.getElementById('profile-bar').style.display='none';
   if(user){
     const se=user.email.replace(/\./g,'_');
@@ -2111,6 +2149,20 @@ onAuthStateChanged(auth,async user=>{
     // сторінки: до перевірки сеансу екран прихований, і рядок під ним
     // ніхто б не побачив.
     renderVendorCredit();
+  }
+  }catch(e){
+    // Показуємо форму входу й кажемо правду: сталося не те, що очікували.
+    // Мовчки лишити темний екран — найгірше з можливого: людина не знає
+    // навіть, чи варто чекати.
+    console.error('[Push School] Вхід:', e);
+    const scr = document.getElementById('login-screen');
+    if(scr) scr.style.display = 'block';
+    document.body.classList.add('auth-mode');
+    renderVendorCredit();
+    setMsg('login-error', /permission[_ ]denied/i.test(e && e.message || '')
+      ? 'Портал не отримав доступу до бази. Зверніться до адміністрації школи.'
+      : 'Не вдалося завершити вхід: ' + ((e && e.message) || 'немає звʼязку')
+        + '. Перевірте інтернет і спробуйте ще раз.', 'login-err');
   }
 });
 async function fetchTeacherAccess(se){const s=await get(child(ref(db),`teacher_access/${se}`));teacherAccessMatrix=s.exists()?s.val():{};}
@@ -3690,7 +3742,22 @@ function setMsg(id,msg,cls){
   el.style.display=msg?'block':'none';
 }
 // ── перемикання екранів ──
+// ПОКАЗ ЕКРАНА ЗАВЖДИ ПОВЕРТАЄ КНОПКИ В РОБОЧИЙ СТАН.
+//
+// setBusy лишає кнопку вимкненою з написом «Зачекайте...», і скидалася
+// вона тільки в гілці помилки. Але людину повертають сюди й ПІСЛЯ
+// успішного натискання: акаунт створився, а пошти в школі не знайшлося.
+// Тоді на екрані висіла мертва кнопка «⏳ Зачекайте...», натиснути її
+// вдруге було неможливо — і єдиним, що взагалі натискалося, лишалося
+// «Забули пароль?».
+function resetAuthButtons(){
+  setBusy('btn-login-submit', false, 'Увійти');
+  setBusy('btn-fl-submit',    false, 'Встановити пароль і увійти');
+  setBusy('btn-rp-submit',    false, 'Зберегти новий пароль');
+}
+
 window.showFirstLoginScreen=function(prefillEmail,hint){
+  resetAuthButtons();
   document.getElementById('login-screen').style.display='none';
   document.getElementById('first-login-screen').style.display='block';
   const em=document.getElementById('fl-email');
@@ -3701,6 +3768,7 @@ window.showFirstLoginScreen=function(prefillEmail,hint){
   (em&&!em.value?em:document.getElementById('fl-pass'))?.focus();
 };
 window.showLoginScreen=function(prefillEmail,hint){
+  resetAuthButtons();
   document.getElementById('first-login-screen').style.display='none';
   document.getElementById('login-screen').style.display='block';
   renderVendorCredit();
@@ -3825,6 +3893,14 @@ window.submitFirstLogin=async function(ev){
   const p2=document.getElementById('fl-pass2').value;
   setMsg('fl-error','');
   if(!email||!p1){setMsg('fl-error','Заповніть email і пароль.','login-err');return false;}
+  // Учень вводить НІКНЕЙМ, а не пошту, і акаунт йому створюють батьки.
+  // Без цієї перевірки Firebase відповідав «Невірний формат email», з чого
+  // дитині незрозуміло ні що не так, ні до кого йти.
+  if(!email.includes('@')){
+    setMsg('fl-error','Схоже, це нікнейм, а не email. Учні тут пароль не створюють — '
+      + 'його задають батьки у своєму кабінеті, розділ «Доступ дитини до порталу».','login-err');
+    return false;
+  }
   if(p1.length<6){setMsg('fl-error','Пароль має бути не коротшим за 6 символів.','login-err');return false;}
   if(p1!==p2){setMsg('fl-error','Паролі не збігаються.','login-err');return false;}
   setBusy('btn-fl-submit',true);
@@ -3835,6 +3911,11 @@ window.submitFirstLogin=async function(ev){
     firstLoginJustCreated = true;
     await createUserWithEmailAndPassword(auth,email,p1);
   }catch(err){
+    // Створення не вдалося — отже, акаунта ми не створювали, і прибирати
+    // згодом нічого. Без цього рядка прапорець лишався б піднятим після,
+    // скажімо, «занадто простий пароль», і наступний вхід під ІНШИМ,
+    // давнім акаунтом без доступу видалив би його.
+    firstLoginJustCreated = false;
     setBusy('btn-fl-submit',false,'Встановити пароль і увійти');
     const code=err&&err.code||'';
     if(code==='auth/email-already-in-use'){
