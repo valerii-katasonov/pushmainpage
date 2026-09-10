@@ -26,18 +26,47 @@
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, update } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { db, currentUserData, getActiveClass, showToast, escHtml,
-         logAction, mondayOf, localDateString } from './common.js';
+         logAction, mondayOf, localDateString,
+         getStudentDir, resolveStudentKey } from './common.js';
 
 export const ACT_BUILD = '2026-09-08 · басейн і автобус v3';
 // Рядок у консолі — щоб на питання «а нова версія взагалі виїхала?»
 // можна було відповісти за секунду, а не здогадуватися.
 console.info('[Push School] activities.js —', ACT_BUILD);
 
-// Ключ дитини в базі. Скрізь у порталі перевага в studentId — імена
-// повторюються й міняються (заміжжя, зміна документів), ідентифікатор ні.
-function myKid(){
+// Ключ дитини в базі. Перевага в studentId: імена повторюються й
+// міняються, ідентифікатор — ні.
+//
+// ОДНА ДИТИНА — ОДИН КЛЮЧ, НЕЗАЛЕЖНО ВІД ТОГО, ХТО З БАТЬКІВ ВІДКРИВ.
+//
+// Раніше тут стояло `d.studentId || d.studentName` — сирий запасний
+// варіант із профілю того, хто зайшов. А профілі в батьків різні: у
+// матері при прив'язці записався ідентифікатор, у батька — ні, у нього
+// лише ім'я. Виходило два різні шляхи для однієї дитини:
+//   activity_plan/class_3/-Nx7...    ← відповідь матері
+//   activity_plan/class_3/Іван Ковальчук  ← відповідь батька
+// Мати відповідала, батько відкривав портал — і питання про басейн
+// поставало перед ним заново, ніби ніхто нічого не вирішував. А в
+// класного керівника та сама дитина рахувалася двічі.
+//
+// Ця сама вада вже ловилася на харчуванні; лікується вона там
+// resolveStudentKey — звіркою зі списком класу, а не довірою до копії в
+// профілі. Тут тепер те саме, тією ж функцією.
+//
+// Асинхронна: список класу читається з бази (з кешем усередині).
+async function myKid(){
   const d = currentUserData || {};
-  return { cls: d.class || getActiveClass(), sid: d.studentId || d.studentName || '' };
+  const cls = d.class || getActiveClass();
+  if(!cls) return { cls:'', sid:'' };
+  let dir = null;
+  try{ dir = await getStudentDir(cls); }
+  catch(e){ console.warn('[Push School] довідник класу:', e.message); }
+  const res = resolveStudentKey(dir, d.studentId, d.studentName);
+  if(res.stale)
+    console.warn('[Push School] studentId із профілю не знайдено у списку класу — шукаю за імʼям');
+  // Ключа немає в списку зовсім — лишається ім'я. Це гірше за
+  // ідентифікатор, але краще, ніж не показати питання взагалі.
+  return { cls, sid: res.key || d.studentId || d.studentName || '' };
 }
 
 // Понеділок тижня, до якого належить дата. Тиждень позначаємо саме
@@ -84,7 +113,7 @@ export async function renderActivities(boxId){
   // Питання адресоване дорослому: рішення про басейн і про те, хто везе
   // дитину, приймає він. Учень бачить результат у розкладі, але не змінює.
   if(!currentUserData || currentUserData.role !== 'parent'){ box.style.display='none'; return; }
-  const { cls, sid } = myKid();
+  const { cls, sid } = await myKid();
   // Дитина не визначена — мовчки ховати не можна: батько вирішив би, що
   // так і має бути, і питання про басейн просто не дійшло б до нього.
   if(!cls || !sid){
@@ -224,7 +253,7 @@ function buildActivitiesHtml(wk){
 // Постійна відповідь. update, а не set: два питання живуть в одному вузлі,
 // і відповідь на друге не має стирати перше.
 window.setActivityPlan = async function(key, val){
-  const { cls, sid } = myKid();
+  const { cls, sid } = await myKid();
   if(!cls || !sid) return;
   try{
     const patch = { [key]: !!val, ts: Date.now(),
@@ -248,7 +277,7 @@ window.setActivityPlan = async function(key, val){
 // Тижнева відмітка. «Буде» — це ВИДАЛЕННЯ запису, а не запис true:
 // див. пояснення вгорі файлу, у базі живуть тільки відмови.
 window.setPoolWeek = async function(going){
-  const { cls, sid } = myKid();
+  const { cls, sid } = await myKid();
   if(!cls || !sid) return;
   const wk = weekKey();
   try{
