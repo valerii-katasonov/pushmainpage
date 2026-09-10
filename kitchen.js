@@ -41,11 +41,6 @@
 import { ref, set, get, child, update, remove, onValue } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { db, auth, currentUserData, showToast, escHtml, escJs, localDateString, logAction, notifyEvent, pushConfigured, renderPushWarning, getSchoolRange, sidOf, getStudentDir, resolveStudentKey, getDateRange, stuName, mondayOf } from './common.js';
 
-// Позначка версії модуля. Показується в блоці харчування дрібним рядком.
-// Якщо людина каже «нічого не змінилося», перше питання — який тут рядок:
-// айфон із головного екрана вміє показувати сторінку тижневої давнини.
-export const MEAL_BUILD = '2026-09-06 · харчування v10 · оцінки v2 (рівні 1–4 класи, реакції й коментарі за ключем дитини)';
-
 export const MEAL_CUTOFF_HOUR = 9;   // до 09:00 можна відмовитися від сьогоднішнього
 // Сніданок їдять до уроків, тож дедлайн 09:00 для нього безглуздий — його
 // вже зʼїли. Приймаємо до 7:00 того самого дня: те саме число, що й у
@@ -1323,12 +1318,7 @@ export async function renderParentMenu(cls, studentKey, date){
       </div>
       <!-- Позначка версії. Айфон уміє тримати стару сторінку днями, і
            «нічого не змінилося» найчастіше означає саме це. За рядком видно,
-           який код зараз працює. -->
-      <!-- Ключ дитини показуємо навмисно. Саме через невидимість цього
-           рядка з'ясування «чому в мами одне, а в тата інше» зайняло цілий
-           день: обидва кабінети виглядали однаково, а ходили за різними
-           ключами. Тепер це видно за секунду, з двох телефонів поруч. -->
-      <div class="pm-build">${escHtml(MEAL_BUILD)} · ключ: ${escHtml(String(studentKey).slice(0,24))}</div>`;
+           який код зараз працює. -->`;
     renderTakeaway(cur);
   }catch(e){
     box.innerHTML = `<div class="pm-none">Не вдалося завантажити меню: ${escHtml(e.message)}</div>`;
