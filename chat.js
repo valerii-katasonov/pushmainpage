@@ -39,6 +39,7 @@ export const CHAT_BUILD = '2026-08-31 · avatars v2';
 console.log('chat.js', CHAT_BUILD);
 
 let listListener = null, msgListener = null, currentChatId = null, currentMembers = [];
+let listGen = 0;
 
 // ── ХТО КОМУ МОЖЕ ПИСАТИ ──
 // Директор і секретар — будь-кому. Учитель — батькам своїх класів та
@@ -247,8 +248,14 @@ window.openChatModal = async function(){
   const box = document.getElementById('inbox-contacts-list');
   box.innerHTML = '<p class="empty-msg" style="padding:20px;">Завантаження...</p>';
 
-  if(listListener) listListener();
+  // Лічильник поколінь: між зняттям старої підписки й новою читається
+  // довідник контактів. Якщо вікно переписок встигли закрити й відкрити
+  // ще раз, обидва виклики знімуть ту саму стару підписку, а потім
+  // другий затре посилання на першу — і зняти її буде вже нічим.
+  const gen = ++listGen;
+  if(listListener){ listListener(); listListener = null; }
   const dir = await contactDirectory().catch(()=>new Map());
+  if(gen !== listGen) return;
   listListener = onValue(ref(db, `user_chats/${myKey()}`), async snap => {
     const ids = snap.exists() ? Object.keys(snap.val()) : [];
     if(!ids.length){
@@ -388,9 +395,18 @@ window.backToChatList = function(){
 };
 window.closeInboxModal = function(){
   document.getElementById('inbox-modal').style.display = 'none';
-  if(msgListener) msgListener();
-  if(listListener) listListener();
+  stopChatListeners();
 };
+// Знімає підписки вікна переписок. Викликається і при закритті вікна, і
+// при виході з акаунта: сторінка після виходу не перезавантажується, а
+// телефон у сім'ї часто спільний — чужі переписки не мають лишатися
+// підписаними під наступним користувачем.
+export function stopChatListeners(){
+  listGen++;                       // скасовуємо виклик, що зараз у польоті
+  if(msgListener){ try{ msgListener(); }catch(e){} msgListener = null; }
+  if(listListener){ try{ listListener(); }catch(e){} listListener = null; }
+}
+window.stopChatListeners = stopChatListeners;
 
 window.sendInboxMessage = async function(){
   if(!currentChatId) return;
