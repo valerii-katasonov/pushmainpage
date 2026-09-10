@@ -7,7 +7,7 @@
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, push, remove, update, onValue, runTransaction } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { renderNewsFeed } from './news.js';
-import { db, auth, CLOUDINARY_URL, UPLOAD_PRESET, HW_FILE_EXT, HW_FILE_MAX_MB, fileExt, getActiveClass, currentUserData, showToast, displayGrade, renderHwItem, renderHwList, dayKeys, formatAttendanceSlotLabel, STICKER_GOAL, stickerGoal, escJs, escHtml, safeUrl, normalizeChildren, notifyEvent, logAction, renderBirthdays, teacherAccessMatrix, getUsersSnap, stuName, gradeWritePaths, localDateString, isMasterTeacher, gradeTypesCache} from './common.js';
+import { db, auth, CLOUDINARY_URL, UPLOAD_PRESET, HW_FILE_EXT, HW_FILE_MAX_MB, fileExt, getActiveClass, currentUserData, showToast, displayGrade, renderHwItem, renderHwList, dayKeys, formatAttendanceSlotLabel, STICKER_GOAL, stickerGoal, escJs, escHtml, safeUrl, normalizeChildren, notifyEvent, logAction, renderBirthdays, teacherAccessMatrix, getUsersSnap, stuName, gradeWritePaths, localDateString, isMasterTeacher, gradeTypesCache, subjKey } from './common.js';
 import { populateTopicSelector, availableTopicsCache } from './curriculum.js';
 
 let currentHwImages=[];
@@ -214,7 +214,7 @@ window.fillHwTextbooks=async function(){
   const subj=document.getElementById('t-subject')?.value;
   if(!sel)return;
   if(!subj){sel.innerHTML='<option value="">— спочатку оберіть предмет —</option>';return;}
-  const snap=await get(ref(db,`textbooks/${getActiveClass()}/${subj.replace(/[.#$[\]]/g,'_')}`));
+  const snap=await get(ref(db,`textbooks/${getActiveClass()}/${subjKey(subj)}`));
   let html='<option value="">— не вказувати —</option>';
   let n=0;
   if(snap.exists()){
@@ -819,7 +819,7 @@ window.saveBehaviorGrade=async function(){
 async function loadTextbooksForTeacher(){
   const cls=getActiveClass();const subj=document.getElementById('t-subject').value;
   if(!subj)return;
-  const snap=await get(ref(db,`textbooks/${cls}/${subj.replace(/[.#$[\]]/g,'_')}`));
+  const snap=await get(ref(db,`textbooks/${cls}/${subjKey(subj)}`));
   const container=document.getElementById('t-textbooks-list');container.innerHTML='';
   if(snap.exists()){const data=snap.val();for(let k in data){const tb=data[k];container.innerHTML+=`<div class="textbook-item">📘 <a href="${safeUrl(tb.url)}" target="_blank" rel="noopener noreferrer">${escHtml(tb.title||tb.url)}</a><button onclick="removeTextbook('${cls}','${escJs(subj)}','${k}')" style="background:none;border:none;color:var(--red);cursor:pointer;padding:0;width:auto;margin:0;font-size:1rem;">✖</button></div>`;}}
   else container.innerHTML='<p class="empty-msg" style="font-size:.8rem;">Підручників ще не додано.</p>';
@@ -829,12 +829,12 @@ window.saveTextbook=async function(){
   const title=document.getElementById('t-tb-title').value.trim();const url=document.getElementById('t-tb-url').value.trim();
   if(!subj||!url){showToast("⚠️ Оберіть предмет та введіть посилання!");return;}
   if(!url.startsWith('http')){showToast("⚠️ URL має починатись з http!");return;}
-  await push(ref(db,`textbooks/${cls}/${subj.replace(/[.#$[\]]/g,'_')}`),{title:title||url,url,addedBy:auth.currentUser.uid});
+  await push(ref(db,`textbooks/${cls}/${subjKey(subj)}`),{title:title||url,url,addedBy:auth.currentUser.uid});
   document.getElementById('t-tb-title').value='';document.getElementById('t-tb-url').value='';
   showToast("📘 Підручник додано!");loadTextbooksForTeacher();
 };
 window.removeTextbook=async function(cls,subj,key){
-  await remove(ref(db,`textbooks/${cls}/${subj.replace(/[.#$[\]]/g,'_')}/${key}`));
+  await remove(ref(db,`textbooks/${cls}/${subjKey(subj)}/${key}`));
   showToast("🗑️ Видалено");loadTextbooksForTeacher();
 };
 // ══════════ CURRICULUM PLAN (legacy checklist) ══════════
@@ -870,7 +870,7 @@ export function hasCalendarPlan(node){
 
 async function loadCurriculumTopics(){
   const cls=getActiveClass();const subj=document.getElementById('t-subject').value;if(!subj)return;
-  const snap=await get(ref(db,`curriculum_plans/${cls}/${subj.replace(/[.#$[\]]/g,'_')}`));
+  const snap=await get(ref(db,`curriculum_plans/${cls}/${subjKey(subj)}`));
   const container=document.getElementById('curriculum-topics');container.innerHTML='';
   const node=snap.exists()?snap.val():{};
   const list=legacyTopics(node);
@@ -909,18 +909,18 @@ window.addCurriculumTopic=async function(){
   const cls=getActiveClass();const subj=document.getElementById('t-subject').value;
   const title=document.getElementById('new-topic-title').value.trim();const hours=parseInt(document.getElementById('new-topic-hours').value)||1;
   if(!subj||!title){showToast("⚠️ Оберіть предмет і введіть тему!");return;}
-  const existSnap=await get(ref(db,`curriculum_plans/${cls}/${subj.replace(/[.#$[\]]/g,'_')}`));
+  const existSnap=await get(ref(db,`curriculum_plans/${cls}/${subjKey(subj)}`));
   // Рахуємо САМЕ теми чекліста. Раніше бралися всі ключі вузла, тож
   // завантажений календарний план додавав до ліміту двійку зі своїх
   // службових ключів — і п'ять тем перетворювалися на три.
   const existCount=existSnap.exists()?legacyTopics(existSnap.val()).length:0;
   if(existCount>=5){showToast(`⚠️ Ліміт 5 тем на рік для "${subj}" вже досягнуто!`);return;}
-  await push(ref(db,`curriculum_plans/${cls}/${subj.replace(/[.#$[\]]/g,'_')}`),{title,hours,covered:false});
+  await push(ref(db,`curriculum_plans/${cls}/${subjKey(subj)}`),{title,hours,covered:false});
   document.getElementById('new-topic-title').value='';document.getElementById('new-topic-hours').value='';
   showToast("✅ Тему додано!");loadCurriculumTopics();
 };
 window.toggleTopicCovered=async function(cls,subj,key,val){
-  await set(ref(db,`curriculum_plans/${cls}/${subj.replace(/[.#$[\]]/g,'_')}/${key}/covered`),val);
+  await set(ref(db,`curriculum_plans/${cls}/${subjKey(subj)}/${key}/covered`),val);
   loadCurriculumTopics();
 };
 // ══════════ RETAKE REQUESTS (teacher review side) ══════════
@@ -1459,7 +1459,7 @@ export async function renderTeacherHwDay(){
       hwDayState[l.subject]={saved:!!rec, dirty:false, images:have};
       const id=`hwd-${i}`;
       const books=(function(){
-        const k=String(l.subject).replace(/[.#$[\]]/g,'_');
+        const k=subjKey(l.subject);
         const node=allBooks[k]||{};
         return Object.entries(node).map(([key,b])=>({key,...b})).filter(b=>b.title);
       })();
