@@ -224,6 +224,9 @@
        Свідомо тихий: людина прийшла увійти, а не читати, хто це зробив.
        Але видно щодня — а саме так і знаходять того, хто зробив систему,
        якщо захотіли таку собі. */
+    /* Один тихий рядок версії — під кнопкою виходу в кожному кабінеті.
+       Замінив чотирнадцять міток, розкиданих по розділах. */
+    .app-version{font-size:.66rem;color:#b0bec5;text-align:center;margin:9px 0 0;}
     .vendor-credit{margin-top:18px;padding-top:13px;border-top:1px solid rgba(160,230,240,.16);
                    font-size:.7rem;line-height:1.5;text-align:center;color:rgba(214,240,245,.5);}
     .vendor-credit a{color:rgba(160,230,240,.8);text-decoration:none;border-bottom:1px dotted;}
@@ -482,7 +485,6 @@
     .cp-av{width:32px;height:32px;border-radius:50%;flex:none;display:flex;align-items:center;
            justify-content:center;color:#fff;font-size:.72rem;font-weight:700;position:relative;overflow:hidden;}
     .cp-mid{flex:1;min-width:0;display:flex;flex-direction:column;}
-    .cp-diag{font-size:.68rem;color:#90a4ae;padding:4px 2px 8px;border-bottom:1px dashed #eceff1;margin-bottom:6px;}
     /* Профіль співробітника (кабінет директора) */
     .sp-back{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:70;
              display:flex;align-items:center;justify-content:center;padding:16px;}
@@ -788,7 +790,6 @@
     .si-apply{margin-top:12px;background:#2b5aa8;color:#fff;}
     .si-apply:disabled{opacity:.45;cursor:default;}
     .si-hint{font-size:.74rem;color:#90a4ae;margin-top:7px;line-height:1.5;}
-    .si-build{font-size:.66rem;color:#c8d2dc;margin-top:8px;text-align:right;}
     /* Клітинка обліку як кнопка — кухня дописує порцію після дедлайну */
     /* Правка замовлень на винос у кабінеті кухні */
     .k-ta-cell{line-height:2;}
@@ -1205,7 +1206,6 @@
     .bk-log-title{color:#eceff1;font-weight:700;margin-bottom:4px;}
     .bk-log-line.ok{color:#a5d6a7;}
     .bk-log-line.bad{color:#ef9a9a;}
-    .bk-build{margin-top:8px;font-size:.66rem;color:#9fa8da;text-align:right;}
     /* Дії над цілим рядком розкладу */
     .row-tools{margin-top:14px;padding:11px;background:#f3f6f7;border-radius:11px;border:1px solid #dde5e7;}
     .row-tools-title{font-size:.74rem;font-weight:800;color:#546e7a;text-transform:uppercase;
@@ -1321,7 +1321,6 @@
     .alt-badge.pending{background:#fff3e0;color:#e65100;}
     .alt-hint{font-size:.68rem;color:#9575cd;margin-top:2px;}
     .alt-mini{font-style:normal;font-size:.62rem;color:#9575cd;margin-left:4px;}
-    .alt-build{margin-top:8px;font-size:.66rem;color:#b39ddb;text-align:right;}
     /* Імпорт розкладу з Word */
     .si-drop{display:block;border:2px dashed #b39ddb;border-radius:10px;padding:16px;text-align:center;
              color:#4527a0;font-size:.84rem;cursor:pointer;margin-top:11px;background:#fff;}
@@ -1363,7 +1362,6 @@
     .pm-msg{font-size:.79rem;background:#e8f5e9;color:#1b5e20;border-radius:9px;
             padding:8px 11px;margin-top:9px;line-height:1.45;}
     .pm-msg.bad{background:#ffebee;color:#b71c1c;}
-    .pm-build{font-size:.66rem;color:#c8d2cc;margin-top:8px;text-align:right;}
     /* Правка позиції на винос у кухні */
     .ta-edit{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 9px 0;padding:9px 11px;
              background:#fffdf5;border:1px solid #f0e2b8;border-radius:9px;}
@@ -2285,6 +2283,7 @@
     </section>
 
     <button class="btn-logout" onclick="logoutUser()">Вийти</button>
+    <p class="app-version"></p>
   </div>
   <!-- КУХНЯ -->
   <div id="kitchen-screen" class="panel">
@@ -2395,6 +2394,7 @@
     </section>
 
     <button class="btn-logout" onclick="logoutUser()">Вийти</button>
+    <p class="app-version"></p>
   </div>
   <!-- DIRECTOR -->
   <div id="director-screen" class="panel">
@@ -2981,6 +2981,7 @@
     </section>
 
     <button class="btn-logout" onclick="logoutUser()">Вийти</button>
+    <p class="app-version"></p>
   </div>
   <!-- ══════════════════════════════
        TEACHER SCREEN
@@ -3368,6 +3369,7 @@
     </section>
 
     <button class="btn-logout" onclick="logoutUser()">Вийти</button>
+    <p class="app-version"></p>
   </div>
   <!-- ══════════════════════════════
        PARENT / STUDENT SCREEN
@@ -3590,6 +3592,7 @@
     </section>
 
     <button class="btn-logout" onclick="logoutUser()">Вийти</button>
+    <p class="app-version"></p>
   </div>
   <!-- ══════════════════════════════
        STUDENT SCREEN
@@ -3724,6 +3727,7 @@
     </section>
 
 <button class="btn-logout" onclick="logoutUser()">Вийти</button>
+    <p class="app-version"></p>
   </div>
 </div>
 <!-- ══════════════════ MODALS ══════════════════ -->
