@@ -53,6 +53,7 @@
 // НАЛАШТУВАННЯ: та сама змінна, що вже є, — FIREBASE_SERVICE_ACCOUNT.
 
 const crypto = require('crypto');
+const { mailConfigured, passwordLetter, sendMail } = require('./lib/mail');
 
 const ALLOWED_HOSTS = ['planlekcjipush.netlify.app', 'localhost', '127.0.0.1'];
 
@@ -72,6 +73,7 @@ function originAllowed(origin){
   try{ host = new URL(origin).hostname; }catch(e){ return false; }
   return ALLOWED_HOSTS.includes(host);
 }
+const PROJECT_ID = 'test-4eb3e';
 const DB = 'https://test-4eb3e-default-rtdb.europe-west1.firebasedatabase.app';
 const IDT = 'https://identitytoolkit.googleapis.com/v1';
 const WEB_API_KEY = process.env.FIREBASE_WEB_API_KEY || 'AIzaSyA3OA9pcR1zscUtEPWD8LEKTKonAN5Y90c';
@@ -166,13 +168,42 @@ async function createUser(token, email, password) {
   return j.localId;
 }
 
-// Лист із посиланням на встановлення пароля. Той самий механізм, що й
-// «Забули пароль?» у кабінеті.
+// ── ПОСИЛАННЯ НА ВСТАНОВЛЕННЯ ПАРОЛЯ ──
 //
-// continueUrl додає в лист кнопку повернення на портал. Firebase приймає
-// його лише якщо домен є в Authentication → Settings → Authorized
-// domains; якщо ні — надсилаємо без нього, бо лист важливіший за кнопку.
-async function sendPasswordLetter(email) {
+// Просимо Firebase не надсилати лист, а ПОВЕРНУТИ посилання
+// (returnOobLink). Далі беремо з нього лише одноразовий код і будуємо
+// свою адресу — на портал.
+//
+// Так довелося зробити, бо Firebase заблокував редагування шаблонів для
+// цього проєкту, а разом із ними й Custom action URL. Через консоль ні
+// перекласти лист, ні відправити людину на портал уже не можна.
+//
+// Вийшло навіть краще, ніж планувалося: сторінок Firebase людина не
+// бачить взагалі — ні англійського листа, ні firebaseapp.com у рядку
+// адреси. Портал такі посилання вже вміє обробляти: hasPendingAuthAction
+// шукає рівно ці два параметри.
+//
+// Запит іде на проєктний вузол і зі службовим ключем: анонімний
+// (?key=API_KEY) повертати посилання не вміє — він тільки надсилає лист.
+async function getPasswordLink(token, email) {
+  const r = await fetch(`${IDT}/projects/${PROJECT_ID}/accounts:sendOobCode`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+    body: JSON.stringify({ requestType: 'PASSWORD_RESET', email, returnOobLink: true })
+  });
+  const j = await r.json();
+  if (j.error) throw new Error(j.error.message || 'не вдалося створити посилання');
+  if (!j.oobLink) throw new Error('Firebase не повернув посилання');
+  let code = '';
+  try { code = new URL(j.oobLink).searchParams.get('oobCode') || ''; } catch (e) {}
+  if (!code) throw new Error('у посиланні немає коду');
+  return `${PORTAL_URL}?mode=resetPassword&oobCode=${encodeURIComponent(code)}`;
+}
+
+// Запасний шлях: звичайний лист від Firebase. Англійський, із переходом
+// на firebaseapp.com — але вхід працює. Потрібен доти, доки не заданий
+// BREVO_API_KEY, щоб функцію можна було викласти вже зараз.
+async function sendFirebaseLetter(email) {
   const body = { requestType: 'PASSWORD_RESET', email, continueUrl: PORTAL_URL };
   let r = await fetch(`${IDT}/accounts:sendOobCode?key=${WEB_API_KEY}`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -188,7 +219,27 @@ async function sendPasswordLetter(email) {
     j = await r.json();
   }
   if (j.error) throw new Error(j.error.message || 'лист не надіслано');
-  return true;
+  return 'firebase';
+}
+
+// Спершу свій лист, і лише якщо надіслати не вдалося — Firebase.
+//
+// Мовчазний відступ тут доречний: людині потрібен вхід, а не наші
+// проблеми з поштовим сервісом. Причина йде в лог функції, і те, яким
+// шляхом пішов лист, повертається нагору — щоб було видно в логах, що
+// Brevo мовчить.
+async function sendPasswordLetter(token, email, mode) {
+  if (mailConfigured()) {
+    try {
+      const link = await getPasswordLink(token, email);
+      const res = await sendMail(email, passwordLetter(link, mode, email));
+      if (res.sent) return 'brevo';
+      console.error('[first-login] свій лист не пішов:', res.why);
+    } catch (e) {
+      console.error('[first-login] посилання не отримали:', e && e.message);
+    }
+  }
+  return sendFirebaseLetter(email);
 }
 
 // Пароль, якого ніхто не знає й не побачить: потрібен лише щоб акаунт
@@ -224,6 +275,9 @@ exports.handler = async (event) => {
   catch (e) { return fail(400, 'Пошкоджений запит', origin); }
 
   const email = String(body.email || '').trim().toLowerCase();
+  // 'first' — пароля ще не було, 'reset' — його скидають. Різниця лише в
+  // словах листа; дія однакова, і саме тому вона тут одна.
+  const mode = body.mode === 'reset' ? 'reset' : 'first';
 
   if (!email.includes('@'))
     return fail(400, 'Схоже, це нікнейм, а не email. Учням пароль задають батьки '
@@ -267,8 +321,8 @@ exports.handler = async (event) => {
         hadAccount = true;
       }
     }
-    await sendPasswordLetter(email);
-    return ok({ sent: true, hadAccount }, origin);
+    const via = await sendPasswordLetter(token, email, mode);
+    return ok({ sent: true, hadAccount, via }, origin);
   } catch (e) {
     // Подробиці — у лог функції, людині загальний текст. У повідомленні
     // помилки бази трапляється шлях вузла, і показувати його назовні
