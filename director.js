@@ -7,7 +7,7 @@
 // header for why.)
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, push, remove, update, query, limitToLast } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, showToast, getClassNum, displayGrade, gradeClass6, teacherAccessMatrix, getWeekDates, formatAttendanceSlotLabel, gradeTypesCache, loadGradeTypesCache, calculateStudentWeightedAvg, escJs, escHtml, localDateString, normalizeRoles, getUserRoles, ROLE_LABELS, currentUserData, dayNamesUA, sendPasswordReset, normalizeChildren, renderParentsBlock, logAction, AUDIT_LABELS, getParentProfile, parentFullName, getSchoolRange, getAllUsers, invalidateUsersCache, getUsersSnap, stuName, invalidateStudentDir, subjectsLabel, syncStaffCard, shrinkImage , dayKeys} from './common.js';
+import { auth, db, showToast, getClassNum, displayGrade, gradeClass6, teacherAccessMatrix, getWeekDates, formatAttendanceSlotLabel, gradeTypesCache, loadGradeTypesCache, calculateStudentWeightedAvg, escJs, escHtml, localDateString, normalizeRoles, getUserRoles, ROLE_LABELS, currentUserData, dayNamesUA, sendPasswordReset, normalizeChildren, renderParentsBlock, logAction, AUDIT_LABELS, getParentProfile, parentFullName, getSchoolRange, getAllUsers, invalidateUsersCache, getUsersSnap, stuName, invalidateStudentDir, subjectsLabel, syncStaffCard, shrinkImage, dayKeys, invalidateParentLinks, emailKey } from './common.js';
 
 let directorSkillsTemp=[];
 
@@ -27,7 +27,7 @@ window.findSubstitute=async function(){
     const users=usersSnap.val();
     for(let uid in users){
       const u=users[uid];if(u.role!=='teacher'&&u.role!=='art_school_teacher')continue;
-      const se=u.email?.replace(/\./g,'_');if(!se)continue;
+      const se=emailKey(u.email);if(!se)continue;
       const teacherSkills=skills[se]?.subjects||[];
       const hasSkill=teacherSkills.some(s=>s.toLowerCase()===subj.toLowerCase())||teacherSkills.includes('Всі предмети');
       if(!hasSkill)continue;
@@ -64,7 +64,7 @@ window.confirmSubstitute=async function(email,cls,subj,date){
 // ══════════ TEACHER SKILLS (matrix managed by director) ══════════
 export async function loadDirectorTeacherSkillsList(){invalidateUsersCache();
   const select=document.getElementById('d-skills-teacher');select.innerHTML='<option value="">-- Оберіть вчителя --</option>';
-  const _s=await getUsersSnap(); if(!_s.exists())return; const users=_s.val();for(let uid in users){const u=users[uid];const rs=getUserRoles(u);if(rs.some(r=>r==='teacher'||r==='art_school_teacher'||r==='class_teacher'||r==='music_teacher')&&u.email&&!u.disabled){const n=(u.firstName||u.lastName)?`${u.firstName||''} ${u.lastName||''}`.trim():u.email;select.innerHTML+=`<option value="${u.email.replace(/\./g,'_')}">${escHtml(n)} (${escHtml(u.email)})</option>`;}}
+  const _s=await getUsersSnap(); if(!_s.exists())return; const users=_s.val();for(let uid in users){const u=users[uid];const rs=getUserRoles(u);if(rs.some(r=>r==='teacher'||r==='art_school_teacher'||r==='class_teacher'||r==='music_teacher')&&u.email&&!u.disabled){const n=(u.firstName||u.lastName)?`${u.firstName||''} ${u.lastName||''}`.trim():u.email;select.innerHTML+=`<option value="${emailKey(u.email)}">${escHtml(n)} (${escHtml(u.email)})</option>`;}}
 }
 window.loadDirectorTeacherSkillsList=loadDirectorTeacherSkillsList;
 document.getElementById('d-skills-teacher').addEventListener('change',async function(){
@@ -464,7 +464,7 @@ window.removeHoliday=function(id){if(confirm("Видалити це свято?"
 // ══════════ TEACHER LIST FOR DIRECTOR (access matrix + staff mgmt) ══════════
 // Мультиролі: вчителем вважається той, у кого вчительська роль є СЕРЕД ролей,
 // а не лише як активна. Відключених (disabled) до списків не додаємо.
-export async function loadTeachersListForDirector(){invalidateUsersCache();const s=document.getElementById('d-acc-email-select');s.innerHTML='<option value="">-- Вчитель --</option>';const snap=await getUsersSnap();window.globalTeachersList=[];if(snap.exists()){const u=snap.val();for(let uid in u){const us=u[uid];const rs=getUserRoles(us);if(rs.some(r=>r==='teacher'||r==='art_school_teacher'||r==='class_teacher'||r==='music_teacher')&&us.email&&!us.disabled){const n=(us.firstName||us.lastName)?`${us.firstName||''} ${us.lastName||''}`.trim():us.email;const se=us.email.replace(/\./g,'_');s.innerHTML+=`<option value="${se}">${escHtml(n)} (${escHtml(us.email)})</option>`;window.globalTeachersList.push({email:us.email,name:n,safeEmail:se});}}}}
+export async function loadTeachersListForDirector(){invalidateUsersCache();const s=document.getElementById('d-acc-email-select');s.innerHTML='<option value="">-- Вчитель --</option>';const snap=await getUsersSnap();window.globalTeachersList=[];if(snap.exists()){const u=snap.val();for(let uid in u){const us=u[uid];const rs=getUserRoles(us);if(rs.some(r=>r==='teacher'||r==='art_school_teacher'||r==='class_teacher'||r==='music_teacher')&&us.email&&!us.disabled){const n=(us.firstName||us.lastName)?`${us.firstName||''} ${us.lastName||''}`.trim():us.email;const se=emailKey(us.email);s.innerHTML+=`<option value="${se}">${escHtml(n)} (${escHtml(us.email)})</option>`;window.globalTeachersList.push({email:us.email,name:n,safeEmail:se});}}}}
 window.loadTeachersListForDirector=loadTeachersListForDirector;
 // Предмети для матриці доступу беруться з ЧИННОГО розкладу класу, за всі
 // дні тижня одразу. Це збиває з пантелику: додав розклад на понеділок —
@@ -544,7 +544,7 @@ window.grantStaffRole=async function(){
   const roles=Array.from(sel.selectedOptions).map(o=>o.value);
   if(!raw)return alert("Введіть Email!");
   if(roles.length===0)return alert("Виберіть хоча б одну роль!");
-  const se=raw.toLowerCase().replace(/\./g,'_');
+  const se=emailKey(raw);
   try{
     await set(ref(db,`pre_approved_roles/${se}`),roles);
     // Якщо людина вже заходила раніше — оновлюємо і її профіль, щоб нові ролі
@@ -585,11 +585,11 @@ window.loadStaffList=async function(){invalidateUsersCache();
     const byEmail={};
     for(let uid in users){
       const u=users[uid];
-      if(u.email)byEmail[u.email.replace(/\./g,'_')]={uid,...u};
+      if(u.email)byEmail[emailKey(u.email)]={uid,...u};
     }
     const keys=Object.keys(approved);
     if(keys.length===0){box.innerHTML='<p class="empty-msg">Персоналу ще не додано.</p>';return;}
-    const myEmailSafe=(currentUserData?.email||'').replace(/\./g,'_');
+    const myEmailSafe=emailKey(currentUserData?.email);
     let html='';
     keys.sort().forEach(safeEmail=>{
       const roles=normalizeRoles(approved[safeEmail]);
@@ -656,7 +656,7 @@ async function findTeacherLessons(safeEmail){
           const items=Array.isArray(slot)?slot:(slot&&slot.subject?[slot]:[]);
           items.forEach(l=>{
             if(!l||!l.teacherEmail)return;
-            if(l.teacherEmail.replace(/\./g,'_')!==safeEmail)return;
+            if(emailKey(l.teacherEmail)!==safeEmail)return;
             result.total++;
             if(!result.byClass[cls])result.byClass[cls]=new Set();
             result.byClass[cls].add(dayNamesUA[day]||day);
@@ -698,7 +698,7 @@ window.removeStaffMember=async function(safeEmail){
     if(usersSnap.exists()){
       const users=usersSnap.val();
       for(let uid in users){
-        if(users[uid].email&&users[uid].email.replace(/\./g,'_')===safeEmail){
+        if(users[uid].email&&emailKey(users[uid].email)===safeEmail){
           await update(ref(db,`users/${uid}`),{disabled:true,roles:null,role:null});
         }
       }
@@ -708,7 +708,7 @@ window.removeStaffMember=async function(safeEmail){
     if(ctSnap.exists()){
       const ct=ctSnap.val();
       for(let cls in ct){
-        if(ct[cls]?.teacherEmail&&ct[cls].teacherEmail.replace(/\./g,'_')===safeEmail){
+        if(ct[cls]?.teacherEmail&&emailKey(ct[cls].teacherEmail)===safeEmail){
           await remove(ref(db,`class_teachers/${cls}`));
         }
       }
@@ -1021,7 +1021,7 @@ window.directorLinkParent=async function(){
   const raw=document.getElementById('pl-email').value.trim().toLowerCase();
   if(!cls||!st)return alert('Оберіть клас та учня.');
   if(!raw)return alert('Введіть email батьків.');
-  const se=raw.replace(/\./g,'_');
+  const se=emailKey(raw);
   try{
     const snap=await get(child(ref(db),`parent_links/${se}`));
     const rec=snap.exists()?snap.val():{};
@@ -1031,6 +1031,7 @@ window.directorLinkParent=async function(){
       return alert(`Ця дитина вже прив'язана.`);
     kids.push({studentId:st,studentName:stNm,class:cls,role});
     await update(ref(db,`parent_links/${se}`),{children:kids});
+    invalidateParentLinks();   // список змінився — кеш більше не чинний
     // Якщо батьки вже заходили — одразу оновлюємо їхній профіль
     const us=await getUsersSnap();
     if(us.exists()){
@@ -1243,7 +1244,7 @@ window.markStaffAbsent=async function(){
   const note=document.getElementById('sa-note').value.trim();
   if(!date||!sel.value)return alert('Оберіть дату та вчителя.');
   const [email,name]=sel.value.split('|');
-  await set(ref(db,`staff_absence/${date}/${email.replace(/\./g,'_')}`),
+  await set(ref(db,`staff_absence/${date}/${emailKey(email)}`),
             {name,email,reason,note,by:currentUserData?.email||'',ts:Date.now()});
   logAction('staff_absent',{target:name,date,value:reason});
   document.getElementById('sa-note').value='';
@@ -1517,7 +1518,7 @@ window.directorAddStudent=async function(){
     const newRef = await push(ref(db,`students_list/${cls}`),nName);
     const newSid = newRef.key;
     // Email потрібен лише якщо учень заходитиме у портал самостійно
-    if(emailRaw)await set(ref(db,`student_links/${emailRaw.replace(/\./g,'_')}`),{studentName:nName,studentId:newSid,class:cls});
+    if(emailRaw)await set(ref(db,`student_links/${emailKey(emailRaw)}`),{studentName:nName,studentId:newSid,class:cls});
     document.getElementById('ds-new-name').value='';
     document.getElementById('ds-new-email').value='';
     invalidateStudentDir(cls); if(window.preloadStudentDirs) await window.preloadStudentDirs();
@@ -2044,7 +2045,7 @@ window.rebuildContactDirs = async function(){
       if(!u || !u.email || u.disabled) continue;
       const rawRole = Array.isArray(u.role) ? u.role[0] : u.role;
       if(rawRole === 'parent' || rawRole === 'student' || !rawRole) continue;
-      const se = u.email.toLowerCase().replace(/\./g,'_');
+      const se = emailKey(u.email);
       // Правило вимагає, щоб людина була у списку персоналу — інакше через
       // довідник можна було б приписати собі будь-яку посаду.
       if(!pre[se]){ skipped.push(u.email); continue; }
@@ -2184,7 +2185,7 @@ window.openStaffProfile = async function(safeEmail){
     const users = us.exists() ? us.val() : {};
     for(const uid in users){
       const u = users[uid] || {};
-      if(String(u.email||'').replace(/\./g,'_') === safeEmail){
+      if(emailKey(u.email||'') === safeEmail){
         document.getElementById('sp-first').value = u.firstName || '';
         document.getElementById('sp-last').value  = u.lastName  || '';
         if(u.photoURL){
@@ -2236,7 +2237,7 @@ window.saveStaffProfile = async function(){
     const users = us.exists() ? us.val() : {};
     let uid = null;
     for(const k in users){
-      if(String((users[k]||{}).email||'').replace(/\./g,'_') === staffProfileSE){ uid = k; break; }
+      if(emailKey((users[k]||{}).email) === staffProfileSE){ uid = k; break; }
     }
     if(!uid) throw new Error('Обліковий запис не знайдено — людина ще не входила в портал.');
     const patch = { firstName: first, lastName: last };
@@ -2427,3 +2428,65 @@ window.toggleWeekBreakdown = async function(){
     box.innerHTML = `<p class="empty-msg" style="color:var(--red);">Не вдалося прочитати: ${escHtml(e.message||'відмова')}</p>`;
   }
 };
+
+// ══════════════════════════════════════════════════════════════════
+//  ЗВІРКА ДОСТУПІВ
+// ══════════════════════════════════════════════════════════════════
+//
+// Портал знає свої списки, Firebase Authentication — свої. Донедавна
+// зіставити їх не було чим, і випадок «людину внесли в Authentication, а
+// в порталі не завели» розбирали цілий день наосліп: портал казав
+// «акаунт існує», консоль показувала порожньо, лист не приходив.
+//
+// Тут це видно одразу й у двох напрямках. Робить звірку сервер —
+// перелік акаунтів проєкту з браузера не прочитати.
+export async function runAccessAudit(){
+  const box = document.getElementById('aa-out');
+  const btn = document.getElementById('aa-run');
+  if(!box) return;
+  box.innerHTML = '<p class="empty-msg">Звіряємо…</p>';
+  if(btn){ btn.disabled = true; btn.textContent = '⏳ Звіряємо…'; }
+  try{
+    // Без цієї перевірки згаслий сеанс давав людині «Cannot read
+    // properties of null» замість зрозумілої причини.
+    if(!auth.currentUser) throw new Error('Сеанс завершився. Увійдіть ще раз.');
+    const idToken = await auth.currentUser.getIdToken();
+    const r = await fetch('/.netlify/functions/access-audit', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ idToken })
+    });
+    const d = await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+
+    const rows = (list, extra) => list.map(x =>
+      `<div class="aa-row"><b>${escHtml(x.email)}</b>${extra(x)}</div>`).join('');
+    const when = ts => ts ? new Date(ts).toLocaleDateString('uk-UA',
+      { day:'numeric', month:'long', year:'numeric' }) : 'жодного разу';
+
+    box.innerHTML = `
+      <div class="aa-group">
+        <h4>Немає акаунта — ${d.noAccount.length}</h4>
+        <p class="aa-note">Ці люди є у списках школи, але жодного разу не заходили.
+           Найчастіше просто не знають, що портал існує.</p>
+        ${d.noAccount.length
+          ? rows(d.noAccount, x => `<span>${escHtml(x.where)}</span>`)
+          : '<p class="aa-empty">Усі, кого внесено, мають доступ.</p>'}
+      </div>
+      <div class="aa-group">
+        <h4>Немає у списках — ${d.orphan.length}</h4>
+        <p class="aa-note">Акаунт існує, а пошти немає в жодному списку школи.
+           Такий вхід нічого не показує — портал не пустить. Або людину
+           видалили зі школи й забули про акаунт, або акаунт створили самі.</p>
+        ${d.orphan.length
+          ? rows(d.orphan, x => `<span>${escHtml(x.kind)} · створено ${escHtml(when(x.createdAt))}`
+              + ` · заходив: ${escHtml(when(x.lastLoginAt))}</span>`)
+          : '<p class="aa-empty">Зайвих акаунтів немає.</p>'}
+      </div>
+      <p class="aa-count">У списках школи: ${d.total.school} · акаунтів входу: ${d.total.accounts}</p>`;
+  }catch(e){
+    box.innerHTML = `<p class="empty-msg" style="color:var(--red);">${escHtml(e.message||'Не вдалося звірити')}</p>`;
+  }finally{
+    if(btn){ btn.disabled = false; btn.textContent = '🔍 Звірити доступи'; }
+  }
+}
+window.runAccessAudit = runAccessAudit;
