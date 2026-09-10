@@ -329,14 +329,29 @@ export function stickerGoal(cls){
 }
 window.stickerGoal = stickerGoal;
 // Читають усі: батькам і учням треба показати ту саму мету, що й учителю
+//
+// ПІДПИСКУ ТРЕБА ВМІТИ ЗНІМАТИ. Функція викликається з initUserSession, а
+// та відпрацьовує не лише при вході: ще й на кожному перемиканні дитини
+// та ролі. Сторінка при цьому не перезавантажується. Поки результат
+// onValue нікуди не записували, кожне перемикання додавало ще одного
+// слухача на той самий вузол: мама з двома дітьми клацнула перемикач
+// десять разів — і кожна зміна мети наліпок перемальовувала екран
+// десять разів поспіль.
+let stickerUnsub = null;
 export function listenStickerGoals(){
+  stopStickerGoals();
   try{
-    onValue(ref(db, 'sticker_goal'), snap => {
+    stickerUnsub = onValue(ref(db, 'sticker_goal'), snap => {
       stickerGoals = snap.exists() ? (snap.val() || {}) : {};
       try{ if(window.refreshStickerViews) window.refreshStickerViews(); }catch(e){}
     }, err => console.warn('sticker_goal:', err.message));
   }catch(e){ console.warn('sticker_goal:', e.message); }
 }
+export function stopStickerGoals(){
+  if(stickerUnsub){ try{ stickerUnsub(); }catch(e){} stickerUnsub = null; }
+  stickerGoals = {};
+}
+window.stopStickerGoals = stopStickerGoals;
 export const dayKeys=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 export const dayNamesUA={Monday:"Понеділок",Tuesday:"Вівторок",Wednesday:"Середа",Thursday:"Четвер",Friday:"П'ятниця"};
 // ══════════ MULTI-ROLE SUPPORT ══════════
@@ -3755,9 +3770,36 @@ window.requestPasswordReset=async function(){
 // Сумісність зі старими викликами
 window.loginUser=()=>window.submitLogin();
 window.registerUser=()=>window.showFirstLoginScreen();
+// ПРИ ВИХОДІ ЗНІМАЄМО ВСІ ПІДПИСКИ, А НЕ ТРИ З ВОСЬМИ.
+//
+// Сторінка після виходу не перезавантажується: onAuthStateChanged просто
+// показує екран входу. Тому все, що підписалося за час сеансу, лишається
+// живим і під наступним користувачем. Телефон у сім'ї спільний — мама
+// вийшла, тато зайшов зі своєю дитиною, а слухачі на харчування і розклад
+// попередньої дитини далі перемальовують йому кабінет. Якщо діти в
+// одному класі, правила бази це навіть не зупинять: читання дозволене.
+//
+// Раніше знімалися лише значок непрочитаних, відвідуваність і таймер
+// уроку. Лишалися: харчування (до шести підписок), класна година,
+// чергування підгруп, мета наліпок і вікно переписок.
+function stopAllListeners(){
+  const calls = [
+    () => window.stopWatchUnread && window.stopWatchUnread(),
+    () => { if(teacherAttendanceListener) teacherAttendanceListener(); },
+    () => window.stopMyMeals && window.stopMyMeals(),
+    () => window.stopChatListeners && window.stopChatListeners(),
+    () => stopStickerGoals(),
+    () => listenClassHour(null),      // без класу функція лише знімає стару
+    () => listenAltChoices(null),
+  ];
+  // Кожну окремо: якщо один модуль не завантажився, решту це не має
+  // зупиняти — інакше вихід лишить по собі половину підписок.
+  calls.forEach(f => { try{ f(); }catch(e){ console.warn('відписка:', e.message); } });
+}
+window.stopAllListeners = stopAllListeners;
+
 window.logoutUser=async function(){
-  if(window.stopWatchUnread)window.stopWatchUnread();
-  if(teacherAttendanceListener)teacherAttendanceListener();
+  stopAllListeners();
   if(parentLessonInterval)clearInterval(parentLessonInterval);
   document.getElementById('profile-bar').style.display='none';
 
