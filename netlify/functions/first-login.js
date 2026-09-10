@@ -242,17 +242,31 @@ async function sendFirebaseLetter(email) {
 // шляхом пішов лист, повертається нагору — щоб було видно в логах, що
 // Brevo мовчить.
 async function sendPasswordLetter(token, email, mode) {
+  // ЧОМУ ВІДСТУПИЛИ — коротким кодом у відповідь.
+  //
+  // Перший же лист після налаштування прийшов від Firebase, і зрозуміти
+  // чому можна було лише з логів. Причин рівно три, вони не таємні й не
+  // про конкретну людину, тож нехай будуть видні одразу:
+  //   mailer-off  — немає BREVO_API_KEY або MAIL_FROM (чи не перезібрано
+  //                 сайт після додавання змінних);
+  //   link-failed — Firebase не віддав посилання;
+  //   send-failed — Brevo не прийняв лист (найчастіше відправника не
+  //                 підтверджено).
+  let why = 'mailer-off';
   if (mailConfigured()) {
     try {
       const link = await getPasswordLink(token, email);
       const res = await sendMail(email, passwordLetter(link, mode, email));
-      if (res.sent) return 'brevo';
+      if (res.sent) return { via: 'brevo' };
+      why = 'send-failed';
       console.error('[first-login] свій лист не пішов:', res.why);
     } catch (e) {
+      why = 'link-failed';
       console.error('[first-login] посилання не отримали:', e && e.message);
     }
   }
-  return sendFirebaseLetter(email);
+  await sendFirebaseLetter(email);
+  return { via: 'firebase', why };
 }
 
 // Пароль, якого ніхто не знає й не побачить: потрібен лише щоб акаунт
@@ -349,8 +363,8 @@ exports.handler = async (event) => {
       }
     }
     stage = 'letter';
-    const via = await sendPasswordLetter(token, email, mode);
-    return ok({ sent: true, hadAccount, via }, origin);
+    const sentBy = await sendPasswordLetter(token, email, mode);
+    return ok({ sent: true, hadAccount, via: sentBy.via, why: sentBy.why }, origin);
   } catch (e) {
     // Подробиці — у лог функції, людині загальний текст. У повідомленні
     // помилки бази трапляється шлях вузла, і показувати його назовні
