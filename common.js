@@ -1268,13 +1268,67 @@ export function minsOf(t){
   const [h, m] = String(t || '').split(':').map(Number);
   return (isNaN(h) || isNaN(m)) ? null : h * 60 + m;
 }
+// ══════════════════════════════════════════════════════════════════
+//  ЧАС УРОКУ: «13:55-14:40», «13:55 - 14:40», «9:00 — 9:45»
+// ══════════════════════════════════════════════════════════════════
+//
+// ЩО СТАЛОСЯ. Час у розкладі заповнюють руками, і в одній таблиці
+// співіснують «12:40 - 13:00» і «13:55-14:40» — з пробілами навколо
+// дефіса і без. А ввесь портал різав рядок рівно по ' - ', тобто по
+// «пробіл-дефіс-пробіл».
+//
+// Для запису без пробілів split(' - ') повертав один шматок: кінця
+// уроку не існувало. Наслідки, які довго виглядали загадкою:
+//   • смужка поточного уроку не малювалася зовсім — межі невідомі;
+//   • день «закінчувався» за останнім записом, який вдалося розібрати.
+//     У 5 класі такими виявилися ПЕРЕРВИ (їх заповнили з пробілами), і
+//     о 13:55 портал вирішував, що все скінчилося, хоча урок ішов до
+//     14:40. Кабінет перемикався на завтра.
+// Третій клас працював лише тому, що там час набрали з пробілами.
+//
+// Просити школу переписати години марно: наступний рядок наберуть так
+// само. Тому розбираємо терпимо — беремо два часи з рядка, чим би вони
+// не були розділені: дефіс, тире, довге тире, з пробілами чи без.
+const TIME_RANGE = /(\d{1,2})\s*:\s*(\d{2})\s*[^\d]{1,3}\s*(\d{1,2})\s*:\s*(\d{2})/;
+export function parseTimeRange(t){
+  const m = TIME_RANGE.exec(String(t || ''));
+  if(!m) return { start:null, end:null, text:'' };
+  const start = (+m[1]) * 60 + (+m[2]);
+  const end   = (+m[3]) * 60 + (+m[4]);
+  if(start > 24*60 || end > 24*60) return { start:null, end:null, text:'' };
+  const p2 = n => String(n).padStart(2, '0');
+  return { start, end,
+           text: `${p2(m[1])}:${m[2]} – ${p2(m[3])}:${m[4]}` };
+}
+window.parseTimeRange = parseTimeRange;
+
+// Показувати час теж треба однаково: інакше в одному стовпчику стоять
+// «09:00 - 09:45» і «13:55-14:40», і виглядає це як недогляд.
+export function fmtTimeRange(t){
+  const r = parseTimeRange(t);
+  return r.text || String(t || '');
+}
+window.fmtTimeRange = fmtTimeRange;
+
+// Вигляд, у якому час ЛЯГАЄ В БАЗУ. Читання тепер терпиме, але писати
+// вроздріб однаково не варто: старі сторінки класів (class-5.html і
+// сусідні) розбирають час по «пробіл-дефіс-пробіл» і про наш терпимий
+// розбір не знають. Тому зберігаємо саме в цьому вигляді.
+//
+// Не розібрали — повертаємо як є. Затирати те, що людина набрала, гірше:
+// хай краще видно дивний рядок, ніж порожньо.
+export function normalizeTimeRange(t){
+  const r = parseTimeRange(t);
+  return r.start == null ? String(t || '').trim() : r.text.replace(' – ', ' - ');
+}
+window.normalizeTimeRange = normalizeTimeRange;
+
 // Початок і кінець слота за часом першого уроку в ньому
 export function slotBounds(slot){
   const items = Array.isArray(slot) ? slot : (slot && slot.subject ? [slot] : []);
   const withTime = items.filter(i => i && i.time);
   if(!withTime.length) return null;
-  const [a, b] = String(withTime[0].time).split(' - ');
-  const start = minsOf(a), end = minsOf(b);
+  const { start, end } = parseTimeRange(withTime[0].time);
   return (start == null || end == null) ? null : { start, end };
 }
 
