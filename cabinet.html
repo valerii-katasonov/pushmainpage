@@ -220,6 +220,19 @@
     .fn-left{font-style:italic;}
     .fn-all{width:100%;margin:2px 0 0;padding:8px;font-size:.8rem;border-radius:9px;
             background:#fff;color:#0d47a1;border:1px solid #b6d4fb;cursor:pointer;}
+    /* ── Підпис розробника під формою входу ──
+       Свідомо тихий: людина прийшла увійти, а не читати, хто це зробив.
+       Але видно щодня — а саме так і знаходять того, хто зробив систему,
+       якщо захотіли таку собі. */
+    .vendor-credit{margin-top:18px;padding-top:13px;border-top:1px solid rgba(160,230,240,.16);
+                   font-size:.7rem;line-height:1.5;text-align:center;color:rgba(214,240,245,.5);}
+    .vendor-credit a{color:rgba(160,230,240,.8);text-decoration:none;border-bottom:1px dotted;}
+    .vendor-credit a:hover{color:#fff;}
+    .vendor-credit .vc-name{color:rgba(214,240,245,.75);font-weight:600;}
+    /* Поза темним екраном входу (раптом блок колись переїде) — темні літери */
+    body:not(.auth-mode) .vendor-credit{color:#90a4ae;border-top-color:#e3ecef;}
+    body:not(.auth-mode) .vendor-credit a{color:var(--teal);}
+    body:not(.auth-mode) .vendor-credit .vc-name{color:#546e7a;}
     .lesson-countdown{font-size:.75rem;font-weight:700;color:var(--green);background:#e8f5e9;padding:2px 8px;border-radius:12px;white-space:nowrap;}
     .progress-thin{width:100%;height:4px;background:#eee;border-radius:2px;margin-top:4px;overflow:hidden;}
     .progress-thin-fill{height:100%;background:linear-gradient(90deg,var(--green),var(--accent));border-radius:2px;transition:width 1s linear;}
@@ -2031,7 +2044,15 @@
 .curr-subj-fix{width:100%;margin:4px 0 8px 0;font-size:.84rem;}
 </style>
 </head>
-<body>
+<!-- auth-mode СТОЇТЬ ТУТ ОДРАЗУ, а не чекає на скрипт.
+     Клас знімає onAuthStateChanged — але він спрацьовує лише після того,
+     як завантажиться Firebase і перевірить сеанс. До того моменту сторінка
+     малювалася світлою, а потім темнішала: людина щоразу бачила спалах
+     білим на екрані входу.
+     Тепер перше ж малювання темне. Той, хто вже увійшов, побачить
+     зворотне перемикання — але воно збігається з появою кабінету й
+     читається як «завантажилося», а не як миготіння. -->
+<body class="auth-mode">
 <!-- Фон екранів входу: світлові плями в кольорах логотипа замість
      фонового відео — нуль ваги, нічого не вантажиться ззовні.
      Видно лише коли <body class="auth-mode">, тобто до входу. -->
@@ -2067,7 +2088,15 @@
        Це критично: атрибут працює з моменту парсингу HTML, тому навіть якщо
        JS-модуль не завантажився (кеш, збій CDN, стара версія файлу) — форма
        НЕ піде звичайним GET-запитом і пароль ніколи не потрапить в URL. -->
-  <div id="login-screen" class="panel" style="display:block;">
+  <!-- ПРИХОВАНИЙ ДО ПЕРЕВІРКИ СЕАНСУ.
+       Раніше форма стояла видимою з першого кадру. Для того, хто ще не
+       входив, це добре, а для вчителя, який заходить щодня, — ні:
+       він бачив спалах формою входу перед своїм кабінетом, ніби його
+       щойно виштовхнуло з системи.
+       Тепер до відповіді Firebase видно лише темне тло, а далі
+       відкривається одне з двох. Про випадок «Firebase не відповів
+       узагалі» подбає запобіжник у common.js. -->
+  <div id="login-screen" class="panel" style="display:none;">
     <div class="auth-brand"><img src="logo.png" alt="Push School Warsaw" class="auth-logo"></div>
     <h2>Вхід до порталу</h2>
     <p class="auth-sub">Для учнів, батьків та вчителів</p>
@@ -2093,6 +2122,11 @@
     <button type="button" class="link-btn" onclick="showFirstLoginScreen()">Перший вхід? Встановити пароль →</button>
     <button type="button" class="link-btn" style="color:#7f8c8d;font-weight:600;margin-top:2px;"
             onclick="requestPasswordReset()">Забули пароль?</button>
+    <!-- ПІДПИС РОЗРОБНИКА.
+         Наповнюється з common.js (VENDOR) — не руками в розмітці: підпис
+         має бути в одному місці, щоб зміна імені чи посилання не вимагала
+         шукати його по файлах. Порожній VENDOR ховає блок цілком. -->
+    <div id="vendor-credit" class="vendor-credit" style="display:none;"></div>
   </div>
   <!-- ═══ ЕКРАН 2: ПЕРШИЙ ВХІД (окремий екран, не режим) ═══ -->
   <div id="first-login-screen" class="panel">
