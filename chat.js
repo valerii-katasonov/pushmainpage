@@ -33,11 +33,6 @@ const safe  = e => String(e||'').toLowerCase().replace(/\./g,'_');
 const unsafe = se => String(se||'').replace(/_/g,'.');
 const myKey = () => safe(auth.currentUser?.email);
 
-// Позначка збірки. Перше, що треба знати при розборі: чи взагалі
-// оновився файл на сайті.
-export const CHAT_BUILD = '2026-08-31 · avatars v2';
-console.log('chat.js', CHAT_BUILD);
-
 let listListener = null, msgListener = null, currentChatId = null, currentMembers = [];
 let listGen = 0;
 
@@ -462,14 +457,7 @@ window.openChatPicker = async function(mode){
     const list = (await chatCandidates()).filter(c => !currentMembers.includes(c.key));
     if(!list.length){ box.innerHTML = '<p class="empty-msg">Немає доступних співрозмовників.</p>'; return; }
     list.sort((a,b)=>a.name.localeCompare(b.name,'uk'));
-    // Рядок діагностики. Коли аватарок не видно, він одразу каже, чого
-    // саме бракує: файл не оновився, фото не дійшли, чи їх ніхто не ставив.
-    const withPhoto = list.filter(c => c.photo).length;
-    const diag = `<div class="cp-diag">Збірка ${escHtml(CHAT_BUILD)} · контактів ${list.length}`
-      + ` · з фото ${withPhoto}</div>`;
-    console.log('[чат] контактів', list.length, '· з фото', withPhoto,
-                '· приклад:', list[0] && { name:list[0].name, photo:(list[0].photo||'').slice(0,40) });
-    box.innerHTML = diag + list.map(c=>`
+    box.innerHTML = list.map(c=>`
       <label class="cp-row">
         <input type="checkbox" value="${escHtml(c.key)}" data-name="${escHtml(c.name)}">
         ${avatarHtml(c.name, c.photo, 'cp-av')}
