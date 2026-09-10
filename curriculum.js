@@ -1193,18 +1193,25 @@ export async function renderPlanEditor(){
     box.innerHTML = `
       <div class="pe-head">${escHtml(p.subj)} · ${escHtml(String(p.cls).replace('class_',''))} клас
         <span>${rows.length} тем</span></div>
-      ${rows.length ? rows.map(([id,t]) => {
+      ${rows.length ? `<div class="pe-list" id="pe-list">` + rows.map(([id,t]) => {
         const hu = t.hoursUsed || 0;
+        const num = t.lessonNum || 0, ph = t.plannedHours || 1;
+        // data-orig-*: те, що зараз у базі. Потрібне, щоб відрізнити
+        // незбережену правку від збереженої перед тим, як перенос
+        // перемалює список (інакше правка тихо зникне).
         return `
-        <div class="pe-row" id="pe-${escHtml(id)}">
-          <input type="number" class="pe-num" value="${escHtml(t.lessonNum||0)}" min="1" title="№ уроку">
+        <div class="pe-row" id="pe-${escHtml(id)}" data-id="${escHtml(id)}"
+             data-orig-num="${escHtml(num)}" data-orig-title="${escHtml(t.title||'')}"
+             data-orig-hours="${escHtml(ph)}">
+          <span class="pe-grip" aria-hidden="true" title="Перетягніть, щоб змінити порядок">⠿</span>
+          <input type="number" class="pe-num" value="${escHtml(num)}" min="1" title="№ уроку">
           <input type="text" class="pe-title" value="${escHtml(t.title||'')}" placeholder="Назва теми">
-          <input type="number" class="pe-hours" value="${escHtml(t.plannedHours||1)}" min="1" title="Годин за планом">
+          <input type="number" class="pe-hours" value="${escHtml(ph)}" min="1" title="Годин за планом">
           <span class="pe-used" title="Витрачено — рахується від уроків, вручну не змінюється">${hu} вик.</span>
           <button type="button" class="pe-save" onclick="savePlanTopic('${escJs(id)}')">💾</button>
           <button type="button" class="pe-del" onclick="deletePlanTopic('${escJs(id)}','${escJs(t.title||'')}',${hu})">✕</button>
         </div>`;
-      }).join('') : '<p class="empty-msg">У цього предмета ще немає плану. Завантажте файл вище.</p>'}
+      }).join('') + `</div>` : '<p class="empty-msg">У цього предмета ще немає плану. Завантажте файл вище.</p>'}
       <div class="pe-add">
         <input type="number" id="pe-new-num" placeholder="№" min="1" style="width:70px;">
         <input type="text" id="pe-new-title" placeholder="Назва нової теми">
@@ -1212,13 +1219,254 @@ export async function renderPlanEditor(){
         <button type="button" onclick="addPlanTopic()">➕ Додати</button>
       </div>
       <p class="pe-hint">«вик.» — скільки годин теми вже відпрацьовано на уроках.
-         Це рахується автоматично й редагуванню не підлягає.</p>`;
+         Це рахується автоматично й редагуванню не підлягає.<br>
+         ⠿ — потягніть за цей значок, щоб посунути тему вище або нижче.
+         Номери уроків при цьому лишаються на своїх місцях: міняється те,
+         яка тема на якому уроці. Якщо перетягувати незручно (миша,
+         читалка екрана), той самий результат дає зміна № вручну.</p>`;
+    wirePlanDrag();
   }catch(e){
     console.error('Редактор плану:', e);
     box.innerHTML = `<p class="empty-msg" style="color:var(--red);">Не вдалося завантажити: ${escHtml(e.message||'')}</p>`;
   }
 }
 window.renderPlanEditor = renderPlanEditor;
+
+
+// ══════════════════════════════════════════════════════════════════
+//  ПЕРЕТЯГУВАННЯ ТЕМ У СПИСКУ
+// ══════════════════════════════════════════════════════════════════
+//
+// ЩО САМЕ РУХАЄТЬСЯ. Не номери уроків, а теми між ними. Послідовність
+// номерів лишається такою, якою була: якщо в плані є два записи на урок
+// № 7, після переносу їх так само буде два. Тема, яку перетягнули,
+// отримує номер того місця, куди її поклали, а теми між старим і новим
+// місцем зсуваються на одну позицію. Теми поза цим проміжком не
+// чіпаються взагалі.
+//
+// ЧОМУ НЕ HTML5 drag-and-drop. Він не працює на сенсорних екранах, а
+// портал відкривають переважно з телефона. Pointer Events — одні й ті
+// самі для миші, пальця й стилуса.
+//
+// ЗАПИС. Один update на весь список: або нова нумерація стала цілком,
+// або не стала зовсім. Порядок, у якому теми потрапили б у базу
+// по одній, посеред обриву зв'язку лишив би план із дірками.
+
+let peDrag = null;        // стан поточного перетягування
+let peScroll = null;      // таймер автопрокрутки біля краю екрана
+
+function peRows(list){ return Array.from(list.querySelectorAll('.pe-row')); }
+
+// Скільки рядків користувач змінив, але не зберіг. Перенос перемальовує
+// список, тому мовчки втратити ці правки не можна.
+//
+// Числа порівнюємо числами, а не рядками: «2» і 2 — те саме значення, і
+// показувати через таку різницю попередження про втрату правок означало б
+// привчити людину тиснути «Так» не читаючи.
+function peDirtyCount(list){
+  const numChanged = (v, orig) => Number(v) !== Number(orig);
+  return peRows(list).filter(r =>
+       r.querySelector('.pe-title').value !== r.dataset.origTitle
+    || numChanged(r.querySelector('.pe-num').value,   r.dataset.origNum)
+    || numChanged(r.querySelector('.pe-hours').value, r.dataset.origHours)
+  ).length;
+}
+
+function peRestoreOrder(list, ids){
+  const byId = new Map(peRows(list).map(r => [r.dataset.id, r]));
+  ids.forEach(id => { const r = byId.get(id); if(r) list.appendChild(r); });
+}
+
+function wirePlanDrag(){
+  const list = document.getElementById('pe-list');
+  if(!list) return;
+  list.addEventListener('pointerdown', peDown);
+}
+
+function peDown(e){
+  const grip = e.target.closest && e.target.closest('.pe-grip');
+  if(!grip) return;
+  if(e.pointerType === 'mouse' && e.button !== 0) return;
+  const row  = grip.closest('.pe-row');
+  // currentTarget, а не getElementById: слухач висить на конкретному
+  // списку, і саме в ньому лежить рядок. Пошук за id знайшов би новий
+  // список після перемальовування, а рядок лишився б від старого — і
+  // жодне перенесення не спрацювало б, мовчки.
+  const list = e.currentTarget;
+  if(!row || !list || peDrag) return;
+  e.preventDefault();
+  clearInterval(peScroll); peScroll = null;   // хвіст від обірваного перенесення
+
+  peDrag = {
+    row, list,
+    // Порядок і нумерація ДО переносу — саме в тому вигляді, як лежить
+    // у базі, а не як зараз у полях: у полі може бути незбережена правка.
+    ids0:  peRows(list).map(r => r.dataset.id),
+    nums0: peRows(list).map(r => parseInt(r.dataset.origNum, 10) || 0),
+    moved: false
+  };
+  row.classList.add('pe-drag');
+  // Поки тягнемо — не даємо виділятися тексту в полях сусідніх рядків:
+  // довгий рух пальцем інакше лишає за собою синю смугу виділення.
+  list.classList.add('pe-moving');
+  // Захоплюємо вказівник списком, а не ручкою. Ручка їздить разом із
+  // рядком, а переміщення вузла в DOM браузер вважає видаленням і
+  // захоплення знімає — палець «зривався» б з теми на першому ж кроці.
+  // Список під час перенесення не рухається.
+  peDrag.pid = e.pointerId;
+  try{ list.setPointerCapture(e.pointerId); }catch(_){}
+  list.addEventListener('pointermove',   peMove);
+  list.addEventListener('pointerup',     peUp);
+  list.addEventListener('pointercancel', peCancel);
+  // Страховка: якщо захоплення все ж загубиться (перемикання вікна,
+  // системний жест), перенесення має завершитися, а не зависнути
+  // з таймером автопрокрутки, що крутиться далі.
+  window.addEventListener('pointerup', peUp);
+
+  // Автопрокрутка: у плані буває півтори сотні тем, і перенести тему на
+  // десять рядків вище без прокрутки неможливо — палець упирається в край.
+  //
+  // Після кожного зсуву сторінки переставляємо рядок заново. Спершу я
+  // цього не робив, і виходило безглуздо: сторінка їде, а тема стоїть на
+  // місці, доки палець не смикнеться. Прокрутка під нерухомим пальцем —
+  // це рух списку відносно нього, тобто те саме, що рух пальця.
+  peScroll = setInterval(() => {
+    if(!peDrag || peDrag.lastY == null) return;
+    const y = peDrag.lastY, h = window.innerHeight;
+    const before = window.scrollY;
+    if(y < 90)        window.scrollBy(0, -12);
+    else if(y > h-90) window.scrollBy(0,  12);
+    if(window.scrollY !== before) peReposition(peDrag.lastX, y);
+  }, 16);
+}
+
+// Куди покласти рядок при поточному положенні вказівника.
+function peReposition(x, y){
+  if(!peDrag || x == null || y == null) return;
+  const el = document.elementFromPoint(x, y);
+  const over = el && el.closest ? el.closest('.pe-row') : null;
+  if(!over || over === peDrag.row || over.parentNode !== peDrag.list) return;
+  const r = over.getBoundingClientRect();
+  const before = y < r.top + r.height / 2;
+  peDrag.list.insertBefore(peDrag.row, before ? over : over.nextSibling);
+  peDrag.moved = true;
+}
+
+function peMove(e){
+  if(!peDrag) return;
+  e.preventDefault();
+  peDrag.lastX = e.clientX;
+  peDrag.lastY = e.clientY;
+  peReposition(e.clientX, e.clientY);
+}
+
+// Спільне завершення: знімаємо слухачі, захоплення й таймер. Повертає
+// стан, що був, — далі викликач вирішує, зберігати чи відкотити.
+function peFinish(e){
+  const st = peDrag;
+  if(!st) return null;
+  const { row, list, pid } = st;
+  list.removeEventListener('pointermove',   peMove);
+  list.removeEventListener('pointerup',     peUp);
+  list.removeEventListener('pointercancel', peCancel);
+  window.removeEventListener('pointerup',   peUp);
+  try{ if(list.hasPointerCapture(pid)) list.releasePointerCapture(pid); }catch(_){}
+  clearInterval(peScroll); peScroll = null;
+  row.classList.remove('pe-drag');
+  list.classList.remove('pe-moving');
+  peDrag = null;
+  return st;
+}
+
+// Жест перервала система — вхідний дзвінок, перемикання застосунку.
+// Людина нічого не «поклала», тому нічого й не зберігаємо: повертаємо
+// список у той вигляд, у якому вона його бачила до захоплення.
+function peCancel(e){
+  const st = peFinish(e);
+  if(st && st.moved) peRestoreOrder(st.list, st.ids0);
+}
+
+async function peUp(e){
+  const st = peFinish(e);
+  if(!st) return;
+  const { list, ids0, nums0, moved } = st;
+
+  if(!moved) return;
+  const ids1 = peRows(list).map(r => r.dataset.id);
+  // Список могли перемалювати просто під час перенесення — наприклад,
+  // вчитель перемкнув клас. Тоді порядок на екрані вже не стосується
+  // того плану, який ми збиралися записати.
+  if(!list.isConnected) return;
+  const SEP = String.fromCharCode(0);   // роздільник, якого точно немає в ключах
+  if(ids1.join(SEP) === ids0.join(SEP)) return;   // повернули на місце
+
+  const dirty = peDirtyCount(list);
+  if(dirty && !confirm(
+      `У списку є незбережені правки (рядків: ${dirty}).\n\n`
+    + 'Після переносу список перечитається з бази і ці правки зникнуть.\n'
+    + 'Перенести?')){
+    peRestoreOrder(list, ids0);
+    return;
+  }
+  await savePlanOrder(list, ids0, nums0, ids1);
+}
+
+// Чистий перерахунок номерів: що саме треба записати, щоб теми стали в
+// новому порядку. Винесено окремо й покрито тестами, бо помилка тут
+// зіпсувала б нумерацію всього предмета одним записом, а перевірити її
+// на око в списку зі 140 тем неможливо.
+//
+//   ids0, nums0 — порядок і номери до переносу (номер nums0[i] належить
+//                 темі ids0[i]);
+//   ids1        — порядок після переносу.
+// Номери лишаються на своїх позиціях: тема, що стала i-ю, дістає nums0[i].
+export function reorderTopicNums(ids0, nums0, ids1){
+  const was = {};
+  ids0.forEach((id,i) => { was[id] = nums0[i]; });
+  const updates = {};
+  ids1.forEach((id,i) => {
+    if(was[id] !== nums0[i]) updates[`${id}/lessonNum`] = nums0[i];
+  });
+  return updates;
+}
+
+async function savePlanOrder(list, ids0, nums0, ids1){
+  const p = planPath();
+  if(!p){ peRestoreOrder(list, ids0); return; }
+  const updates = reorderTopicNums(ids0, nums0, ids1);
+  // Порядок на екрані змінився, а писати нічого — значить теми, які
+  // помінялися місцями, стоять під одним номером уроку. Між рівними
+  // номерами порядок задає база, і зберегти його ніде. Мовчати тут не
+  // можна: вчитель побачив би переставлені рядки, які після оновлення
+  // сторінки повернуться назад.
+  if(!Object.keys(updates).length){
+    peRestoreOrder(list, ids0);
+    showToast('ℹ️ У цих тем однаковий № уроку — порядок між ними не зберігається');
+    return;
+  }
+
+  list.classList.add('pe-busy');
+  try{
+    await update(ref(db, `curriculum_plans/${p.cls}/${p.sk}/topics`), updates);
+    // У журнал пишемо не лише кількість, а й межі зачепленого проміжку.
+    // Запис «змінено порядок тем (3)» через півроку не дасть відповіді на
+    // питання «що саме поїхало»; «уроки 12–14» — дає.
+    const touched = Object.values(updates).sort((a,b) => a - b);
+    logAction('curriculum', { cls:p.cls, subject:p.subj,
+      value:`змінено порядок тем: уроки ${touched[0]}–${touched[touched.length-1]}`
+            + ` (${touched.length})` });
+    showToast('✅ Порядок збережено');
+    renderPlanEditor();
+    if(window.populateTopicSelector) window.populateTopicSelector();
+  }catch(err){
+    // Не залишаємо на екрані порядок, якого немає в базі: інакше вчитель
+    // піде далі в переконанні, що перенос відбувся.
+    alert('Не вдалося зберегти порядок: ' + err.message);
+    peRestoreOrder(list, ids0);
+  }finally{
+    list.classList.remove('pe-busy');
+  }
+}
 
 
 // Чи є вже тема з таким номером уроку. Не забороняємо — попереджаємо:
