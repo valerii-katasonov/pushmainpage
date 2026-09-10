@@ -150,6 +150,12 @@ export function fileExt(name){
 }
 export function isImageUrl(u){ return IMG_EXT.includes(fileExt(u)); }
 const firebaseConfig={apiKey:"AIzaSyA3OA9pcR1zscUtEPWD8LEKTKonAN5Y90c",authDomain:"test-4eb3e.firebaseapp.com",databaseURL:"https://test-4eb3e-default-rtdb.europe-west1.firebasedatabase.app",projectId:"test-4eb3e",storageBucket:"test-4eb3e.firebasestorage.app",messagingSenderId:"933339787450",appId:"1:933339787450:web:cc87b850ed3b4903f41283"};
+// Ідентифікатор проєкту — назовні. Потрібен рівно для одного питання,
+// яке виникає щоразу: «а до якої бази взагалі звертається сайт?»
+// Без відповіді на нього можна годину шукати людину в Authentication
+// іншого проєкту й бути впевненим, що її немає.
+export const PROJECT_ID = firebaseConfig.projectId;
+window.PROJECT_ID = PROJECT_ID;
 export const app=initializeApp(firebaseConfig); export const auth=getAuth(app); export const db=getDatabase(app);
 
 // ══════════ ЧИТАННЯ ДІАПАЗОНУ ДАТ ══════════
@@ -4028,13 +4034,17 @@ window.submitFirstLogin=async function(ev){
         setBusy('btn-fl-submit',false,'Встановити пароль і увійти');
         const c2=e2&&e2.code||'';
         if(c2==='auth/invalid-credential'||c2==='auth/wrong-password'){
+          // Проєкт у підказці не для краси: саме тут виникає суперечка
+          // «в Authentication її немає». Її немає в тому проєкті, який
+          // відкрито в консолі, — а сайт говорить ось із цим.
           window.showLoginScreen(email,'Для цієї адреси пароль уже створювали раніше, '
-            + 'і він інший. Натисніть «Забули пароль?» — прийде лист, і ви задасте новий.');
+            + 'і він інший. Натисніть «Забули пароль?» — прийде лист, і ви задасте новий.'
+            + `<br><span style="font-size:.72rem;opacity:.75;">акаунт шукайте у проєкті ${escHtml(PROJECT_ID)}</span>`);
         }else if(c2==='auth/user-not-found'){
           setMsg('fl-error','Firebase каже, що акаунт із такою адресою вже існує, '
             + 'і водночас що його немає. Це збій на боці сервера входу — '
             + 'зверніться до адміністрації школи та передайте цей рядок: '
-            + 'створення → auth/email-already-in-use, вхід → auth/user-not-found.','login-err');
+            + `створення → auth/email-already-in-use, вхід → auth/user-not-found, проєкт → ${PROJECT_ID}.`,'login-err');
         }else{
           setMsg('fl-error',(AUTH_ERRORS[c2]||('Не вдалося увійти: '+(e2.message||c2)))
             + ` (створення: ${code}, вхід: ${c2||'—'})`,'login-err');
