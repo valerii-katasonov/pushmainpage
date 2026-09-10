@@ -682,14 +682,19 @@ export function loadParentDashboard(){
   // Calendar (holidays/breaks/exams) + bell schedule — Phase 3
   renderParentCalendar('parent');loadParentBellSchedule('parent');
   // HW
-  renderHwList(cls,date,'p-daily-hw-list');
+  // Блок «Задано на сьогодні» прибрано з цієї вкладки: його цілком
+  // замінила вкладка «📚 ДЗ» — там і навігація по тижнях, і теми уроків,
+  // і «Як допомогти» по кожному предмету окремо, а не одна кнопка на день.
+  // Разом із розміткою прибрано й виклики, які її наповнювали:
+  // renderHwList('p-daily-hw-list'), loadAiDayContext('p'), renderDayTopics('p').
+  // Свіжі оголошення школи — навпаки, тепер найперші на екрані.
+  if(window.renderFreshNews) window.renderFreshNews('p-fresh-news');
   // Textbooks
   loadTextbooksForParent();
-  loadAiDayContext('p');
   renderBirthdays('p-birthdays',cls,currentUserData.studentName);
   renderFinalGrades('p-final-grades',cls,currentUserData.studentName);
   Promise.all([loadTodaySubstitutions(cls,date),loadDayTopics(cls,date)])
-    .then(()=>{renderDynamicSchedule('parent');renderDayTopics('p',date);});
+    .then(()=>{renderDynamicSchedule('parent');});
   renderConsents();
   renderNewsFeed('p-news-feed');
   // Ключ дитини НЕ передаємо: хай renderParentMenu візьме його через
