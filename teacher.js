@@ -1191,12 +1191,24 @@ function setAttHeader(limited){
     +(limited?' Показано лише ваші уроки; класний керівник бачить усі.':'');
 }
 
+// ЛІЧИЛЬНИК ПОКОЛІНЬ. Стару підписку знімаємо на початку, а нову ставимо
+// після await (читання замін). Учитель клацає стрілку дати двічі поспіль —
+// виклики переплітаються: обидва знімають ту саму стару підписку, потім
+// перший записує свою в teacherAttendanceListener, а другий її затирає.
+// Підписка першого лишається живою назавжди — зняти її вже нічим.
+//
+// Для вчителя мистецької школи й директора це не одна підписка, а
+// одинадцять (по класу на кожну), тож кожне таке переплетіння лишає
+// одинадцять слухачів, які довічно перемальовують список.
+let attGen = 0;
 export async function listenTeacherAttendance(){
+  const gen = ++attGen;
   const date=document.getElementById('global-date').value;const list=document.getElementById('t-attendance-list');
-  if(teacherAttendanceListener)teacherAttendanceListener();
+  if(teacherAttendanceListener){teacherAttendanceListener();teacherAttendanceListener=null;}
   // Заміни читаємо ДО побудови списків: без них учитель, поставлений на
   // заміну, не побачив би уроку, який сьогодні веде саме він.
   await loadAttSubs(getActiveClass(),date);
+  if(gen !== attGen) return;   // нас обігнав пізніший виклик
   buildMarkAbsentLessonOptions();
   if(currentUserData.role==='art_school_teacher'){
     document.getElementById('t-att-header').innerText="🚨 Відсутні (Вся школа):";
