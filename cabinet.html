@@ -244,7 +244,11 @@
     .moved-notice{background:#e8f5e9;border:1px solid #a5d6a7;border-left:4px solid #43a047;
                   border-radius:14px;padding:15px 17px;margin:0 0 18px 0;
                   font-size:.86rem;color:#1b5e20;line-height:1.5;}
-    .moved-notice b{display:block;font-size:1rem;font-weight:800;margin:0 0 7px 0;}
+    /* Тільки ПРЯМИЙ <b> — це заголовок смужки. Без «>» правило ловило й
+       жирний усередині абзацу, і «іконку порталу на телефоні» ставало
+       окремим блоком: речення розривалося на три рядки різного розміру. */
+    .moved-notice > b{display:block;font-size:1rem;font-weight:800;margin:0 0 7px 0;}
+    .moved-notice p b{font-weight:700;}
     .moved-notice p{margin:0 0 6px 0;color:#33691e;}
     .moved-notice p:last-of-type{margin-bottom:0;}
     .moved-notice code{background:rgba(67,160,71,.12);border-radius:5px;padding:1px 5px;
