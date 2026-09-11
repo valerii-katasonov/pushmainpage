@@ -746,6 +746,63 @@
     .hwd-dirty{flex:1;min-width:0;font-size:.76rem;color:#e65100;font-weight:700;}
     .hwd-actions .qa-btn{width:auto;margin:0;padding:9px 16px;}
     .hwd-hint{font-size:.76rem;color:#90a4ae;margin-top:10px;}
+    /* ── Вкладка «Ігри» ──
+       Кнопки навмисно великі: грають переважно з телефона, і половина
+       гравців — першо-четвертокласники, яким у дрібну ціль не влучити. */
+    .gm-hint{font-size:.8rem;color:#78909c;margin:0 0 12px;line-height:1.45;}
+    .gm-load{font-size:.85rem;color:#90a4ae;padding:14px 0;}
+    .gm-grid{display:grid;gap:10px;}
+    .gm-card{display:flex;align-items:center;gap:12px;width:100%;margin:0;padding:13px 14px;
+             text-align:left;background:#fff;border:1px solid #eef2f7;border-left:4px solid #7986cb;
+             border-radius:12px;cursor:pointer;color:inherit;}
+    .gm-card:hover{background:#f7f8ff;}
+    .gm-icon{font-size:1.7rem;line-height:1;flex:0 0 auto;}
+    .gm-body{display:flex;flex-direction:column;gap:2px;min-width:0;}
+    .gm-body b{font-size:.95rem;color:#37474f;}
+    .gm-sub{font-size:.78rem;color:#78909c;}
+    .gm-best{font-size:.74rem;color:#3949ab;margin-top:3px;}
+    .gm-best.gm-new{color:#b0bec5;}
+    /* Сама гра */
+    .gm-play{background:#fff;border:1px solid #eef2f7;border-radius:14px;padding:16px;}
+    .gm-top{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+    .gm-back{width:auto;margin:0;padding:6px 12px;font-size:.8rem;background:#eceff1;
+             color:#37474f;border:none;border-radius:8px;cursor:pointer;}
+    .gm-count{font-size:.78rem;color:#90a4ae;font-weight:700;}
+    .gm-bar{height:5px;background:#eceff1;border-radius:3px;margin:12px 0 6px;overflow:hidden;}
+    .gm-bar i{display:block;height:100%;background:#7986cb;border-radius:3px;transition:width .25s;}
+    /* Приклад — найбільше на екрані. Дитина дивиться тільки сюди. */
+    .gm-q{font-size:2.1rem;font-weight:800;color:#263238;text-align:center;
+          padding:22px 0 18px;letter-spacing:.02em;}
+    .gm-form{display:flex;gap:8px;}
+    .gm-form input{flex:1;min-width:0;margin:0;font-size:1.4rem;font-weight:700;text-align:center;
+                   padding:11px;border:2px solid #c5cae9;border-radius:11px;}
+    .gm-form button{width:auto;margin:0;padding:11px 18px;background:#5c6bc0;color:#fff;
+                    border:none;border-radius:11px;font-weight:700;cursor:pointer;}
+    .gm-opts{display:grid;grid-template-columns:repeat(2,1fr);gap:9px;}
+    .gm-opt{margin:0;padding:14px;font-size:1.1rem;font-weight:700;background:#eef0fb;
+            color:#3949ab;border:1px solid #c5cae9;border-radius:11px;cursor:pointer;}
+    .gm-opt:hover{background:#e3e7f8;}
+    /* Місце під відгук тримаємо завжди: інакше поява рядка смикає
+       кнопки вниз рівно в мить, коли по них ціляться. */
+    .gm-feed{min-height:24px;margin-top:12px;text-align:center;font-size:.9rem;font-weight:700;}
+    .gm-feed.gm-ok{color:#2e7d32;}
+    .gm-feed.gm-no{color:#c62828;}
+    /* Підсумок */
+    .gm-done{text-align:center;}
+    .gm-medal{font-size:3rem;line-height:1;}
+    .gm-done h4{margin:8px 0 2px;font-size:1.05rem;color:#37474f;}
+    .gm-score{margin:0 0 14px;font-size:.9rem;color:#78909c;font-weight:700;}
+    .gm-allright{font-size:.85rem;color:#2e7d32;margin:0 0 14px;}
+    .gm-wrong{display:flex;flex-wrap:wrap;gap:7px;justify-content:center;align-items:center;
+              background:#fff8e1;border:1px dashed #ffe082;border-radius:11px;
+              padding:11px;margin:0 0 14px;}
+    .gm-wrong b{width:100%;font-size:.78rem;color:#e65100;font-weight:700;}
+    .gm-wrong span{font-size:.85rem;font-weight:700;color:#5d4037;
+                   background:#fff;border-radius:7px;padding:4px 9px;}
+    .gm-again{display:flex;gap:9px;}
+    .gm-again button{flex:1;margin:0;padding:12px;background:#5c6bc0;color:#fff;
+                     border:none;border-radius:11px;font-weight:700;cursor:pointer;}
+    .gm-again .gm-ghost{background:#eceff1;color:#37474f;}
     /* Вкладка «Домашні»: навігація по тижнях */
     .hw-nav{display:flex;align-items:center;gap:10px;margin-bottom:12px;}
     .hw-nav button{width:auto;margin:0;padding:9px 15px;font-size:1.05rem;font-weight:800;
@@ -3401,6 +3458,7 @@
       <button class="dtab on" data-t="day" onclick="switchTab('parent-screen','day',this)">Сьогодні</button>
       <button class="dtab" data-t="hw" onclick="switchTab('parent-screen','hw',this);openHwTab()">📚 ДЗ</button>
       <button class="dtab" data-t="meals" onclick="switchTab('parent-screen','meals',this)">🍽️ Їжа</button>
+      <button class="dtab" data-t="games" onclick="switchTab('parent-screen','games',this);openGamesTab()">🎮 Ігри</button>
       <button class="dtab" data-t="grades" onclick="switchTab('parent-screen','grades',this)">Оцінки</button>
       <button class="dtab" data-t="school" onclick="switchTab('parent-screen','school',this)">Школа</button>
       <button class="dtab" data-t="profile" onclick="switchTab('parent-screen','profile',this)">Профіль</button>
@@ -3521,6 +3579,14 @@
       <div id="p-hw-week"><p class="empty-msg">Завантаження...</p></div>
     </section>
 
+    <!-- ВКЛАДКА «ІГРИ». Та сама, що в дитини, і це навмисно: батько має
+         бачити рівно те, у що грає дитина, а не окрему «батьківську»
+         версію. Різниця лише в підказці згори. -->
+    <section class="screen-section" data-dtab="games">
+      <h3>🎮 Ігри</h3>
+      <div id="p-games"><p class="empty-msg">Завантаження...</p></div>
+    </section>
+
     <section class="screen-section" data-dtab="grades">
       <h3>📝 Оцінки та коментарі за день</h3>
       <div class="data-card" style="border-left-color:#ff4757;background:#fff0f1;margin-top:0;">
@@ -3623,6 +3689,7 @@
     <div class="dtab-bar" id="student-screen-tabs">
       <button class="dtab on" data-t="day" onclick="switchTab('student-screen','day',this)">Сьогодні</button>
       <button class="dtab" data-t="hw" onclick="switchTab('student-screen','hw',this);openHwTab()">📚 ДЗ</button>
+      <button class="dtab" data-t="games" onclick="switchTab('student-screen','games',this);openGamesTab()">🎮 Ігри</button>
       <button class="dtab" data-t="news" onclick="switchTab('student-screen','news',this)">Новини<span class="chat-dot"></span></button>
       <button class="dtab" data-t="study" onclick="switchTab('student-screen','study',this)">Навчання</button>
     </div>
@@ -3675,6 +3742,14 @@
     <section class="screen-section" data-dtab="hw">
       <h3>📚 Домашні завдання</h3>
       <div id="s-hw-week"><p class="empty-msg">Завантаження...</p></div>
+    </section>
+
+    <!-- ВКЛАДКА «ІГРИ». Вміст малює games.js при відкритті вкладки, а не
+         при завантаженні сторінки: сам список читає прогрес із бази, і
+         робити це для того, хто в ігри не заходить, немає навіщо. -->
+    <section class="screen-section" data-dtab="games">
+      <h3>🎮 Ігри</h3>
+      <div id="s-games"><p class="empty-msg">Завантаження...</p></div>
     </section>
 
     <section class="screen-section" data-dtab="study">
@@ -4258,6 +4333,11 @@ document.addEventListener('DOMContentLoaded', function(){
 <script type="module" src="consent.js"></script>
 <script type="module" src="activities.js"></script>
 <script type="module" src="homework.js"></script>
+<!-- Сам каталог ігор і двигун. Код КОНКРЕТНОЇ гри сюди не входить: він
+     лежить у games/ і підвантажується через import() у мить, коли гру
+     відкрили. Інакше кожна нова гра сповільнювала б кабінет усім,
+     включно з учителями, які в цю вкладку не заходять. -->
+<script type="module" src="games.js"></script>
 
   <!-- ═══ ЕКРАН ЗГОДИ ПРИ ВХОДІ ═══
        Модалка без кнопки закриття: GDPR вимагає поінформувати ДО обробки,
