@@ -8,7 +8,7 @@
 // XLSX comes from the CDN <script> tag already in <head> (global).
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, update, remove } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, auth, getActiveClass, currentUserData, showToast, localDateString, escHtml, teacherAccessMatrix, withTeachingRole, syncStaffCard, isBreakItem, isTeacherRole, isMasterTeacher, escJs, logAction, subjKey, emailKey } from './common.js';
+import { db, auth, getActiveClass, currentUserData, showToast, localDateString, escHtml, teacherAccessMatrix, withTeachingRole, syncStaffCard, isBreakItem, isTeacherRole, isMasterTeacher, escJs, logAction, subjKey, planKeyWith, emailKey } from './common.js';
 
 let parsedCurriculum=null;        // після парсингу xlsx
 const MAX_TOPICS=250;             // стеля на предмет: захист від зіпсованого файлу
@@ -380,23 +380,20 @@ export async function loadAliases(cls, force){
   }
 }
 
-// Під якою назвою насправді лежить план цього предмета.
+// Ключ плану в базі. Сама підстановка живе в common.js (planKeyWith) —
+// тут лише підставляємо кеш класу. Так у кабінеті вчителя й у кабінеті
+// батьків працює буквально один і той самий код, хоч карта псевдонімів
+// приходить туди різними шляхами.
 //
-// Крок рівно один. Якщо А вказує на Б, а Б на В — зупиняємось на Б.
-// Ланцюжки тут нікому не потрібні, а зациклити їх випадково легко, і
-// тоді сторінка просто повисне.
-export function planSubject(cls, subj){
-  if(!subj) return subj;
-  // Кеш належить одному класу. Якщо питають про інший — не вгадуємо:
-  // мовчазна підстановка чужого псевдоніма гірша за його відсутність.
-  if(cls && cls !== aliasCls) return subj;
-  const target = aliasMap[subjKey(subj)];
-  return (target && String(target).trim()) ? String(target).trim() : subj;
+// Кеш належить одному класу. Питають про інший — не вгадуємо: мовчазна
+// підстановка чужого псевдоніма гірша за його відсутність.
+//
+// Крок рівно один: ланцюжок А→Б→В неможливий, бо звʼязати предмет із
+// тим, у кого план сам чужий, інтерфейс не дає.
+export function planKey(cls, subj){
+  if(cls && cls !== aliasCls) return subjKey(subj);
+  return planKeyWith(aliasMap, subj);
 }
-
-// Ключ плану в базі: спершу псевдонім, потім очищення під Firebase.
-// Усі шляхи curriculum_plans рахуються ЛИШЕ через неї.
-export function planKey(cls, subj){ return subjKey(planSubject(cls, subj)); }
 
 // Стан доступу поточного користувача — обчислюється один раз при показі
 // картки і використовується і у превʼю, і при збереженні.
@@ -1084,11 +1081,14 @@ function renderAliasBox(subj){
   const box  = document.getElementById('curr-alias-box');
   const sel  = document.getElementById('curr-alias');
   const note = document.getElementById('curr-alias-note');
-  // Усі три елементи разом або жодного: у браузері може бути стара
-  // розмітка без цього блоку. Без перевірки note тут падав би TypeError
-  // просто посеред onCurrSubjectChange — і перемикання предмета
-  // переставало працювати цілком, хоч псевдоніми ні до чого.
-  if(!box || !sel || !note) return;
+  const view = document.getElementById('curr-alias-view');
+  const edit = document.getElementById('curr-alias-edit');
+  const state= document.getElementById('curr-alias-state');
+  // Усі елементи разом або жодного: у браузері може бути стара розмітка
+  // без цього блоку. Без перевірки тут падав би TypeError просто посеред
+  // onCurrSubjectChange — і перемикання предмета переставало працювати
+  // цілком, хоч псевдоніми ні до чого.
+  if(!box || !sel || !note || !view || !edit || !state) return;
   if(!subj){ box.style.display = 'none'; return; }
 
   const cur = aliasMap[subjKey(subj)] || '';
@@ -1102,11 +1102,40 @@ function renderAliasBox(subj){
   // а людина вирішить, що ні.
   if(cur && !others.some(s => s === cur))
     sel.innerHTML += `<option value="${escHtml(cur)}" selected>${escHtml(cur)} (немає в розкладі)</option>`;
+  sel.value = cur;
 
+  // Згорнутий рядок: що є зараз, і посилання «змінити». Ніяких дій тут
+  // не відбувається — саме цього й бракувало: список зберігав одразу при
+  // виборі, тобто випадкове торкання перевʼязувало план мовчки.
+  state.innerHTML = cur
+    ? `Спільний план з <b>${escHtml(cur)}</b>`
+    : `Спільний план: <b>немає</b>`;
   note.textContent = cur
     ? `Теми беруться з плану предмета «${cur}». Файл, завантажений тут, ляже туди ж.`
     : 'Якщо цей самий курс є в розкладі під іншою назвою — вкажіть її, і план буде один на двох.';
+  view.style.display = '';
+  edit.style.display = 'none';
   box.style.display = 'block';
+}
+
+window.editCurrAlias = function(){
+  const view = document.getElementById('curr-alias-view');
+  const edit = document.getElementById('curr-alias-edit');
+  if(!view || !edit) return;
+  view.style.display = 'none';
+  edit.style.display = '';
+};
+
+window.cancelCurrAlias = function(){ renderAliasBox(chosenSubject()); };
+
+// Скільки власних тем у предмета під ЙОГО ВЛАСНОЮ назвою.
+// Саме власною, не через planKey: питання в тому, чи не сховаємо ми
+// зараз готовий план, перевʼязавши предмет на чужий.
+async function ownTopicCount(cls, subj){
+  try{
+    const snap = await get(ref(db, `curriculum_plans/${cls}/${subjKey(subj)}/topics`));
+    return snap.exists() ? Object.keys(snap.val() || {}).length : 0;
+  }catch(e){ console.warn('curriculum_plans (перевірка):', e.message); return 0; }
 }
 
 window.saveCurrAlias = async function(){
@@ -1117,14 +1146,32 @@ window.saveCurrAlias = async function(){
   const target = sel.value.trim();
   const key = subjKey(subj);
 
+  // Нічого не змінилося — просто згортаємось. Зайвий запис у базу й
+  // зайвий рядок у журналі дій нікому не потрібні.
+  if((aliasMap[key] || '') === target){ renderAliasBox(subj); return; }
+
   // ЗАБОРОНА ЛАНЦЮЖКІВ. Якщо предмет, на який вказують, сам кудись
   // указує, вийшло б А→Б→В: план шукали б у Б, а він там лише
   // псевдонімом. Розв'язувати ланцюжки складніше, ніж не давати їх
   // будувати, а користі від них ніякої.
   if(target && aliasMap[subjKey(target)]){
     showToast(`«${target}» сам користується чужим планом. Оберіть предмет, у якого план власний.`);
-    renderAliasBox(subj);
     return;
+  }
+
+  // ПОПЕРЕДЖАЄМО, ЯКЩО ХОВАЄМО ГОТОВЕ.
+  //
+  // У предмета вже може бути свій заповнений план. Перевʼязування його
+  // не видаляє — запис лишається в базі під власною назвою, — але з
+  // очей він зникає, і збоку це виглядає рівно як «мій план стерли».
+  // Тому питаємо прямо й називаємо число тем.
+  if(target){
+    const n = await ownTopicCount(cls, subj);
+    if(n && !confirm(
+      `У «${subj}» уже є власний план: тем — ${n}.\n\n`
+      + `Після звʼязування теми братимуться з «${target}», а власний план перестане показуватись.\n`
+      + `Він не видаляється: якщо повернути «окремий власний план», усі ${n} тем будуть на місці.\n\n`
+      + 'Звʼязати?')) return;
   }
 
   const prev = aliasMap[key];
