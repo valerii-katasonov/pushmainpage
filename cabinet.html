@@ -1215,6 +1215,23 @@
     .add-parallel-btn:hover{background:#3498db;color:#fff;}
     .cell-warning-travel{border:2px solid #e67e22!important;box-shadow:inset 0 0 10px rgba(230,126,34,.3);}
     .cell-warning-conflict{border:2px solid var(--red)!important;box-shadow:inset 0 0 10px rgba(231,76,60,.3);background-color:#fdedec!important;}
+    /* ── Спільний план предмета ──
+       Блок навмисно тихий: сірий дрібний рядок, а не третє поле на всю
+       ширину. Він стосується рідкісного випадку, і виглядати мусить як
+       примітка, а не як питання, на яке треба відповісти. */
+    .ca-box{margin-top:6px;font-size:.78rem;color:#78909c;}
+    .ca-view{display:flex;align-items:baseline;gap:7px;flex-wrap:wrap;}
+    .ca-view b{color:#455a64;font-weight:700;}
+    .ca-link{width:auto;margin:0;padding:0;background:none;border:none;cursor:pointer;
+             color:#2b5aa8;font-size:.78rem;text-decoration:underline;}
+    .ca-edit{margin-top:6px;background:#fff;border:1px solid #dde5ee;border-radius:10px;padding:9px 10px;}
+    .ca-edit select{margin:0;font-size:.85rem;}
+    .ca-actions{display:flex;gap:7px;margin-top:8px;}
+    .ca-ok,.ca-no{width:auto;margin:0;padding:6px 14px;font-size:.78rem;font-weight:700;
+                  border:none;border-radius:8px;cursor:pointer;}
+    .ca-ok{background:#2b5aa8;color:#fff;}
+    .ca-no{background:#eceff1;color:#546e7a;}
+    .ca-note{margin-top:7px;color:#90a4ae;line-height:1.45;font-size:.75rem;}
     /* Погодження накладок. Кнопка навмисно скромна: вона стоїть у кожному
        рядку попередження, і якби виглядала як головна дія, натискати її
        почали б не читаючи — а це рівно те, чого тут не треба. */
@@ -3335,12 +3352,24 @@
              назвами — «Математика» і «Matematyka». Тут кажемо, що план у
              них один, замість того щоб заливати його двічі й потім
              гадати, яка з двох копій свіжіша. -->
-        <div id="curr-alias-box" style="display:none;margin-top:7px;font-size:.79rem;color:#455a64;">
-          <label style="font-weight:600;">Спільний план з предметом:</label>
-          <select id="curr-alias" onchange="saveCurrAlias()" style="margin-top:4px;">
-            <option value="">— окремий власний план —</option>
-          </select>
-          <div id="curr-alias-note" style="margin-top:4px;color:#78909c;line-height:1.4;"></div>
+        <div id="curr-alias-box" class="ca-box" style="display:none;">
+          <!-- ЗГОРНУТИЙ СТАН — ЗВИЧАЙНИЙ. Спільний план потрібен одному
+               предмету з двадцяти, а поле на весь рядок поруч із вибором
+               предмета виглядало як ще одне обов'язкове питання. -->
+          <div id="curr-alias-view" class="ca-view">
+            <span id="curr-alias-state"></span>
+            <button type="button" class="ca-link" onclick="editCurrAlias()">змінити</button>
+          </div>
+          <div id="curr-alias-edit" class="ca-edit" style="display:none;">
+            <select id="curr-alias">
+              <option value="">— окремий власний план —</option>
+            </select>
+            <div class="ca-actions">
+              <button type="button" class="ca-ok" onclick="saveCurrAlias()">Зберегти</button>
+              <button type="button" class="ca-no" onclick="cancelCurrAlias()">Скасувати</button>
+            </div>
+            <div id="curr-alias-note" class="ca-note"></div>
+          </div>
         </div>
         <label class="curr-drop-zone" id="curr-drop-zone-label">
           <input type="file" id="curr-file-input" accept=".xlsx,.xls">
