@@ -82,10 +82,40 @@ window.removeDirectorSkill=function(i){directorSkillsTemp.splice(i,1);renderDire
 window.addTeacherSkill=function(){const v=document.getElementById('d-skill-input').value.trim();if(!v)return;if(!directorSkillsTemp.includes(v))directorSkillsTemp.push(v);document.getElementById('d-skill-input').value='';renderDirectorSkillsTags();};
 window.saveTeacherSkills=async function(){const se=document.getElementById('d-skills-teacher').value;if(!se)return alert("Оберіть вчителя!");await set(ref(db,`teacher_skills/${se}/subjects`),directorSkillsTemp);showToast("✅ Скіли збережено!");};
 // ══════════ SCHEDULE DRAFTS (Конструктор Розкладу) ══════════
-export function loadDrafts(){get(ref(db,'schedule_drafts')).then(snap=>{const c=document.getElementById('drafts-list-container');if(snap.exists()){let h='';const dr=snap.val();for(let dn in dr)h+=`<div style="background:#f4f9fd;padding:13px;border-radius:8px;border:1px solid var(--blue);margin-bottom:9px;"><b style="color:var(--teal);">📝 ${dn}</b><div style="display:flex;gap:8px;margin-top:9px;flex-wrap:wrap;"><button style="flex:1;background:#f39c12;color:#fff;padding:11px;margin:0;min-width:100px;" onclick="openVisualMatrixModal('${dn}')">✏️ Відкрити</button><button style="background:var(--red);color:#fff;padding:11px 13px;margin:0;" onclick="deleteDraft('${dn}')">🗑</button><button style="flex:100%;background:var(--green);color:#fff;padding:11px;margin:0;" onclick="activateDraft('${dn}','replace')">🚀 Опублікувати як увесь розклад школи</button><button style="flex:100%;background:#0288d1;color:#fff;padding:10px;margin:0;font-size:.83rem;" onclick="activateDraft('${dn}','merge')">➕ Оновити лише класи з чернетки</button></div></div>`;c.innerHTML=h;}else c.innerHTML='<p class="empty-msg">Чернеток немає.</p>';});}
+// НАЗВА ЧЕРНЕТКИ — ЦЕ ТЕКСТ ВІД ЛЮДИНИ, І ЇЇ ТРЕБА ЕКРАНУВАТИ.
+//
+// Тут назва підставлялася сирою і в текст, і в чотири onclick поспіль.
+// Ключі Firebase не приймають . # $ [ ] / — але апостроф приймають
+// цілком. Чернетка «Розклад О'Брайена» розривала рядковий літерал в
+// обробнику, і всі чотири кнопки переставали працювати мовчки: ні
+// відкрити, ні опублікувати, ні навіть видалити, щоб позбутися.
+//
+// escHtml для тексту, escJs для onclick — як і скрізь у порталі.
+export function loadDrafts(){get(ref(db,'schedule_drafts')).then(snap=>{const c=document.getElementById('drafts-list-container');if(snap.exists()){let h='';const dr=snap.val();for(let dn in dr){const t=escHtml(dn),j=escJs(dn);h+=`<div style="background:#f4f9fd;padding:13px;border-radius:8px;border:1px solid var(--blue);margin-bottom:9px;"><b style="color:var(--teal);">📝 ${t}</b><div style="display:flex;gap:8px;margin-top:9px;flex-wrap:wrap;"><button style="flex:1;background:#f39c12;color:#fff;padding:11px;margin:0;min-width:100px;" onclick="openVisualMatrixModal('${j}')">✏️ Відкрити</button><button style="background:var(--red);color:#fff;padding:11px 13px;margin:0;" onclick="deleteDraft('${j}')">🗑</button><button style="flex:100%;background:var(--green);color:#fff;padding:11px;margin:0;" onclick="activateDraft('${j}','replace')">🚀 Опублікувати як увесь розклад школи</button><button style="flex:100%;background:#0288d1;color:#fff;padding:10px;margin:0;font-size:.83rem;" onclick="activateDraft('${j}','merge')">➕ Оновити лише класи з чернетки</button></div></div>`;}c.innerHTML=h;}else c.innerHTML='<p class="empty-msg">Чернеток немає.</p>';});}
 window.loadDrafts=loadDrafts;
 window.createNewDraft=async function(){const name=document.getElementById('new-draft-name').value.trim();if(!name)return alert("Введіть назву!");const ok=confirm("Скопіювати поточний розклад?");if(ok){const s=await get(ref(db,'schedules'));if(s.exists())await set(ref(db,`schedule_drafts/${name}`),s.val());else await set(ref(db,`schedule_drafts/${name}`),{placeholder:true});}else await set(ref(db,`schedule_drafts/${name}`),{placeholder:true});document.getElementById('new-draft-name').value='';showToast("✅ Чернетку створено!");loadDrafts();};
-window.deleteDraft=function(name){if(confirm(`Видалити "${name}"?`))remove(ref(db,`schedule_drafts/${name}`)).then(()=>loadDrafts());};
+// Разом із чернеткою прибираємо і погодження накладок по ній.
+//
+// Погодження лежать окремим вузлом schedule_warn_ok/{чернетка} — саме
+// тому, що вони належать конкретному розкладу, а не школі взагалі. Але
+// видалення чернетки про них не знало, і вони лишалися в базі назавжди:
+// сміття, на яке ніхто ніколи не подивиться, зате яке оживе, якщо колись
+// створити чернетку з тією самою назвою — і тоді частина накладок у
+// новому розкладі виявиться «вже погодженою» невідомо ким.
+window.deleteDraft=async function(name){
+  if(!confirm(`Видалити "${name}"?`)) return;
+  try{
+    await remove(ref(db,`schedule_drafts/${name}`));
+    // Погодження — річ другорядна: не змогли прибрати, чернетку все одно
+    // вже видалено, і падати тут означало б показати помилку там, де
+    // головна дія відбулася.
+    try{ await remove(ref(db,`schedule_warn_ok/${name}`)); }
+    catch(e){ console.warn('schedule_warn_ok:', e.message); }
+  }catch(e){
+    return showToast('Не вдалося видалити чернетку: '+e.message);
+  }
+  loadDrafts();
+};
 // Публікація чернетки розкладу.
 //
 // ЩО ТУТ БУЛО НЕ ТАК.
