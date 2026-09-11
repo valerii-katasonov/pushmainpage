@@ -1893,6 +1893,9 @@ window.handleDateChange=function(){
 };
 window.handleClassChange=function(){
   const ac=getActiveClass();if(!ac)return;
+  // Запам'ятовуємо саме тут, а не в обробнику select: клас міняється і
+  // програмно (відновлення при вході), і руками, а сюди сходяться обидва.
+  try{ localStorage.setItem('push_school_class', ac); }catch(e){}
   const sel=document.getElementById('t-class-selector');const label=sel.options[sel.selectedIndex].text;
   document.getElementById('teacher-dashboard-title').innerText=`👨‍🏫 Журнал: ${label}`;
   // Кожен перехід майстер-ролі між класами лишає слід. Роль тимчасова й
@@ -2382,13 +2385,25 @@ async function initUserSession(){
     document.getElementById('t-hw-input-wrapper').style.display=isArt?'none':'block';
     document.getElementById('t-topic-card').style.display=isArt?'none':'block';
     const cs=document.getElementById('t-class-selector');cs.innerHTML='';
-    if(isMasterTeacher(r)){
+    // КЛАСИ СОРТУЄМО ЧИСЛОМ, А НЕ РЯДКОМ.
+    //
+    // Тут стояв голий Object.keys(teacherAccessMatrix) без жодного
+    // сортування. Firebase віддає ключі за абеткою, а за абеткою
+    // «class_10» стоїть одразу після «class_1» — тож у списку було
+    // 1, 10, 11, 2, 3… Схоже на різницю між системами, але річ не в них:
+    // порядку не було взагалі, і на будь-якій машині виходило те саме.
+    //
+    // localeCompare тут теж не підійшов би: він порівнює текст, а «10»
+    // як текст менше за «2». Тому лише число, через getClassNum.
+    const classList = isMasterTeacher(r)
       // Роль для налагодження допущена до всіх класів окремим правилом бази,
       // записів у teacher_access у неї немає — тож список будуємо самі.
-      for(let i=1;i<=11;i++) cs.innerHTML+=`<option value="class_${i}">${i} Клас</option>`;
-    }else{
-      Object.keys(teacherAccessMatrix).forEach(c=>cs.innerHTML+=`<option value="${c}">${c.replace('class_','')} Клас</option>`);
-    }
+      ? Array.from({length:11},(_,i)=>`class_${i+1}`)
+      : Object.keys(teacherAccessMatrix||{});
+    classList.sort((a,b)=>getClassNum(a)-getClassNum(b));
+    classList.forEach(c=>{
+      cs.innerHTML+=`<option value="${escHtml(c)}">${escHtml(String(getClassNum(c)))} Клас</option>`;
+    });
     if(cs.options.length===0){
       if(isArt)cs.innerHTML='<option value="class_1">1 Клас</option>';
       else{
@@ -2405,6 +2420,16 @@ async function initUserSession(){
         return;
       }
     }
+    // ОСТАННІЙ ОБРАНИЙ КЛАС.
+    //
+    // Учитель, у якого класів кілька, щоразу починав із першого за
+    // номером і першим ділом перемикався на свій. Пам'ятаємо вибір —
+    // але лише якщо такий клас у списку ще є: доступ могли й забрати,
+    // і тоді збережене значення тихо вибрало б порожній пункт.
+    try{
+      const last=localStorage.getItem('push_school_class');
+      if(last && Array.from(cs.options).some(o=>o.value===last)) cs.value=last;
+    }catch(e){}
     window.handleClassChange();
     callWhenReady('initTabs', 0, ['teacher-screen']);
     callWhenReady('renderPushInvite', 600, ['t-push-invite']);
