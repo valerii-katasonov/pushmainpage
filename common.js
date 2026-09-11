@@ -2015,33 +2015,30 @@ window.renderMasterBanner = renderMasterBanner;
 const MOVED_NOTICE_UNTIL = '2027-01-01';
 const MOVED_SEEN_KEY = 'push_school_moved_seen';
 export function renderMovedNotice(){
+  const box = document.getElementById('moved-notice');
+  if(!box) return;
   try{
     if(localDateString >= MOVED_NOTICE_UNTIL) return;
     if(localStorage.getItem(MOVED_SEEN_KEY)) return;
   }catch(e){ /* приватний режим — просто покажемо */ }
-  if(document.getElementById('moved-notice')) return;
-  const el = document.createElement('div');
-  el.id = 'moved-notice';
-  el.className = 'moved-notice';
-  el.innerHTML = '<b>📦 Портал переїхав на push.school</b>'
-    + '<span>Посилання й закладки працюють самі. Але якщо ви додавали іконку '
-    + 'порталу на телефон — додайте її заново: стара відкривається у браузері, '
-    + 'і сповіщення до неї більше не приходять.</span>'
+  // Три окремі абзаци, а не один рядок із переносами: у смужці три різні
+  // думки — що сталося, що робити нічого не треба, і що таки треба. Злиті
+  // в суцільний текст, вони читаються як службове попередження, і людина
+  // закриває смужку не дочитавши саме той рядок, заради якого вона є.
+  box.innerHTML = '<b>📦 Портал переїхав на <code>push.school</code></b>'
+    + '<p>Стара адреса працює й веде сюди — посилання, закладки та листи '
+    + 'відкриються як завжди.</p>'
+    + '<p>А от <b>іконку порталу на телефоні</b> треба додати заново: стара '
+    + 'відкривається у браузері замість застосунку, і сповіщення на неї '
+    + 'більше не приходять. Як це зробити — у «Профіль» → «Встановити застосунок».</p>'
     + '<button type="button" onclick="dismissMovedNotice()">Зрозуміло</button>';
-  // Кабінети всіх ролей лежать у розмітці одночасно, видимий — один.
-  // Тому шукаємо саме показаний, а не «перший, який знайдеться»: інакше
-  // смужка лягла б у прихований екран і її ніхто б не побачив.
-  const SCREENS = ['parent-screen','student-screen','teacher-screen',
-                   'director-screen','admin-screen','kitchen-screen'];
-  const host = SCREENS.map(id => document.getElementById(id))
-                      .find(x => x && x.offsetParent !== null) || document.body;
-  host.insertBefore(el, host.firstChild);
+  box.style.display = 'block';
 }
 window.renderMovedNotice = renderMovedNotice;
 window.dismissMovedNotice = function(){
   try{ localStorage.setItem(MOVED_SEEN_KEY, '1'); }catch(e){}
   const el = document.getElementById('moved-notice');
-  if(el) el.remove();
+  if(el) el.style.display = 'none';
 };
 // Предмети НЕ зберігаються окремим списком — вони беруться з РОЗКЛАДУ класу
 // (schedules/{clas}/lessons/{день}) і додатково фільтруються матрицею доступу
