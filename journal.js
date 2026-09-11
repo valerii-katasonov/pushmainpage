@@ -5,12 +5,7 @@
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, update } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { ACTIVE_YEAR } from './director.js';
-import { db, getActiveClass, currentUserData, displayGrade, gradeClass6, calculateStudentWeightedAvg, getClassNum, LEVEL_MAX_CLASS, GRADE_WEIGHTS, dayKeys, dayNamesUA, showToast, normalizeTimeRange, localDateString, summarizeAttendanceSlots, gradeTypesCache, escJs, escHtml, notifyEvent, logAction, getUserRoles, getUsersSnap, stuName, gradeWritePaths, isBreakItem, insertSlot, removeSlot, makeBreak, withBreaks, slotBounds, hhmmFromMins } from './common.js';
-
-// Позначка складання: видно в рядку стану матриці. Якщо після викладення
-// вона не змінилася — браузер працює зі старим файлом, і шукати помилку
-// в коді марно.
-export const JOURNAL_BUILD = '2026-09-05 · матриця v2';
+import { db, getActiveClass, currentUserData, displayGrade, gradeClass6, calculateStudentWeightedAvg, getClassNum, LEVEL_MAX_CLASS, GRADE_WEIGHTS, dayKeys, dayNamesUA, showToast, normalizeTimeRange, localDateString, summarizeAttendanceSlots, gradeTypesCache, escJs, escHtml, notifyEvent, logAction, getUserRoles, getUsersSnap, stuName, gradeWritePaths, isBreakItem, insertSlot, removeSlot, makeBreak, withBreaks, slotBounds, hhmmFromMins, emailKey } from './common.js';
 
 // globalTeacherAccess is reassigned only in this file (openVisualMatrixModal)
 // and read from common.js (window.getDefaultTeacher) — plain export/import.
@@ -21,6 +16,22 @@ let globalAllSchedules={};
 let globalAllStudents={};
 let currentMatrixMode='live';
 let draftWarningsCache=[];
+// ── ПОГОДЖЕНІ НАКЛАДКИ ──────────────────────────────────────────
+//
+// Накладка не завжди помилка. Той самий учитель справді буває одночасно
+// в кількох класах: повіз усіх на басейн, веде об'єднану групу, супроводжує
+// поїздку. Портал цього не знає й знати не може — а список щоразу той
+// самий, і серед звичних червоних рядків губиться справжня помилка.
+//
+// Тому директор може сказати «так і має бути». Погоджене не зникає
+// назовсім: воно згортається в рядок, який розгортається назад і де
+// погодження можна зняти. Попередження, що просто зникло, потім нічим
+// не перевірити й не пригадати, чому його немає.
+//
+// Живуть погодження в тій чернетці, до якої належать. Чернетка — це
+// окремий розклад; переносити погодження між ними означало б мовчки
+// сказати «і тут ця накладка нормальна», чого ніхто не казав.
+let warnOk = {};
 // globalTeachersList is written to both from here and from director.js
 // (loadTeachersListForDirector), so it stays on window (see common.js note).
 window.globalTeachersList = window.globalTeachersList || [];
@@ -802,6 +813,16 @@ window.openVisualMatrixModal=async function(mode){
     const ch = await get(ref(db, 'class_hour'));
     if(ch.exists()) window.allClassHours = ch.val() || {};
   }catch(e){ console.warn('class_hour:', e.message); }
+  // Погодження накладок цієї чернетки. У чинному розкладі попереджень
+  // немає взагалі, тож і читати нічого. Відмова в правах не страшна:
+  // без погоджень список просто буде повним, як і був досі.
+  warnOk = {};
+  if(mode !== 'live'){
+    try{
+      const wo = await get(ref(db, `schedule_warn_ok/${mode}`));
+      if(wo.exists()) warnOk = wo.val() || {};
+    }catch(e){ console.warn('schedule_warn_ok:', e.message); }
+  }
   globalAllSchedules=snap.exists()?snap.val():{};
   globalTeacherAccess=(accSnap&&accSnap.exists())?accSnap.val():{};
   globalAllStudents=(stSnap&&stSnap.exists())?stSnap.val():{};
@@ -815,7 +836,7 @@ window.openVisualMatrixModal=async function(mode){
   try{ uSnap=await getUsersSnap(); }
   catch(e){ usersDenied=true; denied.push(`список персоналу (users): ${e.message}`); }
   window.globalTeachersList=[];
-  if(uSnap&&uSnap.exists()){const u=uSnap.val();for(let uid in u){const us=u[uid];const rs=getUserRoles(us);if(rs.some(r=>r==='teacher'||r==='class_teacher'||r==='art_school_teacher'||r==='music_teacher')&&us.email&&!us.disabled){const n=(us.firstName||us.lastName)?`${us.firstName||''} ${us.lastName||''}`.trim():"Ім'я";const se=us.email.replace(/\./g,'_');window.globalTeachersList.push({email:us.email,name:n,safeEmail:se});}}}
+  if(uSnap&&uSnap.exists()){const u=uSnap.val();for(let uid in u){const us=u[uid];const rs=getUserRoles(us);if(rs.some(r=>r==='teacher'||r==='class_teacher'||r==='art_school_teacher'||r==='music_teacher')&&us.email&&!us.disabled){const n=(us.firstName||us.lastName)?`${us.firstName||''} ${us.lastName||''}`.trim():"Ім'я";const se=emailKey(us.email);window.globalTeachersList.push({email:us.email,name:n,safeEmail:se});}}}
   window._matrixAccDenied=accDenied;
   // Помітна смуга просто у вікні: рядок стану внизу легко не помітити,
   // а наслідок серйозний — половина сітки виглядає як розклад без учителів.
@@ -867,14 +888,172 @@ window.openVisualMatrixModal=async function(mode){
   say((clsKeys.length
     ? `${mode==='live'?'Чинний розклад':'Чернетка «'+mode+'»'}: класів ${clsKeys.length}, уроків у понеділок ${mon}.`
     : `${mode==='live'?'Чинний розклад':'Чернетка «'+mode+'»'} порожня — жодного класу. Додайте уроки клацанням по клітинці.`)
-    + accNote + `  [журнал ${JOURNAL_BUILD}]`);
+    + accNote);
   }catch(e){
     console.error('openVisualMatrixModal', e);
     say('Не вдалося завантажити: '+e.message+'. Сітку не побудовано.', true);
   }
 };
 window.closeVisualMatrixModal=function(){document.getElementById('visual-matrix-modal').style.display='none';};
-window.calculateMatrixWarnings=function(){if(currentMatrixMode==='live')return;draftWarningsCache=[];const day=document.getElementById('matrix-day-select').value;let wHtml='<b>⚠️ Аналіз накладок:</b><ul style="margin:4px 0 0 0;padding-left:18px;">';let hasW=false;let tracker={};let maxR=8;for(let i=1;i<=11;i++){const cls=`class_${i}`;maxR=Math.max(maxR,dayArr(globalAllSchedules[cls]?.lessons?.[day]).length);}for(let row=0;row<maxR;row++){let slotT={};for(let c=1;c<=11;c++){const clsId=`class_${c}`;const building=c<=5?1:2;const la=dayArr(globalAllSchedules[clsId]?.lessons?.[day]);const raw=la[row];let items=Array.isArray(raw)?raw:(raw&&raw.subject?[raw]:[]);items.forEach((lesson,si)=>{if(lesson.type==='break')return;let te=lesson.teacherEmail;if(!te&&lesson.subject){const sn=typeof lesson.subject==='string'?lesson.subject:(lesson.subject.ua||'');const dt=window.getDefaultTeacher(clsId,sn);if(dt)te=dt.email;}if(te){if(!tracker[te])tracker[te]={};if(slotT[te]){hasW=true;wHtml+=`<li style="color:#c0392b;"><b>Накладка!</b> ${te}: ${clsId}+${slotT[te].classId} (Слот ${row+1})</li>`;draftWarningsCache.push({type:'conflict',row,classId:clsId,subIdx:si});draftWarningsCache.push({type:'conflict',row,classId:slotT[te].classId,subIdx:slotT[te].subIdx});}else slotT[te]={classId:clsId,subIdx:si};tracker[te][row]={classId:clsId,building,subIdx:si};}});}}for(let te in tracker){const slots=Object.keys(tracker[te]).map(Number).sort((a,b)=>a-b);for(let i=0;i<slots.length-1;i++){if(slots[i+1]-slots[i]===1&&tracker[te][slots[i]].building!==tracker[te][slots[i+1]].building){hasW=true;wHtml+=`<li style="color:#e67e22;"><b>Переїзд:</b> ${te} між слотами ${slots[i]+1}→${slots[i+1]+1}</li>`;draftWarningsCache.push({type:'travel',row:slots[i],classId:tracker[te][slots[i]].classId,subIdx:tracker[te][slots[i]].subIdx});draftWarningsCache.push({type:'travel',row:slots[i+1],classId:tracker[te][slots[i+1]].classId,subIdx:tracker[te][slots[i+1]].subIdx});}}}wHtml+='</ul>';const wb=document.getElementById('constructor-warnings');if(hasW){wb.innerHTML=wHtml;wb.style.display='block';}else{wb.innerHTML='✅ Накладок не виявлено!';wb.style.display='block';}};
+// Ключ попередження. Навмисно НЕ містить пари класів: у слоті, де вчитель
+// веде п'ять класів одразу, пар виходить п'ять, а обставина одна.
+// Крапки в пошті — у підкреслення, інакше ключ розірве шлях у Firebase.
+function warnKey(kind, day, row, email){
+  return `${kind}_${day}_${row}_${emailKey(email || '')}`;
+}
+
+window.calculateMatrixWarnings=function(){
+  if(currentMatrixMode==='live')return;
+  draftWarningsCache=[];
+  const day=document.getElementById('matrix-day-select').value;
+
+  let maxR=8;
+  for(let i=1;i<=11;i++){
+    const cls=`class_${i}`;
+    maxR=Math.max(maxR,dayArr(globalAllSchedules[cls]?.lessons?.[day]).length);
+  }
+
+  // Накладки збираємо групами «вчитель + слот», а не окремими парами.
+  // Раніше кожна пара була своїм рядком: учитель, що повіз шість класів
+  // на басейн, давав п'ять однакових рядків поспіль.
+  const conflicts=new Map();
+  const travels=new Map();
+  const tracker={};
+
+  for(let row=0;row<maxR;row++){
+    const slotT={};
+    for(let c=1;c<=11;c++){
+      const clsId=`class_${c}`;
+      const building=c<=5?1:2;
+      const la=dayArr(globalAllSchedules[clsId]?.lessons?.[day]);
+      const raw=la[row];
+      const items=Array.isArray(raw)?raw:(raw&&raw.subject?[raw]:[]);
+      items.forEach((lesson,si)=>{
+        if(lesson.type==='break')return;
+        let te=lesson.teacherEmail;
+        if(!te&&lesson.subject){
+          const sn=typeof lesson.subject==='string'?lesson.subject:(lesson.subject.ua||'');
+          const dt=window.getDefaultTeacher(clsId,sn);
+          if(dt)te=dt.email;
+        }
+        if(!te)return;
+        if(!tracker[te])tracker[te]={};
+        if(slotT[te]){
+          const key=warnKey('c',day,row,te);
+          let g=conflicts.get(key);
+          if(!g){
+            // Перший клас слота теж потрапляє в групу — він половина
+            // накладки, а не сторонній спостерігач.
+            g={key,email:te,row,classes:new Set([slotT[te].classId]),
+               cells:[{type:'conflict',row,classId:slotT[te].classId,subIdx:slotT[te].subIdx}]};
+            conflicts.set(key,g);
+          }
+          g.classes.add(clsId);
+          g.cells.push({type:'conflict',row,classId:clsId,subIdx:si});
+        } else slotT[te]={classId:clsId,subIdx:si};
+        tracker[te][row]={classId:clsId,building,subIdx:si};
+      });
+    }
+  }
+
+  for(const te in tracker){
+    const slots=Object.keys(tracker[te]).map(Number).sort((a,b)=>a-b);
+    for(let i=0;i<slots.length-1;i++){
+      const a=slots[i], b=slots[i+1];
+      if(b-a!==1) continue;
+      if(tracker[te][a].building===tracker[te][b].building) continue;
+      const key=warnKey('t',day,a,te);
+      travels.set(key,{key,email:te,from:a,to:b,
+        cells:[{type:'travel',row:a,classId:tracker[te][a].classId,subIdx:tracker[te][a].subIdx},
+               {type:'travel',row:b,classId:tracker[te][b].classId,subIdx:tracker[te][b].subIdx}]});
+    }
+  }
+
+  const open=[], okd=[];
+  conflicts.forEach(g=>(warnOk[g.key]?okd:open).push({kind:'c',g}));
+  travels.forEach(g=>(warnOk[g.key]?okd:open).push({kind:'t',g}));
+
+  // Клітинки підсвічуємо лише за непогодженими. Інакше погодження нічого
+  // не змінювало б: рядок зник, а сітка так само червона.
+  open.forEach(({g})=>g.cells.forEach(c=>draftWarningsCache.push(c)));
+
+  const okBtn=(k)=>`<button type="button" onclick="approveWarn('${escJs(k)}')" class="wo-btn">Це нормально</button>`;
+  const line=({kind,g})=>kind==='c'
+    ? `<li style="color:#c0392b;"><b>Накладка!</b> ${escHtml(g.email)}: `
+      + `${escHtml([...g.classes].join(', '))} (Слот ${g.row+1}) ${okBtn(g.key)}</li>`
+    : `<li style="color:#e67e22;"><b>Переїзд:</b> ${escHtml(g.email)} `
+      + `між слотами ${g.from+1}→${g.to+1} ${okBtn(g.key)}</li>`;
+
+  let html='<b>⚠️ Аналіз накладок:</b>';
+  if(open.length) html+=`<ul style="margin:4px 0 0 0;padding-left:18px;">${open.map(line).join('')}</ul>`;
+  else html+=okd.length
+    ? ' <span style="color:#2e7d32;">усі погоджені.</span>'
+    : ' <span style="color:#2e7d32;">накладок не виявлено.</span>';
+
+  // Погоджені — згорнутим рядком. Не ховаємо назовсім: інакше через місяць
+  // ніхто не згадає, що саме визнали нормальним і чому в сітці тиша.
+  if(okd.length){
+    const items=okd.map(({kind,g})=>{
+      const what=kind==='c'
+        ? `${escHtml(g.email)}: ${escHtml([...g.classes].join(', '))} (Слот ${g.row+1})`
+        : `${escHtml(g.email)} — переїзд ${g.from+1}→${g.to+1}`;
+      const who=warnOk[g.key]&&warnOk[g.key].by ? ` <i>— ${escHtml(warnOk[g.key].by)}</i>` : '';
+      return `<li>${what}${who} `
+        + `<button type="button" onclick="unapproveWarn('${escJs(g.key)}')" class="wo-btn wo-undo">Повернути</button></li>`;
+    }).join('');
+    html+=`<div style="margin-top:7px;">`
+      + `<button type="button" onclick="toggleWarnOkList()" class="wo-btn wo-toggle">✔️ Погоджено: ${okd.length}</button>`
+      + `<ul id="warn-ok-list" style="display:none;margin:5px 0 0 0;padding-left:18px;color:#7a7a7a;">${items}</ul>`
+      + `</div>`;
+  }
+
+  const wb=document.getElementById('constructor-warnings');
+  wb.innerHTML=html;
+  wb.style.display='block';
+};
+
+window.toggleWarnOkList=function(){
+  const el=document.getElementById('warn-ok-list');
+  if(el) el.style.display = el.style.display==='none' ? '' : 'none';
+};
+
+// Погодження пише директор і бачать усі, хто відкриє цю чернетку. Тому
+// зберігаємо, хто саме сказав «нормально»: за місяць це єдиний спосіб
+// зрозуміти, з ким про цю накладку розмовляти.
+window.approveWarn=async function(key){
+  if(currentMatrixMode==='live') return;
+  const u=currentUserData||{};
+  const by=((u.firstName||u.lastName)?`${u.firstName||''} ${u.lastName||''}`.trim():'')||u.email||'';
+  const rec={by,ts:Date.now()};
+  warnOk[key]=rec;
+  window.calculateMatrixWarnings();renderMatrixGrid();
+  try{
+    await set(ref(db,`schedule_warn_ok/${currentMatrixMode}/${key}`),rec);
+    logAction('warn_approved',{draft:currentMatrixMode,key});
+  }catch(e){
+    // Не змогли зберегти — повертаємо як було. Показати «погоджено» і
+    // мовчки цього не зберегти означало б, що завтра попередження
+    // повернеться, а людина буде впевнена, що вже все вирішила.
+    delete warnOk[key];
+    window.calculateMatrixWarnings();renderMatrixGrid();
+    showToast('Не вдалося зберегти погодження: '+e.message);
+  }
+};
+
+window.unapproveWarn=async function(key){
+  if(currentMatrixMode==='live') return;
+  const prev=warnOk[key];
+  delete warnOk[key];
+  window.calculateMatrixWarnings();renderMatrixGrid();
+  try{
+    await set(ref(db,`schedule_warn_ok/${currentMatrixMode}/${key}`),null);
+    logAction('warn_unapproved',{draft:currentMatrixMode,key});
+  }catch(e){
+    if(prev) warnOk[key]=prev;
+    window.calculateMatrixWarnings();renderMatrixGrid();
+    showToast('Не вдалося зняти погодження: '+e.message);
+  }
+};
 // Чи веде цей вчитель цей предмет у цьому класі за матрицею доступу.
 //
 // НАВІЩО. Значок 🔄 у клітинці має означати заміну — тобто урок веде не
@@ -895,7 +1074,7 @@ window.calculateMatrixWarnings=function(){if(currentMatrixMode==='live')return;d
 // повертаємо null: «сказати нічого не можу».
 export function teacherTeaches(email, clsId, subjName){
   if(!globalTeacherAccess || !Object.keys(globalTeacherAccess).length) return null;
-  const se = String(email || '').toLowerCase().replace(/\./g, '_');
+  const se = emailKey(email || '');
   const raw = globalTeacherAccess && globalTeacherAccess[se] && globalTeacherAccess[se][clsId];
   if(!raw) return false;
   const list = Array.isArray(raw) ? raw : Object.values(raw);
@@ -1144,6 +1323,6 @@ window.saveMatrixCell=async function(){
     liveEditConfirmed=true;
   }
   try{for(let tc of tClasses){if(!globalAllSchedules[tc])globalAllSchedules[tc]={};if(!globalAllSchedules[tc].lessons)globalAllSchedules[tc].lessons={};if(!globalAllSchedules[tc].lessons[day])globalAllSchedules[tc].lessons[day]=[];let da=dayArr(globalAllSchedules[tc].lessons[day]);globalAllSchedules[tc].lessons[day]=da;while(da.length<=ri)da.push({});let es=da[ri];let si2=Array.isArray(es)?[...es]:(es&&es.subject?[es]:[]);if(sis!=='')si2[parseInt(sis)]={...nc};else si2.push({...nc});da[ri]=si2;await set(ref(db,`${dp}/${tc}/lessons/${day}`),da);}
-  if(te&&subj&&type!=='break'&&currentMatrixMode==='live'){const se=te.replace(/\./g,'_');for(let tc of tClasses){const as=await get(child(ref(db),`teacher_access/${se}/${tc}`));let ca=as.exists()?as.val():[];if(!Array.isArray(ca))ca=Object.values(ca);if(!ca.includes("Всі предмети")&&!ca.includes(subj)){ca.push(subj);await set(ref(db,`teacher_access/${se}/${tc}`),ca);}}}
+  if(te&&subj&&type!=='break'&&currentMatrixMode==='live'){const se=emailKey(te);for(let tc of tClasses){const as=await get(child(ref(db),`teacher_access/${se}/${tc}`));let ca=as.exists()?as.val():[];if(!Array.isArray(ca))ca=Object.values(ca);if(!ca.includes("Всі предмети")&&!ca.includes(subj)){ca.push(subj);await set(ref(db,`teacher_access/${se}/${tc}`),ca);}}}
   closeEditCellModal();if(currentMatrixMode!=='live')window.calculateMatrixWarnings();renderMatrixGrid();showToast("✅ Збережено!");}catch(e){alert("Помилка: "+e.message);}};
 window.deleteMatrixCell=async function(){const clsId=document.getElementById('cell-edit-class').value;const ri=parseInt(document.getElementById('cell-edit-row').value);const sis=document.getElementById('cell-edit-subindex').value;const day=document.getElementById('matrix-day-select').value;const dp=currentMatrixMode==='live'?'schedules':`schedule_drafts/${currentMatrixMode}`;if(globalAllSchedules[clsId]?.lessons?.[day]){let da=dayArr(globalAllSchedules[clsId].lessons[day]);let es=da[ri];let si2=Array.isArray(es)?[...es]:(es&&es.subject?[es]:[]);if(sis!=='')si2.splice(parseInt(sis),1);da[ri]=si2.length===0?{}:si2;await set(ref(db,`${dp}/${clsId}/lessons/${day}`),da);closeEditCellModal();if(currentMatrixMode!=='live')window.calculateMatrixWarnings();renderMatrixGrid();showToast("🗑️ Видалено!");}};
