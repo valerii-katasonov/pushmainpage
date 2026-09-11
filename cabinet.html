@@ -820,6 +820,11 @@
     .hw-day{margin-bottom:14px;background:#fff;border:1px solid #eef2f7;
             border-left:4px solid #cfd8dc;border-radius:11px;padding:11px 13px;}
     .hw-day.today{border-left-color:#2b5aa8;background:#f7fbff;}
+    /* День у тижневому списку оцінок. Стилі свої, а не .hw-day: там
+       ліва смуга синя під ДЗ, а тут доречніша нейтральна. */
+    .gv-day{margin-bottom:12px;background:#fff;border:1px solid #f0e4e6;
+            border-left:4px solid #ff8a95;border-radius:11px;padding:10px 13px;}
+    .gv-day-head{font-weight:800;font-size:.88rem;color:#37474f;margin-bottom:6px;}
     .hw-day-head{font-weight:800;font-size:.9rem;color:#37474f;margin-bottom:7px;}
     .hw-day-head span{font-weight:400;font-size:.74rem;color:#2b5aa8;
                       background:#e3f2fd;border-radius:5px;padding:1px 6px;margin-left:5px;}
@@ -3652,6 +3657,24 @@
       <div id="p-games"><p class="empty-msg">Завантаження...</p></div>
     </section>
 
+    <!-- Оцінки за ТИЖДЕНЬ, а не за день. Денний показ вимагав сім клацань
+         по даті, щоб побачити тиждень, і жодного разу не давав картини
+         цілком. Денний список лишається нижче — він потрібен тим, хто
+         прийшов саме з конкретної дати. -->
+    <section class="screen-section" data-dtab="grades">
+      <h3>📝 Оцінки за тиждень</h3>
+      <div class="data-card" style="border-left-color:#ff4757;background:#fff0f1;margin-top:0;">
+        <div id="p-grades-week"><p class="empty-msg">Завантаження...</p></div>
+      </div>
+    </section>
+
+    <section class="screen-section" data-dtab="grades">
+      <h3>📈 За предметом</h3>
+      <div class="data-card" style="border-left-color:var(--purple,#7b1fa2);background:#faf5ff;margin-top:0;">
+        <div id="p-grades-subject"><p class="empty-msg">Завантаження...</p></div>
+      </div>
+    </section>
+
     <section class="screen-section" data-dtab="grades">
       <h3>📝 Оцінки та коментарі за день</h3>
       <div class="data-card" style="border-left-color:#ff4757;background:#fff0f1;margin-top:0;">
@@ -3846,6 +3869,15 @@
           <p id="ai-student-msg" class="ai-hw-msg" style="display:none;"></p>
           <div id="ai-student-out" class="ai-out" style="display:none;"></div>
         </div>
+      </div>
+      <!-- Оцінки за тиждень і за предметом — те саме, що в батьків -->
+      <div class="data-card" style="border-left-color:#ff4757;background:#fff0f1;">
+        <h4 style="margin-top:0;color:#ff4757;">📝 Мої оцінки за тиждень:</h4>
+        <div id="s-grades-week"><p class="empty-msg">Завантаження...</p></div>
+      </div>
+      <div class="data-card" style="border-left-color:#7b1fa2;background:#faf5ff;">
+        <h4 style="margin-top:0;color:#7b1fa2;">📈 За предметом:</h4>
+        <div id="s-grades-subject"><p class="empty-msg">Завантаження...</p></div>
       </div>
       <!-- Журнал та коментарі -->
       <div class="data-card" style="border-left-color:#ff4757;background:#fff0f1;">
@@ -4404,6 +4436,7 @@ document.addEventListener('DOMContentLoaded', function(){
      включно з учителями, які в цю вкладку не заходять. -->
 <script type="module" src="games.js"></script>
 <script type="module" src="mastery.js"></script>
+<script type="module" src="grades-view.js"></script>
 
   <!-- ═══ ЕКРАН ЗГОДИ ПРИ ВХОДІ ═══
        Модалка без кнопки закриття: GDPR вимагає поінформувати ДО обробки,
