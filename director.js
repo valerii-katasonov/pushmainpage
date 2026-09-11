@@ -1999,6 +1999,24 @@ window.switchTab = switchTab;
 // вмикається.
 const RENAMED_TABS = { journal: 'lesson' };
 
+// ВКЛАДКИ, ЯКІ САМІ СЕБЕ НЕ МАЛЮЮТЬ.
+//
+// switchTab лише показує потрібну секцію. Вмісту він не чіпає — і для
+// більшості вкладок це правильно, бо їх заповнює дашборд при вході.
+// Але кілька вкладок читають своє окремо, і малює їх функція, яка
+// висить в onclick кнопки. Коли на вкладку НАТИСКАЮТЬ — усе гаразд.
+//
+// А от коли вкладку ВІДНОВЛЮЮТЬ із пам'яті браузера, натискання немає:
+// initTabs викликає switchTab напряму. Людина, яка минулого разу пішла
+// з порталу з такої вкладки, після перезавантаження бачила на ній
+// «Завантаження...» — і назавжди, бо малювати нікому. Лікувалося це
+// переходом на іншу вкладку й назад, тобто випадково.
+//
+// Тому тут перелік: вкладка → чим її наповнити. Виклик іде ПІСЛЯ
+// switchTab, щоб секція вже була видима (обидві функції дивляться на
+// offsetParent, а в прихованій секції він порожній).
+const TAB_OPENERS = { hw: 'openHwTab', games: 'openGamesTab' };
+
 export function initTabs(screenId){
   const bar = document.getElementById(screenId + '-tabs');
   if(!bar) return;
@@ -2007,7 +2025,15 @@ export function initTabs(screenId){
   if(tab && RENAMED_TABS[tab] && bar.querySelector(`.dtab[data-t="${RENAMED_TABS[tab]}"]`))
     tab = RENAMED_TABS[tab];
   const btn = (tab && bar.querySelector(`.dtab[data-t="${tab}"]`)) || bar.querySelector('.dtab');
-  if(btn) switchTab(screenId, btn.dataset.t, btn);
+  if(!btn) return;
+  switchTab(screenId, btn.dataset.t, btn);
+  const opener = TAB_OPENERS[btn.dataset.t];
+  // Помилка в наповненні однієї вкладки не має валити відновлення решти
+  // кабінету: без try сюди прилітало б усе, що станеться всередині.
+  if(opener && window[opener]){
+    try{ window[opener](); }
+    catch(e){ console.warn('[Push School] вкладка', btn.dataset.t, ':', e && e.message); }
+  }
 }
 window.initTabs = initTabs;
 
