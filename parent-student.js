@@ -5,7 +5,7 @@
 // lives in teacher.js).
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, getActiveClass, currentUserData, STICKER_GOAL, stickerGoal, getWeekDates, displayGrade, gradeClass6, showToast, renderHwItem, renderHwList, dayKeys, dayNamesUA, isBreakItem, parseTimeRange, fmtTimeRange, localDateString, formatAttendanceSlotLabel, renderGradeFormulaInfo, escJs, escHtml, safeUrl, renderBirthdays, stuName, auth, normalizeChildren, gradesFromMirror, mondayOf, altChoiceFor, resolveAlt, classHourItem, insertAtTime, minsOf, subjKey } from './common.js';
+import { db, getActiveClass, currentUserData, STICKER_GOAL, stickerGoal, getWeekDates, displayGrade, gradeClass6, showToast, renderHwItem, renderHwList, dayKeys, dayNamesUA, isBreakItem, parseTimeRange, fmtTimeRange, localDateString, formatAttendanceSlotLabel, renderGradeFormulaInfo, escJs, escHtml, safeUrl, renderBirthdays, stuName, auth, normalizeChildren, gradesFromMirror, mondayOf, altChoiceFor, resolveAlt, classHourItem, insertAtTime, minsOf, subjKey, planKeyWith } from './common.js';
 import { ACTIVE_YEAR } from './director.js';
 import { renderParentMenu } from './kitchen.js';
 import { renderNewsFeed } from './news.js';
@@ -13,15 +13,6 @@ import { renderNewsFeed } from './news.js';
 // parentLessonInterval is reassigned only here and read/cleared from
 // common.js's logoutUser — plain export/import.
 export let parentLessonInterval=null;
-
-// "all" is the reserved slotKey that submitAttendance() below writes under —
-// it represents a whole-day self-report from the parent/student (they don't
-// pick a specific lesson), as opposed to teacher's per-lesson slotKeys.
-// Мітка збірки. Потрібна не для краси: коли людина каже «не полагодилося»,
-// перше питання — чи виїхала взагалі нова версія. Рядок у консолі
-// відповідає на нього за секунду.
-export const PS_BUILD = '2026-09-10 · розклад v3 (час без пробілів навколо дефіса)';
-console.info('[Push School] parent-student.js —', PS_BUILD);
 
 const SELF_REPORT_SLOT='all';
 // Checks today's attendance/{cls}/{date}/{student} slot-map for teacher-marked
@@ -174,17 +165,26 @@ export async function loadDayTopics(cls, date){
   dayTopics = {};
   if(!cls || !date) return;
   try{
-    const [topSnap, planSnap] = await Promise.all([
+    const [topSnap, planSnap, alSnap] = await Promise.all([
       get(child(ref(db), `lesson_topics/${cls}`)),
-      get(child(ref(db), `curriculum_plans/${cls}`)).catch(()=>null)
+      get(child(ref(db), `curriculum_plans/${cls}`)).catch(()=>null),
+      get(child(ref(db), `curriculum_aliases/${cls}`)).catch(()=>null)
     ]);
     if(!topSnap.exists()) return;
     const byKey = topSnap.val() || {};
     const plans = (planSnap && planSnap.exists()) ? planSnap.val() : {};
+    const aliases = (alSnap && alSnap.exists()) ? (alSnap.val() || {}) : {};
     for(const sk in byKey){
       const rec = byKey[sk] && byKey[sk][date];
       if(!rec) continue;
-      const names = topicNames(rec, plans[sk]);
+      // Тема уроку записана під власною назвою предмета, а НАЗВА теми
+      // лежить у плані — можливо, спільному. Було plans[sk] на обидва
+      // випадки: щойно план ставав спільним, батько бачив урок без теми.
+      //
+      // sk тут уже очищений ключ, а не сира назва — але planKeyWith
+      // спирається на subjKey, яка на очищеному нічого не змінює, тож
+      // підстановка спрацьовує однаково.
+      const names = topicNames(rec, plans[planKeyWith(aliases, sk)]);
       if(names) dayTopics[sk] = names;
     }
   }catch(e){ dayTopics = {}; }
@@ -303,23 +303,10 @@ function renderDynamicSchedule(role='parent'){
   const over      = !noToday && dayIsOver(todayLessons,currentMins);
   const todayDone = noToday || over;
 
-  // ПОЯСНЮЄМО РІШЕННЯ. Кабінет мовчки перемикався на завтра, і зрозуміти
-  // чому було неможливо: чи розклад порожній, чи час минув, чи дані не ті.
-  // Тепер причина лежить у консолі одним рядком — і в підказці на екрані.
-  window.__schedWhy = {
-    клас: (window.currentUserData && window.currentUserData.class) || '—',
-    день: todayDayName,
-    зараз: `${String(Math.floor(currentMins/60)).padStart(2,'0')}:${String(currentMins%60).padStart(2,'0')}`,
-    слотівУРозкладі: ((window.schedule||{})[todayDayName]||[]).length,
-    уроківПісляРозбору: realLessons(todayLessons),
-    безЧасу: todayLessons.filter(l=>!l._break && l._noTime).length,
-    часи: todayLessons.filter(l=>!l._break).map(l=>l.time||'без часу'),
-    деньЗавершено: todayDone,
-    причина: noToday ? 'у розкладі немає жодного уроку на сьогодні'
-           : over    ? 'минув час останнього уроку'
-                     : 'день триває'
-  };
-  console.info('[Push School] розклад:', window.__schedWhy);
+  // Причина, чому показуємо не сьогодні, потрібна для підказки під
+  // заголовком — див. нижче. Окремого дампу в консоль більше немає:
+  // він додавався, щоб розібратися з розкладом старших класів, і своє
+  // відпрацював.
 
   // Шукаємо з завтрашнього дня — сьогоднішній уже або порожній, або минув
   const nextDay = todayDone ? nextSchoolDay(dayKeys, (todayDow+1)%7, hasLessons) : null;
@@ -1040,8 +1027,6 @@ window.loadStudentDashboard=loadStudentDashboard;
 const CA_FN = '/.netlify/functions/child-access';
 // Мітка збірки. Якщо в кабінеті під розділом стоїть інша дата — на сайті
 // лежить стара версія файлу, і шукати помилку в коді немає сенсу.
-const CA_BUILD = '2026-08-26 · v8';
-
 // Список дітей приходить із сервера — з того самого parent_links, за яким
 // перевіряється право міняти дитині пароль. Локальний профіль сюди більше
 // не втручається: у старих акаунтів він буває неповним, і розділ казав
@@ -1129,8 +1114,6 @@ export async function initChildAccess(){
   const sel = document.getElementById('ca-child');
   const box = document.getElementById('ca-body');
   if(!sel || !box) return;
-  const ver = document.getElementById('ca-ver');
-  if(ver) ver.textContent = CA_BUILD;
   try{
     await caLoadChildren(sel, box);
   }catch(e){
