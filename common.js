@@ -53,17 +53,16 @@ import { checkCurriculumUploadAccess } from './curriculum.js';
 // збірки як такої немає, файли викладаються як є.
 export const APP_VERSION = '2026-09-10';
 
-export function renderAppVersion(){
-  const txt = `Портал ${VENDOR.product} · версія ${APP_VERSION}`;
-  document.querySelectorAll('.app-version').forEach(el => { el.textContent = txt; });
-}
-window.renderAppVersion = renderAppVersion;
-
 export const VENDOR = {
   product: 'Push School',        // ← робоча назва порталу; змінюється тут
-  name:    '',                   // ← імʼя або назва розробника
-  url:     '',                   // ← посилання (LinkedIn, сайт)
-  note:    'Хочете такий портал для своєї школи?'
+  name:    'Valerii Katasonov',  // ← імʼя або назва розробника
+  url:     'https://www.linkedin.com/in/valeriikatasonov/',
+  // Підпис бачать батьки на екрані входу — щодня, дорогою до розкладу
+  // чи обіду. Тому він не про технології: жодному батькові не цікаво, на
+  // чому це написано. Він про те, як портал зростав — на прохання тих,
+  // хто ним користується.
+  note:    'Кожна кнопка тут зʼявилася тому, що комусь — учителю, батькам '
+         + 'чи дитині — вона була потрібна.'
 };
 
 // Тільки http(s) і тільки на дозволені домени: підпис — це посилання, яке
@@ -77,17 +76,41 @@ export function vendorLinkOk(url){
   }catch(e){ return false; }
 }
 
+// Сам підпис — однією функцією на обидві точки показу: блок на екрані
+// входу й рядок унизу кабінету. Двох копій бути не повинно: колись
+// розійдуться, і в одному місці лишиться старе посилання.
+export function vendorCreditHtml(){
+  if(!VENDOR.name) return '';
+  const link = vendorLinkOk(VENDOR.url)
+    ? ` · <a href="${escHtml(VENDOR.url)}" target="_blank" rel="noopener noreferrer">LinkedIn</a>`
+    : '';
+  return `Розробка — <span class="vc-name">${escHtml(VENDOR.name)}</span>${link}`;
+}
+
 export function renderVendorCredit(){
   const box = document.getElementById('vendor-credit');
   if(!box) return;
   if(!VENDOR.name){ box.style.display = 'none'; return; }
-  const link = vendorLinkOk(VENDOR.url)
-    ? ` · <a href="${escHtml(VENDOR.url)}" target="_blank" rel="noopener noreferrer">LinkedIn</a>`
-    : '';
   box.style.display = 'block';
-  box.innerHTML = `${escHtml(VENDOR.note || '')}<br>`
-    + `Розробка — <span class="vc-name">${escHtml(VENDOR.name)}</span>${link}`;
+  box.innerHTML = `${escHtml(VENDOR.note || '')}<br>` + vendorCreditHtml();
 }
+
+// Рядок унизу кабінету. Раніше тут стояла лише версія, і підпис бачив
+// тільки той, хто НЕ увійшов: після входу екран із ним зникав назавжди.
+// Тобто саме вчителі й батьки — ті, хто користується порталом щодня, —
+// не бачили його жодного разу.
+//
+// Девіз сюди не дублюємо свідомо: рядок є на шести екранах, і фраза про
+// кнопки, повторена шість разів, із підпису перетворюється на рекламу.
+// Там, де людина заходить уперше, для неї є цілий блок; тут досить імені.
+export function renderAppVersion(){
+  const txt = `Портал ${escHtml(VENDOR.product)} · версія ${escHtml(APP_VERSION)}`;
+  const credit = vendorCreditHtml();
+  document.querySelectorAll('.app-version').forEach(el => {
+    el.innerHTML = credit ? `${txt}<br>${credit}` : txt;
+  });
+}
+window.renderAppVersion = renderAppVersion;
 window.renderVendorCredit = renderVendorCredit;
 
 // ══════════════════════════════════════════════════════════════════
