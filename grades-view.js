@@ -228,10 +228,16 @@ export async function renderGradesWeek(weekStart){
       const g = items.find(i => i.subj === s);
       const cm = mineOf(cmDay[s]) || '';
       const rx = mineOf((reactions[ds]||{})[s]) || null;
+      // Реакція — на весь рядок предмета, а не лише на коментар. Спершу
+      // вона стояла всередині коментаря, і на «голу» оцінку без
+      // коментаря відреагувати було нічим, хоча раніше — можна: у
+      // денному блоці кнопки малювалися завжди, коли є оцінка АБО
+      // коментар. Батько тисне 🔥 саме на хорошу оцінку частіше, ніж на
+      // текст учителя.
       return `<li style="margin-bottom:9px;"><b>${escHtml(s)}</b><br>`
         + (g ? gradeChip(g.v, g.t, cls) + retakeBtn(cls, s, ds, g.v) : '')
-        + (cm ? `<div style="background:#f0f8ff;padding:5px 9px;border-radius:6px;font-style:italic;font-size:.88rem;margin-top:4px;">${escHtml(cm)}</div>`
-                + reactionRow(ds, s, rx) : '')
+        + (cm ? `<div style="background:#f0f8ff;padding:5px 9px;border-radius:6px;font-style:italic;font-size:.88rem;margin-top:4px;">${escHtml(cm)}</div>` : '')
+        + reactionRow(ds, s, rx)
         + `</li>`;
     }).join('');
     return `<div class="gv-day"><div class="gv-day-head">${escHtml(dayName(ds))}, ${escHtml(human(ds))}</div>
