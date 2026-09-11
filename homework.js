@@ -18,12 +18,10 @@
 import { ref, get, child, query, orderByKey, startAt, endAt }
   from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { db, currentUserData, getActiveClass, escHtml, escJs, mondayOf, localDateString,
-         renderHwItem, booksForSubject, nextLessonDate, dayNamesUA, dayKeys, subjKey }
+         renderHwItem, booksForSubject, nextLessonDate, dayNamesUA, dayKeys, subjKey, planKeyWith }
   from './common.js';
 import { topicNames } from './parent-student.js';
 import { ACTIVE_YEAR } from './director.js';
-
-export const HW_BUILD = '2026-09-09 · вкладка ДЗ v1';
 
 // Який тиждень зараз показано. Порожньо — ще не відкривали.
 let hwWeek = '';
@@ -90,10 +88,10 @@ export async function renderHwWeekView(boxId, weekStart){
   }
 
   box.innerHTML = '<p class="empty-msg">Завантаження...</p>';
-  let byDate = {}, books = {}, topics = {}, plans = {}, skip = new Set();
+  let byDate = {}, books = {}, topics = {}, plans = {}, aliases = {}, skip = new Set();
   try{
     // Один запит на весь тиждень замість п'яти по днях.
-    const [hwSnap, tbSnap, topSnap, planSnap, sk] = await Promise.all([
+    const [hwSnap, tbSnap, topSnap, planSnap, alSnap, sk] = await Promise.all([
       get(query(child(ref(db),`homeworks/${cls}`), orderByKey(),
                 startAt(days[0]), endAt(days[4]+''))),
       get(child(ref(db),`textbooks/${cls}`)).catch(()=>null),
@@ -102,12 +100,18 @@ export async function renderHwWeekView(boxId, weekStart){
       // запитом на весь показ, а не по запиту на кожен предмет.
       get(child(ref(db),`lesson_topics/${cls}`)).catch(()=>null),
       get(child(ref(db),`curriculum_plans/${cls}`)).catch(()=>null),
+      // Псевдоніми предметів: під якою назвою насправді лежить план.
+      // Читаємо тут, а не беремо з кеша curriculum.js — у кабінеті
+      // батьків того кеша немає й не буде: картку завантаження плану
+      // там не відкривають ніколи.
+      get(child(ref(db),`curriculum_aliases/${cls}`)).catch(()=>null),
       loadSkipDates()
     ]);
     byDate = hwSnap.exists() ? (hwSnap.val()||{}) : {};
     books  = (tbSnap&&tbSnap.exists()) ? tbSnap.val() : {};
     topics = (topSnap&&topSnap.exists()) ? topSnap.val() : {};
     plans  = (planSnap&&planSnap.exists()) ? planSnap.val() : {};
+    aliases= (alSnap&&alSnap.exists()) ? (alSnap.val()||{}) : {};
     skip   = sk;
   }catch(e){
     console.error('[Push School] ДЗ за тиждень:', e);
@@ -155,7 +159,18 @@ export async function renderHwWeekView(boxId, weekStart){
       // а й «що вони проходили» — без цього допомогти важко.
       // Ключ предмета в lesson_topics «безпечний»: крапки й слеші замінені.
       const sk2 = subjKey(subj);
-      const topic = topicNames((topics[sk2]||{})[ds], plans[sk2]);
+      // ДВА РІЗНІ КЛЮЧІ, І ЦЕ НАВМИСНО.
+      //
+      // Що робили на уроці — лежить під власною назвою предмета (sk2):
+      // «Matematyka» і «Математика» — два різні уроки в розкладі, і
+      // журнали в них свої. А ПЛАН у них може бути спільний, тож назви
+      // тем шукаємо під тим ключем, куди веде псевдонім.
+      //
+      // Було plans[sk2] на обох, і після появи спільного плану батько
+      // бачив завдання без теми: ідентифікатор теми є, а плану під
+      // польською назвою немає, отже й розшифрувати його нічим.
+      const pk2 = planKeyWith(aliases, subj);
+      const topic = topicNames((topics[sk2]||{})[ds], plans[pk2]);
       const topicTxt = topic
         ? `<div class="hw-topic"><b>Тема уроку:</b> ${escHtml(topic)}</div>` : '';
 
