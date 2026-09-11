@@ -107,15 +107,57 @@ async function findClassTargets(token, cls) {
 
 // Повідомлення адресоване конкретним людям за поштою, а не класом:
 // у розмові можуть бути і вчитель, і директор, і кілька батьків.
+//
+// ЗВІРЯЄМО ЗА КЛЮЧЕМ ПОШТИ, А НЕ ЗА САМОЮ ПОШТОЮ.
+//
+// Учасники розмови лежать у базі ключами (`emailKey`: крапки замінені на
+// підкреслення), і чат довго слав сюди спробу відновити з них адресу —
+// заміною ВСІХ підкреслень назад на крапки. Для `ivan_petrov@gmail.com`
+// це давало `ivan.petrov@gmail.com`, тобто чужу адресу: жоден токен не
+// збігався, сервер відповідав «0 надіслано», і людина просто не
+// отримувала сповіщень про повідомлення. Мовчки, без жодної помилки.
+//
+// Відновити адресу з ключа неможливо в принципі — перетворення однобічне.
+// Тому порівнюємо в один бік: обидві сторони зводимо до ключа. Клієнт
+// може слати і ключ, і справжню адресу — результат той самий.
+const emailKey = (e) => String(e || '').trim().toLowerCase().replace(/\./g, '_');
 async function findByEmails(token, emails) {
   const all = await readDb(token, 'push_tokens');
   if (!all || typeof all !== 'object') return [];
-  const want = new Set(emails.map(e => String(e).toLowerCase()));
+  const want = new Set(emails.map(emailKey));
   const out = [];
   for (const uid in all) {
     const t = all[uid];
     if (!t || !t.token || !t.email) continue;
-    if (want.has(String(t.email).toLowerCase())) out.push(t.token);
+    if (want.has(emailKey(t.email))) out.push(t.token);
+  }
+  return [...new Set(out)];
+}
+
+// Оголошення. Окрема вибірка, хоч і схожа на решту — і ось чому.
+//
+// Раніше новини йшли тим самим шляхом, що й меню (findMealTargets), і це
+// давало ДВІ помилки одночасно.
+//
+// ПЕРША: клас ігнорувався. Оголошення «завтра 3-А їде в театр» летіло
+// всім батькам школи — сотні людей отримували чуже.
+//
+// ДРУГА: у вибірці меню стоїть відсів «дитина не харчується — не
+// турбуємо». Для меню це доречно, для оголошень — ні. Родини, які
+// відмовилися від обідів, не отримували шкільних оголошень узагалі, і
+// побачити цей звʼязок ззовні було неможливо.
+async function findNewsTargets(token, cls) {
+  const all = await readDb(token, 'push_tokens');
+  if (!all || typeof all !== 'object') return [];
+  // 'ALL' шле news.js, коли оголошення на всю школу
+  const one = cls && cls !== 'ALL' ? cls : '';
+  const out = [];
+  for (const uid in all) {
+    const t = all[uid];
+    if (!t || !t.token) continue;
+    if (t.role !== 'parent' && t.role !== 'student') continue;
+    if (one && t.class !== one) continue;
+    out.push(t.token);
   }
   return [...new Set(out)];
 }
@@ -219,9 +261,10 @@ exports.handler = async (event) => {
     }
     const targets = body.type === 'chat'
       ? await findByEmails(token, Array.isArray(body.to) ? body.to.slice(0, 30) : [])
+      : (body.type === 'news' ? await findNewsTargets(token, cls)
       : (isClassWide ? await findClassTargets(token, cls)
       : (isBroadcast ? await findMealTargets(token)
-                     : await findTargets(token, cls, studentName)));
+                     : await findTargets(token, cls, studentName))));
     if (targets.length === 0)
       return { statusCode: 200, headers: cors(origin), body: JSON.stringify({ sent: 0, note: 'Немає підписників' }) };
 
