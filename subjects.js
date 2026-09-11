@@ -18,16 +18,16 @@
 // Саме тому їх можна ганяти тестами, і саме тому перед записом ми вміємо
 // показати директору, скільки записів зміниться.
 // ═══════════════════════════════════════════════════════════════
-import { ref, set, get, child, update, remove } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, currentUserData, showToast, escHtml, escJs, logAction, splitAltName } from './common.js';
+import { ref, set, get, child, update, remove } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js"; import { db, currentUserData, showToast, escHtml, escJs, logAction, splitAltName, isDirectorRole, subjKey, emailKey } from './common.js';
 import { ACTIVE_YEAR, getAcademicYearId } from './director.js';
-
-export const SUBJ_BUILD = '2026-09-02 · subjects v2 (каталог за роками)';
 
 // «Безпечний» ключ: так curriculum_plans і textbooks зберігають назву.
 // Крапки й дужки в ключах Firebase заборонені, тому їх колись замінили
 // підкресленнями — і перейменування має рахуватися з цим.
-export function safeKey(s){ return String(s || '').replace(/[.#$[\]/]/g, '_').trim(); }
+// Те саме, що subjKey у common.js, лише під іншою назвою. Псевдонім
+// лишаємо — на нього спираються тести й решта файлу, — але реалізація
+// одна, щоб дві копії не розійшлися.
+export function safeKey(s){ return subjKey(s); }
 
 // ── Де саме в базі живе назва предмета ─────────────────────────
 // depth — скільки проміжних рівнів між {вузол}/{клас} і ключем предмета.
@@ -47,6 +47,12 @@ export const SUBJECT_KEY_NODES = [
   { node:'reactions',            depth:2, kind:'plain',  label:'Реакції' },
   { node:'retake_requests',      depth:1, kind:'plain',  label:'Заявки на перескладання' },
   { node:'curriculum_plans',     depth:1, kind:'safe',   label:'Календарні плани' },
+  // Псевдонім спільного плану. Тут перейменовується лише КЛЮЧ — тобто
+  // «хто користується чужим планом». Друга половина запису, назва того,
+  // ЧИЇМ планом користуються, лежить у значенні, і її перейменовує
+  // окрема renameInAliasTargets нижче: обхід ключами до значень не
+  // дістає за побудовою.
+  { node:'curriculum_aliases',   depth:1, kind:'safe',   label:'Спільні плани (посилання)' },
   { node:'textbooks',            depth:1, kind:'safe',   label:'Підручники' },
   { node:'stickers',             depth:2, kind:'suffix', label:'Наклейки' }
 ];
@@ -105,6 +111,34 @@ export function renameInTree(tree, depth, oldName, newName, kind, base){
 }
 
 // ── Назва предмета як значення, а не ключ ───────────────────────
+
+// Псевдонім спільного плану: curriculum_aliases/{клас}/{ключ} = «Назва».
+//
+// Запис зберігає назву предмета ДВІЧІ. Ключ — хто користується чужим
+// планом; значення — чиїм саме. Загальний обхід перейменовує тільки
+// ключі, тож без цієї функції виходило б так: директор перейменовує
+// «Математика» на «Математика (поглиблена)», ключ Matematyka лишається
+// на місці, а вказує тепер у порожнечу. Спільний план мовчки зникає —
+// саме та біда, заради якої псевдоніми й заводили.
+//
+// Порівнюємо з сирою назвою, а не з ключем: у значенні лежить те, що
+// людина бачить, а не очищене під Firebase.
+export function renameInAliasTargets(byClass, oldName, newName, base){
+  const updates = {}; let hits = 0;
+  const oldKey = safeKey(oldName), newKey = safeKey(newName);
+  Object.entries(byClass || {}).forEach(([key, target]) => {
+    if(String(target == null ? '' : target).trim() !== oldName) return;
+    // ОБЕРЕЖНО З ПОРЯДКОМ. Якщо той самий предмет перейменовують і як
+    // ключ, загальний обхід уже переніс цю гілку на нову назву й позначив
+    // стару на видалення. Записати значення в стару означало б воскресити
+    // її: у пласкому update() перемагає той, хто в списку останній.
+    // Тому пишемо одразу за новою назвою.
+    const at = (key === oldKey) ? newKey : key;
+    updates[`${base}/${at}`] = newName;
+    hits++;
+  });
+  return { updates, hits };
+}
 
 // Розклад: lessons/{День}/{слот}/{і}/subject/{ua,pl} і масив alt
 export function renameInLessons(lessons, oldName, newName, base){
@@ -210,9 +244,9 @@ export function similarNames(names, target){
 // ══════════════════════════════════════════════════════════════════
 //  ІНТЕРФЕЙС
 // ══════════════════════════════════════════════════════════════════
-const DIR_ROLES = ['director', 'administrator'];
 const CLASSES = Array.from({ length: 11 }, (_, i) => `class_${i + 1}`);
-function isDir(){ return DIR_ROLES.includes(currentUserData && currentUserData.role); }
+// Роль адміністрації — спільна з common.js, щоб не розійшлася.
+function isDir(){ return isDirectorRole(currentUserData && currentUserData.role); }
 
 let plan = null;          // прорахований перенос, чекає підтвердження
 
@@ -305,6 +339,16 @@ window.checkRenameSubject = async function(){
       if(branches) rows.push({ label: spec.label, branches, leaves, merged });
       totalLeaves += leaves; totalMerged += merged;
     }
+    // 1б. Псевдоніми спільного плану — та частина, де назва лежить у
+    //     значенні. Ключі вже перейменовані циклом вище.
+    let aliasHits = 0;
+    for(const cls of CLS){
+      const al = await get(child(ref(db), `curriculum_aliases/${cls}`));
+      if(!al.exists()) continue;
+      const r = renameInAliasTargets(al.val(), oldName, newName, `curriculum_aliases/${cls}`);
+      Object.assign(updates, r.updates); aliasHits += r.hits;
+    }
+    if(aliasHits) rows.push({ label: 'Спільні плани (на що вказують)', branches: aliasHits, leaves: aliasHits, merged: 0 });
     // 2. Розклади й чернетки
     let schedHits = 0;
     for(const cls of CLS){
@@ -550,7 +594,7 @@ window.addCatalogSubject = async function(cls, name, teacherEmail, teacherName){
 
 // Призначення вчителя = запис у матрицю доступу. Одне джерело правди.
 async function grantSubjectToTeacher(email, cls, subject){
-  const se = String(email).replace(/\./g, '_');
+  const se = emailKey(email);
   const snap = await get(child(ref(db), `teacher_access/${se}/${cls}`));
   let list = snap.exists() ? snap.val() : [];
   if(!Array.isArray(list)) list = Object.values(list);
@@ -612,7 +656,7 @@ window.renderSubjectsCatalog = async function(){
             <div class="sc-name">${escHtml(e.name)}
               ${dup.length ? `<i>⚠️ схоже на ${escHtml(dup.join(', '))}</i>` : ''}</div>
             ${teacherSelect(e)}
-            <button type="button" onclick="removeSubjectFromCatalog('${escJs(e.key)}')" title="Прибрати зі списку">×</button>
+            <button type="button" onclick="removeSubjectFromCatalog('${escJs(e.key)}')" data-tip="Прибрати зі списку">×</button>
           </div>`;
         }).join('')}</div>`
       : '<p class="empty-msg">Для цього класу й року предметів ще немає.</p>'}
@@ -635,8 +679,7 @@ window.renderSubjectsCatalog = async function(){
       <button type="button" onclick="fillCatalogFromSchedule()">📥 Зібрати з розкладу й матриці доступу</button>
       <button type="button" onclick="carryOverSubjects()">🗓 Перенести з минулого року</button>
       <button type="button" onclick="copySubjectsFromClass()">📋 Скопіювати з іншого класу</button>
-    </div>
-    <div class="bk-build">версія модуля: ${escHtml(SUBJ_BUILD)}</div>`;
+    </div>`;
 };
 
 window.addSubjectFromCard = async function(){
