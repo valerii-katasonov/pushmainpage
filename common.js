@@ -61,9 +61,9 @@ window.renderAppVersion = renderAppVersion;
 
 export const VENDOR = {
   product: 'Push School',        // ← робоча назва порталу; змінюється тут
-  name:    'Valerii Katasonov',                   // ← імʼя або назва розробника
-  url:     'https://www.linkedin.com/in/valeriikatasonov/',                   // ← посилання (LinkedIn, сайт)
-  note:    ''
+  name:    '',                   // ← імʼя або назва розробника
+  url:     '',                   // ← посилання (LinkedIn, сайт)
+  note:    'Хочете такий портал для своєї школи?'
 };
 
 // Тільки http(s) і тільки на дозволені домени: підпис — це посилання, яке
@@ -1715,6 +1715,10 @@ window.switchChild=async function(idx){
     // Вкладка ДЗ живе окремо від дашборда й сама не оновиться. Раніше
     // після перемикання дитини на ній висіла домашка попередньої.
     if(window.refreshHwTabIfOpen) window.refreshHwTabIfOpen();
+    // Те саме з іграми: каталог фільтрується за класом, а прогрес
+    // читається під конкретну дитину. Без цього рядка батько з двома
+    // дітьми бачив би на вкладці ігри й результати попередньої.
+    if(window.refreshGamesTabIfOpen) window.refreshGamesTabIfOpen();
   });
   showToast(`👶 Дитина: ${k.studentName}`);
 };
