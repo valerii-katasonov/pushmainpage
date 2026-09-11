@@ -1757,6 +1757,10 @@ window.switchChild=async function(idx){
   // Кеш ключа харчування памʼятає попередню дитину — інакше відповіді
   // лягли б не на ту, особливо коли обидві діти в одному класі
   if(window.invalidateMealKey) window.invalidateMealKey();
+  // З тієї ж причини — дзеркало оцінок: воно прочитане за рік і лежить у
+  // модулі, тож без скидання мама побачила б оцінки першої дитини під
+  // імʼям другої.
+  if(window.resetGradesCache) window.resetGradesCache();
   // Розклад прив'язаний до класу — перечитуємо під нову дитину
   loadScheduleScript(k.class,()=>{
     initUserSession();
