@@ -237,7 +237,11 @@
        якщо захотіли таку собі. */
     /* Один тихий рядок версії — під кнопкою виходу в кожному кабінеті.
        Замінив чотирнадцять міток, розкиданих по розділах. */
-    .app-version{font-size:.66rem;color:#b0bec5;text-align:center;margin:9px 0 0;}
+    .app-version{font-size:.66rem;color:#b0bec5;text-align:center;margin:9px 0 0;line-height:1.6;}
+    /* Підпис розробника в тому ж рядку: посилання має бути видно, але не
+       так, щоб воно перетягувало увагу з кабінету на себе. */
+    .app-version a{color:var(--teal);text-decoration:none;border-bottom:1px dotted;}
+    .app-version .vc-name{color:#78909c;font-weight:600;}
     .vendor-credit{margin-top:18px;padding-top:13px;border-top:1px solid rgba(160,230,240,.16);
                    font-size:.7rem;line-height:1.5;text-align:center;color:rgba(214,240,245,.5);}
     .vendor-credit a{color:rgba(160,230,240,.8);text-decoration:none;border-bottom:1px dotted;}
@@ -3469,6 +3473,18 @@
       </div>
     </section>
 
+    <!-- Освоєння тем за тренажерами. Рахується з результатів ігор, які
+         діти й так проходять удома. Панель важка на читання (весь вузол
+         класу), тому лежить у details і рахується лише коли її відкрили. -->
+    <section class="screen-section half" data-dtab="class">
+      <h3>📊 Освоєння тем</h3>
+      <details style="background:#fff;padding:14px;border-radius:12px;border:1px solid #ddd;"
+               ontoggle="if(this.open&&window.renderMastery)renderMastery('tm-mastery')">
+        <summary style="font-weight:700;cursor:pointer;color:#00695c;">📊 Що клас відпрацював у тренажерах</summary>
+        <div id="tm-mastery" style="margin-top:11px;"><p class="empty-msg">Натисніть, щоб порахувати.</p></div>
+      </details>
+    </section>
+
     <section class="screen-section half" data-dtab="class">
       <h3>⚙️ Клас і батьки</h3>
       <!-- Управління класом -->
@@ -4387,6 +4403,7 @@ document.addEventListener('DOMContentLoaded', function(){
      відкрили. Інакше кожна нова гра сповільнювала б кабінет усім,
      включно з учителями, які в цю вкладку не заходять. -->
 <script type="module" src="games.js"></script>
+<script type="module" src="mastery.js"></script>
 
   <!-- ═══ ЕКРАН ЗГОДИ ПРИ ВХОДІ ═══
        Модалка без кнопки закриття: GDPR вимагає поінформувати ДО обробки,
