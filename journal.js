@@ -905,7 +905,9 @@ function warnKey(kind, day, row, email){
 window.calculateMatrixWarnings=function(){
   if(currentMatrixMode==='live')return;
   draftWarningsCache=[];
-  const day=document.getElementById('matrix-day-select').value;
+  const daySel=document.getElementById('matrix-day-select');
+  if(!daySel) return;
+  const day=daySel.value;
 
   let maxR=8;
   for(let i=1;i<=11;i++){
@@ -1008,6 +1010,10 @@ window.calculateMatrixWarnings=function(){
   }
 
   const wb=document.getElementById('constructor-warnings');
+  // Стара розмітка в браузері — не привід валити побудову сітки цілком.
+  // Раніше тут стояло голе wb.innerHTML, і відсутній блок означав би
+  // виключення просто посеред відкриття конструктора.
+  if(!wb) return;
   wb.innerHTML=html;
   wb.style.display='block';
 };
