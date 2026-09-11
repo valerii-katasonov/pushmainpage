@@ -399,14 +399,26 @@ window.openGamesTab = async function(){
   if(!box) return;
   box.innerHTML = `<p class="gm-load">Хвилинку…</p>`;
 
-  const { cls } = await whoseProgress();
-  const progress = await loadProgress();
+  // ВІЧНЕ «ЗАВАНТАЖЕННЯ» — НАЙЧАСТІША ВАДА ЦЬОГО ПОРТАЛУ.
+  //
+  // Варто чомусь усередині кинути виключення, і напис «Хвилинку…»
+  // лишається назавжди: людина бачить, що щось вантажиться, і чекає
+  // того, чого вже не буде. Тому все, що між написом і результатом,
+  // загорнуте, а відмова перетворюється на видимий текст із кнопкою.
+  try{
+    const { cls } = await whoseProgress();
+    const progress = await loadProgress();
 
-  const hint = isPupil()
-    ? 'Обери гру. Це тренування, а не оцінка — помилятися можна скільки завгодно.'
-    : 'Ігри за темами, які клас зараз проходить. Можна грати разом — спроби з вашого кабінету теж зараховуються.';
+    const hint = isPupil()
+      ? 'Обери гру. Це тренування, а не оцінка — помилятися можна скільки завгодно.'
+      : 'Ігри за темами, які клас зараз проходить. Можна грати разом — спроби з вашого кабінету теж зараховуються.';
 
-  box.innerHTML = `<p class="gm-hint">${escHtml(hint)}</p>` + catalogHtml(cls, progress);
+    box.innerHTML = `<p class="gm-hint">${escHtml(hint)}</p>` + catalogHtml(cls, progress);
+  }catch(e){
+    console.error('[Push School] вкладка ігор:', e && e.message);
+    box.innerHTML = `<div class="data-card"><p style="margin:0 0 10px;">Не вдалося показати список ігор.</p>`
+      + `<button onclick="openGamesTab()">Спробувати ще раз</button></div>`;
+  }
 };
 
 // ── ОНОВЛЕННЯ ПРИ ЗМІНІ ДИТИНИ ──────────────────────────────────
