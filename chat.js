@@ -27,9 +27,9 @@
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, push, update, onValue }
   from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, auth, currentUserData, showToast, escHtml, escJs, isTeacherRole, getUsersSnap, logAction, notifyEvent, initials, avatarColor, chatTime, chatDayLabel, getParentLinks } from './common.js';
+import { db, auth, currentUserData, showToast, escHtml, escJs, isTeacherRole, getUsersSnap, logAction, notifyEvent, initials, avatarColor, chatTime, chatDayLabel, getParentLinks, emailKey } from './common.js';
 
-const safe  = e => String(e||'').toLowerCase().replace(/\./g,'_');
+const safe  = e => emailKey(e||'');
 const unsafe = se => String(se||'').replace(/_/g,'.');
 const myKey = () => safe(auth.currentUser?.email);
 
@@ -430,7 +430,13 @@ window.sendInboxMessage = async function(){
 
     // Сповіщення решті учасників. Тексту в пуш не кладемо: він видно на
     // екрані блокування, а в школі листування буває про дітей.
-    const others = currentMembers.filter(k => k !== myKey()).map(unsafe);
+    //
+    // Шлемо КЛЮЧІ пошт, а не спробу відновити з них адресу. `unsafe`
+    // міняє назад усі підкреслення на крапки, і для пошти, де
+    // підкреслення було з самого початку (ivan_petrov@…), виходила чужа
+    // адреса — сповіщення тихо не доходило нікому. Сервер зводить до
+    // ключа обидві сторони, тож ключ йому підходить.
+    const others = currentMembers.filter(k => k !== myKey());
     if(others.length) notifyEvent('chat', { to: others, subject: nm || 'Школа',
                                             value: 'нове повідомлення' });
   }catch(e){
