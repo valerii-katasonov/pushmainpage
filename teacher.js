@@ -5,9 +5,9 @@
 // review, class/attendance management, teacher dashboard counters,
 // exams calendar, and reactions/weekly-wrapped.
 // ═══════════════════════════════════════════════════════════════
-import { ref, set, get, child, push, remove, update, onValue, runTransaction } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+import { ref, set, get, child, push, remove, update, onValue } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { renderNewsFeed } from './news.js';
-import { db, auth, CLOUDINARY_URL, UPLOAD_PRESET, HW_FILE_EXT, HW_FILE_MAX_MB, fileExt, getActiveClass, currentUserData, showToast, displayGrade, renderHwItem, renderHwList, dayKeys, formatAttendanceSlotLabel, STICKER_GOAL, stickerGoal, escJs, escHtml, safeUrl, normalizeChildren, notifyEvent, logAction, renderBirthdays, teacherAccessMatrix, getUsersSnap, stuName, gradeWritePaths, localDateString, isMasterTeacher, gradeTypesCache, subjKey } from './common.js';
+import { db, auth, CLOUDINARY_URL, UPLOAD_PRESET, HW_FILE_EXT, HW_FILE_MAX_MB, fileExt, getActiveClass, currentUserData, showToast, displayGrade, renderHwItem, renderHwList, dayKeys, formatAttendanceSlotLabel, STICKER_GOAL, stickerGoal, escJs, escHtml, safeUrl, normalizeChildren, notifyEvent, logAction, renderBirthdays, teacherAccessMatrix, getUsersSnap, stuName, gradeWritePaths, localDateString, isMasterTeacher, gradeTypesCache, subjKey, emailKey } from './common.js';
 import { populateTopicSelector, availableTopicsCache } from './curriculum.js';
 
 let currentHwImages=[];
@@ -408,7 +408,7 @@ window.sendClassBroadcast=async function(){
     }
     if(targets.length===0){alert('У цьому класі немає прив\'язаних батьків.');return;}
     if(!confirm(`Надіслати повідомлення ${targets.length} отримувачам?\n\nКожен отримає його в особистий чат.`))return;
-    const mySafe=(currentUserData?.email||'').replace(/\./g,'_');
+    const mySafe=emailKey(currentUserData?.email);
     const myName=((currentUserData?.firstName||'')+' '+(currentUserData?.lastName||'')).trim()||currentUserData?.email||'Вчитель';
     for(const se of targets){
       const chatId=[mySafe,se].sort().join('___');
@@ -1018,7 +1018,21 @@ export function myLessonsForDay(cls){
     const names=window.expandAltSubjects?window.expandAltSubjects(item)
                                         :[window.getValidSubjectName(item)].filter(Boolean);
     if(!names.length)return;                         // перерва
-    const key=String(flatIdx+1);
+    // КЛЮЧ УРОКУ — ЦЕ ЙОГО НОМЕР У РОЗКЛАДІ, А НЕ МІСЦЕ В МАСИВІ.
+    //
+    // Тут стояло flatIdx+1 — порядкове місце в пласкому списку дня. Але в
+    // тому списку разом з уроками лежать перерви й обіди, і кожне з них
+    // це місце займає. При звичайному чергуванні «урок — перерва» другий
+    // урок опинявся на місці 3, третій — на 5.
+    //
+    // Помітити було важко, бо у випадайці стояв ПРАВИЛЬНИЙ номер: підпис
+    // брався з item.number, а значення — з індексу. Учитель обирав
+    // «2. Математика», у базу йшло 3, і батько читав «Урок 3».
+    //
+    // У перерв number — пробіл, але сюди вони не доходять: вихід по
+    // порожньому names стоїть рядком вище. Запасне flatIdx+1 лишається на
+    // випадок розкладу без номерів — там зсув можливий, зате ключ буде.
+    const key=String(item.number||(flatIdx+1));
     names.forEach(sn=>{
     const sub=attSubs[slotIdx];
     let mine, viaSub=false;
@@ -1070,11 +1084,18 @@ function buildMarkAbsentLessonOptions(){
     // номерами (у перерви свого номера немає, тож підставлявся порядковий).
     // Та сама умова стоїть у myAttendanceSlots — обидва місця мають
     // однаково розуміти, що таке урок.
-    const shown=flat.map((l,i)=>({l,i,sn:window.getValidSubjectName(l)}))
+    // НОМЕР УРОКУ ЛИШЕ З ОДНОГО ДЖЕРЕЛА.
+    //
+    // Раніше підпис брався з l.number, а значення — з індексу в масиві,
+    // де перерви теж займають місця. Два різні числа під одним пунктом:
+    // учитель бачив «2», у базу йшло «3». Тепер обидва з key, і розійтися
+    // їм більше нема як. Та сама формула стоїть у myLessonsForDay —
+    // звідки приходить mine, і порівнювати їх треба однаковими ключами.
+    const shown=flat.map((l,i)=>({sn:window.getValidSubjectName(l),key:String(l.number||(i+1))}))
       .filter(({sn})=>!!sn)
-      .filter(({i})=>!mine||mine.has(String(i+1)));
-    shown.forEach(({l,i,sn})=>{
-      sel.innerHTML+=`<option value="${i+1}">${escHtml(l.number||(i+1))}. ${escHtml(sn)}</option>`;
+      .filter(({key})=>!mine||mine.has(key));
+    shown.forEach(({sn,key})=>{
+      sel.innerHTML+=`<option value="${escHtml(key)}">${escHtml(key)}. ${escHtml(sn)}</option>`;
     });
     if(!shown.length&&mine)
       sel.innerHTML='<option value="all">Увесь день (ваших уроків цього дня немає)</option>';
@@ -1115,47 +1136,82 @@ window.teacherMarkAbsent=function(){
     document.getElementById('t-mark-absent-student').value='';
   });
 };
-window.addStudent=function(){const name=document.getElementById('new-student-name').value.trim();const emailEl=document.getElementById('new-student-email');const email=emailEl?emailEl.value.trim().replace(/\./g,'_'):'';if(name){push(ref(db,`students_list/${getActiveClass()}`),name).then(()=>{if(email)set(ref(db,`student_links/${email}`),{studentName:name,class:getActiveClass()});alert("Учня додано!");loadStudentsList();document.getElementById('new-student-name').value='';if(emailEl)emailEl.value='';});}};
+window.addStudent=function(){const name=document.getElementById('new-student-name').value.trim();const emailEl=document.getElementById('new-student-email');const email=emailEl?emailKey(emailEl.value):'';if(name){push(ref(db,`students_list/${getActiveClass()}`),name).then(()=>{if(email)set(ref(db,`student_links/${email}`),{studentName:name,class:getActiveClass()});alert("Учня додано!");loadStudentsList();document.getElementById('new-student-name').value='';if(emailEl)emailEl.value='';});}};
 // Прив'язка ДОДАЄ дитину до списку, а не замінює його: в одних батьків у школі
 // може вчитися кілька дітей. Раніше другий виклик мовчки затирав першу дитину.
+// ══════════════════════════════════════════════════════════════════
+//  ПРИВʼЯЗКА ПОШТИ БАТЬКІВ ДО УЧНЯ
+// ══════════════════════════════════════════════════════════════════
+//
+// ЩО ЗМІНИЛОСЯ. Раніше тут стояла транзакція на ВЕСЬ вузол
+// parent_links/{пошта}: прочитати, дописати дитину, записати назад.
+// Для директора це працювало, а для класного керівника — ні, і кнопка
+// просто відмовляла в правах. Розширити право на цілий вузол не можна:
+// поруч із дітьми там лежить profile — телефони й адреса родини, а в
+// списку дітей можуть бути діти ІНШИХ класів.
+//
+// Тому пишемо не вузол, а ОДИН вільний слот у списку дітей. Правило бази
+// дозволяє лише створення (!data.exists()), лише у свій клас і лише під
+// тим імʼям, під яким учень записаний у списку класу.
+//
+// Побічна користь: транзакція більше не потрібна. Якщо два вчителі
+// одночасно цілять у той самий слот, другий отримає відмову, а не тихо
+// затре першого, — і ми просто спробуємо наступний вільний.
+const MAX_KIDS = 6;          // стільки ж, скільки звіряє правило users
+
+// Сирі ключі списку дітей — саме ключі, а не значення: нам потрібно
+// знати, які індекси вже зайняті.
+function rawKidKeys(node){
+  const c = node && node.children;
+  if(!c) return [];
+  return Array.isArray(c) ? c.map((v,i)=>v?String(i):null).filter(Boolean)
+                          : Object.keys(c);
+}
+function firstFreeSlot(node){
+  const used = new Set(rawKidKeys(node));
+  for(let i=0;i<MAX_KIDS;i++) if(!used.has(String(i))) return String(i);
+  return null;
+}
+
 window.linkParent=async function(){
   const raw=document.getElementById('parent-email').value.trim().toLowerCase();
-  const e=raw.replace(/\./g,'_');
+  const e=emailKey(raw);
   const st=document.getElementById('t-student-for-parent').value;
   const cls=getActiveClass();
   const role=document.getElementById('t-parent-role').value;
   if(!e||!st)return alert("Оберіть учня та Email");
+  const stNm=stuName(cls,st);
   try{
-    const stNm=stuName(cls,st);
-    // ТРАНЗАКЦІЯ, а не «прочитати → дописати → записати».
-    //
-    // Тут живе список ДІТЕЙ батька, і writes йдуть на весь вузол. Між
-    // читанням і записом є проміжок: якщо в цю мить хтось прив'яже другу
-    // дитину (директор, імпорт списків), вона зникне — і батько втратить
-    // доступ, а причини не знайде ніхто. Транзакція виконує читання й
-    // запис як одну дію: Firebase сам повторить її, якщо дані змінилися.
-    let already=false;
-    const res=await runTransaction(ref(db,`parent_links/${e}`), cur=>{
-      const kids=normalizeChildren(cur||{});
-      if(kids.some(k=>k.studentId===st||(k.studentName===stNm&&k.class===cls))){
-        already=true;
-        return cur;                       // нічого не міняємо
-      }
-      kids.push({studentId:st,studentName:stNm,class:cls,role});
-      // Зберігаємо решту полів вузла (profile тощо) — раніше вони гинули.
-      return Object.assign({}, cur||{}, {children:kids});
-    });
-    if(already||!res.committed) return alert(`Ця дитина вже прив'язана.`);
+    const snap=await get(ref(db,`parent_links/${e}`));
+    const node=snap.exists()?(snap.val()||{}):{};
+
+    // Старий формат: дитина лежить у корені вузла, списку children немає.
+    // Перекласти її в список — означає записати чужий, можливо, клас, а на
+    // це в класного керівника права немає (і не має бути). Кажемо прямо.
+    if(!node.children && node.studentName){
+      return alert('Цей запис зроблено в старому форматі, і додати до нього '
+        + 'другу дитину може лише адміністрація школи.\n\nПередайте їй пошту '
+        + `${raw} та імʼя учня.`);
+    }
+
+    const kids=normalizeChildren(node);
+    if(kids.some(k=>k.studentId===st||(k.studentName===stNm&&k.class===cls)))
+      return alert("Ця дитина вже привʼязана.");
+    const slot=firstFreeSlot(node);
+    if(slot===null)
+      return alert(`До цієї пошти вже привʼязано ${MAX_KIDS} дітей — більше портал не веде.`);
+
+    await set(ref(db,`parent_links/${e}/children/${slot}`),
+      {studentId:st,studentName:stNm,class:cls,role});
     if(window.invalidateParentLinks) window.invalidateParentLinks();
-    // Підсумковий список — уже той, що ліг у базу (транзакція могла
-    // побачити свіжіші дані, ніж ми на початку).
-    const kids=normalizeChildren(res.snapshot.val()||{});
+
+    const total=kids.length+1;
     // Якщо батьки вже заходили — оновлюємо і їхній профіль.
     //
     // Читати users має право лише директор: там персональні дані всіх
-    // людей школи. Учитель прив'язку зробити може (parent_links він пише),
-    // але оновити чужий профіль — ні. Раніше ця відмова летіла нагору й
-    // прив'язка виглядала як провал, хоча головне вже збереглося.
+    // людей школи. Привʼязку класний керівник зробити може, а оновити
+    // чужий профіль — ні. Раніше ця відмова летіла нагору й привʼязка
+    // виглядала як провал, хоча головне вже збереглося.
     let profileSynced = true;
     try{
       const us = await getUsersSnap();
@@ -1163,18 +1219,28 @@ window.linkParent=async function(){
         const u = us.val();
         for(const uid in u){
           if((u[uid].email||'').toLowerCase() === raw && u[uid].role === 'parent'){
-            await update(ref(db, `users/${uid}`), { children: kids });
+            await update(ref(db, `users/${uid}`),
+              { children: kids.concat([{studentId:st,studentName:stNm,class:cls,role}]) });
           }
         }
       }
-    }catch(e){ profileSynced = false; }
+    }catch(err){ profileSynced = false; }
     const syncNote = profileSynced ? ''
       : '\n\nПрофіль батьків оновиться, коли вони наступного разу зайдуть у портал.';
-    alert((kids.length>1
-      ? `✅ Додано. Тепер до ${raw} прив'язано дітей: ${kids.length}. Батьки зможуть перемикатися між ними у профілі.`
-      : `✅ Email прив'язано!`) + syncNote);
+    alert((total>1
+      ? `✅ Додано. Тепер до ${raw} привʼязано дітей: ${total}. Батьки зможуть перемикатися між ними у профілі.`
+      : `✅ Email привʼязано!`) + syncNote);
     document.getElementById('parent-email').value='';
-  }catch(err){alert('Помилка: '+err.message);}
+  }catch(err){
+    // Найімовірніша відмова — не свій клас. Кажемо це словами, а не кодом.
+    const denied=/permission[_ ]denied/i.test(err&&err.message||'');
+    alert(denied
+      ? 'Немає прав на цю дію.\n\nПривʼязувати батьків можна лише до учнів '
+        + 'СВОГО класу — і це має бути клас, де ви класний керівник. '
+        + 'Якщо клас ваш, зверніться до адміністрації: можливо, призначення '
+        + 'класного керівника ще не внесено в портал.'
+      : 'Помилка: '+err.message);
+  }
 };
 // Підпис над списком. Раніше тут завжди стояло «сьогодні», навіть коли
 // вгорі обрано інший день, — учитель бачив чуже слово й вирішував, що
