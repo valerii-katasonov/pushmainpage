@@ -8,7 +8,7 @@
 import { ref, set, get, child, push, remove, update, onValue } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { renderNewsFeed } from './news.js';
 import { db, auth, CLOUDINARY_URL, UPLOAD_PRESET, HW_FILE_EXT, HW_FILE_MAX_MB, fileExt, getActiveClass, currentUserData, showToast, displayGrade, renderHwItem, renderHwList, dayKeys, formatAttendanceSlotLabel, STICKER_GOAL, stickerGoal, escJs, escHtml, safeUrl, normalizeChildren, notifyEvent, logAction, renderBirthdays, teacherAccessMatrix, getUsersSnap, stuName, gradeWritePaths, localDateString, isMasterTeacher, gradeTypesCache, subjKey, emailKey } from './common.js';
-import { populateTopicSelector, availableTopicsCache } from './curriculum.js';
+import { populateTopicSelector, availableTopicsCache, planKey, loadAliases } from './curriculum.js';
 
 let currentHwImages=[];
 // teacherAttendanceListener is reassigned only here and read/invoked from
@@ -593,11 +593,30 @@ const BTN_HW    = '💾 Зберегти ДЗ';
 
 // Що зараз редагується. Предмет обов'язковий обом кнопкам: без нього
 // невідомо, до чого чіпляти запис.
+// ДВА КЛЮЧІ, А НЕ ОДИН — І ЦЕ НЕ ДРІБНИЦЯ.
+//
+//   sk — під цією назвою лежить те, що робив САМЕ ЦЕЙ урок:
+//        lesson_topics/{клас}/{sk}/{дата}. Тут псевдонім не діє: два
+//        рядки в розкладі — це два різні уроки, і зливати їхні журнали
+//        ми навмисно не стали.
+//
+//   pk — під цією назвою лежить ПЛАН: curriculum_plans/{клас}/{pk}/…
+//        Він може бути спільним, і тоді «Matematyka» бере теми з
+//        «Математика».
+//
+// Досі скрізь стояв один sk на обидва вузли, і це працювало рівно доти,
+// доки план не став спільним. Далі виходило так: список тем уроку
+// приходив зі спільного плану (там свої ідентифікатори), а витрачені
+// години дописувалися в curriculum_plans/{клас}/Matematyka — вузол,
+// якого не існує. get().exists() повертав false, лічильник тихо не
+// збільшувався, і в плані назавжди лишалося «0 з 140». Без жодної
+// помилки на екрані.
 function lessonCtx(){
   const subject=document.getElementById('t-subject').value;
   if(!subject){ alert('Оберіть предмет!'); return null; }
+  const cls=getActiveClass();
   return { date:document.getElementById('global-date').value,
-           subject, sk:subjKey(subject), cls:getActiveClass(),
+           subject, sk:subjKey(subject), pk:planKey(cls, subject), cls,
            uid:auth.currentUser.uid, sm:document.getElementById('status-msg') };
 }
 
@@ -648,6 +667,11 @@ window.saveLessonTopic=function(){
   }
   return runSave('btn-save-topic', BTN_TOPIC, c.sm, async()=>{
     const {cls,sk,date}=c;
+    // Псевдоніми могли ще не прочитатися — тоді pk у контексті порахувався
+    // за старим кешем. Читання одне на клас і з кешу, тож перестрахуватися
+    // тут дешево, а помилитися ключем плану — ні: години пішли б у нікуди.
+    await loadAliases(cls);
+    const pk=planKey(cls, c.subject);
 
     // 1. Вибір з обох слотів (слот 2 — лише якщо його блок відкритий)
     const slot2Active=document.getElementById('t-topic-slot-2-wrap')&&document.getElementById('t-topic-slot-2-wrap').style.display!=='none';
@@ -681,7 +705,7 @@ window.saveLessonTopic=function(){
       // менш точним саме там, де мав бути точним.
       const prevTopicId=prevTopics[i]?.topicId||null;
       if(selectedId!==prevTopicId){
-        const newTSnap=await get(ref(db,`curriculum_plans/${cls}/${sk}/topics/${selectedId}`));
+        const newTSnap=await get(ref(db,`curriculum_plans/${cls}/${pk}/topics/${selectedId}`));
         if(newTSnap.exists()){
           const t=newTSnap.val();
           if((t.hoursUsed||0)>=(t.plannedHours||0))
@@ -706,18 +730,20 @@ window.saveLessonTopic=function(){
       const prevId=prevTopics[i]?.topicId||null;
       const newId=newTopics[i]?.topicId||null;
       if(prevId===newId)continue;
+      // pk, а не sk: ідентифікатори тем прийшли зі СПІЛЬНОГО плану, і
+      // лічильник годин має зростати саме там, звідки взято тему.
       if(prevId){
-        const pSnap=await get(ref(db,`curriculum_plans/${cls}/${sk}/topics/${prevId}`));
+        const pSnap=await get(ref(db,`curriculum_plans/${cls}/${pk}/topics/${prevId}`));
         if(pSnap.exists()){
           const t=pSnap.val();
-          await set(ref(db,`curriculum_plans/${cls}/${sk}/topics/${prevId}/hoursUsed`),Math.max(0,(t.hoursUsed||0)-1));
+          await set(ref(db,`curriculum_plans/${cls}/${pk}/topics/${prevId}/hoursUsed`),Math.max(0,(t.hoursUsed||0)-1));
         }
       }
       if(newId){
-        const nSnap=await get(ref(db,`curriculum_plans/${cls}/${sk}/topics/${newId}`));
+        const nSnap=await get(ref(db,`curriculum_plans/${cls}/${pk}/topics/${newId}`));
         if(nSnap.exists()){
           const t=nSnap.val();
-          await set(ref(db,`curriculum_plans/${cls}/${sk}/topics/${newId}/hoursUsed`),(t.hoursUsed||0)+1);
+          await set(ref(db,`curriculum_plans/${cls}/${pk}/topics/${newId}/hoursUsed`),(t.hoursUsed||0)+1);
         }
       }
     }
