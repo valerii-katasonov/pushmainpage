@@ -680,6 +680,10 @@ export function loadParentDashboard(){
   loadTextbooksForParent();
   renderBirthdays('p-birthdays',cls,currentUserData.studentName);
   renderFinalGrades('p-final-grades',cls,currentUserData.studentName);
+  // Оцінки за тиждень і за предметом. Дзеркало читається один раз і
+  // кешується в модулі, тож два виклики поспіль — це один запит у базу.
+  if(window.renderGradesWeek) window.renderGradesWeek();
+  if(window.renderGradesSubject) window.renderGradesSubject();
   Promise.all([loadTodaySubstitutions(cls,date),loadDayTopics(cls,date)])
     .then(()=>{renderDynamicSchedule('parent');});
   renderConsents();
@@ -984,6 +988,8 @@ export function loadStudentDashboard(){
   loadAiDayContext('s');
   renderBirthdays('s-birthdays',cls,currentUserData.studentName);
   renderFinalGrades('s-final-grades',cls,currentUserData.studentName);
+  if(window.renderGradesWeek) window.renderGradesWeek();
+  if(window.renderGradesSubject) window.renderGradesSubject();
   Promise.all([loadTodaySubstitutions(cls,date),loadDayTopics(cls,date)])
     .then(()=>{renderDynamicSchedule('student');renderDayTopics('s',date);});
   const ym=date.substring(0,7);
