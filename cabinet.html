@@ -3662,9 +3662,27 @@
          цілком. Денний список лишається нижче — він потрібен тим, хто
          прийшов саме з конкретної дати. -->
     <section class="screen-section" data-dtab="grades">
-      <h3>📝 Оцінки за тиждень</h3>
+      <h3>📝 Оцінки й коментарі за тиждень</h3>
       <div class="data-card" style="border-left-color:#ff4757;background:#fff0f1;margin-top:0;">
         <div id="p-grades-week"><p class="empty-msg">Завантаження...</p></div>
+      </div>
+    </section>
+
+    <!-- Наліпки — одразу під оцінками тижня: це те, за чим дитина стежить
+         сама, і воно має бути видно без прокрутки повз усе інше. -->
+    <section class="screen-section" data-dtab="grades">
+      <div class="data-card" style="border-left-color:#f1c40f;background:#fffcf0;text-align:center;margin-top:0;">
+        <h4 style="margin-top:0;color:var(--orange);font-size:1rem;">🌟 Прогрес наліпок</h4>
+        <div class="progress-bar-container"><div id="p-ribbon-progress" class="progress-bar"></div></div>
+        <p id="p-ribbon-count" style="font-size:1.1rem;font-weight:700;color:#d35400;margin:13px 0 4px 0;">Завантаження...</p>
+        <p id="p-ribbon-msg" style="color:var(--green);font-weight:800;margin:0;font-size:.95rem;"></p>
+      </div>
+    </section>
+
+    <section class="screen-section" data-dtab="grades">
+      <div class="data-card" style="border-left-color:#3949ab;background:#e8eaf6;margin-top:0;">
+        <h4 style="margin-top:0;color:#283593;">🤝 Поведінка (цей тиждень)</h4>
+        <div id="p-behavior-list"><p class="empty-msg">Завантаження...</p></div>
       </div>
     </section>
 
@@ -3672,13 +3690,6 @@
       <h3>📈 За предметом</h3>
       <div class="data-card" style="border-left-color:var(--purple,#7b1fa2);background:#faf5ff;margin-top:0;">
         <div id="p-grades-subject"><p class="empty-msg">Завантаження...</p></div>
-      </div>
-    </section>
-
-    <section class="screen-section" data-dtab="grades">
-      <h3>📝 Оцінки та коментарі за день</h3>
-      <div class="data-card" style="border-left-color:#ff4757;background:#fff0f1;margin-top:0;">
-        <ul id="p-daily-comments-list" class="list-dash"></ul>
       </div>
     </section>
 
@@ -3693,19 +3704,11 @@
 
 
     <!-- ═══════════ НАВЧАННЯ ═══════════ -->
+    <!-- Без спільного заголовка: наліпки, поведінка й підсумкові оцінки —
+         три різні речі, і «Успішність» над ними нічого не пояснювала, лише
+         вдавала розділ. Кожна картка вже підписана сама. -->
     <section class="screen-section" data-dtab="grades">
-      <h3>📊 Успішність</h3>
-      <div class="data-card" style="border-left-color:#f1c40f;background:#fffcf0;text-align:center;margin-top:0;">
-        <h4 style="margin-top:0;color:var(--orange);font-size:1rem;">🌟 Прогрес наліпок</h4>
-        <div class="progress-bar-container"><div id="p-ribbon-progress" class="progress-bar"></div></div>
-        <p id="p-ribbon-count" style="font-size:1.1rem;font-weight:700;color:#d35400;margin:13px 0 4px 0;">Завантаження...</p>
-        <p id="p-ribbon-msg" style="color:var(--green);font-weight:800;margin:0;font-size:.95rem;"></p>
-      </div>
-      <div class="data-card" style="border-left-color:#3949ab;background:#e8eaf6;">
-        <h4 style="margin-top:0;color:#283593;">🤝 Поведінка (цей тиждень)</h4>
-        <div id="p-behavior-list"><p class="empty-msg">Завантаження...</p></div>
-      </div>
-      <div class="data-card" style="border-left-color:#00838f;background:#e0f7fa;">
+      <div class="data-card" style="border-left-color:#00838f;background:#e0f7fa;margin-top:0;">
         <h4 style="margin-top:0;color:#00838f;">🏆 Підсумкові оцінки</h4>
         <div id="p-final-grades" class="fin-box" style="display:none;"></div>
         <button type="button" id="btn-report-card" onclick="downloadMyReportCard()" style="background:#00838f;color:#fff;margin-top:0;">📄 Завантажити табель</button>
@@ -3872,17 +3875,12 @@
       </div>
       <!-- Оцінки за тиждень і за предметом — те саме, що в батьків -->
       <div class="data-card" style="border-left-color:#ff4757;background:#fff0f1;">
-        <h4 style="margin-top:0;color:#ff4757;">📝 Мої оцінки за тиждень:</h4>
+        <h4 style="margin-top:0;color:#ff4757;">📝 Мої оцінки й коментарі за тиждень:</h4>
         <div id="s-grades-week"><p class="empty-msg">Завантаження...</p></div>
       </div>
       <div class="data-card" style="border-left-color:#7b1fa2;background:#faf5ff;">
         <h4 style="margin-top:0;color:#7b1fa2;">📈 За предметом:</h4>
         <div id="s-grades-subject"><p class="empty-msg">Завантаження...</p></div>
-      </div>
-      <!-- Журнал та коментарі -->
-      <div class="data-card" style="border-left-color:#ff4757;background:#fff0f1;">
-        <h4 style="margin-top:0;color:#ff4757;">📝 Мої оцінки та коментарі:</h4>
-        <ul id="s-daily-comments-list" class="list-dash"></ul>
       </div>
       <!-- Behavior -->
       <div class="data-card" style="border-left-color:#3949ab;background:#e8eaf6;">
