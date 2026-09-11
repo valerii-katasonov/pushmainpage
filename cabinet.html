@@ -1215,6 +1215,15 @@
     .add-parallel-btn:hover{background:#3498db;color:#fff;}
     .cell-warning-travel{border:2px solid #e67e22!important;box-shadow:inset 0 0 10px rgba(230,126,34,.3);}
     .cell-warning-conflict{border:2px solid var(--red)!important;box-shadow:inset 0 0 10px rgba(231,76,60,.3);background-color:#fdedec!important;}
+    /* Погодження накладок. Кнопка навмисно скромна: вона стоїть у кожному
+       рядку попередження, і якби виглядала як головна дія, натискати її
+       почали б не читаючи — а це рівно те, чого тут не треба. */
+    .wo-btn{width:auto;margin:0 0 0 6px;padding:2px 9px;font-size:.72rem;font-weight:700;
+            background:#fff;color:#5d6d7e;border:1px solid #cfd8dc;border-radius:7px;cursor:pointer;
+            vertical-align:baseline;}
+    .wo-btn:hover{background:#eceff1;}
+    .wo-toggle{margin-left:0;color:#2e7d32;border-color:#c8e6c9;background:#f1f8f2;}
+    .wo-undo{color:#b26a00;border-color:#ffe082;background:#fffdf5;}
     /* ── QUICK ACTIONS ── */
     .qa-row{display:flex;gap:8px;margin:12px 0;flex-wrap:wrap;}
     .qa-btn{flex:1;min-width:130px;padding:var(--space-3) var(--space-2);border-radius:11px;border:none;cursor:pointer;font-weight:700;font-size:var(--text-sm);display:flex;align-items:center;justify-content:center;gap:6px;transition:.2s;margin:0;}
@@ -3322,6 +3331,17 @@
         <input type="text" id="curr-subject-other" placeholder="Назва предмета точно як у розкладі"
                style="display:none;margin-top:6px;" oninput="onCurrSubjectChange()">
         <div id="curr-subject-warn" class="curr-warn" style="display:none;"></div>
+        <!-- СПІЛЬНИЙ ПЛАН. Той самий курс живе в розкладі під двома
+             назвами — «Математика» і «Matematyka». Тут кажемо, що план у
+             них один, замість того щоб заливати його двічі й потім
+             гадати, яка з двох копій свіжіша. -->
+        <div id="curr-alias-box" style="display:none;margin-top:7px;font-size:.79rem;color:#455a64;">
+          <label style="font-weight:600;">Спільний план з предметом:</label>
+          <select id="curr-alias" onchange="saveCurrAlias()" style="margin-top:4px;">
+            <option value="">— окремий власний план —</option>
+          </select>
+          <div id="curr-alias-note" style="margin-top:4px;color:#78909c;line-height:1.4;"></div>
+        </div>
         <label class="curr-drop-zone" id="curr-drop-zone-label">
           <input type="file" id="curr-file-input" accept=".xlsx,.xls">
           <div id="curr-drop-text">📤 Натисніть або перетягніть Excel файл сюди</div>
