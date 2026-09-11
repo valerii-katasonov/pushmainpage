@@ -1990,6 +1990,59 @@ export function renderMasterBanner(){
   }
 }
 window.renderMasterBanner = renderMasterBanner;
+
+// ══════════ ПЕРЕЇЗД НА ВЛАСНИЙ ДОМЕН ══════════
+//
+// Стара адреса веде на нову 301-м редиректом, тож посилання й закладки
+// працюють самі. А от ІКОНКА НА ТЕЛЕФОНІ — ні.
+//
+// Встановлений застосунок памʼятає адресу, з якої його додали, і межі
+// («scope») теж старі. Перехід на інший домен виходить за ці межі, і
+// телефон відкриває його вже не як застосунок: Android показує вкладку
+// з адресним рядком, iPhone просто кидає в Safari. Працювати буде, але
+// виглядатиме як «зламалося».
+//
+// Сповіщення прив'язані до тієї ж старої адреси. Поки людина не зайшла
+// на нову — вони ще приходять; щойно зайшла й увімкнула тут, токен у
+// базі перезаписується, і до старої іконки більше нічого не прилітає.
+//
+// Тому просимо перевстановити. Показуємо один раз: сховище на новому
+// домені порожнє в усіх, тож смужку побачить кожен, хто заходить сюди
+// вперше, і більше ніколи — якщо закриє.
+//
+// ДО ЯКОЇ ДАТИ. Смужка потрібна лише на час переїзду; після неї нові
+// родини побачили б повідомлення про подію, якої для них не було.
+const MOVED_NOTICE_UNTIL = '2027-01-01';
+const MOVED_SEEN_KEY = 'push_school_moved_seen';
+export function renderMovedNotice(){
+  try{
+    if(localDateString >= MOVED_NOTICE_UNTIL) return;
+    if(localStorage.getItem(MOVED_SEEN_KEY)) return;
+  }catch(e){ /* приватний режим — просто покажемо */ }
+  if(document.getElementById('moved-notice')) return;
+  const el = document.createElement('div');
+  el.id = 'moved-notice';
+  el.className = 'moved-notice';
+  el.innerHTML = '<b>📦 Портал переїхав на push.school</b>'
+    + '<span>Посилання й закладки працюють самі. Але якщо ви додавали іконку '
+    + 'порталу на телефон — додайте її заново: стара відкривається у браузері, '
+    + 'і сповіщення до неї більше не приходять.</span>'
+    + '<button type="button" onclick="dismissMovedNotice()">Зрозуміло</button>';
+  // Кабінети всіх ролей лежать у розмітці одночасно, видимий — один.
+  // Тому шукаємо саме показаний, а не «перший, який знайдеться»: інакше
+  // смужка лягла б у прихований екран і її ніхто б не побачив.
+  const SCREENS = ['parent-screen','student-screen','teacher-screen',
+                   'director-screen','admin-screen','kitchen-screen'];
+  const host = SCREENS.map(id => document.getElementById(id))
+                      .find(x => x && x.offsetParent !== null) || document.body;
+  host.insertBefore(el, host.firstChild);
+}
+window.renderMovedNotice = renderMovedNotice;
+window.dismissMovedNotice = function(){
+  try{ localStorage.setItem(MOVED_SEEN_KEY, '1'); }catch(e){}
+  const el = document.getElementById('moved-notice');
+  if(el) el.remove();
+};
 // Предмети НЕ зберігаються окремим списком — вони беруться з РОЗКЛАДУ класу
 // (schedules/{clas}/lessons/{день}) і додатково фільтруються матрицею доступу
 // вчителя. Тому «порожньо» означає одне з трьох, і раніше всі три випадки
@@ -2384,6 +2437,9 @@ async function initUserSession(){
   initModalScrollLock();   // фон під вікнами не прокручується (важливо для iPhone)
   renderMasterBanner();    // червона смуга, якщо ввімкнено режим налагодження
   renderAppVersion();      // один рядок версії під кнопкою виходу
+  // Смужка про переїзд на push.school — один раз на пристрій, поки
+  // триває перехідний період (див. MOVED_NOTICE_UNTIL)
+  setTimeout(renderMovedNotice, 400);
   listenStickerGoals();    // мета наліпок задається класним керівником
   // Чинний навчальний рік читаємо ПЕРШИМ. Календар, семестри й табелі
   // залежать від нього, і якщо взяти його пізніше, вони встигнуть
