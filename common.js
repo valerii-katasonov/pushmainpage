@@ -2370,6 +2370,9 @@ async function initUserSession(){
   healStaffRegistry();
   publishContactCard();
   // тихо відновлюємо запис у списку персоналу, якщо його немає
+  // Клас і дитина в підписці на сповіщення застигали в мить вмикання —
+  // після переходу в наступний клас пуші йшли за старою адресою
+  refreshPushReg();
   setTimeout(()=>{ if(window.watchUnread) window.watchUnread(); }, 300);
   try{
     let dirs = await preloadStudentDirs();
@@ -2727,6 +2730,56 @@ window.disablePush=async function(){
   showToast('🔕 Сповіщення вимкнено');
   renderPushButton();
 };
+
+// ══════════ ОСВІЖЕННЯ ПІДПИСКИ ПРИ ВХОДІ ══════════
+//
+// Запис push_tokens/{uid} робився РІВНО ОДИН РАЗ — у мить, коли людина
+// натиснула «Увімкнути», — і більше не чіпався. Разом із токеном там
+// застигали клас, імʼя та ідентифікатор дитини, а сервер адресує
+// сповіщення саме за ними.
+//
+// Найболючіше це 1 вересня: дитина перейшла в наступний клас, а її
+// батьки далі отримують сповіщення попереднього — про чужі оцінки,
+// відсутності й домашні завдання. І навпаки, про свої не отримують
+// нічого. Те саме, тільки тихіше, при виправленні прізвища дитини.
+//
+// Окремо про сам токен FCM: він може змінитися (переустановка застосунку,
+// чистка даних сайту). Тоді в базі лежить мертвий рядок, FCM відповідає
+// UNREGISTERED, і ніхто цього не бачить. Тому при вході перепитуємо і
+// його — getToken віддає той самий рядок, якщо підписка ще жива.
+//
+// Нічого не вмикаємо самі: якщо запису немає, людина сповіщень не
+// просила, і тиснути кнопку за неї ми не маємо права.
+export async function refreshPushReg(){
+  try{
+    if(!pushConfigured) return;
+    const uid = auth.currentUser?.uid;
+    if(!uid) return;
+    if(typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+    const snap = await get(child(ref(db),`push_tokens/${uid}`));
+    if(!snap.exists()) return;                 // підписки не було — не створюємо
+    const prev = snap.val() || {};
+    let token = prev.token || '';
+    try{
+      if(await pushSupported()){
+        const reg = swRegistration || await navigator.serviceWorker.ready;
+        const fresh = await getToken(getMessaging(app),{vapidKey:VAPID_KEY,serviceWorkerRegistration:reg});
+        if(fresh) token = fresh;
+      }
+    }catch(e){ console.warn('Токен сповіщень не перепитано:', e.message); }
+    if(!token) return;                          // без токена запис безглуздий
+    await update(ref(db,`push_tokens/${uid}`),{
+      token,
+      role: currentUserData?.role || prev.role || '',
+      email: currentUserData?.email || prev.email || '',
+      studentName: currentUserData?.studentName || '',
+      studentId: currentUserData?.studentId || '',
+      class: currentUserData?.class || '',
+      updatedAt: Date.now()
+    });
+  }catch(e){ console.warn('Підписку на сповіщення не освіжено:', e.message); }
+}
+window.refreshPushReg = refreshPushReg;
 
 // ══════════ ЗАПРОШЕННЯ УВІМКНУТИ СПОВІЩЕННЯ ══════════
 // Кнопка вмикання жила лише всередині модалки «Профіль» — туди майже
