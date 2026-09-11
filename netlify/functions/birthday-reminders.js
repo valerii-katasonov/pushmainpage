@@ -25,7 +25,7 @@
 
 const crypto = require('crypto');
 const DB = 'https://test-4eb3e-default-rtdb.europe-west1.firebasedatabase.app';
-const SITE = 'https://planlekcjipush.netlify.app';
+const { SITE_URL: SITE } = require('./lib/site');
 // За скільки днів нагадувати. НЕ дорівнює вікну списку в кабінеті
 // (BIRTHDAY_WINDOW_DAYS у common.js — місяць), і це навмисно: список
 // показує, що попереду, а сповіщення каже, що пора діяти. Якщо колись
