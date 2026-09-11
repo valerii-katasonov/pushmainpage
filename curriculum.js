@@ -8,7 +8,7 @@
 // XLSX comes from the CDN <script> tag already in <head> (global).
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, update, remove } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, auth, getActiveClass, currentUserData, showToast, localDateString, escHtml, teacherAccessMatrix, withTeachingRole, syncStaffCard, isBreakItem, isTeacherRole, isMasterTeacher, escJs, logAction, subjKey } from './common.js';
+import { db, auth, getActiveClass, currentUserData, showToast, localDateString, escHtml, teacherAccessMatrix, withTeachingRole, syncStaffCard, isBreakItem, isTeacherRole, isMasterTeacher, escJs, logAction, subjKey, emailKey } from './common.js';
 
 let parsedCurriculum=null;        // після парсингу xlsx
 const MAX_TOPICS=250;             // стеля на предмет: захист від зіпсованого файлу
@@ -55,7 +55,6 @@ export function parseLessonRange(v){
   if(one) return { from:parseInt(one[1]), to:parseInt(one[1]) };
   return null;
 }
-
 
 // Ціле число з клітинки Excel або запасне значення.
 //
@@ -330,6 +329,63 @@ export function subjectAllowedForUpload(subject, allowed){
   return allowed.some(a => a.toLowerCase() === s);
 }
 
+// ══════════════════════════════════════════════════════════════════
+//  СПІЛЬНИЙ ПЛАН ДЛЯ ДВОХ НАЗВ ПРЕДМЕТА
+// ══════════════════════════════════════════════════════════════════
+//
+// НАВІЩО. Той самий курс у школі має дві назви — «Математика» і
+// «Matematyka». У розкладі це різні рядки, тож і плани виходили різні:
+// один заповнений, другий порожній. Учитель бачив «теми не
+// показуються» на кожному другому уроці й заливав план удруге.
+//
+// Копію робити не можна: дві копії розходяться з першою ж правкою, і
+// вже через місяць ніхто не скаже, яка з них справжня. Тому копії немає
+// — є псевдонім. «Matematyka» каже: план шукай у «Математика». Теми,
+// заплановані години й витрачені лежать в одному місці, а звідки на них
+// подивилися — байдуже.
+//
+//   curriculum_aliases/{клас}/{ключ псевдоніма} = «Канонічна назва»
+//
+// ЩО ПСЕВДОНІМ НЕ ЧІПАЄ. Журнал, оцінки й теми проведених уроків
+// (lesson_topics) лишаються при своїх назвах: там дві назви — це два
+// різні уроки в розкладі, і зливати їх означало б зливати два журнали.
+// Якщо школі потрібне й це, хай буде окремим рішенням, а не побічним
+// наслідком спільного плану.
+let aliasMap = {};
+let aliasCls = '';
+
+export async function loadAliases(cls){
+  aliasCls = cls || '';
+  aliasMap = {};
+  if(!cls) return;
+  try{
+    const snap = await get(ref(db, `curriculum_aliases/${cls}`));
+    if(snap.exists()) aliasMap = snap.val() || {};
+  }catch(e){
+    // Не прочиталися — поводимося як раніше: кожна назва зі своїм планом.
+    // Відмова передбачувана: людина побачить порожній план, а не чужий.
+    console.warn('curriculum_aliases:', e.message);
+  }
+}
+
+// Під якою назвою насправді лежить план цього предмета.
+//
+// Крок рівно один. Якщо А вказує на Б, а Б на В — зупиняємось на Б.
+// Ланцюжки тут нікому не потрібні, а зациклити їх випадково легко, і
+// тоді сторінка просто повисне.
+export function planSubject(cls, subj){
+  if(!subj) return subj;
+  // Кеш належить одному класу. Якщо питають про інший — не вгадуємо:
+  // мовчазна підстановка чужого псевдоніма гірша за його відсутність.
+  if(cls && cls !== aliasCls) return subj;
+  const target = aliasMap[subjKey(subj)];
+  return (target && String(target).trim()) ? String(target).trim() : subj;
+}
+
+// Ключ плану в базі: спершу псевдонім, потім очищення під Firebase.
+// Усі шляхи curriculum_plans рахуються ЛИШЕ через неї.
+export function planKey(cls, subj){ return subjKey(planSubject(cls, subj)); }
+
 // Стан доступу поточного користувача — обчислюється один раз при показі
 // картки і використовується і у превʼю, і при збереженні.
 let uploadAccess = { allowed: [], isClassTeacher: false, cls: null };
@@ -481,7 +537,9 @@ window.saveCurriculumToDb=async function(){
     let trimmedWarnings=[];
     for(let sheetName in parsedCurriculum.sheets){
       const s=parsedCurriculum.sheets[sheetName];
-      const sk=subjKey(s.meta.subject);
+      // planKey, а не subjKey: якщо для цієї назви заведено спільний
+      // план, файл має лягти в нього, а не завести третій вузол поруч.
+      const sk=planKey(cls, s.meta.subject);
       let topicsToSave=s.topics;
       if(topicsToSave.length>MAX_TOPICS){
         const cut=topicsToSave.length-MAX_TOPICS;
@@ -670,7 +728,10 @@ export async function populateTopicSelector(){
     [1,2].forEach(slot=>applyTopicToSlot(slot,null));
     return;
   }
-  const sk=subjKey(subj);
+  // Спільний план: урок може називатися «Matematyka», а теми лежати під
+  // «Математика». Без цього вчитель польської назви бачив би порожній
+  // список тем на уроці, який насправді розписаний.
+  const sk=planKey(cls, subj);
   const snap=await get(ref(db,`curriculum_plans/${cls}/${sk}/topics`));
   availableTopicsCache={};
   let totalTopics=0;let coveredTopics=0;
@@ -825,7 +886,7 @@ window.assignClassTeacher=async function(){
     const stillCT=ctSnap.exists() &&
       Object.values(ctSnap.val()).some(v=>(v.teacherEmail||'').toLowerCase()===prevEmail.toLowerCase());
     if(!stillCT){
-      const prevSE=prevEmail.replace(/\./g,'_');
+      const prevSE=emailKey(prevEmail);
       const prevRoles=await get(child(ref(db),`pre_approved_roles/${prevSE}`));
       await set(ref(db,`pre_approved_roles/${prevSE}`),
                 withTeachingRole(prevRoles.exists()?prevRoles.val():null,'teacher'));
@@ -836,7 +897,7 @@ window.assignClassTeacher=async function(){
   // попереднього. Інакше в батьків підпис змінився б лише після того, як
   // ці двоє наступного разу зайдуть у портал.
   await syncStaffCard(teacherSE);
-  if(prevEmail) await syncStaffCard(prevEmail.replace(/\./g,'_'));
+  if(prevEmail) await syncStaffCard(emailKey(prevEmail));
   showToast(`✅ ${teacher.name} — кл. керівник ${cls.replace('class_','')} класу.`);
   loadClassTeacherInfo();
 };
@@ -917,9 +978,6 @@ export function chosenSubject(){
   return sel.value.trim();
 }
 
-export const CURR_BUILD = '2026-09-02 · plan v3';
-console.log('curriculum.js', CURR_BUILD);
-
 let scheduleSubjects = [];
 
 async function fillSubjectSelect(cls){
@@ -950,8 +1008,6 @@ async function fillSubjectSelect(cls){
   const hint = document.getElementById('curr-access-hint');
   // Рядок стану. Коли предметів немає, він одразу каже, на що дивитися:
   // чи той клас, чи прочитався розклад, чи справа в призначеннях.
-  console.log('[план] клас', cls, '· у розкладі', scheduleSubjects.length,
-              '· доступно', list.length, scheduleSubjects);
   if(hint && list.length){
     hint.textContent = `Клас ${String(cls).replace('class_','')} · предметів у розкладі: `
       + `${scheduleSubjects.length}` + (allowed === null ? '' : `, доступно вам: ${list.length}`);
@@ -965,7 +1021,6 @@ async function fillSubjectSelect(cls){
   }
   onCurrSubjectChange();
 }
-
 
 // Редактор плану оновлюємо ЛИШЕ коли він розгорнутий. Без цього виходив
 // той самий узор, на якому портал спотикався вже двічі: людина міняє
@@ -999,8 +1054,74 @@ window.onCurrSubjectChange = function(){
     if(off) warn.textContent = 'У розкладі класу такого предмета немає. План збережеться, '
       + 'але вчитель не побачить тем, доки назва не збігатиметься з розкладом рівно.';
   }
+  renderAliasBox(subj);
   // Уже розібраний файл перечитуємо під новий предмет
   if(parsedCurriculum) applyChosenSubject(parsedCurriculum);
+};
+
+// ── ВИБІР СПІЛЬНОГО ПЛАНУ ───────────────────────────────────────
+//
+// Показуємо лише коли предмет обрано: питання «спільний план з чим»
+// без предмета не має сенсу й лише додає шуму в і без того щільну картку.
+function renderAliasBox(subj){
+  const box  = document.getElementById('curr-alias-box');
+  const sel  = document.getElementById('curr-alias');
+  const note = document.getElementById('curr-alias-note');
+  if(!box || !sel) return;
+  if(!subj){ box.style.display = 'none'; return; }
+
+  const cur = aliasMap[subjKey(subj)] || '';
+  // У список беремо решту предметів розкладу цього класу. Себе виключаємо:
+  // предмет, що вказує сам на себе, — це нескінченна петля в чистому вигляді.
+  const others = scheduleSubjects.filter(s => s.toLowerCase() !== subj.toLowerCase());
+  sel.innerHTML = '<option value="">— окремий власний план —</option>'
+    + others.map(s => `<option value="${escHtml(s)}"${s === cur ? ' selected' : ''}>${escHtml(s)}</option>`).join('');
+  // Псевдонім міг лишитися від предмета, якого в розкладі вже немає.
+  // Мовчки показати «окремий план» тут не можна: план спільний і далі,
+  // а людина вирішить, що ні.
+  if(cur && !others.some(s => s === cur))
+    sel.innerHTML += `<option value="${escHtml(cur)}" selected>${escHtml(cur)} (немає в розкладі)</option>`;
+
+  note.textContent = cur
+    ? `Теми беруться з плану предмета «${cur}». Файл, завантажений тут, ляже туди ж.`
+    : 'Якщо цей самий курс є в розкладі під іншою назвою — вкажіть її, і план буде один на двох.';
+  box.style.display = 'block';
+}
+
+window.saveCurrAlias = async function(){
+  const sel = document.getElementById('curr-alias');
+  const subj = chosenSubject();
+  const cls = currClass();
+  if(!sel || !subj || !cls) return;
+  const target = sel.value.trim();
+  const key = subjKey(subj);
+
+  // ЗАБОРОНА ЛАНЦЮЖКІВ. Якщо предмет, на який вказують, сам кудись
+  // указує, вийшло б А→Б→В: план шукали б у Б, а він там лише
+  // псевдонімом. Розв'язувати ланцюжки складніше, ніж не давати їх
+  // будувати, а користі від них ніякої.
+  if(target && aliasMap[subjKey(target)]){
+    showToast(`«${target}» сам користується чужим планом. Оберіть предмет, у якого план власний.`);
+    renderAliasBox(subj);
+    return;
+  }
+
+  const prev = aliasMap[key];
+  if(target) aliasMap[key] = target; else delete aliasMap[key];
+  renderAliasBox(subj);
+  try{
+    await set(ref(db, `curriculum_aliases/${cls}/${key}`), target || null);
+    logAction('curriculum_alias', { cls, subject: subj, target: target || '(знято)' });
+    showToast(target ? `План спільний з «${target}»` : 'Повернули власний план');
+    loadCurrentCurriculumDisplay();
+    refreshPlanEditorIfOpen();
+  }catch(e){
+    // Відкотити обов'язково: інакше на екрані спільний план, у базі —
+    // ні, і наступне завантаження файлу піде не туди, куди показано.
+    if(prev) aliasMap[key] = prev; else delete aliasMap[key];
+    renderAliasBox(subj);
+    showToast('Не вдалося зберегти: ' + e.message);
+  }
 };
 
 // Проставляє обраний предмет у розібраний файл.
@@ -1062,6 +1183,9 @@ export async function checkCurriculumUploadAccess(){
     // Спершу список класів, і лише потім читання плану: інакше клас ще
     // порожній, і показали б план невідомо якого класу.
     await fillDirClassSelect();
+    // Псевдоніми читаємо ДО плану: інакше перше читання піде за старою
+    // назвою й покаже порожньо саме там, де план якраз є.
+    await loadAliases(currClass());
     uploadAccess={allowed:null,isClassTeacher:false,cls:currClass()};
     if(hint) hint.textContent='Ви можете завантажити план за будь-який клас і предмет.';
     sec.style.display='block';
@@ -1090,6 +1214,7 @@ export async function checkCurriculumUploadAccess(){
     console.warn('class_teachers:', e.message);
   }
 
+  await loadAliases(cls);
   const allowed=allowedSubjectsFor(cls, role, teacherAccessMatrix, isClassTeacher);
   uploadAccess={allowed, isClassTeacher, cls};
   // Ким людина є для ЦЬОГО класу — потрібно й іншим карткам (напр. меті
@@ -1126,9 +1251,12 @@ async function fillDirClassSelect(){
 }
 
 // Директор змінив клас — перечитати те, що вже збережено для нового класу.
-window.onCurrDirClassChange=function(){
+window.onCurrDirClassChange=async function(){
   const cls=currClass();
   uploadAccess.cls=cls;
+  // Псевдоніми в кожного класу свої, і кеш зберігає лише один клас.
+  // Без цього рядка після зміни класу шляхи рахувалися б за старими.
+  await loadAliases(cls);
   loadCurrentCurriculumDisplay();
   refreshPlanEditorIfOpen();
   warnIfNoSchedule(cls);
@@ -1182,7 +1310,7 @@ function planPath(){
   // саме нею. Дві однакові з вигляду регулярки — це те, що рано чи пізно
   // розходиться, і тоді редактор писав би в сусідній вузол, а вчитель
   // бачив би, що правки «не зберігаються».
-  return { cls, subj, sk: subjKey(subj) };
+  return { cls, subj, sk: planKey(cls, subj) };
 }
 
 export async function renderPlanEditor(){
@@ -1245,7 +1373,6 @@ export async function renderPlanEditor(){
   }
 }
 window.renderPlanEditor = renderPlanEditor;
-
 
 // ══════════════════════════════════════════════════════════════════
 //  ПЕРЕСТАВЛЯННЯ ТЕМ ПЕРЕТЯГУВАННЯМ
