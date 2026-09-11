@@ -55,7 +55,11 @@
 const crypto = require('crypto');
 const { mailConfigured, passwordLetter, sendMail } = require('./lib/mail');
 
-const ALLOWED_HOSTS = ['planlekcjipush.netlify.app', 'localhost', '127.0.0.1'];
+// Перелік дозволених джерел — спільний для всіх функцій (lib/site.js).
+// Раніше кожна тримала власну копію рядка з доменом, і зміна домену
+// означала правку в шести файлах: забути один означає тиху відмову
+// «запит із невідомого джерела» рівно в одній функції.
+const { ALLOWED_HOSTS, CABINET_URL } = require('./lib/site');
 
 // ПОРІВНЮЄМО ІМʼЯ ВУЗЛА ЦІЛКОМ, А НЕ ПІДРЯДОК.
 //
@@ -78,7 +82,10 @@ const DB = 'https://test-4eb3e-default-rtdb.europe-west1.firebasedatabase.app';
 const IDT = 'https://identitytoolkit.googleapis.com/v1';
 const WEB_API_KEY = process.env.FIREBASE_WEB_API_KEY || 'AIzaSyA3OA9pcR1zscUtEPWD8LEKTKonAN5Y90c';
 // Куди повернути людину після встановлення пароля.
-const PORTAL_URL = 'https://planlekcjipush.netlify.app/cabinet.html';
+// Адреса, на яку веде кнопка в листі про перший вхід. Береться з
+// lib/site.js: лист — найгірше місце для застарілого домену, бо
+// виправити вже надісланий лист неможливо.
+const PORTAL_URL = CABINET_URL;
 const PUPIL_DOMAIN = 'pupil.push.local';
 
 // Дозвіл віддаємо ЛИШЕ дозволеному джерелу.
