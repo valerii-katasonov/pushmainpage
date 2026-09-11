@@ -29,7 +29,11 @@
 
 const crypto = require('crypto');
 
-const ALLOWED_HOSTS = ['planlekcjipush.netlify.app', 'localhost', '127.0.0.1'];
+// Перелік дозволених джерел — спільний для всіх функцій (lib/site.js).
+// Раніше кожна тримала власну копію рядка з доменом, і зміна домену
+// означала правку в шести файлах: забути один означає тиху відмову
+// «запит із невідомого джерела» рівно в одній функції.
+const { ALLOWED_HOSTS } = require('./lib/site');
 const PROJECT_ID = 'test-4eb3e';
 const DB = 'https://test-4eb3e-default-rtdb.europe-west1.firebasedatabase.app';
 const IDT = 'https://identitytoolkit.googleapis.com/v1';
