@@ -238,13 +238,21 @@
     /* Один тихий рядок версії — під кнопкою виходу в кожному кабінеті.
        Замінив чотирнадцять міток, розкиданих по розділах. */
     /* Смужка про переїзд на власний домен. Помітна, але не тривожна:
-       це не помилка, а прохання перевстановити іконку. */
+       це не помилка, а прохання перевстановити іконку.
+       Рядки розділені навмисно: заголовок, пояснення й кнопка злипалися
+       в суцільний абзац, і смужка читалася як службове попередження. */
     .moved-notice{background:#e8f5e9;border:1px solid #a5d6a7;border-left:4px solid #43a047;
-                  border-radius:12px;padding:12px 14px;margin:0 0 13px 0;font-size:.84rem;color:#1b5e20;}
-    .moved-notice b{display:block;margin-bottom:4px;font-size:.92rem;}
-    .moved-notice span{display:block;line-height:1.45;color:#33691e;}
-    .moved-notice button{width:auto;margin:9px 0 0;padding:7px 15px;font-size:.8rem;font-weight:700;
-                         background:#43a047;color:#fff;border:none;border-radius:9px;cursor:pointer;}
+                  border-radius:14px;padding:15px 17px;margin:0 0 18px 0;
+                  font-size:.86rem;color:#1b5e20;line-height:1.5;}
+    .moved-notice b{display:block;font-size:1rem;font-weight:800;margin:0 0 7px 0;}
+    .moved-notice p{margin:0 0 6px 0;color:#33691e;}
+    .moved-notice p:last-of-type{margin-bottom:0;}
+    .moved-notice code{background:rgba(67,160,71,.12);border-radius:5px;padding:1px 5px;
+                       font-size:.85em;font-weight:700;}
+    .moved-notice button{display:block;width:auto;margin:13px 0 0;padding:9px 18px;
+                         font-size:.82rem;font-weight:700;background:#43a047;color:#fff;
+                         border:none;border-radius:10px;cursor:pointer;}
+    .moved-notice button:hover{background:#388e3c;}
     .app-version{font-size:.66rem;color:#b0bec5;text-align:center;margin:9px 0 0;line-height:1.6;}
     /* Підпис розробника в тому ж рядку: посилання має бути видно, але не
        так, щоб воно перетягувало увагу з кабінету на себе. */
@@ -2298,6 +2306,11 @@
     </div>
     <button onclick="openProfileModal()" style="width:auto;padding:7px 13px;margin:0;background:var(--teal);color:#fff;border-radius:8px;font-size:.85rem;">⚙️ Профіль</button>
   </div>
+  <!-- Смужка про переїзд на push.school. Лежить у розмітці, а не
+       створюється кодом: вставлений «кудись у перший видимий екран» блок
+       ліз над панель вкладок і склеювався з нею. Тут у нього своє місце —
+       під шапкою профілю, над кабінетом будь-якої ролі. -->
+  <div id="moved-notice" class="moved-notice" style="display:none;"></div>
   <!-- DATE PICKER -->
   <div id="calendar-block" style="display:none;" class="date-picker-box">
     <div id="teacher-class-selector-box" style="display:none;margin-bottom:13px;border-bottom:1px dashed var(--teal);padding-bottom:13px;">
