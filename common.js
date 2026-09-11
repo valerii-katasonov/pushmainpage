@@ -61,9 +61,9 @@ window.renderAppVersion = renderAppVersion;
 
 export const VENDOR = {
   product: 'Push School',        // ← робоча назва порталу; змінюється тут
-  name:    '',                   // ← імʼя або назва розробника
-  url:     '',                   // ← посилання (LinkedIn, сайт)
-  note:    'Хочете такий портал для своєї школи?'
+  name:    'Valerii Katasonov',                   // ← імʼя або назва розробника
+  url:     'https://www.linkedin.com/in/valeriikatasonov/',                   // ← посилання (LinkedIn, сайт)
+  note:    ''
 };
 
 // Тільки http(s) і тільки на дозволені домени: підпис — це посилання, яке
