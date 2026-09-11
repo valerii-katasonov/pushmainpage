@@ -354,7 +354,19 @@ export function subjectAllowedForUpload(subject, allowed){
 let aliasMap = {};
 let aliasCls = '';
 
-export async function loadAliases(cls){
+// force — перечитати, навіть якщо клас той самий. Потрібне лише після
+// власного запису; у звичайному житті кеш на один клас саме те, що треба.
+export async function loadAliases(cls, force){
+  // ЧОМУ ТУТ КЕШ, А НЕ ПРОСТО ЧИТАННЯ ЩОРАЗУ.
+  //
+  // Псевдоніми знадобилися в двох різних місцях: у картці завантаження
+  // плану і в списку тем уроку. Друге викликається з дашборда вчителя, і
+  // обидва запускаються з handleClassChange без очікування — тобто
+  // наввипередки. Без кешу список тем міг порахувати шлях ще за старими
+  // псевдонімами й показати порожньо там, де план є.
+  //
+  // Тепер той, хто прийшов першим, читає, а другий бере готове.
+  if(!force && cls && cls === aliasCls) return;
   aliasCls = cls || '';
   aliasMap = {};
   if(!cls) return;
@@ -731,6 +743,11 @@ export async function populateTopicSelector(){
   // Спільний план: урок може називатися «Matematyka», а теми лежати під
   // «Математика». Без цього вчитель польської назви бачив би порожній
   // список тем на уроці, який насправді розписаний.
+  //
+  // Чекаємо саме тут, а не покладаємось на картку завантаження плану:
+  // вона асинхронна й запускається паралельно, тож устигнути могла й не
+  // встигнути. Читання одне на клас — далі з кешу.
+  await loadAliases(cls);
   const sk=planKey(cls, subj);
   const snap=await get(ref(db,`curriculum_plans/${cls}/${sk}/topics`));
   availableTopicsCache={};
@@ -1067,7 +1084,11 @@ function renderAliasBox(subj){
   const box  = document.getElementById('curr-alias-box');
   const sel  = document.getElementById('curr-alias');
   const note = document.getElementById('curr-alias-note');
-  if(!box || !sel) return;
+  // Усі три елементи разом або жодного: у браузері може бути стара
+  // розмітка без цього блоку. Без перевірки note тут падав би TypeError
+  // просто посеред onCurrSubjectChange — і перемикання предмета
+  // переставало працювати цілком, хоч псевдоніми ні до чого.
+  if(!box || !sel || !note) return;
   if(!subj){ box.style.display = 'none'; return; }
 
   const cur = aliasMap[subjKey(subj)] || '';
