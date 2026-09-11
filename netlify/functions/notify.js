@@ -19,7 +19,11 @@
 // решті порталу.
 
 const crypto = require('crypto');
-const ALLOWED_HOSTS = ['planlekcjipush.netlify.app', 'localhost', '127.0.0.1'];
+// Перелік дозволених джерел — спільний для всіх функцій (lib/site.js).
+// Раніше кожна тримала власну копію рядка з доменом, і зміна домену
+// означала правку в шести файлах: забути один означає тиху відмову
+// «запит із невідомого джерела» рівно в одній функції.
+const { ALLOWED_HOSTS, CABINET_URL } = require('./lib/site');
 const DB = 'https://test-4eb3e-default-rtdb.europe-west1.firebasedatabase.app';
 
 function cors(origin) {
@@ -287,7 +291,11 @@ exports.handler = async (event) => {
       chat:     'chat'      // особливий випадок: відкриваємо саме листування
     };
     const tab = TAB_BY_TYPE[body.type] || 'day';
-    const url = `https://${ALLOWED_HOSTS[0]}/cabinet?open=${tab}`;
+    // Адреса кабінету — з lib/site.js, а не з першого елемента списку
+    // дозволених джерел: у тому списку тепер є і старий домен, і
+    // localhost, і порядок у ньому — не місце вирішувати, куди вести
+    // людину зі сповіщення.
+    const url = `${CABINET_URL}?open=${tab}`;
     const results = await Promise.allSettled(targets.map(t =>
       fetch(`https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`, {
         method: 'POST',
