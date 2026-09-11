@@ -1078,6 +1078,18 @@ window.checkNotifySetup = async function(){
 // порожній блок і враження, що кухня нічого не опублікувала. Тепер показуємо
 // смужку робочих днів тижня і самі перемикаємось на найближчий день із меню.
 let pmDate = null;   // який день зараз відкритий у блоці харчування
+// Чи цей день ОБРАЛА ЛЮДИНА, чи його підставив розрахунок.
+//
+// Різниця важлива вночі. pmDate раніше зберігався й тоді, коли його
+// вибрав сам портал, — а вкладку з телефона не закривають тижнями.
+// О пів на восьму ранку блок і далі показував учорашній день (він у
+// тому ж тижні, тож перевірка week.includes його пропускала), і все
+// замикалося написом «Цей день уже минув».
+//
+// Тепер збережений вибір поважаємо лише тоді, коли по ньому справді
+// клацнули: подивитися минулий понеділок — законне бажання, а от
+// застрягти у вчора без жодної дії — ні.
+let pmPicked = false;
 
 // Який день показати батькам за замовчуванням. Чиста функція від дати й
 // години — щоб її можна було перевірити тестами, а не чекати вечора.
@@ -1087,7 +1099,7 @@ export function menuAnchor(dateStr, hour){
 function menuAnchorDay(){
   return menuAnchor(localDateString, new Date().getHours());
 }
-window.pmShowDay = function(d){ pmDate = d; renderParentMenu(); renderTakeaway(d); };
+window.pmShowDay = function(d){ pmDate = d; pmPicked = true; renderParentMenu(); renderTakeaway(d); };
 
 // Другий аргумент — КЛЮЧ учня (постійний ідентифікатор), а не імʼя
 export async function renderParentMenu(cls, studentKey, date){
@@ -1099,7 +1111,7 @@ export async function renderParentMenu(cls, studentKey, date){
 
   try{
     // Явно передана дата (зміна дати в кабінеті) скидає ручний вибір дня
-    if(date) pmDate = null;
+    if(date){ pmDate = null; pmPicked = false; }
     // Який день показати.
     //
     // Вихідний зсуваємо на найближчий робочий день, інакше тижня немає.
@@ -1150,9 +1162,28 @@ export async function renderParentMenu(cls, studentKey, date){
     // автоматично діє й на вибір дня.
     const wantDay = week.includes(anchor) ? anchor : null;
     const fallback = wantDay || week.find(d => d >= anchor) || week[0];
-    let cur = pmDate && week.includes(pmDate) ? pmDate
+    // САМІ НАЗАД У ЧАСІ НЕ ХОДИМО.
+    //
+    // Тут останнім варіантом стояв week.find((d,i)=>has[i]) — «перший
+    // день тижня, де є меню». У п'ятницю вранці, поки кухня ще не
+    // виклала сьогоднішнє меню, він знаходив понеділок. Блок відкривався
+    // на понеділку, mealsEditable бачив минулу дату й замикав усе
+    // написом «Цей день уже минув».
+    //
+    // Наслідок був не косметичний: батько о 7:30 не міг відмовитися від
+    // СЬОГОДНІШНЬОГО обіду, хоча до дедлайну лишалося півтори години.
+    // Кнопок просто не було на екрані.
+    //
+    // Причина глибша за один рядок: відмова від обіду не має жодного
+    // стосунку до того, чи кухня вже надрукувала меню. Меню — це «що
+    // дадуть», а відмова — це meal_plan, окремий запис. Прив'язувати
+    // друге до першого не можна було з самого початку.
+    //
+    // Тепер, якщо попереду немає дня з меню, лишаємось на сьогодні:
+    // хай без переліку страв, зате з робочими кнопками.
+    let cur = (pmPicked && pmDate && week.includes(pmDate)) ? pmDate
             : (wantDay && has[week.indexOf(wantDay)] ? wantDay
-            : (week.find((d,i)=>has[i] && d >= anchor) || week.find((d,i)=>has[i]) || fallback));
+            : (week.find((d,i)=>has[i] && d >= anchor) || fallback));
     pmDate = cur;
     const ci = week.indexOf(cur);
     const m = menus[ci].exists() ? menus[ci].val() : null;
