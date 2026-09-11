@@ -57,7 +57,7 @@ import { ref, get, child, update } from "https://www.gstatic.com/firebasejs/10.8
 // сторінки. Апостроф у варіанті відповіді (а українські слова їх повні)
 // без escJs ламає обробник цілком.
 import { db, currentUserData, getActiveClass, showToast, escHtml, escJs,
-         logAction, getStudentDir, resolveStudentKey } from './common.js';
+         logAction, getStudentDir, resolveStudentKey, getClassNum } from './common.js';
 
 // ── КАТАЛОГ ─────────────────────────────────────────────────────
 //
@@ -116,13 +116,15 @@ async function whoseProgress(){
   return { cls, sid: res.key || d.studentId || d.studentName || '' };
 }
 
-// Номер класу з ключа виду class_3. Каталог фільтруємо саме за числом:
-// у ключі колись може з'явитися літера (class_3b), і порівняння рядків
-// тоді почне мовчки відсікати всі ігри.
-function classNumber(cls){
-  const m = String(cls || '').match(/(\d+)/);
-  return m ? Number(m[1]) : 0;
-}
+// Номер класу — спільною getClassNum, а не власною регуляркою. Своя
+// копія тут уже була написана, і це рівно та вада, через яку в порталі
+// колись розійшлися чотири різні способи почистити назву предмета.
+//
+// Одне застереження: getClassNum на порожньому значенні повертає 1 —
+// зручний типовий клас для решти порталу, але не для нас. «Клас
+// невідомий» тут має означати «ігор не показуємо», а не «показуємо
+// першокласні». Тому порожнечу відсікаємо до виклику.
+function classNumber(cls){ return cls ? getClassNum(cls) : 0; }
 
 // ── ПРОГРЕС ─────────────────────────────────────────────────────
 let progressCache = null;
@@ -297,6 +299,17 @@ function paintResult(){
 // відповідь рядком, і «56 » з пробілом від дитини має зараховуватись.
 function check(given){
   if(!session) return;
+  // ПОДВІЙНА ВІДПОВІДЬ.
+  //
+  // Між відповіддю й наступним завданням є пауза (див. нижче), і всі
+  // цієї паузи кнопки лишалися живими. Дитина, яка тицяє швидко — а вони
+  // всі тицяють швидко, — встигала відповісти двічі на те саме завдання:
+  // очко нараховувалося двічі, session.i зростав на два, і одне завдання
+  // просто зникало. У підсумку «13 з 12».
+  //
+  // Замок знімається там само, де малюється наступний раунд.
+  if(session.locked) return;
+  session.locked = true;
   const t = session.tasks[session.i];
   const okAnswer = String(t.answer).trim() === String(given).trim();
   if(okAnswer) session.score++;
@@ -316,7 +329,10 @@ function check(given){
   const at = session.i;
   setTimeout(() => {
     // Могли встигнути вийти з гри або почати нову — тоді нічого не робимо.
+    // Замок при цьому не знімаємо: він належить тій сесії, якої вже немає,
+    // а в нової свій власний.
     if(!session || session.i !== at) return;
+    session.locked = false;
     if(session.i >= session.tasks.length){
       paintResult();
       saveResult(session.id, session.score, session.tasks.length);
@@ -367,7 +383,7 @@ window.startGame = async function(id){
     return;
   }
 
-  session = { id, seed, tasks, i:0, score:0, wrong:[] };
+  session = { id, seed, tasks, i:0, score:0, wrong:[], locked:false };
   paintRound();
 };
 
