@@ -1050,12 +1050,17 @@ window.loadMealStats = async function(){
     if(!rows.length){ box.innerHTML = '<p class="empty-msg">За цей період даних немає.</p>'; return; }
     const tot = rows.reduce((a,r)=>({lunch:a.lunch+r.lunch, snack:a.snack+r.snack, brk:a.brk+(r.brk||0)}),{lunch:0,snack:0,brk:0});
     const byClass = {};
-    rows.forEach(r=>{ byClass[r.cls] = byClass[r.cls] || {lunch:0,snack:0,brk:0}; byClass[r.cls].lunch+=r.lunch; byClass[r.cls].snack+=r.snack; byClass[r.cls].brk+=(r.brk||0); });
+    rows.forEach(r=>{ byClass[r.cls] = byClass[r.cls] || {lunch:0,snack:0,brk:0,ta:0};
+      byClass[r.cls].lunch+=r.lunch; byClass[r.cls].snack+=r.snack;
+      byClass[r.cls].brk+=(r.brk||0); byClass[r.cls].ta+=(r.ta||0); });
     // Гроші показуємо, лише якщо ціни задані: колонка з нулями в кожному
     // рядку виглядає як «усе безкоштовно», а це не так — це «ціну ще не
     // внесли», і сплутати їх дорожче, ніж не показати колонку.
     const prices = await loadMealPrices();
-    const money$ = hasPrices(prices);
+    const anyTa = rows.some(r => r.ta);
+    const money$ = hasPrices(prices) || anyTa;
+    // Винос — уже гроші, тож підсумовуємо суми рядків, а не кількості.
+    tot.ta = Math.round(rows.reduce((a,r)=>a+(r.ta||0), 0) * 100) / 100;
     const sumAll = mealCost(tot, prices);
     box.innerHTML = `
       <div class="k-total"><b>${tot.lunch}</b><span>людино-днів з обідом</span>
@@ -1063,16 +1068,18 @@ window.loadMealStats = async function(){
       ${money$ ? `<div class="k-total k-total-money"><b>${taMoney(sumAll.total)} zł</b><span>разом за період</span>
         <div class="k-total-snack">обіди ${taMoney(sumAll.lunch)}${
           sumAll.brk?` · сніданки ${taMoney(sumAll.brk)}`:''}${
-          sumAll.snack?` · підвечірки ${taMoney(sumAll.snack)}`:''}</div></div>` : ''}
+          sumAll.snack?` · підвечірки ${taMoney(sumAll.snack)}`:''}${
+          sumAll.ta?` · винос ${taMoney(sumAll.ta)}`:''}</div></div>` : ''}
       <div class="k-sub">${escHtml(human(from))} — ${escHtml(human(to))}</div>
       <div class="k-scroll"><table class="k-table"><thead><tr><th>Клас</th><th>Снід.</th><th>Обіди</th><th>Підвеч.</th>${money$?'<th>Сума</th>':''}</tr></thead><tbody>
         ${Object.keys(byClass).sort((a,b)=>a-b).map(c=>`<tr><td>${c}</td><td>${byClass[c].brk||''}</td><td><b>${byClass[c].lunch}</b></td><td>${byClass[c].snack||''}</td>${
           money$?`<td>${taMoney(mealCost(byClass[c], prices).total)} zł</td>`:''}</tr>`).join('')}
       </tbody></table></div>
       <div class="k-skip-title">Поіменно</div>
-      <div class="k-scroll"><table class="k-table"><thead><tr><th>Учень</th><th>Кл.</th><th>Снід.</th><th>Обіди</th><th>Підвеч.</th>${money$?'<th>Сума</th>':''}</tr></thead><tbody>
+      <div class="k-scroll"><table class="k-table"><thead><tr><th>Учень</th><th>Кл.</th><th>Снід.</th><th>Обіди</th><th>Підвеч.</th>${anyTa?'<th>Винос</th>':''}${money$?'<th>Сума</th>':''}</tr></thead><tbody>
         ${rows.sort((a,b)=>b.lunch-a.lunch || a.name.localeCompare(b.name,'uk'))
               .map(r=>`<tr><td>${escHtml(r.name)}</td><td>${r.cls}</td><td>${r.brk||''}</td><td><b>${r.lunch}</b></td><td>${r.snack||''}</td>${
+                anyTa?`<td>${r.ta?taMoney(r.ta)+' zł':''}</td>`:''}${
                 money$?`<td>${taMoney(mealCost(r, prices).total)} zł</td>`:''}</tr>`).join('')}
       </tbody></table></div>
       <button onclick="exportMealStats()" style="background:#e0f7fa;color:#00838f;border:1px solid #80deea;margin-top:11px;">📄 Вивантажити CSV</button>`;
@@ -1122,8 +1129,11 @@ export function mealCost(counts, prices){
   const lunch = n('lunch') * (Number(p.lunch)||0);
   const brk   = n('brk')   * (Number(p.breakfast)||0);
   const snack = n('snack') * (Number(p.snack)||0);
+  // Винос приходить уже в грошах: у нього своя ціна на кожну позицію, і
+  // приводити його до «кількість × одна ціна» нічим.
+  const ta    = Number((counts||{}).ta) || 0;
   const r = v => Math.round(v*100)/100;
-  return { lunch:r(lunch), brk:r(brk), snack:r(snack), total:r(lunch+brk+snack) };
+  return { lunch:r(lunch), brk:r(brk), snack:r(snack), ta:r(ta), total:r(lunch+brk+snack+ta) };
 }
 // Чи є сенс показувати гроші взагалі
 export function hasPrices(prices){
@@ -1131,16 +1141,58 @@ export function hasPrices(prices){
   return !!(Number(p.lunch) || Number(p.breakfast) || Number(p.snack) || Number(p.staff));
 }
 
+// ВИНОС ТЕЖ КОШТУЄ ГРОШЕЙ.
+//
+// Позиції на винос оплачуються окремо від обідів, і в підсумку за період
+// їх спершу не було: кухня бачила «за вересень 300 zł», а родина платила
+// 380 — різниця в кавах і сирниках, яких у звіті просто не існувало.
+// Найгірший різновид розбіжності: обидві сторони впевнені, що рахують
+// правильно.
+//
+// orders — {позиція: кількість} за один день або сума кількох днів;
+// items — довідник позицій із цінами.
+export function takeawaySum(orders, items){
+  let sum = 0, qty = 0;
+  for(const id in (orders || {})){
+    const q = Number(orders[id]) || 0;
+    if(q <= 0) continue;
+    qty += q;
+    // Ціни немає — позиція не рахується, але й не ламає суму. Так буває,
+    // коли кухня прибрала позицію, а замовлення на неї лишилося в історії.
+    sum += q * Number(((items || {})[id] || {}).price || 0);
+  }
+  return { sum: Math.round(sum * 100) / 100, qty };
+}
+
 // Спільний рахунок для кухні і для батьків. onlyCls/onlyName звужують вибірку.
 export async function computeMealStats(from, to, onlyCls, onlyName){
   // Обидва вузли ключуються датою, тож просимо лише обраний період.
   // Раніше статистика за тиждень качала весь навчальний рік.
-  const [stSnap, planSnap, att, days] = await Promise.all([
+  const [stSnap, planSnap, att, days, taDays, taItemsSnap] = await Promise.all([
     get(child(ref(db),'students_list')),
     get(child(ref(db),'meal_plan')),
     getSchoolRange('attendance', from, to),
-    getDateRange('meal_day', from, to)
+    getDateRange('meal_day', from, to),
+    // Винос лежить так само по датах, тож береться тим самим діапазоном.
+    getDateRange('takeaway_orders', from, to),
+    get(child(ref(db),'takeaway_items')).catch(()=>null)
   ]);
+  const taItems = (taItemsSnap && taItemsSnap.exists()) ? taItemsSnap.val() : {};
+  // Згортаємо замовлення на винос у «клас → учень → сума за період».
+  // Рахуємо ОДИН раз на весь період, а не в циклі по дітях: інакше на
+  // кожного учня довелося б заново перебирати всі дні.
+  const taByKid = {};
+  for(const date in (taDays || {})){
+    const byCls = taDays[date] || {};
+    for(const cls in byCls){
+      for(const sid in (byCls[cls] || {})){
+        const { sum } = takeawaySum(byCls[cls][sid], taItems);
+        if(!sum) continue;
+        (taByKid[cls] = taByKid[cls] || {});
+        taByKid[cls][sid] = Math.round(((taByKid[cls][sid] || 0) + sum) * 100) / 100;
+      }
+    }
+  }
   const students = stSnap.exists()?stSnap.val():{};
   const plans    = planSnap.exists()?planSnap.val():{};
 
@@ -1170,7 +1222,10 @@ export async function computeMealStats(from, to, onlyCls, onlyName){
         if(e.snack) snack++;
         if(e.breakfast) brk++;
       });
-      if(lunch || snack || brk) out.push({ cls:i, name, lunch, snack, brk, absent, days:dateList.length });
+      // Винос рахуємо за ключем учня; під імʼям він лежить лише в старих
+      // записах, зроблених до переходу на ідентифікатори.
+      const ta = (taByKid[cls] && (taByKid[cls][key] || taByKid[cls][name])) || 0;
+      if(lunch || snack || brk || ta) out.push({ cls:i, name, lunch, snack, brk, ta, absent, days:dateList.length });
     }
   }
   return out;
@@ -1179,8 +1234,8 @@ export async function computeMealStats(from, to, onlyCls, onlyName){
 window.exportMealStats = function(){
   const s = window.__mealStats;
   if(!s) return;
-  const csv = ['Учень;Клас;Сніданки;Обіди;Підвечірки',
-    ...s.rows.map(r=>`${r.name};${r.cls};${r.brk||0};${r.lunch};${r.snack}`)].join('\n');
+  const csv = ['Учень;Клас;Сніданки;Обіди;Підвечірки;Винос, zł',
+    ...s.rows.map(r=>`${r.name};${r.cls};${r.brk||0};${r.lunch};${r.snack};${(r.ta||0).toFixed(2)}`)].join('\n');
   const blob = new Blob(['﻿'+csv], {type:'text/csv;charset=utf-8'});   // BOM — щоб Excel не ламав кирилицю
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
@@ -1885,11 +1940,15 @@ window.saveMealSettings = async function(){
 // «Рахуємо...» лишався назавжди. Тут читаємо рівно те, що дозволено:
 // свій клас і свою дитину.
 export async function computeMyMealStats(from, to, cls, sid){
-  const [planSnap, attRange] = await Promise.all([
+  const [planSnap, attRange, taItemsSnap] = await Promise.all([
     get(child(ref(db), `meal_plan/${cls}/${sid}`)),
-    getDateRange(`attendance/${cls}`, from, to)
+    getDateRange(`attendance/${cls}`, from, to),
+    // Довідник позицій на винос відкритий усім, хто увійшов: без цін
+    // порахувати замовлення нічим.
+    get(child(ref(db), 'takeaway_items')).catch(() => null)
   ]);
   const plan = planSnap.exists() ? planSnap.val() : null;
+  const taItems = (taItemsSnap && taItemsSnap.exists()) ? taItemsSnap.val() : {};
 
   const dates = [];
   const d = new Date(from + 'T12:00:00'), end = new Date(to + 'T12:00:00');
@@ -1911,13 +1970,28 @@ export async function computeMyMealStats(from, to, cls, sid){
   const OVERRIDE_LIMIT = 70;
   const withOverrides = dates.length <= OVERRIDE_LIMIT;
   const ovByDate = {}, menuByDate = {};
+  // ВИНОС — ТЕЖ ГРОШІ РОДИНИ.
+  //
+  // Корінь takeaway_orders родині закритий (там вся школа), тож читаємо
+  // поденно, як і разові зміни, і в тій самій пачці запитів. Для довгих
+  // періодів не читаємо зовсім: там і обіди рахуються за планом, і
+  // попередження про це вже стоїть.
+  let taSum = 0, taQty = 0;
   if(withOverrides){
-    const [ovs, menus] = await Promise.all([
+    const [ovs, menus, taOrders] = await Promise.all([
       Promise.all(dates.map(date =>
         get(child(ref(db), `meal_day/${date}/${cls}/${sid}`)).catch(() => null))),
       Promise.all(dates.map(date =>
-        get(child(ref(db), `menu/${date}`)).catch(() => null)))
+        get(child(ref(db), `menu/${date}`)).catch(() => null))),
+      Promise.all(dates.map(date =>
+        get(child(ref(db), `takeaway_orders/${date}/${cls}/${sid}`)).catch(() => null)))
     ]);
+    taOrders.forEach(sn => {
+      if(!sn || !sn.exists()) return;
+      const r = takeawaySum(sn.val(), taItems);
+      taSum += r.sum; taQty += r.qty;
+    });
+    taSum = Math.round(taSum * 100) / 100;
     dates.forEach((date, i) => {
       if(ovs[i] && ovs[i].exists()) ovByDate[date] = ovs[i].val();
       const mv = menus[i] && menus[i].exists() ? (menus[i].val() || {}) : null;
@@ -1939,7 +2013,7 @@ export async function computeMyMealStats(from, to, cls, sid){
     if(e.snack) snack++;
     if(e.breakfast) brk++;
   });
-  return [{ lunch, snack, brk, absent, days: dates.length - skipped, skipped, withOverrides }];
+  return [{ lunch, snack, brk, ta: taSum, taQty, absent, days: dates.length - skipped, skipped, withOverrides }];
 }
 
 window.openMyMealStats = async function(){
@@ -2005,18 +2079,21 @@ window.reloadMyMealStats = async function(){
     body.innerHTML = `<p class="empty-msg" style="color:var(--red);">Не вдалося порахувати: ${escHtml(e.message||'відмова')}</p>`;
     return;
   }
-  const r = rows[0] || { lunch:0, snack:0, brk:0, absent:0, days:0 };
+  const r = rows[0] || { lunch:0, snack:0, brk:0, ta:0, taQty:0, absent:0, days:0 };
   // Та сама арифметика, що й у кухні — саме тому вона й винесена в
   // mealCost(): дві копії розійшлися б у першому ж місяці, і батько
   // побачив би не те число, яке назве кухня.
   const prices = await loadMealPrices();
   const cost = mealCost(r, prices);
-  const moneyBlock = hasPrices(prices) ? `
+  // Показуємо гроші й тоді, коли цін на обіди ще немає: у виносу ціна
+  // своя, і якщо родина щось замовляла, сума в неї вже є.
+  const moneyBlock = (hasPrices(prices) || cost.ta) ? `
     <div class="pms-money">
       <b>${taMoney(cost.total)} zł</b>
       <span>за період${cost.lunch?` · обіди ${taMoney(cost.lunch)}`:''}${
         cost.brk?` · сніданки ${taMoney(cost.brk)}`:''}${
-        cost.snack?` · підвечірки ${taMoney(cost.snack)}`:''}</span>
+        cost.snack?` · підвечірки ${taMoney(cost.snack)}`:''}${
+        cost.ta?` · винос ${taMoney(cost.ta)}`:''}</span>
       <small>Рахунок довідковий: оплата — у школі, як завжди.</small>
     </div>` : '';
   body.innerHTML = `
@@ -2025,6 +2102,7 @@ window.reloadMyMealStats = async function(){
       <div class="pms-cell"><b>${r.snack}</b><span>з підвечірком</span></div>
       <div class="pms-cell"><b>${r.brk||0}</b><span>зі сніданком</span></div>
       <div class="pms-cell"><b>${r.absent||0}</b><span>днів відсутності</span></div>
+      ${r.taQty ? `<div class="pms-cell"><b>${r.taQty}</b><span>позицій на винос</span></div>` : ''}
     </div>
     ${moneyBlock}
     <p class="ms-note">Період: ${escHtml(human(from))} — ${escHtml(human(to))}. Рахуються лише робочі дні,
