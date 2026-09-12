@@ -584,6 +584,9 @@ window.refreshKitchen = function(){
   }
   loadWeekMenu(); loadWeekCounts();
   loadTakeawayItems();
+  // Персонал: ціна обіду й список на обрану дату
+  if(window.loadMealPricesForm) window.loadMealPricesForm();
+  if(window.loadStaffOrders) window.loadStaffOrders();
 };
 
 // ── Хто харчується (кухня / адміністрація) ──
@@ -646,6 +649,13 @@ window.setMealPlan = async function(cls, sid, field, value){
 // ── Хто що замовив: поіменний список по класу на конкретний день ──
 // Кухні потрібен не лише підсумок, а й список, з яким можна вийти на роздачу:
 // хто сьогодні обідає, хто бере підвечірок, кого немає і хто відмовився.
+// Персонал живе на тій самій даті, тож оновлюємо обидва списки разом:
+// інакше кухня міняє дату, бачить оновлений клас і СТАРИЙ персонал.
+window.loadOrdersForDay = function(){
+  window.loadClassOrders();
+  window.loadStaffOrders();
+};
+
 window.loadClassOrders = async function(){
   const cls  = document.getElementById('k-order-class')?.value;
   const date = document.getElementById('k-order-date')?.value;
@@ -726,6 +736,120 @@ window.loadClassOrders = async function(){
     box.innerHTML = `<p style="color:red;font-size:.8rem;">Помилка: ${escHtml(e.message)}</p>`;
   }
 };
+// ══════════════════════════════════════════════════════════════════
+//  ЗАМОВЛЕННЯ ПЕРСОНАЛУ
+// ══════════════════════════════════════════════════════════════════
+//
+// Учителі й директор замовляють обід так само, як родини, але живуть
+// їхні відповіді окремо (staff_meals / staff_meal_day) — у персоналу
+// немає ні класу, ні ключа в списку класу, тож у дитячі вузли їх не
+// покласти. Через це й показ окремий, рівно як просила школа: свій
+// список із іменами та сумою.
+//
+// Ціна обіду для персоналу — meal_prices/staff. Поки її не задано,
+// суму не показуємо: нуль на екрані читався б як «безкоштовно».
+window.loadStaffOrders = async function(){
+  const box  = document.getElementById('k-staff-orders');
+  if(!box) return;
+  const date = document.getElementById('k-order-date')?.value || localDateString;
+  box.innerHTML = '<p class="empty-msg">Завантаження...</p>';
+  try{
+    const [planSnap, daySnap, priceSnap, dirSnap, menuSnap] = await Promise.all([
+      get(child(ref(db),'staff_meals')),
+      get(child(ref(db),`staff_meal_day/${date}`)),
+      loadMealPrices(true),
+      // Імена беремо з довідника персоналу: пошта в списку кухні нічого
+      // не каже, а вузол users кухні закритий.
+      get(child(ref(db),'staff_directory')).catch(()=>null),
+      get(child(ref(db),`menu/${date}`))
+    ]);
+    const plans  = planSnap.exists()?planSnap.val():{};
+    const days   = daySnap.exists()?daySnap.val():{};
+    const price  = Number(priceSnap.staff) || 0;
+    const dir    = (dirSnap && dirSnap.exists())?dirSnap.val():{};
+    const menuDay= menuSnap.exists()?menuSnap.val():{};
+    const choice = choicePair(menuDay);
+
+    // Хто рахується. Постійна відповідь дає обід щодня; запис дня його
+    // скасовує або, навпаки, додає тому, хто зазвичай не обідає.
+    const keys = [...new Set([...Object.keys(plans), ...Object.keys(days)])];
+    const rows = keys.map(se => {
+      const plan = plans[se] || {};
+      const ov   = days[se] || null;
+      const on   = (ov && ov.lunch !== undefined) ? !!Number(ov.lunch) : !!plan.lunch;
+      const nm   = (dir[se] && dir[se].name) || String(se).replace(/_/g,'.');
+      const role = (dir[se] && dir[se].role) || '';
+      return { se, name: nm, role, on, pick: (ov && ov.pick) || 'a',
+               permanent: !!plan.lunch, once: !!(ov && ov.lunch !== undefined) };
+    }).filter(r => r.on).sort((a,b)=>String(a.name).localeCompare(String(b.name),'uk'));
+
+    const pa = rows.filter(r=>r.pick==='a').length;
+    const pb = rows.filter(r=>r.pick==='b').length;
+    const sum = price ? rows.length * price : 0;
+
+    if(!rows.length){
+      box.innerHTML = `<div class="k-ord-sum"><b>0</b> обідів для персоналу
+        <span>${escHtml(human(date))}</span></div>
+        <p class="empty-msg">На цей день ніхто з персоналу обід не замовляв.</p>`;
+      return;
+    }
+
+    box.innerHTML = `
+      <div class="k-ord-sum"><b>${rows.length}</b> обідів для персоналу${
+        choice?` <span class="k-ord-ab">А ${pa} / Б ${pb}</span>`:''}
+        <span>${escHtml(human(date))}${price?` · на суму ${taMoney(sum)} zł`:''}</span></div>
+      ${price ? '' : '<p class="k-ord-hint">Ціну обіду для персоналу ще не задано — сума не рахується.</p>'}
+      <div class="k-scroll">
+      <table class="k-table k-ord"><thead><tr>
+        <th>Співробітник</th>${choice?'<th>Варіант</th>':''}<th>Замовлення</th>${price?'<th>Сума</th>':''}
+      </tr></thead><tbody>
+        ${rows.map(r=>`<tr>
+          <td data-l="Співробітник">${escHtml(r.name)}</td>
+          ${choice?`<td data-l="Варіант">${r.pick==='b'?'Б':'А'}</td>`:''}
+          <td data-l="Замовлення">${r.once && !r.permanent ? 'разово' : 'щодня'}</td>
+          ${price?`<td data-l="Сума">${taMoney(price)} zł</td>`:''}
+        </tr>`).join('')}
+      </tbody></table></div>`;
+  }catch(e){
+    box.innerHTML = `<p style="color:red;font-size:.8rem;">Помилка: ${escHtml(e.message)}</p>`;
+  }
+};
+
+// Ціна обіду для персоналу. Одне число, тому й форма одна.
+// Усі чотири ціни — однією формою: обід, сніданок, підвечірок і обід
+// персоналу. Окремі кнопки «зберегти» біля кожного поля дали б чотири
+// нагоди зберегти половину.
+window.saveMealPrices = async function(){
+  const num = (id) => {
+    const el = document.getElementById(id);
+    if(!el) return null;
+    const raw = String(el.value||'').trim().replace(',','.');
+    if(!raw) return 0;                       // порожнє поле = ціни немає
+    const v = Number(raw);
+    return (isNaN(v) || v < 0 || v > 999) ? null : v;
+  };
+  const vals = { lunch:num('k-price-lunch'), breakfast:num('k-price-brk'),
+                 snack:num('k-price-snack'), staff:num('k-price-staff') };
+  if(Object.values(vals).some(v => v === null))
+    return alert('Ціна має бути числом від 0 до 999. Порожнє поле означає «ціни немає».');
+  try{
+    await set(ref(db,'meal_prices'), vals);
+    invalidateMealPrices();
+    logAction('meal_price', { value:`обід ${vals.lunch} · сніданок ${vals.breakfast} · `
+      + `підвечірок ${vals.snack} · персонал ${vals.staff}` });
+    showToast('✅ Ціни збережено');
+    window.loadStaffOrders();
+    if(document.getElementById('k-stats')) window.loadMealStats();
+  }catch(e){ alert('Не вдалося зберегти: ' + e.message); }
+};
+
+window.loadMealPricesForm = async function(){
+  const p = await loadMealPrices(true);
+  const put = (id, v) => { const el = document.getElementById(id); if(el) el.value = v || ''; };
+  put('k-price-lunch', p.lunch); put('k-price-brk', p.breakfast);
+  put('k-price-snack', p.snack); put('k-price-staff', p.staff);
+};
+
 // Підтвердження, яке працює і на планшеті.
 //
 // ЧОМУ НЕ ПРОСТО confirm(). Коли портал відкрито як застосунок з головного
@@ -927,17 +1051,29 @@ window.loadMealStats = async function(){
     const tot = rows.reduce((a,r)=>({lunch:a.lunch+r.lunch, snack:a.snack+r.snack, brk:a.brk+(r.brk||0)}),{lunch:0,snack:0,brk:0});
     const byClass = {};
     rows.forEach(r=>{ byClass[r.cls] = byClass[r.cls] || {lunch:0,snack:0,brk:0}; byClass[r.cls].lunch+=r.lunch; byClass[r.cls].snack+=r.snack; byClass[r.cls].brk+=(r.brk||0); });
+    // Гроші показуємо, лише якщо ціни задані: колонка з нулями в кожному
+    // рядку виглядає як «усе безкоштовно», а це не так — це «ціну ще не
+    // внесли», і сплутати їх дорожче, ніж не показати колонку.
+    const prices = await loadMealPrices();
+    const money$ = hasPrices(prices);
+    const sumAll = mealCost(tot, prices);
     box.innerHTML = `
       <div class="k-total"><b>${tot.lunch}</b><span>людино-днів з обідом</span>
         <div class="k-total-snack">${tot.brk?`${tot.brk} зі сніданком · `:''}+ ${tot.snack} з підвечірком</div></div>
+      ${money$ ? `<div class="k-total k-total-money"><b>${taMoney(sumAll.total)} zł</b><span>разом за період</span>
+        <div class="k-total-snack">обіди ${taMoney(sumAll.lunch)}${
+          sumAll.brk?` · сніданки ${taMoney(sumAll.brk)}`:''}${
+          sumAll.snack?` · підвечірки ${taMoney(sumAll.snack)}`:''}</div></div>` : ''}
       <div class="k-sub">${escHtml(human(from))} — ${escHtml(human(to))}</div>
-      <div class="k-scroll"><table class="k-table"><thead><tr><th>Клас</th><th>Снід.</th><th>Обіди</th><th>Підвеч.</th></tr></thead><tbody>
-        ${Object.keys(byClass).sort((a,b)=>a-b).map(c=>`<tr><td>${c}</td><td>${byClass[c].brk||''}</td><td><b>${byClass[c].lunch}</b></td><td>${byClass[c].snack||''}</td></tr>`).join('')}
+      <div class="k-scroll"><table class="k-table"><thead><tr><th>Клас</th><th>Снід.</th><th>Обіди</th><th>Підвеч.</th>${money$?'<th>Сума</th>':''}</tr></thead><tbody>
+        ${Object.keys(byClass).sort((a,b)=>a-b).map(c=>`<tr><td>${c}</td><td>${byClass[c].brk||''}</td><td><b>${byClass[c].lunch}</b></td><td>${byClass[c].snack||''}</td>${
+          money$?`<td>${taMoney(mealCost(byClass[c], prices).total)} zł</td>`:''}</tr>`).join('')}
       </tbody></table></div>
       <div class="k-skip-title">Поіменно</div>
-      <div class="k-scroll"><table class="k-table"><thead><tr><th>Учень</th><th>Кл.</th><th>Снід.</th><th>Обіди</th><th>Підвеч.</th></tr></thead><tbody>
+      <div class="k-scroll"><table class="k-table"><thead><tr><th>Учень</th><th>Кл.</th><th>Снід.</th><th>Обіди</th><th>Підвеч.</th>${money$?'<th>Сума</th>':''}</tr></thead><tbody>
         ${rows.sort((a,b)=>b.lunch-a.lunch || a.name.localeCompare(b.name,'uk'))
-              .map(r=>`<tr><td>${escHtml(r.name)}</td><td>${r.cls}</td><td>${r.brk||''}</td><td><b>${r.lunch}</b></td><td>${r.snack||''}</td></tr>`).join('')}
+              .map(r=>`<tr><td>${escHtml(r.name)}</td><td>${r.cls}</td><td>${r.brk||''}</td><td><b>${r.lunch}</b></td><td>${r.snack||''}</td>${
+                money$?`<td>${taMoney(mealCost(r, prices).total)} zł</td>`:''}</tr>`).join('')}
       </tbody></table></div>
       <button onclick="exportMealStats()" style="background:#e0f7fa;color:#00838f;border:1px solid #80deea;margin-top:11px;">📄 Вивантажити CSV</button>`;
     window.__mealStats = { from, to, rows };
@@ -945,6 +1081,55 @@ window.loadMealStats = async function(){
     box.innerHTML = `<p style="color:red;font-size:.8rem;">Помилка: ${escHtml(e.message)}</p>`;
   }
 };
+
+// ══════════════════════════════════════════════════════════════════
+//  ЦІНИ НА ХАРЧУВАННЯ
+// ══════════════════════════════════════════════════════════════════
+//
+//   meal_prices = {lunch, breakfast, snack, staff}
+//
+// ОДНА АРИФМЕТИКА НА ВСІХ. Суму бачать троє: кухня у звіті, батько у
+// своїй статистиці й співробітник у власному блоці. Якби кожен рахував
+// сам, перше ж розходження в копійку перетворилося б на розмову «а в
+// мене інша цифра», у якій правих немає. Тому рахунок тут, один.
+//
+// ЦІНИ, ЯКОЇ НЕМАЄ, НЕ ІСНУЄ. Незаданa ціна — це нуль, але нуль у сумі
+// й «безкоштовно» — різні речі, тому показ вирішує окремо: там, де
+// жодної ціни не задано, сум не показуємо взагалі.
+let pricesCache = null;
+export async function loadMealPrices(force){
+  if(pricesCache && !force) return pricesCache;
+  try{
+    const snap = await get(child(ref(db),'meal_prices'));
+    const v = snap.exists() ? (snap.val()||{}) : {};
+    pricesCache = { lunch: Number(v.lunch)||0, breakfast: Number(v.breakfast)||0,
+                    snack: Number(v.snack)||0, staff: Number(v.staff)||0 };
+  }catch(e){
+    // Ціни — прикраса звіту, а не умова його роботи: без них показуємо
+    // кількості, як і раніше.
+    console.warn('[Push School] ціни харчування:', e.message);
+    pricesCache = { lunch:0, breakfast:0, snack:0, staff:0 };
+  }
+  return pricesCache;
+}
+export function invalidateMealPrices(){ pricesCache = null; }
+
+// Скільки коштує набір «стільки обідів, стільки сніданків, стільки
+// підвечірків». Чиста функція: жодної бази, жодного DOM.
+export function mealCost(counts, prices){
+  const p = prices || {};
+  const n = k => Number((counts||{})[k]) || 0;
+  const lunch = n('lunch') * (Number(p.lunch)||0);
+  const brk   = n('brk')   * (Number(p.breakfast)||0);
+  const snack = n('snack') * (Number(p.snack)||0);
+  const r = v => Math.round(v*100)/100;
+  return { lunch:r(lunch), brk:r(brk), snack:r(snack), total:r(lunch+brk+snack) };
+}
+// Чи є сенс показувати гроші взагалі
+export function hasPrices(prices){
+  const p = prices || {};
+  return !!(Number(p.lunch) || Number(p.breakfast) || Number(p.snack) || Number(p.staff));
+}
 
 // Спільний рахунок для кухні і для батьків. onlyCls/onlyName звужують вибірку.
 export async function computeMealStats(from, to, onlyCls, onlyName){
@@ -1771,6 +1956,20 @@ window.openMyMealStats = async function(){
   if(t){ t.max = localDateString; if(!t.value) t.value = to; }
   window.reloadMyMealStats();
 };
+// Тиждень і місяць — двома кнопками. Батько не має вираховувати, яким
+// числом був понеділок: саме на цьому кроці люди й кидають звіт.
+window.myMealPeriod = function(kind){
+  const f = document.getElementById('pms-from'), t = document.getElementById('pms-to');
+  if(!f || !t) return;
+  const today = localDateString;
+  if(kind === 'month'){ f.value = today.slice(0,8) + '01'; t.value = today; }
+  else {
+    f.value = mondayOf(today);
+    t.value = today;
+  }
+  window.reloadMyMealStats();
+};
+
 window.reloadMyMealStats = async function(){
   const body = document.getElementById('meal-stats-body');
   if(!body) return;
@@ -1807,6 +2006,19 @@ window.reloadMyMealStats = async function(){
     return;
   }
   const r = rows[0] || { lunch:0, snack:0, brk:0, absent:0, days:0 };
+  // Та сама арифметика, що й у кухні — саме тому вона й винесена в
+  // mealCost(): дві копії розійшлися б у першому ж місяці, і батько
+  // побачив би не те число, яке назве кухня.
+  const prices = await loadMealPrices();
+  const cost = mealCost(r, prices);
+  const moneyBlock = hasPrices(prices) ? `
+    <div class="pms-money">
+      <b>${taMoney(cost.total)} zł</b>
+      <span>за період${cost.lunch?` · обіди ${taMoney(cost.lunch)}`:''}${
+        cost.brk?` · сніданки ${taMoney(cost.brk)}`:''}${
+        cost.snack?` · підвечірки ${taMoney(cost.snack)}`:''}</span>
+      <small>Рахунок довідковий: оплата — у школі, як завжди.</small>
+    </div>` : '';
   body.innerHTML = `
     <div class="pms-grid">
       <div class="pms-cell"><b>${r.lunch}</b><span>днів з обідом</span></div>
@@ -1814,6 +2026,7 @@ window.reloadMyMealStats = async function(){
       <div class="pms-cell"><b>${r.brk||0}</b><span>зі сніданком</span></div>
       <div class="pms-cell"><b>${r.absent||0}</b><span>днів відсутності</span></div>
     </div>
+    ${moneyBlock}
     <p class="ms-note">Період: ${escHtml(human(from))} — ${escHtml(human(to))}. Рахуються лише робочі дні,
     коли кухня працювала.${r.skipped ? ` Не враховано днів (канікули, свята або меню не публікувалося): ${r.skipped}.` : ''}
     Дні, коли дитина була відсутня, до харчування не зараховуються.
