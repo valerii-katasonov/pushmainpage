@@ -261,6 +261,26 @@ window.invalidateStudentDir = invalidateStudentDir;
 // Функція жила в curriculum.js як window.subjKey, а половина коду мала
 // власні копії регулярки — і половина копій була НЕПОВНОЮ, без «/».
 // Тепер джерело одне.
+// ── ІМʼЯ ДИТИНИ ДЛЯ ПОКАЗУ ──────────────────────────────────────
+//
+// У списках класу учні записані як «Прізвище Імʼя» — так зручно
+// сортувати й шукати, і так само їх вносить школа. Але коли батько
+// перемикає власних дітей, прізвище попереду лише заважає: воно в усіх
+// однакове, і обидва рядки починаються з того самого слова
+// («KOVALOV MAKAR», «KOVALOV YEHOR»). Око чіпляється за друге слово.
+//
+// Тому в ПОКАЗІ (і тільки в показі) переставляємо: перше слово — це
+// прізвище, усе інше — імʼя. У базі, у ключах і в сортуванні порядок
+// лишається старим: варто переставити там — і зламається звірка зі
+// списком класу, на якій тримається половина порталу.
+export function childDisplayName(name){
+  const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+  if(parts.length < 2) return String(name || '').trim();
+  const [surname, ...rest] = parts;
+  return rest.join(' ') + ' ' + surname;
+}
+window.childDisplayName = childDisplayName;
+
 export function subjKey(s){ return String(s||'').replace(/[.#$[\]/]/g,'_').trim(); }
 window.subjKey = subjKey;
 
@@ -1706,7 +1726,7 @@ function updateProfileBar(){
   if(!currentUserData)return;document.getElementById('profile-bar').style.display='flex';
   const src=currentUserData.photoURL||"https://cdn-icons-png.flaticon.com/512/149/149071.png";
   document.getElementById('pb-avatar').src=src;document.getElementById('modal-avatar-preview').src=src;
-  let n="Користувач";if(currentUserData.firstName||currentUserData.lastName)n=`${currentUserData.firstName||''} ${currentUserData.lastName||''}`.trim();else if(currentUserData.studentName)n=`Батьки (${currentUserData.studentName})`;else if(currentUserData.email)n=currentUserData.email;
+  let n="Користувач";if(currentUserData.firstName||currentUserData.lastName)n=`${currentUserData.firstName||''} ${currentUserData.lastName||''}`.trim();else if(currentUserData.studentName)n=`Батьки (${childDisplayName(currentUserData.studentName)})`;else if(currentUserData.email)n=currentUserData.email;
   let r="";if(currentUserData.role==='teacher')r="Вчитель";if(currentUserData.role==='class_teacher')r="🎓 Класний керівник";if(currentUserData.role==='art_school_teacher'||currentUserData.role==='music_teacher')r="Вчитель школи мистецтв";if(currentUserData.role==='director')r="Директор";if(currentUserData.role==='administrator')r="🛡️ Секретар (Адміністратор)";if(currentUserData.role==='student')r="🎒 Учень";if(currentUserData.role==='parent'){if(currentUserData.parentRole==='mother')r="Мати";else if(currentUserData.parentRole==='father')r="Батько";else r="Опекун";}
   document.getElementById('pb-name').innerText=n;document.getElementById('pb-role').innerText=r;
   renderRoleSwitcher();
@@ -1720,7 +1740,7 @@ function renderChildSwitcher(){
   if(kids.length<2){box.style.display='none';box.innerHTML='';return;}
   box.style.display='block';
   box.innerHTML=`<select id="pb-child-select" data-tip="Переключити дитину">
-    ${kids.map((k,i)=>`<option value="${i}" ${k.studentName===currentUserData.studentName&&k.class===currentUserData.class?'selected':''}>👶 ${escHtml(k.studentName)} (${escHtml(String(k.class||'').replace('class_',''))} кл.)</option>`).join('')}
+    ${kids.map((k,i)=>`<option value="${i}" ${k.studentName===currentUserData.studentName&&k.class===currentUserData.class?'selected':''}>👶 ${escHtml(childDisplayName(k.studentName))} (${escHtml(String(k.class||'').replace('class_',''))} кл.)</option>`).join('')}
   </select>`;
   document.getElementById('pb-child-select').addEventListener('change',e=>window.switchChild(parseInt(e.target.value,10)));
 }
@@ -2453,6 +2473,9 @@ async function initUserSession(){
   // Клас і дитина в підписці на сповіщення застигали в мить вмикання —
   // після переходу в наступний клас пуші йшли за старою адресою
   refreshPushReg();
+  // Власне харчування співробітника — блок є в кабінетах учителя,
+  // директора й адміністрації; модуль сам вирішує, чи показувати.
+  if(window.renderStaffMeals) window.renderStaffMeals();
   setTimeout(()=>{ if(window.watchUnread) window.watchUnread(); }, 300);
   try{
     let dirs = await preloadStudentDirs();
