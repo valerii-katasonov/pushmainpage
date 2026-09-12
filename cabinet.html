@@ -257,6 +257,49 @@
                          font-size:.82rem;font-weight:700;background:#43a047;color:#fff;
                          border:none;border-radius:10px;cursor:pointer;}
     .moved-notice button:hover{background:#388e3c;}
+    .k-prices{background:#fff;border:1px solid #b2ebf2;border-radius:12px;padding:11px 13px;margin-bottom:13px;}
+    .k-prices summary{font-weight:700;color:#00838f;cursor:pointer;font-size:.9rem;}
+    .k-prices-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:11px 0 9px;}
+    .k-prices-grid label{display:flex;flex-direction:column;gap:3px;font-size:.74rem;color:#607d8b;}
+    .k-prices-grid input{margin:0;font-size:.9rem;padding:8px 10px;}
+    .k-prices-save{width:auto;margin:0;padding:9px 16px;font-size:.83rem;font-weight:700;
+                   background:#00838f;color:#fff;border:none;border-radius:9px;cursor:pointer;}
+    .k-total-money b{color:#2e7d32;}
+    .pms-money{margin-top:11px;background:#e8f5e9;border:1px solid #a5d6a7;border-radius:12px;
+               padding:12px 14px;text-align:center;}
+    .pms-money b{display:block;font-size:1.5rem;font-weight:800;color:#1b5e20;line-height:1.15;}
+    .pms-money span{display:block;font-size:.78rem;color:#33691e;margin-top:3px;}
+    .pms-money small{display:block;font-size:.72rem;color:#7c9a7e;margin-top:6px;}
+    .pms-presets{display:flex;gap:7px;margin-top:8px;flex-wrap:wrap;}
+    .pms-presets button{width:auto;margin:0;padding:7px 13px;font-size:.78rem;font-weight:600;
+                        background:#e0f7fa;color:#00838f;border:1px solid #80deea;border-radius:9px;cursor:pointer;}
+    /* ── Харчування персоналу ── */
+    .k-staff-block{margin-top:18px;padding-top:14px;border-top:2px dashed #b2ebf2;}
+    .k-staff-block h4{margin:0 0 9px;font-size:.92rem;color:#00838f;}
+    .k-staff-price{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:11px;}
+    .k-staff-price label{font-size:.74rem;color:#607d8b;flex:1 1 100%;}
+    .k-staff-price input{margin:0;max-width:120px;}
+    .k-staff-price button{width:auto;margin:0;padding:9px 14px;font-size:.82rem;background:#00838f;color:#fff;border:none;border-radius:9px;cursor:pointer;}
+    .stm-nav{display:flex;align-items:center;gap:10px;margin-bottom:11px;}
+    .stm-nav button{width:auto;margin:0;padding:8px 14px;font-weight:800;background:#eef5ff;color:#2b5aa8;
+                    border:1px solid #cfe0f5;border-radius:10px;cursor:pointer;}
+    .stm-day{flex:1;min-width:0;text-align:center;line-height:1.25;}
+    .stm-day b{display:block;font-size:.95rem;color:#37474f;}
+    .stm-day span{font-size:.74rem;color:#26a69a;font-weight:700;}
+    .stm-dish{display:flex;gap:9px;align-items:baseline;padding:5px 0;border-bottom:1px dashed #e0f2f1;}
+    .stm-dish span{flex:0 0 62px;font-size:.72rem;color:#78909c;text-transform:uppercase;letter-spacing:.03em;}
+    .stm-dish b{flex:1;min-width:0;font-size:.88rem;color:#263238;overflow-wrap:anywhere;}
+    .stm-choice{display:flex;gap:8px;margin:9px 0;flex-wrap:wrap;}
+    .stm-ab{flex:1;min-width:140px;margin:0;padding:10px;font-size:.82rem;font-weight:700;
+            background:#fff;color:#00695c;border:2px solid #b2dfdb;border-radius:11px;cursor:pointer;}
+    .stm-ab.on{background:#00897b;color:#fff;border-color:#00897b;}
+    .stm-act{margin:12px 0 8px;}
+    .stm-take{width:100%;margin:0;padding:13px;font-size:.92rem;font-weight:800;border:none;border-radius:12px;
+              background:#00897b;color:#fff;cursor:pointer;}
+    .stm-take.on{background:#e0f2f1;color:#00695c;border:2px solid #4db6ac;}
+    .stm-plan{font-size:.78rem;color:#607d8b;}
+    .stm-plan a{color:var(--teal);text-decoration:none;border-bottom:1px dotted;}
+    .stm-ta{margin-top:14px;padding-top:12px;border-top:1px dashed #ddd;}
     .app-version{font-size:.66rem;color:#b0bec5;text-align:center;margin:9px 0 0;line-height:1.6;}
     /* Підпис розробника в тому ж рядку: посилання має бути видно, але не
        так, щоб воно перетягувало увагу з кабінету на себе. */
@@ -2339,6 +2382,15 @@
   <div id="admin-screen" class="panel">
     <h2 style="color:#2c3e50;">🛡️ Панель Адміністратора</h2>
     <!-- Нові картки адміністратора додавайте новими <section class="screen-section">
+      <!-- Власне харчування співробітника. Той самий вибір, що й у родин,
+           але без сніданків і підвечірків: кухня їх персоналу не пропонує. -->
+      <div class="data-card" style="border-left-color:#00897b;background:#e0f2f1;">
+        <h4 style="margin-top:0;color:#00695c;">🍽 Моє харчування</h4>
+        <div class="stm-box"><p class="empty-msg">Завантаження...</p></div>
+      </div>
+    </section>
+
+    <section class="screen-section">
          (додайте клас "half" для пів-ширини на десктопі) — grid підхопить їх автоматично. -->
 
     <section class="screen-section">
@@ -2460,14 +2512,38 @@
         <div style="display:flex;gap:8px;">
           <div style="flex:1;min-width:0;">
             <label for="k-order-class" style="font-size:.74rem;">Клас</label>
-            <select id="k-order-class" onchange="loadClassOrders()"><option value="">Оберіть...</option><option value="class_1">1 клас</option><option value="class_2">2 клас</option><option value="class_3">3 клас</option><option value="class_4">4 клас</option><option value="class_5">5 клас</option><option value="class_6">6 клас</option><option value="class_7">7 клас</option><option value="class_8">8 клас</option><option value="class_9">9 клас</option><option value="class_10">10 клас</option><option value="class_11">11 клас</option></select>
+            <select id="k-order-class" onchange="loadOrdersForDay()"><option value="">Оберіть...</option><option value="class_1">1 клас</option><option value="class_2">2 клас</option><option value="class_3">3 клас</option><option value="class_4">4 клас</option><option value="class_5">5 клас</option><option value="class_6">6 клас</option><option value="class_7">7 клас</option><option value="class_8">8 клас</option><option value="class_9">9 клас</option><option value="class_10">10 клас</option><option value="class_11">11 клас</option></select>
           </div>
           <div style="flex:1;min-width:0;">
             <label for="k-order-date" style="font-size:.74rem;">Дата</label>
-            <input type="date" id="k-order-date" onchange="loadClassOrders()">
+            <input type="date" id="k-order-date" onchange="loadOrdersForDay()">
           </div>
         </div>
+        <!-- Ціни. Одна форма на всі чотири позиції: окремі кнопки
+             «зберегти» біля кожного поля дали б чотири нагоди зберегти
+             половину. Порожнє поле означає «ціни немає» — тоді суми не
+             показуються нікому. -->
+        <details class="k-prices">
+          <summary>💰 Ціни на харчування</summary>
+          <div class="k-prices-grid">
+            <label>Обід<input type="text" id="k-price-lunch" inputmode="decimal" placeholder="—"></label>
+            <label>Сніданок<input type="text" id="k-price-brk" inputmode="decimal" placeholder="—"></label>
+            <label>Підвечірок<input type="text" id="k-price-snack" inputmode="decimal" placeholder="—"></label>
+            <label>Обід персоналу<input type="text" id="k-price-staff" inputmode="decimal" placeholder="—"></label>
+          </div>
+          <button type="button" class="k-prices-save" onclick="saveMealPrices()">Зберегти ціни</button>
+          <p class="k-ord-hint">Ціни бачать батьки у своїй статистиці харчування. Порожнє поле —
+            позиція без ціни, у сумах не враховується.</p>
+        </details>
+
         <div id="k-orders"><p class="empty-msg">Оберіть клас і дату.</p></div>
+
+        <!-- Персонал замовляє без класу, тому й список окремий. Дата —
+             та сама, що вибрана вище для класу. -->
+        <div class="k-staff-block">
+          <h4>👩‍🏫 Персонал</h4>
+          <div id="k-staff-orders"><p class="empty-msg">Оберіть дату.</p></div>
+        </div>
       </div>
     </section>
 
@@ -2543,6 +2619,15 @@
       <button class="dtab"    data-t="stat"   onclick="switchDirTab('stat',this)">Аналітика</button>
       <button class="dtab"    data-t="nalash" onclick="switchDirTab('nalash',this)">Налаштування</button>
     </div>
+
+    <section class="screen-section">
+      <!-- Власне харчування співробітника. Той самий вибір, що й у родин,
+           але без сніданків і підвечірків: кухня їх персоналу не пропонує. -->
+      <div class="data-card" style="border-left-color:#00897b;background:#e0f2f1;">
+        <h4 style="margin-top:0;color:#00695c;">🍽 Моє харчування</h4>
+        <div class="stm-box"><p class="empty-msg">Завантаження...</p></div>
+      </div>
+    </section>
 
     <section class="screen-section" data-dtab="ogl">
       <h3>🚀 Швидкі дії</h3>
@@ -3151,6 +3236,13 @@
     <section class="screen-section" data-dtab="day">
       <!-- Дні народження. Найперше на вкладці. Розгорнуто лише найближчий тиждень, решта — під «ще N». -->
       <div id="t-birthdays" class="bd-box" style="display:none;"></div>
+      <!-- Власне харчування співробітника. Той самий вибір, що й у родин,
+           але без сніданків і підвечірків: кухня їх персоналу не пропонує. -->
+      <div class="data-card" style="border-left-color:#00897b;background:#e0f2f1;">
+        <h4 style="margin-top:0;color:#00695c;">🍽 Моє харчування</h4>
+        <div class="stm-box"><p class="empty-msg">Завантаження...</p></div>
+      </div>
+
       <!-- Басейн і автобус. Показуємо лише класному керівникові: у нього
            свій клас, і правила бази до чужих його однаково не пустять. -->
       <div class="data-card" id="t-activities-card"
@@ -4383,6 +4475,12 @@
       <div style="flex:1;min-width:0;"><label for="pms-from" style="font-size:.74rem;">Від</label><input type="date" id="pms-from" onchange="reloadMyMealStats()" min="2020-01-01" max="2099-12-31"></div>
       <div style="flex:1;min-width:0;"><label for="pms-to" style="font-size:.74rem;">До</label><input type="date" id="pms-to" onchange="reloadMyMealStats()" min="2020-01-01" max="2099-12-31"></div>
     </div>
+    <!-- Тиждень і місяць двома кнопками: саме на «а яким числом був
+         понеділок» люди й кидають звіт. -->
+    <div class="pms-presets">
+      <button type="button" onclick="myMealPeriod('week')">Цей тиждень</button>
+      <button type="button" onclick="myMealPeriod('month')">Цей місяць</button>
+    </div>
     <div id="meal-stats-body"></div>
     <button onclick="document.getElementById('meal-stats-modal').style.display='none'" style="background:#eceff1;color:#37474f;">Закрити</button>
   </div>
@@ -4471,6 +4569,7 @@ document.addEventListener('DOMContentLoaded', function(){
 <script type="module" src="games.js"></script>
 <script type="module" src="mastery.js"></script>
 <script type="module" src="grades-view.js"></script>
+<script type="module" src="staff-meals.js"></script>
 
   <!-- ═══ ЕКРАН ЗГОДИ ПРИ ВХОДІ ═══
        Модалка без кнопки закриття: GDPR вимагає поінформувати ДО обробки,
