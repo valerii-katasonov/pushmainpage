@@ -2382,16 +2382,16 @@
   <div id="admin-screen" class="panel">
     <h2 style="color:#2c3e50;">🛡️ Панель Адміністратора</h2>
     <!-- Нові картки адміністратора додавайте новими <section class="screen-section">
+         (додайте клас "half" для пів-ширини на десктопі) — grid підхопить їх автоматично. -->
+
+    <section class="screen-section half">
       <!-- Власне харчування співробітника. Той самий вибір, що й у родин,
            але без сніданків і підвечірків: кухня їх персоналу не пропонує. -->
-      <div class="data-card" style="border-left-color:#00897b;background:#e0f2f1;">
+      <div class="data-card" style="border-left-color:#00897b;background:#e0f2f1;margin-top:0;">
         <h4 style="margin-top:0;color:#00695c;">🍽 Моє харчування</h4>
         <div class="stm-box"><p class="empty-msg">Завантаження...</p></div>
       </div>
     </section>
-
-    <section class="screen-section">
-         (додайте клас "half" для пів-ширини на десктопі) — grid підхопить їх автоматично. -->
 
     <section class="screen-section">
       <h3>🚀 Швидкі дії</h3>
@@ -2617,13 +2617,14 @@
       <button class="dtab"    data-t="staff"  onclick="switchDirTab('staff',this)">Персонал</button>
       <button class="dtab"    data-t="rozklad" onclick="switchDirTab('rozklad',this)">Розклад</button>
       <button class="dtab"    data-t="stat"   onclick="switchDirTab('stat',this)">Аналітика</button>
+      <button class="dtab"    data-t="meals"  onclick="switchDirTab('meals',this)">🍽 Їжа</button>
       <button class="dtab"    data-t="nalash" onclick="switchDirTab('nalash',this)">Налаштування</button>
     </div>
 
-    <section class="screen-section">
+    <section class="screen-section" data-dtab="meals">
       <!-- Власне харчування співробітника. Той самий вибір, що й у родин,
            але без сніданків і підвечірків: кухня їх персоналу не пропонує. -->
-      <div class="data-card" style="border-left-color:#00897b;background:#e0f2f1;">
+      <div class="data-card" style="border-left-color:#00897b;background:#e0f2f1;margin-top:0;">
         <h4 style="margin-top:0;color:#00695c;">🍽 Моє харчування</h4>
         <div class="stm-box"><p class="empty-msg">Завантаження...</p></div>
       </div>
@@ -3228,6 +3229,7 @@
       <button class="dtab" data-t="lesson" onclick="switchTab('teacher-screen','lesson',this)">Урок</button>
       <button class="dtab" data-t="hwday" onclick="switchTab('teacher-screen','hwday',this);renderTeacherHwDay()">📚 ДЗ на день</button>
       <button class="dtab" data-t="class" onclick="switchTab('teacher-screen','class',this)">Клас</button>
+      <button class="dtab" data-t="meals" onclick="switchTab('teacher-screen','meals',this);renderStaffMeals()">🍽 Їжа</button>
       <button class="dtab" data-t="news" onclick="switchTab('teacher-screen','news',this)">Новини<span class="chat-dot"></span></button>
     </div>
     <div id="t-push-invite" style="display:none;"></div>
@@ -3236,12 +3238,6 @@
     <section class="screen-section" data-dtab="day">
       <!-- Дні народження. Найперше на вкладці. Розгорнуто лише найближчий тиждень, решта — під «ще N». -->
       <div id="t-birthdays" class="bd-box" style="display:none;"></div>
-      <!-- Власне харчування співробітника. Той самий вибір, що й у родин,
-           але без сніданків і підвечірків: кухня їх персоналу не пропонує. -->
-      <div class="data-card" style="border-left-color:#00897b;background:#e0f2f1;">
-        <h4 style="margin-top:0;color:#00695c;">🍽 Моє харчування</h4>
-        <div class="stm-box"><p class="empty-msg">Завантаження...</p></div>
-      </div>
 
       <!-- Басейн і автобус. Показуємо лише класному керівникові: у нього
            свій клас, і правила бази до чужих його однаково не пустять. -->
@@ -3554,6 +3550,15 @@
       <p class="hwd-cap">Показано ваші уроки в цьому класі на обрану дату.
          Дата й клас — угорі сторінки.</p>
       <div id="t-hw-day"><p class="empty-msg">Завантаження...</p></div>
+    </section>
+
+    <section class="screen-section" data-dtab="meals">
+      <!-- Власне харчування співробітника. Той самий вибір, що й у родин,
+           але без сніданків і підвечірків: кухня їх персоналу не пропонує. -->
+      <div class="data-card" style="border-left-color:#00897b;background:#e0f2f1;margin-top:0;">
+        <h4 style="margin-top:0;color:#00695c;">🍽 Моє харчування</h4>
+        <div class="stm-box"><p class="empty-msg">Завантаження...</p></div>
+      </div>
     </section>
 
     <section class="screen-section half" data-dtab="class">
