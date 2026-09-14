@@ -2716,9 +2716,9 @@
       <h3>👩‍🏫 Навантаження вчителів</h3>
       <p style="font-size:.83rem;color:#666;">Заняття з чинного розкладу обраного тижня, без гуртків і окремої класної години. Враховуються свята, канікули, заміни й вибрані чергування. Години — тривалість занять, а не ставка вчителя. Проміжки між заняттями включають перерви.</p>
       <div class="ma-filters">
-        <input type="date" id="d-workload-week" aria-label="Тиждень" onchange="openWorkloadTab()" style="width:auto;">
+        <input type="date" id="d-workload-week" aria-label="Тиждень" onchange="loadDirectorWorkload()" style="width:auto;">
         <input type="search" id="d-workload-search" placeholder="Знайти вчителя" aria-label="Знайти вчителя" oninput="renderWorkload()">
-        <button type="button" onclick="openWorkloadTab()">Оновити</button>
+        <button type="button" onclick="loadDirectorWorkload()">Оновити</button>
       </div>
       <p style="font-size:.78rem;color:#777;">Теми перевіряються лише за минулі дати цього тижня, по парі «клас + предмет + дата». Це перевірка заповнення журналу, не висновок про відставання. Для минулих тижнів застосовується поточна версія розкладу.</p>
       <p id="d-workload-summary" style="font-size:.83rem;font-weight:700;"></p>
@@ -4743,8 +4743,8 @@ document.addEventListener('DOMContentLoaded', function(){
 <script type="module" src="staff-meals.js"></script>
 <script type="module" src="payment.js"></script>
 <script type="module" src="materials-audit.js"></script>
-<script type="module" src="workload.js"></script>
-<script type="module" src="clubs-catalog.js"></script>
+<script type="module" src="workload.js?v=20260915-2"></script>
+<script type="module" src="clubs-catalog.js?v=20260915-2"></script>
 
   <!-- ═══ ЕКРАН ЗГОДИ ПРИ ВХОДІ ═══
        Модалка без кнопки закриття: GDPR вимагає поінформувати ДО обробки,
