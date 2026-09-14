@@ -3613,11 +3613,13 @@
       </details>
       <div style="margin-top:12px;background:#f0f8ff;padding:14px;border-radius:12px;border:1px solid #d0e8f2;">
         <h4 style="margin:0 0 8px 0;color:var(--blue);font-size:.88rem;">📘 Посилання на підручники</h4>
+        <label for="t-tb-subject" style="font-size:.83rem;">Предмет підручника:</label>
+        <select id="t-tb-subject" onchange="loadTextbooksForTeacher(false)" style="margin-top:4px;margin-bottom:10px;"><option value="">Оберіть предмет...</option></select>
         <div id="t-textbooks-list" style="margin-bottom:8px;"></div>
         <div style="display:flex;gap:7px;">
           <input type="text" id="t-tb-title" placeholder="Назва підручника" style="flex:2;margin-top:0;font-size:.85rem;">
           <input type="text" id="t-tb-url" placeholder="https://..." style="flex:3;margin-top:0;font-size:.85rem;">
-          <button onclick="saveTextbook()" style="flex:1;margin-top:0;background:var(--blue);color:#fff;padding:10px 6px;font-size:.82rem;">+ Додати</button>
+          <button type="button" id="btn-save-textbook" onclick="saveTextbook()" style="flex:1;margin-top:0;background:var(--blue);color:#fff;padding:10px 6px;font-size:.82rem;">+ Додати</button>
         </div>
       </div>
     </section>
