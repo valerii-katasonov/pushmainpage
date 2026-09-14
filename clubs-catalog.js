@@ -12,9 +12,10 @@ export function clubsFromSchedule(school){
   const found=new Map();
   function visit(value,inClubs=false){
     if(!value||typeof value!=='object')return;
-    if(value.subject){
+    const rawName=value.subject||(inClubs?value.name:null);
+    if(rawName){
       if(value.type==='break'||(!inClubs&&value.type!=='extra'))return;
-      const name=String(typeof value.subject==='string'?value.subject:value.subject.ua||'').trim();
+      const name=String(typeof rawName==='string'?rawName:rawName.ua||rawName.pl||'').trim();
       if(!name)return;
       const key=subjKey(name),previous=found.get(key);
       const record={name,teacherEmail:value.teacherEmail||'',teacherName:value.teacherName||''};
