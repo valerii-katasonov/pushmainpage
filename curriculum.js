@@ -650,7 +650,9 @@ window.toggleTopicDropdown=function(slot){
   list.style.display=isOpen?'none':'block';
 };
 document.addEventListener('click',function(e){
-  if(!e.target.closest('.topic-dropdown'))document.querySelectorAll('.topic-dropdown-list').forEach(l=>l.style.display='none');
+  // «Замінити» розташована під списком: її клік не є кліком зовні.
+  // Інакше спливання того самого кліку одразу закривало відкритий список.
+  if(!e.target.closest('.topic-dropdown, .topic-actions'))document.querySelectorAll('.topic-dropdown-list').forEach(l=>l.style.display='none');
 });
 // ПОВТОРНЕ ВИКОРИСТАННЯ ТЕМИ ДОЗВОЛЕНЕ.
 //
