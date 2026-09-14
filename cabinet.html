@@ -153,7 +153,7 @@
     .journal-table thead tr.jt-day-row th{position:sticky;top:calc(1.8em - 1px);z-index:4;}
     .jct-type-select{font-size:.69em;width:100%;margin-top:2px;padding:0 1px;border:1px solid #bbdefb;border-radius:4px;background:#fff;color:#154360;}
     /* ── GRADE EDITOR POPUP ── */
-    .grade-editor-popup{position:fixed;z-index:5000;background:#fff;border-radius:13px;box-shadow:0 8px 30px rgba(0,0,0,.25);padding:13px;display:none;min-width:210px;border:2px solid var(--teal);animation:popIn .15s ease-out;}
+    .grade-editor-popup{position:fixed;z-index:5000;background:#fff;border-radius:13px;box-shadow:0 8px 30px rgba(0,0,0,.25);padding:13px;display:none;min-width:210px;max-width:min(360px,calc(100vw - 20px));max-height:80vh;overflow:auto;border:2px solid var(--teal);animation:popIn .15s ease-out;}
     .grade-editor-popup input[type=text]{width:100%;padding:8px 12px;border:2px solid var(--teal);border-radius:8px;font-size:1.1rem;font-weight:800;text-align:center;color:var(--teal);margin-top:0;}
     /* ПІДКАЗКИ БЕЗ ЗАТРИМКИ.
        Нативний title браузер показує приблизно через секунду, і змінити
@@ -2288,8 +2288,14 @@
   <input type="text" id="gep-value" placeholder="1-6" autocomplete="off">
   <div class="gep-hint" id="gep-type-hint">Вид роботи:</div>
   <div class="type-btns" id="gep-type-btns"></div>
+  <div style="margin-top:9px;border-top:1px solid #eee;padding-top:8px;">
+    <label for="gep-work-files" style="font-size:.8rem;">📷 Фото контрольної, самостійної чи іншої роботи</label>
+    <div id="gep-work-existing"></div>
+    <input type="file" id="gep-work-files" accept="image/jpeg,image/png,image/webp" multiple style="font-size:.8rem;">
+    <small>До 3 фото, кожне до 8 МБ. Батьки побачать їх поруч з оцінкою після збереження.</small>
+  </div>
   <div class="editor-actions">
-    <button class="btn-confirm" onclick="confirmGrade()">✔ Зберегти</button>
+    <button id="gep-save" class="btn-confirm" onclick="confirmGrade()">✔ Зберегти</button>
     <button class="btn-delete" onclick="deleteGrade()">✖</button>
     <button class="btn-cancel" onclick="closeGradeEditor()">Скас.</button>
   </div>
