@@ -606,8 +606,10 @@ export function gradeWritePaths(cls, ym, subj, date, sid, value, type){
   const del = (value === null || value === undefined || value === '');
   out[`grades/${cls}/${ym}/${subj}/${date}/${sid}`]      = del ? null : value;
   out[`grade_types/${cls}/${ym}/${subj}/${date}/${sid}`] = del ? null : (type || null);
-  out[`student_grades/${cls}/${sid}/${ym}/${subj}/${date}`] =
-    del ? null : { v: value, t: type || '' };
+  const mirror=`student_grades/${cls}/${sid}/${ym}/${subj}/${date}`;
+  // Оновлення оцінки не стирає фото роботи, збережені в цій клітинці.
+  if(del)out[mirror]=null;
+  else{out[`${mirror}/v`]=value;out[`${mirror}/t`]=type||'';}
   return out;
 }
 
