@@ -1968,10 +1968,12 @@ window.switchDirTab = function(tab, btn){
   });
 
   try{ localStorage.setItem(DTAB_KEY, tab); }catch(e){}
+  if(tab === 'workload' && window.openWorkloadTab) window.openWorkloadTab();
   if(tab === 'news' && window.renderNewsFeed) window.renderNewsFeed('d-news-feed');
   // Вкладка «Їжа»: меню з дня в день міняється, тож перечитуємо при
   // кожному відкритті, а не лише при вході в кабінет.
   if(tab === 'meals' && window.renderStaffMeals) window.renderStaffMeals();
+  if(tab === 'nalash' && window.renderPaymentSettings) window.renderPaymentSettings();
 };
 // Відновлюємо останню відкриту вкладку: директор зазвичай повертається
 // в те саме місце, де працював.
