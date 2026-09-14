@@ -2466,18 +2466,7 @@
 
     <section class="screen-section half">
       <h3>📊 Огляд</h3>
-      <details class="data-card" style="border-left-color:var(--teal);margin-top:0;" ontoggle="if(this.open)loadMaterialsAudit()">
-        <summary style="cursor:pointer;font-weight:800;">📚 Підручники та календарне планування</summary>
-        <p style="font-size:.83rem;color:#666;">Перевірка предметів із розкладу та каталогу на поточний навчальний рік. Планування вважається доданим, якщо є теми; це не оцінка повноти плану.</p>
-        <div class="ma-filters">
-          <select id="d-materials-class" aria-label="Клас" onchange="renderMaterialsAudit()"><option value="">Усі класи</option></select>
-          <input id="d-materials-search" type="search" placeholder="Предмет або вчитель" aria-label="Предмет або вчитель" oninput="renderMaterialsAudit()">
-          <label><input type="checkbox" id="d-materials-missing" onchange="renderMaterialsAudit()">Лише незаповнені</label>
-          <button type="button" id="d-materials-refresh" onclick="loadMaterialsAudit()">Оновити</button>
-        </div>
-        <p id="d-materials-summary" style="font-size:.83rem;font-weight:700;"></p>
-        <div id="d-materials-results"><p class="empty-msg">Відкрийте блок, щоб перевірити матеріали.</p></div>
-      </details>
+
       <div style="display:flex;gap:9px;">
         <div style="flex:1;background:#e0f7fa;padding:14px;border-radius:12px;text-align:center;">
           <h4 id="a-hw-title" style="margin:0;color:#00838f;font-size:.82rem;">📚 ДЗ</h4>
@@ -2698,6 +2687,18 @@
 
     <section class="screen-section" data-dtab="ogl">
       <h3>📊 Огляд</h3>
+      <details class="data-card" style="border-left-color:var(--teal);margin-top:0;" ontoggle="if(this.open)loadMaterialsAudit()">
+        <summary style="cursor:pointer;font-weight:800;">📚 Підручники та календарне планування</summary>
+        <p style="font-size:.83rem;color:#666;">Перевірка предметів із розкладу та каталогу на поточний навчальний рік. Планування вважається доданим, якщо є теми; це не оцінка повноти плану.</p>
+        <div class="ma-filters">
+          <select id="d-materials-class" aria-label="Клас" onchange="renderMaterialsAudit()"><option value="">Усі класи</option></select>
+          <input id="d-materials-search" type="search" placeholder="Предмет або вчитель" aria-label="Предмет або вчитель" oninput="renderMaterialsAudit()">
+          <label><input type="checkbox" id="d-materials-missing" onchange="renderMaterialsAudit()">Лише незаповнені</label>
+          <button type="button" id="d-materials-refresh" onclick="loadMaterialsAudit()">Оновити</button>
+        </div>
+        <p id="d-materials-summary" style="font-size:.83rem;font-weight:700;"></p>
+        <div id="d-materials-results"><p class="empty-msg">Відкрийте блок, щоб перевірити матеріали.</p></div>
+      </details>
       <!-- Статистика -->
       <div class="data-card" style="border-left-color:var(--purple);background:#fdfafc;margin-top:0;">
         <h4 style="margin-top:0;color:var(--purple);">📈 Середні оцінки</h4>
