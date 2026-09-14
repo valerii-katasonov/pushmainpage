@@ -1674,6 +1674,8 @@
     /* topic card */
     .topic-card{background:linear-gradient(135deg,#667eea12,#764ba212);border:1px solid #764ba230;border-radius:12px;padding:13px;margin-bottom:12px;}
     .topic-card label{margin-top:0;color:#764ba2;font-size:.83rem;}
+    .wl-day{padding:10px;background:#f4f8fa;border-radius:9px;font-size:.8rem;overflow-wrap:anywhere;}
+    .wl-day small{display:block;color:#666;margin:5px 0;}
     .ma-filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px;}
     .ma-filters select,.ma-filters input[type="search"]{flex:1;min-width:150px;margin:0;}
     .ma-filters label{display:flex;align-items:center;gap:6px;margin:0;font-size:.83rem;}
@@ -2661,10 +2663,25 @@
       <button class="dtab"    data-t="uchni"  onclick="switchDirTab('uchni',this)">Учні та батьки</button>
       <button class="dtab"    data-t="staff"  onclick="switchDirTab('staff',this)">Персонал</button>
       <button class="dtab"    data-t="rozklad" onclick="switchDirTab('rozklad',this)">Розклад</button>
+      <button class="dtab" data-t="workload" onclick="switchDirTab('workload',this)">Навантаження</button>
       <button class="dtab"    data-t="stat"   onclick="switchDirTab('stat',this)">Аналітика</button>
       <button class="dtab"    data-t="meals"  onclick="switchDirTab('meals',this)">🍽 Їжа</button>
       <button class="dtab"    data-t="nalash" onclick="switchDirTab('nalash',this)">Налаштування</button>
     </div>
+
+    <section class="screen-section" data-dtab="workload">
+      <h3>👩‍🏫 Навантаження вчителів</h3>
+      <p style="font-size:.83rem;color:#666;">Заняття з чинного розкладу обраного тижня, без гуртків і окремої класної години. Враховуються свята, канікули, заміни й вибрані чергування. Години — тривалість занять, а не ставка вчителя. Проміжки між заняттями включають перерви.</p>
+      <div class="ma-filters">
+        <input type="date" id="d-workload-week" aria-label="Тиждень" onchange="openWorkloadTab()" style="width:auto;">
+        <input type="search" id="d-workload-search" placeholder="Знайти вчителя" aria-label="Знайти вчителя" oninput="renderWorkload()">
+        <button type="button" onclick="openWorkloadTab()">Оновити</button>
+      </div>
+      <p style="font-size:.78rem;color:#777;">Теми перевіряються лише за минулі дати цього тижня, по парі «клас + предмет + дата». Це перевірка заповнення журналу, не висновок про відставання. Для минулих тижнів застосовується поточна версія розкладу.</p>
+      <p id="d-workload-summary" style="font-size:.83rem;font-weight:700;"></p>
+      <div id="d-workload-results"><p class="empty-msg">Відкрийте вкладку для перевірки.</p></div>
+      <div id="d-workload-issues"></div>
+    </section>
 
     <section class="screen-section" data-dtab="nalash">
       <h3>💳 Реквізити для оплати</h3>
@@ -4674,6 +4691,7 @@ document.addEventListener('DOMContentLoaded', function(){
 <script type="module" src="staff-meals.js"></script>
 <script type="module" src="payment.js"></script>
 <script type="module" src="materials-audit.js"></script>
+<script type="module" src="workload.js"></script>
 
   <!-- ═══ ЕКРАН ЗГОДИ ПРИ ВХОДІ ═══
        Модалка без кнопки закриття: GDPR вимагає поінформувати ДО обробки,
