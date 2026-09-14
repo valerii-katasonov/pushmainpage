@@ -825,6 +825,7 @@ window.openVisualMatrixModal=async function(mode){
       }
     }
   }catch(e){ console.warn('subjects_catalog:', e.message); }
+  if(window.loadClubCatalogs){try{await window.loadClubCatalogs();}catch(e){console.warn('clubs_catalog:',e.message);}}
   // Класні години всіх класів. У сітці їх немає й бути не може: сітка
   // будується з розкладу, а класна година лежить окремим вузлом, бо розклад
   // перезаписує імпорт. Але директор, який складає розклад, мусить бачити,
@@ -956,7 +957,7 @@ window.calculateMatrixWarnings=function(){
         let te=lesson.teacherEmail;
         if(!te&&lesson.subject){
           const sn=typeof lesson.subject==='string'?lesson.subject:(lesson.subject.ua||'');
-          const dt=window.getDefaultTeacher(clsId,sn);
+          const dt=lesson.type==='extra'?window.getClubTeacher?.(clsId,sn):window.getDefaultTeacher(clsId,sn);
           if(dt)te=dt.email;
         }
         if(!te)return;
@@ -1154,7 +1155,7 @@ window.renderClassHourNote=function(day){
     : '';
 };
 
-window.renderMatrixGrid=function(){const day=document.getElementById('matrix-day-select').value;window.renderClassHourNote(day);const th=document.getElementById('matrix-thead-row');const tb=document.getElementById('matrix-tbody');th.innerHTML='<th class="time-col">№/Час</th>';for(let i=1;i<=11;i++)th.innerHTML+=`<th>${i} Кл</th>`;tb.innerHTML='';let maxR=8;for(let i=1;i<=11;i++){const cls=`class_${i}`;maxR=Math.max(maxR,dayArr(globalAllSchedules[cls]?.lessons?.[day]).length);}maxR+=1;let lc=1;for(let row=0;row<maxR;row++){let tr=document.createElement('tr');let bc=0;let lsc=0;for(let c=1;c<=11;c++){const clsId=`class_${c}`;const la=dayArr(globalAllSchedules[clsId]?.lessons?.[day]);const raw=la[row];let items=Array.isArray(raw)?raw:(raw&&raw.subject?[raw]:[]);items.forEach(l=>{if(l&&l.subject){if(isBreakItem(l))bc++;else lsc++;}});}const isB=bc>0&&bc>=lsc;const isE=bc===0&&lsc===0;if(isB)tr.innerHTML='<td class="time-col" style="background:#fce4ec;color:#e91e63;">☕</td>';else if(isE)tr.innerHTML='<td class="time-col" style="color:#ccc;font-size:1.1rem;">+</td>';else tr.innerHTML=`<td class="time-col">Ур.${lc++}</td>`;for(let c=1;c<=11;c++){const clsId=`class_${c}`;const la=dayArr(globalAllSchedules[clsId]?.lessons?.[day]);const raw=la[row];let items=Array.isArray(raw)?raw:(raw&&raw.subject?[raw]:[]);let td=document.createElement('td');let h='';if(items.length>0){h+=`<div class="matrix-cell-container">`;items.forEach((lesson,si)=>{const sn=typeof lesson.subject==='string'?lesson.subject:(lesson.subject.ua||'');const te=lesson.teacherEmail||'';let dn=lesson.teacherName||'';let isOvr=false;const isB2=isBreakItem(lesson);if(!isB2){if(!te&&sn){const dt=window.getDefaultTeacher(clsId,sn);if(dt)dn=dt.name;
+window.renderMatrixGrid=function(){const day=document.getElementById('matrix-day-select').value;window.renderClassHourNote(day);const th=document.getElementById('matrix-thead-row');const tb=document.getElementById('matrix-tbody');th.innerHTML='<th class="time-col">№/Час</th>';for(let i=1;i<=11;i++)th.innerHTML+=`<th>${i} Кл</th>`;tb.innerHTML='';let maxR=8;for(let i=1;i<=11;i++){const cls=`class_${i}`;maxR=Math.max(maxR,dayArr(globalAllSchedules[cls]?.lessons?.[day]).length);}maxR+=1;let lc=1;for(let row=0;row<maxR;row++){let tr=document.createElement('tr');let bc=0;let lsc=0;for(let c=1;c<=11;c++){const clsId=`class_${c}`;const la=dayArr(globalAllSchedules[clsId]?.lessons?.[day]);const raw=la[row];let items=Array.isArray(raw)?raw:(raw&&raw.subject?[raw]:[]);items.forEach(l=>{if(l&&l.subject){if(isBreakItem(l))bc++;else lsc++;}});}const isB=bc>0&&bc>=lsc;const isE=bc===0&&lsc===0;if(isB)tr.innerHTML='<td class="time-col" style="background:#fce4ec;color:#e91e63;">☕</td>';else if(isE)tr.innerHTML='<td class="time-col" style="color:#ccc;font-size:1.1rem;">+</td>';else tr.innerHTML=`<td class="time-col">Ур.${lc++}</td>`;for(let c=1;c<=11;c++){const clsId=`class_${c}`;const la=dayArr(globalAllSchedules[clsId]?.lessons?.[day]);const raw=la[row];let items=Array.isArray(raw)?raw:(raw&&raw.subject?[raw]:[]);let td=document.createElement('td');let h='';if(items.length>0){h+=`<div class="matrix-cell-container">`;items.forEach((lesson,si)=>{const sn=typeof lesson.subject==='string'?lesson.subject:(lesson.subject.ua||'');const te=lesson.teacherEmail||'';let dn=lesson.teacherName||'';let isOvr=false;const isB2=isBreakItem(lesson);if(!isB2){if(!te&&sn){const dt=lesson.type==='extra'?window.getClubTeacher?.(clsId,sn):window.getDefaultTeacher(clsId,sn);if(dt)dn=dt.name;
         // Урок-чергування: повної назви «А / Б» немає в жодному
         // довіднику, тож шукаємо вчителя окремо для кожного предмета пари.
         else{const al=window.altTeacherLabel(clsId,lesson);if(al)dn=al;}}
@@ -1189,12 +1190,16 @@ window.toggleCellType=async function(){
     ni.disabled=false;
   }
   await window.fillCellSubjects(cls,cur,t);
+  if(document.getElementById('cell-type-select').value!==t||document.getElementById('cell-edit-class').value!==cls)return;
+  const teacherSelect=document.getElementById('cell-teacher-select');
+  window.updateCellEditorTeacherOptions(cls,cur,teacherSelect.value);
   window.triggerSmartCheck();
 };
 window.toggleExtraFormat=function(){const f=document.getElementById('cell-extra-format').value;document.getElementById('extra-individual-wrap').style.display=f==='individual'?'block':'none';document.getElementById('extra-group-wrap').style.display=f==='group'?'block':'none';if(f==='group')toggleExtraGroupType();};
 window.toggleExtraGroupType=function(){const gt=document.getElementById('extra-group-type').value;document.getElementById('extra-group-classes-wrap').style.display=gt==='classes'?'block':'none';document.getElementById('extra-group-students-wrap').style.display=gt==='students'?'block':'none';};
 // Назви перерв каталогом не керуються: «Обід 1-3 класи» — це не предмет
 const BREAK_NAMES = ['Перерва', 'Велика перерва', 'Обід'];
+let cellSubjectsGeneration=0;
 
 // Наповнити список предметів. current лишаємо в переліку, навіть якщо
 // його немає в каталозі: інакше, відкривши старий урок, директор мовчки
@@ -1202,19 +1207,22 @@ const BREAK_NAMES = ['Перерва', 'Велика перерва', 'Обід'
 window.fillCellSubjects = async function(clsId, current, type){
   const sel = document.getElementById('cell-subj-ua');
   if(!sel) return;
+  const gen=++cellSubjectsGeneration;
   let names = [];
   if(type === 'break') names = BREAK_NAMES.slice();
-  else if(window.catalogNames) { try{ names = await window.catalogNames(clsId); }catch(e){ names = []; } }
+  else if(type==='extra'&&window.clubCatalogNames){try{names=await window.clubCatalogNames(clsId);}catch(e){names=[];}}
+  else if(type!=='extra'&&window.catalogNames) { try{ names = await window.catalogNames(clsId); }catch(e){ names = []; } }
+  if(gen!==cellSubjectsGeneration)return;
   if(current && !names.includes(current)) names = [current, ...names];
   const empty = type === 'break' ? '— оберіть назву —'
-    : (names.length ? '— оберіть предмет —' : '— каталог порожній —');
+    : (names.length ? (type==='extra'?'— оберіть гурток —':'— оберіть предмет —') : '— каталог порожній —');
   sel.innerHTML = `<option value="">${empty}</option>`
     + names.map(n => `<option value="${escHtml(n)}">${escHtml(n)}</option>`).join('')
     + `<option value="__other__">➕ Інший…</option>`;
   sel.value = current || '';
   const hint = document.getElementById('cell-subj-hint');
   if(hint) hint.textContent = (type === 'break' || names.length)
-    ? '' : 'Каталог цього класу порожній. Заповніть «📗 Предмети класу й учителі» або додайте через «Інший…».';
+    ? '' : type==='extra'?'Заповніть «🎨 Гуртки класу й учителі» або додайте через «Інший…».':'Каталог цього класу порожній. Заповніть «📗 Предмети класу й учителі» або додайте через «Інший…».';
 };
 
 window.handleSubjInput=async function(){
@@ -1222,7 +1230,7 @@ window.handleSubjInput=async function(){
   const sel=document.getElementById('cell-subj-ua');
   const type=document.getElementById('cell-type-select').value;
   if(sel.value === '__other__'){
-    const name=(prompt(type==='break'?'Назва перерви:':'Назва нового предмета:','')||'').trim();
+    const name=(prompt(type==='break'?'Назва перерви:':type==='extra'?'Назва нового гуртка:':'Назва нового предмета:','')||'').trim();
     if(!name){ sel.value=''; return; }
     // Новий предмет одразу лягає в каталог — інакше наступного разу
     // його знову довелося б вписувати руками, і розбіжності повернулися б
@@ -1234,9 +1242,9 @@ window.handleSubjInput=async function(){
   window.updateCellEditorTeacherOptions(c,s,ts.value);
   window.triggerSmartCheck();
 };
-window.updateCellEditorTeacherOptions=function(clsId,sName,curE){const ts=document.getElementById('cell-teacher-select');const dt=window.getDefaultTeacher(clsId,sName);
+window.updateCellEditorTeacherOptions=function(clsId,sName,curE){const ts=document.getElementById('cell-teacher-select');const isClub=document.getElementById('cell-type-select').value==='extra';const dt=isClub?window.getClubTeacher?.(clsId,sName):window.getDefaultTeacher(clsId,sName);
   // Для пари чергування «Авто» — це двоє вчителів, по одному на предмет
-  const auto=dt?dt.name:(window.altTeacherLabel(clsId,{subject:sName})||'—');
+  const auto=dt?dt.name:(isClub?'—':window.altTeacherLabel(clsId,{subject:sName})||'—');
   ts.innerHTML=`<option value="">-- Авто (${escHtml(auto)}) --</option>`;window.globalTeachersList.forEach(t=>ts.innerHTML+=`<option value="${escHtml(t.email)}">${escHtml(t.name)} (${escHtml(t.email)})</option>`);if(curE&&Array.from(ts.options).some(o=>o.value===curE))ts.value=curE;else ts.value='';};
 window.triggerSmartCheck=function(){if(currentMatrixMode==='live')return;const te=document.getElementById('cell-teacher-select').value;const wb=document.getElementById('cell-live-warnings');if(!te){wb.style.display='none';return;}const day=document.getElementById('matrix-day-select').value;const clsId=document.getElementById('cell-edit-class').value;const tB=parseInt(clsId.replace('class_',''))<=5?1:2;const row=parseInt(document.getElementById('cell-edit-row').value);let conf=[];let trav=[];for(let c=1;c<=11;c++){let cc=`class_${c}`;if(cc===clsId)continue;let b=c<=5?1:2;let da=dayArr(globalAllSchedules[cc]?.lessons?.[day]);let ss=da[row];let si=Array.isArray(ss)?ss:(ss?[ss]:[]);si.forEach(item=>{if(item.type!=='break'&&item.teacherEmail===te)conf.push(`Накладка: ${c} клас!`);});[row-1,row+1].forEach(nr=>{if(nr<0)return;let ns=da[nr];let ni=Array.isArray(ns)?ns:(ns?[ns]:[]);ni.forEach(item=>{if(item.type!=='break'&&item.teacherEmail===te&&b!==tB)trav.push(`Переїзд: ${c} клас`);});});}if(conf.length>0||trav.length>0){let h=conf.length>0?`<div style="color:#c0392b;font-weight:700;">❌ ${conf[0]}</div>`:'';if(trav.length>0)h+=`<div style="color:#e67e22;font-weight:700;">⚠️ ${trav[0]}</div>`;wb.innerHTML=h;wb.style.display='block';wb.style.background=conf.length>0?'#fdedec':'#fdf2e9';wb.style.border=`1px solid ${conf.length>0?'var(--red)':'#e67e22'}`;}else{wb.innerHTML='<div style="color:#27ae60;font-weight:700;">✅ Вільний, переїзд не потрібен.</div>';wb.style.display='block';wb.style.background='#eafaf1';wb.style.border='1px solid #2ecc71';}};
 window.openCellEditor=async function(clsId,rowIdx,subIdx,lessonObj){
@@ -1335,7 +1343,7 @@ window.closeEditCellModal=function(){document.getElementById('edit-cell-modal').
 window.saveMatrixCell=async function(){
   const clsId=document.getElementById('cell-edit-class').value;const ri=parseInt(document.getElementById('cell-edit-row').value);const sis=document.getElementById('cell-edit-subindex').value;const day=document.getElementById('matrix-day-select').value;
   const type=document.getElementById('cell-type-select').value;const subj=document.getElementById('cell-subj-ua').value.trim();const time=normalizeTimeRange(document.getElementById('cell-time').value);   /* «13:55-14:40» і «13:55 - 14:40» — той самий урок. Різнобій у базі колись зламав кабінет 5 класу: кінець уроку не розбирався, і день «закінчувався» за останньою перервою. */const num=type==='break'?'':document.getElementById('cell-number').value.trim();
-  const ts=document.getElementById('cell-teacher-select');const te=type==='break'?'':ts.value;const tn=te?ts.options[ts.selectedIndex].text.split(' (')[0]:'';
+  const ts=document.getElementById('cell-teacher-select');const clubDefault=type==='extra'&&!ts.value?window.getClubTeacher?.(clsId,subj):null;const te=type==='break'?'':ts.value||clubDefault?.email||'';const tn=clubDefault?.name||(te?ts.options[ts.selectedIndex].text.split(' (')[0]:'');
   let ed=null;if(type==='extra'){const fmt=document.getElementById('cell-extra-format').value;ed={format:fmt};if(fmt==='individual')ed.student=document.getElementById('extra-ind-student').value;else{ed.groupType=document.getElementById('extra-group-type').value;const opts=ed.groupType==='classes'?document.getElementById('extra-group-classes').selectedOptions:document.getElementById('extra-group-students').selectedOptions;ed[ed.groupType==='classes'?'classes':'students']=Array.from(opts).map(o=>o.value);}}
   const nc={number:num,time,subject:{ua:subj,pl:subj},teacherEmail:te,teacherName:tn,type,extraData:ed};
   let tClasses=[clsId];if(type==='extra'&&ed?.format==='group'){if(ed.groupType==='classes'&&ed.classes?.length>0)tClasses=ed.classes;else if(ed.groupType==='students'&&ed.students?.length>0){let ac=new Set();ed.students.forEach(st=>{for(let c in globalAllStudents)if(Object.values(globalAllStudents[c]).includes(st)){ac.add(c);break;}});if(ac.size>0)tClasses=Array.from(ac);}}
