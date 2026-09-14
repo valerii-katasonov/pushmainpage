@@ -1936,6 +1936,17 @@ window.wipeLegacyStudentKeys = async function(){
 // зайве. Секцію без жодного видимого блоку ховаємо теж — інакше лишався б
 // самотній заголовок.
 const DTAB_KEY = 'push_school_dir_tab';
+let workloadLaunchGeneration=0;
+window.loadDirectorWorkload=async function(){
+  const box=document.getElementById('d-workload-results');if(!box)return;
+  const gen=++workloadLaunchGeneration;
+  box.innerHTML='<p class="empty-msg">Завантажую модуль навантаження...</p>';
+  try{
+    const module=await import('./workload.js?v=20260915-2');
+    if(gen!==workloadLaunchGeneration)return;
+    await module.openWorkloadTab();
+  }catch(e){if(gen===workloadLaunchGeneration)box.innerHTML=`<p class="empty-msg" style="color:var(--red);">Не вдалося відкрити навантаження: ${escHtml(e.message)}. Перевірте, що workload.js замінено разом із cabinet.html та director.js.</p>`;}
+};
 window.switchDirTab = function(tab, btn){
   document.querySelectorAll('#dtab-bar .dtab').forEach(b=>b.classList.toggle('on', b.dataset.t === tab));
   const scr = document.getElementById('director-screen');
@@ -1968,7 +1979,7 @@ window.switchDirTab = function(tab, btn){
   });
 
   try{ localStorage.setItem(DTAB_KEY, tab); }catch(e){}
-  if(tab === 'workload' && window.openWorkloadTab) window.openWorkloadTab();
+  if(tab === 'workload') window.loadDirectorWorkload();
   if(tab === 'news' && window.renderNewsFeed) window.renderNewsFeed('d-news-feed');
   // Вкладка «Їжа»: меню з дня в день міняється, тож перечитуємо при
   // кожному відкритті, а не лише при вході в кабінет.
