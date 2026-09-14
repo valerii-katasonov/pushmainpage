@@ -2687,7 +2687,8 @@
 
     <section class="screen-section" data-dtab="ogl">
       <h3>📊 Огляд</h3>
-      <details class="data-card" style="border-left-color:var(--teal);margin-top:0;" ontoggle="if(this.open)loadMaterialsAudit()">
+      <div style="display:flex;flex-direction:column;gap:24px;margin-bottom:18px;">
+      <details id="d-overview-materials" class="data-card" style="border-left-color:var(--teal);background:#f0faf8;margin:0;" ontoggle="if(this.open)loadMaterialsAudit()">
         <summary style="cursor:pointer;font-weight:800;">📚 Підручники та календарне планування</summary>
         <p style="font-size:.83rem;color:#666;">Перевірка предметів із розкладу та каталогу на поточний навчальний рік. Планування вважається доданим, якщо є теми; це не оцінка повноти плану.</p>
         <div class="ma-filters">
@@ -2700,9 +2701,9 @@
         <div id="d-materials-results"><p class="empty-msg">Відкрийте блок, щоб перевірити матеріали.</p></div>
       </details>
       <!-- Статистика -->
-      <div class="data-card" style="border-left-color:var(--purple);background:#fdfafc;margin-top:0;">
-        <h4 style="margin-top:0;color:var(--purple);">📈 Середні оцінки</h4>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:9px;">
+      <details id="d-overview-averages" class="data-card" style="border-left-color:var(--purple);background:#fdfafc;margin:0;">
+        <summary style="cursor:pointer;font-weight:800;color:var(--purple);">📈 Середні оцінки</summary>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;margin-bottom:9px;">
           <select id="d-stat-class" onchange="updateDirectorStatSubjects()" style="flex:1;min-width:110px;">
             <option value="">Оберіть клас...</option>
             <option value="class_1">1</option><option value="class_2">2</option><option value="class_3">3</option>
@@ -2713,6 +2714,7 @@
           <select id="d-stat-subj" onchange="renderDirectorStats()" style="flex:1;min-width:110px;"><option value="">Спочатку клас</option></select>
         </div>
         <div id="d-stat-results"><p class="empty-msg">Оберіть клас та предмет.</p></div>
+      </details>
       </div>
       <!-- Дашборд -->
       <div style="display:flex;gap:9px;margin:16px 0;">
