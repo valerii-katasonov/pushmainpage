@@ -4,6 +4,7 @@
 // schedule and director's drafts.
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, update } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+import { loadGradeWork, prepareGradeWork, setGradeWorkBusy, hasGradeWorkChanges } from './grade-work.js';
 import { ACTIVE_YEAR } from './director.js';
 import { db, getActiveClass, currentUserData, displayGrade, gradeClass6, calculateStudentWeightedAvg, getClassNum, LEVEL_MAX_CLASS, GRADE_WEIGHTS, dayKeys, dayNamesUA, showToast, normalizeTimeRange, localDateString, summarizeAttendanceSlots, gradeTypesCache, escJs, escHtml, notifyEvent, logAction, getUserRoles, getUsersSnap, stuName, gradeWritePaths, isBreakItem, insertSlot, removeSlot, makeBreak, withBreaks, slotBounds, hhmmFromMins, emailKey } from './common.js';
 
@@ -37,6 +38,7 @@ let warnOk = {};
 window.globalTeachersList = window.globalTeachersList || [];
 
 let journalMode='view'; let journalIsTeacher=false;
+let gradeSaving=false;
 let gepCls=''; let gepSubj=''; let gepDate=''; let gepStudent=''; let gepType='П'; let gepCellEl=null; let gepYMonth='';
 // Phase 4b/9: journal zoom state (10% steps, 40%-150%), applied via --journal-scale on
 // .journal-table. journalZoomIsAuto=true means "recompute fit-to-width after every
@@ -125,6 +127,8 @@ window.selectGradeLevel = function(v){
 };
 
 function openGradeEditor(cls,subj,dateStr,student,yMonth,cellEl,existingVal,existingType,presetType){
+  if(gradeSaving)return;
+  loadGradeWork(cls,student,yMonth,subj,dateStr);
   gepCls=cls;gepSubj=subj;gepDate=dateStr;gepStudent=student;gepYMonth=yMonth;gepCellEl=cellEl;gepType=existingType||presetType||'П';
   document.getElementById('gep-label').textContent=`${stuName(cls,student)} | ${subj} | ${dateStr.split('-').reverse().join('.')}`;
   document.getElementById('gep-value').value=existingVal||'';
@@ -132,15 +136,23 @@ function openGradeEditor(cls,subj,dateStr,student,yMonth,cellEl,existingVal,exis
   renderGradeTypeButtons();
   selectGradeType(gepType);
   const popup=document.getElementById('grade-editor-popup');popup.style.display='block';
-  const rect=cellEl.getBoundingClientRect();let top=rect.bottom+6;let left=rect.left;
-  if(top+230>window.innerHeight)top=rect.top-236;if(left+220>window.innerWidth)left=window.innerWidth-225;
+  const rect=cellEl.getBoundingClientRect();
+  const height=popup.offsetHeight,width=popup.offsetWidth;
+  let top=rect.bottom+6,left=rect.left;
+  if(top+height>window.innerHeight)top=rect.top-height-6;
+  top=Math.max(10,Math.min(top,window.innerHeight-height-10));
+  left=Math.max(10,Math.min(left,window.innerWidth-width-10));
   popup.style.top=top+'px';popup.style.left=left+'px';
   setTimeout(()=>document.getElementById('gep-value').focus(),50);
 }
-window.closeGradeEditor=function(){document.getElementById('grade-editor-popup').style.display='none';gepCellEl=null;};
+window.closeGradeEditor=function(){if(gradeSaving)return;document.getElementById('grade-editor-popup').style.display='none';gepCellEl=null;};
 window.confirmGrade=async function(){
+  if(gradeSaving)return;
   let val=document.getElementById('gep-value').value.trim();
-  if(!val)return window.deleteGrade();
+  if(!val){
+    if(hasGradeWorkChanges())return showToast('⚠️ Спершу вкажіть оцінку. Фото роботи не зберігаються без оцінки.');
+    return window.deleteGrade();
+  }
   // Рівень зберігаємо великою літерою: інакше в базі опиняться і «в», і «В»,
   // і будь-яке порівняння почне брехати
   const up=val.toUpperCase();
@@ -153,15 +165,22 @@ window.confirmGrade=async function(){
   // Основа і дзеркало — одним атомарним записом.
   // Під try: якщо запис не пройде, вікно не має закриватися з бадьорим
   // «✅» — учитель піде далі, певний, що оцінка стоїть, а її немає.
+  gradeSaving=true;setGradeWorkBusy(true);
+  const save=document.getElementById('gep-save');if(save){save.disabled=true;save.textContent='⏳ Збереження...';}
   try{
-    await update(ref(db), gradeWritePaths(gepCls,gepYMonth,gepSubj,gepDate,gepStudent,val,gepType));
+    const workPhotos=await prepareGradeWork();
+    const paths=gradeWritePaths(gepCls,gepYMonth,gepSubj,gepDate,gepStudent,val,gepType);
+    // Незмінені вкладення не перезаписуємо: інший учитель міг додати
+    // фото після відкриття цього вікна.
+    if(workPhotos!==undefined)paths[`student_grades/${gepCls}/${gepStudent}/${gepYMonth}/${gepSubj}/${gepDate}/workPhotos`]=workPhotos;
+    await update(ref(db),paths);
   }catch(e){
     console.error('Виставлення оцінки:',e);
     showToast(/permission[_ ]denied/i.test(e.message||'')
       ? '⛔ Немає прав виставляти оцінку в цьому класі'
       : '❌ Оцінку не збережено: '+(e.message||''));
     return;
-  }
+  }finally{gradeSaving=false;setGradeWorkBusy(false);if(save){save.disabled=false;save.textContent='✔ Зберегти';}}
   closeGradeEditor();renderJournalTable();showToast(`✅ ${stuName(gepCls,gepStudent)}: ${displayGrade(val,gepCls)} (${gepType})`);
   // Сповіщаємо батьків/учня. Оцінку показуємо у вигляді, який бачить сім'я
   // (для 1-5 класів — літерою, а не цифрою).
@@ -169,13 +188,15 @@ window.confirmGrade=async function(){
   logAction('grade_set',{cls:gepCls,target:stuName(gepCls,gepStudent),subject:gepSubj,date:gepDate,value:val,gtype:gepType});
 };
 window.deleteGrade=async function(){
+  if(gradeSaving)return;
+  gradeSaving=true;setGradeWorkBusy(true);
   try{
     await update(ref(db), gradeWritePaths(gepCls,gepYMonth,gepSubj,gepDate,gepStudent,null,null));
   }catch(e){
     console.error('Видалення оцінки:',e);
     showToast('❌ Не видалено: '+(e.message||''));
     return;
-  }
+  }finally{gradeSaving=false;setGradeWorkBusy(false);}
   closeGradeEditor();renderJournalTable();showToast('🗑️ Оцінку видалено');
   logAction('grade_del',{cls:gepCls,target:stuName(gepCls,gepStudent),subject:gepSubj,date:gepDate});
 };
