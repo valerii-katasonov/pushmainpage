@@ -663,12 +663,47 @@ document.addEventListener('click',function(e){
 //
 // Тепер тему можна взяти ще раз, а перевитрата годин видно кольором
 // (див. renderTopicOptionsList) — це чесніше, ніж не дати натиснути.
+function topicDirty(){
+  const box=document.getElementById('t-topic-dirty');if(box)box.style.display='block';
+}
+function resetTopicEditor(slot){
+  const input=document.getElementById(`t-topic-${slot}`);if(input)input.dataset.editing='';
+  const opts=document.getElementById(`t-topic-edit-options-${slot}`);if(opts)opts.style.display='none';
+  const check=document.getElementById(`t-topic-plan-${slot}`);if(check)check.checked=false;
+}
+window.editLessonTopic=function(slot){
+  const id=document.getElementById(`t-topic-value-${slot}`)?.value;
+  const input=document.getElementById(`t-topic-${slot}`);if(!input)return;
+  if(id&&id!=='__custom__'){
+    const topic=availableTopicsCache[id];
+    if(!topic)return showToast('Тему не знайдено у плані');
+    if(input.dataset.editing!=='true')input.value=topic.title;
+    input.dataset.editing='true';
+    const opts=document.getElementById(`t-topic-edit-options-${slot}`);if(opts)opts.style.display='block';
+  }
+  input.style.display='block';input.focus();
+};
+window.clearLessonTopic=function(slot){
+  applyTopicToSlot(slot,null);
+  if(slot===2)window.hideSecondTopicSlot();
+  topicDirty();
+};
+window.cancelLessonTopicChanges=async function(){
+  try{await populateTopicSelector();}
+  catch(e){showToast('Не вдалося відновити тему: '+e.message);}
+};
+document.addEventListener('input',e=>{
+  if(['t-topic-1','t-topic-2','t-topic-plan-1','t-topic-plan-2'].includes(e.target.id))topicDirty();
+});
 window.selectTopicOption=function(slot,value,reused){
   if(reused) showToast('↻ Тема вже пройдена — використовуємо повторно');
   const valueInput=document.getElementById(`t-topic-value-${slot}`);
   const trigger=document.getElementById(`t-topic-trigger-${slot}`);
   const customInput=document.getElementById(`t-topic-${slot}`);
   if(!valueInput)return;
+  resetTopicEditor(slot);
+  topicDirty();
+  const display=document.getElementById(`t-topic-display-${slot}`);if(display)display.style.display='none';
   valueInput.value=value;
   document.getElementById(`t-topic-list-${slot}`).style.display='none';
   if(value==='__custom__'){
@@ -770,6 +805,7 @@ export async function populateTopicSelector(){
 }
 window.populateTopicSelector=populateTopicSelector;
 function applyTopicToSlot(slot,entry){
+  resetTopicEditor(slot);
   const valueInput=document.getElementById(`t-topic-value-${slot}`);
   const customInput=document.getElementById(`t-topic-${slot}`);
   const display=document.getElementById(`t-topic-display-${slot}`);
@@ -784,9 +820,10 @@ function applyTopicToSlot(slot,entry){
   if(entry.topicId){
     const t=availableTopicsCache[entry.topicId];
     if(t){
-      valueInput.value=entry.topicId;if(customInput)customInput.style.display='none';
+      valueInput.value=entry.topicId;if(customInput){customInput.style.display=entry.customText?'block':'none';customInput.value=entry.customText||'';customInput.dataset.editing=entry.customText?'true':'';}
+      const opts=document.getElementById(`t-topic-edit-options-${slot}`);if(opts)opts.style.display=entry.customText?'block':'none';
       if(trigger)trigger.innerText=`№ ${t.lessonNum}. ${t.title} (${t.hoursUsed||0}/${t.plannedHours} год.)`;
-      if(display){display.innerText=`№ ${t.lessonNum}. ${t.title}`;display.style.display='block';}
+      if(display){display.innerText=`№ ${t.lessonNum}. ${entry.customText||t.title}`;display.style.display='block';}
     } else {
       // Тему видалили з плану — повертаємо слот у ручний режим, інакше
       // вчитель бачить «(тема видалена)» і не має куди вписати нову.
@@ -823,6 +860,7 @@ async function loadSavedTopicForLesson(){
   if(topicsArr[1]){window.showSecondTopicSlot();applyTopicToSlot(2,topicsArr[1]);}
   else window.hideSecondTopicSlot();
   renderSavedTopicLine(topicsArr, date);
+  const dirty=document.getElementById('t-topic-dirty');if(dirty)dirty.style.display='none';
 }
 
 // Рядок «що збережено на цю дату».
