@@ -7,7 +7,7 @@
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, push, remove, update, onValue } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { renderNewsFeed } from './news.js';
-import { db, auth, CLOUDINARY_URL, UPLOAD_PRESET, HW_FILE_EXT, HW_FILE_MAX_MB, fileExt, getActiveClass, currentUserData, showToast, displayGrade, renderHwItem, renderHwList, dayKeys, formatAttendanceSlotLabel, STICKER_GOAL, stickerGoal, escJs, escHtml, safeUrl, normalizeChildren, notifyEvent, logAction, renderBirthdays, teacherAccessMatrix, getUsersSnap, stuName, gradeWritePaths, localDateString, isMasterTeacher, gradeTypesCache, subjKey, emailKey } from './common.js';
+import { db, auth, CLOUDINARY_URL, UPLOAD_PRESET, HW_FILE_EXT, HW_FILE_MAX_MB, fileExt, getActiveClass, currentUserData, showToast, displayGrade, renderHwItem, renderHwList, dayKeys, formatAttendanceSlotLabel, STICKER_GOAL, stickerGoal, escJs, escHtml, safeUrl, normalizeChildren, notifyEvent, logAction, renderBirthdays, teacherAccessMatrix, getUsersSnap, stuName, gradeWritePaths, localDateString, isMasterTeacher, gradeTypesCache, subjKey, emailKey, subjectsForClassWeek } from './common.js';
 import { populateTopicSelector, availableTopicsCache, planKey, loadAliases } from './curriculum.js';
 
 let currentHwImages=[];
@@ -117,6 +117,7 @@ window.handleSubjectChange=function(){
   if(document.getElementById('hw-textbook')) fillHwTextbooks();
 };
 export function loadCurrentTopicAndHW(){
+  loadTextbooksForTeacher();
   const date=document.getElementById('global-date').value;const subject=document.getElementById('t-subject').value;const cls=getActiveClass();
   // Підручники прив'язані до пари «клас + предмет», тож після зміни класу
   // список теж застаріває
@@ -836,26 +837,65 @@ window.saveBehaviorGrade=async function(){
   document.getElementById('t-behavior-grade').value='';
 };
 // ══════════ TEXTBOOKS (teacher side) ══════════
-async function loadTextbooksForTeacher(){
-  const cls=getActiveClass();const subj=document.getElementById('t-subject').value;
-  if(!subj)return;
-  const snap=await get(ref(db,`textbooks/${cls}/${subjKey(subj)}`));
-  const container=document.getElementById('t-textbooks-list');container.innerHTML='';
-  if(snap.exists()){const data=snap.val();for(let k in data){const tb=data[k];container.innerHTML+=`<div class="textbook-item">📘 <a href="${safeUrl(tb.url)}" target="_blank" rel="noopener noreferrer">${escHtml(tb.title||tb.url)}</a><button onclick="removeTextbook('${cls}','${escJs(subj)}','${k}')" style="background:none;border:none;color:var(--red);cursor:pointer;padding:0;width:auto;margin:0;font-size:1rem;">✖</button></div>`;}}
-  else container.innerHTML='<p class="empty-msg" style="font-size:.8rem;">Підручників ще не додано.</p>';
+let textbookGeneration=0;
+function fillTextbookSubjects(){
+  const select=document.getElementById('t-tb-subject');if(!select)return;
+  const cls=getActiveClass();
+  const current=select.dataset.cls===cls?select.value:'';
+  // Навіть у вихідний беремо предмети всього тижня, а не лише уроки сьогодні.
+  const names=new Set(subjectsForClassWeek(cls));
+  const raw=teacherAccessMatrix[cls]||[];
+  for(const name of (Array.isArray(raw)?raw:Object.values(raw))){
+    if(typeof name==='string'&&name.trim()&&name!=='Всі предмети')names.add(name.trim());
+  }
+  const subjects=[...names].sort((a,b)=>a.localeCompare(b,'uk'));
+  select.innerHTML='<option value="">Оберіть предмет...</option>'+subjects.map(s=>`<option value="${escHtml(s)}">${escHtml(s)}</option>`).join('');
+  const lesson=document.getElementById('t-subject')?.value||'';
+  select.value=subjects.includes(current)?current:subjects.includes(lesson)?lesson:'';
+  select.dataset.cls=cls;
 }
+async function loadTextbooksForTeacher(refresh=true){
+  if(refresh)fillTextbookSubjects();
+  const cls=getActiveClass(),subj=document.getElementById('t-tb-subject')?.value||'';
+  const container=document.getElementById('t-textbooks-list');if(!container)return;
+  const gen=++textbookGeneration;
+  if(!subj){container.innerHTML='<p class="empty-msg">Оберіть предмет підручника.</p>';return;}
+  container.innerHTML='<p class="empty-msg">Завантаження...</p>';
+  try{
+    const snap=await get(ref(db,`textbooks/${cls}/${subjKey(subj)}`));
+    if(gen!==textbookGeneration)return;
+    let html='';
+    if(snap.exists())for(const [key,tb] of Object.entries(snap.val()||{})){
+      if(!tb||typeof tb!=='object')continue;
+      html+=`<div class="textbook-item">📘 <a href="${escHtml(safeUrl(tb.url))}" target="_blank" rel="noopener noreferrer">${escHtml(tb.title||tb.url)}</a><button onclick="removeTextbook('${escJs(cls)}','${escJs(subj)}','${escJs(key)}')" style="background:none;border:none;color:var(--red);cursor:pointer;padding:0;width:auto;margin:0;font-size:1rem;">✖</button></div>`;
+    }
+    container.innerHTML=html||'<p class="empty-msg">Підручників ще не додано.</p>';
+  }catch(e){if(gen===textbookGeneration)container.innerHTML=`<p class="empty-msg">Не вдалося завантажити підручники: ${escHtml(e.message)}</p>`;}
+}
+window.loadTextbooksForTeacher=loadTextbooksForTeacher;
 window.saveTextbook=async function(){
-  const cls=getActiveClass();const subj=document.getElementById('t-subject').value;
-  const title=document.getElementById('t-tb-title').value.trim();const url=document.getElementById('t-tb-url').value.trim();
-  if(!subj||!url){showToast("⚠️ Оберіть предмет та введіть посилання!");return;}
-  if(!url.startsWith('http')){showToast("⚠️ URL має починатись з http!");return;}
-  await push(ref(db,`textbooks/${cls}/${subjKey(subj)}`),{title:title||url,url,addedBy:auth.currentUser.uid});
-  document.getElementById('t-tb-title').value='';document.getElementById('t-tb-url').value='';
-  showToast("📘 Підручник додано!");loadTextbooksForTeacher();
+  const cls=getActiveClass(),subj=document.getElementById('t-tb-subject')?.value||'';
+  const title=document.getElementById('t-tb-title').value.trim(),url=document.getElementById('t-tb-url').value.trim();
+  if(!subj||!url)return showToast('⚠️ Оберіть предмет підручника та введіть посилання!');
+  try{const parsed=new URL(url);if(!['http:','https:'].includes(parsed.protocol))throw Error();}
+  catch(e){return showToast('⚠️ Введіть коректне посилання http:// або https://');}
+  const button=document.getElementById('btn-save-textbook');if(button?.disabled)return;
+  if(button)button.disabled=true;
+  try{
+    await push(ref(db,`textbooks/${cls}/${subjKey(subj)}`),{title:title||url,url,addedBy:auth.currentUser.uid});
+    if(getActiveClass()===cls&&document.getElementById('t-tb-subject')?.value===subj){
+      if(document.getElementById('t-tb-title').value.trim()===title)document.getElementById('t-tb-title').value='';
+      if(document.getElementById('t-tb-url').value.trim()===url)document.getElementById('t-tb-url').value='';
+    }
+    showToast('📘 Підручник додано!');await loadTextbooksForTeacher(false);
+  }catch(e){showToast('❌ Не вдалося додати підручник: '+e.message);}
+  finally{if(button)button.disabled=false;}
 };
 window.removeTextbook=async function(cls,subj,key){
-  await remove(ref(db,`textbooks/${cls}/${subjKey(subj)}/${key}`));
-  showToast("🗑️ Видалено");loadTextbooksForTeacher();
+  try{
+    await remove(ref(db,`textbooks/${cls}/${subjKey(subj)}/${key}`));
+    showToast('🗑️ Видалено');await loadTextbooksForTeacher(false);
+  }catch(e){showToast('❌ Не вдалося видалити підручник: '+e.message);}
 };
 // ══════════ CURRICULUM PLAN (legacy checklist) ══════════
 //
