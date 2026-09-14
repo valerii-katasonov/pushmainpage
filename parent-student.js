@@ -696,43 +696,27 @@ export function loadParentDashboard(){
   // писало під ідентифікатором. Мама відкривала — і бачила порожньо там,
   // де тато щойно обрав гарнір Б.
   renderParentMenu(cls,null,date);
-  // Grades + comments + behavior
-  const ym=date.substring(0,7);
-  Promise.all([
-    get(child(ref(db),`comments/${cls}/${date}`)),
-    get(child(ref(db),`reactions/${cls}/${date}`)),
-    // Дзеркало: лише своя дитина, а не весь клас
-    get(child(ref(db),`student_grades/${cls}/${mySid()}/${ym}`)),
-    get(child(ref(db),`behavior_grades/${cls}/${ym}`))
-  ]).then(([cmS,rxS,mirS,bhS])=>{
-    const list=document.getElementById('p-daily-comments-list');list.innerHTML=renderGradeFormulaInfo();let hasItems=false;
-    const rx=rxS.exists()?rxS.val():{};
-    const sn=currentUserData.studentName;
-    // Дзеркало розгортаємо у звичну форму gr[предмет][дата][імʼя],
-    // щоб малювання нижче лишилося без змін
-    const {gr,gt}=gradesFromMirror(mirS.exists()?mirS.val():{}, sn);
-    const subjs=new Set();
-    if(cmS.exists())Object.keys(cmS.val()).forEach(s=>subjs.add(s));
-    Object.keys(gr).forEach(s=>{if(gr[s][date]&&gr[s][date][sn])subjs.add(s);});
-    subjs.forEach(s=>{
-      const cm=cmS.exists()?(mineOf(cmS.val()[s])||''):'';
-      const gv=gr[s]&&gr[s][date]&&gr[s][date][sn]?gr[s][date][sn]:'';
-      const gtp=gt[s]&&gt[s][date]&&gt[s][date][sn]?gt[s][date][sn]:'';
-      if(cm||gv){
-        hasItems=true;const cr=mineOf(rx[s])||null;const gc=gradeClass6(gv);const dispVal=displayGrade(gv,cls);
-        let gHtml=gv?`<span class="g-cell ${gc}" style="display:inline-flex;padding:4px 9px;border-radius:8px;gap:5px;margin-bottom:3px;"><span class="g-val">${dispVal}</span>${gtp?`<span class="g-type">${gtp}</span>`:''}</span>`:'';
-        // Retake button
-        let retakeBtn='';if(gv){const n=parseInt(gv);if(!isNaN(n)&&n<=3)retakeBtn=`<button class="retake-btn" onclick="sendRetakeRequest('${cls}','${escJs(s)}','${date}','${escJs(currentUserData.studentId||sn)}',${n})" style="margin-left:6px;">🔄 Покращити</button>`;}
-        const rxHtml=`<div style="display:flex;gap:8px;margin-top:8px;padding-top:7px;border-top:1px dashed #eee;align-items:center;"><button style="background:none;border:none;font-size:1.3rem;cursor:pointer;filter:${cr==='👍'?'none':'grayscale(100%)'};opacity:${cr==='👍'?'1':'.5'};padding:4px;width:auto;margin:0;" onclick="sendReaction('${date}','${escJs(s)}','👍')">👍</button><button style="background:none;border:none;font-size:1.3rem;cursor:pointer;filter:${cr==='❤️'?'none':'grayscale(100%)'};opacity:${cr==='❤️'?'1':'.5'};padding:4px;width:auto;margin:0;" onclick="sendReaction('${date}','${escJs(s)}','❤️')">❤️</button><button style="background:none;border:none;font-size:1.3rem;cursor:pointer;filter:${cr==='🔥'?'none':'grayscale(100%)'};opacity:${cr==='🔥'?'1':'.5'};padding:4px;width:auto;margin:0;" onclick="sendReaction('${date}','${escJs(s)}','🔥')">🔥</button></div>`;
-        list.innerHTML+=`<li><b>${escHtml(s)}:</b><br>${gHtml}${retakeBtn}${cm?`<div style="background:#f0f8ff;padding:5px 9px;border-radius:6px;font-style:italic;font-size:.88rem;margin-top:3px;">${escHtml(cm)}</div>`:''}${rxHtml}</li>`;
-      }
-    });
-    if(!hasItems)list.innerHTML+='<li class="empty-msg">Немає оцінок або коментарів.</li>';
-    // Behavior
-    const bEl=document.getElementById('p-behavior-list');bEl.innerHTML='';
-    if(bhS.exists()){const bd=bhS.val();const wDates=getWeekDates(date);let bh='';wDates.forEach(wd=>{if(bd[wd]&&mineOf(bd[wd])!==undefined){const bv=mineOf(bd[wd]);const dispBv=displayGrade(String(bv),cls);const gc=gradeClass6(bv);bh+=`<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px dashed #c5cae9;font-size:.85rem;"><span style="color:#888;flex:1;">${wd.split('-').slice(1).reverse().join('.')}</span><span class="g-cell ${gc}" style="padding:3px 8px;">${dispBv}</span></div>`;}});bEl.innerHTML=bh||'<p class="empty-msg" style="font-size:.82rem;">Оцінок поведінки немає.</p>';}
-    else bEl.innerHTML='<p class="empty-msg" style="font-size:.82rem;">Оцінок поведінки немає.</p>';
-  });
+  renderDashboardBehavior('p',cls,date);
+}
+// Оцінки й коментарі вже показує grades-view.js. Старі списки прибрані
+// з HTML: спроба їх заповнити зривала завантаження кабінету родини.
+async function renderDashboardBehavior(prefix,cls,date){
+  const box=document.getElementById(`${prefix}-behavior-list`);
+  if(!box)return;
+  box.innerHTML='<p class="empty-msg">Завантаження...</p>';
+  try{
+    const snap=await get(child(ref(db),`behavior_grades/${cls}/${date.substring(0,7)}`));
+    const data=snap.exists()?snap.val():{};
+    let html='';
+    for(const day of getWeekDates(date)){
+      if(!data[day]||mineOf(data[day])===undefined)continue;
+      const value=mineOf(data[day]);
+      html+=`<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px dashed #c5cae9;font-size:.85rem;"><span style="color:#888;flex:1;">${escHtml(day.split('-').slice(1).reverse().join('.'))}</span><span class="g-cell ${gradeClass6(value)}" style="padding:3px 8px;">${escHtml(displayGrade(String(value),cls))}</span></div>`;
+    }
+    box.innerHTML=html||'<p class="empty-msg" style="font-size:.82rem;">Оцінок поведінки немає.</p>';
+  }catch(e){
+    box.innerHTML=`<p class="empty-msg">Не вдалося завантажити оцінки поведінки: ${escHtml(e.message||'невідома помилка')}</p>`;
+  }
 }
 // ══════════ ПІДСУМКОВІ ОЦІНКИ У БАТЬКІВ/УЧНЯ ══════════
 // Показуємо лише виставлені вчителем підсумкові — жодних «попередніх»
@@ -1001,30 +985,7 @@ export function loadStudentDashboard(){
   if(window.renderGradesSubject) window.renderGradesSubject();
   Promise.all([loadTodaySubstitutions(cls,date),loadDayTopics(cls,date)])
     .then(()=>{renderDynamicSchedule('student');renderDayTopics('s',date);});
-  const ym=date.substring(0,7);
-  Promise.all([get(child(ref(db),`comments/${cls}/${date}`)),get(child(ref(db),`student_grades/${cls}/${mySid()}/${ym}`)),get(child(ref(db),`behavior_grades/${cls}/${ym}`))]).then(([cmS,mirS,bhS])=>{
-    const list=document.getElementById('s-daily-comments-list');list.innerHTML=renderGradeFormulaInfo();let hasItems=false;
-    const sn=currentUserData.studentName;
-    const {gr,gt}=gradesFromMirror(mirS.exists()?mirS.val():{}, sn);
-    const subjs=new Set();
-    if(cmS.exists())Object.keys(cmS.val()).forEach(s=>subjs.add(s));
-    Object.keys(gr).forEach(s=>{if(gr[s][date]&&gr[s][date][sn])subjs.add(s);});
-    subjs.forEach(s=>{
-      const cm=cmS.exists()?(mineOf(cmS.val()[s])||''):'';
-      const gv=gr[s]&&gr[s][date]&&gr[s][date][sn]?gr[s][date][sn]:'';
-      const gtp=gt[s]&&gt[s][date]&&gt[s][date][sn]?gt[s][date][sn]:'';
-      if(cm||gv){
-        hasItems=true;const gc=gradeClass6(gv);const dispVal=displayGrade(gv,cls);
-        let gHtml=gv?`<span class="g-cell ${gc}" style="display:inline-flex;padding:4px 9px;border-radius:8px;gap:5px;margin-bottom:3px;"><span class="g-val">${dispVal}</span>${gtp?`<span class="g-type">${gtp}</span>`:''}</span>`:'';
-        let retakeBtn='';if(gv){const n=parseInt(gv);if(!isNaN(n)&&n<=3)retakeBtn=`<button class="retake-btn" onclick="sendRetakeRequest('${cls}','${escJs(s)}','${date}','${escJs(currentUserData.studentId||sn)}',${n})" style="margin-left:6px;">🔄 Покращити</button>`;}
-        list.innerHTML+=`<li><b>${escHtml(s)}:</b><br>${gHtml}${retakeBtn}${cm?`<div style="background:#f0f8ff;padding:5px 9px;border-radius:6px;font-style:italic;font-size:.88rem;margin-top:3px;">${escHtml(cm)}</div>`:''}</li>`;
-      }
-    });
-    if(!hasItems)list.innerHTML+='<li class="empty-msg">Немає оцінок або коментарів.</li>';
-    const bEl=document.getElementById('s-behavior-list');bEl.innerHTML='';
-    if(bhS.exists()){const bd=bhS.val();const wDates=getWeekDates(date);let bh='';wDates.forEach(wd=>{if(bd[wd]&&mineOf(bd[wd])!==undefined){const bv=mineOf(bd[wd]);const dispBv=displayGrade(String(bv),cls);const gc=gradeClass6(bv);bh+=`<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px dashed #c5cae9;font-size:.85rem;"><span style="color:#888;flex:1;">${wd.split('-').slice(1).reverse().join('.')}</span><span class="g-cell ${gc}" style="padding:3px 8px;">${dispBv}</span></div>`;}});bEl.innerHTML=bh||'<p class="empty-msg" style="font-size:.82rem;">Оцінок поведінки немає.</p>';}
-    else bEl.innerHTML='<p class="empty-msg" style="font-size:.82rem;">Оцінок поведінки немає.</p>';
-  });
+  renderDashboardBehavior('s',cls,date);
 }
 window.loadStudentDashboard=loadStudentDashboard;
 
