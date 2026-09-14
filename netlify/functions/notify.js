@@ -190,11 +190,30 @@ async function findMealTargets(token) {
   return [...new Set(out)];
 }
 
+// Родина попереджає вчителів свого класу, а не інші родини.
+// Клас у токені вчителя не є призначенням: звіряємо реєстр і матрицю.
+async function findTeacherTargets(token, cls) {
+  const [all, access, heads] = await Promise.all([
+    readDb(token, 'push_tokens'), readDb(token, 'teacher_access'), readDb(token, 'class_teachers')
+  ]);
+  const head = emailKey(heads?.[cls]?.teacherEmail);
+  const roles = ['teacher', 'class_teacher', 'art_school_teacher', 'music_teacher', 'master_class_teacher'];
+  return [...new Set(Object.values(all || {}).filter(t => {
+    if (!t?.token || !t.email || !roles.includes(t.role)) return false;
+    const key = emailKey(t.email);
+    const assigned = access?.[key]?.[cls];
+    const subjects = Array.isArray(assigned) ? assigned : Object.values(assigned || {});
+    return key === head || subjects.some(v => typeof v === 'string' && v.trim());
+  }).map(t => t.token))];
+}
+
 // Тексти подій. Імена дітей у сповіщення не пишемо: воно з'являється на
 // екрані блокування, де його може побачити хто завгодно.
 const EVENTS = {
   grade:      (p) => ({ title: '📊 Нова оцінка', body: `${p.subject || 'Предмет'}: ${p.value || ''}`.trim(), tag: 'grade' }),
   absence:    (p) => ({ title: '🚨 Відсутність на уроці', body: `Учитель відмітив відсутність${p.subject ? ' — ' + p.subject : ''}`, tag: 'absence' }),
+  late:       (p) => ({ title: '⏰ Запізнення на урок', body: `Учитель відмітив запізнення${p.subject ? ' — ' + p.subject : ''}`, tag: 'late' }),
+  attendance_report: (p) => ({ title: p.value === 'late' ? '⏰ Учень запізнюється' : '🚨 Учень буде відсутній', body: `Родина повідомила про ${p.value === 'late' ? 'запізнення' : 'відсутність'}. Подробиці — у відвідуваності класу.`, tag: 'attendance-report' }),
   comment:    (p) => ({ title: '💬 Коментар учителя', body: p.subject ? `Новий коментар: ${p.subject}` : 'Новий коментар у щоденнику', tag: 'comment' }),
   homework:   (p) => ({ title: '📚 Нове завдання', body: `${p.subject || 'Предмет'}: задано домашнє завдання`, tag: 'hw' }),
   chat:       (p) => ({ title: '💬 Нове повідомлення',
@@ -263,7 +282,9 @@ exports.handler = async (event) => {
         ok: true, project: sa.project_id, tokens: list.length, eligible: eligible.length
       }) };
     }
-    const targets = body.type === 'chat'
+    const targets = body.type === 'attendance_report'
+      ? await findTeacherTargets(token, cls)
+      : body.type === 'chat'
       ? await findByEmails(token, Array.isArray(body.to) ? body.to.slice(0, 30) : [])
       : (body.type === 'news' ? await findNewsTargets(token, cls)
       : (isClassWide ? await findClassTargets(token, cls)
@@ -286,6 +307,8 @@ exports.handler = async (event) => {
       news:     'school',   // оголошення — вкладка «Школа»
       grade:    'grades',
       absence:  'day',
+      late:     'day',
+      attendance_report: 'day',
       menu:     'day',
       homework: 'day',      // ДЗ живе на вкладці «Сьогодні», поруч з уроками
       chat:     'chat'      // особливий випадок: відкриваємо саме листування
