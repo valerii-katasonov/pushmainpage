@@ -20,6 +20,10 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <!-- QR для переказу за стандартом ZBP. Малюємо самі, а не через
+       онлайн-сервіс: інакше номер рахунку школи й прізвище дитини
+       їхали б на чужий сервер заради картинки. -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
   <style>
     :root {
       --teal:#00796b; --teal-l:#e0f2f1; --accent:#00f2fe;
@@ -273,6 +277,28 @@
     .pms-presets{display:flex;gap:7px;margin-top:8px;flex-wrap:wrap;}
     .pms-presets button{width:auto;margin:0;padding:7px 13px;font-size:.78rem;font-weight:600;
                         background:#e0f7fa;color:#00838f;border:1px solid #80deea;border-radius:9px;cursor:pointer;}
+    /* ── Оплата за навчання ── */
+    .pay-qr{text-align:center;margin-bottom:13px;}
+    .pay-qr svg{max-width:220px;height:auto;background:#fff;border-radius:10px;padding:6px;
+                border:1px solid #c8e6c9;}
+    .pay-qr span{display:block;font-size:.76rem;color:#4c7a52;margin-top:6px;}
+    .pay-noqr{font-size:.82rem;color:#7a5c00;background:#fff8e1;border:1px solid #ffe0a3;
+              border-radius:9px;padding:9px 11px;margin-bottom:11px;}
+    .pay-row{display:flex;align-items:center;gap:9px;padding:7px 0;border-bottom:1px dashed #d7ead9;}
+    .pay-row:last-of-type{border-bottom:none;}
+    .pay-label{flex:0 0 92px;font-size:.72rem;color:#5b7c60;text-transform:uppercase;letter-spacing:.03em;}
+    .pay-value{flex:1;min-width:0;font-size:.86rem;color:#1b5e20;overflow-wrap:anywhere;}
+    .pay-copy{width:auto;margin:0;flex:0 0 auto;padding:6px 11px;font-size:.74rem;font-weight:700;
+              background:#2e7d32;color:#fff;border:none;border-radius:8px;cursor:pointer;}
+    .pay-note{font-size:.76rem;color:#5b7c60;line-height:1.45;margin:11px 0 0;}
+    .pay-form label{display:block;font-size:.78rem;color:#37474f;font-weight:600;margin-bottom:9px;}
+    .pay-form label small{display:block;font-weight:400;color:#8aa08d;font-size:.72rem;margin-bottom:2px;}
+    .pay-form input{margin:0;font-size:.88rem;}
+    .pay-form button{width:auto;margin:4px 0 0;padding:9px 16px;font-size:.83rem;font-weight:700;
+                     background:#2e7d32;color:#fff;border:none;border-radius:9px;cursor:pointer;}
+    .pay-preview{margin-top:11px;font-size:.8rem;color:#37474f;background:#fff;border:1px solid #d7ead9;
+                 border-radius:9px;padding:9px 11px;}
+    .pay-warn{color:#a15c00;font-size:.76rem;}
     /* ── Харчування персоналу ── */
     .k-staff-block{margin-top:18px;padding-top:14px;border-top:2px dashed #b2ebf2;}
     .k-staff-block h4{margin:0 0 9px;font-size:.92rem;color:#00838f;}
@@ -1648,6 +1674,8 @@
     /* topic card */
     .topic-card{background:linear-gradient(135deg,#667eea12,#764ba212);border:1px solid #764ba230;border-radius:12px;padding:13px;margin-bottom:12px;}
     .topic-card label{margin-top:0;color:#764ba2;font-size:.83rem;}
+    .topic-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px;}
+    .topic-actions button{width:auto;padding:6px 9px;background:#edf0f5;color:#333;font-size:.8rem;}
     .topic-display{background:#f3e5f5;border-left:3px solid #764ba2;padding:6px 11px;border-radius:6px;font-size:.83rem;color:#4a148c;font-weight:600;margin-top:5px;}
     /* ── CURRICULUM ── */
     .curr-drop-zone{border:2px dashed var(--blue);border-radius:11px;padding:16px;text-align:center;background:#f0f8ff;cursor:pointer;transition:.2s;display:block;}
@@ -2621,6 +2649,13 @@
       <button class="dtab"    data-t="nalash" onclick="switchDirTab('nalash',this)">Налаштування</button>
     </div>
 
+    <section class="screen-section" data-dtab="nalash">
+      <h3>💳 Реквізити для оплати</h3>
+      <div class="data-card" style="border-left-color:#2e7d32;background:#f1f8f2;margin-top:0;">
+        <div id="d-pay-settings" class="pay-form"><p class="empty-msg">Завантаження...</p></div>
+      </div>
+    </section>
+
     <section class="screen-section" data-dtab="meals">
       <!-- Власне харчування співробітника. Той самий вибір, що й у родин,
            але без сніданків і підвечірків: кухня їх персоналу не пропонує. -->
@@ -3347,6 +3382,16 @@
              інакше стан розмітки суперечить стану значення. -->
         <input type="text" id="t-topic-1" placeholder="Введіть тему вручну..." style="margin-top:6px;">
         <div id="t-topic-display-1" style="display:none;" class="topic-display"></div>
+        <div class="topic-actions">
+          <button type="button" onclick="editLessonTopic(1)">✏️ Редагувати</button>
+          <button type="button" onclick="toggleTopicDropdown(1)">🔄 Замінити</button>
+          <button type="button" onclick="clearLessonTopic(1)">✖ Прибрати з уроку</button>
+        </div>
+        <div id="t-topic-edit-options-1" style="display:none;">
+          <small>Зміни тексту стосуються тільки цього уроку.</small>
+          <label style="display:flex;gap:7px;align-items:center;"><input type="checkbox" id="t-topic-plan-1" style="width:auto;">Змінити також у календарному плані</label>
+          <small>Якщо позначити: назва зміниться в усіх уроках, що використовують цю тему, та у спільному плані предметів.</small>
+        </div>
         <button type="button" id="btn-add-second-topic" onclick="showSecondTopicSlot()" style="margin-top:8px;background:#ecf0f1;color:#333;">+ Додати другу тему</button>
         <div id="t-topic-slot-2-wrap" style="display:none;margin-top:8px;">
           <label>📌 Тема уроку 2:</label>
@@ -3357,7 +3402,16 @@
           </div>
           <input type="text" id="t-topic-2" placeholder="Введіть тему вручну..." style="margin-top:6px;display:none;">
           <div id="t-topic-display-2" style="display:none;" class="topic-display"></div>
-          <button type="button" onclick="hideSecondTopicSlot()" style="margin-top:5px;background:none;color:var(--red);width:auto;padding:2px;">✖ Прибрати</button>
+        <div class="topic-actions">
+          <button type="button" onclick="editLessonTopic(2)">✏️ Редагувати</button>
+          <button type="button" onclick="toggleTopicDropdown(2)">🔄 Замінити</button>
+          <button type="button" onclick="clearLessonTopic(2)">✖ Прибрати з уроку</button>
+        </div>
+        <div id="t-topic-edit-options-2" style="display:none;">
+          <small>Зміни тексту стосуються тільки цього уроку.</small>
+          <label style="display:flex;gap:7px;align-items:center;"><input type="checkbox" id="t-topic-plan-2" style="width:auto;">Змінити також у календарному плані</label>
+          <small>Якщо позначити: назва зміниться в усіх уроках, що використовують цю тему, та у спільному плані предметів.</small>
+        </div>
         </div>
         <!-- Своя кнопка на тему. Раніше тема й ДЗ зберігалися однією
              кнопкою внизу, і це плутало: учитель заповнював тільки тему,
@@ -3365,6 +3419,7 @@
              щось зайве. Тепер кожен блок зберігається окремо. -->
         <button type="button" class="qa-btn qa-save" id="btn-save-topic"
                 onclick="saveLessonTopic()" style="margin-top:11px;">💾 Зберегти тему</button>
+        <div id="t-topic-dirty" style="display:none;margin-top:8px;">Є незбережені зміни. <button type="button" onclick="cancelLessonTopicChanges()" style="width:auto;">Скасувати зміни</button></div>
       </div>
       <!-- ДЗ + Фото -->
       <div id="t-hw-input-wrapper">
@@ -3845,6 +3900,15 @@
         <h4 style="margin-top:0;color:#00838f;">🏆 Підсумкові оцінки</h4>
         <div id="p-final-grades" class="fin-box" style="display:none;"></div>
         <button type="button" id="btn-report-card" onclick="downloadMyReportCard()" style="background:#00838f;color:#fff;margin-top:0;">📄 Завантажити табель</button>
+      </div>
+    </section>
+
+    <!-- Оплата за навчання. QR за стандартом ZBP: посередника немає,
+         комісії немає, гроші йдуть прямо на рахунок школи. -->
+    <section class="screen-section" data-dtab="school">
+      <h3>💳 Оплата за навчання</h3>
+      <div class="data-card" style="border-left-color:#2e7d32;background:#f1f8f2;margin-top:0;">
+        <div class="pay-box"></div>
       </div>
     </section>
 
@@ -4575,6 +4639,7 @@ document.addEventListener('DOMContentLoaded', function(){
 <script type="module" src="mastery.js"></script>
 <script type="module" src="grades-view.js"></script>
 <script type="module" src="staff-meals.js"></script>
+<script type="module" src="payment.js"></script>
 
   <!-- ═══ ЕКРАН ЗГОДИ ПРИ ВХОДІ ═══
        Модалка без кнопки закриття: GDPR вимагає поінформувати ДО обробки,
