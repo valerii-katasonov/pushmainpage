@@ -181,6 +181,8 @@ function readCurrentTopicText(){
   // інакше — введена вручну.
   const idEl=document.getElementById('t-topic-value-1');
   const selectedId=idEl?idEl.value:'__custom__';
+  const edited=document.getElementById('t-topic-1');
+  if(edited?.dataset.editing==='true')return edited.value.trim();
   if(selectedId&&selectedId!=='__custom__'){
     const t=availableTopicsCache[selectedId];
     if(t&&t.title)return t.title;
@@ -361,7 +363,7 @@ window.saveQuickJournal=async function(){
       else{
         await set(ref(db,`attendance/${cls}/${date}/${sid}/${slotKey}`),
           {status,reason:status==='late'?'запізнення':'Відмічено вчителем',markedBy:'teacher'});
-        nA++;notifyEvent('absence',{class:cls,studentName:name,subject:subj});
+        nA++;notifyEvent(status==='late'?'late':'absence',{class:cls,studentName:name,subject:subj});
       }
     }
     if(Object.keys(gPatch).length){
@@ -677,7 +679,9 @@ window.saveLessonTopic=function(){
     const slot2Active=document.getElementById('t-topic-slot-2-wrap')&&document.getElementById('t-topic-slot-2-wrap').style.display!=='none';
     const slotInputs=[1,...(slot2Active?[2]:[])].map(n=>({
       selectedId:document.getElementById(`t-topic-value-${n}`)?document.getElementById(`t-topic-value-${n}`).value:'__custom__',
-      customText:document.getElementById(`t-topic-${n}`)?document.getElementById(`t-topic-${n}`).value.trim():''
+      customText:document.getElementById(`t-topic-${n}`)?document.getElementById(`t-topic-${n}`).value.trim():'',
+      editing:document.getElementById(`t-topic-${n}`)?.dataset.editing==='true',
+      changePlan:!!document.getElementById(`t-topic-plan-${n}`)?.checked
     }));
 
     // 2. Попередній стан (будь-яку стару форму запису зводимо до масиву)
@@ -692,8 +696,9 @@ window.saveLessonTopic=function(){
 
     // 3. Новий масив тем; ліміт годин перевіряємо для КОЖНОЇ нової окремо
     let newTopics=[];
+    const updates={};
     for(let i=0;i<slotInputs.length;i++){
-      const {selectedId,customText}=slotInputs[i];
+      const {selectedId,customText,editing,changePlan}=slotInputs[i];
       if(selectedId==='__custom__'){ if(customText)newTopics.push({customText}); continue; }
       // ЛІМІТ ГОДИН БІЛЬШЕ НЕ ЗАБОРОНЯЄ, А ПОПЕРЕДЖАЄ.
       //
@@ -712,42 +717,31 @@ window.saveLessonTopic=function(){
             showToast(`↻ Тема "${t.title}" береться повторно — години понад план`);
         }
       }
-      newTopics.push({topicId:selectedId});
+      if(!availableTopicsCache[selectedId])throw new Error('Обрану тему видалено з плану. Оберіть іншу тему.');
+      if(editing&&!customText)throw new Error('Назва теми не може бути порожньою');
+      if(editing&&changePlan)updates[`curriculum_plans/${cls}/${pk}/topics/${selectedId}/title`]=customText;
+      newTopics.push(editing&&!changePlan?{topicId:selectedId,customText}:{topicId:selectedId});
     }
     if(newTopics.length===2&&newTopics[0].topicId&&newTopics[0].topicId===newTopics[1].topicId){
       showToast('⚠️ Тема 1 і Тема 2 не можуть збігатися!');
       return false;
     }
 
-    // 4. Запис або видалення теми
-    if(newTopics.length>0) await set(ref(db,`lesson_topics/${cls}/${sk}/${date}`),{topics:newTopics});
-    else await remove(ref(db,`lesson_topics/${cls}/${sk}/${date}`));
-
-    // 5. hoursUsed — окремо для кожної позиції масиву (слот 1 порівнюється
-    //    лише зі слотом 1, слот 2 — лише зі слотом 2)
-    const maxLen=Math.max(prevTopics.length,newTopics.length);
-    for(let i=0;i<maxLen;i++){
-      const prevId=prevTopics[i]?.topicId||null;
-      const newId=newTopics[i]?.topicId||null;
-      if(prevId===newId)continue;
-      // pk, а не sk: ідентифікатори тем прийшли зі СПІЛЬНОГО плану, і
-      // лічильник годин має зростати саме там, звідки взято тему.
-      if(prevId){
-        const pSnap=await get(ref(db,`curriculum_plans/${cls}/${pk}/topics/${prevId}`));
-        if(pSnap.exists()){
-          const t=pSnap.val();
-          await set(ref(db,`curriculum_plans/${cls}/${pk}/topics/${prevId}/hoursUsed`),Math.max(0,(t.hoursUsed||0)-1));
-        }
-      }
-      if(newId){
-        const nSnap=await get(ref(db,`curriculum_plans/${cls}/${pk}/topics/${newId}`));
-        if(nSnap.exists()){
-          const t=nSnap.val();
-          await set(ref(db,`curriculum_plans/${cls}/${pk}/topics/${newId}/hoursUsed`),(t.hoursUsed||0)+1);
-        }
-      }
+    // Тема і години зберігаються одним update: відмова правил не може
+    // залишити нову тему зі старими лічильниками. Порівнюємо внесок тем,
+    // а не позиції: після видалення першої друга лише переміщується.
+    updates[`lesson_topics/${cls}/${sk}/${date}`]=newTopics.length?{topics:newTopics}:null;
+    const delta={};
+    for(const t of prevTopics)if(t.topicId)delta[t.topicId]=(delta[t.topicId]||0)-1;
+    for(const t of newTopics)if(t.topicId)delta[t.topicId]=(delta[t.topicId]||0)+1;
+    for(const [id,change] of Object.entries(delta)){
+      if(!change)continue;
+      const snap=await get(ref(db,`curriculum_plans/${cls}/${pk}/topics/${id}`));
+      if(snap.exists())updates[`curriculum_plans/${cls}/${pk}/topics/${id}/hoursUsed`]=Math.max(0,(snap.val().hoursUsed||0)+change);
     }
-    populateTopicSelector();   // перемальовує обидві випадайки
+    await update(ref(db),updates);
+    try{await populateTopicSelector();}
+    catch(e){showToast('Тему збережено, але не вдалося оновити список. Оновіть сторінку.');}
     return newTopics.length ? '✅ Тему збережено' : '✅ Тему прибрано';
   });
 };
@@ -1156,7 +1150,7 @@ window.teacherMarkAbsent=function(){
   const lessonSel=document.getElementById('t-mark-absent-lesson');
   const lessonLabel=lessonSel&&lessonSel.selectedIndex>=0
     ? (lessonSel.options[lessonSel.selectedIndex].text||'').replace(/^\d+\.\s*/,'') : '';
-  notifyEvent('absence',{class:getActiveClass(),studentName:stuName(getActiveClass(),st),
+  notifyEvent(status==='late'?'late':'absence',{class:getActiveClass(),studentName:stuName(getActiveClass(),st),
     subject:(slotKey==='all'?'':lessonLabel)});
     logAction('attendance',{cls:getActiveClass(),target:stuName(getActiveClass(),st),date,value:status,reason:rs});
     document.getElementById('t-mark-absent-student').value='';
