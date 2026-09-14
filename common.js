@@ -2476,6 +2476,8 @@ async function initUserSession(){
   // Власне харчування співробітника — блок є в кабінетах учителя,
   // директора й адміністрації; модуль сам вирішує, чи показувати.
   if(window.renderStaffMeals) window.renderStaffMeals();
+  // Реквізити для оплати — у батьків і учня
+  if(window.renderPaymentBlock) window.renderPaymentBlock();
   setTimeout(()=>{ if(window.watchUnread) window.watchUnread(); }, 300);
   try{
     let dirs = await preloadStudentDirs();
@@ -3010,14 +3012,15 @@ window.renderPushButton=renderPushButton;
 // не налаштовані або впали — основна дія (оцінка, відмітка) вже збережена
 // і не має зриватися через це.
 export function notifyEvent(type,payload){
-  if(!pushConfigured) return Promise.resolve({ok:false,error:'Push не налаштовано: немає VAPID-ключа'});
+  // VAPID потрібен отримувачу для підписки, а не відправнику події.
   return fetch('/.netlify/functions/notify',{
     method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({type,...payload})
   }).then(async r=>{
     let d={}; try{ d=await r.json(); }catch(e){}
     if(!r.ok) return {ok:false,error:d.error||`HTTP ${r.status}`};
-    return {ok:true,sent:d.sent||0,note:d.note||''};
+    const partial = typeof d.total==='number' && (d.sent||0)<d.total;
+    return {ok:!partial,sent:d.sent||0,total:d.total,note:d.note||'',error:partial?(d.firstError||'Частину сповіщень не доставлено'):''};
   }).catch(e=>({ok:false,error:e.message||'Немає звʼязку з сервером'}));
 }
 // Попередження на екрані замість мовчазної тиші, коли push не налаштований
