@@ -1,146 +1,4784 @@
-// Навантаження з чинного розкладу; історичні версії розкладу не зберігаються.
-import { ref, get, query, orderByKey, startAt, endAt } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, currentUserData, isDirectorRole, getUserRoles, isTeacherRole, emailKey, subjKey, escHtml, mondayOf, localDateString, dayKeys, parseTimeRange, expandAltSubjects, altPairKey, getClassNum } from './common.js';
-import { catalogList } from './subjects.js';
-import { ACTIVE_YEAR } from './director.js';
-export function workloadDates(monday){
-  const [y,m,d]=monday.split('-').map(Number),out=[];
-  for(let i=0;i<7;i++){const date=new Date(y,m-1,d+i);out.push(`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`);}
-  return out;
-}
-export function buildWorkload(data,monday,today,year=ACTIVE_YEAR){
-  const {schedules={},catalogs={},users={},access={},choices={},subs={},topics={},calendar={}}=data;
-  const teachers=new Map(),issues=[];
-  for(const u of Object.values(users))if(u?.email&&!u.disabled&&getUserRoles(u).some(isTeacherRole)){
-    teachers.set(emailKey(u.email),{name:[u.firstName,u.lastName].filter(Boolean).join(' ')||u.email,email:u.email,lessons:[],possible:[],conflicts:[],missing:[]});
-  }
-  const dates=workloadDates(monday);
-  const applies=(event,cls)=>!event.classes||event.classes==='all'||
-    (Array.isArray(event.classes)?event.classes:Object.values(event.classes)).includes(cls);
-  const closed=(date,cls)=>Object.values(calendar.holidays||{}).some(h=>h?.date===date&&h.calendarType!=='art_school'&&applies(h,cls))||
-    Object.values(calendar.breaks||{}).some(b=>b?.startDate&&b.endDate&&date>=b.startDate&&date<=b.endDate&&applies(b,cls));
-  function teacherFor(cls,subject,item){
-    if(item.teacherEmail)return emailKey(item.teacherEmail);
-    const catalog=catalogList(catalogs[year]?.[cls]??catalogs[cls]??{});
-    const assigned=new Set(catalog.filter(e=>subjKey(e.name)===subjKey(subject)&&e.teacherEmail).map(e=>emailKey(e.teacherEmail)));
-    // Дублікати предмета з різними викладачами — неоднозначне
-    // призначення, а не причина приписати урок першому запису.
-    if(assigned.size>1)return '';
-    if(assigned.size===1)return [...assigned][0];
-    const candidates=Object.entries(access).filter(([key,matrix])=>{
-      if(!teachers.has(key))return false;
-      const raw=matrix?.[cls]||[];
-      return (Array.isArray(raw)?raw:Object.values(raw)).some(s=>typeof s==='string'&&subjKey(s)===subjKey(subject));
-    }).map(([key])=>key);
-    return candidates.length===1?candidates[0]:'';
-  }
-  for(const [cls,school] of Object.entries(schedules)){
-    if(!/^class_\d+$/.test(cls))continue;
-    dates.forEach((date,index)=>{
-      if(closed(date,cls))return;
-      const dn=dayKeys[(index+1)%7],raw=school.lessons?.[dn]||[];
-      const slots=(Array.isArray(raw)?raw.map((slot,i)=>[i,slot]):Object.entries(raw)).sort((a,b)=>Number(a[0])-Number(b[0]));
-      slots.forEach(([slotIndex,slot])=>{
-        const items=Array.isArray(slot)?slot:[slot];
-        items.forEach((item,itemIndex)=>{
-          if(!item||typeof item!=='object'||item.type==='break')return;
-          const names=expandAltSubjects(item);if(!names.length)return;
-          const week=choices[cls]?.[monday]||{};
-          const choice=week.pairs?.[altPairKey(names)]||week[dn]?.[slotIndex]||'';
-          const resolved=names.length===1||names.includes(choice);
-          const subjects=resolved?[names.length===1?names[0]:choice]:names;
-          const candidates=new Set();let hasUnassigned=false;
-          for(const subject of subjects){
-            const daily=subs[date]?.[cls]||{};
-            const cover=daily[slotIndex]?.subject===subject?daily[slotIndex]:daily.any?.subject===subject?daily.any:null;
-            const key=cover?.subEmail?emailKey(cover.subEmail):teacherFor(cls,subject,item);
-            const parsed=parseTimeRange(item.time||'');
-            // Загальний парсер терпимий до введення; для підрахунку годин
-            // додатково відкидаємо неіснуючі хвилини та години.
-            const parts=parsed.text.match(/\d+/g)?.map(Number);
-            const valid=parsed.start!==null&&parsed.end!==null&&parsed.end>parsed.start&&
-              parts?.length===4&&parts[0]<24&&parts[2]<24&&parts[1]<60&&parts[3]<60;
-            const lesson={id:`${cls}/${dn}/${slotIndex}/${itemIndex}`,cls,subject,date,dn,time:item.time||'',start:valid?parsed.start:null,end:valid?parsed.end:null,minutes:valid?parsed.end-parsed.start:0,substitute:!!cover};
-            if(!key||!teachers.has(key)){hasUnassigned=true;issues.push({...lesson,reason:key?'Учитель відсутній або вимкнений у списку персоналу':'Учителя не визначено однозначно',possible:!resolved});continue;}
-            const teacher=teachers.get(key);
-            if(resolved)teacher.lessons.push(lesson);
-            else if(!candidates.has(key)){teacher.possible.push({...lesson,subject:names.join(' / '),pending:true});candidates.add(key);}
-          }
-          // Якщо обидва варіанти веде одна людина, заняття точно її;
-          // невизначеною лишається лише тема, не навантаження.
-          if(!resolved&&!hasUnassigned&&candidates.size===1){
-            const teacher=teachers.get([...candidates][0]);teacher.lessons.push(teacher.possible.pop());
-          }
-        });
-      });
-    });
-  }
-  for(const teacher of teachers.values()){
-    const checked=new Set();
-    for(const l of teacher.lessons){
-      const key=`${l.cls}|${l.subject}|${l.date}`;
-      if(!l.pending&&l.date<today&&!checked.has(key)){
-        checked.add(key);
-        const record=topics[l.cls]?.[subjKey(l.subject)]?.[l.date];
-        const entries=typeof record==='string'?[{customText:record}]:Array.isArray(record?.topics)?record.topics:record?[record]:[];
-        if(!entries.some(t=>t?.topicId||String(t?.customText||'').trim()))teacher.missing.push(l);
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Push School — Кабінет v2</title>
+  <link rel="manifest" href="manifest-cabinet.json">
+  <meta name="theme-color" content="#fff">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <!-- iOS не бере іконку з маніфесту: для екрана «Домів» потрібен саме
+       apple-touch-icon у розмітці. Раніше тут стояло чуже посилання на
+       зовнішній CDN — звідти й бралася не та картинка. -->
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+  <link rel="apple-touch-icon" sizes="167x167" href="apple-touch-icon-167.png">
+  <link rel="apple-touch-icon" sizes="152x152" href="apple-touch-icon-152.png">
+  <meta name="apple-mobile-web-app-title" content="Push School">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <!-- QR для переказу за стандартом ZBP. Малюємо самі, а не через
+       онлайн-сервіс: інакше номер рахунку школи й прізвище дитини
+       їхали б на чужий сервер заради картинки. -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+  <style>
+    :root {
+      --teal:#00796b; --teal-l:#e0f2f1; --accent:#00f2fe;
+      --red:#e74c3c; --green:#27ae60; --orange:#f39c12; --purple:#8e44ad; --blue:#2980b9;
+      /* 6-бальна шкала — окрема семантика (зелений=добре, червоний=погано), не змішувати з палітрою карток вище */
+      --g6:#0d47a1; --g5:#1565c0; --g4:#2e7d32; --g3:#f57f17; --g2:#bf360c; --g1:#b71c1c;
+      /* ── DESIGN SYSTEM (Крок B): spacing scale ── */
+      --space-1:4px; --space-2:8px; --space-3:12px; --space-4:16px; --space-5:24px; --space-6:32px;
+      /* ── typography scale ── */
+      --text-xs:.72rem; --text-sm:.82rem; --text-base:.92rem; --text-lg:1.15rem; --text-xl:1.6rem;
+      /* ── shared card tokens (unifies .data-card/.payment-card/.schedule-box) ── */
+      --card-radius:12px; --card-shadow:0 2px 10px rgba(0,0,0,.07);
+      /* ── shared badge tokens ── */
+      --badge-radius:8px;
+    }
+    *{box-sizing:border-box;}
+    body{font-family:'Montserrat',sans-serif;background:linear-gradient(135deg,#f0f8ff,#e6e6fa);min-height:100vh;margin:0;display:flex;justify-content:center;align-items:flex-start;padding:20px;}
+    .container{background:rgba(255,255,255,.95);backdrop-filter:blur(10px);max-width:560px;width:100%;padding:28px;border-radius:20px;box-shadow:0 10px 30px rgba(0,0,0,.1);margin-bottom:40px;}
+    h2{color:var(--teal);text-align:center;margin-top:0;font-size:var(--text-xl);}
+    h3{color:#333;border-bottom:2px solid #eee;padding-bottom:var(--space-2);margin-top:var(--space-5);font-size:var(--text-lg);}
+    label{display:block;margin-top:var(--space-4);font-weight:600;color:#555;font-size:var(--text-base);}
+    input[type=email],input[type=password],input[type=text],input[type=date],input[type=month],select,textarea{width:100%;padding:11px;margin-top:4px;border:1px solid #ccc;border-radius:11px;font-family:inherit;font-size:.95rem;}
+    input[type=file]{margin-top:4px;font-size:.88rem;border:1px dashed var(--teal);padding:9px;border-radius:11px;width:100%;background:#fafafa;cursor:pointer;}
+    button{width:100%;padding:14px;border:none;border-radius:11px;cursor:pointer;font-weight:700;font-size:var(--text-base);transition:.25s;margin-top:var(--space-4);font-family:inherit;}
+    /* ── DESIGN SYSTEM: primary/save/danger(logout) share the `button` base above, only color differs ── */
+    .btn-login{background:linear-gradient(135deg,#00f2fe,#4facfe);color:#fff;}
+    .btn-logout{background:var(--red);color:#fff;margin-top:var(--space-5);}
+    .btn-save{background:linear-gradient(135deg,#43e97b,#38f9d7);color:#1a1a1a;box-shadow:0 4px 14px rgba(67,233,123,.3);}
+    .panel{display:none;}
+    /* ── DESIGN SYSTEM: .screen-section groups related cards/details under one
+       heading on every role screen (admin/director/teacher/parent/student).
+       On mobile it's just spacing; on desktop (see @media 1024px) it becomes
+       the actual grid unit, replacing the old brittle inline-style selectors. */
+    .screen-section{margin-bottom:var(--space-6);}
+    .screen-section:last-of-type{margin-bottom:var(--space-4);}
+    .screen-section>h3:first-child{margin-top:0;}
+    /* ── DESIGN SYSTEM: unified card pattern (was 3 near-duplicate rules) ── */
+    .data-card,.payment-card,.schedule-box{background:#fff;border-radius:var(--card-radius);padding:var(--space-4);box-shadow:var(--card-shadow);}
+    .data-card{border-left:4px solid var(--teal);margin-top:var(--space-4);}
+    .empty-msg{color:#999;font-style:italic;margin:var(--space-1) 0;}
+    /* ── unified badge base (colors stay per-variant/semantic) ── */
+    .badge{display:inline-block;padding:3px 7px;border-radius:7px;font-size:var(--text-xs);font-weight:700;margin-left:4px;}
+    .badge-late{background:#fff3cd;color:#856404;border:1px solid #ffeeba;}
+    .badge-absent{background:#f8d7da;color:#721c24;border:1px solid #f5c6cb;}
+    .list-dash{margin:0;padding-left:18px;color:#444;line-height:1.6;}
+    .list-dash li{margin-bottom:10px;}
+    /* ── TOAST ── */
+    #toast-container{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:9999;display:flex;flex-direction:column;gap:8px;width:90%;max-width:400px;pointer-events:none;}
+    .toast{background:rgba(0,0,0,.86);color:#fff;padding:14px 18px;border-radius:11px;box-shadow:0 5px 15px rgba(0,0,0,.3);font-size:.92rem;animation:slideUp .3s ease-out;}
+    @keyframes slideUp{from{transform:translateY(80px);opacity:0}to{transform:translateY(0);opacity:1}}
+    /* ── MODAL ── */
+    .modal-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.8);z-index:1000;justify-content:center;align-items:center;overflow-y:auto;padding:16px 0;backdrop-filter:blur(5px);padding:10px;overscroll-behavior:contain;}
+    .modal-content{background:#fff;padding:28px;border-radius:18px;text-align:center;max-width:460px;width:100%;box-shadow:0 15px 30px rgba(0,0,0,.3);animation:popIn .3s ease-out;max-height:92vh;overflow-y:auto;}
+    @keyframes popIn{0%{transform:scale(.8);opacity:0}100%{transform:scale(1);opacity:1}}
+    /* ── GRADE CELLS — 6-БАЛЬНА ── */
+    .g-cell{display:inline-flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;border-radius:7px;padding:3px 5px;cursor:pointer;transition:.15s;min-width:32px;}
+    .g-cell:hover{transform:scale(1.12);box-shadow:0 2px 8px rgba(0,0,0,.18);}
+    .g-val{font-weight:800;font-size:.95rem;line-height:1;}
+    .g-type{font-size:.55rem;font-weight:700;opacity:.8;letter-spacing:.4px;text-transform:uppercase;}
+    .g6{background:#e3f2fd;color:var(--g6);}
+    .g5{background:#e8f5e9;color:var(--g5);}
+    .g4{background:#f1f8e9;color:var(--g4);}
+    .g3{background:#fff8e1;color:#a04a02;}
+    .g2{background:#fbe9e7;color:var(--g2);}
+    .g1{background:#ffebee;color:var(--g1);}
+    .g-letter{background:#f3e5f5;color:var(--purple);}
+    .g-behavior{background:#e8eaf6;color:#3949ab;}
+    .g-empty{color:#ccc;font-size:.7rem;}
+    .att-absent{background:#ffebee;color:var(--g1);font-weight:800;border-radius:4px;padding:1px 4px;}
+    .att-late{background:#fff8e1;color:#a04a02;font-weight:800;border-radius:4px;padding:1px 4px;}
+    /* ── JOURNAL TABLE ── */
+    .journal-wrap{overflow-x:auto;background:#fff;border-radius:11px;border:1px solid #ddd;max-height:58vh;}
+    #journal-scale-inner{ /* plain wrapper; zoom is metric-based now (see .journal-table note below), no JS sizing needed */ }
+    /* ── PHASE 9/10: ZOOM ARCHITECTURE — metric scaling, NOT transform:scale().
+       The zoom used to be transform:scale(var(--journal-scale)) on the whole
+       table. That fundamentally breaks position:sticky: the browser resolves
+       sticky left/right/top offsets in UNSCALED layout coordinates and only then
+       applies the visual transform, so at e.g. 54% the "right:0"-stuck average
+       column visually landed at 54% of the viewport — the middle of the screen.
+       Instead, the table's font-size is what scales (calc(base * --journal-scale))
+       and every internal metric (paddings, heights, min-widths) is in em, so the
+       entire grid grows/shrinks with the zoom level natively — the same way real
+       spreadsheet apps implement zoom — and sticky columns/headers keep working
+       because there is no transform at all.
+       (Also deliberately no table-level min-width: column-level em minimums below
+       are the real floor, so fit-to-width measures true content width.) */
+    .journal-table{border-collapse:collapse;font-size:calc(.8rem*var(--journal-scale,1));text-align:center;}
+    .journal-table th{background:#e8f4fd;color:#154360;font-weight:800;position:sticky;top:0;z-index:3;border:1px solid #ddd;padding:.55em .31em;white-space:nowrap;}
+    .journal-table td{border:1px solid #eee;padding:.16em;vertical-align:middle;height:2.66em;min-width:2.5em;max-width:3.75em;}
+    /* Колонка з прізвищем. max-width тут ОБОВʼЯЗКОВИЙ: загальне правило для td
+       вище ставить max-width:3.75em (воно розраховане на вузькі клітинки з
+       оцінками), і колонка імені його успадковувала. Разом із nowrap це давало
+       текст, який виходив за межу колонки й накладався на дати.
+       Тепер довге прізвище переноситься на другий рядок, а не вилазить. */
+    .journal-table td.sn{text-align:left;font-weight:700;background:#fffcf0;position:sticky;left:0;z-index:2;border-right:2px solid #ccc;padding-left:.63em;min-width:10.9em;max-width:11.5em;font-size:1.03em;white-space:normal;overflow-wrap:anywhere;line-height:1.18;}
+    .journal-table th.sn{background:#e8f4fd;z-index:6;border-right:2px solid #ccc;left:0;top:0;vertical-align:middle;}
+    .journal-table td.avg-col{background:#f4ecf7;font-weight:800;color:var(--purple);position:sticky;right:0;border-left:2px solid #d1c4e9;min-width:3.6em;}
+    .journal-table th.avg-col{background:#f4ecf7;color:var(--purple);position:sticky;right:0;border-left:2px solid #d1c4e9;z-index:6;top:0;vertical-align:middle;}
+    .journal-table td.today-col{background:#fffde7;}
+    .journal-table th.today-col{background:#fff3cd!important;color:#d35400!important;border-bottom:3px solid var(--orange)!important;}
+    .journal-table tr:hover td{background:#e0f7fa!important;}
+    .journal-table tr:nth-child(even) td{background:#fafbfc;}
+    /* Frozen-pane affordance (à la Sheets): soft shadow off the pinned edges so
+       it reads as "these columns float above the scrolling grid". */
+    .journal-table td.sn,.journal-table th.sn{box-shadow:2px 0 4px rgba(0,0,0,.05);}
+    .journal-table td.avg-col,.journal-table th.avg-col{box-shadow:-2px 0 4px rgba(0,0,0,.05);}
+    /* Grade cells / attendance marks inside the journal scale with the table font
+       (em) — same visual size at 100% as their global rem-based defaults. */
+    .journal-table .g-cell{min-width:2.5em;padding:.23em .39em;}
+    .journal-table .g-val{font-size:1.19em;}
+    .journal-table .g-type{font-size:.69em;}
+    .journal-table .att-absent,.journal-table .att-late{padding:.08em .31em;}
+    /* ── PHASE 9: month-group header row — without this, a multi-month range just
+       shows repeating bare day numbers with no indication of which month they're
+       in. jt-month-row (rowspan-2 "Учень"/avg-col corners + one <th> per month,
+       colspan = days shown that month) sits above jt-day-row (the existing day/
+       weekday/тип cells). Both rows are sticky; the day row's top offset (1.8em,
+       in table-font ems) equals the month row's height (2em × .9em font) at every
+       zoom level, so the two rows stack instead of overlapping — px offsets would
+       drift the moment the zoom changed. ── */
+    .journal-table thead tr.jt-month-row th{position:sticky;top:0;z-index:5;height:2em;line-height:2em;padding:0 .4em;font-size:.9em;letter-spacing:.2px;}
+    /* Corner cells (Учень / Зважений сер. бал) are rowspan=2 — they span both
+       header rows, so the month-band row's compact height/line-height must not
+       squash their multi-line labels. */
+    .journal-table thead tr.jt-month-row th.sn,
+    .journal-table thead tr.jt-month-row th.avg-col{height:auto;line-height:normal;font-size:1em;padding:.55em .31em;}
+    .journal-table thead tr.jt-day-row th{position:sticky;top:calc(1.8em - 1px);z-index:4;}
+    .jct-type-select{font-size:.69em;width:100%;margin-top:2px;padding:0 1px;border:1px solid #bbdefb;border-radius:4px;background:#fff;color:#154360;}
+    /* ── GRADE EDITOR POPUP ── */
+    .grade-editor-popup{position:fixed;z-index:5000;background:#fff;border-radius:13px;box-shadow:0 8px 30px rgba(0,0,0,.25);padding:13px;display:none;min-width:210px;max-width:min(360px,calc(100vw - 20px));max-height:80vh;overflow:auto;border:2px solid var(--teal);animation:popIn .15s ease-out;}
+    .grade-editor-popup input[type=text]{width:100%;padding:8px 12px;border:2px solid var(--teal);border-radius:8px;font-size:1.1rem;font-weight:800;text-align:center;color:var(--teal);margin-top:0;}
+    /* ПІДКАЗКИ БЕЗ ЗАТРИМКИ.
+       Нативний title браузер показує приблизно через секунду, і змінити
+       це неможливо — ні CSS, ні скриптом. У редакторі оцінки кнопок два
+       десятки («П», «ДК», «ЛР»...), учитель веде по них мишею, і кожна
+       відповідає з паузою: здається, що портал гальмує. Тому підпис
+       лежить у data-tip, а показуємо його самі — миттєво. */
+    [data-tip]{position:relative;}
+    [data-tip]:hover::after,[data-tip]:focus-visible::after{
+      content:attr(data-tip);position:absolute;bottom:calc(100% + 6px);left:50%;
+      transform:translateX(-50%);background:#37474f;color:#fff;
+      padding:5px 9px;border-radius:6px;font-size:.72rem;font-weight:600;
+      white-space:nowrap;z-index:60;pointer-events:none;
+      box-shadow:0 3px 10px rgba(0,0,0,.22);}
+    /* Хвостик, щоб було видно, до якої саме кнопки належить підказка */
+    [data-tip]:hover::before,[data-tip]:focus-visible::before{
+      content:'';position:absolute;bottom:calc(100% + 1px);left:50%;
+      transform:translateX(-50%);border:5px solid transparent;
+      border-top-color:#37474f;z-index:60;pointer-events:none;}
+    /* На дотику підказка не має сенсу — і не має перекривати сусідні
+       кнопки після натискання, коли :hover «залипає» на мобільному. */
+    @media (hover:none){
+      [data-tip]:hover::after,[data-tip]:hover::before{display:none;}
+    }
+    .type-btns{display:flex;gap:4px;margin-top:8px;flex-wrap:wrap;}
+    .type-btn{flex:1;min-width:38px;padding:6px 3px;border:2px solid #ddd;border-radius:7px;background:#f8f9fa;cursor:pointer;font-size:.7rem;font-weight:800;transition:.15s;margin:0;}
+    .type-btn.active{border-color:var(--teal);background:#e0f2f1;color:var(--teal);}
+    .editor-actions{display:flex;gap:5px;margin-top:8px;}
+    .editor-actions button{flex:1;padding:8px;margin:0;font-size:.82rem;border-radius:8px;}
+    .btn-confirm{background:var(--green);color:#fff;}
+    .btn-delete{background:var(--red);color:#fff;}
+    .btn-cancel{background:#ecf0f1;color:#333;}
+    /* ── MODE TOGGLE ── */
+    .mode-toggle{display:flex;gap:4px;background:#f0f2f5;border-radius:10px;padding:4px;margin-bottom:10px;}
+    .mode-toggle button{flex:1;padding:7px;margin:0;border-radius:7px;background:transparent;color:#666;font-size:.82rem;border:none;transition:.2s;cursor:pointer;}
+    .mode-toggle button.active{background:#fff;color:var(--teal);box-shadow:0 2px 6px rgba(0,0,0,.1);font-weight:700;}
+    /* ── DYNAMIC SCHEDULE (Parent) ── */
+    .schedule-box{margin-bottom:var(--space-3);}
+    .schedule-day-label{font-size:.78rem;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--purple);margin-bottom:8px;text-align:center;}
+    .lesson-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:9px;margin-bottom:5px;border:1px solid #eee;background:#fafafa;transition:.2s;}
+    .lesson-row.current{background:linear-gradient(135deg,#e0f7fa,#e8f5e9);border-color:var(--green);box-shadow:0 2px 10px rgba(39,174,96,.2);}
+    .lesson-row.passed{opacity:.45;}
+    .lesson-num{width:24px;height:24px;border-radius:50%;background:var(--teal);color:#fff;font-size:.72rem;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+    .lesson-row.current .lesson-num{background:var(--green);animation:pulse 2s infinite;}
+    @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(39,174,96,.4)}50%{box-shadow:0 0 0 8px rgba(39,174,96,0)}}
+    .lesson-info{flex:1;min-width:0;}
+    .lesson-subj{font-weight:700;font-size:.88rem;color:#222;}
+    .lesson-time{font-size:.72rem;color:#888;}
+    /* Урок є, а часу для нього в розкладі дзвінків немає. Показуємо це
+       відкрито: мовчазне зникнення такого уроку з кабінету колись і
+       створило враження, ніби в класі вже все закінчилося. */
+    .lesson-notime{color:#c77800;font-style:italic;}
+    /* Звірка доступів */
+    .aa-group{margin-top:12px;}
+    .aa-group h4{margin:0 0 6px;font-size:.84rem;color:#37474f;}
+    .aa-note{font-size:.72rem;color:#78909c;margin:0 0 7px;line-height:1.4;}
+    .aa-row{display:flex;gap:8px;align-items:baseline;padding:6px 9px;border-radius:8px;
+            background:#fff;border:1px solid #e8eaf6;margin-bottom:4px;font-size:.8rem;
+            flex-wrap:wrap;}
+    .aa-row b{font-weight:600;color:#283593;overflow-wrap:anywhere;}
+    .aa-row span{font-size:.72rem;color:#78909c;}
+    .aa-empty{font-size:.78rem;color:#2e7d32;background:#e8f5e9;border-radius:8px;padding:7px 10px;}
+    .aa-count{font-size:.72rem;color:#78909c;margin-top:9px;}
+    .sched-why{font-size:.7rem;color:#8d6e63;background:#fff8e1;border-radius:8px;
+               padding:6px 9px;margin:5px 0 8px;line-height:1.35;}
+    /* ── Свіжі оголошення нагорі «Сьогодні» ──
+       Синій, а не жовтий: жовтим у кабінеті вже позначені попередження
+       (незбережене, «щось не так»). Оголошення — не попередження. */
+    .fn-box{background:#e8f2fe;border:1px solid #b6d4fb;border-radius:14px;
+            padding:12px 13px;margin-bottom:15px;}
+    .fn-head{font-weight:800;color:#0d47a1;font-size:.92rem;margin-bottom:9px;}
+    .fn-item{background:#fff;border-radius:11px;padding:10px 12px;margin-bottom:8px;
+             border-left:4px solid #64b5f6;}
+    .fn-item.imp{border-left-color:var(--red);}
+    .fn-item .nw-title{margin:5px 0 4px;font-size:.88rem;}
+    .fn-item .nw-text{font-size:.83rem;line-height:1.45;color:#37474f;}
+    .fn-foot{display:flex;justify-content:space-between;align-items:center;gap:8px;
+             flex-wrap:wrap;margin-top:7px;font-size:.7rem;color:#90a4ae;}
+    .fn-left{font-style:italic;}
+    .fn-all{width:100%;margin:2px 0 0;padding:8px;font-size:.8rem;border-radius:9px;
+            background:#fff;color:#0d47a1;border:1px solid #b6d4fb;cursor:pointer;}
+    /* ── Підпис розробника під формою входу ──
+       Свідомо тихий: людина прийшла увійти, а не читати, хто це зробив.
+       Але видно щодня — а саме так і знаходять того, хто зробив систему,
+       якщо захотіли таку собі. */
+    /* Один тихий рядок версії — під кнопкою виходу в кожному кабінеті.
+       Замінив чотирнадцять міток, розкиданих по розділах. */
+    /* Смужка про переїзд на власний домен. Помітна, але не тривожна:
+       це не помилка, а прохання перевстановити іконку.
+       Рядки розділені навмисно: заголовок, пояснення й кнопка злипалися
+       в суцільний абзац, і смужка читалася як службове попередження. */
+    .moved-notice{background:#e8f5e9;border:1px solid #a5d6a7;border-left:4px solid #43a047;
+                  border-radius:14px;padding:15px 17px;margin:0 0 18px 0;
+                  font-size:.86rem;color:#1b5e20;line-height:1.5;}
+    /* Тільки ПРЯМИЙ <b> — це заголовок смужки. Без «>» правило ловило й
+       жирний усередині абзацу, і «іконку порталу на телефоні» ставало
+       окремим блоком: речення розривалося на три рядки різного розміру. */
+    .moved-notice > b{display:block;font-size:1rem;font-weight:800;margin:0 0 7px 0;}
+    .moved-notice p b{font-weight:700;}
+    .moved-notice p{margin:0 0 6px 0;color:#33691e;}
+    .moved-notice p:last-of-type{margin-bottom:0;}
+    .moved-notice code{background:rgba(67,160,71,.12);border-radius:5px;padding:1px 5px;
+                       font-size:.85em;font-weight:700;}
+    .moved-notice button{display:block;width:auto;margin:13px 0 0;padding:9px 18px;
+                         font-size:.82rem;font-weight:700;background:#43a047;color:#fff;
+                         border:none;border-radius:10px;cursor:pointer;}
+    .moved-notice button:hover{background:#388e3c;}
+    .k-prices{background:#fff;border:1px solid #b2ebf2;border-radius:12px;padding:11px 13px;margin-bottom:13px;}
+    .k-prices summary{font-weight:700;color:#00838f;cursor:pointer;font-size:.9rem;}
+    .k-prices-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:11px 0 9px;}
+    .k-prices-grid label{display:flex;flex-direction:column;gap:3px;font-size:.74rem;color:#607d8b;}
+    .k-prices-grid input{margin:0;font-size:.9rem;padding:8px 10px;}
+    .k-prices-save{width:auto;margin:0;padding:9px 16px;font-size:.83rem;font-weight:700;
+                   background:#00838f;color:#fff;border:none;border-radius:9px;cursor:pointer;}
+    .k-total-money b{color:#2e7d32;}
+    .pms-money{margin-top:11px;background:#e8f5e9;border:1px solid #a5d6a7;border-radius:12px;
+               padding:12px 14px;text-align:center;}
+    .pms-money b{display:block;font-size:1.5rem;font-weight:800;color:#1b5e20;line-height:1.15;}
+    .pms-money span{display:block;font-size:.78rem;color:#33691e;margin-top:3px;}
+    .pms-money small{display:block;font-size:.72rem;color:#7c9a7e;margin-top:6px;}
+    .pms-presets{display:flex;gap:7px;margin-top:8px;flex-wrap:wrap;}
+    .pms-presets button{width:auto;margin:0;padding:7px 13px;font-size:.78rem;font-weight:600;
+                        background:#e0f7fa;color:#00838f;border:1px solid #80deea;border-radius:9px;cursor:pointer;}
+    /* ── Оплата за навчання ── */
+    .pay-qr{text-align:center;margin-bottom:13px;}
+    .pay-qr svg{max-width:220px;height:auto;background:#fff;border-radius:10px;padding:6px;
+                border:1px solid #c8e6c9;}
+    .pay-qr span{display:block;font-size:.76rem;color:#4c7a52;margin-top:6px;}
+    .pay-noqr{font-size:.82rem;color:#7a5c00;background:#fff8e1;border:1px solid #ffe0a3;
+              border-radius:9px;padding:9px 11px;margin-bottom:11px;}
+    .pay-row{display:flex;align-items:center;gap:9px;padding:7px 0;border-bottom:1px dashed #d7ead9;}
+    .pay-row:last-of-type{border-bottom:none;}
+    .pay-label{flex:0 0 92px;font-size:.72rem;color:#5b7c60;text-transform:uppercase;letter-spacing:.03em;}
+    .pay-value{flex:1;min-width:0;font-size:.86rem;color:#1b5e20;overflow-wrap:anywhere;}
+    .pay-copy{width:auto;margin:0;flex:0 0 auto;padding:6px 11px;font-size:.74rem;font-weight:700;
+              background:#2e7d32;color:#fff;border:none;border-radius:8px;cursor:pointer;}
+    .pay-note{font-size:.76rem;color:#5b7c60;line-height:1.45;margin:11px 0 0;}
+    .pay-form label{display:block;font-size:.78rem;color:#37474f;font-weight:600;margin-bottom:9px;}
+    .pay-form label small{display:block;font-weight:400;color:#8aa08d;font-size:.72rem;margin-bottom:2px;}
+    .pay-form input{margin:0;font-size:.88rem;}
+    .pay-form button{width:auto;margin:4px 0 0;padding:9px 16px;font-size:.83rem;font-weight:700;
+                     background:#2e7d32;color:#fff;border:none;border-radius:9px;cursor:pointer;}
+    .pay-preview{margin-top:11px;font-size:.8rem;color:#37474f;background:#fff;border:1px solid #d7ead9;
+                 border-radius:9px;padding:9px 11px;}
+    .pay-warn{color:#a15c00;font-size:.76rem;}
+    /* ── Харчування персоналу ── */
+    .k-staff-block{margin-top:18px;padding-top:14px;border-top:2px dashed #b2ebf2;}
+    .k-staff-block h4{margin:0 0 9px;font-size:.92rem;color:#00838f;}
+    .k-staff-price{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:11px;}
+    .k-staff-price label{font-size:.74rem;color:#607d8b;flex:1 1 100%;}
+    .k-staff-price input{margin:0;max-width:120px;}
+    .k-staff-price button{width:auto;margin:0;padding:9px 14px;font-size:.82rem;background:#00838f;color:#fff;border:none;border-radius:9px;cursor:pointer;}
+    .stm-nav{display:flex;align-items:center;gap:10px;margin-bottom:11px;}
+    .stm-nav button{width:auto;margin:0;padding:8px 14px;font-weight:800;background:#eef5ff;color:#2b5aa8;
+                    border:1px solid #cfe0f5;border-radius:10px;cursor:pointer;}
+    .stm-day{flex:1;min-width:0;text-align:center;line-height:1.25;}
+    .stm-day b{display:block;font-size:.95rem;color:#37474f;}
+    .stm-day span{font-size:.74rem;color:#26a69a;font-weight:700;}
+    .stm-dish{display:flex;gap:9px;align-items:baseline;padding:5px 0;border-bottom:1px dashed #e0f2f1;}
+    .stm-dish span{flex:0 0 62px;font-size:.72rem;color:#78909c;text-transform:uppercase;letter-spacing:.03em;}
+    .stm-dish b{flex:1;min-width:0;font-size:.88rem;color:#263238;overflow-wrap:anywhere;}
+    .stm-choice{display:flex;gap:8px;margin:9px 0;flex-wrap:wrap;}
+    .stm-ab{flex:1;min-width:140px;margin:0;padding:10px;font-size:.82rem;font-weight:700;
+            background:#fff;color:#00695c;border:2px solid #b2dfdb;border-radius:11px;cursor:pointer;}
+    .stm-ab.on{background:#00897b;color:#fff;border-color:#00897b;}
+    .stm-act{margin:12px 0 8px;}
+    .stm-take{width:100%;margin:0;padding:13px;font-size:.92rem;font-weight:800;border:none;border-radius:12px;
+              background:#00897b;color:#fff;cursor:pointer;}
+    .stm-take.on{background:#e0f2f1;color:#00695c;border:2px solid #4db6ac;}
+    .stm-plan{font-size:.78rem;color:#607d8b;}
+    .stm-plan a{color:var(--teal);text-decoration:none;border-bottom:1px dotted;}
+    .stm-ta{margin-top:14px;padding-top:12px;border-top:1px dashed #ddd;}
+    .app-version{font-size:.66rem;color:#b0bec5;text-align:center;margin:9px 0 0;line-height:1.6;}
+    /* Підпис розробника в тому ж рядку: посилання має бути видно, але не
+       так, щоб воно перетягувало увагу з кабінету на себе. */
+    .app-version a{color:var(--teal);text-decoration:none;border-bottom:1px dotted;}
+    .app-version .vc-name{color:#78909c;font-weight:600;}
+    .vendor-credit{margin-top:18px;padding-top:13px;border-top:1px solid rgba(160,230,240,.16);
+                   font-size:.7rem;line-height:1.5;text-align:center;color:rgba(214,240,245,.5);}
+    .vendor-credit a{color:rgba(160,230,240,.8);text-decoration:none;border-bottom:1px dotted;}
+    .vendor-credit a:hover{color:#fff;}
+    .vendor-credit .vc-name{color:rgba(214,240,245,.75);font-weight:600;}
+    /* Поза темним екраном входу (раптом блок колись переїде) — темні літери */
+    body:not(.auth-mode) .vendor-credit{color:#90a4ae;border-top-color:#e3ecef;}
+    body:not(.auth-mode) .vendor-credit a{color:var(--teal);}
+    body:not(.auth-mode) .vendor-credit .vc-name{color:#546e7a;}
+    .lesson-countdown{font-size:.75rem;font-weight:700;color:var(--green);background:#e8f5e9;padding:2px 8px;border-radius:12px;white-space:nowrap;}
+    .progress-thin{width:100%;height:4px;background:#eee;border-radius:2px;margin-top:4px;overflow:hidden;}
+    .progress-thin-fill{height:100%;background:linear-gradient(90deg,var(--green),var(--accent));border-radius:2px;transition:width 1s linear;}
+    .no-lessons-msg{text-align:center;padding:15px;color:#aaa;font-style:italic;font-size:.9rem;}
+    /* ── PAYMENTS MOCKUP ── */
+    .payment-card{border:1px solid #eee;margin-bottom:var(--space-3);}
+    .payment-card h4{margin:0 0 10px 0;font-size:.9rem;display:flex;align-items:center;gap:7px;}
+    .payment-row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px dashed #eee;font-size:.88rem;}
+    .payment-row:last-child{border-bottom:none;}
+    .pay-amount{font-weight:800;font-size:1rem;}
+    .pay-paid{color:var(--green);}
+    .pay-due{color:var(--red);}
+    .pay-btn{width:auto;padding:7px var(--space-4);margin:0;font-size:var(--text-sm);border-radius:var(--badge-radius);background:linear-gradient(135deg,#00f2fe,#4facfe);color:#fff;}
+    /* ── DESIGN SYSTEM: unified badge base (was 3 near-duplicate declarations) ── */
+    .debt-badge,.paid-badge{padding:4px 10px;border-radius:var(--badge-radius);font-size:var(--text-xs);font-weight:700;}
+    .debt-badge{background:#fdecea;border:1px solid #f5c6cb;color:var(--red);}
+    .paid-badge{background:#d4edda;border:1px solid #c3e6cb;color:var(--green);}
+    /* ── SKILLS ── */
+    /* ══════════════════════════════════════════════════════════
+       ЕКРАНИ ВХОДУ — темна тема у кольорах логотипа
+       Вмикається класом body.auth-mode (ставиться в common.js,
+       поки користувач не увійшов). Після входу портал лишається
+       світлим, як і був.
+       ══════════════════════════════════════════════════════════ */
+    :root{
+      --logo-teal:#22b8cf; --logo-cyan:#4dd0e1; --logo-mint:#a7f3d0;
+      --logo-yellow:#ffd54f; --logo-pink:#f48fb1; --logo-bird:#4a90d9;
+      --auth-bg:#041b22; --auth-fg:#f2fbfc; --auth-sub:#9fc4cb;
+    }
+    #auth-bg{display:none;}
+    body.auth-mode{background:var(--auth-bg);align-items:center;}
+    body.auth-mode #auth-bg{display:block;}
+    #auth-bg .glow{position:fixed;border-radius:50%;filter:blur(90px);pointer-events:none;z-index:0;}
+    #auth-bg .g1{width:580px;height:470px;background:var(--logo-teal);opacity:.42;top:-150px;left:-130px;animation:authFloat1 22s ease-in-out infinite alternate;}
+    #auth-bg .g2{width:520px;height:430px;background:var(--logo-bird);opacity:.32;bottom:-170px;right:-110px;animation:authFloat2 26s ease-in-out infinite alternate;}
+    /* Теплі акценти — відсилка до метелика й квітів на логотипі */
+    #auth-bg .g3{width:300px;height:260px;background:var(--logo-yellow);opacity:.13;top:16%;right:18%;animation:authFloat1 30s ease-in-out infinite alternate-reverse;}
+    #auth-bg .g4{width:260px;height:230px;background:var(--logo-pink);opacity:.11;bottom:18%;left:12%;animation:authFloat2 34s ease-in-out infinite alternate;}
+    #auth-bg .auth-backdrop{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:min(900px,94vw);height:520px;background:#01121a;opacity:.82;filter:blur(82px);pointer-events:none;z-index:0;}
+    @keyframes authFloat1{0%{transform:translate(0,0) scale(1);}100%{transform:translate(60px,50px) scale(1.12);}}
+    @keyframes authFloat2{0%{transform:translate(0,0) scale(1);}100%{transform:translate(-50px,-40px) scale(1.08);}}
+    /* Контейнер порталу на екранах входу «розчиняється» — карткою стає сам екран */
+    body.auth-mode .container{background:transparent;box-shadow:none;backdrop-filter:none;padding:0;max-width:440px;margin-bottom:0;position:relative;z-index:1;}
+    /* Liquid glass — техніка з референсу, кант підфарбований у бірюзу */
+    body.auth-mode .panel[style*="block"],
+    body.auth-mode #login-screen,body.auth-mode #first-login-screen,body.auth-mode #reset-password-screen{
+      background:rgba(255,255,255,.04);
+      backdrop-filter:blur(18px) saturate(135%);
+      -webkit-backdrop-filter:blur(18px) saturate(135%);
+      border-radius:26px;padding:36px 32px 28px;position:relative;overflow:hidden;
+      box-shadow:inset 0 1px 1px rgba(255,255,255,.12),0 30px 70px rgba(0,0,0,.5);
+      color:var(--auth-fg);
+    }
+    body.auth-mode #login-screen::before,body.auth-mode #first-login-screen::before,body.auth-mode #reset-password-screen::before{
+      content:"";position:absolute;inset:0;border-radius:inherit;padding:1.4px;
+      background:linear-gradient(180deg,rgba(180,245,255,.5) 0%,rgba(180,245,255,.16) 20%,rgba(255,255,255,0) 40%,rgba(255,255,255,0) 60%,rgba(180,245,255,.16) 80%,rgba(180,245,255,.5) 100%);
+      -webkit-mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);
+      -webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none;
+    }
+    .auth-brand{display:flex;justify-content:center;margin-bottom:16px;}
+    .auth-logo{
+      width:112px;height:112px;border-radius:50%;display:block;object-fit:cover;
+      box-shadow:0 14px 40px rgba(34,184,207,.45),0 0 0 1px rgba(180,245,255,.22),0 0 60px rgba(34,184,207,.28);
+      animation:logoIn .7s cubic-bezier(.2,.8,.3,1) both;
+    }
+    @keyframes logoIn{from{opacity:0;transform:translateY(-8px) scale(.94);}to{opacity:1;transform:none;}}
+    /* Заголовок не дублює назву школи — вона вже є на логотипі */
+    body.auth-mode #login-screen h2,body.auth-mode #first-login-screen h2,body.auth-mode #reset-password-screen h2{
+      font-size:1.75rem;font-weight:800;letter-spacing:-.02em;margin:0;
+      background-image:linear-gradient(100deg,var(--logo-cyan),var(--logo-mint) 48%,var(--logo-yellow));
+      -webkit-background-clip:text;background-clip:text;color:transparent;
+    }
+    .auth-sub{margin:9px 0 20px;text-align:center;color:var(--auth-sub);font-size:.88rem;line-height:1.55;}
+    body.auth-mode #login-screen label,body.auth-mode #first-login-screen label,body.auth-mode #reset-password-screen label{
+      color:var(--auth-sub);margin-top:13px;font-size:.78rem;
+    }
+    body.auth-mode #login-screen input,body.auth-mode #first-login-screen input,body.auth-mode #reset-password-screen input{
+      background:rgba(255,255,255,.055);border:1px solid rgba(160,230,240,.18);color:var(--auth-fg);
+      border-radius:13px;padding:13px 15px;
+    }
+    body.auth-mode input::placeholder{color:rgba(214,240,245,.34);}
+    body.auth-mode #login-screen input:focus,body.auth-mode #first-login-screen input:focus,body.auth-mode #reset-password-screen input:focus{
+      outline:none;border-color:var(--logo-cyan);background:rgba(255,255,255,.09);
+      box-shadow:0 0 0 4px rgba(77,208,225,.18);
+    }
+    body.auth-mode .btn-login{
+      background:linear-gradient(100deg,var(--logo-cyan),var(--logo-teal) 70%);
+      color:#032b33;border-radius:13px;padding:15px;
+      box-shadow:0 12px 30px rgba(34,184,207,.4);
+      transition:transform .16s,box-shadow .16s,filter .16s;
+    }
+    body.auth-mode .btn-login:hover{transform:translateY(-1px);box-shadow:0 16px 38px rgba(34,184,207,.5);filter:brightness(1.07);}
+    body.auth-mode .link-btn{color:var(--logo-mint);}
+    body.auth-mode .link-btn:hover{color:#fff;}
+    body.auth-mode .pass-toggle{color:var(--auth-fg);}
+    body.auth-mode .pass-toggle:hover{background:rgba(255,255,255,.08);}
+    body.auth-mode .fl-intro{background:rgba(255,255,255,.05);border-color:rgba(160,230,240,.18);color:var(--auth-sub);}
+    body.auth-mode .login-hint{background:rgba(77,208,225,.10);border-color:rgba(77,208,225,.3);color:#c9f2f8;}
+    body.auth-mode .login-hint.warn{background:rgba(255,213,79,.12);border-color:rgba(255,213,79,.35);color:#ffe9a8;}
+    body.auth-mode .login-err{color:#ff8f8f;}
+    @media(max-width:480px){
+      body.auth-mode #login-screen,body.auth-mode #first-login-screen,body.auth-mode #reset-password-screen{padding:28px 20px 22px;border-radius:20px;}
+      body.auth-mode #login-screen h2,body.auth-mode #first-login-screen h2,body.auth-mode #reset-password-screen h2{font-size:1.45rem;}
+      .auth-logo{width:88px;height:88px;}
+    }
+    /* ── поля екранів входу (світла тема, коли auth-mode не активний) ── */
+    #login-screen label,#first-login-screen label{margin-top:12px;font-size:.82rem;color:#666;}
+    #login-screen input,#first-login-screen input{margin-top:4px;}
+    .fl-intro{font-size:.86rem;color:#555;line-height:1.5;background:#f0f8ff;border:1px solid #d0e8f2;border-radius:10px;padding:11px 13px;margin:0 0 4px 0;}
+    .login-err{color:var(--red);text-align:center;margin:10px 0 0 0;font-size:.85rem;font-weight:600;}
+    .pass-wrap{position:relative;}
+    .pass-wrap input{padding-right:44px;}
+    .pass-toggle{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:34px;height:34px;padding:0;margin:0;border:none;background:transparent;cursor:pointer;font-size:1.05rem;opacity:.55;border-radius:8px;}
+    .pass-toggle:hover{opacity:1;background:#f0f0f0;}
+    .login-hint{margin:10px 0 0 0;padding:9px 12px;border-radius:9px;font-size:.82rem;line-height:1.45;background:#e8f4fd;color:#154360;border:1px solid #bbdefb;}
+    .login-hint.warn{background:#fff8e1;color:#8a6d1f;border-color:#ffe0a3;}
+    .link-btn{width:auto;display:block;margin:12px auto 0 auto;padding:6px 10px;background:none;border:none;color:var(--teal);font-size:.84rem;font-weight:700;text-decoration:underline;cursor:pointer;}
+    .link-btn:hover{color:#004d40;}
+    #login-screen.first-login-mode #login-title::after{content:' — перший раз';font-size:.75rem;color:var(--orange);font-weight:400;display:block;margin-top:2px;}
+    .skill-tag{display:inline-block;background:#e0f2f1;color:var(--teal);border:1px solid #a5d6d1;border-radius:20px;padding:3px 10px;font-size:.75rem;font-weight:700;margin:2px;}
+    /* ── ПЕРЕМИКАЧ КАБІНЕТІВ (для тих, у кого кілька ролей) ── */
+    /* Флекс-елемент за замовчуванням має min-width:auto і не стискається
+       вужче за свій вміст. Довге ім'я дитини в перемикачі через це розпирало
+       профіль-бар, з'являвся горизонтальний скрол і всю сторінку зсувало. */
+    #profile-bar > div{min-width:0;}
+    #profile-bar > button{flex-shrink:0;white-space:nowrap;}
+    #pb-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+    #pb-role-switcher,#pb-child-switcher{max-width:100%;}
+    #pb-role-switcher select,#pb-child-switcher select{
+      width:100%;max-width:100%;margin-top:0;padding:4px 8px;font-size:.78rem;
+      font-weight:700;border-radius:7px;cursor:pointer;
+      text-overflow:ellipsis;
+    }
+    #pb-role-switcher select{color:var(--teal);border:1px solid var(--teal);background:#f0f8ff;}
+    #pb-child-switcher select{color:var(--purple);border:1px solid var(--purple);background:#f9f4ff;}
+    /* Підстраховка: у порталі багато блоків, що генеруються з даних, і будь-який
+       довгий рядок не має ламати сторінку цілком */
+    html,body{max-width:100%;overflow-x:hidden;}
+    /* ── РОЗКЛАД ДЗВІНКІВ ПО КЛАСАХ ── */
+    .bell-missing{background:#ffebee;border:1px solid #ef9a9a;color:#b71c1c;border-radius:9px;padding:8px 11px;font-size:.8rem;font-weight:700;margin-bottom:8px;}
+    .bell-row{display:flex;gap:9px;align-items:baseline;padding:6px 0;border-bottom:1px dashed #e0e0e0;font-size:.8rem;}
+    .bell-row:last-child{border-bottom:none;}
+    .bell-row .cls{flex-shrink:0;width:58px;font-weight:800;color:#283593;}
+    .bell-row .times{flex:1;color:#444;line-height:1.5;word-break:break-word;}
+    .bell-row.empty .cls{color:var(--red);}
+    .bell-row.empty .times{color:var(--red);font-style:italic;}
+    /* ── СПИСОК ПЕРСОНАЛУ ── */
+    .staff-row{display:flex;align-items:center;gap:10px;padding:9px 11px;border:1px solid #e8e8e8;border-radius:9px;margin-bottom:6px;background:#fff;}
+    .staff-row.is-disabled{opacity:.5;background:#fafafa;}
+    .staff-main{flex:1;min-width:0;}
+    .staff-email{font-size:.75rem;color:#888;word-break:break-all;}
+    .staff-roles{margin-top:4px;display:flex;flex-wrap:wrap;gap:3px;}
+    .staff-role-tag{display:inline-block;background:#eef2ff;color:#3949ab;border:1px solid #c5cae9;border-radius:12px;padding:1px 8px;font-size:.68rem;font-weight:700;}
+    /* ── AI-ЧЕРНЕТКА ДЗ ── */
+    .ai-hw-row{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:7px;}
+    #btn-ai-hw,#btn-ai-comment{width:auto;margin:0;padding:8px 14px;font-size:.82rem;font-weight:700;border:none;border-radius:9px;cursor:pointer;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;}
+    #btn-ai-hw:disabled,#btn-ai-comment:disabled{opacity:.6;cursor:wait;}
+    .ai-hw-note{font-size:.72rem;color:#999;font-style:italic;}
+    /* ── Вкладки кабінету директора ── */
+    /* На телефоні це стрічка, яку гортають пальцем. На ПК місця вистачає
+       всім семи, тож розтягуємо їх рівним рядом — інакше купка кнопок
+       ліворуч виглядає як недороблений макет. */
+    .dtab-bar{display:flex;gap:6px;width:100%;overflow-x:auto;padding:4px 0 10px 0;margin:0 0 16px 0;
+              border-bottom:1px solid #e3e8ea;scrollbar-width:none;}
+    .dtab-bar::-webkit-scrollbar{display:none;}
+    .dtab{flex:0 0 auto;width:auto;margin:0;padding:8px 15px;font-size:.82rem;font-weight:600;white-space:nowrap;
+          background:#fff;color:#5a6b74;border:1px solid #dfe6e9;border-radius:20px;cursor:pointer;
+          transition:background .12s,border-color .12s,color .12s;}
+    .dtab:hover{border-color:#9fb3bd;color:#37474f;}
+    .dtab.on{background:var(--teal);border-color:var(--teal);color:#fff;}
+    .dtab-badge{display:none;margin-left:6px;background:var(--red);color:#fff;font-size:.65rem;
+                padding:1px 6px;border-radius:10px;font-weight:700;}
+    .dtab-badge.show{display:inline-block;}
+    @media (max-width:1023px){
+      /* Липне до верху лише там, де довгий сувій і вузький екран */
+      .dtab-bar{position:sticky;top:0;z-index:5;background:rgba(255,255,255,.97);
+                backdrop-filter:blur(6px);padding-top:8px;}
+    }
+    @media (min-width:1024px){
+      .dtab-bar{gap:6px;overflow:visible;flex-wrap:nowrap;justify-content:stretch;
+                border-bottom:none;background:#f1f5f7;border-radius:14px;padding:6px;margin-bottom:22px;}
+      .dtab{flex:1 1 0;min-width:0;text-align:center;padding:10px 8px;font-size:.84rem;border-radius:10px;
+            overflow:hidden;text-overflow:ellipsis;
+            background:transparent;border-color:transparent;}
+      .dtab:hover{background:rgba(255,255,255,.7);border-color:transparent;}
+      .dtab.on{background:#fff;border-color:transparent;color:var(--teal);
+               box-shadow:0 1px 3px rgba(0,0,0,.08);}
+    }
+    .chat-dot{display:none;margin-left:7px;min-width:19px;height:19px;padding:0 6px;border-radius:10px;
+              background:var(--red);color:#fff;font-size:.68rem;font-weight:800;line-height:19px;
+              text-align:center;vertical-align:middle;box-shadow:0 0 0 2px rgba(255,255,255,.6);}
+    .chat-dot.show{display:inline-block;animation:dotPop .25s ease;}
+    @keyframes dotPop{from{transform:scale(.5);opacity:0}to{transform:scale(1);opacity:1}}
+    .push-invite{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#e0f7fa;
+                 border:1px solid #80deea;border-radius:12px;padding:11px 14px;margin-bottom:14px;
+                 font-size:.84rem;color:#00646e;line-height:1.45;}
+    .push-invite span{flex:1;min-width:180px;}
+    .pi-go,.pi-x{width:auto;margin:0;padding:7px 14px;font-size:.79rem;font-weight:700;border-radius:9px;cursor:pointer;}
+    .pi-go{background:var(--teal);color:#fff;border:none;}
+    .pi-x{background:transparent;color:#5c8a90;border:1px solid #a5dde3;}
+    /* ── Вікно чату ── */
+    /* Підкладка чату НЕ скролиться. Коли два скролери вкладені один в
+       одного, iOS віддає жест зовнішньому — а йому нікуди їхати, бо вікно
+       рівно за розміром. Зовні це виглядає як намертво застиглий список. */
+    #inbox-modal{overflow:hidden;}
+    .chat-win{background:#fff;width:100%;max-width:520px;height:85vh;max-height:760px;display:flex;
+              flex-direction:column;border-radius:16px;overflow:hidden;box-shadow:0 18px 50px rgba(0,0,0,.22);}
+    .chat-pane{display:flex;flex-direction:column;height:100%;min-height:0;}
+    .chat-bar{display:flex;align-items:center;gap:6px;padding:12px 14px;background:#fff;
+              border-bottom:1px solid #ececec;flex-shrink:0;}
+    .chat-bar-title{flex:1;min-width:0;font-size:1rem;font-weight:600;color:#1f2d33;text-align:left;
+                    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .chat-back,.chat-x{width:32px;height:32px;flex:none;margin:0;padding:0;background:transparent;border:none;
+                       color:#7a8b93;font-size:1.4rem;line-height:1;cursor:pointer;border-radius:8px;}
+    .chat-back:hover,.chat-x:hover{background:#f2f5f6;color:#37474f;}
+    .chat-back{font-size:1.9rem;}
+    /* overscroll-behavior:contain — щоб рух пальцем у списку не «перетікав»
+       на сторінку під вікном, яка в цей момент заморожена */
+    .chat-scroll{flex:1;min-height:0;overflow-y:auto;
+                 overscroll-behavior:contain;touch-action:pan-y;}
+    .chat-scroll.list{background:#fff;}
+    .chat-scroll.msgs{background:#f6f8f9;padding:8px 14px 14px;display:flex;flex-direction:column;}
+    .chat-compose{display:flex;align-items:flex-end;gap:8px;padding:10px 12px;background:#fff;
+                  border-top:1px solid #ececec;flex-shrink:0;}
+    .chat-compose textarea{flex:1;margin:0;padding:10px 14px;border:1px solid #dfe6e9;border-radius:20px;
+                           resize:none;max-height:110px;font-size:.9rem;line-height:1.4;font-family:inherit;}
+    .chat-compose textarea:focus{border-color:var(--teal);outline:none;}
+    .chat-send{width:40px;height:40px;flex:none;margin:0;padding:0;border:none;border-radius:50%;
+               background:var(--teal);color:#fff;font-size:1.05rem;cursor:pointer;line-height:1;}
+    .chat-send:hover{filter:brightness(1.08);}
+    @media (max-width:600px){
+      .chat-win{max-width:100%;height:100%;max-height:none;border-radius:0;}
+    }
+    .chat-readonly{padding:12px 14px;background:#f7f9fa;border-top:1px solid #ececec;color:#8b9aa2;
+                   font-size:.8rem;text-align:center;flex-shrink:0;}
+    .chat-icon{width:32px;height:32px;flex:none;margin:0;padding:0;background:transparent;border:none;
+               color:#00838f;font-size:1.15rem;line-height:1;cursor:pointer;border-radius:8px;}
+    .chat-icon:hover{background:#e0f7fa;}
+    .chat-bar-titles{flex:1;min-width:0;text-align:left;}
+    .chat-bar-sub{display:block;font-size:.7rem;color:#93a4ac;font-weight:400;}
+    .cp-list{max-height:46vh;overflow-y:auto;border:1px solid #eee;border-radius:10px;margin-bottom:12px;}
+    .cp-row{display:flex;align-items:center;gap:10px;padding:9px 11px;border-bottom:1px solid #f4f4f4;
+            cursor:pointer;margin:0;font-size:.86rem;}
+    .cp-row:last-child{border-bottom:none;}
+    .cp-row:hover{background:#fafafa;}
+    .cp-row input{width:auto;margin:0;flex:none;}
+    .cp-av{width:32px;height:32px;border-radius:50%;flex:none;display:flex;align-items:center;
+           justify-content:center;color:#fff;font-size:.72rem;font-weight:700;position:relative;overflow:hidden;}
+    .cp-mid{flex:1;min-width:0;display:flex;flex-direction:column;}
+    /* Профіль співробітника (кабінет директора) */
+    .sp-back{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:70;
+             display:flex;align-items:center;justify-content:center;padding:16px;}
+    .sp-card{background:#fff;border-radius:16px;padding:20px;width:100%;max-width:380px;
+             max-height:88vh;overflow-y:auto;}
+    .sp-card h3{margin:0 0 4px 0;color:var(--teal);}
+    .sp-email{font-size:.78rem;color:#888;margin:0 0 14px 0;word-break:break-all;}
+    .sp-photo-row{display:flex;align-items:center;gap:14px;margin-bottom:14px;}
+    #sp-preview{width:72px;height:72px;border-radius:50%;object-fit:cover;border:2px solid #e0f2f4;}
+    .sp-pick{background:#e0f7fa;color:#00838f;padding:9px 13px;border-radius:10px;
+             font-size:.83rem;font-weight:700;cursor:pointer;}
+    .sp-pick input{display:none;}
+    .sp-lab{display:block;font-size:.78rem;color:#555;margin:9px 0 3px;}
+    .sp-err{background:#fdecea;color:#b3261e;padding:10px;border-radius:9px;
+            font-size:.8rem;margin-top:11px;}
+    .sp-save{background:var(--teal);color:#fff;padding:12px;width:100%;margin-top:14px;}
+    .sp-cancel{background:#eceff1;color:#455a64;padding:11px;width:100%;margin-top:8px;}
+    .sp-note{font-size:.72rem;color:#888;margin-top:11px;line-height:1.35;}
+    .staff-av{width:38px;height:38px;border-radius:50%;flex:none;display:flex;
+              align-items:center;justify-content:center;background:#b0bec5;color:#fff;
+              font-weight:700;font-size:.9rem;position:relative;overflow:hidden;margin-right:10px;}
+    .staff-av img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
+    .staff-edit{background:#e8f5e9;color:#2e7d32;font-size:.75rem;padding:7px 9px;border-radius:8px;}
+    .cp-mid b{font-weight:600;color:#222;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .cp-mid small{font-size:.72rem;color:#999;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    /* ── Чат: список ── */
+    .ch-row{display:flex;align-items:center;gap:12px;padding:11px 14px;cursor:pointer;border-bottom:1px solid #f0f0f0;background:#fff;transition:background .12s;}
+    .ch-row:hover{background:#fafafa;}
+    .ch-row:active{background:#f0f0f0;}
+    .ch-av{width:42px;height:42px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:.88rem;letter-spacing:.02em;position:relative;overflow:hidden;}
+    /* Фото лягає поверх ініціалів. Якщо картинка не завантажилась, вона
+       прибирає себе сама, і під нею вже готовий кружок з літерами. */
+    .ch-av img,.cp-av img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:50%;}
+    .ch-av.dir{background:#78909c;font-size:1.05rem;}
+    .ch-mid{flex:1;min-width:0;}
+    .ch-top{display:flex;align-items:baseline;gap:8px;}
+    .ch-name{font-size:.92rem;font-weight:600;color:#222;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0;}
+    .ch-sub{font-size:.72rem;color:#90a4ae;margin-top:1px;line-height:1.2;}
+.ch-time{font-size:.7rem;color:#aaa;flex-shrink:0;}
+    .ch-prev{font-size:.81rem;color:#888;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .ch-prev b{color:#666;font-weight:600;}
+    .ch-badge{flex-shrink:0;min-width:20px;height:20px;padding:0 6px;border-radius:10px;background:var(--teal);color:#fff;font-size:.7rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+    .ch-empty{padding:40px 20px;text-align:center;color:#bbb;font-size:2rem;line-height:1.6;}
+    .ch-empty span{display:block;font-size:.85rem;color:#999;margin-top:6px;}
+    /* ── Чат: повідомлення ── */
+    .ms-day{text-align:center;margin:14px 0 10px;}
+    .ms-day span{background:rgba(0,0,0,.06);color:#777;font-size:.7rem;padding:3px 11px;border-radius:20px;}
+    .ms{max-width:78%;padding:8px 12px;margin-bottom:2px;font-size:.9rem;line-height:1.45;word-break:break-word;position:relative;}
+    .ms.they{align-self:flex-start;background:#fff;color:#222;border-radius:14px 14px 14px 4px;border:1px solid #eee;}
+    .ms.me{align-self:flex-end;background:var(--teal);color:#fff;border-radius:14px 14px 4px 14px;}
+    .ms.grp.they{border-radius:4px 14px 14px 4px;}
+    .ms.grp.me{border-radius:14px 4px 4px 14px;}
+    .ms.last{margin-bottom:10px;}
+    .ms.last.they{border-radius:14px 14px 14px 4px;}
+    .ms.last.me{border-radius:14px 14px 4px 14px;}
+    .ms.grp.last.they{border-radius:4px 14px 14px 4px;}
+    .ms.grp.last.me{border-radius:14px 4px 4px 14px;}
+    .ms-from{font-size:.7rem;font-weight:700;color:var(--purple);margin-bottom:3px;}
+    .ms-time{font-size:.65rem;opacity:.55;text-align:right;margin-top:3px;}
+    /* ── Новинна стрічка ── */
+    .nw-feed{display:flex;flex-direction:column;gap:10px;}
+    .nw-item{background:#fff;border:1px solid #eee;border-radius:12px;padding:12px 14px;}
+    .nw-item.imp{border-color:#ffcc80;background:#fffdf7;}
+    .nw-item.new{box-shadow:inset 3px 0 0 var(--teal);}
+    .nw-head{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px;}
+    .nw-tag{font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:20px;text-transform:uppercase;letter-spacing:.02em;}
+    .nw-tag.school{background:#e0f7fa;color:#00838f;}
+    .nw-tag.cls{background:#ede7f6;color:#5e35b1;}
+    .nw-tag.imp{background:#fff3e0;color:#e65100;}
+    .nw-dot{width:7px;height:7px;border-radius:50%;background:var(--teal);}
+    .nw-time{margin-left:auto;font-size:.72rem;color:#aaa;}
+    .nw-title{margin:0 0 5px 0;font-size:.95rem;color:#222;font-weight:700;}
+    .nw-text{font-size:.87rem;line-height:1.5;color:#444;}
+    .nw-foot{display:flex;align-items:center;gap:10px;margin-top:9px;padding-top:8px;border-top:1px dashed #f0f0f0;}
+    .nw-author{font-size:.75rem;color:#999;}
+    .nw-del{width:auto;margin:0 0 0 auto;padding:3px 10px;font-size:.72rem;background:transparent;color:#c62828;border:1px solid #ffcdd2;border-radius:7px;cursor:pointer;}
+    .nw-imp-row{display:flex;align-items:flex-start;gap:9px;margin:12px 0 4px;font-size:.85rem;}
+    .nw-imp-row input{width:auto;margin:2px 0 0 0;}
+    .nw-imp-row small{color:#888;font-size:.74rem;line-height:1.4;}
+    /* ── Кухня ── */
+    .k-weeknav{display:flex;align-items:center;gap:10px;justify-content:space-between;background:#e0f7fa;border-radius:11px;padding:9px 11px;}
+    .k-weeknav button{width:auto;margin:0;padding:6px 15px;font-size:1.05rem;font-weight:800;background:#fff;color:#00838f;border:1px solid #80deea;border-radius:9px;cursor:pointer;}
+    .k-weeknav div{text-align:center;flex:1;min-width:0;font-size:.88rem;color:#00838f;}
+    .k-weeknav a{font-size:.72rem;color:#0097a7;}
+    .k-total{text-align:center;padding:12px;background:#e0f7fa;border-radius:11px;}
+    .k-total b{display:block;font-size:2.4rem;color:#00838f;line-height:1;}
+    .k-total span{font-size:.8rem;color:#666;}
+    .k-total-snack{font-size:.85rem;font-weight:700;color:#6a1b9a;margin-top:5px;}
+    .k-sub{text-align:center;font-size:.76rem;color:#888;margin-top:6px;}
+    .k-table{width:100%;border-collapse:collapse;font-size:.83rem;margin-top:10px;}
+    .k-table th{background:#e0f7fa;color:#00838f;padding:6px;font-size:.74rem;border-bottom:1px solid #b2ebf2;}
+    .k-table td{padding:5px 6px;border-bottom:1px solid #f0f0f0;text-align:center;}
+    .k-table td:first-child{text-align:left;font-weight:700;}
+    .k-table tr.k-now td{background:#fffde7;}
+
+    /* ДОСТУПНІСТЬ ТАБЛИЦЬ КУХНІ ПРИ ЗБІЛЬШЕНОМУ ШРИФТІ.
+       У html,body стоїть overflow-x:hidden — це рятує сторінку від з'їзду
+       вбік, але водночас ОБРІЗАЄ широку таблицю: вона йде за екран, і
+       дотягнутися до неї неможливо. Людині зі слабким зором, у якої в
+       телефоні збільшений шрифт, просто не видно колонки «Варіант».
+       Тому кожна таблиця отримує власну прокрутку. */
+    .k-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;
+              overscroll-behavior-x:contain;}
+
+    /* А це головне. Брейкпойнт у em, а не в px, — і це навмисно: em
+       рахується від розміру шрифту, тож умова спрацьовує саме тоді, коли
+       текст завеликий для екрана, а не просто «телефон вузький». При
+       звичайному шрифті таблиця лишається таблицею; коли людина збільшує
+       шрифт у налаштуваннях — вона розкладається на картки, по одному
+       учню в кожній, і горизонтальна прокрутка стає не потрібна взагалі. */
+       Поріг 21em підібрано за розрахунком: при звичайному шрифті найвужчий
+       телефон (360px) дає 22.5em — тобто лишається таблицею; варто людині
+       підняти шрифт хоча б на 15% — і вмикаються картки. Ширші екрани при
+       великому шрифті потрапляють сюди теж. Проміжні випадки прикриває
+       .k-scroll вище: обрізаним не лишиться ніщо. */
+    @media (max-width:21em){
+      .k-ord thead{display:none;}
+      .k-ord,.k-ord tbody,.k-ord tr,.k-ord td{display:block;width:100%;}
+      .k-ord tr{border:1px solid #b2ebf2;border-radius:12px;
+                margin-bottom:11px;padding:9px 11px;background:#fff;}
+      .k-ord tr.k-ord-abs{background:#fafafa;opacity:.75;}
+      .k-ord td{text-align:left;border:0;padding:5px 0;
+                display:flex;justify-content:space-between;align-items:center;gap:12px;}
+      .k-ord td::before{content:attr(data-l);font-weight:700;color:#00838f;
+                        font-size:.85em;flex:0 0 auto;}
+      .k-ord td:first-child{font-size:1.1em;padding-bottom:8px;margin-bottom:4px;
+                border-bottom:1px solid #e0f2f1;display:block;}
+      .k-ord td:first-child::before{content:none;}
+      .k-scroll{overflow-x:visible;}
+    }
+    .k-off{color:#bbb;}
+    .k-skip-title{font-size:.8rem;font-weight:800;color:#00838f;margin:14px 0 5px 0;}
+    .k-skip-title.extra{color:#2e7d32;}
+    .k-skip-title.warn{color:#e65100;}
+    .k-names{margin-top:12px;}
+    .k-names>summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:6px;
+                     margin:0 0 5px 0;user-select:none;}
+    .k-names>summary::-webkit-details-marker{display:none;}
+    .k-names>summary::before{content:'▸';font-size:.7rem;transition:transform .15s;}
+    .k-names[open]>summary::before{transform:rotate(90deg);}
+    .k-names>summary:hover{opacity:.75;}
+    .k-skip.warn{border-left:3px solid var(--orange);padding-left:8px;}
+    .k-skip-note{font-size:.72rem;color:#8d6e63;margin:0 0 5px 0;}
+    .k-skip.extra{border-left:3px solid #2e7d32;padding-left:8px;}
+    .k-skip{font-size:.8rem;padding:3px 0;border-bottom:1px dashed #eee;}
+    .k-skip span{color:#999;font-size:.74rem;}
+    .k-day{border:1px solid #b2ebf2;border-radius:10px;margin-bottom:7px;background:#fafeff;}
+    .k-day summary{cursor:pointer;padding:9px 11px;display:flex;align-items:center;gap:8px;font-size:.85rem;}
+    .k-day-name{font-weight:800;color:#00838f;}
+    .k-day-date{color:#999;font-size:.76rem;}
+    .k-day-flag{margin-left:auto;font-size:.7rem;padding:2px 7px;border-radius:20px;}
+    .k-day-flag.ok{background:#e8f5e9;color:#2e7d32;}
+    .k-day-flag.no{background:#f5f5f5;color:#aaa;}
+    .k-day-body{padding:2px 11px 11px 11px;}
+    .k-day-body label{margin-top:8px;font-size:.76rem;color:#666;display:block;}
+    .k-day-body input{margin-top:3px;}
+    .k-day-ts{font-size:.7rem;color:#bbb;margin:8px 0 0 0;}
+    .k-plan-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f0f0f0;flex-wrap:wrap;}
+    .k-plan-name{flex:1;min-width:110px;overflow-wrap:anywhere;font-size:.83rem;font-weight:700;}
+    .k-plan-lunch{font-size:.78rem;color:#555;display:flex;align-items:center;gap:4px;margin:0;}
+    .k-plan-lunch input[type=checkbox]{width:20px;height:20px;min-width:20px;margin:0;accent-color:var(--teal);cursor:pointer;}
+    .k-plan-row select{width:auto;margin:0;padding:5px 7px;font-size:.76rem;}
+    .push-warn{background:#fff8e1;border:1px solid #ffe0a3;color:#7a5f14;border-radius:10px;padding:10px 13px;font-size:.79rem;line-height:1.45;margin-bottom:11px;}
+    .k-notify{margin-top:10px;white-space:pre-line;border-radius:9px;padding:8px 11px;font-size:.78rem;line-height:1.4;}
+    .k-notify.ok{background:#e8f5e9;color:#1b5e20;border:1px solid #a5d6a7;}
+    .k-notify.bad{background:#ffebee;color:#b71c1c;border:1px solid #ef9a9a;}
+    .k-ord-sum{background:#fff3e0;border:1px solid #ffcc80;border-radius:10px;padding:9px 12px;font-size:.86rem;color:#e65100;}
+    .k-ord-sum b{font-size:1.15rem;}
+    .k-ord-sum span{display:block;font-size:.72rem;color:#a1887f;margin-top:2px;}
+    .k-ord td{text-align:left;}
+    .k-ord td:nth-child(2),.k-ord td:nth-child(3){text-align:center;width:44px;}
+    .k-ord-abs td{opacity:.5;}
+    .k-ord-note{font-size:.72rem;color:#999;}
+    /* Немає відповіді про обіди — не «відмова» і не «не харчується»,
+       а стан, який має впадати в око: дитина просто випала із замовлення */
+    .k-noreply{color:#c0392b;font-weight:800;}
+    /* Рівень у редакторі оцінки (1–5 класи) */
+    .level-btns{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px;}
+    .level-btn{width:auto;margin-top:0;flex:0 0 auto;padding:9px 14px;border:1px solid #cfd8dc;
+               background:#fff;color:#546e7a;border-radius:9px;font-weight:800;font-size:.95rem;cursor:pointer;}
+    .level-btn.active{background:var(--teal);border-color:var(--teal);color:#fff;}
+    .gep-hint{width:100%;font-size:.7rem;color:#90a4ae;margin:0 0 3px 0;font-weight:600;}
+    /* Що збережено на цю дату — відповідь на питання «чи записалася тема» */
+    .topic-saved{margin-top:10px;padding:9px 12px;border-radius:10px;font-size:.82rem;
+                 background:#e8f5e9;color:#1b5e20;line-height:1.5;}
+    .topic-saved.none{background:#f5f5f5;color:#90a4ae;}
+    .topic-saved span{font-weight:700;}
+    /* Теми уроків, які вже відбулися — у кабінеті родини */
+    .topics-box{background:#f3f7ff;border:1px solid #d7e3f8;border-radius:12px;
+                padding:11px 13px;margin-bottom:11px;}
+    .topics-box .tb-head{font-size:.84rem;font-weight:800;color:#2b5aa8;margin-bottom:6px;}
+    .topics-row{display:flex;gap:9px;padding:4px 0;border-top:1px dashed #e3ebf8;font-size:.84rem;}
+    .topics-row:first-of-type{border-top:none;}
+    .topics-subj{flex:0 0 38%;color:#5a6b85;font-weight:700;}
+    .topics-what{flex:1;min-width:0;color:#263238;}
+    .lesson-topic{font-size:.76rem;color:#5a6b85;margin-top:3px;}
+    /* Імпорт учнів */
+    .si-sum{background:#eef5ff;border:1px solid #cfe0f7;border-radius:10px;padding:10px 12px;
+            font-size:.86rem;color:#2b5aa8;margin-bottom:9px;}
+    .si-sum span{display:block;font-size:.75rem;color:#7b8ea8;margin-top:3px;}
+    .si-warn{background:#fff8e1;border:1px solid #ffe082;border-radius:10px;padding:9px 12px;
+             font-size:.78rem;color:#7a5b00;line-height:1.5;margin-bottom:9px;}
+    .si-note{background:#f5f5f5;border-radius:10px;padding:9px 12px;font-size:.78rem;
+             color:#666;line-height:1.5;margin-bottom:9px;}
+    .si-table{width:100%;border-collapse:collapse;font-size:.78rem;}
+    .si-table th{background:#eef5ff;color:#2b5aa8;text-align:left;padding:6px 8px;}
+    .si-table td{padding:6px 8px;border-top:1px solid #eef2f7;vertical-align:top;}
+    /* Поле файлів для ДЗ: нативний input сховано, видима кнопка — label */
+    .hw-file-input{position:absolute;width:1px;height:1px;opacity:0;
+                   overflow:hidden;clip:rect(0 0 0 0);}
+    .hw-file-input:focus + .hw-file-row .hw-file-btn{outline:2px solid var(--teal);
+                   outline-offset:2px;}
+    .hw-file-row{display:flex;align-items:center;gap:9px;margin-top:4px;flex-wrap:wrap;}
+    .hw-file-btn{display:inline-block;cursor:pointer;margin:0;padding:8px 14px;
+                 background:#eef5ff;color:#2b5aa8;border:1px solid #cfe0f5;
+                 border-radius:9px;font-size:.86rem;font-weight:700;
+                 white-space:nowrap;user-select:none;}
+    .hw-file-btn:hover{background:#e2eeff;}
+    .hw-file-name{font-size:.82rem;color:#78909c;overflow-wrap:anywhere;}
+    .hw-file-hint{margin:5px 0 0 0;font-size:.76rem;color:#90a4ae;line-height:1.4;}
+    .hw-doc{display:inline-flex;align-items:center;gap:5px;padding:7px 11px;
+            background:#f4f9ff;border:1px solid #cfe0f5;border-radius:8px;
+            font-size:.8rem;color:#2b5aa8;text-decoration:none;max-width:220px;}
+    .hw-doc span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+    .hw-book-link{color:#2b5aa8;font-weight:700;text-decoration:underline;}
+    /* Сторінки — окремим рядком під текстом завдання: це те, що дитина
+       відкриває в підручнику, і воно має бути помітним, а не губитися. */
+    .hw-pages{margin-top:5px;font-size:.87rem;font-weight:700;color:#2b5aa8;}
+    /* ДЗ на день у вчителя: згорнуті рядки по уроках */
+    .hwd-cap{font-size:.8rem;color:#90a4ae;margin:-6px 0 12px 0;}
+    .hwd-row{border:1px solid #e0e6ed;border-left:4px solid #cfd8dc;border-radius:11px;
+             margin-bottom:9px;background:#fff;overflow:hidden;}
+    .hwd-row.done{border-left-color:#2e7d32;background:#f6fbf7;}
+    .hwd-row.dirty{border-left-color:#e65100;background:#fffaf3;}
+    .hwd-head{display:flex;align-items:center;gap:9px;width:100%;margin:0;
+              padding:12px 14px;background:none;border:0;cursor:pointer;text-align:left;font-family:inherit;}
+    .hwd-mark{font-size:1.1rem;color:#b0bec5;flex:0 0 auto;}
+    .hwd-row.done .hwd-mark{color:#2e7d32;font-weight:800;}
+    .hwd-name{flex:1;min-width:0;overflow-wrap:anywhere;font-weight:700;font-size:.92rem;color:#37474f;}
+    .hwd-sub{font-size:.68rem;background:#fff3e0;color:#e65100;border-radius:5px;padding:1px 6px;}
+    .hwd-dbl{font-size:.66rem;background:#ede7f6;color:#5e35b1;border-radius:5px;padding:1px 5px;font-weight:400;}
+    .hwd-state{font-size:.74rem;color:#90a4ae;}
+    .hwd-row.done .hwd-state{color:#2e7d32;}
+    .hwd-chev{color:#b0bec5;font-size:.8rem;}
+    .hwd-body{padding:0 14px 13px 14px;border-top:1px dashed #eef2f7;}
+    .hwd-body label{display:block;margin-top:9px;font-size:.8rem;color:#546e7a;font-weight:700;}
+    .hwd-actions{display:flex;align-items:center;gap:10px;margin-top:11px;}
+    .hwd-dirty{flex:1;min-width:0;font-size:.76rem;color:#e65100;font-weight:700;}
+    .hwd-actions .qa-btn{width:auto;margin:0;padding:9px 16px;}
+    .hwd-hint{font-size:.76rem;color:#90a4ae;margin-top:10px;}
+    /* ── Вкладка «Ігри» ──
+       Кнопки навмисно великі: грають переважно з телефона, і половина
+       гравців — першо-четвертокласники, яким у дрібну ціль не влучити. */
+    .gm-hint{font-size:.8rem;color:#78909c;margin:0 0 12px;line-height:1.45;}
+    .gm-load{font-size:.85rem;color:#90a4ae;padding:14px 0;}
+    .gm-grid{display:grid;gap:10px;}
+    .gm-card{display:flex;align-items:center;gap:12px;width:100%;margin:0;padding:13px 14px;
+             text-align:left;background:#fff;border:1px solid #eef2f7;border-left:4px solid #7986cb;
+             border-radius:12px;cursor:pointer;color:inherit;}
+    .gm-card:hover{background:#f7f8ff;}
+    .gm-icon{font-size:1.7rem;line-height:1;flex:0 0 auto;}
+    .gm-body{display:flex;flex-direction:column;gap:2px;min-width:0;}
+    .gm-body b{font-size:.95rem;color:#37474f;}
+    .gm-sub{font-size:.78rem;color:#78909c;}
+    .gm-best{font-size:.74rem;color:#3949ab;margin-top:3px;}
+    .gm-best.gm-new{color:#b0bec5;}
+    /* Сама гра */
+    .gm-play{background:#fff;border:1px solid #eef2f7;border-radius:14px;padding:16px;}
+    .gm-top{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+    .gm-back{width:auto;margin:0;padding:6px 12px;font-size:.8rem;background:#eceff1;
+             color:#37474f;border:none;border-radius:8px;cursor:pointer;}
+    .gm-count{font-size:.78rem;color:#90a4ae;font-weight:700;}
+    .gm-bar{height:5px;background:#eceff1;border-radius:3px;margin:12px 0 6px;overflow:hidden;}
+    .gm-bar i{display:block;height:100%;background:#7986cb;border-radius:3px;transition:width .25s;}
+    /* Приклад — найбільше на екрані. Дитина дивиться тільки сюди. */
+    .gm-q{font-size:2.1rem;font-weight:800;color:#263238;text-align:center;
+          padding:22px 0 18px;letter-spacing:.02em;}
+    .gm-form{display:flex;gap:8px;}
+    .gm-form input{flex:1;min-width:0;margin:0;font-size:1.4rem;font-weight:700;text-align:center;
+                   padding:11px;border:2px solid #c5cae9;border-radius:11px;}
+    .gm-form button{width:auto;margin:0;padding:11px 18px;background:#5c6bc0;color:#fff;
+                    border:none;border-radius:11px;font-weight:700;cursor:pointer;}
+    .gm-opts{display:grid;grid-template-columns:repeat(2,1fr);gap:9px;}
+    .gm-opt{margin:0;padding:14px;font-size:1.1rem;font-weight:700;background:#eef0fb;
+            color:#3949ab;border:1px solid #c5cae9;border-radius:11px;cursor:pointer;}
+    .gm-opt:hover{background:#e3e7f8;}
+    /* Місце під відгук тримаємо завжди: інакше поява рядка смикає
+       кнопки вниз рівно в мить, коли по них ціляться. */
+    .gm-feed{min-height:24px;margin-top:12px;text-align:center;font-size:.9rem;font-weight:700;}
+    .gm-feed.gm-ok{color:#2e7d32;}
+    .gm-feed.gm-no{color:#c62828;}
+    /* Підсумок */
+    .gm-done{text-align:center;}
+    .gm-medal{font-size:3rem;line-height:1;}
+    .gm-done h4{margin:8px 0 2px;font-size:1.05rem;color:#37474f;}
+    .gm-score{margin:0 0 14px;font-size:.9rem;color:#78909c;font-weight:700;}
+    .gm-allright{font-size:.85rem;color:#2e7d32;margin:0 0 14px;}
+    .gm-wrong{display:flex;flex-wrap:wrap;gap:7px;justify-content:center;align-items:center;
+              background:#fff8e1;border:1px dashed #ffe082;border-radius:11px;
+              padding:11px;margin:0 0 14px;}
+    .gm-wrong b{width:100%;font-size:.78rem;color:#e65100;font-weight:700;}
+    .gm-wrong span{font-size:.85rem;font-weight:700;color:#5d4037;
+                   background:#fff;border-radius:7px;padding:4px 9px;}
+    .gm-again{display:flex;gap:9px;}
+    .gm-again button{flex:1;margin:0;padding:12px;background:#5c6bc0;color:#fff;
+                     border:none;border-radius:11px;font-weight:700;cursor:pointer;}
+    .gm-again .gm-ghost{background:#eceff1;color:#37474f;}
+    /* Вкладка «Домашні»: навігація по тижнях */
+    .hw-nav{display:flex;align-items:center;gap:10px;margin-bottom:12px;}
+    .hw-nav button{width:auto;margin:0;padding:9px 15px;font-size:1.05rem;font-weight:800;
+                   background:#eef5ff;color:#2b5aa8;border:1px solid #cfe0f5;border-radius:10px;cursor:pointer;}
+    .hw-nav button:hover{background:#e2eeff;}
+    .hw-nav-mid{flex:1;min-width:0;text-align:center;line-height:1.25;}
+    .hw-nav-mid b{display:block;font-size:.95rem;color:#37474f;}
+    .hw-nav-mid span{font-size:.76rem;color:#90a4ae;}
+    .hw-today{width:100%;margin:0 0 12px 0;padding:8px;font-size:.8rem;
+              background:none;border:1px dashed #cfe0f5;border-radius:9px;color:#2b5aa8;cursor:pointer;}
+    .hw-day{margin-bottom:14px;background:#fff;border:1px solid #eef2f7;
+            border-left:4px solid #cfd8dc;border-radius:11px;padding:11px 13px;}
+    .hw-day.today{border-left-color:#2b5aa8;background:#f7fbff;}
+    /* День у тижневому списку оцінок. Стилі свої, а не .hw-day: там
+       ліва смуга синя під ДЗ, а тут доречніша нейтральна. */
+    .gv-day{margin-bottom:12px;background:#fff;border:1px solid #f0e4e6;
+            border-left:4px solid #ff8a95;border-radius:11px;padding:10px 13px;}
+    .gv-day-head{font-weight:800;font-size:.88rem;color:#37474f;margin-bottom:6px;}
+    .hw-day-head{font-weight:800;font-size:.9rem;color:#37474f;margin-bottom:7px;}
+    .hw-day-head span{font-weight:400;font-size:.74rem;color:#2b5aa8;
+                      background:#e3f2fd;border-radius:5px;padding:1px 6px;margin-left:5px;}
+    .hw-day-list{list-style:none;padding-left:0;margin:0;}
+    .hw-day-list li{padding:7px 0;border-bottom:1px dashed #eef2f7;font-size:.88rem;}
+    .hw-day-list li:last-child{border-bottom:0;}
+    /* «Зробити до …» — головна відповідь на питання батька */
+    .hw-due{display:block;margin-top:5px;font-size:.78rem;font-weight:700;color:#2e7d32;}
+    .hw-due.none{color:#b0bec5;font-weight:400;font-style:italic;}
+    /* Тема уроку під завданням: батько питає і «що робити», і «що проходили» */
+    .hw-topic{margin-top:5px;font-size:.82rem;color:#5e35b1;
+              background:#f3e5f5;border-radius:7px;padding:5px 9px;}
+    .hw-topic b{color:#4527a0;}
+    /* Помічник — при кожному завданні, а не один на всю вкладку */
+    .hw-help{margin-top:7px;}
+    .hw-help-btn{width:auto;margin:0;padding:6px 12px;font-size:.76rem;font-weight:700;
+                 background:#fff8e1;color:#8a6d1f;border:1px solid #ffe082;
+                 border-radius:8px;cursor:pointer;}
+    .hw-help-btn:hover{background:#fff3cd;}
+    .hw-help-out{margin-top:7px;font-size:.83rem;line-height:1.5;color:#37474f;
+                 background:#fffdf5;border:1px solid #ffe082;border-radius:9px;
+                 padding:10px 12px;white-space:pre-wrap;}
+    .si-table tr.si-bad td{background:#fff5f5;}
+    .si-table tr.si-skip td{background:#f7f8fa;color:#9aa5b1;}
+    .si-pick{display:flex;flex-wrap:wrap;gap:6px;align-items:center;
+             margin-bottom:9px;font-size:.8rem;}
+    .si-pick>b{color:#2b5aa8;margin-right:2px;}
+    .si-chip{display:inline-flex;align-items:center;gap:4px;cursor:pointer;
+             padding:3px 8px;border:1px solid #cfe0f5;border-radius:14px;
+             background:#f4f9ff;user-select:none;}
+    .si-chip.off{background:#f2f3f5;border-color:#dfe3e8;color:#9aa5b1;}
+    .si-chip input{margin:0;cursor:pointer;}
+    .si-chip span{color:#90a4ae;font-size:.72rem;}
+    .si-all{margin-left:auto;background:none;border:none;color:#2b5aa8;
+            cursor:pointer;font-size:.78rem;text-decoration:underline;padding:0;}
+    .si-mail{color:#2b5aa8;overflow-wrap:anywhere;}
+    .si-nomail{color:#b0a184;font-style:italic;}
+    .si-new{color:#2e7d32;font-weight:700;}
+    .si-old{color:#90a4ae;}
+    .si-apply{margin-top:12px;background:#2b5aa8;color:#fff;}
+    .si-apply:disabled{opacity:.45;cursor:default;}
+    .si-hint{font-size:.74rem;color:#90a4ae;margin-top:7px;line-height:1.5;}
+    /* Клітинка обліку як кнопка — кухня дописує порцію після дедлайну */
+    /* Правка замовлень на винос у кабінеті кухні */
+    .k-ta-cell{line-height:2;}
+    .k-ta-pick{display:inline-flex;align-items:center;gap:4px;background:#fffdf5;
+               border:1px solid #f0e2b8;border-radius:8px;padding:2px 6px;margin:0 5px 4px 0;
+               font-size:.78rem;white-space:nowrap;}
+    .k-ta-pick button{width:22px;height:22px;padding:0;margin:0;border:1px solid #e0cf9a;
+                      background:#fff;color:#8a6d1f;border-radius:6px;font-weight:800;
+                      cursor:pointer;line-height:1;}
+    .k-ta-pick button:disabled{opacity:.35;cursor:default;}
+    .k-ta-add{margin-top:12px;background:#fffdf5;border:1px solid #f0e2b8;border-radius:10px;padding:11px 13px;}
+    .k-ta-add>b{display:block;font-size:.84rem;color:#8a6d1f;margin-bottom:7px;}
+    .k-ta-add-row{display:flex;gap:7px;flex-wrap:wrap;align-items:center;}
+    .k-ta-add-row select{margin-top:0;flex:1;min-width:120px;}
+    .k-ta-add-btn{margin-top:0;width:auto;background:#8a6d1f;color:#fff;border:none;
+                  border-radius:9px;padding:10px 16px;font-weight:700;cursor:pointer;}
+    .k-ta-note{display:block;margin-top:7px;font-size:.73rem;color:#b0a184;}
+    .k-cell-btn{background:none;border:1px dashed transparent;border-radius:7px;
+                padding:2px 8px;margin:0;width:auto;cursor:pointer;font-size:inherit;}
+    .k-cell-btn:hover{border-color:#80deea;background:#e0f7fa;}
+    .k-ord-hint{font-size:.74rem;color:#78909c;margin:8px 0 0 0;line-height:1.45;}
+    .k-yes{color:#2e7d32;font-weight:800;}
+    .k-no{color:#ccc;}
+    /* ── Харчування у батьків ── */
+    .pm-box{background:#e0f7fa;border:1px solid #80deea;border-radius:11px;padding:12px 14px;margin-top:0;}
+    .pm-tabs{display:flex;gap:5px;margin-bottom:10px;}
+    .pm-tab{flex:1;min-width:0;margin:0;padding:6px 2px;border:1px solid #b2ebf2;background:#fff;border-radius:9px;cursor:pointer;line-height:1.25;}
+    .pm-tab span{display:block;font-size:.68rem;color:#888;text-transform:uppercase;}
+    .pm-tab b{display:block;font-size:.72rem;color:#00838f;}
+    .pm-tab.on{background:#00838f;border-color:#00838f;}
+    .pm-tab.on span,.pm-tab.on b{color:#fff;}
+    .pm-tab.empty{opacity:.45;}
+    .k-week-hint{display:block;font-size:.68rem;color:#4dd0e1;font-weight:600;text-transform:uppercase;letter-spacing:.03em;}
+    .pm-title{font-size:.9rem;font-weight:800;color:#00838f;margin-bottom:7px;}
+    .pm-dish{font-size:.86rem;color:#333;padding:2px 0;}
+    .pm-none{font-size:.8rem;color:#888;font-style:italic;}
+    .pm-snack{font-size:.83rem;color:#4a148c;background:#f3e5f5;border-radius:8px;padding:6px 9px;margin-top:8px;}
+    .pm-allerg{font-size:.78rem;color:#b71c1c;background:#ffebee;border:1px solid #ef9a9a;border-radius:8px;padding:6px 9px;margin-top:8px;}
+    .pm-note{font-size:.76rem;color:#666;margin-top:6px;font-style:italic;}
+    .pm-status{margin-top:10px;display:flex;gap:9px;flex-wrap:wrap;}
+    .pm-on{font-size:.8rem;font-weight:700;color:#1b5e20;background:#e8f5e9;border-radius:20px;padding:3px 11px;}
+    .pm-off{font-size:.8rem;font-weight:700;color:var(--red);background:#ffebee;border-radius:20px;padding:3px 11px;}
+    .pm-dim{font-size:.8rem;color:#999;background:#f5f5f5;border-radius:20px;padding:3px 11px;}
+    .pm-act{margin-top:9px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+    .pm-btn{width:auto;margin:0;padding:7px 13px;font-size:.78rem;font-weight:700;border:1px solid #ef9a9a;background:#fff;color:var(--red);border-radius:8px;cursor:pointer;}
+    .pm-btn.back{border-color:#a5d6a7;color:#1b5e20;}
+    .pm-btn.snack{border-color:#ce93d8;color:#6a1b9a;}
+    /* Разовий обід у дитини, яка зазвичай не обідає — головна дія дня */
+    .pm-btn.once{background:#2e7d32;border-color:#2e7d32;color:#fff;font-weight:700;}
+    .pm-locked{font-size:.77rem;color:#8d6e63;background:#fff8e1;border:1px solid #ffe0a3;border-radius:8px;padding:7px 10px;line-height:1.4;}
+    .pm-links{margin-top:11px;display:flex;gap:14px;flex-wrap:wrap;}
+    .pm-links a{font-size:.76rem;color:#00838f;text-decoration:none;font-weight:700;}
+    /* Рядок із головною галочкою.
+       На iPhone Safari малює власний прапорець і не збільшує його разом
+       зі шрифтом — виходив значок 13 px поруч із великим текстом, у який
+       ще й важко влучити пальцем. Задаємо розмір явно: 24 px — це нижня
+       межа зручної цілі для дотику.
+       text-align:left потрібен тому, що .modal-content центрує весь
+       вміст: підпис розповзався по центру, а галочка лишалася ліворуч. */
+    .ms-row{display:flex;align-items:flex-start;gap:11px;margin:4px 0 14px 0;
+            font-size:.85rem;text-align:left;}
+    .ms-row input[type=checkbox]{
+      width:24px;height:24px;min-width:24px;flex:none;margin:1px 0 0 0;
+      accent-color:var(--teal);cursor:pointer;}
+    .ms-row span{flex:1;min-width:0;}
+    .ms-row b{display:block;margin-bottom:2px;}
+    .ms-row small{color:#888;font-size:.74rem;}
+    #ms-days{display:flex;gap:6px;margin-top:8px;}
+    .ms-day{flex:1;text-align:center;background:#f5f5f5;border-radius:8px;padding:7px 2px;margin:0;font-size:.76rem;cursor:pointer;}
+    .ms-day input[type=checkbox]{width:20px;height:20px;margin:0 0 4px 0;accent-color:var(--teal);cursor:pointer;}
+    .ms-day span{display:block;font-weight:700;color:#555;}
+    .ms-note{font-size:.74rem;color:#888;margin-top:12px;line-height:1.45;}
+    .pms-grid{display:flex;gap:8px;margin-top:11px;}
+    .pms-cell{flex:1;text-align:center;background:#e0f7fa;border-radius:10px;padding:11px 4px;}
+    .pms-cell b{display:block;font-size:1.7rem;color:#00838f;line-height:1;}
+    .pms-cell span{font-size:.7rem;color:#666;}
+    /* ── Швидкий журнал ── */
+    .qj-legend{display:flex;gap:12px;font-size:.72rem;color:#888;margin-top:8px;}
+    .qj-row{display:grid;grid-template-columns:24px 1fr auto 52px;gap:7px;align-items:center;padding:6px 4px;border-bottom:1px solid #f2f2f2;}
+    .qj-n{font-size:.7rem;color:#bbb;text-align:center;}
+    .qj-name{font-size:.85rem;color:#333;word-break:break-word;}
+    .qj-att{display:flex;gap:3px;}
+    .qj-b{width:30px;height:30px;margin:0;padding:0;border:1px solid #ddd;background:#fafafa;border-radius:7px;cursor:pointer;font-size:.78rem;font-weight:800;color:#999;}
+    .qj-b.ok.on{background:#e8f5e9;border-color:#66bb6a;color:#1b5e20;}
+    .qj-b.lt.on{background:#fff8e1;border-color:#ffb74d;color:#e65100;}
+    .qj-b.ab.on{background:#ffebee;border-color:#ef5350;color:#b71c1c;}
+    .qj-g{width:46px;margin:0;padding:5px;text-align:center;font-weight:800;font-size:.95rem;border:2px solid #e0e0e0;border-radius:7px;}
+    .qj-g:focus{border-color:#0072ff;outline:none;}
+    /* ── Друк розкладу ── */
+    #print-area{display:none;}
+    .ps-sheet{font-family:'Montserrat',sans-serif;color:#000;}
+    .ps-head{text-align:center;margin-bottom:12px;}
+    .ps-title{font-size:20px;font-weight:800;}
+    .ps-cls{font-size:13px;color:#444;margin-top:2px;}
+    .ps-table{width:100%;border-collapse:collapse;font-size:12px;}
+    .ps-table th{background:#eee;border:1px solid #999;padding:6px;font-weight:800;}
+    .ps-table td{border:1px solid #bbb;padding:6px;vertical-align:top;height:34px;}
+    .ps-num{text-align:center;font-weight:800;width:52px;background:#f7f7f7;}
+    .ps-time{font-size:9px;font-weight:400;color:#666;}
+    .ps-break{color:#888;font-style:italic;}
+    .ps-hour{font-weight:700;}
+    .ps-foot{margin-top:14px;font-size:10px;color:#777;text-align:right;}
+    @media print{
+      body.printing>*{display:none!important;}
+      body.printing #print-area{display:block!important;}
+      body.printing{background:#fff!important;padding:0;}
+      @page{size:A4 landscape;margin:12mm;}
+    }
+    /* ── Згоди: директор ── */
+    .cs-card{background:#fff;border:1px solid #c5e1a5;border-radius:10px;padding:10px;margin-bottom:8px;}
+    .cs-card.overdue{border-color:#ef9a9a;background:#fff8f8;}
+    .cs-head{display:flex;justify-content:space-between;align-items:flex-start;gap:9px;}
+    .cs-text{font-size:.79rem;color:#555;margin-top:4px;}
+    .cs-meta{font-size:.74rem;color:#888;margin-top:5px;}
+    .cs-stats{display:flex;gap:10px;margin-top:7px;font-size:.8rem;font-weight:700;}
+    .cs-yes{color:#1b5e20;} .cs-no{color:var(--red);} .cs-wait{color:#f39c12;}
+    .cs-detail{width:auto;margin:7px 0 0 0;padding:4px 10px;font-size:.74rem;background:#eceff1;color:#37474f;border:none;border-radius:7px;cursor:pointer;}
+    .cs-cls{font-size:.8rem;font-weight:800;color:#33691e;margin:9px 0 4px 0;}
+    .cs-row{display:flex;justify-content:space-between;gap:9px;font-size:.8rem;padding:3px 0;border-bottom:1px dashed #f0f0f0;}
+    .cs-ok{font-size:.75rem;color:#1b5e20;font-style:italic;}
+    /* ── Згоди: батьки ── */
+    .pc-card{background:#f1f8e9;border:1px solid #c5e1a5;border-radius:11px;padding:12px;margin-bottom:8px;}
+    .pc-card.answered{background:#fff;border-color:#e0e0e0;}
+    .pc-title{font-weight:800;font-size:.9rem;color:#33691e;}
+    .pc-text{font-size:.82rem;color:#555;margin-top:4px;line-height:1.45;}
+    .pc-deadline{font-size:.74rem;color:#888;margin-top:5px;}
+    .pc-btns{display:flex;gap:8px;margin-top:10px;}
+    .pc-yes,.pc-no{flex:1;margin:0;padding:10px;font-size:.85rem;font-weight:700;border:none;border-radius:9px;cursor:pointer;}
+    .pc-yes{background:#43a047;color:#fff;}
+    .pc-no{background:#fff;color:var(--red);border:1px solid #f5c6cb;}
+    .pc-done{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:.83rem;font-weight:700;color:#33691e;flex-wrap:wrap;}
+    .pc-when{font-size:.72rem;color:#999;font-weight:400;}
+    .pc-change{width:auto;margin:0;padding:3px 9px;font-size:.72rem;background:#eceff1;color:#555;border:none;border-radius:7px;cursor:pointer;}
+    /* ── Відсутність вчителів і заміни ── */
+    .sa-card{background:#fff;border:1px solid #ffcc80;border-radius:10px;padding:10px;margin-bottom:8px;}
+    .sa-head{display:flex;justify-content:space-between;align-items:flex-start;gap:9px;min-width:0;}
+    .sa-mail{font-size:.72rem;color:#999;overflow-wrap:anywhere;}
+    .sa-reason{font-size:.78rem;color:#e65100;margin-top:3px;}
+    .sa-sub{font-size:.76rem;font-weight:700;margin:7px 0 4px 0;color:#555;}
+    .sa-none{font-size:.76rem;color:#aaa;font-style:italic;margin-top:6px;}
+    .sa-lesson{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:4px 0;border-top:1px dashed #f0e2cc;font-size:.79rem;flex-wrap:wrap;}
+    .sa-l-info{color:#444;}
+    .sa-cover{color:#1b5e20;font-weight:700;white-space:nowrap;}
+    .sa-x{width:auto;margin:0 0 0 4px;padding:0 5px;background:none;border:none;color:var(--red);cursor:pointer;font-size:.85rem;}
+    .sa-pick{width:auto;max-width:190px;margin:0;padding:3px 6px;font-size:.75rem;}
+    .sub-badge{font-size:.64rem;font-weight:800;background:#fff3e0;color:#e65100;border:1px solid #ffcc80;border-radius:8px;padding:0 6px;vertical-align:middle;}
+    /* ── Глобальний пошук ── */
+    .gs-row{display:grid;grid-template-columns:auto 1fr;gap:2px 8px;padding:7px 9px;background:#fff;border:1px solid #e0e8ef;border-radius:8px;margin-bottom:4px;cursor:pointer;}
+    .gs-row:hover{border-color:#90caf9;background:#f5faff;}
+    .gs-tag{font-size:.66rem;font-weight:800;padding:1px 7px;border-radius:9px;align-self:start;white-space:nowrap;}
+    .gs-tag.st{background:#e8f5e9;color:#1b5e20;}
+    .gs-tag.pa{background:#f3e5f5;color:#7b1fa2;}
+    .gs-main{font-size:.85rem;font-weight:700;color:#333;}
+    .gs-sub{grid-column:2;font-size:.74rem;color:#888;line-height:1.4;overflow-wrap:anywhere;min-width:0;}
+    /* ── Статистика відвідуваності ── */
+    .as-sum{display:flex;gap:10px;margin-bottom:10px;}
+    .as-sum>div{flex:1;background:#fff;border:1px solid #f5c6cb;border-radius:9px;padding:9px;text-align:center;}
+    .as-sum b{display:block;font-size:1.5rem;color:#b71c1c;}
+    .as-sum span{font-size:.7rem;color:#888;}
+    .as-title{font-size:.8rem;font-weight:800;color:#b71c1c;margin:10px 0 5px 0;}
+    .as-classes{display:flex;flex-wrap:wrap;gap:4px;}
+    .as-cls{font-size:.74rem;background:#fff;border:1px solid #f5c6cb;border-radius:10px;padding:2px 8px;}
+    .as-cls.zero{opacity:.45;border-color:#e0e0e0;}
+    .as-row{display:flex;justify-content:space-between;gap:9px;padding:5px 8px;background:#fff;border:1px solid #eee;border-radius:8px;margin-bottom:4px;font-size:.82rem;}
+    .as-name{color:#333;}
+    .as-c{color:#aaa;font-size:.72rem;}
+    .as-nums{color:#b71c1c;white-space:nowrap;font-size:.78rem;}
+    /* ── Учні без оцінок ── */
+    .ug-row{display:flex;justify-content:space-between;gap:9px;padding:6px 9px;border-bottom:1px dashed #eee;font-size:.83rem;}
+    .ug-row.warn{background:#fff8e1;border-radius:7px;border-bottom-color:transparent;}
+    .ug-name{color:#333;font-weight:600;}
+    .ug-when{color:#888;font-size:.76rem;white-space:nowrap;}
+    /* ── Табель (рендер для PDF) ── */
+    .rc-page{font-family:'Montserrat',sans-serif;padding:26px 30px;background:#fff;color:#222;width:760px;box-sizing:border-box;}
+    .rc-head{text-align:center;border-bottom:3px solid #22b8cf;padding-bottom:11px;margin-bottom:16px;}
+    .rc-title{font-size:24px;font-weight:800;color:#00796b;}
+    .rc-school{font-size:13px;color:#777;margin-top:3px;}
+    .rc-meta{display:flex;gap:26px;flex-wrap:wrap;font-size:14px;margin-bottom:16px;}
+    .rc-table{width:100%;border-collapse:collapse;font-size:14px;}
+    .rc-table th{background:#e0f7fa;color:#00838f;padding:9px 7px;border:1px solid #b2ebf2;font-weight:800;}
+    .rc-table td{padding:8px 7px;border:1px solid #e0e0e0;}
+    .rc-subj{font-weight:600;}
+    .rc-val{text-align:center;font-weight:800;font-size:16px;color:#00796b;}
+    .rc-foot{display:flex;justify-content:space-between;margin-top:26px;font-size:12px;color:#777;}
+    .rc-sign{color:#444;}
+    /* ── Підсумкові оцінки ── */
+    .sem-info{font-size:.78rem;color:#666;margin:0 0 7px 0;}
+    .sem-wrap{max-height:48vh;overflow-y:auto;border:1px solid #e0e0e0;border-radius:9px;}
+    .sem-table{width:100%;border-collapse:collapse;font-size:.82rem;}
+    .sem-table th{position:sticky;top:0;background:#e0f7fa;color:#00838f;font-size:.72rem;padding:6px 5px;border-bottom:1px solid #b2ebf2;z-index:1;}
+    .sem-table td{padding:5px;border-bottom:1px solid #f0f0f0;text-align:center;}
+    .sem-name{text-align:left!important;font-weight:600;color:#333;}
+    .sem-avg{color:#777;font-size:.8rem;}
+    .sem-cnt{font-size:.66rem;color:#aaa;}
+    .sem-auto{color:#00838f;font-weight:800;}
+    .sem-in{width:46px;margin:0;padding:5px;text-align:center;font-weight:800;font-size:.95rem;border:2px solid #b2ebf2;border-radius:7px;}
+    .sem-in:focus{border-color:#00838f;outline:none;}
+    .sem-flag{color:var(--orange);font-weight:800;width:22px;}
+    /* Підсумкові в кабінеті батьків/учня */
+    .fin-box{background:#e0f7fa;border:1px solid #80deea;border-radius:10px;padding:10px 12px;margin-bottom:10px;}
+    .fin-title{font-size:.82rem;font-weight:800;color:#00838f;margin-bottom:6px;}
+    .fin-row{display:flex;justify-content:space-between;align-items:center;gap:9px;padding:3px 0;font-size:.85rem;}
+    #btn-hw-copy{width:auto;margin:0;padding:8px 14px;font-size:.82rem;font-weight:700;border:none;border-radius:9px;cursor:pointer;background:#e8f4fd;color:#0d47a1;border:1px solid #bbdefb;}
+    #btn-hw-copy:hover{background:#0d47a1;color:#fff;}
+    .hw-copy-opt{display:flex;align-items:center;gap:8px;padding:7px 9px;border:1px solid #e0e0e0;border-radius:8px;margin-bottom:5px;font-size:.86rem;cursor:pointer;}
+    .hw-copy-opt:hover{background:#f5f9ff;border-color:#bbdefb;}
+    .hw-copy-opt input[type=checkbox]{width:20px;height:20px;min-width:20px;margin:0;cursor:pointer;accent-color:var(--teal);}
+    .ai-ctx{margin-top:8px;background:#faf7ff;border:1px solid #e2d6f0;border-radius:10px;padding:9px 11px;}
+    .ai-ctx summary{cursor:pointer;font-size:.8rem;font-weight:700;color:#7b1fa2;}
+    .ai-ctx label{margin-top:0;font-size:.76rem;color:#666;}
+    .ai-ctx input,.ai-ctx select,.ai-ctx textarea{font-size:.85rem;}
+    .ai-ctx-note{font-size:.72rem;color:#8a6d1f;background:#fff8e1;border:1px solid #ffe0a3;border-radius:8px;padding:7px 9px;margin:9px 0 0 0;line-height:1.45;}
+    .ai-hw-msg{margin:7px 0 0 0;font-size:.8rem;padding:8px 11px;border-radius:8px;background:#f3e5f5;color:#4a148c;border:1px solid #ce93d8;}
+    .ai-hw-msg.err{background:#fdecea;color:#b71c1c;border-color:#f5c6cb;}
+    /* Блоки AI у кабінетах батьків та учня */
+    .ai-help-box{margin-top:11px;border-top:1px dashed #cfd8dc;padding-top:10px;}
+    #btn-ai-parent,#btn-ai-student,#btn-ai-ann{width:auto;margin:0;padding:8px 14px;font-size:.82rem;font-weight:700;border:none;border-radius:9px;cursor:pointer;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;white-space:nowrap;}
+    #btn-ai-parent:disabled,#btn-ai-student:disabled,#btn-ai-ann:disabled{opacity:.6;cursor:wait;}
+    .ai-out{margin-top:9px;background:#fff;border:1px solid #d1c4e9;border-left:4px solid var(--purple);border-radius:9px;padding:11px 13px;font-size:.85rem;line-height:1.55;color:#333;white-space:pre-wrap;}
+    /* ── БАТЬКИ УЧНІВ (зріз для директора) ── */
+    /* ПАМʼЯТКА ПРО ДОВГІ РЯДКИ.
+       Колонка всередині display:flex не стискається вужче за свій вміст,
+       доки їй не поставити min-width:0. Якщо в колонку потрапляє текст
+       людини без пробілів — пошта, посилання, «Українська мова/Читання» —
+       без min-width:0 (а часто ще й overflow-wrap:anywhere) вона розсуне
+       картку, і текст вилізе за рамку. Саме так вилазили адреси батьків
+       у списку класу. */
+    .po-row{display:flex;gap:11px;align-items:flex-start;padding:8px;background:#fff;border:1px solid #e8e0f0;border-radius:9px;margin-bottom:5px;font-size:.83rem;}
+    .po-child{flex:0 0 40%;font-weight:700;color:#4a148c;word-break:break-word;display:flex;flex-direction:column;gap:3px;align-items:flex-start;}
+    .po-child-name{line-height:1.35;}
+    .po-child-acts{display:flex;gap:4px;}
+    .po-allergy{font-size:.7rem;font-weight:800;color:#b71c1c;background:#ffebee;border:1px solid #ef9a9a;border-radius:10px;padding:1px 7px;cursor:help;}
+    .sc-group{margin-top:14px;padding-top:11px;border-top:1px dashed #ddd;}
+    .sc-group:first-child{margin-top:0;padding-top:0;border-top:none;}
+    .sc-group>b{font-size:.86rem;color:var(--teal);}
+    .sc-group.danger>b{color:var(--red);}
+    .sc-group.danger{background:#fff5f5;border-radius:10px;padding:11px;border:1px solid #f5c6cb;border-top:1px solid #f5c6cb;}
+    #sc-fields label{margin-top:9px;font-size:.78rem;color:#666;}
+    #sc-fields input,#sc-fields textarea{margin-top:3px;font-size:.88rem;}
+    #sc-fields [readonly]{background:#f7f8fa;color:#666;}
+    .sc-lock{font-size:.68rem;color:#8a6d1f;background:#fff8e1;border:1px solid #ffe0a3;border-radius:8px;padding:0 6px;font-weight:600;}
+    .po-login{font-size:.7rem;font-weight:600;color:#1b5e20;background:#e8f5e9;border:1px solid #a5d6a7;border-radius:10px;padding:1px 7px;word-break:break-all;}
+    .po-login.none{color:#8a6d1f;background:#fff8e1;border-color:#ffe0a3;}
+    .po-del{background:#fdecea!important;border-color:#f5c6cb!important;}
+    .po-del:hover{background:var(--red)!important;}
+    .ds-ok{width:auto;margin:0;padding:2px 9px;font-size:.75rem;background:var(--green);color:#fff;border:none;border-radius:7px;cursor:pointer;}
+        /* МІНІМАЛЬНА ШИРИНА НУЛЬ — інакше колонка не стискається.
+       Елемент flex за замовчуванням не може стати вужчим за свій вміст, а
+       вміст тут — пошта без жодного пробілу (dhavrylenko@gmail.com). Колонка
+       розсувалася під неї й вилазила за картку разом із текстом. */
+    .po-parents{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:3px;}
+    .po-parent{padding:5px 0;border-bottom:1px dashed #f0e8f6;}
+    .po-parent:last-child{border-bottom:none;}
+    .po-line{display:flex;gap:6px;align-items:baseline;flex-wrap:wrap;min-width:0;}
+    .po-name{color:#333;font-size:.83rem;overflow-wrap:anywhere;min-width:0;}
+    .po-role{font-size:.72rem;color:#7b1fa2;white-space:nowrap;}
+    .po-email{color:#777;word-break:break-all;font-size:.75rem;}
+    .po-new{font-size:.68rem;color:#f39c12;white-space:nowrap;}
+    .po-none{font-size:.78rem;color:var(--red);font-style:italic;}
+    .po-ok{background:#e8f5e9;border:1px solid #a5d6a7;color:#1b5e20;border-radius:9px;padding:8px 11px;font-size:.8rem;font-weight:700;margin-bottom:8px;}
+    .po-contacts{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:2px;}
+    .po-contacts a{color:var(--blue);text-decoration:none;font-size:.76rem;white-space:nowrap;}
+    .po-contacts a:hover{text-decoration:underline;}
+    .po-addr{font-size:.75rem;color:#888;}
+    .po-edit{width:auto;margin:0;padding:2px 7px;font-size:.72rem;background:#fff8e1;border:1px solid #ffe0a3;border-radius:7px;cursor:pointer;line-height:1.5;}
+    .po-edit:hover{background:#f39c12;}
+    #pe-fields label{margin-top:11px;font-size:.79rem;color:#666;}
+    #pe-fields input{margin-top:3px;}
+    /* ── Журнал дій ── */
+    .audit-row{display:grid;grid-template-columns:74px 1fr;gap:2px 9px;padding:7px 9px;background:#fff;border:1px solid #e4e8ea;border-radius:8px;margin-bottom:4px;font-size:.79rem;}
+    .audit-time{color:#90a4ae;font-size:.72rem;white-space:nowrap;}
+    .audit-act{font-weight:700;color:#37474f;}
+    .audit-det{grid-column:2;color:#546e7a;word-break:break-word;}
+    .audit-who{grid-column:2;color:#90a4ae;font-size:.72rem;}
+    @media(min-width:900px){
+      .audit-row{grid-template-columns:78px 210px 1fr 150px;align-items:baseline;}
+      .audit-det,.audit-who{grid-column:auto;}
+      .audit-who{text-align:right;}
+    }
+    .bd-box{background:#fff8f0;border:1px solid #ffd9b0;border-radius:10px;padding:9px 11px;margin-bottom:10px;}
+    .bd-title{font-size:.82rem;font-weight:800;color:#d35400;margin-bottom:5px;}
+    .bd-row{display:flex;justify-content:space-between;gap:9px;font-size:.83rem;padding:2px 0;}
+    .bd-row.me{font-weight:800;color:#d35400;}
+    .bd-name{color:#444;}
+    .bd-date{color:#999;white-space:nowrap;}
+    /* Сьогоднішній іменинник — щоб не загубився серед «через 5 днів» */
+    .bd-row.bd-today{background:#fff2e0;border-radius:6px;padding:3px 6px;font-weight:800;color:#d35400;}
+    .bd-when{color:#b0a89c;font-style:normal;font-size:.76rem;}
+    /* Найближчий тиждень у місячному списку — те, до чого готуватися вже */
+    .bd-when.soon{color:#c0873f;font-weight:700;}
+    /* Дальні дати — приглушено: блок стоїть найпершим на екрані, і кричати
+       про свято через три тижні йому не треба */
+    .bd-row.bd-dim .bd-name{color:#8a8a8a;}
+    .bd-more{margin-top:4px;}
+    .bd-more>summary{cursor:pointer;font-size:.76rem;color:#b07d3a;list-style:none;}
+    .bd-more>summary::-webkit-details-marker{display:none;}
+    .bd-more>summary::before{content:'▸ ';}
+    .bd-more[open]>summary::before{content:'▾ ';}
+    /* ── Перемикач сповіщень ── */
+    .push-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+    .push-label{flex:1;font-size:.85rem;font-weight:600;color:#555;}
+    .push-btn{width:auto;margin:0;padding:7px 14px;font-size:.8rem;font-weight:700;border:none;border-radius:9px;cursor:pointer;background:linear-gradient(135deg,#00c6ff,#4facfe);color:#fff;}
+    .push-hint{font-size:.74rem;color:#999;flex:1 1 100%;}
+    .pe-section{margin-top:16px;border-top:1px dashed #ddd;padding-top:11px;}
+    .pe-section b{font-size:.84rem;color:var(--purple);}
+    .pe-kid{display:flex;gap:7px;align-items:center;margin-top:6px;}
+    .pe-kid-name{flex:1;min-width:0;overflow-wrap:anywhere;font-size:.82rem;font-weight:600;color:#333;}
+    .pe-kid select{width:auto;flex:0 0 128px;margin:0;padding:5px 7px;font-size:.76rem;}
+    .pe-unlink{width:auto;flex-shrink:0;margin:0;padding:5px 9px;font-size:.78rem;background:#fdecea;color:var(--red);border:1px solid #f5c6cb;border-radius:7px;cursor:pointer;}
+    .pe-unlink:hover{background:var(--red);color:#fff;}
+    /* ── СПИСОК УЧНІВ У ДИРЕКТОРА ── */
+    .ds-row{display:flex;align-items:center;gap:9px;padding:6px 8px;background:#fff;border:1px solid #e0e0e0;border-radius:8px;margin-bottom:4px;font-size:.85rem;}
+    .ds-num{width:22px;text-align:center;color:#888;font-size:.75rem;flex-shrink:0;}
+    .ds-name{flex:1;font-weight:600;color:#333;word-break:break-word;}
+    .ds-edit{width:auto;flex-shrink:0;margin:0;padding:6px 9px;font-size:.8rem;background:#fff8e1;border:1px solid #ffe0a3;border-radius:8px;cursor:pointer;}
+    .ds-edit:hover{background:#f39c12;}
+    .ds-ok{width:auto;flex-shrink:0;margin:0;padding:6px 11px;font-size:.8rem;background:var(--green);color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:700;}
+    .staff-actions{display:flex;flex-direction:column;gap:4px;flex-shrink:0;}
+    .staff-reset{width:auto;margin:0;padding:6px 11px;font-size:.75rem;background:#e8f4fd;color:#0d47a1;border:1px solid #bbdefb;border-radius:8px;cursor:pointer;font-weight:700;white-space:nowrap;}
+    .staff-reset:hover{background:#0d47a1;color:#fff;}
+    .staff-del{width:auto;flex-shrink:0;margin:0;padding:6px 11px;font-size:.75rem;background:#fdecea;color:var(--red);border:1px solid #f5c6cb;border-radius:8px;cursor:pointer;font-weight:700;white-space:nowrap;}
+    .staff-del:hover{background:var(--red);color:#fff;}
+    .skill-tag.remove{cursor:pointer;background:#fdecea;color:var(--red);border-color:#f5c6cb;}
+    .skill-tag.remove:hover{background:var(--red);color:#fff;}
+    /* ── RETAKE ── */
+    .retake-btn{width:auto;padding:4px 10px;margin:0;font-size:var(--text-xs);background:#fff3cd;color:#856404;border:1px solid #ffeeba;border-radius:var(--badge-radius);cursor:pointer;font-weight:700;}
+    .retake-btn:hover{background:#f39c12;color:#fff;}
+    .retake-btn:disabled{opacity:.4;cursor:not-allowed;}
+    /* ── CURRICULUM ── */
+    .topic-row{display:flex;align-items:center;gap:8px;padding:6px;border-bottom:1px dashed #eee;font-size:.85rem;}
+    .topic-row input[type=checkbox]{width:20px;height:20px;min-width:20px;cursor:pointer;margin:0;accent-color:var(--teal);}
+    .topic-row.covered span{text-decoration:line-through;color:#aaa;}
+    .smart-alert{background:#fff3cd;border:1px solid #ffc107;border-radius:10px;padding:10px 14px;font-size:.85rem;color:#856404;margin-top:10px;display:none;}
+    /* ── TEXTBOOKS ── */
+    .textbook-item{display:flex;align-items:center;gap:8px;padding:8px;background:#f0f8ff;border-radius:9px;border:1px solid #d0e8f2;margin-bottom:6px;font-size:.85rem;}
+    .textbook-item a{color:var(--blue);font-weight:700;text-decoration:none;flex:1;min-width:0;overflow-wrap:anywhere;}
+    .textbook-item a:hover{text-decoration:underline;}
+    /* ── BEHAVIOR ── */
+    .behavior-row{display:flex;gap:8px;align-items:center;margin-top:8px;}
+    .behavior-grade-btn{flex:1;padding:9px 4px;border-radius:9px;font-weight:800;font-size:.9rem;border:2px solid #ddd;background:#f8f9fa;cursor:pointer;margin:0;transition:.2s;}
+    .behavior-grade-btn.sel-6{background:#e3f2fd;border-color:var(--g6);color:var(--g6);}
+    .behavior-grade-btn.sel-5{background:#e8f5e9;border-color:var(--g5);color:var(--g5);}
+    .behavior-grade-btn.sel-4{background:#f1f8e9;border-color:var(--g4);color:var(--g4);}
+    .behavior-grade-btn.sel-3{background:#fff8e1;border-color:var(--g3);color:var(--g3);}
+    .behavior-grade-btn.sel-2{background:#fbe9e7;border-color:var(--g2);color:var(--g2);}
+    .behavior-grade-btn.sel-1{background:#ffebee;border-color:var(--g1);color:var(--g1);}
+    /* ── MATRIX ── */
+    .matrix-wrapper{overflow-x:auto;overflow-y:auto;max-height:65vh;background:#fff;border-radius:12px;border:1px solid #eee;margin-top:14px;}
+    .matrix-table{width:100%;border-collapse:collapse;min-width:1400px;}
+    .matrix-table th{background:#f8f9fa;position:sticky;top:0;padding:11px 9px;z-index:2;border-bottom:2px solid #ddd;border-right:1px solid #eee;color:#2c3e50;font-size:.92rem;text-align:center;font-weight:800;}
+    .matrix-table td{vertical-align:top;width:170px;padding:5px;border-right:1px solid #eee;border-bottom:1px solid #eee;}
+    .time-col{position:sticky;left:0;background:#f8f9fa;z-index:1;border-right:2px solid #ddd;text-align:center;vertical-align:middle!important;font-weight:700;color:#555;width:80px;}
+    .matrix-cell-container{display:flex;flex-direction:column;gap:5px;height:100%;}
+    .matrix-cell{border-radius:8px;padding:9px;cursor:pointer;transition:.2s;min-height:82px;display:flex;flex-direction:column;position:relative;background:#fff;border:1px dashed #ccc;flex:1;}
+    .matrix-cell:hover{transform:translateY(-2px);box-shadow:0 4px 10px rgba(0,0,0,.1);border-style:solid;border-color:var(--teal);z-index:10;}
+    .cell-lesson{background-color:#fff3e0;border:1px solid #ffe0b2;border-left:4px solid #ff9800;}
+    .cell-club{background-color:#fce4ec;border:1px solid #f8bbd0;border-left:4px solid #e91e63;}
+    .cell-break{background-color:#f5f5f5;border:1px solid #e0e0e0;color:#888;align-items:center;justify-content:center;text-align:center;font-style:italic;}
+    .cell-empty{display:flex;align-items:center;justify-content:center;color:#aaa;background:transparent;}
+    .cell-empty:hover{background:#e0f2f1;color:var(--teal);}
+    .cell-subj{font-weight:700;font-size:.83rem;color:#333;margin-bottom:4px;line-height:1.2;}
+    .cell-teacher{font-size:.72rem;color:#e67e22;display:flex;align-items:center;gap:4px;font-weight:600;margin-bottom:4px;}
+    .cell-time{font-size:.68rem;color:#999;margin-top:auto;text-align:right;background:rgba(255,255,255,.7);padding:2px 4px;border-radius:4px;display:inline-block;align-self:flex-end;}
+    .cell-student-linked{font-size:.68rem;color:#8e44ad;background:#f3e5f5;padding:2px 6px;border-radius:4px;font-weight:800;margin-top:4px;border:1px solid #d1c4e9;}
+    .add-parallel-btn{font-size:.72rem;color:#2980b9;text-align:center;cursor:pointer;padding:4px;border:1px dashed #3498db;border-radius:6px;background:#f0f8ff;transition:.2s;margin-top:auto;}
+    .add-parallel-btn:hover{background:#3498db;color:#fff;}
+    .cell-warning-travel{border:2px solid #e67e22!important;box-shadow:inset 0 0 10px rgba(230,126,34,.3);}
+    .cell-warning-conflict{border:2px solid var(--red)!important;box-shadow:inset 0 0 10px rgba(231,76,60,.3);background-color:#fdedec!important;}
+    /* ── Спільний план предмета ──
+       Блок навмисно тихий: сірий дрібний рядок, а не третє поле на всю
+       ширину. Він стосується рідкісного випадку, і виглядати мусить як
+       примітка, а не як питання, на яке треба відповісти. */
+    .ca-box{margin-top:6px;font-size:.78rem;color:#78909c;}
+    .ca-view{display:flex;align-items:baseline;gap:7px;flex-wrap:wrap;}
+    .ca-view b{color:#455a64;font-weight:700;}
+    .ca-link{width:auto;margin:0;padding:0;background:none;border:none;cursor:pointer;
+             color:#2b5aa8;font-size:.78rem;text-decoration:underline;}
+    .ca-edit{margin-top:6px;background:#fff;border:1px solid #dde5ee;border-radius:10px;padding:9px 10px;}
+    .ca-edit select{margin:0;font-size:.85rem;}
+    .ca-actions{display:flex;gap:7px;margin-top:8px;}
+    .ca-ok,.ca-no{width:auto;margin:0;padding:6px 14px;font-size:.78rem;font-weight:700;
+                  border:none;border-radius:8px;cursor:pointer;}
+    .ca-ok{background:#2b5aa8;color:#fff;}
+    .ca-no{background:#eceff1;color:#546e7a;}
+    .ca-note{margin-top:7px;color:#90a4ae;line-height:1.45;font-size:.75rem;}
+    /* Погодження накладок. Кнопка навмисно скромна: вона стоїть у кожному
+       рядку попередження, і якби виглядала як головна дія, натискати її
+       почали б не читаючи — а це рівно те, чого тут не треба. */
+    .wo-btn{width:auto;margin:0 0 0 6px;padding:2px 9px;font-size:.72rem;font-weight:700;
+            background:#fff;color:#5d6d7e;border:1px solid #cfd8dc;border-radius:7px;cursor:pointer;
+            vertical-align:baseline;}
+    .wo-btn:hover{background:#eceff1;}
+    .wo-toggle{margin-left:0;color:#2e7d32;border-color:#c8e6c9;background:#f1f8f2;}
+    .wo-undo{color:#b26a00;border-color:#ffe082;background:#fffdf5;}
+    /* ── QUICK ACTIONS ── */
+    .qa-row{display:flex;gap:8px;margin:12px 0;flex-wrap:wrap;}
+    .qa-btn{flex:1;min-width:130px;padding:var(--space-3) var(--space-2);border-radius:11px;border:none;cursor:pointer;font-weight:700;font-size:var(--text-sm);display:flex;align-items:center;justify-content:center;gap:6px;transition:.2s;margin:0;}
+    .qa-btn:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,0,0,.15);}
+    .qa-grades{background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;}
+    .qa-save{background:linear-gradient(135deg,#43e97b,#38f9d7);color:#1a1a1a;}
+    .qa-exams{background:linear-gradient(135deg,#f39c12,#d35400);color:#fff;}
+    .qa-journal{background:linear-gradient(135deg,var(--purple),#9b59b6);color:#fff;}
+    /* grade legend */
+    .grade-legend{display:flex;gap:5px;flex-wrap:wrap;font-size:.72rem;margin:6px 0;}
+    .grade-legend span{padding:2px 7px;border-radius:6px;font-weight:700;}
+    /* progress bar */
+    .progress-bar-container{width:100%;background-color:#ffeaa7;border-radius:10px;overflow:hidden;margin-top:12px;height:16px;box-shadow:inset 0 1px 3px rgba(0,0,0,.1);}
+    .progress-bar{height:100%;background:linear-gradient(90deg,#f39c12,#e74c3c);width:0%;transition:width .8s ease-out;}
+    /* cal */
+    /* Режим матриці: чинний розклад чи чернетка */
+    .mx-mode{padding:9px 12px;border-radius:9px;font-size:.79rem;line-height:1.35;margin-bottom:9px;}
+    .mx-mode.live{background:#fff3e0;color:#e65100;border:1px solid #ffb74d;font-weight:600;}
+    .mx-mode.draft{background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;}
+    /* Смуга режиму налагодження. Навмисно голосна: тимчасова роль із
+       правами класного керівника в усіх класах не має губитися з очей. */
+    /* position:fixed, а не sticky: body тут display:flex із центруванням,
+       і смуга як звичайний елемент ставала колонкою ліворуч замість того,
+       щоб лягти на всю ширину. Фіксоване позиціювання не залежить від
+       розкладки батька. */
+    #master-mode-banner{position:fixed;top:0;left:0;right:0;z-index:1200;
+      background:repeating-linear-gradient(45deg,#b71c1c,#b71c1c 12px,#8e0000 12px,#8e0000 24px);
+      color:#fff;font-size:.78rem;font-weight:800;text-align:center;padding:7px 12px;
+      letter-spacing:.02em;box-shadow:0 2px 8px rgba(0,0,0,.25);}
+    #master-mode-banner span{display:block;font-weight:400;font-size:.68rem;opacity:.9;}
+    /* Запасний відступ на випадок, якщо скрипт не встиг поміряти смугу.
+       Точне значення виставляє renderMasterBanner() за реальною висотою. */
+    body.master-mode{padding-top:64px;}
+    /* Перерви класу */
+    .bk-list{margin-top:11px;background:#fff;border-radius:10px;border:1px solid #c5cae9;overflow:hidden;}
+    .bk-row{display:flex;align-items:center;gap:9px;padding:8px 11px;border-bottom:1px solid #f2f3fa;}
+    .bk-row:last-child{border-bottom:none;}
+    .bk-when{flex:none;width:118px;font-size:.76rem;font-weight:700;color:#283593;}
+    .bk-when span{display:block;font-weight:400;font-size:.68rem;color:#9e9e9e;}
+    .bk-row input{flex:1;margin:0;font-size:.8rem;padding:7px 9px;}
+    .bk-hint{font-size:.72rem;color:#7986cb;margin-top:6px;}
+    .bk-apply{width:100%;margin-top:11px;padding:11px;background:#3949ab;color:#fff;font-size:.84rem;}
+    .bk-copy{width:100%;margin-top:7px;padding:10px;background:#fff;color:#3949ab;border:1px solid #9fa8da;font-size:.82rem;}
+    .bk-warn{background:#fff8e1;border-left:3px solid var(--orange);color:#7a5b00;
+             padding:9px 11px;border-radius:0 8px 8px 0;font-size:.77rem;margin-top:9px;line-height:1.45;}
+    .bk-warn.small{font-size:.72rem;}
+    .bk-copy-box{margin-top:9px;background:#fff;border:1px solid #c5cae9;border-radius:10px;padding:11px;}
+    .bk-copy-title{font-size:.78rem;font-weight:700;color:#283593;margin-bottom:7px;}
+    .bk-copy-classes{display:flex;flex-wrap:wrap;gap:7px;}
+    .bk-copy-classes label{display:flex;align-items:center;gap:5px;font-size:.78rem;color:#37474f;
+                           background:#f5f6fb;padding:5px 9px;border-radius:7px;cursor:pointer;}
+    .bk-copy-classes input{width:18px;height:18px;margin:0;}
+    .bk-copy-box>button{width:100%;margin-top:9px;padding:9px;background:#3949ab;color:#fff;font-size:.8rem;}
+    #bk-log:not(:empty){margin-top:11px;background:#263238;border-radius:9px;padding:9px 11px;
+                        font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.7rem;line-height:1.55;
+                        color:#b0bec5;overflow-x:auto;}
+    .bk-log-title{color:#eceff1;font-weight:700;margin-bottom:4px;}
+    .bk-log-line.ok{color:#a5d6a7;}
+    .bk-log-line.bad{color:#ef9a9a;}
+    /* Дії над цілим рядком розкладу */
+    .row-tools{margin-top:14px;padding:11px;background:#f3f6f7;border-radius:11px;border:1px solid #dde5e7;}
+    .row-tools-title{font-size:.74rem;font-weight:800;color:#546e7a;text-transform:uppercase;
+                     letter-spacing:.03em;margin-bottom:7px;text-align:left;}
+    .row-tools-btns{display:flex;gap:6px;flex-wrap:wrap;}
+    .row-tools-btns button{width:auto;margin:0;flex:1;min-width:120px;padding:8px 6px;font-size:.75rem;
+                           background:#fff;color:#37474f;border:1px solid #cfd8dc;border-radius:8px;}
+    .row-tools-btns button:hover{background:#eceff1;}
+    .row-tools-auto{width:100%;margin-top:6px;padding:9px;font-size:.76rem;
+                    background:#546e7a;color:#fff;border:none;border-radius:8px;}
+    /* Предмети класу та перейменування */
+    .sc-list{margin-top:11px;background:#fff;border-radius:10px;border:1px solid #f8bbd0;overflow:hidden;}
+    .sc-item{display:flex;align-items:center;gap:8px;padding:8px 11px;border-bottom:1px solid #fdf2f6;font-size:.82rem;}
+    .sc-item:last-child{border-bottom:none;}
+    .sc-item span{flex:1;min-width:0;color:#4a148c;}
+    .sc-item i{font-style:normal;font-size:.68rem;color:#e65100;background:#fff3e0;padding:2px 6px;border-radius:6px;}
+    .sc-item button{width:auto;margin:0;padding:3px 9px;background:transparent;color:#bbb;border:none;font-size:1rem;}
+    .sc-item button:hover{color:var(--red);}
+    .sc-add{display:flex;gap:7px;margin-top:9px;}
+    .sc-add input{flex:1;margin:0;font-size:.84rem;}
+    .sc-add button{width:auto;margin:0;padding:9px 14px;background:#ad1457;color:#fff;font-size:.82rem;}
+    .sc-add-hint{margin-top:9px;font-size:.75rem;color:#6a1b9a;background:#f3e5f5;padding:9px 11px;border-radius:9px;}
+    .sc-add-hint button{width:auto;margin:6px 0 0;padding:5px 11px;background:#8e24aa;color:#fff;font-size:.74rem;display:block;}
+    .sc-item{display:flex;align-items:center;gap:8px;padding:8px 11px;border-bottom:1px solid #fdf2f6;}
+    .sc-name{flex:1;min-width:0;font-size:.82rem;color:#4a148c;font-weight:600;}
+    .sc-name i{display:block;font-style:normal;font-size:.66rem;color:#e65100;font-weight:400;}
+    .sc-item select{flex:1;min-width:120px;margin:0;font-size:.76rem;padding:6px 8px;}
+    .sc-add select{flex:1;min-width:110px;margin:0;font-size:.8rem;}
+    .sc-tools{display:flex;flex-direction:column;gap:6px;margin-top:11px;}
+    .sc-tools button{width:100%;margin:0;padding:9px;font-size:.79rem;background:#fff;color:#ad1457;
+                     border:1px solid #f48fb1;border-radius:9px;}
+    .sc-tools button:hover{background:#fdf2f6;}
+    .rs-sum{margin-top:12px;font-size:.85rem;font-weight:700;color:#ad1457;}
+    .rs-table{width:100%;border-collapse:collapse;font-size:.78rem;margin-top:7px;background:#fff;border-radius:9px;overflow:hidden;}
+    .rs-table td{padding:6px 10px;border-bottom:1px solid #fdf2f6;}
+    .rs-table td:last-child{text-align:right;font-weight:700;color:#ad1457;width:70px;}
+    .rs-warn{background:#fff8e1;border-left:3px solid var(--orange);color:#7a5b00;
+             padding:9px 11px;border-radius:0 8px 8px 0;font-size:.77rem;margin-top:9px;line-height:1.45;}
+    .rs-ok{background:#e8f5e9;border-left:3px solid var(--green);color:#1b5e20;
+           padding:9px 11px;border-radius:0 8px 8px 0;font-size:.79rem;margin-top:9px;}
+    /* Картка чергування уроків */
+    .alt-week{margin-top:12px;background:#fff;border-radius:10px;border:1px solid #e1bee7;overflow:hidden;}
+    .alt-week-head{background:#f3e5f5;color:#6a1b9a;font-weight:700;font-size:.82rem;
+                   padding:8px 11px;display:flex;justify-content:space-between;align-items:center;}
+    .alt-week-head span{font-weight:400;font-size:.72rem;color:#9c27b0;}
+    .alt-row{padding:9px 11px;border-top:1px solid #f5f0f7;}
+    .alt-when{font-size:.78rem;font-weight:600;color:#4a148c;}
+    .alt-when span{display:block;font-weight:400;font-size:.68rem;color:#9e9e9e;}
+    .alt-opts{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center;}
+    .alt-opt{margin:0;padding:7px 11px;font-size:.76rem;background:#f5f5f5;color:#555;
+             border:1px solid #e0e0e0;border-radius:8px;width:auto;}
+    .alt-opt.on{background:#8e24aa;color:#fff;border-color:#8e24aa;font-weight:700;}
+    .alt-opt:disabled{opacity:.55;cursor:not-allowed;}
+    .alt-clear{margin:0;padding:7px 10px;font-size:.8rem;background:#fff;color:#9e9e9e;
+               border:1px solid #e0e0e0;border-radius:8px;width:auto;}
+    .alt-none{font-size:.68rem;color:#ef6c00;margin-top:5px;}
+    /* Що з вибору вийшло в кабінеті батьків — щоб не вірити на слово */
+    .alt-seen{font-size:.68rem;color:#2e7d32;margin-top:5px;}
+    /* Класна година */
+    .ch-cur{font-size:.82rem;color:#1b5e20;margin-bottom:8px;}
+    .ch-cur span{color:#66896a;font-size:.74rem;}
+    .ch-cur.ch-none{color:#8d9d8f;}
+    .ch-row{display:flex;gap:7px;flex-wrap:wrap;align-items:center;}
+    .ch-row select{margin-top:0;flex:1;min-width:120px;}
+    .ch-save{margin-top:0;background:#2e7d32;color:#fff;border:none;border-radius:9px;
+             padding:10px 14px;font-weight:700;font-size:.82rem;cursor:pointer;width:auto;}
+    .ch-clear{margin-top:0;background:#eceff1;color:#78909c;border:none;border-radius:9px;
+              padding:10px 12px;font-weight:800;cursor:pointer;width:auto;}
+    .ch-full{font-size:.76rem;color:#ef6c00;}
+    /* Класна година в розкладі родини — щоб не плуталася з уроком */
+    .lesson-row.class-hour{background:#f1f8f2;}
+    .lesson-row.class-hour .lesson-num{background:#2e7d32;}
+    .ug-note{font-size:.72rem;color:#78909c;text-align:center;margin:0 0 9px 0;line-height:1.4;}
+    /* Вибір предмета всередині вікна дії. Раніше ці дії мовчки брали
+       предмет із вкладки «Журнал» — з екрана, якого в цю мить не видно. */
+    .act-subj{width:auto;max-width:100%;margin:0;padding:5px 9px;font-size:.85rem;
+              font-weight:700;color:var(--teal);border:1px solid #b2dfdb;border-radius:8px;background:#fff;}
+    /* Групи всередині вкладки «Урок». Раніше тринадцять блоків ішли
+       суцільним списком, і знайти потрібний можна було лише перебором. */
+    .lg-head{display:flex;align-items:center;gap:9px;margin:20px 0 9px 0;
+             font-size:.82rem;font-weight:800;color:#455a64;text-transform:uppercase;
+             letter-spacing:.03em;border-bottom:2px solid #eceff1;padding-bottom:6px;}
+    .lg-head span{flex:none;width:22px;height:22px;border-radius:50%;background:#455a64;
+                  color:#fff;font-size:.72rem;display:flex;align-items:center;justify-content:center;}
+    /* ── Швидкі дії: одна сітка замість трьох рядів ──
+       Раніше це були три окремі ряди з різними відступами: у першого
+       не було нижнього поля, у другого 14px, у третього верхнє 9px.
+       Через це ряди сходилися впритул і кнопки виглядали накладеними.
+       Сітка сама тримає однакову відстань і по горизонталі, і по
+       вертикалі, а мінімальна ширина не дає підпису переноситися. */
+    .qa-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));
+             gap:9px;margin-bottom:9px;}
+    .qa-grid:last-of-type{margin-bottom:0;}
+    .qa-btn{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .qa-ungraded{background:linear-gradient(135deg,#f39c12,#e67e22);color:#fff;}
+    .qa-quick{background:linear-gradient(135deg,#00c6ff,#0072ff);color:#fff;}
+    .qa-broadcast{background:linear-gradient(135deg,#9b59b6,#8e44ad);color:#fff;}
+    .qa-print{background:#eceff1;color:#37474f;}
+    .qa-matrix{background:linear-gradient(135deg,#1abc9c,#16a085);color:#fff;}
+    @media (max-width:520px){
+      .qa-grid{grid-template-columns:1fr;}
+    }
+    /* Мета наліпок — задає класний керівник свого класу */
+    .sg-box{background:#fff8e1;border:1px solid #ffe0a3;border-radius:11px;padding:11px;margin-bottom:11px;text-align:left;}
+    .sg-box label{display:block;font-size:.78rem;font-weight:700;color:#b26a00;margin-bottom:6px;}
+    .sg-row{display:flex;gap:7px;}
+    .sg-row input{flex:1;margin:0;font-size:.9rem;}
+    .sg-row button{width:auto;margin:0;padding:9px 15px;background:#f39c12;color:#fff;font-size:.82rem;}
+    .sg-note{font-size:.71rem;color:#8d6e63;margin-top:6px;line-height:1.4;}
+    /* Уроки, що чергуються */
+    .alt-badge{display:inline-block;background:#ede7f6;color:#5e35b1;border-radius:6px;
+               padding:1px 6px;font-size:.64rem;font-weight:700;vertical-align:middle;margin-left:5px;}
+    .alt-badge.pending{background:#fff3e0;color:#e65100;}
+    .alt-hint{font-size:.68rem;color:#9575cd;margin-top:2px;}
+    .alt-mini{font-style:normal;font-size:.62rem;color:#9575cd;margin-left:4px;}
+    /* Імпорт розкладу з Word */
+    .si-drop{display:block;border:2px dashed #b39ddb;border-radius:10px;padding:16px;text-align:center;
+             color:#4527a0;font-size:.84rem;cursor:pointer;margin-top:11px;background:#fff;}
+    .si-drop input{display:none;}
+    .si-breaks{display:flex;align-items:flex-start;gap:8px;margin-top:10px;font-size:.78rem;color:#4527a0;cursor:pointer;}
+    .si-breaks input{width:20px;height:20px;flex:none;margin:0;}
+    .si-sum{font-size:.8rem;color:#4527a0;font-weight:700;margin:11px 0 7px;}
+    .si-scroll{overflow-x:auto;background:#fff;border-radius:9px;border:1px solid #d1c4e9;}
+    .si-table{border-collapse:collapse;font-size:.72rem;width:100%;}
+    .si-table th{background:#ede7f6;color:#4527a0;padding:5px 6px;border:1px solid #d1c4e9;white-space:nowrap;}
+    .si-table td{padding:5px 6px;border:1px solid #ede7f6;vertical-align:top;}
+    .si-table td i{font-size:.66rem;color:#9575cd;font-style:normal;}
+    .si-num{white-space:nowrap;font-weight:700;color:#4527a0;}
+    .si-num span{display:block;font-weight:400;font-size:.64rem;color:#9e9e9e;}
+    .si-warn{background:#fff8e1;border-left:3px solid var(--orange);color:#7a5b00;
+             padding:8px 10px;border-radius:0 8px 8px 0;font-size:.76rem;margin-top:8px;line-height:1.4;}
+    #si-save{background:#5e35b1;color:#fff;padding:11px;margin-top:11px;}
+    #si-save:disabled{background:#d1c4e9;color:#fff;cursor:not-allowed;}
+    /* Розшифровка лічильника ДЗ у директора */
+    .hwb-cls{display:flex;justify-content:space-between;align-items:center;background:#e0f7fa;
+             color:#00838f;padding:6px 10px;border-radius:8px;margin:10px 0 6px;font-size:.83rem;}
+    .hwb-cls span{background:#00838f;color:#fff;border-radius:10px;padding:1px 8px;font-size:.72rem;}
+    .hwb-row{border-bottom:1px solid #f0f4f5;padding:6px 4px;}
+    .hwb-row:last-child{border-bottom:none;}
+    .hwb-subj{font-weight:700;font-size:.82rem;color:#263238;}
+    .hwb-text{font-size:.79rem;color:#546e7a;margin:2px 0;overflow-wrap:anywhere;}
+    .hwb-who{font-size:.72rem;color:#90a4ae;}
+    .hwb-total{font-size:.76rem;color:#78909c;margin:10px 0 0;text-align:right;}
+    .hwb-date{font-size:.74rem;color:#00838f;margin:0 0 6px;font-weight:700;}
+    .k-plan-unset{background:#fff8e1;}
+    .k-plan-note{font-style:normal;font-size:.68rem;color:var(--orange);white-space:nowrap;}
+    .k-closed td{background:#f5f5f5;color:#9e9e9e;}
+    .k-closed-cell{font-size:.76rem;font-style:italic;text-align:center;}
+    .k-day-clear{background:#fdecea;color:#b3261e;border:1px solid #f5c6cb;padding:8px;margin-top:8px;font-size:.8rem;}
+    /* Питання «чи обідає дитина» — поки батько не відповів */
+    .pm-manual{font-size:.76rem;color:#00838f;background:#e0f7fa;border-radius:9px;
+               padding:7px 10px;margin-top:7px;}
+    /* Повідомлення прямо в блоці: на айфоні з домашнього екрана alert() мовчить */
+    .pm-msg{font-size:.79rem;background:#e8f5e9;color:#1b5e20;border-radius:9px;
+            padding:8px 11px;margin-top:9px;line-height:1.45;}
+    .pm-msg.bad{background:#ffebee;color:#b71c1c;}
+    /* Правка позиції на винос у кухні */
+    .ta-edit{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 9px 0;padding:9px 11px;
+             background:#fffdf5;border:1px solid #f0e2b8;border-radius:9px;}
+    .ta-edit input{margin-top:0;flex:1;min-width:110px;font-size:.82rem;}
+    .ta-edit-btns{display:flex;gap:6px;width:100%;}
+    .ta-mini.save{background:#8a6d1f;color:#fff;border-color:#8a6d1f;}
+    /* Перемикач варіанта А/Б у кухні */
+    .k-ab-btn{width:26px;height:26px;padding:0;margin:0 2px 0 0;border:1px solid #cfd8dc;
+              background:#fff;color:#90a4ae;border-radius:7px;font-weight:800;
+              font-size:.76rem;cursor:pointer;line-height:1;}
+    .k-ab-btn.on{color:#fff;border-color:transparent;}
+    .k-ab-btn.on.a{background:#5c6bc0;}
+    .k-ab-btn.on.b{background:#26a69a;}
+    /* Записи, що не звелися з учнями — це втрачені відповіді батьків */
+    .k-orphan{margin-top:11px;background:#fff8e1;border:1px solid #ffe082;
+              border-radius:10px;padding:10px 12px;font-size:.78rem;color:#7a5b00;}
+    .k-orphan>b{display:block;margin-bottom:4px;}
+    .k-orphan p{margin:0 0 6px 0;line-height:1.45;}
+    .k-orphan ul{margin:0;padding-left:18px;}
+    .k-orphan code{background:#fff;padding:1px 5px;border-radius:5px;}
+    .k-orphan span{color:#a58b45;}
+    .pm-warn{background:#ffebee;border:1px solid #ef9a9a;border-radius:12px;padding:11px 13px;
+             margin-bottom:12px;font-size:.8rem;color:#b71c1c;line-height:1.5;}
+    .pm-ask{background:#fff8e1;border:1px solid #ffe082;border-radius:12px;padding:12px 14px;margin-bottom:12px;}
+    .pm-ask b{display:block;color:#e65100;font-size:.92rem;margin-bottom:3px;}
+    .pm-ask span{display:block;font-size:.79rem;color:#8d6e63;margin-bottom:9px;}
+    .pm-ask small{display:block;font-size:.72rem;color:#a1887f;margin-top:7px;}
+    /* Басейн і автобус */
+    .act-box{background:#fff;border:1px solid #b3e5fc;border-left:4px solid #0288d1;
+             border-radius:12px;padding:13px 15px;margin-bottom:13px;}
+    .act-title{margin:0 0 10px 0;color:#0277bd;font-size:.95rem;}
+    /* Пара рівноцінних варіантів. Жоден не підсвічений — щоб відповідь була
+       свідомою, а не «натиснув зелену». Обраний виділяється вже потім,
+       у налаштуваннях, класом .on. */
+    .act-choice{display:flex;gap:8px;flex-wrap:wrap;}
+    .act-choice button{flex:1;min-width:130px;margin:0;padding:11px 12px;
+             border:1.5px solid #b0bec5;background:#fff;color:#37474f;
+             border-radius:10px;font-size:.85rem;font-weight:700;cursor:pointer;}
+    .act-choice button:hover{border-color:#0288d1;color:#0277bd;background:#f5fbff;}
+    .act-opt.on{background:#0288d1;border-color:#0288d1;color:#fff;}
+    .act-opt.on:hover{background:#0277bd;color:#fff;}
+    .act-more{margin-top:11px;border-top:1px dashed #e1f5fe;padding-top:9px;}
+    .act-more>summary{cursor:pointer;font-size:.82rem;color:#0277bd;font-weight:700;}
+    .act-set{margin-top:11px;}
+    .act-set>b{display:block;font-size:.83rem;color:#37474f;margin-bottom:6px;}
+    .act-week{margin-top:11px;background:#e1f5fe;border:1px solid #81d4fa;
+              border-radius:10px;padding:11px 13px;}
+    .act-week.off{background:#fff3e0;border-color:#ffcc80;}
+    .act-week-head{font-weight:700;color:#0277bd;font-size:.87rem;margin-bottom:3px;}
+    .act-week-head span{font-weight:400;color:#78909c;font-size:.78rem;}
+    .act-week.off .act-week-head{color:#e65100;}
+    .act-week-state{font-size:.8rem;color:#455a64;margin-bottom:9px;}
+    .act-week small{display:block;font-size:.71rem;color:#90a4ae;margin-top:7px;}
+    .act-build{font-size:.68rem;color:#cfd8dc;margin-top:9px;text-align:right;}
+    .act-warn{background:#ffebee;color:#b71c1c;border-radius:8px;padding:9px;font-size:.8rem;}
+    /* Зведення для директора / класного керівника */
+    .act-sum{display:flex;gap:9px;flex-wrap:wrap;margin-bottom:9px;}
+    /* Цифра — це кнопка: натиснув і побачив, хто саме за нею стоїть */
+    .act-num{flex:1;min-width:92px;background:#e1f5fe;border-radius:10px;
+             padding:9px 11px;text-align:center;border:2px solid transparent;
+             cursor:pointer;margin:0;font-family:inherit;}
+    .act-num:hover{border-color:#81d4fa;}
+    .act-num.open{border-color:#0288d1;background:#b3e5fc;}
+    .act-num b{display:block;font-size:1.35rem;color:#0277bd;line-height:1.1;}
+    .act-num span{font-size:.71rem;color:#546e7a;display:block;}
+    .act-num.warn{background:#fff3e0;}
+    .act-num.warn b{color:#e65100;}
+    .act-num.warn.open{border-color:#e65100;background:#ffe0b2;}
+    .act-week-cap{font-size:.76rem;color:#90a4ae;margin-bottom:9px;}
+    .act-h{margin:11px 0 5px 0;font-size:.83rem;color:#37474f;}
+    .act-list{list-style:none;padding:0;margin:0;font-size:.82rem;}
+    .act-list li{padding:5px 0;border-bottom:1px solid #f0f4f8;}
+    .act-cls{display:inline-block;background:#0288d1;color:#fff;border-radius:4px;
+             padding:1px 5px;font-size:.7rem;font-weight:700;margin-right:5px;}
+    .act-hint{font-size:.75rem;color:#90a4ae;margin-top:9px;}
+    .pm-ask-btns{display:flex;gap:8px;}
+    .pm-ask-btns button{flex:1;margin:0;padding:11px;border-radius:10px;font-size:.86rem;}
+    .pm-ask-yes{background:var(--green);color:#fff;}
+    .pm-ask-no{background:#eceff1;color:#546e7a;}
+    /* Календар на весь навчальний рік */
+    .yc-wrap{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:6px;}
+    .yc-month{background:#fff;border:1px solid #eceff1;border-radius:10px;padding:8px;}
+    .yc-name{font-size:.78rem;font-weight:700;color:#37474f;margin-bottom:5px;}
+    .yc-name span{font-weight:400;color:#90a4ae;}
+    .yc-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;}
+    .yc-grid i{font-style:normal;font-size:.66rem;text-align:center;padding:3px 0;border-radius:4px;color:#546e7a;}
+    .yc-grid i.yc-h{color:#b0bec5;font-weight:700;}
+    .yc-holiday,.yc-grid i.yc-holiday{background:#ffe0b2;color:#e65100;font-weight:700;}
+    .yc-brk,.yc-grid i.yc-brk{background:#c8e6c9;color:#2e7d32;font-weight:700;}
+    .yc-exam,.yc-grid i.yc-exam{background:#ffcdd2;color:#c62828;font-weight:700;}
+    .yc-multi,.yc-grid i.yc-multi{background:#d1c4e9;color:#4527a0;font-weight:700;}
+    .yc-legend{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:.72rem;color:#78909c;margin:10px 0 4px;}
+    .yc-legend span{width:13px;height:13px;border-radius:3px;display:inline-block;margin-left:8px;}
+    .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-top:12px;}
+    .cal-header{font-weight:700;color:#555;text-align:center;padding-bottom:4px;border-bottom:2px solid #ddd;font-size:.85rem;}
+    .cal-day{background:#fdfbfb;border:1px solid #eee;border-radius:8px;padding:8px 4px;text-align:center;cursor:pointer;transition:.2s;min-height:46px;display:flex;flex-direction:column;justify-content:center;font-size:.95rem;}
+    .cal-day:hover{background:#e0f2f1;border-color:var(--teal);transform:scale(1.05);}
+    .cal-day.has-1{background-color:#fff3cd;border-color:#ffeeba;color:#d35400;font-weight:700;}
+    .cal-day.has-2{background-color:#f8d7da;border-color:#f5c6cb;color:#c0392b;font-weight:700;}
+    .cal-day.has-exam-p{background-color:#fff3cd;border-color:#ffeeba;color:#d35400;font-weight:700;}
+    .cal-day.has-holiday-p{background-color:#f8d7da;border-color:#f5c6cb;color:#c0392b;font-weight:700;}
+    .cal-day.has-break-p{background-color:#e8f5e9;border-color:#a5d6a7;color:#1b5e20;font-weight:700;}
+    .cal-day.has-multiple-p{background:linear-gradient(135deg,#fff3cd 50%,#f8d7da 50%);font-weight:700;}
+    /* date picker box */
+    .date-picker-box{background:#e0f2f1;padding:14px;border-radius:12px;margin-bottom:18px;text-align:center;box-shadow:0 4px 10px rgba(0,109,119,.1);}
+    #status-msg{display:none;margin-top:9px;text-align:center;font-weight:700;font-size:.92rem;padding:9px;border-radius:8px;}
+    /* topic card */
+    .topic-card{background:linear-gradient(135deg,#667eea12,#764ba212);border:1px solid #764ba230;border-radius:12px;padding:13px;margin-bottom:12px;}
+    .topic-card label{margin-top:0;color:#764ba2;font-size:.83rem;}
+    .wl-day{padding:10px;background:#f4f8fa;border-radius:9px;font-size:.8rem;overflow-wrap:anywhere;}
+    .wl-day small{display:block;color:#666;margin:5px 0;}
+    .wl-table-card{min-width:0;background:#fff;border:1px solid #dce7e5;border-radius:16px;overflow:hidden;box-shadow:0 4px 18px rgba(28,70,63,.06);margin:16px 0 22px;}
+    .wl-table-heading{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:18px 20px;background:#f3f9f7;border-bottom:1px solid #dce7e5;}
+    .wl-table-heading h4{margin:0;color:#205b51;font-size:1rem;}
+    .wl-table-heading p{margin:5px 0 0;color:#647b75;font-size:.78rem;line-height:1.5;}
+    .wl-table-count{flex-shrink:0;padding:6px 10px;border-radius:20px;background:#e0f0eb;color:#2b685b;font-size:.76rem;font-weight:700;}
+    .wl-table-scroll{max-width:100%;overflow-x:auto;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch;}
+    .wl-table-scroll:focus-visible{outline:3px solid var(--teal);outline-offset:-3px;}
+    .wl-table{width:100%;min-width:860px;border-collapse:separate;border-spacing:0;font-size:.84rem;line-height:1.5;color:#314b46;}
+    .wl-table th,.wl-table td{padding:15px 16px;text-align:left;vertical-align:middle;border:0;border-bottom:1px solid #e8efed;}
+    .wl-table thead th{background:#edf4f2;color:#58716b;font-size:.73rem;font-weight:700;white-space:nowrap;}
+    .wl-table tbody tr:nth-child(even){background:#f8fbfa;}
+    .wl-table tbody tr:hover{background:#edf7f3;}
+    .wl-table tbody tr:last-child th,.wl-table tbody tr:last-child td{border-bottom:0;}
+    .wl-table th:first-child{position:sticky;left:0;z-index:1;min-width:210px;max-width:270px;border-right:1px solid #e8efed;}
+    .wl-table thead th:first-child{z-index:2;background:#edf4f2;}
+    .wl-table tbody th:first-child{background:#fff;font-weight:400;}
+    .wl-table tbody tr:nth-child(even) th:first-child{background:#f8fbfa;}
+    .wl-table tbody tr:hover th:first-child{background:#edf7f3;}
+    .wl-table .wl-number{text-align:center;}
+    .wl-person{display:flex;align-items:center;gap:10px;}
+    .wl-avatar{display:flex;align-items:center;justify-content:center;width:36px;height:36px;flex-shrink:0;background:#e0f0eb;color:#2c7363;border-radius:11px;font-size:.74rem;font-weight:800;}
+    .wl-person-name{display:block;font-weight:700;overflow-wrap:anywhere;}
+    .wl-person small{display:block;margin-top:3px;font-size:.7rem;color:#7b8d87;overflow-wrap:anywhere;}
+    .wl-value{font-size:1.08rem;color:#205b51;font-variant-numeric:tabular-nums;}
+    .wl-duration{white-space:nowrap;font-variant-numeric:tabular-nums;}
+    .wl-cell-note{display:block;margin-top:3px;max-width:170px;color:#7b8d87;font-size:.7rem;}
+    .wl-note-warning{color:#99601a;}
+    .wl-count{font-weight:700;font-variant-numeric:tabular-nums;}
+    .wl-badge{display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:28px;padding:0 8px;border-radius:8px;font-weight:800;font-variant-numeric:tabular-nums;}
+    .wl-badge-neutral{background:#f0f4f2;color:#7b8d87;}
+    .wl-badge-danger{background:#fce8e6;color:#b43e35;}
+    .wl-badge-warning{background:#fff1d9;color:#99601a;}
+    .wl-table-footer{padding:12px 20px;background:#f8fbfa;border-top:1px solid #e8efed;font-size:.73rem;color:#72877f;line-height:1.6;}
+    .wl-mobile-hint{display:none;}
+    .wl-sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;}
+    @media(max-width:600px){
+      .wl-table-heading{padding:14px;align-items:flex-start;flex-wrap:wrap;}
+      .wl-table th,.wl-table td{padding:12px;}
+      .wl-table th:first-child{min-width:160px;max-width:190px;}
+      .wl-avatar{display:none;}
+      .wl-table-footer{padding:12px 14px;}
+      .wl-mobile-hint{display:block;margin-top:5px;color:var(--teal);}
+    }
+    .ma-filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px;}
+    .ma-filters select,.ma-filters input[type="search"]{flex:1;min-width:150px;margin:0;}
+    .ma-filters label{display:flex;align-items:center;gap:6px;margin:0;font-size:.83rem;}
+    .ma-filters input[type="checkbox"]{width:auto;margin:0;}
+    .ma-filters button{width:auto;margin:0;}
+    .ma-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),1fr));gap:10px;}
+    .ma-card{padding:12px;background:#fff;border:1px solid #e0e6e8;border-left:4px solid #e49a45;border-radius:10px;font-size:.84rem;overflow-wrap:anywhere;}
+    .ma-card>div{margin-top:6px;}
+    .ma-ready{border-left-color:#27ae60;}
+    .ma-teacher,.ma-books,.ma-card small{font-size:.77rem;color:#666;}
+    .topic-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px;}
+    .topic-actions button{width:auto;padding:6px 9px;background:#edf0f5;color:#333;font-size:.8rem;}
+    .topic-display{background:#f3e5f5;border-left:3px solid #764ba2;padding:6px 11px;border-radius:6px;font-size:.83rem;color:#4a148c;font-weight:600;margin-top:5px;}
+    /* ── CURRICULUM ── */
+    .curr-drop-zone{border:2px dashed var(--blue);border-radius:11px;padding:16px;text-align:center;background:#f0f8ff;cursor:pointer;transition:.2s;display:block;}
+    .curr-drop-zone:hover{background:#d6ecff;border-color:#1565c0;}
+    .curr-drop-zone input[type=file]{display:none;}
+    .curr-drop-zone.has-file{border-style:solid;background:#e8f5e9;border-color:var(--green);}
+    .topic-preview{background:#fff;border-radius:9px;padding:11px;margin:6px 0;border:1px solid #e0e0e0;font-size:.85rem;}
+    .topic-preview-subj{font-weight:800;color:var(--purple);margin-bottom:5px;}
+    .topic-preview-row{display:grid;grid-template-columns:30px 1fr 80px 50px;gap:8px;padding:4px 0;border-bottom:1px dashed #f0f0f0;font-size:.78rem;align-items:center;}
+    .topic-preview-row:last-child{border-bottom:none;}
+    .topic-preview-row .num{color:var(--orange);font-weight:800;text-align:center;}
+    .topic-preview-row .hrs{color:#888;text-align:center;font-size:.72rem;}
+    .topic-select-wrap{position:relative;}
+    .topic-select{width:100%;padding:11px;border:1px solid #ce93d8;border-radius:11px;font-size:.92rem;background:#fff;cursor:pointer;font-family:inherit;}
+    .topic-select option:disabled{color:#bbb;background:#f5f5f5;}
+    .topic-status-bar{display:flex;justify-content:space-between;align-items:center;font-size:.76rem;color:#666;margin-top:6px;padding:6px 10px;background:#f3e5f5;border-radius:7px;}
+    .topic-progress-mini{flex:1;height:5px;background:#e0e0e0;border-radius:3px;margin:0 10px;overflow:hidden;min-width:30px;}
+    .topic-progress-mini-fill{height:100%;background:linear-gradient(90deg,#9c27b0,#673ab7);transition:width .4s;}
+    .ct-badge{display:inline-block;background:linear-gradient(135deg,#ff6e40,#ff5252);color:#fff;padding:3px 10px;border-radius:12px;font-size:var(--text-xs);font-weight:800;margin-left:6px;text-transform:uppercase;letter-spacing:.5px;}
+    /* ── PHASE 6: TOPIC DROPDOWN (replaces native <select>, color-coded remaining hours) ── */
+    .topic-dropdown{position:relative;}
+    .topic-dropdown-trigger{width:100%;text-align:left;background:#fff;border:1px solid #ccc;border-radius:8px;padding:9px 11px;cursor:pointer;}
+    .topic-dropdown-list{position:absolute;z-index:50;top:100%;left:0;right:0;background:#fff;border:1px solid #ccc;border-radius:8px;max-height:260px;overflow-y:auto;box-shadow:0 4px 14px rgba(0,0,0,.12);margin-top:3px;}
+    .topic-opt{padding:8px 11px;cursor:pointer;border-bottom:1px solid #f0f0f0;font-size:.85rem;}
+    .topic-opt:hover{background:#f5f5f5;}
+    .topic-opt-green{border-left:4px solid #2ecc71;}
+    .topic-opt-yellow{border-left:4px solid #f39c12;background:#fffdf5;}
+    /* Червоний більше НЕ означає «не можна» — лише «за планом уже все».
+       Тому прибрано cursor:not-allowed і сірий текст: тему можна взяти
+       повторно, і виглядати вона має як робочий варіант, а не як мертвий. */
+    .topic-opt-red{border-left:4px solid #e74c3c;background:#fdf2f0;}
+    /* Блакитний — тему брали ПОНАД план. Окремий колір потрібен, щоб
+       відрізняти «пройдено рівно» від «повторювали»: перше нормально,
+       друге варто помітити при звірці плану. */
+    .topic-opt-blue{border-left:4px solid #29b6f6;background:#f0f9ff;color:#0277bd;}
+    /* Редактор календарного плану по темах */
+    .pe-head{font-weight:700;color:#0d47a1;font-size:.84rem;margin-bottom:8px;}
+    .pe-head span{font-weight:400;color:#78909c;font-size:.76rem;margin-left:6px;}
+    /* ПЕРЕНОС ОБОВ'ЯЗКОВИЙ.
+       Рядку потрібно щонайменше 371px, а на телефоні картці лишається
+       300–370px. Без переносу останні елементи — саме кнопки збереження
+       й видалення — виїжджали за екран, а html,body{overflow-x:hidden}
+       їх обрізав: натиснути неможливо. Та сама вада, що колись була в
+       таблицях кухні; тут вона з'явилася знову, бо рядок будувався
+       «в один рядок» за звичкою. */
+    .pe-row{display:flex;gap:5px;align-items:center;margin-bottom:5px;flex-wrap:wrap;}
+    .pe-row input{margin:0;padding:6px 8px;font-size:.8rem;border:1px solid #cfd8dc;border-radius:7px;}
+    .pe-num{width:56px;text-align:center;}
+    .pe-title{flex:1;min-width:90px;overflow-wrap:anywhere;}
+    .pe-hours{width:60px;text-align:center;}
+    /* На вузькому екрані (і при збільшеному шрифті — тому в em) назва
+       займає свій рядок, а номер, години й кнопки стають під нею. */
+    @media (max-width:30em){
+      .pe-row{border-bottom:1px dashed #eceff1;padding-bottom:6px;}
+      .pe-title{flex:1 1 100%;order:-1;}
+      .pe-used{flex:1;text-align:left;}
+    }
+    .pe-used{font-size:.7rem;color:#90a4ae;white-space:nowrap;min-width:52px;text-align:right;}
+    .pe-row button{width:auto;margin:0;padding:6px 9px;font-size:.8rem;border-radius:7px;cursor:pointer;border:1px solid transparent;}
+    .pe-save{background:#e8f5e9;color:#1b5e20;border-color:#a5d6a7 !important;}
+    .pe-del{background:#ffebee;color:#b71c1c;border-color:#ef9a9a !important;}
+    .pe-add{display:flex;gap:5px;align-items:center;margin-top:10px;flex-wrap:wrap;
+            border-top:1px dashed #cfd8dc;padding-top:10px;}
+    .pe-add input{margin:0;padding:6px 8px;font-size:.8rem;border:1px solid #cfd8dc;border-radius:7px;}
+    .pe-add input[type=text]{flex:1;min-width:90px;}
+    @media (max-width:30em){ .pe-add input[type=text]{flex:1 1 100%;order:-1;} }
+    .pe-add button{width:auto;margin:0;padding:6px 12px;font-size:.8rem;
+                   background:#0d47a1;color:#fff;border-radius:7px;cursor:pointer;white-space:nowrap;}
+    .pe-hint{font-size:.72rem;color:#90a4ae;margin-top:8px;line-height:1.4;}
+    /* ── Перетягування тем ──
+       Ручка окремою кнопкою, а не «тягнемо весь рядок»: у рядку три поля
+       вводу, і тягнути за них означало б неможливість виділити текст.
+       touch-action:none — щоб палець на ручці тягнув тему, а не гортав
+       сторінку; на решті рядка гортання лишається звичайним.
+       Курсор grab/grabbing — єдина підказка миші, що елемент рухомий. */
+    .pe-grip{flex:0 0 auto;width:24px;align-self:stretch;min-height:32px;
+             display:flex;align-items:center;justify-content:center;
+             color:#b0bec5;font-size:.95rem;line-height:1;cursor:grab;
+             user-select:none;-webkit-user-select:none;touch-action:none;
+             border-radius:6px;background:#f5f7f8;}
+    .pe-grip:hover{background:#eceff1;color:#78909c;}
+    .pe-grip:active{cursor:grabbing;}
+    .pe-list.pe-moving{user-select:none;-webkit-user-select:none;}
+    /* КОПІЯ, ЩО ЇДЕ ЗА ПАЛЬЦЕМ. Сам рядок тягнути марно: палець його
+       накриває, і не видно, що саме несеш. pointer-events:none —
+       обов'язково, інакше привид перехоплював би пошук рядка під
+       вказівником і жоден перенос не спрацював би. */
+    .pe-ghost{position:fixed;z-index:9000;pointer-events:none;margin:0;
+              background:#fff;border:2px solid #1976d2;border-radius:9px;
+              padding:5px 7px;box-shadow:0 10px 24px rgba(13,71,161,.28);
+              transform:rotate(-1deg);opacity:.97;}
+    .pe-ghost .pe-grip{background:#1976d2;color:#fff;}
+    /* МІСЦЕ, КУДИ ТЕМА ЛЯЖЕ. Той самий рядок, тільки порожній: він
+       їде списком услід за пальцем і показує майбутню позицію. */
+    .pe-row.pe-slot{background:#e3f2fd;border:2px dashed #64b5f6;border-radius:9px;}
+    .pe-row.pe-slot > *{visibility:hidden;}
+    /* Номер, який зміниться, якщо натиснути «Зберегти порядок». */
+    .pe-num.pe-changed{background:#fff8e1;border-color:#ffb300 !important;font-weight:700;}
+    /* Смужка підтвердження. sticky — бо в списку буває 140 тем, і кнопка
+       десь унизу сторінки означала б «її ніхто не знайде». */
+    .pe-bar{position:sticky;bottom:6px;z-index:20;display:flex;gap:7px;align-items:center;
+            flex-wrap:wrap;margin-top:9px;padding:9px 11px;border-radius:11px;
+            background:#fff8e1;border:1px solid #ffca28;
+            box-shadow:0 3px 12px rgba(0,0,0,.12);}
+    .pe-bar[hidden]{display:none;}
+    #pe-bar-txt{flex:1 1 100%;font-size:.76rem;color:#7a5900;line-height:1.35;}
+    .pe-bar button{width:auto;margin:0;padding:7px 13px;font-size:.8rem;
+                   border-radius:8px;cursor:pointer;border:1px solid transparent;white-space:nowrap;}
+    .pe-bar-save{background:#1b5e20;color:#fff;flex:1;}
+    .pe-bar-undo{background:#fff;color:#5d4037;border-color:#d7ccc8 !important;}
+    /* Поки триває запис нової нумерації — список не чіпаємо: другий
+       перенос поверх незавершеного дав би дві різні відповіді на питання
+       «який зараз порядок». */
+    .pe-list.pe-busy{opacity:.55;pointer-events:none;}
+    .topic-opt-custom{border-left:4px solid #9575cd;font-style:italic;}
+    /* ═══════════════════════════════════════════════════════
+       RESPONSIVE — MOBILE / TABLET / DESKTOP
+       ═══════════════════════════════════════════════════════ */
+    /* === Touch targets: prevent iOS zoom on input focus === */
+    @media (pointer: coarse) {
+      input[type=text], input[type=email], input[type=password], input[type=date], input[type=month], select, textarea { font-size: 16px !important; }
+      button { min-height: 44px; }
+      .reaction-btn { min-height: 44px !important; min-width: 44px !important; }
+      .g-cell { min-height: 32px; min-width: 32px; }
+    }
+    /* === SMALL MOBILE (<=480px) === */
+    @media (max-width: 480px) {
+      body { padding: 10px; }
+      .container { padding: 16px 14px; border-radius: 14px; margin-bottom: 20px; }
+      h2 { font-size: 1.25rem; }
+      h3 { font-size: 1rem; margin-top: 18px; }
+      label { font-size: .85rem; margin-top: 11px; }
+      button { padding: 12px; font-size: .9rem; margin-top: 13px; }
+      input[type=email], input[type=password], input[type=text], input[type=date], input[type=month], select, textarea { padding: 10px; font-size: 15px; }
+      /* Profile bar — compact */
+      #profile-bar { gap: 10px; padding: 10px; }
+      #pb-avatar { width: 42px !important; height: 42px !important; }
+      #pb-name { font-size: .95rem !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 130px; }
+      #pb-role { font-size: .72rem !important; }
+      #profile-bar > button { padding: 7px 11px !important; font-size: .78rem !important; }
+      /* Quick actions stack vertically on tiny screens */
+      .qa-row { flex-direction: column; gap: 7px; }
+      .qa-btn { width: 100%; min-width: 0; padding: 12px; }
+      /* Two-button rows wrap nicely */
+      #t-exams-journal-btns, .qa-row { gap: 7px; }
+      /* Attendance form — wraps to vertical */
+      #t-mark-absent-block { flex-wrap: wrap; gap: 7px; }
+      #t-mark-absent-block select { flex: 1 1 100%; }
+      #t-mark-absent-block button { flex: 1 1 100%; }
+      /* Sticker / behavior / comment rows wrap */
+      .sticker-row, .behavior-row, [style*="display:flex"][style*="gap:8px"][style*="align-items:flex-end"] { flex-wrap: wrap; }
+      /* Modals — full screen feel */
+      .modal-content { padding: 18px 14px; border-radius: 14px; max-height: 95vh; }
+      .modal-overlay { padding: 4px; }
+      #grade-editor-popup { min-width: 175px; padding: 10px; }
+      #grade-editor-popup .type-btn { padding: 5px 2px; font-size: .65rem; }
+      /* Date picker box */
+      .date-picker-box { padding: 11px; }
+      /* Lesson rows in dynamic schedule — more compact */
+      .lesson-row { padding: 7px 8px; gap: 8px; }
+      .lesson-num { width: 22px; height: 22px; font-size: .68rem; }
+      .lesson-subj { font-size: .82rem; }
+      .lesson-time { font-size: .68rem; }
+      .lesson-countdown { font-size: .7rem; padding: 2px 6px; }
+      /* Payments — tighter */
+      .payment-card { padding: 13px; }
+      .payment-row { font-size: .82rem; padding: 6px 0; }
+      /* Stats counters smaller */
+      .data-card h4 { font-size: .82rem !important; }
+      /* Schedule day label */
+      .schedule-day-label { font-size: .72rem; }
+      /* Smart matching form */
+      #sm-class, #sm-subject, #sm-date, #sm-time { flex: 1 1 100% !important; min-width: 0 !important; }
+      /* Cell editor tighter */
+      #edit-cell-modal .modal-content { padding: 16px 12px; }
+      /* Toast remains at bottom (standard UX) */
+      .toast { font-size: .85rem; padding: 11px 14px; }
+      /* Reactions modal */
+      .reaction-box { gap: 5px; }
+    }
+    /* === MEDIUM MOBILE (481-767px) === */
+    @media (min-width: 481px) and (max-width: 767px) {
+      .container { max-width: 100%; padding: 22px 20px; }
+      .qa-btn { font-size: .85rem; padding: 12px 8px; }
+    }
+    /* === TABLET (768-1023px) === */
+    @media (min-width: 768px) and (max-width: 1023px) {
+      body { padding: 24px; }
+      .container { max-width: 720px; padding: 30px 32px; }
+      h2 { font-size: 1.55rem; }
+      .qa-btn { font-size: .92rem; }
+      /* Stats and counters can sit in row of 3 */
+      #teacher-screen [style*="display:flex"][style*="gap:9px"] { gap: 12px; }
+      /* Modals get a bit wider */
+      .modal-content { max-width: 600px; }
+      /* Journal gets its own ceiling — see the desktop breakpoint for why: it
+         should use more of a big screen without becoming absurdly wide on one. */
+      #journal-modal .modal-content { max-width: min(95vw, 1100px); }
+      #visual-matrix-modal .modal-content { max-width: 95%; }
+    }
+    /* ═══════════════════════════════════════════════════════
+       DESKTOP (>=1024px) — ПРОРАБОТАННЫЕ LAYOUTS ДЛЯ КАЖДОГО КАБИНЕТА
+       ═══════════════════════════════════════════════════════ */
+    @media (min-width: 1024px) {
+      body { padding: 30px 40px; align-items: flex-start; }
+      .container { max-width: 1180px; padding: 30px 40px; border-radius: 22px; }
+      h2 { font-size: 1.7rem; }
+      h3 { font-size: 1.15rem; margin-top: 24px; }
+      /* ───── LOGIN ───── */
+      #login-screen[style*="display: block"], #login-screen[style*="display:block"] {
+        max-width: 440px; margin: 50px auto;
+      }
+      #login-screen h2 { font-size: 1.6rem; }
+      /* ───── PROFILE BAR ───── */
+      #profile-bar { padding: 18px 22px; }
+      #pb-avatar { width: 56px !important; height: 56px !important; }
+      #pb-name { font-size: 1.2rem !important; }
+      #pb-role { font-size: .9rem !important; }
+      /* ───── DATE PICKER (горизонтальный) ───── */
+      .date-picker-box { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding: 16px 22px; }
+      .date-picker-box label { margin: 0 !important; flex-shrink: 0; }
+      .date-picker-box input[type=date] { flex: 1; max-width: 280px; margin-top: 0 !important; }
+      #teacher-class-selector-box { flex: 1 1 100%; padding-bottom: 14px !important; margin-bottom: 14px !important; display: flex; align-items: center; gap: 14px; }
+      #teacher-class-selector-box select { flex: 1; max-width: 280px; margin-top: 0 !important; }
+      #teacher-class-selector-box label { margin-top: 0 !important; }
+      /* ═════════════════════════════════════════
+         ALL 4 ROLE SCREENS — .screen-section is the grid unit.
+         Each screen's HTML groups its cards/details into
+         <section class="screen-section"> (optionally "half" width)
+         blocks; this replaces the old per-inline-style attribute
+         selectors, which broke the moment a card's inline style
+         string changed and couldn't account for new cards at all.
+         ═════════════════════════════════════════ */
+      /* ОДНА КОЛОНКА, а не дві.
+         Раніше екрани розкладалися в дві колонки, причому одні секції
+         займали обидві, інші — одну. Через це на десктопі був рваний
+         правий край: короткий згорнутий блок поруч із порожнечею, під
+         ним блок на всю ширину. Візуально це читалося як помилка верстки.
+         Тепер усі секції однакової ширини — край рівний, а порядок
+         блоків на телефоні й на компʼютері збігається. */
+      #admin-screen[style*="display: block"], #admin-screen[style*="display:block"],
+      #director-screen[style*="display: block"], #director-screen[style*="display:block"],
+      #teacher-screen[style*="display: block"], #teacher-screen[style*="display:block"],
+      #parent-screen[style*="display: block"], #parent-screen[style*="display:block"],
+      #student-screen[style*="display: block"], #student-screen[style*="display:block"] {
+        display: grid !important;
+        grid-template-columns: minmax(0, 1fr);
+        row-gap: var(--space-6);
+        align-items: start;
+      }
+      #admin-screen[style*="display: block"], #admin-screen[style*="display:block"] {
+        max-width: 800px; margin: 0 auto;
+      }
+      #director-screen > .dtab-bar,
+      #teacher-screen > .dtab-bar,
+      #parent-screen > .dtab-bar,
+      #student-screen > .dtab-bar,
+      #admin-screen > h2, #admin-screen > .btn-logout,
+      #director-screen > h2, #director-screen > .btn-logout,
+      #teacher-screen > h2, #teacher-screen > .btn-logout,
+      #parent-screen > .btn-logout,
+      #student-screen > .btn-logout {
+        grid-column: 1 / -1;
+      }
+      #admin-screen > .screen-section,
+      #director-screen > .screen-section,
+      #teacher-screen > .screen-section,
+      #parent-screen > .screen-section,
+      #student-screen > .screen-section {
+        grid-column: 1 / -1;
+        margin-bottom: 0; /* grid row-gap already spaces sections out */
+        align-self: stretch;
+      }
+      /* Клас "half" лишається в розмітці, але більше нічого не звужує:
+         саме він і створював різну ширину. Видаляти його з десятків
+         секцій немає потреби — досить, щоб він нічого не робив. */
+      /* Кнопки. Глобально button{width:100%} — це правильно для телефона,
+         але на компʼютері кнопка завширшки 1300 px виглядає як банер, а не
+         як дія. Обмежуємо ширину, лишаючи винятки для таблиць і вкладок,
+         де кнопка має підлаштовуватися під клітинку. */
+      .screen-section button{ max-width: 460px; }
+      .screen-section table button,
+      .screen-section .journal-wrap button,
+      .screen-section .matrix-wrapper button,
+      .screen-section .wk-box button,
+      .dtab-bar button{ max-width: none; }
+
+      /* ───── PAYMENTS — 3-колоночная структура внутри ───── */
+      #payments-section {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 18px;
+      }
+      #payments-section > .payment-card { margin-bottom: 0; }
+      #payments-section > .payment-card:nth-child(4) {
+        grid-column: 1 / -1;
+      }
+      /* ═════════════════════════════════════════
+         MODALS — шире и комфортнее на ПК
+         ═════════════════════════════════════════ */
+      .modal-content { max-width: 700px; padding: 32px 36px; }
+      /* Journal: scale with the monitor (min(vw,px)) instead of a flat 95% — on a
+         big/ultrawide desktop 95% of the viewport is excessive for a data table,
+         while on a modest laptop screen it should still use most of the width. */
+      #journal-modal .modal-content { max-width: min(95vw, 1500px); }
+      #visual-matrix-modal .modal-content,
+      #edit-cell-modal .modal-content { max-width: 95%; }
+      #profile-modal .modal-content,
+      #wrapped-modal .modal-content,
+      #reactions-modal .modal-content { max-width: 540px; }
+      #inbox-modal .modal-content { max-width: 720px; height: 85vh; }
+      .modal-overlay { padding: 30px; }
+      /* ───── Журнал table комфортнее (base font up; em metrics scale with it) ───── */
+      .journal-table { font-size: calc(.88rem * var(--journal-scale, 1)); }
+      /* More vertical room on desktop — screens are taller, and the modal's own
+         padding already grew above, so the table can afford a bigger viewport. */
+      #journal-modal .journal-wrap { max-height: 66vh; }
+      /* ───── Lesson rows в schedule крупнее ───── */
+      .lesson-row { padding: 11px 14px; }
+      .lesson-num { width: 28px; height: 28px; font-size: .8rem; }
+      .lesson-subj { font-size: 1rem; }
+      .lesson-time { font-size: .8rem; }
+      /* ───── Quick actions — в один ряд ───── */
+      .qa-row { flex-wrap: nowrap; }
+      /* ───── Toasts — bottom right ───── */
+      #toast-container { left: auto; right: 20px; bottom: 20px; transform: none; }
+      /* ───── Hover effects ───── */
+      .data-card, .payment-card, .schedule-box { transition: box-shadow .25s, transform .25s; }
+      .data-card:hover, .payment-card:hover, .schedule-box:hover { box-shadow: 0 6px 20px rgba(0,0,0,.08); }
+      details[open] { animation: subtleOpen .25s ease-out; }
+      @keyframes subtleOpen { from { opacity: .7; } to { opacity: 1; } }
+    }
+    /* ═══════════════════════════════════════════════════════
+       BIG DESKTOP (>=1440px) — Больше воздуха
+       ═══════════════════════════════════════════════════════ */
+    @media (min-width: 1440px) {
+      /* Ширину контейнера навмисно НЕ збільшуємо понад десктопні 1180 px.
+         Раніше на великому моніторі він розтягувався до 1320, і рядок
+         тексту ставав задовгим — око губить початок наступного рядка.
+         Таблиці журналу й матриці це не обмежує: вони прокручуються
+         всередині своїх рамок і відкриваються у вікні на всю ширину. */
+      .container { padding: 36px 48px; }
+    }
+    /* === Print-friendly === */
+    @media print {
+      body { background: #fff !important; padding: 0; }
+      .container { box-shadow: none; max-width: 100%; padding: 0; }
+      #profile-bar, .btn-logout, #toast-container, .modal-overlay { display: none !important; }
+      .data-card { break-inside: avoid; box-shadow: none !important; border: 1px solid #ddd; }
+    }
+    /* === Accessibility: focus states === */
+    button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+      outline: 3px solid var(--accent);
+      outline-offset: 2px;
+    }
+    /* === Reduce motion if user prefers === */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .01ms !important;
       }
     }
-    for(let i=0;i<teacher.lessons.length;i++)for(let j=i+1;j<teacher.lessons.length;j++){
-      const a=teacher.lessons[i],b=teacher.lessons[j];
-      if(a.date===b.date&&a.start!==null&&b.start!==null&&a.start<b.end&&b.start<a.end)teacher.conflicts.push([a,b]);
-    }
-  }
-  return {teachers:[...teachers.values()].sort((a,b)=>b.lessons.length-a.lessons.length||a.name.localeCompare(b.name,'uk')),issues,dates};
-}
-let result=null,state='idle',generation=0;
-const names={Monday:'Пн',Tuesday:'Вт',Wednesday:'Ср',Thursday:'Чт',Friday:'Пт',Saturday:'Сб',Sunday:'Нд'};
-const clock=minutes=>`${String(Math.floor(minutes/60)).padStart(2,'0')}:${String(minutes%60).padStart(2,'0')}`;
-const duration=minutes=>`${Math.floor(minutes/60)} год ${minutes%60} хв`;
-const label=l=>`${l.date.split('-').reverse().join('.')} · ${getClassNum(l.cls)} клас · ${l.subject} · ${l.time||'час не вказано'}`;
-const subjectCount=lessons=>new Set(lessons.flatMap(l=>l.pending?expandAltSubjects({subject:l.subject}):[l.subject])).size;
-export function renderWorkload(){
-  const box=document.getElementById('d-workload-results');if(!box||state!=='ready'||!result)return;
-  const search=(document.getElementById('d-workload-search')?.value||'').trim().toLocaleLowerCase('uk');
-  const rows=result.teachers.filter(t=>[t.name,t.email].join(' ').toLocaleLowerCase('uk').includes(search));
-  const summary=document.getElementById('d-workload-summary');
-  if(summary)summary.textContent=`Учителів: ${result.teachers.length} · Визначених занять: ${result.teachers.reduce((n,t)=>n+t.lessons.length,0)} · Занять із невибраним чергуванням: ${new Set(result.teachers.flatMap(t=>[...t.possible,...t.lessons.filter(l=>l.pending)]).concat(result.issues.filter(l=>l.possible)).map(l=>l.id)).size} · Занять без визначеного вчителя: ${new Set(result.issues.map(l=>l.id)).size}`;
-  const comparison=rows.length?`<div style="overflow-x:auto;"><table style="width:100%;min-width:620px;font-size:.82rem;border-collapse:collapse;"><thead><tr><th>Учитель</th><th>Заняття</th><th>Тривалість</th><th>Класи</th><th>Предмети</th><th>Накладки / дати без тем</th></tr></thead><tbody>${rows.map(t=>`<tr><td>${escHtml(t.name)}</td><td>${t.lessons.length}${t.possible.length?`–${t.lessons.length+t.possible.length}`:''}</td><td>${escHtml(duration(t.lessons.reduce((n,l)=>n+l.minutes,0)))}${t.lessons.some(l=>l.start===null)?' + без часу':''}${t.possible.length?' + можливі заняття':''}</td><td>${new Set(t.lessons.map(l=>l.cls)).size}</td><td>${subjectCount(t.lessons)}</td><td>${t.conflicts.length} / ${t.missing.length}</td></tr>`).join('')}</tbody></table></div>`:'';
-  box.innerHTML=comparison+rows.map(t=>{
-    const lessons=t.lessons,minutes=lessons.reduce((n,l)=>n+l.minutes,0),unknown=lessons.filter(l=>l.start===null).length;
-    const days=result.dates.map(date=>{
-      const list=lessons.filter(l=>l.date===date).sort((a,b)=>(a.start??9999)-(b.start??9999));
-      if(!list.length)return '';
-      const intervals=list.filter(l=>l.start!==null);
-      let windows=0,last=null;
-      for(const l of intervals){if(last!==null&&l.start>last)windows+=l.start-last;last=Math.max(last??0,l.end);}
-      return `<div class="wl-day"><b>${escHtml(names[list[0].dn])}: ${list.length} занять · ${escHtml(duration(list.reduce((n,l)=>n+l.minutes,0)))}</b>${intervals.length?`<small>Час: ${escHtml(clock(intervals[0].start))} — ${escHtml(clock(last))} · проміжки: ${escHtml(duration(windows))}</small>`:''}${list.map(l=>`<div>${escHtml(getClassNum(l.cls))} клас · ${escHtml(l.subject)} · ${escHtml(l.time||'час не вказано')}${l.substitute?' · заміна':''}</div>`).join('')}</div>`;
-    }).join('');
-    return `<details class="data-card" style="margin-top:12px;"><summary style="cursor:pointer;"><b>${escHtml(t.name)}</b> · ${lessons.length}${t.possible.length?`–${lessons.length+t.possible.length}`:''} занять · ${escHtml(duration(minutes))}${t.possible.length?` + можливі ${escHtml(duration(t.possible.reduce((n,l)=>n+l.minutes,0)))}`:''}${unknown?' + заняття без часу':''}</summary><p style="font-size:.82rem;">Класів: ${new Set(lessons.map(l=>l.cls)).size} · Предметів: ${subjectCount(lessons)} · Накладок: ${t.conflicts.length} · Дат без тем: ${t.missing.length}</p><div class="ma-grid">${days}</div>${t.possible.length?`<h4>Чергування ще не вибрано</h4>${t.possible.map(l=>`<div>${escHtml(label(l))}</div>`).join('')}`:''}${t.conflicts.length?`<h4 style="color:var(--red);">Накладки за часом</h4>${t.conflicts.map(([a,b])=>`<div>${escHtml(label(a))}<br>↔ ${escHtml(label(b))}</div>`).join('')}`:''}${t.missing.length?`<h4>Минулі дати без записаної теми</h4>${t.missing.map(l=>`<div>${escHtml(label(l))}</div>`).join('')}`:''}</details>`;
-  }).join('')||'<p class="empty-msg">Учителів за цим пошуком немає.</p>';
-  const issues=document.getElementById('d-workload-issues');if(issues)issues.innerHTML=result.issues.length?`<details style="margin-top:14px;"><summary>⚠️ Не вдалося визначити вчителя (${result.issues.length})</summary>${result.issues.map(l=>`<p>${escHtml(label(l))} — ${escHtml(l.reason)}${l.possible?' · можливий варіант чергування':''}</p>`).join('')}</details>`:'';
-}
-export async function openWorkloadTab(){
-  const box=document.getElementById('d-workload-results');if(!box||!isDirectorRole(currentUserData?.role))return;
-  const input=document.getElementById('d-workload-week');
-  const monday=mondayOf(input?.value||localDateString);if(input)input.value=monday;
-  const year=ACTIVE_YEAR,dates=workloadDates(monday),gen=++generation;state='loading';
-  box.innerHTML='<p class="empty-msg">Рахую навантаження...</p>';
-  for(const id of ['d-workload-summary','d-workload-issues']){const el=document.getElementById(id);if(el)el.textContent='';}
-  try{
-    const roots=['schedules','subjects_catalog','users','teacher_access'];
-    const snapshots=await Promise.all([...roots.map(p=>get(ref(db,p))),
-      get(ref(db,'schedule_alt')),
-      get(query(ref(db,'substitutions'),orderByKey(),startAt(dates[0]),endAt(dates[6]))),
-      get(ref(db,'lesson_topics')),get(ref(db,`academic_year/${year}`))]);
-    if(gen!==generation)return;
-    if(year!==ACTIVE_YEAR)throw Error('Навчальний рік змінився. Оновіть перевірку.');
-    const [schedules,catalogs,users,access,choices,subs,topics,calendar]=snapshots.map(s=>s.exists()?s.val():{});
-    result=buildWorkload({schedules,catalogs,users,access,choices,subs,topics,calendar},monday,localDateString,year);
-    state='ready';renderWorkload();
-  }catch(e){if(gen===generation){state='error';box.innerHTML=`<p class="empty-msg" style="color:var(--red);">Не вдалося завантажити навантаження: ${escHtml(e.message)}</p>`;}}
-}
-window.openWorkloadTab=openWorkloadTab;
-window.renderWorkload=renderWorkload;
-// Відновлена вкладка могла відкритися до завантаження цього модуля.
-if(document.querySelector('#dtab-bar .dtab.on[data-t="workload"]'))openWorkloadTab();
+  
+/* Рядок «Повідомлення» під вкладками: доступ звідусіль, але один раз */
+.p-chatbar{margin:0 0 14px 0;}
+.p-chatbar button{position:relative;width:100%;background:var(--purple);color:#fff;
+  padding:12px;border-radius:12px;font-weight:700;font-size:.92rem;}
+/* Заглушка розділу оплат — без жодних сум */
+.pay-soon{display:flex;gap:14px;align-items:flex-start;background:#f7f9fa;
+  border:1px dashed #cfd8dc;border-radius:14px;padding:18px;}
+.pay-soon-icon{font-size:1.7rem;line-height:1;opacity:.5;}
+.pay-soon b{display:block;color:#37474f;font-size:.95rem;margin-bottom:5px;}
+.pay-soon p{margin:0 0 6px 0;font-size:.83rem;color:#78909c;line-height:1.45;}
+.pay-soon-note{font-size:.76rem !important;color:#b0bec5 !important;}
+
+/* Повний розклад на тиждень, розгортається в кабінеті */
+.wk-box{margin-top:10px;}
+.wk-day{background:#fff;border:1px solid #eceff1;border-radius:12px;padding:11px 13px;margin-bottom:8px;}
+.wk-day.today{border-color:#80deea;background:#f0fbfc;}
+.wk-day-name{font-weight:800;font-size:.87rem;color:#37474f;margin-bottom:7px;}
+.wk-today{font-weight:700;font-size:.68rem;color:#00838f;background:#e0f7fa;
+  padding:2px 7px;border-radius:20px;margin-left:6px;vertical-align:middle;}
+.wk-row{display:flex;align-items:baseline;gap:9px;padding:4px 0;border-top:1px dashed #f0f2f3;}
+.wk-row:first-of-type{border-top:none;}
+.wk-num{flex:0 0 18px;font-size:.72rem;color:#b0bec5;font-weight:700;}
+/* Перерва й обід номера не мають — і виглядати мають спокійніше за уроки */
+.wk-row.wk-service .wk-subj{color:#90a4ae;font-style:italic;}
+.wk-subj{flex:1;min-width:0;overflow-wrap:anywhere;font-size:.85rem;color:#263238;}
+.wk-time{font-size:.75rem;color:#90a4ae;white-space:nowrap;}
+.wk-empty{font-size:.8rem;color:#b0bec5;}
+.wk-full-link{display:block;text-align:center;font-size:.76rem;color:#90a4ae;
+  text-decoration:none;margin-top:8px;}
+
+/* Запізнення: перший блок дня, тому компактний */
+.att-quick .att-hint{margin:0 0 9px 0;font-size:.8rem;color:#8d9ba3;}
+.att-row{display:flex;gap:9px;flex-wrap:wrap;}
+.att-row select{flex:1 1 150px;margin-top:0;}
+
+/* Перерви між уроками */
+.wk-break{display:flex;justify-content:space-between;align-items:baseline;
+  padding:3px 0 3px 27px;font-size:.72rem;color:#b0bec5;}
+.wk-break-label{font-style:italic;}
+.wk-break-time{white-space:nowrap;}
+.lesson-break{display:flex;justify-content:space-between;align-items:center;
+  margin:3px 0;padding:5px 12px;border-radius:9px;background:#f7f9fa;
+  font-size:.75rem;color:#90a4ae;}
+.lesson-break.now{background:#fff8e1;color:#8a6d1f;font-weight:700;}
+.lesson-break .lb-time{white-space:nowrap;font-variant-numeric:tabular-nums;}
+/* Іменована перерва — обід чи велика перерва зі свого розкладу.
+   Відрізняється від безіменного проміжку між уроками: у неї є назва,
+   час і вона займає слот, тому виглядає вагоміше. */
+.lesson-break.named{background:#e8f5e9;color:#2e7d32;border-left:3px solid #66bb6a;
+                    padding-left:10px;font-weight:600;}
+.lesson-break.named.now{background:#fff3e0;color:#e65100;border-left-color:var(--orange);}
+.lesson-break.named.passed{opacity:.55;}
+
+
+/* Календар у кабінеті батьків та учня */
+.cal-hint{font-size:.78rem;color:#8d9ba3;margin:0 0 9px 0;}
+.cal-legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px;font-size:.74rem;color:#78909c;}
+.cal-legend i.lg{display:inline-block;width:11px;height:11px;border-radius:3px;
+  margin-right:5px;vertical-align:-1px;border:1px solid;}
+.cal-legend i.holiday{background:#f8d7da;border-color:#f5c6cb;}
+.cal-legend i.brk{background:#d4edda;border-color:#c3e6cb;}
+.cal-legend i.exam{background:#fff3cd;border-color:#ffeeba;}
+
+/* Список подій місяця під календарем */
+.cal-list{list-style:none;padding:0;margin:14px 0 0 0;}
+.cal-list .ev{display:flex;gap:10px;align-items:baseline;padding:7px 0;
+  border-top:1px solid #f0f2f3;}
+.cal-list .ev:first-child{border-top:none;}
+.cal-list .ev-when{flex:0 0 auto;font-size:.74rem;font-weight:700;color:#78909c;
+  white-space:nowrap;min-width:74px;}
+.cal-list .ev-title{font-size:.85rem;color:#263238;}
+.cal-list .ev::before{content:'';flex:0 0 9px;height:9px;border-radius:3px;
+  border:1px solid;margin-top:4px;}
+.cal-list .ev.holiday::before{background:#f8d7da;border-color:#f5c6cb;}
+.cal-list .ev.brk::before{background:#d4edda;border-color:#c3e6cb;}
+.cal-list .ev.exam::before{background:#fff3cd;border-color:#ffeeba;}
+.cal-none{font-size:.8rem;color:#b0bec5;margin:14px 0 0 0;}
+
+/* Встановлення застосунку */
+.install-box .inst{background:#f7f9fa;border:1px solid #e0e6e8;border-radius:12px;padding:15px;}
+.install-box .inst.ok{background:#f1f8f4;border-color:#c8e6d0;}
+.install-box .inst b{display:block;color:#37474f;font-size:.92rem;margin-bottom:6px;}
+.install-box .inst p{margin:0 0 8px 0;font-size:.83rem;color:#78909c;line-height:1.45;}
+.install-box .inst-steps{margin:0 0 8px 0;padding-left:20px;font-size:.83rem;
+  color:#546e7a;line-height:1.6;}
+.install-box .inst-steps li{margin-bottom:3px;}
+.install-box .inst-note{font-size:.77rem !important;color:#b0bec5 !important;margin-bottom:0 !important;}
+.install-box .inst-btn{width:100%;background:var(--teal);color:#fff;padding:11px;
+  border-radius:10px;font-weight:700;margin-top:4px;}
+
+/* Розподіл за варіантами основної страви */
+.k-choice{background:#f7f9fa;border:1px solid #e0e6e8;border-radius:10px;padding:9px 12px;margin-top:10px;}
+.k-choice-row{display:flex;align-items:center;gap:9px;padding:4px 0;font-size:.85rem;}
+.k-choice-row b{margin-left:auto;font-size:1rem;color:#00838f;}
+.k-choice-name{color:#546e7a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.k-ab{flex:0 0 22px;height:22px;border-radius:6px;display:flex;align-items:center;
+  justify-content:center;font-weight:800;font-size:.74rem;color:#fff;}
+.k-ab.a{background:#00838f;} .k-ab.b{background:#8e44ad;}
+
+/* Вибір основної страви в кабінеті батьків */
+.pm-choice{margin:10px 0;padding:11px;background:#f7fbfc;border:1px solid #d7ecef;border-radius:12px;}
+.pm-choice-title{font-size:.78rem;color:#78909c;margin-bottom:8px;}
+.pm-opt{display:flex;align-items:center;gap:10px;width:100%;text-align:left;
+  background:#fff;border:1.5px solid #e0e6e8;border-radius:10px;padding:10px 12px;
+  margin-bottom:7px;font-size:.88rem;color:#263238;}
+.pm-opt.on{border-color:#00838f;background:#e0f7fa;}
+.pm-opt:disabled{opacity:.6;}
+.pm-opt-mark{flex:0 0 24px;height:24px;border-radius:7px;background:#eceff1;color:#607d8b;
+  display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.76rem;}
+.pm-opt.on .pm-opt-mark{background:#00838f;color:#fff;}
+.pm-opt-name{flex:1;min-width:0;overflow-wrap:anywhere;}
+.pm-opt-on{font-size:.7rem;color:#00838f;font-weight:700;}
+.pm-btn.brk{background:#fff3e0;color:#e65100;}
+.pm-locked.small{font-size:.74rem;}
+
+.k-ord-ab{font-size:.78rem;color:#546e7a;background:#eceff1;padding:2px 8px;border-radius:20px;margin-left:4px;}
+.k-ord-menu{font-size:.76rem;color:#78909c;margin:6px 0 4px 0;}
+
+/* Позиції на винос */
+.ta-box:empty{display:none;}
+.ta-box{margin-top:12px;background:#fffdf7;border:1px solid #f0e3c8;border-radius:14px;padding:13px;}
+.ta-head{font-weight:800;font-size:.9rem;color:#8a6d1f;margin-bottom:9px;}
+.ta-head span{font-weight:400;color:#b0a184;font-size:.78rem;margin-left:6px;}
+.ta-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#fff;border:1px solid #f0e3c8;
+  border-radius:10px;padding:10px 12px;margin-bottom:7px;}
+.ta-row.on{border-color:#e0b34a;background:#fffaf0;}
+/* Те саме, що й у кухні: довгі назви страв не мають ділити рядок з кнопками */
+.ta-row-main{flex:1 1 100%;min-width:0;}
+.ta-row .ta-price{margin-right:auto;}
+.ta-row-main b{display:block;font-size:.86rem;color:#263238;}
+.ta-item-note{display:block;font-size:.74rem;color:#a99b7e;}
+.ta-price{font-size:.82rem;font-weight:700;color:#8a6d1f;white-space:nowrap;}
+.ta-qty{display:flex;align-items:center;gap:8px;flex:0 0 auto;}
+.ta-qty button{width:28px;height:28px;margin-top:0;border-radius:8px;background:#f5efe0;color:#8a6d1f;
+  font-weight:800;font-size:1rem;line-height:1;padding:0;}
+.ta-qty button:disabled{opacity:.35;}
+.ta-qty span{min-width:14px;text-align:center;font-weight:700;font-size:.88rem;}
+.ta-qty-locked{font-weight:700;color:#b0a184;}
+.ta-sum{margin-top:9px;font-size:.85rem;color:#5d4e2a;}
+.ta-sum span{display:block;font-size:.73rem;color:#b0a184;margin-top:2px;}
+.ta-locked{margin-top:7px;font-size:.76rem;color:#b0a184;}
+/* Правило 07:00: спокійним рядком, поки все гаразд, і помітно — коли день перенесено */
+.ta-rule{margin-top:7px;font-size:.73rem;color:#b0a184;}
+.ta-shift{background:#fff8e1;border:1px solid #ffe082;border-radius:9px;padding:8px 10px;
+          margin-bottom:9px;font-size:.78rem;color:#8a6d1f;line-height:1.45;}
+/* Кабінет кухні.
+   ЧОМУ ТУТ ЯВНО width:auto. У порталі є глобальне правило button{width:100%},
+   зручне для великих кнопок «Зберегти» на всю ширину. Але кожна дрібна
+   кнопка поруч із текстом теж розтягувалася на всю ширину: назва позиції
+   стискалася в стовпчик по одній літері, ціна налазила на неї, і сторінка
+   кухні виглядала розваленою — особливо на телефоні. */
+.ta-item{display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  background:#fff;border:1px solid #eceff1;
+  border-radius:10px;padding:10px 12px;margin-bottom:7px;}
+.ta-item.off{opacity:.55;}
+/* Назва займає окремий рядок: у неї найбільше тексту, і ділити ширину
+   з чотирма кнопками їй нема сенсу */
+.ta-item-main{flex:1 1 100%;min-width:0;}
+.ta-item .ta-price{margin-right:auto;}
+.ta-mini{width:auto;margin-top:0;flex:0 0 auto;border:none;
+  padding:7px 12px;font-size:.74rem;background:#eceff1;color:#546e7a;border-radius:8px;}
+.ta-mini.del{background:#fdecea;color:#c0392b;}
+
+/* Екран згоди при вході */
+.cg-back{position:fixed;inset:0;background:rgba(20,30,35,.55);z-index:9000;
+  display:flex;align-items:center;justify-content:center;padding:16px;}
+.cg-win{background:#fff;border-radius:18px;max-width:560px;width:100%;
+  max-height:92vh;display:flex;flex-direction:column;overflow:hidden;}
+.cg-head{padding:18px 22px 14px;font-size:1.15rem;font-weight:800;color:#00838f;
+  border-bottom:1px solid #eceff1;}
+.cg-scroll{padding:18px 22px 22px;overflow-y:auto;}
+.cg-lead{font-size:.88rem;color:#455a64;margin:0 0 14px 0;line-height:1.5;}
+.cg-doc{background:#f7f9fa;border:1px solid #e0e6e8;border-radius:12px;padding:12px 14px;margin-bottom:16px;}
+.cg-doc summary{font-weight:700;cursor:pointer;color:#37474f;font-size:.88rem;}
+.cg-doc ul{margin:11px 0 0 0;padding-left:19px;font-size:.83rem;color:#546e7a;line-height:1.55;}
+.cg-doc li{margin-bottom:6px;}
+.cg-note{font-size:.76rem;color:#90a4ae;margin:10px 0 0 0;}
+.cg-must{display:flex;gap:11px;align-items:flex-start;background:#e0f7fa;border:1.5px solid #80deea;
+  border-radius:12px;padding:13px;font-size:.87rem;color:#00696f;font-weight:600;cursor:pointer;}
+.cg-must input[type=checkbox]{margin-top:2px;width:24px;height:24px;min-width:24px;flex:0 0 auto;accent-color:var(--teal);cursor:pointer;}
+.cg-sep{font-size:.78rem;color:#90a4ae;margin:18px 0 10px 0;}
+.cg-opt{display:flex;gap:11px;align-items:flex-start;background:#fff;border:1px solid #e0e6e8;
+  border-radius:12px;padding:12px;margin-bottom:8px;cursor:pointer;}
+.cg-opt input[type=checkbox]{margin-top:2px;width:22px;height:22px;min-width:22px;flex:0 0 auto;accent-color:var(--teal);cursor:pointer;}
+.cg-opt b{display:block;font-size:.87rem;color:#263238;margin-bottom:3px;}
+.cg-opt em{display:block;font-style:normal;font-size:.79rem;color:#78909c;line-height:1.45;}
+.cg-warn{display:block;font-style:normal;font-size:.75rem;color:#b7791f;margin-top:5px;}
+.cg-opt.small{padding:10px;}
+.cg-err{background:#fdecea;border:1px solid #f5c6cb;color:#b3261e;border-radius:10px;
+  padding:10px 12px;font-size:.82rem;margin:12px 0;}
+#cg-save,.mc-save{width:100%;background:#00838f;color:#fff;padding:13px;border-radius:12px;
+  font-weight:700;font-size:.92rem;margin-top:14px;}
+.cg-foot{font-size:.76rem;color:#b0bec5;text-align:center;margin:10px 0 0 0;line-height:1.45;}
+.mc-when{font-size:.78rem;color:#78909c;margin:0 0 11px 0;}
+
+.cg-doc-link{display:block;text-align:center;background:#f7f9fa;border:1px solid #e0e6e8;
+  border-radius:12px;padding:12px;margin:12px 0;color:#00838f;font-weight:700;
+  font-size:.85rem;text-decoration:none;}
+
+/* Превʼю календарного планування */
+.curr-src{font-size:.74rem;color:#78909c;margin:6px 0 4px 0;}
+.curr-warn{font-size:.76rem;color:#8a6d1f;background:#fff8e1;border:1px solid #ffe0a3;
+  border-radius:8px;padding:7px 9px;margin:6px 0;line-height:1.4;}
+.curr-warn.danger{color:#b3261e;background:#fdecea;border-color:#f5c6cb;}
+.curr-subj-fix{width:100%;margin:4px 0 8px 0;font-size:.84rem;}
+</style>
+</head>
+<!-- auth-mode СТОЇТЬ ТУТ ОДРАЗУ, а не чекає на скрипт.
+     Клас знімає onAuthStateChanged — але він спрацьовує лише після того,
+     як завантажиться Firebase і перевірить сеанс. До того моменту сторінка
+     малювалася світлою, а потім темнішала: людина щоразу бачила спалах
+     білим на екрані входу.
+     Тепер перше ж малювання темне. Той, хто вже увійшов, побачить
+     зворотне перемикання — але воно збігається з появою кабінету й
+     читається як «завантажилося», а не як миготіння. -->
+<body class="auth-mode">
+<!-- Фон екранів входу: світлові плями в кольорах логотипа замість
+     фонового відео — нуль ваги, нічого не вантажиться ззовні.
+     Видно лише коли <body class="auth-mode">, тобто до входу. -->
+<div id="auth-bg" aria-hidden="true">
+  <div class="glow g1"></div><div class="glow g2"></div>
+  <div class="glow g3"></div><div class="glow g4"></div>
+  <div class="auth-backdrop"></div>
+</div>
+<div id="toast-container"></div>
+<!-- Сюди рендериться розклад для друку; поза друком прихований -->
+<div id="print-area"></div>
+<!-- Табель рендериться сюди приховано, потім знімається html2canvas -->
+<div id="report-card-render" style="position:fixed;left:-10000px;top:0;width:760px;"></div>
+<!-- GRADE EDITOR POPUP -->
+<div id="grade-editor-popup" class="grade-editor-popup">
+  <div style="font-size:.73rem;color:#666;margin-bottom:5px;" id="gep-label">Учень | Предмет | Дата</div>
+  <!-- Для 1–5 класів сюди підставляються кнопки рівнів П · С · Д · В:
+       у цих класах оцінка і є літера, і набирати її вручну ніде не треба. -->
+  <div class="level-btns" id="gep-level-btns" style="display:none;"></div>
+  <input type="text" id="gep-value" placeholder="1-6" autocomplete="off">
+  <div class="gep-hint" id="gep-type-hint">Вид роботи:</div>
+  <div class="type-btns" id="gep-type-btns"></div>
+  <div style="margin-top:9px;border-top:1px solid #eee;padding-top:8px;">
+    <label for="gep-work-files" style="font-size:.8rem;">📷 Фото контрольної, самостійної чи іншої роботи</label>
+    <div id="gep-work-existing"></div>
+    <input type="file" id="gep-work-files" accept="image/jpeg,image/png,image/webp" multiple style="font-size:.8rem;">
+    <small>До 3 фото, кожне до 8 МБ. Батьки побачать їх поруч з оцінкою після збереження.</small>
+  </div>
+  <div class="editor-actions">
+    <button id="gep-save" class="btn-confirm" onclick="confirmGrade()">✔ Зберегти</button>
+    <button class="btn-delete" onclick="deleteGrade()">✖</button>
+    <button class="btn-cancel" onclick="closeGradeEditor()">Скас.</button>
+  </div>
+</div>
+<div class="container">
+  <!-- LOGIN -->
+  <!-- ═══ ЕКРАН 1: ЗВИЧАЙНИЙ ВХІД ═══
+       onsubmit прописаний АТРИБУТОМ, а не через addEventListener у модулі.
+       Це критично: атрибут працює з моменту парсингу HTML, тому навіть якщо
+       JS-модуль не завантажився (кеш, збій CDN, стара версія файлу) — форма
+       НЕ піде звичайним GET-запитом і пароль ніколи не потрапить в URL. -->
+  <!-- ПРИХОВАНИЙ ДО ПЕРЕВІРКИ СЕАНСУ.
+       Раніше форма стояла видимою з першого кадру. Для того, хто ще не
+       входив, це добре, а для вчителя, який заходить щодня, — ні:
+       він бачив спалах формою входу перед своїм кабінетом, ніби його
+       щойно виштовхнуло з системи.
+       Тепер до відповіді Firebase видно лише темне тло, а далі
+       відкривається одне з двох. Про випадок «Firebase не відповів
+       узагалі» подбає запобіжник у common.js. -->
+  <div id="login-screen" class="panel" style="display:none;">
+    <div class="auth-brand"><img src="logo.png" alt="Push School Warsaw" class="auth-logo"></div>
+    <h2>Вхід до порталу</h2>
+    <p class="auth-sub">Для учнів, батьків та вчителів</p>
+    <form id="login-form" novalidate
+          onsubmit="event.preventDefault();if(window.submitLogin)window.submitLogin(event);return false;">
+      <label for="email">Email або нікнейм</label>
+      <!-- type="text", а не "email": учні входять за нікнеймом без пошти,
+           і браузер не має відхиляти таке значення як «невірний email». -->
+      <input type="text" id="email" name="email" autocomplete="username"
+             placeholder="ім'я@пошта.com або нікнейм" autocapitalize="none"
+             spellcheck="false" required>
+      <label for="pass">Пароль</label>
+      <div class="pass-wrap">
+        <input type="password" id="pass" name="password" autocomplete="current-password"
+               placeholder="Пароль" required>
+        <button type="button" class="pass-toggle" id="pass-toggle"
+                onclick="togglePassVisibility('pass','pass-toggle')" aria-label="Показати пароль">👁</button>
+      </div>
+      <p id="login-hint" class="login-hint" style="display:none;"></p>
+      <button type="submit" class="btn-login" id="btn-login-submit">Увійти</button>
+      <p id="login-error" class="login-err" style="display:none;"></p>
+    </form>
+    <button type="button" class="link-btn" onclick="showFirstLoginScreen()">Перший вхід? Встановити пароль →</button>
+    <button type="button" class="link-btn" style="color:#7f8c8d;font-weight:600;margin-top:2px;"
+            onclick="requestPasswordReset()">Забули пароль?</button>
+    <!-- ПІДПИС РОЗРОБНИКА.
+         Наповнюється з common.js (VENDOR) — не руками в розмітці: підпис
+         має бути в одному місці, щоб зміна імені чи посилання не вимагала
+         шукати його по файлах. Порожній VENDOR ховає блок цілком. -->
+    <div id="vendor-credit" class="vendor-credit" style="display:none;"></div>
+  </div>
+  <!-- ═══ ЕКРАН 2: ПЕРШИЙ ВХІД (окремий екран, не режим) ═══ -->
+  <div id="first-login-screen" class="panel">
+    <div class="auth-brand"><img src="logo.png" alt="Push School Warsaw" class="auth-logo"></div>
+    <h2>Перший вхід</h2>
+    <p class="fl-intro">
+      Якщо школа вже додала вашу електронну адресу, ми надішлемо на неї лист
+      із посиланням — за ним ви <b>задасте собі пароль</b>. Надалі
+      входитимете з ним на головному екрані.
+    </p>
+    <form id="first-login-form" novalidate
+          onsubmit="event.preventDefault();if(window.submitFirstLogin)window.submitFirstLogin(event);return false;">
+      <label for="fl-email">Email, який вам видала школа</label>
+      <input type="email" id="fl-email" name="email" autocomplete="username"
+             placeholder="ім'я@пошта.com" autocapitalize="none" spellcheck="false" required>
+      <p id="fl-hint" class="login-hint" style="display:none;"></p>
+      <!-- ПОЛЯ ПАРОЛЯ ТУТ БІЛЬШЕ НЕМАЄ.
+           Пароль задають за посиланням із листа. Доти його міг задати
+           будь-хто, хто знає адресу зі списку школи, — а адреса вчителя
+           не таємниця. -->
+      <button type="submit" class="btn-login" id="btn-fl-submit">Надіслати лист для входу</button>
+      <p id="fl-error" class="login-err" style="display:none;"></p>
+    </form>
+    <button type="button" class="link-btn" onclick="showLoginScreen()">← Назад до входу</button>
+  </div>
+  <!-- ═══ ЕКРАН 3: ВСТАНОВЛЕННЯ НОВОГО ПАРОЛЯ ═══
+       Відкривається, коли людина переходить за посиланням із листа
+       відновлення. Працює лише якщо у Firebase Console → Authentication →
+       Templates задано "Customize action URL" на адресу цієї сторінки. -->
+  <div id="reset-password-screen" class="panel">
+    <div class="auth-brand"><img src="logo.png" alt="Push School Warsaw" class="auth-logo"></div>
+    <h2>Новий пароль</h2>
+    <p id="rp-email" class="fl-intro">Встановлення нового пароля</p>
+    <form id="reset-password-form" novalidate
+          onsubmit="event.preventDefault();if(window.submitNewPassword)window.submitNewPassword(event);return false;">
+      <label for="rp-pass">Новий пароль (мінімум 6 символів)</label>
+      <div class="pass-wrap">
+        <input type="password" id="rp-pass" name="new-password" autocomplete="new-password"
+               placeholder="Придумайте пароль" required>
+        <button type="button" class="pass-toggle" id="rp-pass-toggle"
+                onclick="togglePassVisibility('rp-pass','rp-pass-toggle')" aria-label="Показати пароль">👁</button>
+      </div>
+      <label for="rp-pass2">Повторіть пароль</label>
+      <input type="password" id="rp-pass2" name="confirm-password" autocomplete="new-password"
+             placeholder="Ще раз той самий пароль" required>
+      <button type="submit" class="btn-login" id="btn-rp-submit">Зберегти новий пароль</button>
+      <p id="rp-error" class="login-err" style="display:none;"></p>
+    </form>
+  </div>
+  <!-- PROFILE BAR -->
+  <div id="profile-bar" style="display:none;align-items:center;gap:13px;margin-bottom:18px;background:#fff;padding:14px;border-radius:12px;box-shadow:0 4px 10px rgba(0,0,0,.05);border:1px solid #eee;">
+    <img id="pb-avatar" src="https://cdn-icons-png.flaticon.com/512/149/149071.png" style="width:48px;height:48px;border-radius:50%;object-fit:cover;border:2px solid var(--teal);">
+    <div style="flex:1;">
+      <h3 id="pb-name" style="margin:0;font-size:1.05rem;color:#333;border:none;padding:0;">Користувач</h3>
+      <p id="pb-role" style="margin:0;font-size:.82rem;color:#777;">Роль</p>
+      <!-- Перемикач кабінетів — видно лише тим, у кого кілька ролей -->
+      <div id="pb-role-switcher" style="display:none;margin-top:5px;"></div>
+      <!-- Перемикач дітей — для батьків, у яких у школі кілька дітей -->
+      <div id="pb-child-switcher" style="display:none;margin-top:5px;"></div>
+    </div>
+    <button onclick="openProfileModal()" style="width:auto;padding:7px 13px;margin:0;background:var(--teal);color:#fff;border-radius:8px;font-size:.85rem;">⚙️ Профіль</button>
+  </div>
+  <!-- Смужка про переїзд на push.school. Лежить у розмітці, а не
+       створюється кодом: вставлений «кудись у перший видимий екран» блок
+       ліз над панель вкладок і склеювався з нею. Тут у нього своє місце —
+       під шапкою профілю, над кабінетом будь-якої ролі. -->
+  <div id="moved-notice" class="moved-notice" style="display:none;"></div>
+  <!-- DATE PICKER -->
+  <div id="calendar-block" style="display:none;" class="date-picker-box">
+    <div id="teacher-class-selector-box" style="display:none;margin-bottom:13px;border-bottom:1px dashed var(--teal);padding-bottom:13px;">
+      <label style="margin-top:0;color:#d35400;font-size:.95rem;">🏫 Оберіть клас:</label>
+      <select id="t-class-selector" onchange="handleClassChange()" style="margin-top:4px;border:2px solid #e67e22;color:#d35400;font-weight:700;text-align:center;"></select>
+    </div>
+    <label id="global-date-label" style="margin-top:0;color:var(--teal);font-size:.95rem;">📅 Оберіть дату:</label>
+    <input type="date" id="global-date" onchange="handleDateChange()" style="border:2px solid var(--teal);color:var(--teal);font-weight:700;text-align:center;">
+  </div>
+  <!-- ADMIN -->
+  <div id="admin-screen" class="panel">
+    <h2 style="color:#2c3e50;">🛡️ Панель Адміністратора</h2>
+    <!-- Нові картки адміністратора додавайте новими <section class="screen-section">
+         (додайте клас "half" для пів-ширини на десктопі) — grid підхопить їх автоматично. -->
+
+    <section class="screen-section half">
+      <!-- Власне харчування співробітника. Той самий вибір, що й у родин,
+           але без сніданків і підвечірків: кухня їх персоналу не пропонує. -->
+      <div class="data-card" style="border-left-color:#00897b;background:#e0f2f1;margin-top:0;">
+        <h4 style="margin-top:0;color:#00695c;">🍽 Моє харчування</h4>
+        <div class="stm-box"><p class="empty-msg">Завантаження...</p></div>
+      </div>
+    </section>
+
+    <section class="screen-section">
+      <h3>🚀 Швидкі дії</h3>
+      <div style="display:flex;gap:9px;flex-wrap:wrap;">
+        <button onclick="openVisualMatrixModal('live')" style="flex:1;min-width:160px;background:linear-gradient(135deg,#1abc9c,#16a085);color:#fff;margin-top:0;font-size:.95rem;padding:11px;">🗓️ Розклад</button>
+        <button onclick="openJournalModal('administrator')" style="flex:1;min-width:160px;background:linear-gradient(135deg,var(--purple),#9b59b6);color:#fff;margin-top:0;font-size:.95rem;padding:11px;">📖 Журнал</button>
+        <button onclick="openChatModal('administrator')" data-chatbtn="1" style="flex:1;min-width:160px;background:linear-gradient(135deg,#9b59b6,#8e44ad);color:#fff;margin-top:0;font-size:.95rem;padding:11px;">💬 Чат з батьками</button>
+      </div>
+    </section>
+
+    <section class="screen-section">
+      <h3>📋 Відвідуваність</h3>
+      <div class="data-card" style="border-left-color:var(--red);background:#fdfbfb;margin-top:0;">
+        <h4 id="a-att-header" style="margin-top:0;color:var(--red);">🚨 Відсутні та Запізнення</h4>
+        <ul id="a-unified-att-list" class="list-dash" style="padding-left:0;list-style:none;"><li class="empty-msg">Завантаження...</li></ul>
+        <!-- Секретар приймає дзвінки від батьків і відмічає учнів будь-якого класу -->
+        <div id="a-mark-absent-block" style="margin-top:13px;display:flex;gap:8px;flex-wrap:wrap;border-top:1px dashed #f5b7b1;padding-top:13px;">
+          <select id="a-mark-class" onchange="loadAdminStudentsForClass()" style="flex:1;min-width:120px;margin-top:0;border:1px solid #f5b7b1;">
+            <option value="">Клас...</option>
+            <option value="class_1">1 Клас</option><option value="class_2">2 Клас</option><option value="class_3">3 Клас</option>
+            <option value="class_4">4 Клас</option><option value="class_5">5 Клас</option><option value="class_6">6 Клас</option>
+            <option value="class_7">7 Клас</option><option value="class_8">8 Клас</option><option value="class_9">9 Клас</option>
+            <option value="class_10">10 Клас</option><option value="class_11">11 Клас</option>
+          </select>
+          <select id="a-mark-student" style="flex:1;min-width:130px;margin-top:0;border:1px solid #f5b7b1;"><option value="">Спочатку клас</option></select>
+          <select id="a-mark-reason" style="flex:1;min-width:130px;margin-top:0;border:1px solid #f5b7b1;">
+            <option value="Відмічено секретарем">Без причини</option><option value="через хворобу">Хвороба</option>
+            <option value="за сімейними обставинами">Сімейні обставини</option><option value="запізнення">Запізнення</option>
+          </select>
+          <button onclick="adminMarkAbsent()" style="margin-top:0;background:var(--red);color:#fff;width:auto;padding:9px 13px;font-size:.85rem;">Відмітити</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="screen-section half">
+      <h3>📊 Огляд</h3>
+
+      <div style="display:flex;gap:9px;">
+        <div style="flex:1;background:#e0f7fa;padding:14px;border-radius:12px;text-align:center;">
+          <h4 id="a-hw-title" style="margin:0;color:#00838f;font-size:.82rem;">📚 ДЗ</h4>
+          <p id="a-hw-counter" style="font-size:1.7rem;font-weight:800;color:#00acc1;margin:4px 0;">0</p>
+        </div>
+        <div style="flex:1;background:#fce4ec;padding:14px;border-radius:12px;text-align:center;">
+          <h4 id="a-com-title" style="margin:0;color:#ad1457;font-size:.82rem;">💬 Коментарів</h4>
+          <p id="a-com-counter" style="font-size:1.7rem;font-weight:800;color:#d81b60;margin:4px 0;">0</p>
+        </div>
+      </div>
+      <div style="background:#fff3e0;padding:14px;border-radius:12px;text-align:center;margin-top:12px;">
+        <h4 style="margin:0;color:#e65100;font-size:.88rem;">🗓️ Статистика тижня</h4>
+        <div style="display:flex;justify-content:space-around;margin-top:9px;">
+          <div><p id="a-week-late" style="font-size:1.4rem;font-weight:800;color:var(--orange);margin:0;">0</p><span style="font-size:.68rem;color:#888;">запізнень</span></div>
+          <div><p id="a-week-absent" style="font-size:1.4rem;font-weight:800;color:#c0392b;margin:0;">0</p><span style="font-size:.68rem;color:#888;">відсутніх</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="screen-section half">
+      <h3>📚 Довідники</h3>
+      <details style="margin-bottom:12px;background:#e8eaf6;padding:14px;border-radius:12px;border:1px solid #9fa8da;" ontoggle="if(this.open)loadAdminBellSchedule()">
+        <summary style="font-weight:700;cursor:pointer;color:#283593;font-size:.95rem;">🔔 Розклад дзвінків</summary>
+        <div style="margin-top:13px;">
+          <select id="a-bell-class" onchange="loadAdminBellSchedule()" style="border:2px solid #7986cb;">
+            <option value="">-- Оберіть клас --</option>
+            <option value="class_1">1 Клас</option><option value="class_2">2 Клас</option><option value="class_3">3 Клас</option>
+            <option value="class_4">4 Клас</option><option value="class_5">5 Клас</option><option value="class_6">6 Клас</option>
+            <option value="class_7">7 Клас</option><option value="class_8">8 Клас</option><option value="class_9">9 Клас</option>
+            <option value="class_10">10 Клас</option><option value="class_11">11 Клас</option>
+          </select>
+          <div id="a-bell-view" style="margin-top:10px;"><p class="empty-msg">Оберіть клас.</p></div>
+        </div>
+      </details>
+      <details style="background:#fff8e1;padding:14px;border-radius:12px;border:1px solid #ffe0b2;" ontoggle="if(this.open)loadAdminAcademicYear()">
+        <summary style="font-weight:700;cursor:pointer;color:#e65100;font-size:.95rem;">📅 Навчальний рік</summary>
+        <div id="a-academic-view" style="margin-top:13px;"><p class="empty-msg">Завантаження...</p></div>
+      </details>
+    </section>
+
+    <button class="btn-logout" onclick="logoutUser()">Вийти</button>
+    <p class="app-version"></p>
+  </div>
+  <!-- КУХНЯ -->
+  <div id="kitchen-screen" class="panel">
+    <h2 style="color:#00838f;">🍽️ Кухня</h2>
+
+    <section class="screen-section">
+      <h3>📅 Тиждень</h3>
+      <div class="k-weeknav">
+        <button type="button" onclick="kitchenWeekShift(-1)">←</button>
+        <div><b id="k-week-label">—</b><br><a href="#" onclick="event.preventDefault();kitchenThisWeek();">поточний тиждень</a></div>
+        <button type="button" onclick="kitchenWeekShift(1)">→</button>
+      </div>
+      <input type="hidden" id="k-week">
+    </section>
+
+    <section class="screen-section">
+      <h3>🔢 Скільки готувати</h3>
+      <div class="data-card" style="border-left-color:#00838f;margin-top:0;">
+        <div id="k-counts"><p class="empty-msg">Завантаження...</p></div>
+      </div>
+    </section>
+
+    <div id="k-push-warn" style="display:none;"></div>
+
+    <section class="screen-section">
+      <h3>📋 Меню на тиждень</h3>
+      <div class="data-card" style="border-left-color:#4dd0e1;margin-top:0;">
+        <p style="font-size:.76rem;color:#888;margin:0 0 9px 0;">Заповніть дні й натисніть «Опублікувати». Батьки отримають сповіщення лише про ті дні, що змінилися.</p>
+        <div id="k-menu-week"><p class="empty-msg">Завантаження...</p></div>
+        <button onclick="saveWeekMenu()" style="background:#00838f;color:#fff;margin-top:12px;">📢 Опублікувати тиждень</button>
+        <button onclick="checkNotifySetup()" style="background:#f5f5f5;color:#555;border:1px solid #ddd;">🔍 Перевірити, чи працюють сповіщення</button>
+        <div id="k-notify-info" style="display:none;"></div>
+      </div>
+    </section>
+
+    <section class="screen-section">
+      <h3>📝 Хто що замовив</h3>
+      <div class="data-card" style="border-left-color:#ef6c00;margin-top:0;">
+        <p style="font-size:.76rem;color:#888;margin:0 0 7px 0;">Поіменний список на день — з ним можна виходити на роздачу.</p>
+        <div style="display:flex;gap:8px;">
+          <div style="flex:1;min-width:0;">
+            <label for="k-order-class" style="font-size:.74rem;">Клас</label>
+            <select id="k-order-class" onchange="loadOrdersForDay()"><option value="">Оберіть...</option><option value="class_1">1 клас</option><option value="class_2">2 клас</option><option value="class_3">3 клас</option><option value="class_4">4 клас</option><option value="class_5">5 клас</option><option value="class_6">6 клас</option><option value="class_7">7 клас</option><option value="class_8">8 клас</option><option value="class_9">9 клас</option><option value="class_10">10 клас</option><option value="class_11">11 клас</option></select>
+          </div>
+          <div style="flex:1;min-width:0;">
+            <label for="k-order-date" style="font-size:.74rem;">Дата</label>
+            <input type="date" id="k-order-date" onchange="loadOrdersForDay()">
+          </div>
+        </div>
+        <!-- Ціни. Одна форма на всі чотири позиції: окремі кнопки
+             «зберегти» біля кожного поля дали б чотири нагоди зберегти
+             половину. Порожнє поле означає «ціни немає» — тоді суми не
+             показуються нікому. -->
+        <details class="k-prices">
+          <summary>💰 Ціни на харчування</summary>
+          <div class="k-prices-grid">
+            <label>Обід<input type="text" id="k-price-lunch" inputmode="decimal" placeholder="—"></label>
+            <label>Сніданок<input type="text" id="k-price-brk" inputmode="decimal" placeholder="—"></label>
+            <label>Підвечірок<input type="text" id="k-price-snack" inputmode="decimal" placeholder="—"></label>
+            <label>Обід персоналу<input type="text" id="k-price-staff" inputmode="decimal" placeholder="—"></label>
+          </div>
+          <button type="button" class="k-prices-save" onclick="saveMealPrices()">Зберегти ціни</button>
+          <p class="k-ord-hint">Ціни бачать батьки у своїй статистиці харчування. Порожнє поле —
+            позиція без ціни, у сумах не враховується.</p>
+        </details>
+
+        <div id="k-orders"><p class="empty-msg">Оберіть клас і дату.</p></div>
+
+        <!-- Персонал замовляє без класу, тому й список окремий. Дата —
+             та сама, що вибрана вище для класу. -->
+        <div class="k-staff-block">
+          <h4>👩‍🏫 Персонал</h4>
+          <div id="k-staff-orders"><p class="empty-msg">Оберіть дату.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="screen-section">
+      <h3>🥡 Позиції на винос</h3>
+      <p style="font-size:.8rem;color:#8d9ba3;margin:0 0 11px 0;">
+        Асортимент поза меню: випічка, салати, супи в контейнері. Батьки замовляють
+        на конкретний день, оплата — у школі, як завжди.</p>
+
+      <details style="background:#fffdf7;border:1px solid #f0e3c8;border-radius:12px;padding:14px;margin-bottom:12px;">
+        <summary style="font-weight:700;cursor:pointer;color:#8a6d1f;font-size:.9rem;">➕ Додати позицію</summary>
+        <div style="margin-top:11px;">
+          <label for="k-ta-title">Назва</label>
+          <input type="text" id="k-ta-title" placeholder="напр. Сирник">
+          <label for="k-ta-price">Ціна, zł</label>
+          <input type="text" id="k-ta-price" inputmode="decimal" placeholder="напр. 8.50">
+          <label for="k-ta-note">Примітка <span style="font-weight:400;color:#b0a184;">— необовʼязково</span></label>
+          <input type="text" id="k-ta-note" placeholder="напр. 200 г, без цукру">
+          <button onclick="addTakeawayItem()" style="background:#8a6d1f;color:#fff;padding:10px;margin-top:11px;width:100%;">Додати</button>
+        </div>
+      </details>
+
+      <div id="k-ta-items"><p class="empty-msg">Завантаження...</p></div>
+
+      <h4 style="margin:18px 0 8px 0;color:#37474f;font-size:.9rem;">Замовлення на день</h4>
+      <input type="date" id="k-ta-date" onchange="loadTakeawayOrders()">
+      <div id="k-ta-orders" style="margin-top:10px;"><p class="empty-msg">Оберіть дату.</p></div>
+    </section>
+
+    <section class="screen-section">
+      <h3>👥 Хто харчується</h3>
+      <div class="data-card" style="border-left-color:#7e57c2;margin-top:0;">
+        <p style="font-size:.76rem;color:#888;margin:0 0 7px 0;">Зазвичай це налаштовують батьки. Тут можна виправити вручну — наприклад, якщо родина не користується порталом.</p>
+        <select id="k-plan-class" onchange="loadMealPlans()">
+          <option value="">Оберіть клас...</option>
+          <option value="class_1">1 клас</option><option value="class_2">2 клас</option>
+          <option value="class_3">3 клас</option><option value="class_4">4 клас</option>
+          <option value="class_5">5 клас</option><option value="class_6">6 клас</option>
+          <option value="class_7">7 клас</option><option value="class_8">8 клас</option>
+          <option value="class_9">9 клас</option><option value="class_10">10 клас</option>
+          <option value="class_11">11 клас</option>
+        </select>
+        <div id="k-plan-list"><p class="empty-msg">Оберіть клас.</p></div>
+      </div>
+    </section>
+
+    <section class="screen-section">
+      <h3>📊 Статистика за період</h3>
+      <div class="data-card" style="border-left-color:#26a69a;margin-top:0;">
+        <p style="font-size:.76rem;color:#888;margin:0 0 7px 0;">Людино-дні: скільки днів кожна дитина обідала і скільки брала підвечірок. Дні відсутності не рахуються.</p>
+        <div style="display:flex;gap:8px;">
+          <div style="flex:1;min-width:0;"><label for="k-stat-from" style="font-size:.74rem;">Від</label><input type="date" id="k-stat-from"></div>
+          <div style="flex:1;min-width:0;"><label for="k-stat-to" style="font-size:.74rem;">До</label><input type="date" id="k-stat-to"></div>
+        </div>
+        <button onclick="loadMealStats()" style="background:#26a69a;color:#fff;">Порахувати</button>
+        <div id="k-stats"></div>
+      </div>
+    </section>
+
+    <button class="btn-logout" onclick="logoutUser()">Вийти</button>
+    <p class="app-version"></p>
+  </div>
+  <!-- DIRECTOR -->
+  <div id="director-screen" class="panel">
+    <h2 style="color:#2c3e50;">👔 Кабінет Директора</h2>
+
+    <div class="dtab-bar" id="dtab-bar">
+      <button class="dtab on" data-t="ogl"    onclick="switchDirTab('ogl',this)">Огляд</button>
+      <button class="dtab"    data-t="news"   onclick="switchDirTab('news',this)">Новини<span class="dtab-badge" id="dtab-news-badge"></span></button>
+      <button class="dtab"    data-t="uchni"  onclick="switchDirTab('uchni',this)">Учні та батьки</button>
+      <button class="dtab"    data-t="staff"  onclick="switchDirTab('staff',this)">Персонал</button>
+      <button class="dtab"    data-t="rozklad" onclick="switchDirTab('rozklad',this)">Розклад</button>
+      <button class="dtab" data-t="workload" onclick="switchDirTab('workload',this)">Навантаження</button>
+      <button class="dtab"    data-t="stat"   onclick="switchDirTab('stat',this)">Аналітика</button>
+      <button class="dtab"    data-t="meals"  onclick="switchDirTab('meals',this)">🍽 Їжа</button>
+      <button class="dtab"    data-t="nalash" onclick="switchDirTab('nalash',this)">Налаштування</button>
+    </div>
+
+    <section class="screen-section" data-dtab="workload">
+      <h3>👩‍🏫 Навантаження вчителів</h3>
+      <p style="font-size:.83rem;color:#666;">Заняття з чинного розкладу обраного тижня, без гуртків і окремої класної години. Враховуються свята, канікули, заміни й вибрані чергування. Години — тривалість занять, а не ставка вчителя. Проміжки між заняттями включають перерви.</p>
+      <div class="ma-filters">
+        <input type="date" id="d-workload-week" aria-label="Тиждень" onchange="openWorkloadTab()" style="width:auto;">
+        <input type="search" id="d-workload-search" placeholder="Знайти вчителя" aria-label="Знайти вчителя" oninput="renderWorkload()">
+        <button type="button" onclick="openWorkloadTab()">Оновити</button>
+      </div>
+      <p style="font-size:.78rem;color:#777;">Теми перевіряються лише за минулі дати цього тижня, по парі «клас + предмет + дата». Це перевірка заповнення журналу, не висновок про відставання. Для минулих тижнів застосовується поточна версія розкладу.</p>
+      <p id="d-workload-summary" style="font-size:.83rem;font-weight:700;"></p>
+      <div id="d-workload-results"><p class="empty-msg">Відкрийте вкладку для перевірки.</p></div>
+      <div id="d-workload-issues"></div>
+    </section>
+
+    <section class="screen-section" data-dtab="nalash">
+      <h3>💳 Реквізити для оплати</h3>
+      <div class="data-card" style="border-left-color:#2e7d32;background:#f1f8f2;margin-top:0;">
+        <div id="d-pay-settings" class="pay-form"><p class="empty-msg">Завантаження...</p></div>
+      </div>
+    </section>
+
+    <section class="screen-section" data-dtab="meals">
+      <!-- Власне харчування співробітника. Той самий вибір, що й у родин,
+           але без сніданків і підвечірків: кухня їх персоналу не пропонує. -->
+      <div class="data-card" style="border-left-color:#00897b;background:#e0f2f1;margin-top:0;">
+        <h4 style="margin-top:0;color:#00695c;">🍽 Моє харчування</h4>
+        <div class="stm-box"><p class="empty-msg">Завантаження...</p></div>
+      </div>
+    </section>
+
+    <section class="screen-section" data-dtab="ogl">
+      <h3>🚀 Швидкі дії</h3>
+      <div style="display:flex;gap:9px;flex-wrap:wrap;">
+        <button onclick="openVisualMatrixModal('live')" style="flex:1;min-width:170px;background:linear-gradient(135deg,#1abc9c,#16a085);color:#fff;margin-top:0;font-size:.95rem;padding:11px;">🗓️ Розклад</button>
+        <button onclick="openJournalModal('director')" style="flex:1;min-width:170px;background:linear-gradient(135deg,var(--purple),#9b59b6);color:#fff;margin-top:0;font-size:.95rem;padding:11px;">📖 Журнал</button>
+        <button onclick="openChatModal('director')" data-chatbtn="1" style="flex:1;min-width:170px;background:linear-gradient(135deg,#9b59b6,#8e44ad);color:#fff;margin-top:0;font-size:.95rem;padding:11px;">💬 Чат з батьками</button>
+      </div>
+    </section>
+
+    <section class="screen-section" data-dtab="ogl">
+      <h3>📊 Огляд</h3>
+      <div style="display:flex;flex-direction:column;gap:24px;margin-bottom:18px;">
+      <details id="d-overview-materials" class="data-card" style="border-left-color:var(--teal);background:#f0faf8;margin:0;" ontoggle="if(this.open)loadMaterialsAudit()">
+        <summary style="cursor:pointer;font-weight:800;">📚 Підручники та календарне планування</summary>
+        <p style="font-size:.83rem;color:#666;">Перевірка предметів із розкладу та каталогу на поточний навчальний рік. Планування вважається доданим, якщо є теми; це не оцінка повноти плану.</p>
+        <div class="ma-filters">
+          <select id="d-materials-class" aria-label="Клас" onchange="renderMaterialsAudit()"><option value="">Усі класи</option></select>
+          <input id="d-materials-search" type="search" placeholder="Предмет або вчитель" aria-label="Предмет або вчитель" oninput="renderMaterialsAudit()">
+          <label><input type="checkbox" id="d-materials-missing" onchange="renderMaterialsAudit()">Лише незаповнені</label>
+          <button type="button" id="d-materials-refresh" onclick="loadMaterialsAudit()">Оновити</button>
+        </div>
+        <p id="d-materials-summary" style="font-size:.83rem;font-weight:700;"></p>
+        <div id="d-materials-results"><p class="empty-msg">Відкрийте блок, щоб перевірити матеріали.</p></div>
+      </details>
+      <!-- Статистика -->
+      <details id="d-overview-averages" class="data-card" style="border-left-color:var(--purple);background:#fdfafc;margin:0;">
+        <summary style="cursor:pointer;font-weight:800;color:var(--purple);">📈 Середні оцінки</summary>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;margin-bottom:9px;">
+          <select id="d-stat-class" onchange="updateDirectorStatSubjects()" style="flex:1;min-width:110px;">
+            <option value="">Оберіть клас...</option>
+            <option value="class_1">1</option><option value="class_2">2</option><option value="class_3">3</option>
+            <option value="class_4">4</option><option value="class_5">5</option><option value="class_6">6</option>
+            <option value="class_7">7</option><option value="class_8">8</option><option value="class_9">9</option>
+            <option value="class_10">10</option><option value="class_11">11</option>
+          </select>
+          <select id="d-stat-subj" onchange="renderDirectorStats()" style="flex:1;min-width:110px;"><option value="">Спочатку клас</option></select>
+        </div>
+        <div id="d-stat-results"><p class="empty-msg">Оберіть клас та предмет.</p></div>
+      </details>
+      </div>
+      <!-- Дашборд -->
+      <div style="display:flex;gap:9px;margin:16px 0;">
+        <div onclick="toggleHomeworkBreakdown()" title="Показати, хто що задав"
+             style="flex:1;background:#e0f7fa;padding:14px;border-radius:12px;text-align:center;cursor:pointer;">
+          <h4 id="d-hw-title" style="margin:0;color:#00838f;font-size:.82rem;">📚 ДЗ</h4>
+          <p id="d-hw-counter" style="font-size:1.7rem;font-weight:800;color:#00acc1;margin:4px 0;">0</p>
+          <span style="font-size:.68rem;color:#00838f;">натисніть — деталі</span>
+        </div>
+        <div onclick="toggleCommentsBreakdown()" title="Показати, хто що написав"
+             style="flex:1;background:#fce4ec;padding:14px;border-radius:12px;text-align:center;cursor:pointer;">
+          <h4 id="d-com-title" style="margin:0;color:#ad1457;font-size:.82rem;">💬 Коментарів</h4>
+          <p id="d-com-counter" style="font-size:1.7rem;font-weight:800;color:#d81b60;margin:4px 0;">0</p>
+          <span style="font-size:.68rem;color:#ad1457;">натисніть — деталі</span>
+        </div>
+      </div>
+      <div id="d-hw-breakdown" style="display:none;background:#fff;border:1px solid #b2ebf2;border-radius:12px;padding:12px;margin:-6px 0 16px;"></div>
+      <div id="d-com-breakdown" style="display:none;background:#fff;border:1px solid #f8bbd0;border-radius:12px;padding:12px;margin:-6px 0 16px;"></div>
+      <div onclick="toggleWeekBreakdown()" title="Показати, з чого складаються числа"
+           style="background:#fff3e0;padding:14px;border-radius:12px;text-align:center;margin-bottom:16px;cursor:pointer;">
+        <h4 style="margin:0;color:#e65100;font-size:.88rem;">🗓️ Статистика тижня</h4>
+        <div style="display:flex;justify-content:space-around;margin-top:9px;">
+          <div><p id="d-week-late" style="font-size:1.4rem;font-weight:800;color:var(--orange);margin:0;">0</p><span style="font-size:.68rem;color:#888;">запізнень</span></div>
+          <div><p id="d-week-absent" style="font-size:1.4rem;font-weight:800;color:#c0392b;margin:0;">0</p><span style="font-size:.68rem;color:#888;">відсутніх</span></div>
+        </div>
+        <span style="font-size:.68rem;color:#e65100;">натисніть — деталі</span>
+      </div>
+      <div id="d-week-breakdown" style="display:none;background:#fff;border:1px solid #ffe0b2;border-radius:12px;padding:12px;margin:-10px 0 16px;"></div>
+      <div class="data-card" style="border-left-color:var(--red);background:#fdfbfb;margin-top:0;">
+        <h4 id="d-att-header" style="margin-top:0;color:var(--red);">🚨 Відсутні та Запізнення</h4>
+        <ul id="d-unified-att-list" class="list-dash" style="padding-left:0;list-style:none;"><li class="empty-msg">Завантаження...</li></ul>
+      </div>
+      <!-- Басейн і автобус по всій школі -->
+      <div class="data-card" style="border-left-color:#0288d1;background:#f5fbff;">
+        <h4 style="margin-top:0;color:#0277bd;">🏊 Басейн і 🚌 автобус — уся школа</h4>
+        <div id="d-activities"><p class="empty-msg">Завантаження...</p></div>
+      </div>
+    </section>
+
+    <section class="screen-section" data-dtab="rozklad">
+      <h3>🗓️ Розклад та заміни</h3>
+      <!-- SMART MATCHING -->
+      <details data-dtab="rozklad" style="margin-bottom:12px;background:#e8f5e9;padding:14px;border-radius:12px;border:1px solid #a5d6a7;" open>
+        <summary style="font-weight:700;cursor:pointer;color:#1b5e20;font-size:1rem;">🔄 Smart Matching — Підбір на Заміну</summary>
+        <div style="margin-top:13px;">
+          <p style="font-size:.83rem;color:#555;">Система автоматично знаходить вільних учителів з потрібним скілом.</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+            <select id="sm-class" style="flex:1;min-width:110px;border:2px solid #4caf50;margin-top:0;">
+              <option value="">Клас...</option>
+              <option value="class_1">1 Клас</option><option value="class_2">2 Клас</option><option value="class_3">3 Клас</option>
+              <option value="class_4">4 Клас</option><option value="class_5">5 Клас</option><option value="class_6">6 Клас</option>
+              <option value="class_7">7 Клас</option><option value="class_8">8 Клас</option><option value="class_9">9 Клас</option>
+              <option value="class_10">10 Клас</option><option value="class_11">11 Клас</option>
+            </select>
+            <input type="text" id="sm-subject" placeholder="Предмет (напр. Математика)" style="flex:2;min-width:140px;margin-top:0;border:2px solid #4caf50;">
+            <input type="date" id="sm-date" style="flex:1;min-width:110px;margin-top:0;border:2px solid #4caf50;">
+            <input type="text" id="sm-time" placeholder="09:00 - 09:45" style="flex:1;min-width:100px;margin-top:0;border:2px solid #4caf50;">
+          </div>
+          <button onclick="findSubstitute()" style="background:#1b5e20;color:#fff;padding:11px;margin-top:10px;">🔍 Знайти кандидатів</button>
+          <div id="sm-results" style="margin-top:12px;"></div>
+        </div>
+      </details>
+      <!-- Скіли вчителів -->
+      <details data-dtab="staff" style="margin-bottom:12px;background:#e3f2fd;padding:14px;border-radius:12px;border:1px solid #90caf9;">
+        <summary style="font-weight:700;cursor:pointer;color:#0d47a1;font-size:1rem;">🧠 Матриця скілів вчителів</summary>
+        <div style="margin-top:13px;">
+          <p style="font-size:.83rem;color:#555;">Призначайте компетенції (скіли) вчителям — які предмети вони можуть вести на заміні.</p>
+          <select id="d-skills-teacher" style="margin-top:8px;border:2px solid #90caf9;"><option value="">-- Оберіть вчителя --</option></select>
+          <div id="d-skills-current" style="margin-top:8px;min-height:30px;"></div>
+          <div style="display:flex;gap:8px;margin-top:8px;">
+            <input type="text" id="d-skill-input" placeholder="Додати предмет (напр. Фізика)" style="flex:2;margin-top:0;border:2px solid #90caf9;">
+            <button onclick="addTeacherSkill()" style="flex:1;margin-top:0;background:#0d47a1;color:#fff;padding:10px 8px;font-size:.85rem;">+ Додати</button>
+          </div>
+          <button onclick="saveTeacherSkills()" style="background:#0d47a1;color:#fff;padding:10px;margin-top:8px;font-size:.88rem;">💾 Зберегти скіли</button>
+        </div>
+      </details>
+      <!-- Конструктор -->
+      <details data-dtab="rozklad" style="margin-bottom:12px;background:#e0f2f1;padding:14px;border-radius:12px;border:1px solid #1abc9c;" open>
+        <summary style="font-weight:700;cursor:pointer;color:var(--teal);font-size:1rem;">🛠️ Конструктор Розкладу (Чернетки)</summary>
+        <div style="margin-top:13px;">
+          <div id="drafts-list-container"><p class="empty-msg">Завантаження...</p></div>
+          <div style="display:flex;gap:9px;margin-top:12px;">
+            <input type="text" id="new-draft-name" placeholder="Назва (напр. 2026-2027)" style="flex:2;margin-top:0;">
+            <button onclick="createNewDraft()" style="flex:1;margin-top:0;background:var(--teal);color:#fff;">+ Створити</button>
+          </div>
+        </div>
+      </details>
+    </section>
+
+    <!-- ЗВІРКА ДОСТУПІВ.
+         Портал знає свої списки, Firebase — свої, і донедавна зіставити
+         їх не було чим. Через це один випадок «людина є в Authentication,
+         а в порталі її немає» розбирали цілий день. Тепер це видно
+         одним натисканням. -->
+    <section class="screen-section half" data-dtab="staff">
+      <h3>🔑 Доступи</h3>
+      <div class="data-card" style="border-left-color:#5c6bc0;background:#f5f6fd;margin-top:0;">
+        <p class="cal-hint">Порівнює акаунти входу зі списками школи. Показує тих,
+           хто ще жодного разу не заходив, і акаунти, яких у списках немає.</p>
+        <button type="button" id="aa-run" onclick="runAccessAudit()"
+                style="background:#5c6bc0;color:#fff;">🔍 Звірити доступи</button>
+        <div id="aa-out" style="margin-top:11px;"></div>
+      </div>
+    </section>
+
+    <section class="screen-section half">
+      <h3>👥 Персонал</h3>
+      <!-- Staff Management -->
+      <details data-dtab="staff" style="margin-bottom:12px;background:#fff;padding:14px;border-radius:12px;border:1px solid #ddd;">
+        <summary style="font-weight:700;cursor:pointer;color:#c0392b;">⚙️ Управління персоналом</summary>
+        <div style="margin-top:13px;">
+          <input type="email" id="new-staff-email" placeholder="Email співробітника">
+          <label style="font-size:.8rem;color:#777;margin-top:8px;">Ролі (можна обрати кілька — Ctrl/Cmd + клік):</label>
+          <select id="new-staff-role" multiple size="6" style="margin-top:4px;">
+            <option value="teacher">👨‍🏫 Вчитель</option><option value="art_school_teacher">🎨 Вчитель школи мистецтв</option>
+            <option value="class_teacher">🎓 Класний керівник</option>
+            <option value="director">👔 Директор</option><option value="administrator">🛡️ Секретар (Адміністратор)</option><option value="kitchen">🍽️ Кухня</option>
+            <option value="master_class_teacher">🔧 Майстер-класний керівник (налагодження)</option>
+          </select>
+          <div style="font-size:.7rem;color:#b71c1c;margin-top:5px;line-height:1.4;">
+            🔧 Майстер-класний керівник — тимчасова роль для налагодження: права класного
+            керівника в усіх класах. Чужих переписок не бачить. Зніміть її перед передачею порталу школі.
+          </div>
+          <button style="background:#c0392b;padding:8px;margin-top:9px;color:#fff;" onclick="grantStaffRole()">Надати доступ</button>
+          <div style="margin-top:14px;border-top:1px dashed #ddd;padding-top:12px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <b style="font-size:.88rem;color:#c0392b;">👥 Список персоналу</b>
+              <button onclick="loadStaffList()" style="width:auto;padding:5px 11px;margin:0;font-size:.78rem;background:#f0f0f0;color:#333;">🔄 Оновити</button>
+            </div>
+            <div id="staff-list" style="margin-top:8px;"><p class="empty-msg">Натисніть «Оновити».</p></div>
+          </div>
+        </div>
+      </details>
+      <!-- Class Teacher Assignment -->
+            <!-- Календарне планування: сама картка лежить у кабінеті вчителя,
+           для директора вона переїжджає сюди (curriculum.js) -->
+      <details data-dtab="rozklad" style="margin-bottom:12px;background:#ede7f6;padding:14px;border-radius:12px;border:1px solid #b39ddb;" ontoggle="if(this.open)fillImportDest()">
+        <summary style="font-weight:700;cursor:pointer;color:#4527a0;font-size:.95rem;">📄 Імпорт розкладу з Word</summary>
+        <div style="margin-top:13px;">
+          <p style="font-size:.78rem;color:#555;">Файл .docx з однією таблицею: перший рядок — назви днів, перша колонка — номери уроків.</p>
+          <label style="font-size:.8rem;color:#4527a0;font-weight:600;">Клас:</label>
+          <select id="si-class" onchange="onSiClassChange()" style="margin-top:4px;">
+            <option value="class_1">1 клас</option><option value="class_2">2 клас</option>
+            <option value="class_3">3 клас</option><option value="class_4">4 клас</option>
+            <option value="class_5">5 клас</option><option value="class_6">6 клас</option>
+            <option value="class_7">7 клас</option><option value="class_8">8 клас</option>
+            <option value="class_9">9 клас</option><option value="class_10">10 клас</option>
+            <option value="class_11">11 клас</option>
+          </select>
+          <label style="font-size:.8rem;color:#4527a0;font-weight:600;">Куди зберегти:</label>
+          <select id="si-dest" style="margin-top:4px;"></select>
+          <label class="si-drop">
+            <input type="file" id="si-file" accept=".docx" onchange="handleScheduleFile(event)">
+            <span id="si-drop-text">📄 Натисніть або перетягніть файл .docx</span>
+          </label>
+          <div id="si-preview"></div>
+        </div>
+      </details>
+      <details data-dtab="rozklad" style="margin-bottom:12px;background:#f3e5f5;padding:14px;border-radius:12px;border:1px solid #ce93d8;" ontoggle="if(this.open)openAltCard()">
+        <summary style="font-weight:700;cursor:pointer;color:#6a1b9a;font-size:.95rem;">🔁 Чергування уроків</summary>
+        <div style="margin-top:13px;">
+          <p style="font-size:.78rem;color:#555;">Уроки, що йдуть через тиждень («Музичне / Фізичне»). Позначте, що саме буде — батьки побачать конкретну назву.</p>
+          <div id="alt-slot-dir"></div>
+        </div>
+      </details>
+      <details data-dtab="rozklad" style="margin-bottom:12px;background:#fce4ec;padding:14px;border-radius:12px;border:1px solid #f48fb1;" ontoggle="if(this.open)openSubjectsCatalog()">
+        <summary style="font-weight:700;cursor:pointer;color:#ad1457;font-size:.95rem;">📗 Предмети класу й учителі</summary>
+        <div style="margin-top:13px;">
+          <p style="font-size:.78rem;color:#555;">Предмети класу на навчальний рік і вчителі, які їх ведуть. У конструкторі розкладу предмет обирається саме з цього списку, а вчитель підставляється сам.</p>
+          <label style="font-size:.8rem;color:#ad1457;font-weight:600;">Навчальний рік:</label>
+          <select id="sc-year" onchange="renderSubjectsCatalog()" style="margin-top:4px;"></select>
+          <label style="font-size:.8rem;color:#ad1457;font-weight:600;">Клас:</label>
+          <select id="sc-class" onchange="renderSubjectsCatalog()" style="margin-top:4px;"></select>
+          <div id="sc-body"></div>
+        </div>
+      </details>
+      <details data-dtab="rozklad" style="margin-bottom:12px;background:#e8f5e9;padding:14px;border-radius:12px;border:1px solid #a5d6a7;" ontoggle="if(this.open)openClubsCatalog()">
+        <summary style="font-weight:700;cursor:pointer;color:#2e7d32;font-size:.95rem;">🎨 Гуртки класу й учителі</summary>
+        <div style="margin-top:13px;">
+          <p style="font-size:.78rem;color:#555;">Гуртки на навчальний рік і вчителі, які їх ведуть. У конструкторі для типу «Гурток» використовується цей список. Призначення поточного року додає вчителю доступ до гуртка. Зміна каталогу не переписує вже збережений розклад.</p>
+          <label for="cc-year">Навчальний рік:</label><select id="cc-year" onchange="renderClubsCatalog()"></select>
+          <label for="cc-class">Клас:</label><select id="cc-class" onchange="renderClubsCatalog()"></select>
+          <div id="cc-body"></div>
+        </div>
+      </details>
+      <details data-dtab="rozklad" style="margin-bottom:12px;background:#fce4ec;padding:14px;border-radius:12px;border:1px solid #f48fb1;" ontoggle="if(this.open)openRenameSubject()">
+        <summary style="font-weight:700;cursor:pointer;color:#ad1457;font-size:.95rem;">✏️ Перейменувати предмет</summary>
+        <div style="margin-top:13px;">
+          <p style="font-size:.78rem;color:#555;">Назва зміниться в розкладі й одночасно в оцінках, домашніх завданнях, планах і всьому іншому. Дані не втрачаються — вони переїжджають під нову назву.</p>
+          <label style="font-size:.8rem;color:#ad1457;font-weight:600;">Де перейменувати:</label>
+          <select id="rs-scope" onchange="renderRenameSubject()" style="margin-top:4px;"></select>
+          <div id="rs-body"></div>
+        </div>
+      </details>
+      <details data-dtab="rozklad" style="margin-bottom:12px;background:#e8eaf6;padding:14px;border-radius:12px;border:1px solid #9fa8da;" ontoggle="if(this.open)openBreaksCard()">
+        <summary style="font-weight:700;cursor:pointer;color:#283593;font-size:.95rem;">⏱ Перерви класу</summary>
+        <div style="margin-top:13px;">
+          <p style="font-size:.78rem;color:#555;">Час перерв береться з розкладу дзвінків — це проміжки між уроками. Тут задаються лише назви й одним натисканням розставляються в усі дні.</p>
+          <label style="font-size:.8rem;color:#283593;font-weight:600;">Клас:</label>
+          <select id="bk-class" onchange="renderBreaksCard()" style="margin-top:4px;"></select>
+          <label style="font-size:.8rem;color:#283593;font-weight:600;">Куди розставляти:</label>
+          <select id="bk-dest" style="margin-top:4px;"></select>
+          <div id="bk-body"></div>
+        </div>
+      </details>
+      <div id="curr-dir-slot" data-dtab="rozklad"></div>
+
+<details data-dtab="staff" style="background:#e0f7fa;padding:14px;border-radius:12px;border:1px solid #00acc1;">
+        <summary style="font-weight:700;cursor:pointer;color:#00838f;">🔐 Матриця доступу вчителів</summary>
+        <div style="margin-top:13px;">
+          <select id="d-acc-email-select" style="margin-top:8px;border:2px solid #00acc1;"><option value="">-- Оберіть вчителя --</option></select>
+          <select id="d-acc-class" style="margin-top:8px;" onchange="loadDirectorMatrixSubjects()">
+            <option value="">-- Оберіть клас --</option>
+            <option value="class_1">1 Клас</option><option value="class_2">2 Клас</option><option value="class_3">3 Клас</option>
+            <option value="class_4">4 Клас</option><option value="class_5">5 Клас</option><option value="class_6">6 Клас</option>
+            <option value="class_7">7 Клас</option><option value="class_8">8 Клас</option><option value="class_9">9 Клас</option>
+            <option value="class_10">10 Клас</option><option value="class_11">11 Клас</option>
+          </select>
+          <label style="margin-top:13px;">Дозволені предмети:</label>
+          <select id="d-acc-subjects" multiple style="height:130px;margin-top:4px;"><option value="" disabled>Оберіть клас...</option></select>
+          <div id="d-acc-subj-src" style="display:none;font-size:.72rem;color:#78909c;margin-top:5px;line-height:1.35;"></div>
+          <button style="background:#00838f;padding:11px;margin-top:13px;color:#fff;" onclick="grantTeacherAccess()">💾 Зберегти доступ</button>
+        </div>
+      </details>
+      <details data-dtab="staff" style="background:#fff3e0;padding:14px;border-radius:12px;border:1px solid #ffb74d;">
+        <summary style="font-weight:700;cursor:pointer;color:#e65100;font-size:.95rem;">🎓 Призначення класних керівників</summary>
+        <div style="margin-top:13px;">
+          <p style="font-size:.83rem;color:#555;">Кл. керівник може завантажувати календарне планування для свого класу.</p>
+          <select id="ct-class-select" style="margin-top:8px;border:2px solid #ff9800;">
+            <option value="">-- Оберіть клас --</option>
+            <option value="class_1">1 Клас</option><option value="class_2">2 Клас</option>
+            <option value="class_3">3 Клас</option><option value="class_4">4 Клас</option>
+            <option value="class_5">5 Клас</option><option value="class_6">6 Клас</option>
+            <option value="class_7">7 Клас</option><option value="class_8">8 Клас</option>
+            <option value="class_9">9 Клас</option><option value="class_10">10 Клас</option>
+            <option value="class_11">11 Клас</option>
+          </select>
+          <select id="ct-teacher-select" style="margin-top:8px;border:2px solid #ff9800;">
+            <option value="">-- Оберіть вчителя --</option>
+          </select>
+          <div id="ct-current-info" style="margin-top:8px;font-size:.83rem;color:#666;padding:8px;background:#fff;border-radius:7px;display:none;"></div>
+          <button onclick="assignClassTeacher()" style="background:#e65100;color:#fff;padding:11px;margin-top:10px;">💾 Призначити кл. керівника</button>
+        </div>
+      </details>
+    </section>
+
+    <section class="screen-section">
+      <!-- Згоди батьків: екскурсії, фотозйомка тощо -->
+      <details data-dtab="uchni" style="margin-bottom:12px;background:#f1f8e9;padding:14px;border-radius:12px;border:1px solid #c5e1a5;" ontoggle="if(this.open)loadConsents()">
+        <summary style="font-weight:700;cursor:pointer;color:#33691e;font-size:.95rem;">✍️ Згоди батьків</summary>
+        <div style="margin-top:13px;">
+          <div id="cs-list"><p class="empty-msg">Завантаження...</p></div>
+          <div style="margin-top:12px;border-top:1px dashed #c5e1a5;padding-top:11px;">
+            <b style="font-size:.85rem;color:#33691e;">➕ Новий запит на згоду</b>
+            <input type="text" id="cs-title" placeholder="Напр. Екскурсія до музею 12 грудня" style="margin-top:6px;">
+            <textarea id="cs-text" rows="2" placeholder="Деталі: час, місце, вартість, що взяти з собою" style="margin-top:5px;"></textarea>
+            <label style="font-size:.78rem;color:#666;margin-top:7px;">Відповісти до:</label>
+            <input type="date" id="cs-deadline" style="margin-top:3px;">
+            <label style="display:flex;align-items:center;gap:7px;margin-top:8px;font-size:.82rem;">
+              <input type="checkbox" id="cs-all" onchange="toggleConsentAll()" style="width:17px;height:17px;margin:0;"> Усі класи
+            </label>
+            <select id="cs-classes" multiple size="5" style="margin-top:5px;">
+              <option value="class_1">1 Клас</option><option value="class_2">2 Клас</option><option value="class_3">3 Клас</option>
+              <option value="class_4">4 Клас</option><option value="class_5">5 Клас</option><option value="class_6">6 Клас</option>
+              <option value="class_7">7 Клас</option><option value="class_8">8 Клас</option><option value="class_9">9 Клас</option>
+              <option value="class_10">10 Клас</option><option value="class_11">11 Клас</option>
+            </select>
+            <button onclick="createConsent()" style="background:#33691e;color:#fff;margin-top:8px;">➕ Створити запит</button>
+          </div>
+        </div>
+      </details>
+      <!-- Відсутність вчителів і заміни на день -->
+      <details data-dtab="staff" style="margin-bottom:12px;background:#fff4e5;padding:14px;border-radius:12px;border:1px solid #ffcc80;" ontoggle="if(this.open){fillAbsenceTeachers();loadAbsenceDay();}">
+        <summary style="font-weight:700;cursor:pointer;color:#e65100;font-size:.95rem;">🧑‍🏫 Відсутність вчителів і заміни</summary>
+        <div style="margin-top:13px;">
+          <input type="date" id="sa-date" onchange="loadAbsenceDay()" style="border:2px solid #ffb74d;margin-top:0;">
+          <div id="sa-list" style="margin-top:10px;"><p class="empty-msg">Оберіть дату.</p></div>
+          <div style="margin-top:12px;border-top:1px dashed #ffcc80;padding-top:11px;">
+            <b style="font-size:.85rem;color:#e65100;">➕ Відмітити відсутнього</b>
+            <select id="sa-teacher" style="margin-top:6px;"></select>
+            <select id="sa-reason" style="margin-top:5px;">
+              <option value="хвороба">Хвороба</option>
+              <option value="відрядження">Відрядження</option>
+              <option value="навчання">Навчання / курси</option>
+              <option value="за власний рахунок">За власний рахунок</option>
+              <option value="інша причина">Інша причина</option>
+            </select>
+            <input type="text" id="sa-note" placeholder="Примітка (необов'язково)" style="margin-top:5px;">
+            <button onclick="markStaffAbsent()" style="background:#e65100;color:#fff;margin-top:8px;">➕ Відмітити</button>
+          </div>
+        </div>
+      </details>
+      <!-- Пошук по всій школі: учні та батьки -->
+      <details data-dtab="uchni" style="margin-bottom:12px;background:#eef7ff;padding:14px;border-radius:12px;border:1px solid #b3d9f2;">
+        <summary style="font-weight:700;cursor:pointer;color:#0d47a1;font-size:.95rem;">🔎 Пошук по школі</summary>
+        <div style="margin-top:13px;">
+          <input type="search" id="gs-query" placeholder="Прізвище учня, ПІБ батьків, email або телефон" oninput="runGlobalSearch()">
+          <div style="display:flex;justify-content:flex-end;margin-top:5px;">
+            <button onclick="resetSearchIndex()" style="width:auto;margin:0;padding:3px 9px;font-size:.72rem;background:#eceff1;color:#555;">↻ Оновити індекс</button>
+          </div>
+          <div id="gs-results" style="margin-top:7px;max-height:44vh;overflow-y:auto;"><p class="empty-msg">Введіть щонайменше 2 символи.</p></div>
+        </div>
+      </details>
+      <!-- Статистика відвідуваності за місяць -->
+      <details data-dtab="stat" style="margin-bottom:12px;background:#fdf3f2;padding:14px;border-radius:12px;border:1px solid #f5c6cb;" ontoggle="if(this.open){document.getElementById('att-month').value=document.getElementById('att-month').value||new Date().toISOString().slice(0,7);loadAttendanceStats();}">
+        <summary style="font-weight:700;cursor:pointer;color:#b71c1c;font-size:.95rem;">📉 Статистика відвідуваності</summary>
+        <div style="margin-top:13px;">
+          <input type="month" id="att-month" onchange="loadAttendanceStats()" style="margin-top:0;">
+          <p style="font-size:.76rem;color:#888;margin:6px 0 0 0;">
+            Кілька уроків одного дня рахуються як один пропуск дня.
+          </p>
+          <div id="att-stats" style="margin-top:9px;"><p class="empty-msg">Завантаження...</p></div>
+        </div>
+      </details>
+      <!-- Журнал дій: хто, що і коли змінив -->
+      <details data-dtab="stat" style="margin-bottom:12px;background:#eceff1;padding:14px;border-radius:12px;border:1px solid #b0bec5;" ontoggle="if(this.open){fillAuditActions();loadAuditLog();}">
+        <summary style="font-weight:700;cursor:pointer;color:#37474f;font-size:.95rem;">🕓 Журнал дій</summary>
+        <div style="margin-top:13px;">
+          <p style="font-size:.78rem;color:#666;margin:0 0 8px 0;">
+            Хто і коли змінював оцінки, відмітки, списки. Записи зберігаються помісячно.
+          </p>
+          <div style="display:flex;gap:7px;flex-wrap:wrap;">
+            <input type="month" id="audit-month" onchange="loadAuditLog()" style="flex:1;min-width:130px;margin-top:0;">
+            <select id="audit-action" onchange="loadAuditLog()" style="flex:1.4;min-width:150px;margin-top:0;">
+              <option value="">— усі дії —</option>
+            </select>
+          </div>
+          <input type="search" id="audit-search" placeholder="Пошук: учень, предмет, email..." oninput="loadAuditLog()" style="margin-top:6px;">
+          <div id="audit-list" style="margin-top:9px;max-height:52vh;overflow-y:auto;"><p class="empty-msg">Завантаження...</p></div>
+        </div>
+      </details>
+      <!-- AI-чернетка оголошення для батьків -->
+      <div data-dtab="news" style="margin-bottom:12px;">
+        <button onclick="openNewsComposer()" style="background:#00838f;color:#fff;margin:0 0 10px 0;">➕ Нове оголошення</button>
+        <div id="d-news-feed" class="nw-feed"><p class="empty-msg">Завантаження...</p></div>
+      </div>
+      <details data-dtab="news" style="margin-bottom:12px;background:#fff8e1;padding:14px;border-radius:12px;border:1px solid #ffe0a3;">
+        <summary style="font-weight:700;cursor:pointer;color:#8a6d1f;font-size:.95rem;">📣 Оголошення для батьків (чернетка)</summary>
+        <div style="margin-top:13px;">
+          <p style="font-size:.8rem;color:#666;margin:0 0 7px 0;">
+            Напишіть коротко суть — система оформить це у зрозуміле повідомлення.
+            Дати, час і місце зберігаються точно; нічого зайвого не вигадується.
+          </p>
+          <textarea id="d-ann-note" rows="3" placeholder="Напр.: 12 грудня о 18:00 батьківські збори 5 класу, кабінет 24, просимо бути"></textarea>
+          <div class="ai-hw-row">
+            <button type="button" id="btn-ai-ann" onclick="announcementAI()">✨ Скласти оголошення</button>
+            <span class="ai-hw-note">чернетка — перевірте перед розсилкою</span>
+          </div>
+          <p id="ai-ann-msg" class="ai-hw-msg" style="display:none;"></p>
+          <textarea id="d-ann-out" rows="6" style="display:none;margin-top:8px;" placeholder="Тут з'явиться текст"></textarea>
+          <button type="button" id="btn-ann-copy" onclick="copyAnnouncement()" style="display:none;background:#8a6d1f;color:#fff;margin-top:7px;">📋 Скопіювати текст</button>
+        </div>
+      </details>
+      <h3>🎓 Учні</h3>
+      <!-- Один список замість двох: учні класу, а навпроти кожного — його
+           батьки з контактами. Дані про батьків зберігаються «навпаки»
+           (ключ — їхня пошта), тому тут показуємо перевернутий вигляд. -->
+      <!-- Завантаження учнів і батьків із таблиці школи. Стоїть поруч зі
+           списком учнів: це той самий список, тільки заповнюється не руками. -->
+      <details data-dtab="uchni" style="margin-bottom:12px;background:#f4f9ff;padding:14px;border-radius:12px;border:1px solid #b3d4f5;" ontoggle="if(this.open)openStudentsImport()">
+        <summary style="font-weight:700;cursor:pointer;color:#2b5aa8;font-size:.95rem;">📥 Завантажити учнів і батьків із таблиці</summary>
+        <div style="margin-top:13px;">
+          <p style="font-size:.79rem;color:#555;line-height:1.5;">Файл <b>.xlsx</b> з колонками
+            <b>ПІП учня</b>, <b>Клас</b>, <b>ПІП батьків</b>, <b>Електронна пошта</b>.
+            Колонки шукаються за назвою, тож порядок і зайві стовпці не заважають.<br>
+            Якщо батьків двоє, а пошта одна — вона дістанеться першому; другий лишиться без доступу,
+            і портал це покаже. Усіх додаємо опікунами: батьки самі вкажуть у профілі, хто мати, хто батько.</p>
+          <input type="file" id="si-file" accept=".xlsx,.xls" onchange="handleStudentsFile(this)" style="margin-top:8px;">
+          <div id="si-body" style="margin-top:12px;"><p class="empty-msg">Оберіть файл .xlsx зі списком учнів.</p></div>
+        </div>
+      </details>
+      <details data-dtab="uchni" style="margin-bottom:12px;background:#f9f4ff;padding:14px;border-radius:12px;border:1px solid #ce93d8;" ontoggle="if(this.open){loadParentsOverview();loadParentLinkStudents();}">
+        <summary style="font-weight:700;cursor:pointer;color:#7b1fa2;font-size:.95rem;">👨‍🎓 Учні класу та їхні батьки</summary>
+        <div style="margin-top:13px;">
+          <select id="po-class" onchange="loadParentsOverview();loadParentLinkStudents()" style="border:2px solid #ce93d8;">
+            <option value="">-- Оберіть клас --</option>
+            <option value="class_1">1 Клас</option><option value="class_2">2 Клас</option><option value="class_3">3 Клас</option>
+            <option value="class_4">4 Клас</option><option value="class_5">5 Клас</option><option value="class_6">6 Клас</option>
+            <option value="class_7">7 Клас</option><option value="class_8">8 Клас</option><option value="class_9">9 Клас</option>
+            <option value="class_10">10 Клас</option><option value="class_11">11 Клас</option>
+          </select>
+          <div id="po-list" style="margin-top:9px;"><p class="empty-msg">Оберіть клас.</p></div>
+          <!-- Директор може прив'язувати батьків у будь-якому класі -->
+          <div style="margin-top:13px;border-top:1px dashed #ce93d8;padding-top:11px;">
+            <b style="font-size:.85rem;color:#7b1fa2;">➕ Прив'язати батьків до учня</b>
+            <p style="font-size:.76rem;color:#888;margin:4px 0 7px 0;">
+              Якщо в цих батьків уже є діти в школі — новий запис додасться до наявних,
+              нічого не зітреться.
+            </p>
+            <select id="pl-student" style="margin-top:5px;border:1px solid #ce93d8;"><option value="">Спочатку оберіть клас</option></select>
+            <select id="pl-role" style="margin-top:5px;border:1px solid #ce93d8;">
+              <option value="mother">👩 Мати</option><option value="father">👨 Батько</option><option value="guardian">🛡️ Опікун</option>
+            </select>
+            <input type="email" id="pl-email" placeholder="Email батьків" style="margin-top:5px;" autocapitalize="none" spellcheck="false">
+            <button onclick="directorLinkParent()" style="background:var(--purple);color:#fff;margin-top:8px;">🔗 Прив'язати</button>
+          </div>
+          <div style="margin-top:12px;border-top:1px dashed #ce93d8;padding-top:11px;">
+            <b style="font-size:.85rem;color:#1b5e20;">➕ Додати учня до класу</b>
+            <input type="text" id="ds-new-name" placeholder="Прізвище та Ім'я" style="margin-top:6px;">
+            <input type="email" id="ds-new-email" placeholder="Email учня (необов'язково — для власного входу)" style="margin-top:5px;" autocapitalize="none" spellcheck="false">
+            <button onclick="directorAddStudent()" style="background:#1b5e20;color:#fff;margin-top:8px;">➕ Додати</button>
+          </div>
+        </div>
+          <div style="margin-top:12px;border-top:1px dashed #ce93d8;padding-top:11px;">
+            <b style="font-size:.85rem;color:#b71c1c;">🔍 Перевірка на тезок</b>
+            <p style="font-size:.76rem;color:#888;margin:4px 0 6px 0;">Оцінки й відвідуваність зберігаються за іменем учня. Двоє з однаковим іменем в одному класі — це один спільний запис.</p>
+            <button onclick="findDuplicateStudents()" style="background:#fff;color:#b71c1c;border:1px solid #ef9a9a;">Перевірити всі класи</button>
+            <div id="d-dup-result" style="display:none;margin-top:8px;"></div>
+          </div>
+          <div style="margin-top:12px;border-top:1px dashed #ce93d8;padding-top:11px;">
+            <b style="font-size:.85rem;color:#00838f;">🆔 Перехід на постійні ідентифікатори</b>
+            <p style="font-size:.76rem;color:#888;margin:4px 0 6px 0;">Показує, скільки записів прив'язано до імені учня і чи всі імена збігаються зі списками класів. Нічого не змінює — це підготовка до переходу.</p>
+            <button onclick="auditStudentKeys()" style="background:#fff;color:#00838f;border:1px solid #80deea;">Порахувати</button>
+            <button onclick="wipeLegacyStudentKeys()" style="background:#fff;color:#b71c1c;border:1px solid #ef9a9a;">🗑️ Стерти старі записи за іменем</button>
+            <div id="d-idmig-result" style="display:none;margin-top:8px;"></div>
+          </div>
+
+      </details>
+      <!-- Переведення одного учня (перехід у паралель / інший клас серед року) -->
+      <details data-dtab="uchni" style="margin-bottom:12px;background:#f9f4ff;padding:14px;border-radius:12px;border:1px solid #ce93d8;" ontoggle="if(this.open)loadTransferClasses()">
+        <summary style="font-weight:700;cursor:pointer;color:#7b1fa2;font-size:.95rem;">↔️ Перевести учня в інший клас</summary>
+        <div style="margin-top:13px;">
+          <p style="font-size:.83rem;color:#555;">Оцінки та відвідуваність за попередній клас залишаються в архіві того класу — переноситься лише сам учень і прив'язки батьків.</p>
+          <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:8px;">
+            <select id="tr-from-class" onchange="loadTransferStudents()" style="flex:1;min-width:120px;margin-top:0;border:2px solid #ce93d8;">
+              <option value="">Із класу...</option>
+              <option value="class_1">1 Клас</option><option value="class_2">2 Клас</option><option value="class_3">3 Клас</option>
+              <option value="class_4">4 Клас</option><option value="class_5">5 Клас</option><option value="class_6">6 Клас</option>
+              <option value="class_7">7 Клас</option><option value="class_8">8 Клас</option><option value="class_9">9 Клас</option>
+              <option value="class_10">10 Клас</option><option value="class_11">11 Клас</option>
+            </select>
+            <select id="tr-student" style="flex:2;min-width:150px;margin-top:0;border:2px solid #ce93d8;"><option value="">Спочатку клас</option></select>
+            <select id="tr-to-class" style="flex:1;min-width:120px;margin-top:0;border:2px solid #ce93d8;">
+              <option value="">У клас...</option>
+              <option value="class_1">1 Клас</option><option value="class_2">2 Клас</option><option value="class_3">3 Клас</option>
+              <option value="class_4">4 Клас</option><option value="class_5">5 Клас</option><option value="class_6">6 Клас</option>
+              <option value="class_7">7 Клас</option><option value="class_8">8 Клас</option><option value="class_9">9 Клас</option>
+              <option value="class_10">10 Клас</option><option value="class_11">11 Клас</option>
+            </select>
+          </div>
+          <button onclick="transferStudent()" style="background:var(--purple);color:#fff;padding:11px;margin-top:10px;">↔️ Перевести учня</button>
+          <div id="tr-result" style="margin-top:10px;"></div>
+        </div>
+      </details>
+      <!-- Річний перехід усієї школи -->
+            <div data-dtab="nalash" style="margin-bottom:12px;background:#f7f9fa;padding:14px;border-radius:12px;border:1px solid #e0e6e8;">
+        <b style="font-size:.9rem;color:#37474f;">🔔 Сповіщення</b>
+        <p style="font-size:.76rem;color:#888;margin:5px 0 8px 0;">Перевіряє ланцюжок по кроках і надсилає тестове сповіщення вам. Нічого не розсилає іншим.</p>
+        <button onclick="checkNotifySetup()" style="background:#fff;color:#00838f;border:1px solid #80deea;">🔍 Перевірити сповіщення</button>
+        <div id="k-notify-info-2" style="display:none;"></div>
+      </div>
+      <div data-dtab="nalash" style="margin-bottom:12px;background:#f7f9fa;padding:14px;border-radius:12px;border:1px solid #e0e6e8;">
+        <b style="font-size:.9rem;color:#37474f;">📇 Довідники: контакти для чату та дні народження</b>
+        <p style="font-size:.76rem;color:#888;margin:5px 0 8px 0;">Батьки й учителі не бачать списку користувачів школи — і не повинні. Щоб їм було з кого обирати в чаті, кожен публікує про себе імʼя, роль і класи при вході. Ця кнопка заповнює довідник за всіх одразу, а заразом переносить дні народження з карток учнів у відкритий класу вузол — потрібна один раз після оновлення.</p>
+        <button onclick="rebuildContactDirs()" style="background:#fff;color:#00838f;border:1px solid #80deea;">📇 Заповнити довідник</button>
+        <div id="d-dirs-info" style="display:none;font-size:.8rem;margin-top:8px;"></div>
+      </div>
+<details data-dtab="nalash" style="background:#e8f5e9;padding:14px;border-radius:12px;border:1px solid #a5d6a7;">
+        <summary style="font-weight:700;cursor:pointer;color:#1b5e20;font-size:.95rem;">🎓 Перевести школу на наступний навчальний рік</summary>
+        <div style="margin-top:13px;">
+          <div style="background:#fff3cd;border:1px solid #ffc107;border-radius:12px;padding:10px 14px;font-size:.83rem;color:#856404;">
+            ⚠️ <b>Незворотна операція.</b> Усі учні переходять на клас вище (1→2, 2→3 … 10→11), а 11 клас випускається в архів. Оцінки, відвідуваність і коментарі залишаються в архіві своїх класів — переносяться лише списки учнів і прив'язки акаунтів.
+          </div>
+          <button onclick="previewYearRollover()" style="background:#1b5e20;color:#fff;padding:11px;margin-top:10px;">🔍 Переглянути зміни</button>
+          <div id="yr-preview" style="margin-top:12px;"></div>
+        </div>
+      </details>
+    </section>
+
+    <section class="screen-section half">
+      <h3>📅 Навчальний рік</h3>
+      <!-- PHASE 1: Академічний рік -->
+      <details data-dtab="nalash" style="margin-bottom:12px;background:#fff8e1;padding:14px;border-radius:12px;border:1px solid #ffe0b2;" ontoggle="if(this.open)loadAcademicYear()">
+        <summary style="font-weight:700;cursor:pointer;color:#e65100;font-size:.95rem;">📅 Навчальний рік <span id="ay-year-label" style="font-weight:400;color:#888;font-size:.8rem;"></span></summary>
+          <label style="font-size:.8rem;color:#555;">Навчальний рік:</label>
+          <select id="ay-year-select" onchange="switchAcademicYear()" style="margin-top:4px;"></select>
+          <p style="font-size:.72rem;color:#78909c;margin:5px 0 0;line-height:1.35;">Свята й канікули зберігаються всередині обраного року. Якщо календар порожній — імовірно, дані внесені в інший рік: оберіть його тут.</p>
+        <div style="margin-top:13px;">
+          <h4 style="margin:0 0 7px 0;color:#e65100;font-size:.86rem;">Семестри</h4>
+          <div id="ay-semesters-list"></div>
+          <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:8px;">
+            <input type="text" id="ay-sem-name" placeholder="Назва (напр. I семестр)" style="flex:2;min-width:140px;margin-top:0;">
+            <input type="date" id="ay-sem-start" style="flex:1;min-width:120px;margin-top:0;">
+            <input type="date" id="ay-sem-end" style="flex:1;min-width:120px;margin-top:0;">
+            <button onclick="addSemester()" style="flex:1;min-width:100px;margin-top:0;background:#e65100;color:#fff;">+ Додати</button>
+          </div>
+          <h4 style="margin:16px 0 7px 0;color:#e65100;font-size:.86rem;">Канікули</h4>
+          <div id="ay-breaks-list"></div>
+          <input type="text" id="ay-break-title" placeholder="Назва канікул" style="margin-top:8px;">
+          <div style="display:flex;gap:7px;margin-top:6px;">
+            <input type="date" id="ay-break-start" style="flex:1;margin-top:0;">
+            <input type="date" id="ay-break-end" style="flex:1;margin-top:0;">
+          </div>
+          <label style="display:flex;align-items:center;gap:6px;margin-top:6px;font-weight:400;font-size:.82rem;">
+            <input type="checkbox" id="ay-break-all-classes" onchange="toggleAllClasses('break')" style="width:auto;margin:0;"> Усі класи
+          </label>
+          <select id="ay-break-classes" multiple style="height:90px;margin-top:4px;">
+            <option value="class_1">1 Клас</option><option value="class_2">2 Клас</option><option value="class_3">3 Клас</option>
+            <option value="class_4">4 Клас</option><option value="class_5">5 Клас</option><option value="class_6">6 Клас</option>
+            <option value="class_7">7 Клас</option><option value="class_8">8 Клас</option><option value="class_9">9 Клас</option>
+            <option value="class_10">10 Клас</option><option value="class_11">11 Клас</option>
+          </select>
+          <button onclick="addBreak()" style="background:#e65100;color:#fff;margin-top:8px;">+ Додати канікули</button>
+          <h4 style="margin:16px 0 7px 0;color:#e65100;font-size:.86rem;">Свята</h4>
+          <div id="ay-holidays-list"></div>
+          <div style="background:#fff;border:1px dashed #ffb74d;border-radius:10px;padding:11px;margin-top:11px;">
+            <b style="font-size:.83rem;color:#e65100;">📋 Перенести з іншого року</b>
+            <p style="font-size:.74rem;color:#78909c;margin:5px 0 7px;line-height:1.35;">Свята й канікули скопіюються в поточний рік, а дати зсунуться на відповідні дні. Те, що вже є, не дублюється.</p>
+            <select id="ay-copy-from" style="margin-top:0;"></select>
+            <button type="button" id="ay-copy-btn" onclick="copyYearData()" style="background:#ff9800;color:#fff;padding:10px;margin-top:8px;">📋 Перенести з іншого року</button>
+          </div>
+          <input type="text" id="ay-holiday-title" placeholder="Назва свята" style="margin-top:8px;">
+          <input type="date" id="ay-holiday-date" style="margin-top:6px;">
+          <label style="display:flex;align-items:center;gap:6px;margin-top:6px;font-weight:400;font-size:.82rem;">
+            <input type="checkbox" id="ay-holiday-all-classes" onchange="toggleAllClasses('holiday')" style="width:auto;margin:0;"> Усі класи
+          </label>
+          <select id="ay-holiday-classes" multiple style="height:90px;margin-top:4px;">
+            <option value="class_1">1 Клас</option><option value="class_2">2 Клас</option><option value="class_3">3 Клас</option>
+            <option value="class_4">4 Клас</option><option value="class_5">5 Клас</option><option value="class_6">6 Клас</option>
+            <option value="class_7">7 Клас</option><option value="class_8">8 Клас</option><option value="class_9">9 Клас</option>
+            <option value="class_10">10 Клас</option><option value="class_11">11 Клас</option>
+          </select>
+          <select id="ay-holiday-calendar-type" style="margin-top:6px;">
+            <option value="general">🏫 Загальна школа</option>
+            <option value="art_school">🎵 Школа мистецтв</option>
+          </select>
+          <button onclick="addHoliday()" style="background:#e65100;color:#fff;margin-top:8px;">+ Додати свято</button>
+        </div>
+      </details>
+      <!-- PHASE 2: Розклад дзвінків -->
+      <details data-dtab="nalash" style="margin-bottom:12px;background:#e8eaf6;padding:14px;border-radius:12px;border:1px solid #9fa8da;">
+        <summary style="font-weight:700;cursor:pointer;color:#283593;font-size:.95rem;">🔔 Розклад дзвінків</summary>
+        <div style="margin-top:13px;">
+          <select id="bell-class-select" onchange="loadBellSchedule()" style="border:2px solid #7986cb;">
+            <option value="">-- Оберіть клас --</option>
+            <option value="class_1">1 Клас</option><option value="class_2">2 Клас</option><option value="class_3">3 Клас</option>
+            <option value="class_4">4 Клас</option><option value="class_5">5 Клас</option><option value="class_6">6 Клас</option>
+            <option value="class_7">7 Клас</option><option value="class_8">8 Клас</option><option value="class_9">9 Клас</option>
+            <option value="class_10">10 Клас</option><option value="class_11">11 Клас</option>
+          </select>
+          <div id="bell-slots-table" style="margin-top:10px;"><p class="empty-msg">Оберіть клас.</p></div>
+          <button onclick="addBellSlot()" style="background:#7986cb;color:#fff;margin-top:8px;">+ Додати урок</button>
+          <button onclick="saveBellSchedule()" style="background:#283593;color:#fff;margin-top:8px;">💾 Зберегти для цього класу</button>
+          <!-- Один раз налаштувати — застосувати всім класам -->
+          <button onclick="applyBellToAllClasses()" style="background:#00838f;color:#fff;margin-top:8px;">📤 Застосувати цей розклад до ВСІХ класів</button>
+          <!-- Хто який розклад має і в кого не вказано -->
+          <div style="margin-top:14px;border-top:1px dashed #b0bec5;padding-top:10px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <b style="font-size:.85rem;color:#283593;">📊 Розклад дзвінків по класах</b>
+              <button onclick="loadBellCoverage()" style="width:auto;padding:4px 10px;margin:0;font-size:.75rem;background:#eceff1;color:#333;">🔄 Оновити</button>
+            </div>
+            <div id="bell-coverage" style="margin-top:7px;"><p class="empty-msg">Завантаження...</p></div>
+          </div>
+        </div>
+      </details>
+      <!-- PHASE 5: Типи оцінок -->
+      <details data-dtab="nalash" style="background:#fdf2e9;padding:14px;border-radius:12px;border:1px solid #f5cba7;" ontoggle="if(this.open)loadGradeTypesAdmin()">
+        <summary style="font-weight:700;cursor:pointer;color:#d35400;font-size:.95rem;">🎯 Типи оцінок</summary>
+        <div style="margin-top:13px;">
+          <div id="gt-types-table"><p class="empty-msg">Відкрийте блок для завантаження...</p></div>
+          <div style="display:flex;gap:7px;margin-top:12px;flex-wrap:wrap;">
+            <input id="gt-new-code" placeholder="Код (напр. ЛР)" style="width:90px;margin:0;">
+            <input id="gt-new-label" placeholder="Назва" style="flex:1;min-width:140px;margin:0;">
+            <input id="gt-new-weight" type="number" step="0.1" min="0.1" placeholder="Коеф." style="width:80px;margin:0;">
+            <button onclick="addGradeType()" style="background:var(--green);color:#fff;width:auto;padding:8px 14px;margin:0;">➕ Додати</button>
+          </div>
+        </div>
+      </details>
+    </section>
+
+    <button class="btn-logout" onclick="logoutUser()">Вийти</button>
+    <p class="app-version"></p>
+  </div>
+  <!-- ══════════════════════════════
+       TEACHER SCREEN
+       ══════════════════════════════ -->
+  <div id="teacher-screen" class="panel">
+    <h2 id="teacher-dashboard-title">👨‍🏫 Журнал</h2>
+    <div class="dtab-bar" id="teacher-screen-tabs">
+      <button class="dtab on" data-t="day" onclick="switchTab('teacher-screen','day',this)">Сьогодні</button>
+      <button class="dtab" data-t="lesson" onclick="switchTab('teacher-screen','lesson',this)">Урок</button>
+      <button class="dtab" data-t="hwday" onclick="switchTab('teacher-screen','hwday',this);renderTeacherHwDay()">📚 ДЗ на день</button>
+      <button class="dtab" data-t="class" onclick="switchTab('teacher-screen','class',this)">Клас</button>
+      <button class="dtab" data-t="meals" onclick="switchTab('teacher-screen','meals',this);renderStaffMeals()">🍽 Їжа</button>
+      <button class="dtab" data-t="news" onclick="switchTab('teacher-screen','news',this)">Новини<span class="chat-dot"></span></button>
+    </div>
+    <div id="t-push-invite" style="display:none;"></div>
+
+
+    <section class="screen-section" data-dtab="day">
+      <!-- Дні народження. Найперше на вкладці. Розгорнуто лише найближчий тиждень, решта — під «ще N». -->
+      <div id="t-birthdays" class="bd-box" style="display:none;"></div>
+
+      <!-- Басейн і автобус. Показуємо лише класному керівникові: у нього
+           свій клас, і правила бази до чужих його однаково не пустять. -->
+      <div class="data-card" id="t-activities-card"
+           style="border-left-color:#0288d1;background:#f5fbff;display:none;">
+        <h4 style="margin-top:0;color:#0277bd;">🏊 Басейн і 🚌 автобус — ваш клас</h4>
+        <div id="t-activities"><p class="empty-msg">Завантаження...</p></div>
+      </div>
+      <h3>🚀 Швидкі дії</h3>
+      <div id="t-exams-journal-btns" class="qa-grid">
+        <button onclick="openExamsCalendar()" class="qa-btn qa-exams">📅 Контрольні</button>
+        <button onclick="openJournalModal('teacher')" class="qa-btn qa-journal">📖 Журнал</button>
+        <button onclick="showUngraded()" class="qa-btn qa-ungraded">🔍 Без оцінок</button>
+      </div>
+      <div id="t-quick-btns" class="qa-grid">
+        <button onclick="openQuickJournal()" class="qa-btn qa-quick">⚡ Швидкий журнал</button>
+        <button onclick="openClassBroadcast()" class="qa-btn qa-broadcast">✉️ Повідомлення класу</button>
+        <button onclick="printClassSchedule()" class="qa-btn qa-print">🖨️ Друк розкладу</button>
+      </div>
+      <div id="t-matrix-btn-wrapper" class="qa-grid" style="display:none;">
+        <button onclick="openVisualMatrixModal('live')" class="qa-btn qa-matrix">🗓️ Матриця розкладу</button>
+      </div>
+    </section>
+
+    <section class="screen-section" data-dtab="day">
+      <h3>📋 Сьогодні</h3>
+      <!-- Відвідуваність -->
+      <div class="data-card" style="border-left-color:var(--red);background:#fdfbfb;margin-top:0;">
+        <h4 id="t-att-header" style="margin-top:0;color:var(--red);">🚨 Відвідуваність</h4>
+        <p id="t-att-hint" style="margin:-6px 0 8px 0;font-size:.74rem;color:#90a4ae;line-height:1.4;">
+          Щоб відмітити за інший день — змініть дату вгорі сторінки, у полі «📅 Оберіть дату».</p>
+        <ul id="t-attendance-list" class="list-dash" style="list-style:none;padding-left:0;"><li class="empty-msg">Завантаження...</li></ul>
+        <div id="t-mark-absent-block" style="margin-top:13px;display:flex;gap:8px;border-top:1px dashed #f5b7b1;padding-top:13px;">
+          <select id="t-mark-absent-student" style="flex:1;margin-top:0;border:1px solid #f5b7b1;"><option value="">Учень...</option></select>
+          <select id="t-mark-absent-lesson" style="flex:1;margin-top:0;border:1px solid #f5b7b1;"><option value="all">Увесь день</option></select>
+          <select id="t-mark-absent-reason" style="flex:1;margin-top:0;border:1px solid #f5b7b1;">
+            <option value="Відмічено вчителем">Без причини</option><option value="через хворобу">Хвороба</option>
+            <option value="за сімейними обставинами">Сімейні обставини</option><option value="запізнення">Запізнення</option>
+          </select>
+          <button onclick="teacherMarkAbsent()" style="margin-top:0;background:var(--red);color:#fff;width:auto;padding:9px 13px;font-size:.85rem;">Відмітити</button>
+        </div>
+      </div>
+      <!-- Реакції + Підсумки + Перездачі -->
+      <div style="display:flex;gap:9px;margin:14px 0 0 0;">
+        <div style="flex:1;background:#ffeaa7;padding:14px;border-radius:12px;text-align:center;cursor:pointer;" onclick="showReactionsDetails()">
+          <h4 style="margin:0;color:#d35400;font-size:.82rem;">❤️ Реакції</h4>
+          <p id="t-karma-counter" style="font-size:1.6rem;font-weight:800;color:#e67e22;margin:4px 0;">0</p>
+        </div>
+        <div id="t-wrapped-btn" style="flex:1;background:linear-gradient(135deg,#a8ff78,#78ffd6);padding:14px;border-radius:12px;text-align:center;cursor:pointer;" onclick="showWeeklyWrapped()">
+          <h4 style="margin:0;color:var(--teal);font-size:.82rem;">📊 Підсумки</h4>
+          <p style="font-size:1.6rem;margin:4px 0;">🎁</p>
+        </div>
+        <div id="t-retake-btn" style="flex:1;background:#fff3cd;padding:14px;border-radius:12px;text-align:center;cursor:pointer;" onclick="openRetakeRequestsModal()">
+          <h4 style="margin:0;color:#856404;font-size:.82rem;">🔄 Перездачі</h4>
+          <p id="t-retake-counter" style="font-size:1.6rem;font-weight:800;color:#d35400;margin:4px 0;">0</p>
+        </div>
+      </div>
+      <!-- PHASE 7: Статистика наліпок -->
+      <div style="display:flex;gap:9px;margin:14px 0 0 0;">
+        <button onclick="openStickerStatsModal()" style="flex:1;min-width:130px;background:linear-gradient(135deg,#f39c12,#f1c40f);color:#fff;">🌟 Статистика наліпок</button>
+      </div>
+      <div style="display:flex;gap:9px;margin:14px 0 0 0;" id="t-chat-row">
+        <div id="t-chat-btn" style="flex:1;background:#f3e5f5;padding:14px;border-radius:12px;text-align:center;cursor:pointer;" onclick="openChatModal('teacher')" data-chatbtn="1">
+          <h4 style="margin:0;color:#7b1fa2;font-size:.82rem;">💬 Чат з батьками</h4>
+          <p style="font-size:1.6rem;margin:4px 0;">✉️</p>
+        </div>
+      </div>
+      <!-- ДЗ зведення -->
+      <div id="t-hw-list-wrapper" class="data-card" style="border-left-color:var(--blue);background:#f4f9fd;margin:14px 0 0 0;">
+        <h4 style="margin-top:0;color:var(--blue);">📋 ДЗ класу сьогодні:</h4>
+        <ul id="t-daily-hw-list" class="list-dash"></ul>
+      </div>
+    </section>
+
+    <section class="screen-section" data-dtab="news">
+      <h3>📣 Новини школи</h3>
+      <button onclick="openNewsComposer()" style="background:#00838f;color:#fff;margin-bottom:10px;">➕ Нове оголошення</button>
+      <div id="t-news-feed" class="nw-feed"><p class="empty-msg">Завантаження...</p></div>
+    </section>
+
+    <section class="screen-section" data-dtab="lesson">
+      <h3>✏️ Заповнення уроку</h3>
+      <label>Предмет:</label>
+      <select id="t-subject" onchange="handleSubjectChange()"></select>
+
+      <div class="lg-head"><span>1</span>Тема, домашнє завдання та оцінки</div>
+      <!-- Що вже збережено на цю дату. Раніше після «Зберегти» тема зникала
+           з очей: у кабінеті вчителя її ніде не було видно, і перевірити,
+           чи вона взагалі записалася, було ніяк. -->
+      <div id="t-topic-saved" class="topic-saved" style="display:none;"></div>
+      <div class="topic-card" id="t-topic-card" style="margin-top:13px;">
+        <label>📌 Тема уроку 1:</label>
+        <div class="topic-select-wrap">
+          <div class="topic-dropdown" id="t-topic-dropdown-1">
+            <div class="topic-dropdown-trigger" onclick="toggleTopicDropdown(1)" id="t-topic-trigger-1">✏️ Власна тема</div>
+            <div class="topic-dropdown-list" id="t-topic-list-1" style="display:none;"></div>
+            <input type="hidden" id="t-topic-value-1" value="__custom__">
+          </div>
+          <div id="topic-status-line" style="display:none;" class="topic-status-bar">
+            <span id="topic-status-text">—</span>
+            <div class="topic-progress-mini"><div class="topic-progress-mini-fill" id="topic-progress-fill" style="width:0%"></div></div>
+            <span id="topic-status-count" style="font-weight:800;color:var(--purple);">0/0</span>
+          </div>
+        </div>
+        <!-- Видиме за замовчуванням: у t-topic-value-1 початково стоїть
+             __custom__, тож поле ручного вводу має бути показане одразу,
+             інакше стан розмітки суперечить стану значення. -->
+        <input type="text" id="t-topic-1" placeholder="Введіть тему вручну..." style="margin-top:6px;">
+        <div id="t-topic-display-1" style="display:none;" class="topic-display"></div>
+        <div class="topic-actions">
+          <button type="button" onclick="editLessonTopic(1)">✏️ Редагувати</button>
+          <button type="button" onclick="toggleTopicDropdown(1)">🔄 Замінити</button>
+          <button type="button" onclick="clearLessonTopic(1)">✖ Прибрати з уроку</button>
+        </div>
+        <div id="t-topic-edit-options-1" style="display:none;">
+          <small>Зміни тексту стосуються тільки цього уроку.</small>
+          <label style="display:flex;gap:7px;align-items:center;"><input type="checkbox" id="t-topic-plan-1" style="width:auto;">Змінити також у календарному плані</label>
+          <small>Якщо позначити: назва зміниться в усіх уроках, що використовують цю тему, та у спільному плані предметів.</small>
+        </div>
+        <button type="button" id="btn-add-second-topic" onclick="showSecondTopicSlot()" style="margin-top:8px;background:#ecf0f1;color:#333;">+ Додати другу тему</button>
+        <div id="t-topic-slot-2-wrap" style="display:none;margin-top:8px;">
+          <label>📌 Тема уроку 2:</label>
+          <div class="topic-dropdown" id="t-topic-dropdown-2">
+            <div class="topic-dropdown-trigger" onclick="toggleTopicDropdown(2)" id="t-topic-trigger-2">✏️ Власна тема</div>
+            <div class="topic-dropdown-list" id="t-topic-list-2" style="display:none;"></div>
+            <input type="hidden" id="t-topic-value-2" value="__custom__">
+          </div>
+          <input type="text" id="t-topic-2" placeholder="Введіть тему вручну..." style="margin-top:6px;display:none;">
+          <div id="t-topic-display-2" style="display:none;" class="topic-display"></div>
+        <div class="topic-actions">
+          <button type="button" onclick="editLessonTopic(2)">✏️ Редагувати</button>
+          <button type="button" onclick="toggleTopicDropdown(2)">🔄 Замінити</button>
+          <button type="button" onclick="clearLessonTopic(2)">✖ Прибрати з уроку</button>
+        </div>
+        <div id="t-topic-edit-options-2" style="display:none;">
+          <small>Зміни тексту стосуються тільки цього уроку.</small>
+          <label style="display:flex;gap:7px;align-items:center;"><input type="checkbox" id="t-topic-plan-2" style="width:auto;">Змінити також у календарному плані</label>
+          <small>Якщо позначити: назва зміниться в усіх уроках, що використовують цю тему, та у спільному плані предметів.</small>
+        </div>
+        </div>
+        <!-- Своя кнопка на тему. Раніше тема й ДЗ зберігалися однією
+             кнопкою внизу, і це плутало: учитель заповнював тільки тему,
+             а натискав «Зберегти тему та ДЗ» — і не розумів, чи записалося
+             щось зайве. Тепер кожен блок зберігається окремо. -->
+        <button type="button" class="qa-btn qa-save" id="btn-save-topic"
+                onclick="saveLessonTopic()" style="margin-top:11px;">💾 Зберегти тему</button>
+        <div id="t-topic-dirty" style="display:none;margin-top:8px;">Є незбережені зміни. <button type="button" onclick="cancelLessonTopicChanges()" style="width:auto;">Скасувати зміни</button></div>
+      </div>
+      <!-- ДЗ + Фото -->
+      <div id="t-hw-input-wrapper">
+        <label>📚 Домашнє завдання (для всього класу):</label>
+        <textarea id="t-hw" rows="2" placeholder="Введіть ДЗ..."></textarea>
+        <!-- AI-чернетка ДЗ за темою уроку. Предмет, тему і клас система бере
+             сама — вчителю не треба нічого формулювати. -->
+        <!-- Контекст уроку: підручник, сторінки, текст вправи. Служить двом
+             цілям одразу — це і підказка генератору ДЗ, і саме завдання,
+             якщо поле ДЗ лишили порожнім (див. saveHomework). Тому в
+             підписі його НЕ називаємо «для ШІ»: учитель заповнює ці поля
+             замість тексту завдання, і це нормальний спосіб задати ДЗ. -->
+        <details class="ai-ctx" ontoggle="if(this.open)fillHwTextbooks()">
+          <summary>➕ Додати контекст: підручник, сторінки, текст вправи</summary>
+          <p style="margin:7px 0 0 0;font-size:.76rem;color:#90a4ae;line-height:1.4;">
+            Якщо поле «Домашнє завдання» лишиться порожнім, підручник і сторінки
+            стануть завданням самі. Обраний зі списку підручник батьки побачать
+            клікабельним посиланням.</p>
+          <div style="margin-top:9px;">
+            <label for="hw-textbook">📘 Підручник</label>
+            <select id="hw-textbook" style="margin-top:3px;">
+              <option value="">— не вказувати —</option>
+            </select>
+            <input type="text" id="hw-textbook-custom" placeholder="або впишіть назву вручну" style="margin-top:5px;">
+            <label for="hw-pages" style="margin-top:9px;">📄 Сторінки / вправи</label>
+            <input type="text" id="hw-pages" placeholder="напр. с. 45, вправи 3–5" style="margin-top:3px;">
+            <label for="hw-material" style="margin-top:9px;">📋 Текст вправи або матеріалу (за бажанням)</label>
+            <textarea id="hw-material" rows="3" placeholder="Вставте сюди текст із підручника — тоді завдання буде складено саме за ним" style="margin-top:3px;"></textarea>
+            <p class="ai-ctx-note">
+              ⚠️ Система <b>не бачить</b> вмісту підручника і не відкриває посилання.
+              Назва та сторінки підуть у завдання лише як посилання на джерело —
+              вигадувати номери вправ їй заборонено. Щоб ДЗ склалося саме за
+              матеріалом, вставте його текст у поле вище.
+            </p>
+          </div>
+        </details>
+        <div class="ai-hw-row">
+          <button type="button" id="btn-ai-hw" onclick="generateHomeworkAI()">✨ Згенерувати чернетку ДЗ</button>
+          <button type="button" id="btn-hw-copy" onclick="openHwCopy()">📋 Скопіювати в інші класи</button>
+        </div>
+        <p class="ai-hw-note" style="margin:4px 0 0 0;">чернетка — перевірте й відредагуйте перед збереженням</p>
+        <p id="ai-hw-msg" class="ai-hw-msg" style="display:none;"></p>
+        <label>📎 Додати до завдання:</label>
+        <!-- Кнопку нативного <input type="file"> малює САМ БРАУЗЕР, її напис
+             береться з мови браузера, а не сторінки: в одного вчителя вона
+             українська, в іншого російська чи англійська, і жодним атрибутом
+             це не міняється. Тому input сховано, а видима кнопка — це label,
+             підпис якого вже наш. Клік по label відкриває той самий діалог. -->
+        <input type="file" id="t-image" class="hw-file-input"
+               accept="image/*,.doc,.docx,.xls,.xlsx,.csv" multiple
+               onchange="hwFilesPicked(this)">
+        <div class="hw-file-row">
+          <label for="t-image" class="hw-file-btn">📂 Обрати файли</label>
+          <span id="hw-file-name" class="hw-file-name">Файл не обрано</span>
+        </div>
+        <p class="hw-file-hint">Можна: фото (JPG, PNG, HEIC), документ (DOC, DOCX),
+          таблиця (XLS, XLSX, CSV). До 10 МБ на файл.</p>
+        <div id="existing-image-info" style="display:none;font-size:.83rem;color:#e67e22;margin-top:4px;"></div>
+        <button type="button" class="qa-btn qa-save" id="btn-save-hw"
+                onclick="saveHomework()" style="margin-top:11px;">💾 Зберегти ДЗ</button>
+      </div>
+      <!-- КНОПКИ -->
+      <div class="qa-row" style="margin-top:13px;">
+        <button class="qa-btn qa-grades" onclick="openJournalForGrading()">📊 Виставити оцінки</button>
+      </div>
+      <div id="status-msg"></div>
+      <div class="lg-head"><span>2</span>Матеріали та плани</div>
+      <details style="margin-top:14px;background:#f3e5f5;padding:14px;border-radius:12px;border:1px solid #ce93d8;" ontoggle="if(this.open)openAltCard()">
+        <summary style="font-weight:700;cursor:pointer;color:#6a1b9a;font-size:.95rem;">🔁 Чергування уроків</summary>
+        <div style="margin-top:12px;">
+          <p style="font-size:.78rem;color:#555;">Позначте, що саме буде цього й наступного тижня. Поки не позначено, батьки бачать обидві назви.</p>
+          <div id="alt-slot-teacher"></div>
+        </div>
+      </details>
+      <!-- Класна година. Поруч із чергуванням: обидва — про те, ЩО і КОЛИ
+           стоїть у розкладі класу, і обидва веде класний керівник. -->
+      <details style="margin-top:14px;background:#e8f5e9;padding:14px;border-radius:12px;border:1px solid #a5d6a7;" ontoggle="if(this.open)openClassHourCard()">
+        <summary style="font-weight:700;cursor:pointer;color:#2e7d32;font-size:.95rem;">🕘 Класна година</summary>
+        <div style="margin-top:12px;">
+          <p style="font-size:.78rem;color:#555;">Оберіть день і вільний час у своєму класі. Час пропонується з розкладу дзвінків — тільки ті номери, що цього дня не зайняті уроком.</p>
+          <div id="chour-slot"></div>
+        </div>
+      </details>
+      <details style="margin-top:14px;background:#f9f4ff;padding:14px;border-radius:12px;border:1px solid #ce93d8;">
+        <summary style="font-weight:700;cursor:pointer;color:#7b1fa2;font-size:.95rem;">📚 Навчальний план (Теми)</summary>
+        <div style="margin-top:12px;">
+          <div id="curriculum-smart-alert" class="smart-alert">
+            ⚠️ <b>Увага!</b> Залишок годин значно перевищує кількість тем. Перевірте план.
+          </div>
+          <div id="curriculum-topics" style="max-height:250px;overflow-y:auto;margin-top:8px;"></div>
+          <div style="display:flex;gap:7px;margin-top:9px;">
+            <input type="text" id="new-topic-title" placeholder="Нова тема..." style="flex:3;margin-top:0;font-size:.85rem;">
+            <input type="number" id="new-topic-hours" placeholder="Год." style="flex:1;margin-top:0;font-size:.85rem;" min="1" max="10">
+            <button onclick="addCurriculumTopic()" style="flex:1;margin-top:0;background:var(--purple);color:#fff;padding:10px 6px;font-size:.82rem;">+ Тема</button>
+          </div>
+        </div>
+      </details>
+      <details id="curriculum-upload-section" style="display:none;margin-top:18px;background:#e3f2fd;padding:14px;border-radius:12px;border:1px solid #64b5f6;">
+        <summary style="font-weight:700;cursor:pointer;color:#0d47a1;font-size:.95rem;">📅 Календарне планування <span class="ct-badge">Кл. керівник</span></summary>
+        <div style="margin-top:12px;">
+        
+        <p style="font-size:.78rem;color:#555;margin-bottom:10px;">Завантажте Excel-файл — портал збереже теми списком за предметом.
+          Учитель обиратиме їх зі списку, коли заповнює журнал уроку.</p>
+        <div id="curr-sched-warn" class="curr-warn danger" style="display:none;"></div>
+        <div id="curr-dir-class-box" style="display:none;margin-bottom:10px;">
+          <label style="font-size:.8rem;color:#0d47a1;font-weight:600;">Клас, у який зберегти план:</label>
+          <select id="curr-dir-class" onchange="onCurrDirClassChange()" style="margin-top:4px;"></select>
+        </div>
+        <div id="curr-access-hint" class="curr-src" style="margin-bottom:10px;"></div>
+        <label style="font-size:.8rem;color:#0d47a1;font-weight:600;">Предмет, до якого належить план:</label>
+        <select id="curr-subject" onchange="onCurrSubjectChange()" style="margin-top:4px;">
+          <option value="">— оберіть предмет —</option>
+        </select>
+        <input type="text" id="curr-subject-other" placeholder="Назва предмета точно як у розкладі"
+               style="display:none;margin-top:6px;" oninput="onCurrSubjectChange()">
+        <div id="curr-subject-warn" class="curr-warn" style="display:none;"></div>
+        <!-- СПІЛЬНИЙ ПЛАН. Той самий курс живе в розкладі під двома
+             назвами — «Математика» і «Matematyka». Тут кажемо, що план у
+             них один, замість того щоб заливати його двічі й потім
+             гадати, яка з двох копій свіжіша. -->
+        <div id="curr-alias-box" class="ca-box" style="display:none;">
+          <!-- ЗГОРНУТИЙ СТАН — ЗВИЧАЙНИЙ. Спільний план потрібен одному
+               предмету з двадцяти, а поле на весь рядок поруч із вибором
+               предмета виглядало як ще одне обов'язкове питання. -->
+          <div id="curr-alias-view" class="ca-view">
+            <span id="curr-alias-state"></span>
+            <button type="button" class="ca-link" onclick="editCurrAlias()">змінити</button>
+          </div>
+          <div id="curr-alias-edit" class="ca-edit" style="display:none;">
+            <select id="curr-alias">
+              <option value="">— окремий власний план —</option>
+            </select>
+            <div class="ca-actions">
+              <button type="button" class="ca-ok" onclick="saveCurrAlias()">Зберегти</button>
+              <button type="button" class="ca-no" onclick="cancelCurrAlias()">Скасувати</button>
+            </div>
+            <div id="curr-alias-note" class="ca-note"></div>
+          </div>
+        </div>
+        <label class="curr-drop-zone" id="curr-drop-zone-label">
+          <input type="file" id="curr-file-input" accept=".xlsx,.xls">
+          <div id="curr-drop-text">📤 Натисніть або перетягніть Excel файл сюди</div>
+        </label>
+        <div id="curr-preview-section" style="display:none;margin-top:12px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <b style="color:#0d47a1;">Превʼю плану:</b>
+            <span id="curr-preview-class" style="font-size:.78rem;color:#666;"></span>
+          </div>
+          <div id="curr-preview-content" style="max-height:280px;overflow-y:auto;"></div>
+          <button onclick="saveCurriculumToDb()" id="btn-save-curr" style="background:#0d47a1;color:#fff;padding:11px;margin-top:10px;">💾 Зберегти план у систему</button>
+        </div>
+        <details style="margin-top:10px;">
+          <summary style="cursor:pointer;color:#1565c0;font-size:.82rem;">📥 Поточний план у системі</summary>
+          <div id="current-curriculum-display" style="margin-top:8px;font-size:.82rem;"></div>
+        </details>
+        <!-- РЕДАГУВАННЯ ПЛАНУ ПО ОДНІЙ ТЕМІ.
+             Досі виправити описку чи додати забуту тему можна було лише
+             перезаливкою всього файлу — а це ще й ризик зсунути години. -->
+        <details style="margin-top:10px;" ontoggle="if(this.open)renderPlanEditor()">
+          <summary style="cursor:pointer;color:#1565c0;font-size:.82rem;">✏️ Редагувати план по темах</summary>
+          <div id="plan-editor" style="margin-top:8px;">
+            <p class="empty-msg">Оберіть предмет вище.</p>
+          </div>
+        </details>
+      </div>
+      </details>
+      <div style="margin-top:12px;background:#f0f8ff;padding:14px;border-radius:12px;border:1px solid #d0e8f2;">
+        <h4 style="margin:0 0 8px 0;color:var(--blue);font-size:.88rem;">📘 Посилання на підручники</h4>
+        <label for="t-tb-subject" style="font-size:.83rem;">Предмет підручника:</label>
+        <select id="t-tb-subject" onchange="loadTextbooksForTeacher(false)" style="margin-top:4px;margin-bottom:10px;"><option value="">Оберіть предмет...</option></select>
+        <div id="t-textbooks-list" style="margin-bottom:8px;"></div>
+        <div style="display:flex;gap:7px;">
+          <input type="text" id="t-tb-title" placeholder="Назва підручника" style="flex:2;margin-top:0;font-size:.85rem;">
+          <input type="text" id="t-tb-url" placeholder="https://..." style="flex:3;margin-top:0;font-size:.85rem;">
+          <button type="button" id="btn-save-textbook" onclick="saveTextbook()" style="flex:1;margin-top:0;background:var(--blue);color:#fff;padding:10px 6px;font-size:.82rem;">+ Додати</button>
+        </div>
+      </div>
+    </section>
+
+        <!-- ДЗ НА ДЕНЬ. Усі уроки вчителя цього дня одним екраном: він
+         заповнює не «урок», а кінець дня. Тема лишається на вкладці
+         «Урок» — вона тягне облік годин, і це обережна операція. -->
+    <section class="screen-section" data-dtab="hwday">
+      <h3>📚 Домашні завдання на день</h3>
+      <p class="hwd-cap">Показано ваші уроки в цьому класі на обрану дату.
+         Дата й клас — угорі сторінки.</p>
+      <div id="t-hw-day"><p class="empty-msg">Завантаження...</p></div>
+    </section>
+
+    <section class="screen-section" data-dtab="meals">
+      <!-- Власне харчування співробітника. Той самий вибір, що й у родин,
+           але без сніданків і підвечірків: кухня їх персоналу не пропонує. -->
+      <div class="data-card" style="border-left-color:#00897b;background:#e0f2f1;margin-top:0;">
+        <h4 style="margin-top:0;color:#00695c;">🍽 Моє харчування</h4>
+        <div class="stm-box"><p class="empty-msg">Завантаження...</p></div>
+      </div>
+    </section>
+
+    <section class="screen-section half" data-dtab="class">
+      <h3>📝 Оцінювання учня</h3>
+      <!-- Оцінка поведінки -->
+      <div style="background:#e8eaf6;padding:14px;border-radius:12px;border:1px solid #c5cae9;">
+        <h4 style="margin:0 0 9px 0;color:#283593;font-size:.9rem;">🤝 Оцінка поведінки (Класний урок)</h4>
+        <div style="display:flex;gap:8px;align-items:flex-end;">
+          <select id="t-behavior-student" style="flex:2;margin-top:0;border-color:#7986cb;"><option value="">Учень...</option></select>
+          <div style="flex:1;display:flex;flex-direction:column;gap:4px;">
+            <label style="margin-top:0;font-size:.72rem;color:#3949ab;">Оцінка (1-6):</label>
+            <input type="text" id="t-behavior-grade" placeholder="1-6" style="margin-top:0;border:2px solid #7986cb;text-align:center;font-weight:800;color:#283593;">
+          </div>
+          <button onclick="saveBehaviorGrade()" style="flex:1;margin-top:0;background:#283593;color:#fff;padding:11px 8px;font-size:.82rem;border-radius:10px;border:none;cursor:pointer;font-weight:700;">💾 Зберегти</button>
+        </div>
+      </div>
+      <!-- Наліпка -->
+      <div style="margin-top:13px;background:#fffcf0;padding:14px;border-radius:12px;border:1px solid #fde3a7;">
+        <h4 style="margin:0 0 8px 0;color:#d35400;font-size:.88rem;">🌟 Видати наліпку учню</h4>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
+          <label style="flex:2;min-width:170px;font-size:.74rem;color:#d35400;font-weight:600;">Учень
+            <select id="t-sticker-student" style="margin-top:3px;"></select>
+          </label>
+          <label style="flex:1;min-width:140px;font-size:.74rem;color:#d35400;font-weight:600;">Предмет
+            <select id="t-sticker-subject" style="margin-top:3px;"></select>
+          </label>
+          <button onclick="giveStickerToStudent()" style="flex:none;margin-top:0;background:#f1c40f;color:#333;padding:11px 16px;border-radius:10px;border:none;cursor:pointer;font-weight:800;font-size:.88rem;">🌟 Дати</button>
+        </div>
+      </div>
+      <!-- Коментар -->
+      <div style="margin-top:13px;background:#f3e5f5;padding:14px;border-radius:12px;border:1px solid #ce93d8;">
+        <h4 style="margin:0 0 8px 0;color:#7b1fa2;font-size:.88rem;">💬 Коментар учню</h4>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
+          <label style="flex:2;min-width:180px;font-size:.74rem;color:#7b1fa2;font-weight:600;">Учень
+            <select id="t-student" style="margin-top:3px;border-color:#a1887f;"><option value="">Учень...</option></select>
+          </label>
+          <label style="flex:1;min-width:150px;font-size:.74rem;color:#7b1fa2;font-weight:600;">Предмет
+            <select id="t-subject-for-comment" style="margin-top:3px;border-color:#a1887f;"></select>
+          </label>
+        </div>
+        <textarea id="t-comment" rows="2" placeholder="Напишіть своїми словами — напр. «не готовий до уроку, заважає»..." style="margin-top:7px;border-color:#a1887f;font-size:.88rem;"></textarea>
+        <!-- AI переформулює чернетку вчителя в коректне повідомлення батькам.
+             Ім'я учня в сервіс не передається — див. teacher.js -->
+        <div class="ai-hw-row">
+          <button type="button" id="btn-ai-comment" onclick="improveCommentAI()">✨ Допомогти сформулювати</button>
+          <span class="ai-hw-note">перепишу ввічливо й конструктивно</span>
+        </div>
+        <p id="ai-comment-msg" class="ai-hw-msg" style="display:none;"></p>
+        <button onclick="saveComment()" style="background:#7b1fa2;color:#fff;padding:9px;margin-top:7px;border-radius:9px;font-size:.85rem;border:none;cursor:pointer;width:100%;font-weight:700;">💬 Зберегти коментар</button>
+      </div>
+    </section>
+
+    <!-- Освоєння тем за тренажерами. Рахується з результатів ігор, які
+         діти й так проходять удома. Панель важка на читання (весь вузол
+         класу), тому лежить у details і рахується лише коли її відкрили. -->
+    <section class="screen-section half" data-dtab="class">
+      <h3>📊 Освоєння тем</h3>
+      <details style="background:#fff;padding:14px;border-radius:12px;border:1px solid #ddd;"
+               ontoggle="if(this.open&&window.renderMastery)renderMastery('tm-mastery')">
+        <summary style="font-weight:700;cursor:pointer;color:#00695c;">📊 Що клас відпрацював у тренажерах</summary>
+        <div id="tm-mastery" style="margin-top:11px;"><p class="empty-msg">Натисніть, щоб порахувати.</p></div>
+      </details>
+    </section>
+
+    <section class="screen-section half" data-dtab="class">
+      <h3>⚙️ Клас і батьки</h3>
+      <!-- Управління класом -->
+      <details style="background:#fff;padding:14px;border-radius:12px;border:1px solid #ddd;">
+        <summary style="font-weight:700;cursor:pointer;color:#7f8c8d;">⚙️ Управління класом</summary>
+        <div style="margin-top:13px;">
+          <input type="text" id="new-student-name" placeholder="Прізвище та Ім'я учня">
+          <input type="email" id="new-student-email" placeholder="Email учня (для входу)" style="margin-top:5px; border-color:#f1c40f;">
+          <button style="background:#f1c40f;padding:8px;margin-top:5px;margin-bottom:13px;" onclick="addStudent()">Додати учня</button>
+          <hr>
+          <!-- Список батьків свого класу: контакти можна дивитись і редагувати -->
+          <details style="margin-top:13px;background:#f9f4ff;padding:12px;border-radius:12px;border:1px solid #ce93d8;"
+                   ontoggle="if(this.open)renderParentsBlock('t-parents-list',getActiveClass())">
+            <summary style="font-weight:700;cursor:pointer;color:#7b1fa2;font-size:.88rem;">👪 Батьки мого класу</summary>
+            <div id="t-parents-list" style="margin-top:9px;"><p class="empty-msg">Завантаження...</p></div>
+          </details>
+          <p style="font-size:.83rem;color:#555;margin-top:13px;font-weight:700;">Прив'язка батьків:</p>
+          <select id="t-parent-role" style="margin-top:4px;border-color:#9b59b6;">
+            <option value="mother">👩‍👧 Мати</option><option value="father">👨‍👦 Батько</option><option value="guardian">🛡️ Опекун</option>
+          </select>
+          <input type="email" id="parent-email" placeholder="Email батьків" style="margin-top:4px;">
+          <select id="t-student-for-parent" style="margin-top:4px;"><option value="">Учень...</option></select>
+          <button style="background:#9b59b6;padding:8px;margin-top:9px;color:#fff;" onclick="linkParent()">Прив'язати Email</button>
+        </div>
+      </details>
+    </section>
+
+    <button class="btn-logout" onclick="logoutUser()">Вийти</button>
+    <p class="app-version"></p>
+  </div>
+  <!-- ══════════════════════════════
+       PARENT / STUDENT SCREEN
+       ══════════════════════════════ -->
+  <div id="parent-screen" class="panel">
+    <div class="dtab-bar" id="parent-screen-tabs">
+      <button class="dtab on" data-t="day" onclick="switchTab('parent-screen','day',this)">Сьогодні</button>
+      <button class="dtab" data-t="hw" onclick="switchTab('parent-screen','hw',this);openHwTab()">📚 ДЗ</button>
+      <button class="dtab" data-t="meals" onclick="switchTab('parent-screen','meals',this)">🍽️ Їжа</button>
+      <button class="dtab" data-t="games" onclick="switchTab('parent-screen','games',this);openGamesTab()">🎮 Ігри</button>
+      <button class="dtab" data-t="grades" onclick="switchTab('parent-screen','grades',this)">Оцінки</button>
+      <button class="dtab" data-t="school" onclick="switchTab('parent-screen','school',this)">Школа</button>
+      <button class="dtab" data-t="profile" onclick="switchTab('parent-screen','profile',this)">Профіль</button>
+    </div>
+    <!-- Повідомлення поза вкладками: до листування має бути доступ звідусіль,
+         але як один рядок, а не як розділ, що дублюється на кожній вкладці. -->
+    <div class="p-chatbar">
+      <button onclick="openChatModal('parent')" data-chatbtn="1">💬 Повідомлення</button>
+    </div>
+    <div id="p-push-invite" style="display:none;"></div>
+
+    <!-- ═══════════ СЬОГОДНІ ═══════════ -->
+    <!-- ОГОЛОШЕННЯ — НАД УСІМ. Це єдиний блок, який батько не шукає сам:
+         він має потрапити на очі тому, хто просто відкрив портал уранці.
+         Показуються лише свіжі (до тижня); старіші лишаються у вкладці
+         «Школа». Порожній блок ховається цілком — рамка з написом
+         «оголошень немає» щодня нагорі це шум, а не інформація. -->
+    <!-- Далі запізнення й хвороба: те, чим батько користується вранці
+         найчастіше, і шукати це внизу списку незручно. -->
+    <section class="screen-section" data-dtab="day">
+      <!-- Блок оголошень лежить УСЕРЕДИНІ цієї секції, над її заголовком,
+           а не окремою секцією. Причина технічна: switchTab при переході
+           на вкладку виставляє секціям display:'' — тобто примусово
+           показав би порожню рамку, яку ми щойно сховали. Вкладені
+           елементи він не чіпає, тож ховати можна спокійно.
+           Заразом зникає й порожній відступ від секції без вмісту. -->
+      <div id="p-fresh-news" class="fn-box" style="display:none;"></div>
+      <h3>🕒 Запізнення та відсутність</h3>
+      <div id="p-teacher-att-alert" style="display:none;background:#fff3cd;border:1px solid #ffeeba;color:#856404;padding:11px 14px;border-radius:12px;margin-bottom:12px;font-size:.85rem;"></div>
+      <div class="data-card att-quick" style="border-left-color:var(--red);background:#fdfbfb;margin-top:0;">
+        <p class="att-hint">Повідомте вчителя — він побачить це одразу.</p>
+        <div class="att-row">
+          <select id="p-att-type" onchange="updateAttOptions()" style="border-color:var(--red);"><option value="late">Запізнюється</option><option value="absent">Відсутній (весь день)</option></select>
+          <select id="p-att-reason" style="border-color:var(--red);"><option value="на 5 хвилин">на 5 хвилин</option><option value="на 10 хвилин">на 10 хвилин</option><option value="на 15 хвилин">на 15 хвилин</option><option value="на 20 хвилин">на 20 хвилин</option><option value="на 25 хвилин">на 25 хвилин</option><option value="на 30 хвилин">на 30 хвилин</option><option value="до 2-го уроку">до 2-го уроку</option><option value="до 3-го уроку">до 3-го уроку</option></select>
+        </div>
+        <button onclick="submitAttendance()" style="background:var(--red);padding:11px;color:#fff;margin-top:11px;width:100%;">Відправити</button>
+        <p id="p-att-status" style="font-size:.83rem;color:var(--green);font-weight:700;margin-top:9px;display:none;">✅ Сповіщення надіслано!</p>
+      </div>
+      <!-- Басейн і шкільний автобус — одразу під запізненнями й відсутністю.
+           Сусідство не випадкове: це той самий жанр «попередити школу
+           заздалегідь», і батько шукає його там само. -->
+      <!-- Питання лежать ПРЯМО В РОЗМІТЦІ, а не малюються скриптом.
+           Так було не одразу: спершу блок наповнював JS, і коли щось у
+           ланцюжку не спрацьовувало, батько бачив порожню синю смужку й
+           не розумів, що це. Тепер найгірше, що може статися, — тут
+           лишиться саме те, що написано нижче: два питання з кнопками.
+           Скрипт лише замінює це на збережений стан, коли прочитає базу. -->
+      <div id="p-activities" class="act-box">
+        <h4 class="act-title">🏊 Басейн і 🚌 автобус</h4>
+        <div class="pm-ask">
+          <b>🏊 Чи буде дитина ходити на басейн?</b>
+          <span>Поки ви не відповіли, школа не знає, чи рахувати дитину.</span>
+          <div class="act-choice">
+            <button type="button" onclick="setActivityPlan('pool',1)">Так, буде</button>
+            <button type="button" onclick="setActivityPlan('pool',0)">Ні, не буде</button>
+          </div>
+        </div>
+        <!-- Питання про автобус тут НЕМАЄ навмисно: автобус возить на
+             басейн, тож воно з'являється лише після відповіді «так, буде»
+             — і малює його вже скрипт. Питати про дорогу на басейн того,
+             хто на басейн не ходить, немає сенсу. -->
+      </div>
+    </section>
+    <section class="screen-section" data-dtab="day">
+      <!-- Дні народження. Після блоку запізнень: той стоїть першим навмисно,
+           вранці ним користуються найчастіше. -->
+      <div id="p-birthdays" class="bd-box" style="display:none;"></div>
+      <h3>🗓️ Розклад</h3>
+      <div class="schedule-box" style="margin-top:0;">
+        <div class="schedule-day-label" id="p-schedule-day-label">📅 Розклад на сьогодні</div>
+        <div id="p-dynamic-schedule">
+          <div class="no-lessons-msg">⏳ Завантаження розкладу...</div>
+        </div>
+        <button type="button" onclick="printClassSchedule()" style="background:#eceff1;color:#37474f;margin-top:0;margin-bottom:7px;">🖨️ Роздрукувати розклад</button>
+      <button type="button" id="p-week-btn" onclick="toggleWeekSchedule('p')"
+              style="width:100%;background:var(--blue);color:#fff;padding:10px;border-radius:10px;font-weight:700;margin-top:10px;font-size:.88rem;">📅 Показати весь тиждень</button>
+      <div id="p-week-schedule" class="wk-box" style="display:none;"></div>
+      </div>
+      
+      <div class="data-card" style="border-left-color:#7986cb;background:#f5f6ff;">
+        <h4 style="margin-top:0;color:#283593;">🔔 Розклад дзвінків</h4>
+        <div id="p-bell-schedule-container"><p class="empty-msg">Завантаження...</p></div>
+      </div>
+    </section>
+
+    <section class="screen-section" data-dtab="meals">
+      <h3>🍽️ Харчування</h3>
+      <div id="p-menu" class="pm-box"><p class="empty-msg">Завантаження...</p></div>
+      <div id="p-takeaway" class="ta-box"></div>
+    </section>
+
+    <!-- ═══════════ КАЛЕНДАР ═══════════
+         Переїхав сюди з вкладки «Школа». Причина проста: «Задано на
+         сьогодні» тут дублювало вкладку «📚 ДЗ» — там і тижнева навігація,
+         і теми уроків, і «Як допомогти» по кожному предмету окремо. Місце
+         звільнилося, а канікули й контрольні — це якраз те, що дивляться
+         разом із сьогоднішнім днем, а не в архіві.
+         У «Школа» календаря більше немає: два однакові блоки в одному
+         кабінеті — це питання «а який із них правильний». -->
+    <section class="screen-section" data-dtab="day">
+      <h3>📅 Календар школи</h3>
+      <div class="data-card" style="border-left-color:var(--orange);background:#fffcf0;margin-top:0;">
+        <p class="cal-hint">Свята, канікули та контрольні цього місяця — списком нижче.</p>
+        <input type="month" id="p-cal-month-select" onchange="renderParentCalendar('parent')"
+               style="margin-top:0;font-size:.85rem;">
+        <div id="p-cal-grid"><p class="empty-msg">⏳ Завантаження...</p></div>
+        <button type="button" id="p-cal-year-btn" onclick="toggleYearCalendar('parent')" style="background:#eceff1;color:#37474f;margin-top:10px;">📅 Показати весь навчальний рік</button>
+        <div id="p-cal-year" style="display:none;margin-top:10px;"></div>
+        <div id="p-cal-day-details" style="display:none;margin-top:10px;background:#fff;border-radius:8px;padding:9px;border:1px dashed var(--orange);font-size:.82rem;"></div>
+      </div>
+    </section>
+
+        <!-- ВКЛАДКА «ДОМАШНІ». Своя навігація по тижнях: загальна дата вгорі
+         сторінки керує розкладом, відвідуваністю й меню, і крутити її
+         заради домашки означало зсувати все інше. -->
+    <section class="screen-section" data-dtab="hw">
+      <h3>📚 Домашні завдання</h3>
+      <div id="p-hw-week"><p class="empty-msg">Завантаження...</p></div>
+    </section>
+
+    <!-- ВКЛАДКА «ІГРИ». Та сама, що в дитини, і це навмисно: батько має
+         бачити рівно те, у що грає дитина, а не окрему «батьківську»
+         версію. Різниця лише в підказці згори. -->
+    <section class="screen-section" data-dtab="games">
+      <h3>🎮 Ігри</h3>
+      <div id="p-games"><p class="empty-msg">Завантаження...</p></div>
+    </section>
+
+    <!-- Оцінки за ТИЖДЕНЬ, а не за день. Денний показ вимагав сім клацань
+         по даті, щоб побачити тиждень, і жодного разу не давав картини
+         цілком. Денний список лишається нижче — він потрібен тим, хто
+         прийшов саме з конкретної дати. -->
+    <section class="screen-section" data-dtab="grades">
+      <h3>📝 Оцінки й коментарі за тиждень</h3>
+      <div class="data-card" style="border-left-color:#ff4757;background:#fff0f1;margin-top:0;">
+        <div id="p-grades-week"><p class="empty-msg">Завантаження...</p></div>
+      </div>
+    </section>
+
+    <!-- Наліпки — одразу під оцінками тижня: це те, за чим дитина стежить
+         сама, і воно має бути видно без прокрутки повз усе інше. -->
+    <section class="screen-section" data-dtab="grades">
+      <div class="data-card" style="border-left-color:#f1c40f;background:#fffcf0;text-align:center;margin-top:0;">
+        <h4 style="margin-top:0;color:var(--orange);font-size:1rem;">🌟 Прогрес наліпок</h4>
+        <div class="progress-bar-container"><div id="p-ribbon-progress" class="progress-bar"></div></div>
+        <p id="p-ribbon-count" style="font-size:1.1rem;font-weight:700;color:#d35400;margin:13px 0 4px 0;">Завантаження...</p>
+        <p id="p-ribbon-msg" style="color:var(--green);font-weight:800;margin:0;font-size:.95rem;"></p>
+      </div>
+    </section>
+
+    <section class="screen-section" data-dtab="grades">
+      <div class="data-card" style="border-left-color:#3949ab;background:#e8eaf6;margin-top:0;">
+        <h4 style="margin-top:0;color:#283593;">🤝 Поведінка (цей тиждень)</h4>
+        <div id="p-behavior-list"><p class="empty-msg">Завантаження...</p></div>
+      </div>
+    </section>
+
+    <section class="screen-section" data-dtab="grades">
+      <h3>📈 За предметом</h3>
+      <div class="data-card" style="border-left-color:var(--purple,#7b1fa2);background:#faf5ff;margin-top:0;">
+        <div id="p-grades-subject"><p class="empty-msg">Завантаження...</p></div>
+      </div>
+    </section>
+
+
+    <!-- ═══════════ НОВИНИ ═══════════ -->
+    <section class="screen-section" data-dtab="school">
+      <h3>📣 Новини школи</h3>
+      <div id="p-news-feed" class="nw-feed"><p class="empty-msg">Завантаження...</p></div>
+    </section>
+
+    <!-- Календар переїхав на вкладку «Сьогодні» — див. коментар там. -->
+
+
+    <!-- ═══════════ НАВЧАННЯ ═══════════ -->
+    <!-- Без спільного заголовка: наліпки, поведінка й підсумкові оцінки —
+         три різні речі, і «Успішність» над ними нічого не пояснювала, лише
+         вдавала розділ. Кожна картка вже підписана сама. -->
+    <section class="screen-section" data-dtab="grades">
+      <div class="data-card" style="border-left-color:#00838f;background:#e0f7fa;margin-top:0;">
+        <h4 style="margin-top:0;color:#00838f;">🏆 Підсумкові оцінки</h4>
+        <div id="p-final-grades" class="fin-box" style="display:none;"></div>
+        <button type="button" id="btn-report-card" onclick="downloadMyReportCard()" style="background:#00838f;color:#fff;margin-top:0;">📄 Завантажити табель</button>
+      </div>
+    </section>
+
+    <!-- Оплата за навчання. QR за стандартом ZBP: посередника немає,
+         комісії немає, гроші йдуть прямо на рахунок школи. -->
+    <section class="screen-section" data-dtab="school">
+      <h3>💳 Оплата за навчання</h3>
+      <div class="data-card" style="border-left-color:#2e7d32;background:#f1f8f2;margin-top:0;">
+        <div class="pay-box"></div>
+      </div>
+    </section>
+
+    <section class="screen-section" data-dtab="school">
+      <h3>📘 Підручники</h3>
+      <div class="data-card" style="border-left-color:var(--blue);background:#f0f8ff;margin-top:0;">
+        <div id="p-textbooks-list"><p class="empty-msg">Завантаження...</p></div>
+      </div>
+    </section>
+
+    <!-- ═══════════ ПРОФІЛЬ ═══════════ -->
+    <section class="screen-section" data-dtab="profile">
+      <h3>📲 Застосунок на телефоні</h3>
+      <div class="install-box"></div>
+    </section>
+
+    <section class="screen-section" data-dtab="profile">
+      <h3>🔑 Доступ дитини до порталу</h3>
+      <details style="background:#f3f7fb;padding:14px;border-radius:12px;border:1px solid #cfd8dc;">
+        <summary style="font-weight:700;cursor:pointer;color:#37474f;font-size:.95rem;">Вхід для дитини</summary>
+        <div style="margin-top:13px;">
+          <p style="font-size:.82rem;color:#666;margin:0 0 10px 0;">
+            Дитина заходить у портал за нікнеймом — пошта не потрібна. Якщо пошта є,
+            вкажіть її: тоді дитина зможе відновити пароль самостійно, листом.
+            Пароль ви завжди можете змінити тут.
+          </p>
+          <label for="ca-child" style="margin-top:0;">Дитина</label>
+          <select id="ca-child" onchange="caRender()"></select>
+          <div id="ca-body" style="margin-top:12px;">
+            <p class="empty-msg">Натисніть «Оновити», щоб завантажити.</p>
+          </div>
+          <button onclick="caInit()"
+                  style="background:#eceff1;color:#546e7a;padding:9px;margin-top:9px;width:100%;font-size:.85rem;">
+            Оновити</button>
+          <pre id="ca-trail" style="display:none;font-size:.66rem;line-height:1.5;color:#78909c;
+               background:#fff;border:1px solid #eceff1;border-radius:8px;padding:8px;margin-top:9px;
+               white-space:pre-wrap;word-break:break-word;font-family:ui-monospace,monospace;"></pre>
+          <div id="ca-ver" style="font-size:.68rem;color:#cfd8dc;margin-top:6px;text-align:right;">
+            розділ не завантажився</div>
+        </div>
+      </details>
+    </section>
+
+    <section class="screen-section" data-dtab="profile">
+      <h3>✍️ Згоди на обробку даних</h3>
+      <div id="p-my-consents"><p class="empty-msg">Завантаження...</p></div>
+    </section>
+
+    <section class="screen-section" data-dtab="school">
+      <h3>📋 Запити школи</h3>
+      <div id="p-consents"><p class="empty-msg">Активних запитів немає.</p></div>
+    </section>
+
+    <section class="screen-section" data-dtab="profile">
+      <h3>💳 Оплати</h3>
+      <div id="payments-section"></div>
+    </section>
+
+    <button class="btn-logout" onclick="logoutUser()">Вийти</button>
+    <p class="app-version"></p>
+  </div>
+  <!-- ══════════════════════════════
+       STUDENT SCREEN
+       ══════════════════════════════ -->
+  <div id="student-screen" class="panel">
+    <div class="dtab-bar" id="student-screen-tabs">
+      <button class="dtab on" data-t="day" onclick="switchTab('student-screen','day',this)">Сьогодні</button>
+      <button class="dtab" data-t="hw" onclick="switchTab('student-screen','hw',this);openHwTab()">📚 ДЗ</button>
+      <button class="dtab" data-t="games" onclick="switchTab('student-screen','games',this);openGamesTab()">🎮 Ігри</button>
+      <button class="dtab" data-t="news" onclick="switchTab('student-screen','news',this)">Новини<span class="chat-dot"></span></button>
+      <button class="dtab" data-t="study" onclick="switchTab('student-screen','study',this)">Навчання</button>
+    </div>
+    <div id="s-push-invite" style="display:none;"></div>
+
+
+    <section class="screen-section" data-dtab="day">
+      <!-- Дні народження. Найперше на вкладці, як і в інших кабінетах. -->
+      <div id="s-birthdays" class="bd-box" style="display:none;"></div>
+      <h3>🗓️ Розклад</h3>
+      <!-- ДИНАМІЧНИЙ РОЗКЛАД -->
+      <div class="schedule-box" style="margin-top:0;">
+        <div class="schedule-day-label" id="s-schedule-day-label">📅 Мій розклад на сьогодні</div>
+        <div id="s-dynamic-schedule">
+          <div class="no-lessons-msg">⏳ Завантаження розкладу...</div>
+        </div>
+        <button type="button" onclick="printClassSchedule()" style="background:#eceff1;color:#37474f;margin-top:0;margin-bottom:7px;">🖨️ Роздрукувати розклад</button>
+      <button type="button" id="s-week-btn" onclick="toggleWeekSchedule('s')"
+              style="width:100%;background:var(--blue);color:#fff;padding:10px;border-radius:10px;font-weight:700;margin-top:10px;font-size:.88rem;">📅 Показати весь тиждень</button>
+      <div id="s-week-schedule" class="wk-box" style="display:none;"></div>
+      </div>
+      <!-- PHASE 3: Календар -->
+      <div class="data-card" style="border-left-color:var(--orange);background:#fffcf0;">
+        <h4 style="margin-top:0;color:var(--orange);">📅 Календар класу</h4>
+        <p class="cal-hint">Свята, канікули та контрольні цього місяця — списком нижче.</p>
+        <input type="month" id="s-cal-month-select" onchange="renderParentCalendar('student')"
+               style="margin-top:0;font-size:.85rem;">
+        <div id="s-cal-grid"><p class="empty-msg">⏳ Завантаження...</p></div>
+        <button type="button" id="s-cal-year-btn" onclick="toggleYearCalendar('student')" style="background:#eceff1;color:#37474f;margin-top:10px;">📅 Показати весь навчальний рік</button>
+        <div id="s-cal-year" style="display:none;margin-top:10px;"></div>
+
+        <div id="s-cal-day-details" style="display:none;margin-top:10px;background:#fff;border-radius:8px;padding:9px;border:1px dashed var(--orange);font-size:.82rem;"></div>
+      </div>
+      <!-- PHASE 3: Розклад дзвінків -->
+      <div class="data-card" style="border-left-color:#7986cb;background:#f5f6ff;">
+        <h4 style="margin-top:0;color:#283593;">🔔 Розклад дзвінків</h4>
+        <div id="s-bell-schedule-container"><p class="empty-msg">Завантаження...</p></div>
+      </div>
+    </section>
+
+    <section class="screen-section" data-dtab="news">
+      <h3>📣 Новини школи</h3>
+      
+      <div id="s-news-feed" class="nw-feed"><p class="empty-msg">Завантаження...</p></div>
+    </section>
+
+        <!-- ВКЛАДКА «ДОМАШНІ». Своя навігація по тижнях: загальна дата вгорі
+         сторінки керує розкладом, відвідуваністю й меню, і крутити її
+         заради домашки означало зсувати все інше. -->
+    <section class="screen-section" data-dtab="hw">
+      <h3>📚 Домашні завдання</h3>
+      <div id="s-hw-week"><p class="empty-msg">Завантаження...</p></div>
+    </section>
+
+    <!-- ВКЛАДКА «ІГРИ». Вміст малює games.js при відкритті вкладки, а не
+         при завантаженні сторінки: сам список читає прогрес із бази, і
+         робити це для того, хто в ігри не заходить, немає навіщо. -->
+    <section class="screen-section" data-dtab="games">
+      <h3>🎮 Ігри</h3>
+      <div id="s-games"><p class="empty-msg">Завантаження...</p></div>
+    </section>
+
+    <section class="screen-section" data-dtab="study">
+      <h3>📚 Навчання</h3>
+      <!-- Наліпки -->
+      <div class="data-card" style="border-left-color:#f1c40f;background:#fffcf0;text-align:center;margin-top:0;">
+        <h4 style="margin-top:0;color:var(--orange);font-size:1rem;">🌟 Мої наліпки</h4>
+        <div class="progress-bar-container"><div id="s-ribbon-progress" class="progress-bar"></div></div>
+        <p id="s-ribbon-count" style="font-size:1.1rem;font-weight:700;color:#d35400;margin:13px 0 4px 0;">Завантаження...</p>
+      </div>
+      <!-- Підручники -->
+      <div class="data-card" style="border-left-color:var(--blue);background:#f0f8ff;">
+        <h4 style="margin-top:0;color:var(--blue);">📘 Мої підручники</h4>
+        <div id="s-textbooks-list"><p class="empty-msg">Завантаження...</p></div>
+      </div>
+      <!-- ДЗ -->
+      <div class="data-card" style="border-left-color:#00b894;background:#f0fff4;">
+        <h4 style="margin-top:0;color:#00b894;">📚 Завдання для мене:</h4>
+        <div id="s-final-grades" class="fin-box" style="display:none;"></div>
+        <div id="s-day-topics" class="topics-box" style="display:none;"></div>
+        <ul id="s-daily-hw-list" class="list-dash"></ul>
+        <!-- Питання для самоперевірки. Свідомо НЕ «поясни тему» і не
+             «зроби ДЗ» — модель має підштовхнути до перевірки себе. -->
+        <div class="ai-help-box">
+          <div class="ai-hw-row">
+            <select id="s-help-subject" style="flex:1;min-width:140px;margin-top:0;font-size:.82rem;"></select>
+            <button type="button" id="btn-ai-student" onclick="selfCheckAI()">🧠 Перевір себе</button>
+          </div>
+          <p id="ai-student-msg" class="ai-hw-msg" style="display:none;"></p>
+          <div id="ai-student-out" class="ai-out" style="display:none;"></div>
+        </div>
+      </div>
+      <!-- Оцінки за тиждень і за предметом — те саме, що в батьків -->
+      <div class="data-card" style="border-left-color:#ff4757;background:#fff0f1;">
+        <h4 style="margin-top:0;color:#ff4757;">📝 Мої оцінки й коментарі за тиждень:</h4>
+        <div id="s-grades-week"><p class="empty-msg">Завантаження...</p></div>
+      </div>
+      <div class="data-card" style="border-left-color:#7b1fa2;background:#faf5ff;">
+        <h4 style="margin-top:0;color:#7b1fa2;">📈 За предметом:</h4>
+        <div id="s-grades-subject"><p class="empty-msg">Завантаження...</p></div>
+      </div>
+      <!-- Behavior -->
+      <div class="data-card" style="border-left-color:#3949ab;background:#e8eaf6;">
+        <h4 style="margin-top:0;color:#283593;">🤝 Поведінка (цей тиждень):</h4>
+        <div id="s-behavior-list"><p class="empty-msg">Завантаження...</p></div>
+      </div>
+    </section>
+
+    <section class="screen-section half">
+      <h3>🕒 Відвідуваність</h3>
+      <!-- PHASE 2: Алерт про невизнану відмітку вчителя -->
+      <div id="s-teacher-att-alert" style="display:none;background:#fff3cd;border:1px solid #ffeeba;color:#856404;padding:11px 14px;border-radius:12px;margin-bottom:12px;font-size:.85rem;"></div>
+      <!-- Відсутність -->
+      <div class="data-card" style="border-left-color:var(--red);background:#fdfbfb;margin-top:0;">
+        <h4 style="margin-top:0;color:var(--red);">🕒 Я запізнююсь / буду відсутній</h4>
+        <div style="display:flex;flex-direction:column;gap:9px;margin-top:9px;">
+          <select id="s-att-type" onchange="updateAttOptionsStudent()" style="border-color:var(--red);"><option value="late">Запізнююсь</option><option value="absent">Буду відсутній</option></select>
+          <select id="s-att-reason" style="border-color:var(--red);"><option value="на 5 хвилин">на 5 хвилин</option><option value="на 10 хвилин">на 10 хвилин</option><option value="на 15 хвилин">на 15 хвилин</option><option value="на 20 хвилин">на 20 хвилин</option><option value="на 25 хвилин">на 25 хвилин</option><option value="на 30 хвилин">на 30 хвилин</option><option value="до 2-го уроку">до 2-го уроку</option><option value="до 3-го уроку">до 3-го уроку</option></select>
+        </div>
+        <button onclick="submitAttendance('student')" style="background:var(--red);padding:11px;color:#fff;margin-top:13px;">Відправити</button>
+        <p id="s-att-status" style="font-size:.83rem;color:var(--green);font-weight:700;margin-top:9px;display:none;">✅ Повідомлення надіслано!</p>
+      </div>
+    </section>
+
+    <section class="screen-section half">
+      <h3>💬 Комунікація</h3>
+      <!-- Чат -->
+      <div class="data-card" style="border-left-color:var(--purple);background:#f9f4ff; text-align:center;margin-top:0;">
+        <button onclick="openChatModal('student')" data-chatbtn="1" style="background:var(--purple); color:#fff; padding:12px; border-radius:12px; font-weight:700; width:100%;">💬 Написати вчителю / директору</button>
+      </div>
+    </section>
+
+        <section class="screen-section" data-dtab="day">
+      <h3>📲 Застосунок на телефоні</h3>
+      <div class="install-box"></div>
+    </section>
+
+<button class="btn-logout" onclick="logoutUser()">Вийти</button>
+    <p class="app-version"></p>
+  </div>
+</div>
+<!-- ══════════════════ MODALS ══════════════════ -->
+<!-- Підсумкові (семестрові) оцінки. z-index вищий: відкривається поверх журналу -->
+<div id="semester-modal" class="modal-overlay" style="z-index:1010;">
+  <div class="modal-content" style="max-width:640px;text-align:left;">
+    <h2 style="color:#00838f;margin-top:0;text-align:center;">🎓 Підсумкові оцінки</h2>
+    <p style="text-align:center;font-size:.85rem;color:#555;margin:0 0 10px 0;">
+      <b id="sem-class">—</b> · <b id="sem-subject">—</b>
+    </p>
+    <label for="sem-period">Період</label>
+    <select id="sem-period" onchange="renderSemesterTable()" style="border:2px solid #4dd0e1;"></select>
+    <p style="font-size:.77rem;color:#888;margin:8px 0 0 0;">
+      Система рахує середньозважений бал за період і пропонує оцінку.
+      Остаточне рішення — за вами: будь-яке поле можна змінити.
+      Позначка ✎ означає, що оцінка відрізняється від запропонованої.
+    </p>
+    <div id="sem-body" style="margin-top:10px;"><p class="empty-msg">Оберіть період.</p></div>
+    <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
+      <button onclick="semesterFillAuto()" style="background:#e0f7fa;color:#00838f;border:1px solid #80deea;flex:1;min-width:150px;margin-top:0;">↧ Підставити запропоновані</button>
+      <button id="btn-sem-save" onclick="saveSemesterGrades()" style="background:var(--green);color:#fff;flex:1;min-width:150px;margin-top:0;">💾 Зберегти підсумкові</button>
+    </div>
+    <button onclick="closeSemesterGrades()" style="background:#f5f6fa;color:#333;margin-top:8px;border:1px solid #dcdde1;">Закрити</button>
+  </div>
+</div>
+<!-- Швидкий журнал: увесь клас на одному екрані -->
+<div id="quick-journal-modal" class="modal-overlay" style="z-index:1010;">
+  <div class="modal-content" style="max-width:520px;text-align:left;">
+    <h2 style="color:#0072ff;margin-top:0;text-align:center;">⚡ Швидкий журнал</h2>
+    <p style="text-align:center;font-size:.85rem;color:#555;margin:0 0 8px 0;">
+      <select id="qj-subject" class="act-subj" onchange="openQuickJournal()"></select> · <b id="qj-date">—</b>
+    </p>
+    <label for="qj-type" style="margin-top:0;">Тип оцінок на цьому уроці</label>
+    <select id="qj-type" style="margin-top:3px;"></select>
+    <div class="qj-legend"><span><b>✓</b> присутній</span><span><b>З</b> запізнення</span><span><b>Н</b> відсутній</span></div>
+    <div id="qj-body" style="margin-top:6px;max-height:52vh;overflow-y:auto;"></div>
+    <button id="btn-qj-save" onclick="saveQuickJournal()" style="background:var(--green);color:#fff;margin-top:12px;">💾 Зберегти все</button>
+    <button onclick="closeQuickJournal()" style="background:#f5f6fa;color:#333;margin-top:7px;border:1px solid #dcdde1;">Скасувати</button>
+  </div>
+</div>
+<!-- Повідомлення всім батькам класу -->
+<div id="class-broadcast-modal" class="modal-overlay" style="z-index:1010;">
+  <div class="modal-content" style="max-width:440px;text-align:left;">
+    <h2 style="color:var(--purple);margin-top:0;text-align:center;">✉️ Повідомлення класу</h2>
+    <p style="text-align:center;font-size:.85rem;color:#555;margin:0 0 4px 0;"><b id="cb-class">—</b></p>
+    <p style="font-size:.77rem;color:#888;margin:0 0 10px 0;">
+      Кожен отримає повідомлення в особистий чат — батьки не бачитимуть
+      контактів одне одного і не зможуть відповісти «всім».
+    </p>
+    <textarea id="cb-text" rows="4" placeholder="Напр. Завтра принести альбом і олівці"></textarea>
+    <p id="cb-status" style="font-size:.8rem;color:var(--green);font-weight:700;margin:7px 0 0 0;"></p>
+    <button id="btn-cb-send" onclick="sendClassBroadcast()" style="background:var(--purple);color:#fff;margin-top:10px;">✉️ Надіслати всім</button>
+    <button onclick="closeClassBroadcast()" style="background:#f5f6fa;color:#333;margin-top:7px;border:1px solid #dcdde1;">Скасувати</button>
+  </div>
+</div>
+<!-- Учні, яких давно не оцінювали -->
+<div id="ungraded-modal" class="modal-overlay" style="z-index:1010;">
+  <div class="modal-content" style="max-width:440px;text-align:left;">
+    <h2 style="color:#e67e22;margin-top:0;text-align:center;">🔍 Хто давно без оцінок</h2>
+    <p style="text-align:center;font-size:.85rem;color:#555;margin:0 0 4px 0;">Предмет:
+      <select id="ungraded-subject" class="act-subj" onchange="showUngraded()"></select></p>
+    <p style="font-size:.76rem;color:#888;margin:0 0 10px 0;">Перевіряються останні три місяці. Позначено тих, кого не оцінювали 14 днів і довше.</p>
+    <div id="ungraded-body"></div>
+    <button onclick="closeUngraded()" style="background:#333;color:#fff;margin-top:12px;">Закрити</button>
+  </div>
+</div>
+<!-- Копіювання ДЗ у паралельні класи -->
+<div id="hw-copy-modal" class="modal-overlay">
+  <div class="modal-content" style="max-width:400px;text-align:left;">
+    <h2 style="color:var(--blue);margin-top:0;text-align:center;">📋 Скопіювати ДЗ</h2>
+    <p style="font-size:.84rem;color:#555;margin:0 0 4px 0;">Предмет:
+      <select id="hw-copy-subject" class="act-subj" onchange="openHwCopy()"></select>
+      · Дата: <b id="hw-copy-date">—</b></p>
+    <p style="font-size:.76rem;color:#888;margin:0 0 10px 0;">
+      Копіюється лише домашнє завдання. Теми уроків не переносяться —
+      у кожного класу свій прогрес за календарним планом.
+    </p>
+    <div id="hw-copy-classes"></div>
+    <button id="btn-hw-copy-do" onclick="doHwCopy()" style="background:var(--blue);color:#fff;margin-top:12px;">📋 Скопіювати</button>
+    <button onclick="closeHwCopy()" style="background:#f5f6fa;color:#333;margin-top:7px;border:1px solid #dcdde1;">Скасувати</button>
+  </div>
+</div>
+<!-- Картка учня. Медичні дані — особлива категорія за GDPR, тому редагування
+     доступне лише директору, адміністратору й класному керівнику цього класу;
+     решта відкриває картку в режимі перегляду. -->
+<!-- z-index вищий за решту модалок: картку можна відкрити поверх іншого
+     вікна (напр. із профілю батьків), а порядок у DOM цього не гарантує -->
+<div id="student-card-modal" class="modal-overlay" style="z-index:1010;">
+  <div class="modal-content" style="max-width:560px;text-align:left;">
+    <h2 style="color:var(--teal);margin-top:0;text-align:center;">📋 Картка учня</h2>
+    <p style="text-align:center;font-size:.9rem;color:#333;margin:0 0 12px 0;"><b id="sc-student">—</b></p>
+    <p id="sc-readonly" style="display:none;font-size:.78rem;color:#8a6d1f;background:#fff8e1;border:1px solid #ffe0a3;border-radius:8px;padding:8px 10px;margin:0 0 10px 0;">
+      Режим перегляду. Редагувати картку можуть директор, адміністрація та класний керівник цього класу.
+    </p>
+    <div id="sc-fields"></div>
+    <button id="sc-save" onclick="saveStudentCard()" style="background:var(--green);color:#fff;margin-top:14px;">💾 Зберегти</button>
+    <button onclick="closeStudentCard()" style="background:#f5f6fa;color:#333;margin-top:7px;border:1px solid #dcdde1;">Закрити</button>
+  </div>
+</div>
+<!-- Вхід учня: додати, змінити або прибрати власну пошту для входу -->
+<div id="student-login-modal" class="modal-overlay">
+  <div class="modal-content" style="max-width:420px;text-align:left;">
+    <h2 style="color:var(--teal);margin-top:0;text-align:center;">🔑 Вхід учня</h2>
+    <p style="text-align:center;font-size:.85rem;color:#555;margin:0 0 4px 0;"><b id="sl-student">—</b></p>
+    <p style="font-size:.78rem;color:#888;margin:0 0 12px 0;">
+      Email потрібен лише тоді, коли учень заходить у портал <b>сам</b>.
+      Батьки бачать оцінки дитини незалежно від цього.
+    </p>
+    <label for="sl-email">Email для входу</label>
+    <input type="email" id="sl-email" placeholder="учень@пошта.com" autocapitalize="none" spellcheck="false">
+    <p style="font-size:.74rem;color:#8a6d1f;background:#fff8e1;border:1px solid #ffe0a3;border-radius:8px;padding:7px 9px;margin:9px 0 0 0;">
+      Після збереження учень заходить через «Перший вхід» і сам створює пароль.
+      Якщо змінюєте адресу вже наявному учню — вхід за старою перестане діяти.
+    </p>
+    <button onclick="saveStudentLogin()" style="background:var(--green);color:#fff;margin-top:14px;">💾 Зберегти</button>
+    <button id="sl-remove" onclick="removeStudentLogin()" style="background:#fdecea;color:var(--red);border:1px solid #f5c6cb;margin-top:7px;display:none;">🔒 Прибрати вхід</button>
+    <button onclick="closeStudentLogin()" style="background:#f5f6fa;color:#333;margin-top:7px;border:1px solid #dcdde1;">Скасувати</button>
+  </div>
+</div>
+<!-- Редактор контактів батьків. Спільний для кабінету вчителя і директора -->
+<div id="parent-edit-modal" class="modal-overlay">
+  <div class="modal-content" style="max-width:460px;text-align:left;">
+    <h2 style="color:var(--purple);margin-top:0;text-align:center;">👪 Контакти батьків</h2>
+    <p style="text-align:center;font-size:.8rem;color:#888;margin:0 0 4px 0;" id="pe-email">—</p>
+    <p style="font-size:.76rem;color:#999;text-align:center;margin:0 0 12px 0;">Незаповнені поля просто не показуються у списку</p>
+    <div id="pe-fields"></div>
+    <button id="pe-save" onclick="saveParentProfile()" style="background:var(--green);color:#fff;margin-top:16px;">💾 Зберегти</button>
+    <button onclick="closeParentEditor()" style="background:#f5f6fa;color:#333;margin-top:8px;border:1px solid #dcdde1;">Скасувати</button>
+  </div>
+</div>
+<!-- Profile -->
+<div id="profile-modal" class="modal-overlay">
+  <div class="modal-content">
+    <h2 style="color:var(--teal);margin-top:0;">⚙️ Профіль</h2>
+    <div style="display:flex;justify-content:center;margin-bottom:13px;">
+      <img id="modal-avatar-preview" src="https://cdn-icons-png.flaticon.com/512/149/149071.png" style="width:78px;height:78px;border-radius:50%;object-fit:cover;border:3px solid var(--teal);">
+    </div>
+    <label>Фото:</label><input type="file" id="profile-photo" accept="image/*" style="margin-bottom:13px;">
+    <!-- Для батьків ці два поля ховаються: у них ПІБ разом із контактами нижче -->
+    <div id="profile-name-block">
+      <label>Ім'я:</label><input type="text" id="profile-first-name" placeholder="Ім'я" style="margin-bottom:8px;">
+      <label>Прізвище:</label><input type="text" id="profile-last-name" placeholder="Прізвище" style="margin-bottom:8px;">
+    </div>
+    <!-- Встановлення застосунку — має бути ВИЩЕ за сповіщення: на iPhone
+         вони працюють лише після встановлення на екран «Домів» -->
+    <div id="install-block" style="display:none;margin-top:13px;padding-top:11px;border-top:1px dashed #ccc;text-align:left;"></div>
+    <!-- Сповіщення: показується всім, у кого браузер їх підтримує -->
+    <button type="button" onclick="checkPush()" style="background:#eceff1;color:#455a64;margin-top:10px;font-size:.8rem;">🔍 Перевірити сповіщення</button>
+    <div id="push-toggle" style="display:none;margin-top:13px;padding-top:11px;border-top:1px dashed #ccc;text-align:left;"></div>
+    <!-- Дані дитини: доступно лише батькам -->
+    <div id="child-block" style="display:none;margin-top:13px;padding-top:11px;border-top:1px dashed #ccc;text-align:left;">
+      <label style="color:var(--purple);margin-top:0;">👶 Дані дитини</label>
+      <p style="font-size:.76rem;color:#888;margin:3px 0 7px 0;">
+        Тут ви можете оновити медичні відомості, контакти та список тих,
+        хто має право забирати дитину.
+      </p>
+      <button type="button" onclick="openMyChildCard()" style="background:var(--purple);color:#fff;margin-top:0;">📋 Відкрити картку дитини</button>
+      <button type="button" onclick="exportMyChildData()" style="background:#eceff1;color:#37474f;border:1px solid #cfd8dc;margin-top:7px;">📦 Завантажити всі дані про дитину</button>
+      <p style="font-size:.72rem;color:#999;margin:4px 0 0 0;">Файл у форматі JSON — усе, що портал зберігає про вашу дитину.</p>
+    </div>
+    <!-- Контактні дані батьків: заповнює сам батько/мати, а бачать і можуть
+         виправити вчитель і директор. Зберігаються в parent_links, не в users. -->
+    <div id="p-contacts-section" style="display:none;margin-top:13px;padding-top:11px;border-top:1px dashed #ccc;text-align:left;">
+      <label style="color:var(--purple);margin-top:0;">👪 Мої контактні дані</label>
+      <p style="font-size:.76rem;color:#888;margin:3px 0 6px 0;">Ці дані бачать класний керівник і адміністрація школи.</p>
+      <div id="p-contacts-fields"></div>
+    </div>
+    <div id="t-skills-section" style="display:none;margin-top:13px;padding-top:11px;border-top:1px dashed #ccc;text-align:left;">
+      <label style="color:#0d47a1;margin-top:0;">🧠 Мої скіли (предмети для заміни):</label>
+      <div id="t-my-skills-tags" style="margin-top:6px;min-height:28px;"></div>
+      <div style="display:flex;gap:7px;margin-top:7px;">
+        <input type="text" id="t-skill-add-input" placeholder="Предмет..." style="flex:2;margin-top:0;font-size:.85rem;">
+        <button onclick="addMySkill()" style="flex:1;margin-top:0;background:#0d47a1;color:#fff;padding:9px 6px;font-size:.82rem;">+ Додати</button>
+      </div>
+    </div>
+    <div style="margin-top:13px;padding-top:9px;border-top:1px dashed #ccc;text-align:left;">
+      <label style="color:var(--red);margin-top:0;">Зміна пароля:</label>
+      <input type="password" id="profile-new-pass" placeholder="Новий пароль (від 6 символів)" style="margin-bottom:18px;border-color:var(--red);">
+    </div>
+    <button onclick="saveProfile()" id="btn-save-profile" style="background:var(--green);color:#fff;">💾 Зберегти</button>
+    <button onclick="closeProfileModal()" style="background:#f5f6fa;color:#333;margin-top:9px;border:1px solid #dcdde1;">Скасувати</button>
+  </div>
+</div>
+<!-- Visual Matrix -->
+<div id="visual-matrix-modal" class="modal-overlay" style="align-items:flex-start;padding-top:36px;">
+  <div class="modal-content" style="max-width:96%;width:100%;padding:18px;background:#f4f6f8;">
+    <h2 id="matrix-modal-title" style="color:#1abc9c;margin-top:0;margin-bottom:9px;">🗓️ Матриця розкладу</h2>
+    <div id="matrix-mode-banner" class="mx-mode" style="display:none;"></div>
+    <div style="display:flex;justify-content:center;gap:9px;margin-bottom:13px;flex-wrap:wrap;">
+      <div id="matrix-acc-warn" style="display:none;background:#fff8e1;border-left:3px solid var(--orange);color:#7a5b00;padding:9px 11px;border-radius:0 8px 8px 0;font-size:.78rem;margin-bottom:8px;line-height:1.45;text-align:left;"></div>
+      <div id="matrix-hours-note" style="display:none;background:#f1f8f2;border-left:3px solid #2e7d32;color:#1b5e20;padding:9px 11px;border-radius:0 8px 8px 0;font-size:.78rem;margin-bottom:8px;line-height:1.45;text-align:left;"></div>
+      <div id="matrix-load-info" style="display:none;font-size:.75rem;color:#78909c;margin-bottom:6px;"></div>
+      <select id="matrix-day-select" onchange="renderMatrixGrid()" style="max-width:280px;border:2px solid #1abc9c;color:#16a085;font-weight:700;">
+        <option value="Monday">Понеділок</option><option value="Tuesday">Вівторок</option><option value="Wednesday">Середа</option><option value="Thursday">Четвер</option><option value="Friday">П'ятниця</option>
+      </select>
+    </div>
+    <div id="constructor-warnings" style="display:none;background:#fff3cd;border:1px solid #ffeeba;color:#856404;padding:9px;border-radius:8px;margin-bottom:9px;text-align:left;font-size:.82rem;"></div>
+    <div class="matrix-wrapper">
+      <table class="matrix-table">
+        <thead><tr id="matrix-thead-row"></tr></thead>
+        <tbody id="matrix-tbody"></tbody>
+      </table>
+    </div>
+    <button onclick="closeVisualMatrixModal()" style="background:#333;color:#fff;width:auto;min-width:180px;margin-top:18px;display:block;margin-left:auto;margin-right:auto;">Закрити</button>
+  </div>
+</div>
+<!-- Edit Cell Modal -->
+<div id="edit-cell-modal" class="modal-overlay" style="z-index:1001;">
+  <div class="modal-content" style="max-width:440px;">
+    <h3 style="color:#2c3e50;margin-top:0;border-bottom:none;padding-bottom:0;" id="edit-cell-title">Редагування слоту</h3>
+    <p id="edit-cell-subtitle" style="color:#7f8c8d;font-size:.82rem;margin-top:4px;margin-bottom:9px;"></p>
+    <div id="cell-live-warnings" style="display:none;margin-bottom:13px;text-align:left;font-size:.78rem;border-radius:6px;padding:7px;"></div>
+    <label>Тип слоту:</label>
+    <select id="cell-type-select" style="margin-bottom:9px;border-color:#9b59b6;" onchange="toggleCellType()">
+      <option value="lesson">📚 Урок</option><option value="break">☕ Перерва</option><option value="extra">🎸 Гурток</option>
+    </select>
+    <label id="cell-subj-label">Назва предмету:</label>
+    <select id="cell-subj-ua" style="margin-bottom:2px;border-color:var(--blue);" onchange="handleSubjInput()"></select>
+    <div id="cell-subj-hint" style="font-size:.7rem;color:#e65100;margin-bottom:9px;text-align:left;"></div>
+    <div id="cell-extra-wrapper" style="display:none;margin-bottom:9px;background:#f0f8ff;padding:14px;border-radius:12px;border:1px solid var(--blue);text-align:left;">
+      <label style="color:#2980b9;margin-top:0;">Формат:</label>
+      <select id="cell-extra-format" style="border-color:var(--blue);margin-bottom:9px;" onchange="toggleExtraFormat()"><option value="group">👥 Групове</option><option value="individual">👤 Індивідуальне</option></select>
+      <div id="extra-individual-wrap" style="display:none;"><label style="color:#2980b9;margin-top:4px;">Учень:</label><select id="extra-ind-student" style="border-color:var(--blue);"></select></div>
+      <div id="extra-group-wrap" style="display:none;">
+        <label style="color:#2980b9;margin-top:4px;">Склад:</label>
+        <select id="extra-group-type" style="border-color:var(--blue);margin-bottom:9px;" onchange="toggleExtraGroupType()"><option value="classes">Класи</option><option value="students">Учні</option></select>
+        <div id="extra-group-classes-wrap"><select id="extra-group-classes" multiple style="height:90px;"></select></div>
+        <div id="extra-group-students-wrap" style="display:none;"><select id="extra-group-students" multiple style="height:130px;"></select></div>
+      </div>
+    </div>
+    <div id="cell-teacher-wrapper">
+      <label>Вчитель:</label>
+      <select id="cell-teacher-select" style="margin-bottom:9px;border-color:#e67e22;" onchange="triggerSmartCheck()"><option value="">-- Не призначено --</option></select>
+    </div>
+    <div style="display:flex;gap:9px;">
+      <div style="flex:1;"><label>Номер:</label><input type="text" id="cell-number" placeholder="1"></div>
+      <div style="flex:2;"><label>Час:</label><input type="text" id="cell-time" placeholder="09:00 - 09:45"></div>
+    </div>
+    <input type="hidden" id="cell-edit-class"><input type="hidden" id="cell-edit-row"><input type="hidden" id="cell-edit-subindex">
+    <div class="row-tools">
+      <div class="row-tools-title">Дії над цілим рядком</div>
+      <div class="row-tools-btns">
+        <button type="button" onclick="insertMatrixRow('above','break')">⬆ Перерва вище</button>
+        <button type="button" onclick="insertMatrixRow('below','break')">⬇ Перерва нижче</button>
+        <button type="button" onclick="insertMatrixRow('below','empty')">＋ Порожній рядок</button>
+        <button type="button" onclick="deleteMatrixRow()">🗑 Прибрати рядок</button>
+      </div>
+      <button type="button" class="row-tools-auto" onclick="autoBreaksForDay()">⏱ Розставити перерви за часом уроків</button>
+    </div>
+    <div style="display:flex;gap:9px;margin-top:22px;">
+      <button onclick="deleteMatrixCell()" style="background:var(--red);color:#fff;margin-top:0;flex:1;">Очистити</button>
+      <button onclick="saveMatrixCell()" style="background:var(--green);color:#fff;margin-top:0;flex:2;">Зберегти</button>
+    </div>
+    <button onclick="closeEditCellModal()" style="background:transparent;color:#7f8c8d;border:1px solid #bdc3c7;margin-top:9px;">Скасувати</button>
+  </div>
+</div>
+<!-- Journal Modal -->
+<div id="journal-modal" class="modal-overlay">
+  <div class="modal-content" style="max-width:96%;width:100%;padding:18px;">
+    <h2 style="color:var(--blue);margin-top:0;">📖 Класний журнал</h2>
+
+    <!-- Toolbar: Клас / Предмет / Період (від—до) -->
+    <div style="display:flex;gap:var(--space-3);flex-wrap:wrap;margin-bottom:var(--space-3);">
+      <div id="j-class-field" style="flex:1;min-width:110px;display:none;">
+        <label style="margin-top:0;font-size:var(--text-xs);">Клас</label>
+        <select id="j-class-select" style="margin-top:2px;" onchange="updateJournalSubjects()"></select>
+      </div>
+      <div style="flex:1;min-width:110px;">
+        <label style="margin-top:0;font-size:var(--text-xs);">Предмет</label>
+        <select id="j-subj-select" style="margin-top:2px;" onchange="renderJournalTable()"></select>
+      </div>
+      <div style="flex:2;min-width:210px;">
+        <label style="margin-top:0;font-size:var(--text-xs);">Період</label>
+        <div style="display:flex;gap:6px;align-items:center;margin-top:2px;">
+          <input type="month" id="j-month-from" title="Місяць від" style="margin-top:0;flex:1;" onchange="handleJournalRangeChange()">
+          <span style="color:#aaa;">—</span>
+          <input type="month" id="j-month-to" title="Місяць до" style="margin-top:0;flex:1;" onchange="handleJournalRangeChange()">
+        </div>
+      </div>
+    </div>
+
+    <!-- Controls row: mode toggle (teacher/director) + zoom -->
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:var(--space-2);flex-wrap:wrap;margin-bottom:var(--space-2);">
+      <div id="j-mode-toggle-wrap" class="mode-toggle" style="display:none;margin-bottom:0;">
+        <button id="j-mode-view" class="active" onclick="setJournalMode('view')">👁 Перегляд</button>
+        <button id="j-mode-edit" onclick="setJournalMode('edit')">✏️ Редагування</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;margin-left:auto;">
+        <span style="font-size:var(--text-xs);color:#888;">🔍</span>
+        <button onclick="journalZoomOut()" title="Зменшити" style="width:auto;padding:5px 11px;margin:0;background:#ecf0f1;color:#333;border-radius:7px;">−</button>
+        <button onclick="journalZoomFit()" id="journal-zoom-label" title="Підібрати за шириною" style="width:auto;padding:5px 11px;margin:0;background:#ecf0f1;color:#333;border-radius:7px;font-size:var(--text-xs);min-width:56px;">100%</button>
+        <button onclick="journalZoomIn()" title="Збільшити" style="width:auto;padding:5px 11px;margin:0;background:#ecf0f1;color:#333;border-radius:7px;">+</button>
+      </div>
+    </div>
+
+    <div id="j-edit-hint" style="display:none;background:#e0f7fa;padding:8px 12px;border-radius:8px;margin-bottom:7px;font-size:.8rem;color:#006064;">
+      💡 Клікніть на клітинку щоб виставити або змінити оцінку. Tab/Enter — наступний учень.
+    </div>
+    <div id="journal-type-legend" style="margin:4px 0 6px 0;"></div>
+    <div id="j-range-summary" style="font-size:var(--text-xs);color:#999;margin:0 0 6px 2px;"></div>
+    <div class="journal-wrap">
+      <div id="journal-scale-inner">
+        <table class="journal-table" id="journal-table-el"></table>
+      </div>
+    </div>
+    <!-- Weighted Average info -->
+    <div id="j-weighted-avg" style="margin-top:var(--space-3);background:#f4ecf7;border-radius:var(--card-radius);padding:var(--space-3);font-size:var(--text-sm);display:none;"></div>
+    <div style="display:flex;gap:9px;margin-top:13px;flex-wrap:wrap;">
+      <button onclick="openSemesterGrades()" style="background:linear-gradient(135deg,#00838f,#006064);color:#fff;flex:1;min-width:150px;margin-top:0;">🎓 Підсумкові оцінки</button>
+      <button id="btn-export-journal-pdf" onclick="exportJournalToPDF()" style="background:linear-gradient(135deg,#e74c3c,#c0392b);color:#fff;flex:1;min-width:130px;margin-top:0;">📄 Експорт PDF</button>
+      <button onclick="closeJournalModal()" style="background:#333;color:#fff;flex:1;min-width:110px;margin-top:0;">Закрити</button>
+    </div>
+  </div>
+</div>
+<!-- Exams Modal -->
+<div id="exams-modal" class="modal-overlay">
+  <div class="modal-content">
+    <h2 style="color:#d35400;margin-top:0;">📅 Контрольні роботи</h2>
+    <p style="font-size:.83rem;color:#666;margin-bottom:13px;">Клас: <b id="exam-class-label"></b></p>
+    <input type="month" id="exam-month-select" onchange="renderExamsCalendar()" style="margin-bottom:13px;border:2px solid #d35400;color:#d35400;font-weight:700;text-align:center;">
+    <div id="exams-cal-container"></div>
+    <div id="exams-day-details" style="margin-top:18px;text-align:left;background:#fffcf0;padding:14px;border-radius:12px;border:1px dashed var(--orange);display:none;"></div>
+    <button onclick="closeExamsModal()" style="background:#333;color:#fff;width:100%;margin-top:18px;">Закрити</button>
+  </div>
+</div>
+<!-- Inbox / Chat Modal -->
+<div id="inbox-modal" class="modal-overlay">
+  <div class="chat-win">
+
+    <!-- Список переписок -->
+    <div id="chat-list-view" class="chat-pane">
+      <header class="chat-bar">
+        <span class="chat-bar-title">Повідомлення</span>
+        <button class="chat-icon" onclick="openChatPicker('new')" aria-label="Нова переписка" title="Нова переписка">+</button>
+        <button class="chat-x" onclick="closeInboxModal()" aria-label="Закрити">&times;</button>
+      </header>
+      <div id="inbox-contacts-list" class="chat-scroll list">
+        <p class="empty-msg" style="padding:20px;">Завантаження...</p>
+      </div>
+    </div>
+
+    <!-- Одна переписка -->
+    <div id="chat-detail-view" class="chat-pane" style="display:none;">
+      <header class="chat-bar">
+        <button class="chat-back" onclick="backToChatList()" aria-label="Назад">&#8249;</button>
+        <span class="chat-bar-titles">
+          <span class="chat-bar-title" id="chat-detail-title">Чат</span>
+          <small class="chat-bar-sub" id="chat-detail-sub" style="display:none;"></small>
+        </span>
+        <button class="chat-icon" onclick="openChatPicker('add')" aria-label="Додати до розмови" title="Додати до розмови">&#43;&#128100;</button>
+        <button class="chat-x" onclick="closeInboxModal()" aria-label="Закрити">&times;</button>
+      </header>
+      <div id="inbox-messages-list" class="chat-scroll msgs"></div>
+      <div id="chat-readonly" class="chat-readonly" style="display:none;">Ви переглядаєте чужу переписку. Писати в неї не можна.</div>
+      <div class="chat-compose" id="chat-compose">
+        <textarea id="msg-text-input" rows="1" placeholder="Повідомлення..."></textarea>
+        <button class="chat-send" onclick="sendInboxMessage()" aria-label="Надіслати">&#10148;</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div id="wrapped-modal" class="modal-overlay">
+  <div class="modal-content">
+    <h2 style="color:var(--green);margin-top:0;">🎉 Ваші підсумки!</h2>
+    <ul style="list-style:none;padding:0;font-size:1.05rem;line-height:2.1;text-align:left;background:#f8f9fa;padding:13px;border-radius:12px;">
+      <li>📚 Завдань задано: <b id="w-hw" style="float:right;color:var(--blue);">0</b></li>
+      <li>📝 Коментарів: <b id="w-com" style="float:right;color:var(--purple);">0</b></li>
+      <li>🌟 Наліпок: <b id="w-st" style="float:right;color:var(--orange);">0</b></li>
+    </ul>
+    <p style="font-weight:700;color:#d35400;margin-top:18px;">Ви робите неймовірну роботу! ❤️</p>
+    <button onclick="closeModal()" style="background:linear-gradient(135deg,#27ae60,#2ecc71);color:#fff;width:100%;margin-top:9px;">Дякую!</button>
+  </div>
+</div>
+<!-- Reactions Modal -->
+<div id="reactions-modal" class="modal-overlay">
+  <div class="modal-content" style="max-width:500px;max-height:80vh;display:flex;flex-direction:column;">
+    <h2 style="color:#d35400;margin-top:0;">❤️ Реакції</h2>
+    <div id="reactions-list" style="overflow-y:auto;text-align:left;padding:9px 0;"></div>
+    <button onclick="closeReactionsModal()" style="background:#333;color:#fff;width:100%;margin-top:13px;">Закрити</button>
+  </div>
+</div>
+<!-- Retake Requests Modal -->
+<div id="retake-modal" class="modal-overlay">
+  <div class="modal-content" style="max-width:500px;">
+    <h2 style="color:#856404;margin-top:0;">🔄 Запити на перездачу</h2>
+    <div id="retake-list" style="text-align:left;max-height:60vh;overflow-y:auto;"></div>
+    <button onclick="closeRetakeModal()" style="background:#333;color:#fff;width:100%;margin-top:13px;">Закрити</button>
+  </div>
+</div>
+<!-- PHASE 7: Sticker Stats Modal (same structure as #reactions-modal) -->
+<div id="sticker-stats-modal" class="modal-overlay">
+  <div class="modal-content" style="max-width:500px;max-height:80vh;display:flex;flex-direction:column;">
+    <h3 style="margin-top:0;color:#f39c12;">🌟 Статистика наліпок</h3>
+    <div id="sticker-goal-box" class="sg-box">
+      <label for="sticker-goal-input">Наліпок до призу в цьому класі</label>
+      <div class="sg-row">
+        <input type="number" id="sticker-goal-input" min="1" max="500" step="1">
+        <button type="button" onclick="saveStickerGoal()">Зберегти</button>
+      </div>
+      <div class="sg-note" id="sticker-goal-note"></div>
+    </div>
+    <div id="sticker-stats-list" style="overflow-y:auto;text-align:left;padding:9px 0;"></div>
+    <button onclick="closeStickerStatsModal()" style="background:#333;color:#fff;margin-top:13px;">Закрити</button>
+  </div>
+</div>
+<!-- ═══════════════════════ APP MODULES (ES modules) ═══════════════════════ -->
+
+<!-- НАЛАШТУВАННЯ ХАРЧУВАННЯ (батьки) -->
+<div id="meal-settings-modal" class="modal-overlay" style="display:none;z-index:1010;">
+  <div class="modal-content">
+    <h3 style="color:#00838f;margin-top:0;">⚙️ Налаштування харчування</h3>
+    <div id="meal-settings-body"></div>
+    <button onclick="saveMealSettings()" style="background:#00838f;color:#fff;">💾 Зберегти</button>
+    <button onclick="document.getElementById('meal-settings-modal').style.display='none'" style="background:#eceff1;color:#37474f;">Закрити</button>
+  </div>
+</div>
+
+<!-- СТАТИСТИКА ХАРЧУВАННЯ (батьки) -->
+<div id="meal-stats-modal" class="modal-overlay" style="display:none;z-index:1010;">
+  <div class="modal-content">
+    <h3 style="color:#00838f;margin-top:0;">📊 Харчування дитини</h3>
+    <div style="display:flex;gap:8px;">
+      <div style="flex:1;min-width:0;"><label for="pms-from" style="font-size:.74rem;">Від</label><input type="date" id="pms-from" onchange="reloadMyMealStats()" min="2020-01-01" max="2099-12-31"></div>
+      <div style="flex:1;min-width:0;"><label for="pms-to" style="font-size:.74rem;">До</label><input type="date" id="pms-to" onchange="reloadMyMealStats()" min="2020-01-01" max="2099-12-31"></div>
+    </div>
+    <!-- Тиждень і місяць двома кнопками: саме на «а яким числом був
+         понеділок» люди й кидають звіт. -->
+    <div class="pms-presets">
+      <button type="button" onclick="myMealPeriod('week')">Цей тиждень</button>
+      <button type="button" onclick="myMealPeriod('month')">Цей місяць</button>
+    </div>
+    <div id="meal-stats-body"></div>
+    <button onclick="document.getElementById('meal-stats-modal').style.display='none'" style="background:#eceff1;color:#37474f;">Закрити</button>
+  </div>
+</div>
+
+
+<!-- ОГОЛОШЕННЯ -->
+<div id="news-modal" class="modal-overlay" style="display:none;z-index:1010;">
+  <div class="modal-content">
+    <h3 style="color:#00838f;margin-top:0;">📣 Нове оголошення</h3>
+    <div id="nw-scope-row">
+      <label for="nw-scope">Кому</label>
+      <select id="nw-scope" onchange="nwScopeChanged()">
+        <option value="school">Усій школі</option>
+        <option value="class">Окремому класу</option>
+      </select>
+    </div>
+    <div id="nw-class-row" style="display:none;">
+      <label for="nw-class">Клас</label>
+      <select id="nw-class"><option value="">Оберіть...</option><option value="class_1">1 клас</option><option value="class_2">2 клас</option><option value="class_3">3 клас</option><option value="class_4">4 клас</option><option value="class_5">5 клас</option><option value="class_6">6 клас</option><option value="class_7">7 клас</option><option value="class_8">8 клас</option><option value="class_9">9 клас</option><option value="class_10">10 клас</option><option value="class_11">11 клас</option></select>
+    </div>
+    <p id="nw-scope-note" style="font-size:.78rem;color:#888;margin:6px 0 0 0;"></p>
+    <label for="nw-title">Заголовок <span style="color:#aaa;font-weight:400;">(необовʼязково)</span></label>
+    <input type="text" id="nw-title" placeholder="напр. Батьківські збори">
+    <label for="nw-text">Текст</label>
+    <textarea id="nw-text" rows="5" placeholder="Напишіть коротко суть — або натисніть «Скласти чернетку», і AI розгорне її у текст."></textarea>
+    <button id="nw-ai" onclick="newsDraftAI()" style="background:#f3e5f5;color:#6a1b9a;border:1px solid #ce93d8;">✨ Скласти чернетку</button>
+    <label class="nw-imp-row">
+      <input type="checkbox" id="nw-important">
+      <span><b>Важливе</b> — надіслати сповіщення<br>
+        <small>Без галочки оголошення просто зʼявиться у стрічці. Не позначайте важливим усе підряд — інакше сповіщення вимкнуть.</small></span>
+    </label>
+    <button id="nw-publish" onclick="publishNews()" style="background:#00838f;color:#fff;">📢 Опублікувати</button>
+    <button onclick="document.getElementById('news-modal').style.display='none'" style="background:#eceff1;color:#37474f;">Скасувати</button>
+  </div>
+</div>
+
+
+<!-- ВИБІР СПІВРОЗМОВНИКІВ -->
+<div id="chat-picker" class="modal-overlay" style="display:none;z-index:1020;">
+  <div class="modal-content" style="text-align:left;">
+    <h3 id="cp-title" style="color:#00838f;margin-top:0;">Нова переписка</h3>
+    <p id="cp-note" style="font-size:.78rem;color:#888;margin:0 0 10px 0;"></p>
+    <div id="cp-list" class="cp-list"><p class="empty-msg">Завантаження...</p></div>
+    <button onclick="createChatFromPicker()" style="background:#00838f;color:#fff;">Почати розмову</button>
+    <button onclick="closeChatPicker()" style="background:#eceff1;color:#37474f;">Скасувати</button>
+  </div>
+</div>
+
+
+<script>
+// Значок непрочитаних чіпляємо до всіх кнопок чату одним проходом.
+// Розмітка кнопок різна (де button, де div), тому додаємо програмно.
+document.addEventListener('DOMContentLoaded', function(){
+  document.querySelectorAll('[data-chatbtn]').forEach(function(b){
+    if(b.querySelector('.chat-dot')) return;
+    var s = document.createElement('span');
+    s.className = 'chat-dot';
+    b.appendChild(s);
+  });
+});
+</script>
+
+<script src="push-config.js"></script>
+<script type="module" src="common.js"></script>
+<script type="module" src="curriculum.js"></script>
+<script type="module" src="director.js"></script>
+<script type="module" src="journal.js"></script>
+<script type="module" src="parent-student.js"></script>
+<script type="module" src="teacher.js"></script>
+<script type="module" src="kitchen.js"></script>
+<script type="module" src="news.js"></script>
+<script type="module" src="chat.js"></script>
+<script type="module" src="breaks.js"></script>
+<script type="module" src="subjects.js"></script>
+<script type="module" src="alternating.js"></script>
+<script type="module" src="students-import.js"></script>
+<script type="module" src="schedule-import.js"></script>
+<script type="module" src="consent.js"></script>
+<script type="module" src="activities.js"></script>
+<script type="module" src="homework.js"></script>
+<!-- Сам каталог ігор і двигун. Код КОНКРЕТНОЇ гри сюди не входить: він
+     лежить у games/ і підвантажується через import() у мить, коли гру
+     відкрили. Інакше кожна нова гра сповільнювала б кабінет усім,
+     включно з учителями, які в цю вкладку не заходять. -->
+<script type="module" src="games.js"></script>
+<script type="module" src="mastery.js"></script>
+<script type="module" src="grades-view.js"></script>
+<script type="module" src="staff-meals.js"></script>
+<script type="module" src="payment.js"></script>
+<script type="module" src="materials-audit.js"></script>
+<script type="module" src="workload.js"></script>
+<script type="module" src="clubs-catalog.js"></script>
+
+  <!-- ═══ ЕКРАН ЗГОДИ ПРИ ВХОДІ ═══
+       Модалка без кнопки закриття: GDPR вимагає поінформувати ДО обробки,
+       тож обійти екран не можна — лише відповісти. -->
+  <!-- Профіль співробітника: імʼя, прізвище та фото. Відкриває директор
+     зі списку персоналу. -->
+<div id="staff-profile-modal" class="sp-back" style="display:none;">
+  <div class="sp-card">
+    <h3>✏️ Профіль співробітника</h3>
+    <p class="sp-email" id="sp-email"></p>
+    <div class="sp-photo-row">
+      <img id="sp-preview" alt="" style="display:none;">
+      <label class="sp-pick">
+        <input type="file" accept="image/*" id="sp-file" onchange="pickStaffPhoto(this)">
+        📷 Обрати фото
+      </label>
+    </div>
+    <label class="sp-lab">Імʼя</label>
+    <input type="text" id="sp-first" placeholder="Імʼя">
+    <label class="sp-lab">Прізвище</label>
+    <input type="text" id="sp-last" placeholder="Прізвище">
+    <div id="sp-err" class="sp-err" style="display:none;"></div>
+    <button id="sp-save" class="sp-save" onclick="saveStaffProfile()">💾 Зберегти</button>
+    <button class="sp-cancel" onclick="closeStaffProfile()">Скасувати</button>
+    <p class="sp-note">Фото зменшується до 128×128 і зберігається в базі школи.
+      Жодні сторонні сервіси не використовуються.</p>
+  </div>
+</div>
+
+<div id="consent-gate" class="cg-back" style="display:none;">
+    <div class="cg-win">
+      <div class="cg-head">Дані вашої дитини</div>
+      <div id="cg-body" class="cg-scroll"></div>
+    </div>
+  </div>
+</body>
+</html>
