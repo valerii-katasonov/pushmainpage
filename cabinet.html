@@ -3740,10 +3740,13 @@
             <select id="t-sticker-student" style="margin-top:3px;"></select>
           </label>
           <label style="flex:1;min-width:140px;font-size:.74rem;color:#d35400;font-weight:600;">Предмет
-            <select id="t-sticker-subject" style="margin-top:3px;"></select>
+            <select id="t-sticker-subject" style="margin-top:3px;" onchange="toggleStickerOther()"></select>
           </label>
           <button onclick="giveStickerToStudent()" style="flex:none;margin-top:0;background:#f1c40f;color:#333;padding:11px 16px;border-radius:10px;border:none;cursor:pointer;font-weight:800;font-size:.88rem;">🌟 Дати</button>
         </div>
+        <label id="t-sticker-other-wrap" style="display:none;margin-top:9px;font-size:.74rem;color:#d35400;font-weight:600;">За що наліпка?
+          <input type="text" id="t-sticker-other" maxlength="160" placeholder="Наприклад, допоміг однокласнику" style="margin-top:3px;border-color:#f1c40f;">
+        </label>
       </div>
       <!-- Коментар -->
       <div style="margin-top:13px;background:#f3e5f5;padding:14px;border-radius:12px;border:1px solid #ce93d8;">
@@ -3966,6 +3969,7 @@
         <div class="progress-bar-container"><div id="p-ribbon-progress" class="progress-bar"></div></div>
         <p id="p-ribbon-count" style="font-size:1.1rem;font-weight:700;color:#d35400;margin:13px 0 4px 0;">Завантаження...</p>
         <p id="p-ribbon-msg" style="color:var(--green);font-weight:800;margin:0;font-size:.95rem;"></p>
+        <div id="p-sticker-history" style="margin-top:12px;text-align:left;"></div>
       </div>
     </section>
 
@@ -4149,6 +4153,7 @@
         <h4 style="margin-top:0;color:var(--orange);font-size:1rem;">🌟 Мої наліпки</h4>
         <div class="progress-bar-container"><div id="s-ribbon-progress" class="progress-bar"></div></div>
         <p id="s-ribbon-count" style="font-size:1.1rem;font-weight:700;color:#d35400;margin:13px 0 4px 0;">Завантаження...</p>
+        <div id="s-sticker-history" style="margin-top:12px;text-align:left;"></div>
       </div>
       <!-- Підручники -->
       <div class="data-card" style="border-left-color:var(--blue);background:#f0f8ff;">
@@ -4737,8 +4742,8 @@ document.addEventListener('DOMContentLoaded', function(){
 <script type="module" src="curriculum.js"></script>
 <script type="module" src="director.js"></script>
 <script type="module" src="journal.js"></script>
-<script type="module" src="parent-student.js"></script>
-<script type="module" src="teacher.js"></script>
+<script type="module" src="parent-student.js?v=20260915-1"></script>
+<script type="module" src="teacher.js?v=20260915-1"></script>
 <script type="module" src="kitchen.js"></script>
 <script type="module" src="news.js"></script>
 <script type="module" src="chat.js"></script>
