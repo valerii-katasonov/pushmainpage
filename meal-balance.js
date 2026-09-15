@@ -62,15 +62,22 @@ function takeawayPrice(id,date,items,history){
 }
 async function takeawayCostHistoric(from,to,cls,sid,items,history){
   if(!from||from>to)return 0;
-  const sums=await Promise.all(datesBetween(from,to).map(async date=>{
-    const s=await get(child(ref(db),`takeaway_orders/${date}/${cls}/${sid}`)).catch(()=>null),order=s&&s.exists()?s.val():{};
-    return Object.entries(order||{}).reduce((n,[id,q])=>n+(Number(q)||0)*takeawayPrice(id,date,items,history),0);
-  }));
-  return money(sums.reduce((a,b)=>a+b,0));
+  const dates=datesBetween(from,to);let total=0;
+  // Довга історія може містити сотні днів. Читаємо невеликими порціями,
+  // щоб браузер і Firebase не отримали сотні одночасних запитів.
+  for(let i=0;i<dates.length;i+=60){
+    const part=dates.slice(i,i+60);
+    const sums=await Promise.all(part.map(async date=>{
+      const s=await get(child(ref(db),`takeaway_orders/${date}/${cls}/${sid}`)).catch(()=>null),order=s&&s.exists()?s.val():{};
+      return Object.entries(order||{}).reduce((n,[id,q])=>n+(Number(q)||0)*takeawayPrice(id,date,items,history),0);
+    }));
+    total+=sums.reduce((a,b)=>a+b,0);
+  }
+  return money(total);
 }
 
 export async function computeMealAccount(cls,sid,entries,now=new Date()){
-  const start=accountStart(entries),today=localDateString;
+  const start=accountStart(entries),today=iso(now);
   const prices=await loadMealPrices(true);
   const [itemSnap,priceHistorySnap,taHistorySnap]=await Promise.all([
     get(child(ref(db),'takeaway_items')),get(child(ref(db),'meal_price_history')),get(child(ref(db),'takeaway_price_history'))
@@ -93,7 +100,13 @@ export async function computeMealAccount(cls,sid,entries,now=new Date()){
   const taClosed=cutoffState(today,TA_CUTOFF_HOUR,now,today);
   const charged=money(pastMeals.total+pastTa+(brkClosed?brkCost:0)+(mealClosed?lunchCost+snackCost:0)+(taClosed?todayTa:0));
   const pending=money((brkClosed?0:brkCost)+(mealClosed?0:lunchCost+snackCost)+(taClosed?0:todayTa));
-  return {start,entries,prices,parts:{pastMeals,pastTa,brkCost,lunchCost,snackCost,todayTa},...balanceResult(credited(entries,today),charged,pending)};
+  const chargedParts={
+    lunch:money(pastMeals.lunch+(mealClosed?lunchCost:0)),
+    breakfast:money(pastMeals.brk+(brkClosed?brkCost:0)),
+    snack:money(pastMeals.snack+(mealClosed?snackCost:0)),
+    takeaway:money(pastTa+(taClosed?todayTa:0))
+  };
+  return {start,entries,prices,parts:{pastMeals,pastTa,brkCost,lunchCost,snackCost,todayTa,chargedParts},...balanceResult(credited(entries,today),charged,pending)};
 }
 
 function renderAccount(box,a,name,editable){
@@ -101,47 +114,77 @@ function renderAccount(box,a,name,editable){
   const rows=Object.entries(a.entries||{}).sort((x,y)=>String(y[1]?.date||'').localeCompare(String(x[1]?.date||''))).slice(0,12);
   box.innerHTML=`<div class="mb-head${cls}"><span>${escHtml(name||'Рахунок')}</span><b>${moneyText(a.balance)} zł</b><small>надходження ${moneyText(a.income)} · списано ${moneyText(a.charged)}</small></div>
     ${a.pending?`<div class="mb-pending">Після сьогоднішніх дедлайнів: <b>${moneyText(a.afterPending)} zł</b> (очікує списання ${moneyText(a.pending)} zł)</div>`:''}
-    ${a.start?`<div class="mb-note">Харчування рахується від ${escHtml(a.start)}. У витратах: меню ${moneyText(a.parts.pastMeals?.total||0)} zł · винос ${moneyText((a.parts.pastTa||0)+(a.parts.todayTa||0))} zł.</div>`:'<div class="mb-note">Рахунок ще не відкрито: додайте перше надходження.</div>'}
-    ${editable?`<div class="mb-form"><label>Дата надходження<input type="date" id="mb-date" value="${localDateString}"></label><label>Рахувати харчування від<input type="date" id="mb-start" value="${a.start||localDateString}" ${a.start?'disabled':''}></label><input id="mb-amount" inputmode="decimal" placeholder="Сума, zl"><input id="mb-note" maxlength="120" placeholder="Примітка"><button onclick="addMealAccountEntry()">Додати</button><small>${a.start?`Початок розрахунку зафіксовано: ${escHtml(a.start)}. `:''}Для повернення або корекції введіть від’ємну суму.</small></div>`:''}
+    ${a.start?`<div class="mb-note">Харчування рахується від ${escHtml(a.start)}. Списано: обіди ${moneyText(a.parts.chargedParts?.lunch||0)} · сніданки ${moneyText(a.parts.chargedParts?.breakfast||0)} · підвечірки ${moneyText(a.parts.chargedParts?.snack||0)} · винос ${moneyText(a.parts.chargedParts?.takeaway||0)} zł.</div>`:'<div class="mb-note">Рахунок ще не відкрито: додайте перше надходження.</div>'}
+    ${editable?`<div class="mb-form"><label>Дата надходження<input type="date" id="mb-date" value="${iso(new Date())}"></label><label>Рахувати харчування від<input type="date" id="mb-start" value="${a.start||iso(new Date())}" ${a.start?'disabled':''}></label><input id="mb-amount" inputmode="decimal" placeholder="Сума, zl"><input id="mb-note" maxlength="120" placeholder="Примітка"><button id="mb-add" onclick="addMealAccountEntry()">Додати</button><small>${a.start?`Початок розрахунку зафіксовано: ${escHtml(a.start)}. `:''}Для повернення або корекції введіть від’ємну суму.</small></div>`:''}
     <details class="mb-history"><summary>Історія надходжень і корекцій</summary>${rows.length?rows.map(([,x])=>`<div><span>${escHtml(x.date||'')}</span><b class="${Number(x.amount)<0?'neg':''}">${Number(x.amount)>0?'+':''}${moneyText(x.amount)} zł</b><small>${escHtml(x.note||'')}</small></div>`).join(''):'<p class="empty-msg">Записів ще немає.</p>'}</details>`;
 }
 
 let selected={cls:'',sid:'',name:'',start:'',entries:{}};
+let accountSaving=false,kitchenLoadSeq=0,familyLoadSeq=0,familyCache=null;
+window.invalidateMealBalance=()=>{familyCache=null;};
 window.loadMealAccountStudents=async function(){
+  kitchenLoadSeq++;
   const cls=document.getElementById('k-balance-class')?.value||'';
   const sel=document.getElementById('k-balance-student');if(!sel)return;
   selected={cls,sid:'',name:'',start:'',entries:{}};sel.innerHTML='<option value="">Оберіть дитину...</option>';
   if(!cls)return;
-  const s=await get(child(ref(db),`students_list/${cls}`));
-  const rows=s.exists()?s.val():{};
-  sel.innerHTML+=Object.entries(rows).sort((a,b)=>String(a[1]).localeCompare(String(b[1]),'uk')).map(([id,n])=>`<option value="${escHtml(id)}">${escHtml(n)}</option>`).join('');
+  try{
+    const s=await get(child(ref(db),`students_list/${cls}`));
+    const rows=s.exists()?s.val():{};
+    sel.innerHTML+=Object.entries(rows).sort((a,b)=>String(a[1]).localeCompare(String(b[1]),'uk')).map(([id,n])=>`<option value="${escHtml(id)}">${escHtml(n)}</option>`).join('');
+  }catch(e){
+    const box=document.getElementById('k-meal-balance');
+    if(box)box.innerHTML=`<p class="empty-msg">Не вдалося завантажити учнів: ${escHtml(e.message)}</p>`;
+  }
 };
 window.loadKitchenMealAccount=async function(){
   const cls=document.getElementById('k-balance-class')?.value||'',sid=document.getElementById('k-balance-student')?.value||'',box=document.getElementById('k-meal-balance');
   if(!box||!cls||!sid){if(box)box.innerHTML='<p class="empty-msg">Оберіть клас і дитину.</p>';return;}
+  const seq=++kitchenLoadSeq;
   box.innerHTML='<p class="empty-msg">Рахуємо...</p>';selected={cls,sid,name:stuName(cls,sid),start:'',entries:{}};
-  try{const s=await get(child(ref(db),`meal_accounts/${cls}/${sid}`)),entries=s.exists()?s.val():{};const a=await computeMealAccount(cls,sid,entries);selected.entries=entries;selected.start=a.start;renderAccount(box,a,selected.name,true);}catch(e){box.innerHTML=`<p class="empty-msg">Помилка: ${escHtml(e.message)}</p>`;}
+  try{
+    const s=await get(child(ref(db),`meal_accounts/${cls}/${sid}`)),entries=s.exists()?s.val():{};
+    const a=await computeMealAccount(cls,sid,entries);
+    if(seq!==kitchenLoadSeq||document.getElementById('k-balance-class')?.value!==cls||document.getElementById('k-balance-student')?.value!==sid)return;
+    selected.entries=entries;selected.start=a.start;renderAccount(box,a,selected.name,true);
+  }catch(e){if(seq===kitchenLoadSeq)box.innerHTML=`<p class="empty-msg">Помилка: ${escHtml(e.message)}</p>`;}
 };
 window.addMealAccountEntry=async function(){
   const amount=Number(String(document.getElementById('mb-amount')?.value||'').replace(',','.')),date=document.getElementById('mb-date')?.value,startDate=selected.start||document.getElementById('mb-start')?.value,note=(document.getElementById('mb-note')?.value||'').trim();
-  if(!selected.cls||!selected.sid)return;if(!Number.isFinite(amount)||!amount||Math.abs(amount)>100000)return alert('Введіть коректну ненульову суму.');if(!date||!startDate)return alert('Вкажіть дати.');
+  if(accountSaving||!selected.cls||!selected.sid)return;if(!Number.isFinite(amount)||!amount||Math.abs(amount)>100000)return alert('Введіть коректну ненульову суму.');if(!date||!startDate)return alert('Вкажіть дати.');
   if(amount<0&&!selected.start)return alert('Спочатку додайте перше надходження і відкрийте рахунок.');
-  const [ph,th,it]=await Promise.all([get(child(ref(db),'meal_price_history')),get(child(ref(db),'takeaway_price_history')),get(child(ref(db),'takeaway_items'))]);
-  const prices=await loadMealPrices(true),priceHistory=ph.exists()?ph.val():{},taHistory=th.exists()?th.val():{},items=it.exists()?it.val():{};
-  const id=push(ref(db,`meal_accounts/${selected.cls}/${selected.sid}`)).key,changes={
-    [`meal_accounts/${selected.cls}/${selected.sid}/${id}`]:{amount:money(amount),date,startDate,note:note.slice(0,120),by:currentUserData?.email||'',ts:Date.now()}
-  };
-  if(!Object.keys(priceHistory||{}).length)changes[`meal_price_history/${startDate}`]={...prices,ts:Date.now()};
-  for(const itemId of Object.keys(items||{}))if(!Object.keys(taHistory?.[itemId]||{}).length)changes[`takeaway_price_history/${itemId}/${startDate}`]=Number(items[itemId]?.price)||0;
-  await update(ref(db),changes);
-  showToast('✅ Операцію додано');window.loadKitchenMealAccount();
+  const button=document.getElementById('mb-add');accountSaving=true;if(button)button.disabled=true;
+  try{
+    const [ph,th,it]=await Promise.all([get(child(ref(db),'meal_price_history')),get(child(ref(db),'takeaway_price_history')),get(child(ref(db),'takeaway_items'))]);
+    const prices=await loadMealPrices(true),priceHistory=ph.exists()?ph.val():{},taHistory=th.exists()?th.val():{},items=it.exists()?it.val():{};
+    const id=push(ref(db,`meal_accounts/${selected.cls}/${selected.sid}`)).key,changes={
+      [`meal_accounts/${selected.cls}/${selected.sid}/${id}`]:{amount:money(amount),date,startDate,note:note.slice(0,120),by:currentUserData?.email||'',ts:Date.now()}
+    };
+    if(!Object.keys(priceHistory||{}).length)changes[`meal_price_history/${startDate}`]={...prices,ts:Date.now()};
+    for(const itemId of Object.keys(items||{}))if(!Object.keys(taHistory?.[itemId]||{}).length)changes[`takeaway_price_history/${itemId}/${startDate}`]=Number(items[itemId]?.price)||0;
+    await update(ref(db),changes);
+    showToast('✅ Операцію додано');await window.loadKitchenMealAccount();
+  }catch(e){
+    alert('Не вдалося додати операцію: '+e.message);
+  }finally{accountSaving=false;if(button&&document.body.contains(button))button.disabled=false;}
 };
 
 window.loadFamilyMealBalance=async function(){
   const box=document.getElementById('p-meal-balance');if(!box||!currentUserData)return;
-  const cls=currentUserData.class,sid=await studentKey(cls,currentUserData.studentId,currentUserData.studentName);if(!cls||!sid)return;
+  const seq=++familyLoadSeq;
+  const cls=currentUserData.class;if(!cls)return;
+  let sid='';
+  try{sid=await studentKey(cls,currentUserData.studentId,currentUserData.studentName);}
+  catch(e){if(seq===familyLoadSeq)box.innerHTML=`<p class="empty-msg">Не вдалося визначити дитину: ${escHtml(e.message)}</p>`;return;}
+  if(!sid||seq!==familyLoadSeq)return;
+  const phase=`${new Date().getHours()>=BREAKFAST_CUTOFF_HOUR}:${new Date().getHours()>=MEAL_CUTOFF_HOUR}:${new Date().getHours()>=TA_CUTOFF_HOUR}`;
+  const cacheKey=`${cls}/${sid}/${iso(new Date())}/${phase}`;
+  if(familyCache?.key===cacheKey&&Date.now()-familyCache.at<30000){renderAccount(box,familyCache.account,currentUserData.studentName,false);return;}
   box.innerHTML='<p class="empty-msg">Рахуємо...</p>';
-  try{const s=await get(child(ref(db),`meal_accounts/${cls}/${sid}`));renderAccount(box,await computeMealAccount(cls,sid,s.exists()?s.val():{}),currentUserData.studentName,false);}catch(e){box.innerHTML=`<p class="empty-msg">Не вдалося завантажити баланс: ${escHtml(e.message)}</p>`;}
+  try{
+    const s=await get(child(ref(db),`meal_accounts/${cls}/${sid}`));const account=await computeMealAccount(cls,sid,s.exists()?s.val():{});
+    if(seq!==familyLoadSeq)return;familyCache={key:cacheKey,at:Date.now(),account};renderAccount(box,account,currentUserData.studentName,false);
+  }catch(e){if(seq===familyLoadSeq)box.innerHTML=`<p class="empty-msg">Не вдалося завантажити баланс: ${escHtml(e.message)}</p>`;}
 };
 
 // Якщо авторизація завершилася раніше, ніж завантажився цей модуль,
