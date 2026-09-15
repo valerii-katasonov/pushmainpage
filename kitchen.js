@@ -876,7 +876,10 @@ window.saveMealPrices = async function(){
   if(Object.values(vals).some(v => v === null))
     return alert('Ціна має бути числом від 0 до 999. Порожнє поле означає «ціни немає».');
   try{
-    await set(ref(db,'meal_prices'), vals);
+    await update(ref(db), {
+      meal_prices: vals,
+      [`meal_price_history/${localDateString}`]: {...vals,ts:Date.now()}
+    });
     invalidateMealPrices();
     logAction('meal_price', { value:`обід ${vals.lunch} · сніданок ${vals.breakfast} · `
       + `підвечірок ${vals.snack} · персонал ${vals.staff}` });
@@ -1625,6 +1628,7 @@ export async function renderParentMenu(cls, studentKey, date){
            «нічого не змінилося» найчастіше означає саме це. За рядком видно,
            який код зараз працює. -->`;
     renderTakeaway(cur);
+    if(window.loadFamilyMealBalance) window.loadFamilyMealBalance();
   }catch(e){
     box.innerHTML = `<div class="pm-none">Не вдалося завантажити меню: ${escHtml(e.message)}</div>`;
   }
@@ -2250,11 +2254,14 @@ window.saveTakeawayItem = async function(id){
   if(!(price >= 0)) return alert('Ціна має бути числом.');
   try{
     // update, а не set: active, by і ts лишаються як були
-    await update(ref(db, `takeaway_items/${id}`), {
-      title: title.slice(0,80),
-      price: Math.round(price*100)/100,
-      note: note.slice(0,120),
-      by: currentUserData?.email || '', ts: Date.now()
+    const rounded=Math.round(price*100)/100;
+    await update(ref(db), {
+      [`takeaway_items/${id}/title`]: title.slice(0,80),
+      [`takeaway_items/${id}/price`]: rounded,
+      [`takeaway_items/${id}/note`]: note.slice(0,120),
+      [`takeaway_items/${id}/by`]: currentUserData?.email || '',
+      [`takeaway_items/${id}/ts`]: Date.now(),
+      [`takeaway_price_history/${id}/${localDateString}`]: rounded
     });
     logAction('takeaway', { value:`позицію змінено: ${title} · ${taMoney(price)} zł` });
     showToast('✅ Позицію змінено');
@@ -2272,12 +2279,16 @@ window.addTakeawayItem = async function(){
   if(!(price >= 0)) return alert('Ціна має бути числом.');
   try{
     const id = 'ta_' + Date.now().toString(36);
-    await set(ref(db,`takeaway_items/${id}`), {
+    const rounded=Math.round(price*100)/100;
+    await update(ref(db), {
+      [`takeaway_items/${id}`]: {
       title: title.slice(0,80),
-      price: Math.round(price*100)/100,
+      price: rounded,
       note: (n?.value||'').trim().slice(0,120),
       active: true,
       by: currentUserData?.email || '', ts: Date.now()
+      },
+      [`takeaway_price_history/${id}/${localDateString}`]: rounded
     });
     if(t) t.value=''; if(p) p.value=''; if(n) n.value='';
     showToast('✅ Позицію додано');
