@@ -577,6 +577,30 @@ export function getUserRoles(u){
   if(list.length>0)return list;
   return u.role?[u.role]:[];
 }
+// Службові ролі призначає директор, а роль батьків дає сама наявність
+// хоча б однієї дитини в parent_links. Обидва джерела треба ОБ'ЄДНУВАТИ:
+// інакше чергова синхронізація входу перетирає «parent» роллю «teacher».
+export function mergeAccountRoles(staffRaw,parentRaw){
+  const roles=[];
+  normalizeRoles(staffRaw).forEach(r=>{
+    if(r&&r!=='parent'&&r!=='student'&&!roles.includes(r))roles.push(r);
+  });
+  if(normalizeChildren(parentRaw).length&&!roles.includes('parent'))roles.push('parent');
+  return roles;
+}
+
+// Поля активної дитини потрібні правилам Firebase саме в момент переходу
+// до батьківського кабінету. Тримаємо їх у спільному профілі навіть тоді,
+// коли зараз відкрито кабінет учителя.
+export function parentAccountPatch(parentRaw,current={}){
+  const kids=normalizeChildren(parentRaw);
+  if(!kids.length)return {children:[],studentName:null,studentId:null,class:null,parentRole:null};
+  const still=kids.find(k=>(k.studentId&&k.studentId===current.studentId)
+    ||(k.studentName===current.studentName&&k.class===current.class));
+  const active=still||kids[0];
+  return {children:kids,studentName:active.studentName,studentId:active.studentId||null,
+    class:active.class,parentRole:active.role||'guardian'};
+}
 // ══════════ КІЛЬКА ДІТЕЙ В ОДНИХ БАТЬКІВ ══════════
 // Історично parent_links/{email} = {studentName, class, role} — один запис,
 // тож прив'язка другої дитини мовчки затирала першу. Тепер запис може бути:
@@ -798,8 +822,8 @@ export async function syncStaffCard(se){
     // Правило вимагає, щоб людина була у списку персоналу. Якщо її там
     // немає — запис усе одно відхилили б, тому виходимо мовчки.
     if(!pr.exists()) return false;
-    const role = normalizeRoles(pr.val())[0];
-    if(!role || role === 'parent' || role === 'student') return false;
+    const role = normalizeRoles(pr.val()).find(r=>r!=='parent'&&r!=='student');
+    if(!role) return false;
 
     let name = (prev && prev.exists() && prev.val().name) || '';
     if(!name){
@@ -2196,109 +2220,67 @@ onAuthStateChanged(auth,async user=>{
       //  Admin SDK, тому "видалення співробітника" = відкликання доступу.)
       if(currentUserData.disabled){alert("Ваш доступ до системи закрито. Зверніться до адміністрації.");signOut(auth);return;}
       if(!currentUserData.email){currentUserData.email=user.email;update(ref(db,`users/${user.uid}`),{email:user.email});}
-      // ROLE SYNC. Роль призначає директор, але правила дозволяють писати
-      // в users/{uid} лише самому власнику запису — і це навмисно: інакше
-      // роль можна було б підробити. Тому директор змінює лише
-      // pre_approved_roles, а звіряння відбувається тут, при вході.
-      // Без цього кроку призначення класним керівником не діяло взагалі:
-      // запис у чужий users/{uid} відхилявся з PERMISSION_DENIED.
-      if(currentUserData.role!=='parent'&&currentUserData.role!=='student'){
-        try{
-          const pr=await get(child(ref(db),`pre_approved_roles/${se}`));
-          if(pr.exists()){
-            const roles=normalizeRoles(pr.val());
-            const primary=roles[0];
-            if(primary&&primary!==currentUserData.role){
-              await update(ref(db,`users/${user.uid}`),{role:primary,roles});
-              currentUserData.role=primary;currentUserData.roles=roles;
-            }
-          }
-        }catch(e){ console.warn('Синхронізація ролі:', e.message); }
-      }
-      // CHILD SYNC: список дітей веде вчитель у parent_links, тож звіряємо його
-      // при кожному вході — інакше друга дитина, прив'язана пізніше, не
-      // з'явилася б у батьків, які вже колись заходили.
-      if(currentUserData.role==='parent'){
-        try{
-          const pl=await get(child(ref(db),`parent_links/${se}`));
-          if(pl.exists()){
-            const kids=normalizeChildren(pl.val());
-            const known=getUserChildren(currentUserData);
-            const same=kids.length===known.length&&kids.every((k,i)=>k.studentName===known[i]?.studentName&&k.class===known[i]?.class);
-            if(kids.length>0&&!same){
-              currentUserData.children=kids;
-              // Активну дитину зберігаємо, якщо вона ще прив'язана
-              const still=kids.find(k=>k.studentName===currentUserData.studentName&&k.class===currentUserData.class);
-              const act=still||kids[0];
-              currentUserData.studentName=act.studentName;currentUserData.class=act.class;
-              currentUserData.parentRole=act.role||currentUserData.parentRole||'guardian';
-              await update(ref(db,`users/${user.uid}`),{children:kids,studentName:act.studentName,class:act.class,parentRole:currentUserData.parentRole});
-            }
-          }
-        }catch(e){console.warn('Child sync skipped:',e.message);}
-      }
-      // ROLE SYNC: pre_approved_roles is the director-controlled source of truth for
-      // STAFF roles, but it used to be read only when users/{uid} didn't exist yet
-      // (i.e. on the very first login ever). That meant a later role change —
-      // whether via "Управління персоналом" or edited by hand in the Firebase
-      // console — never reached an account that had already logged in once: the
-      // stale role in users/{uid} won forever (this is why re-assigning "Директор"
-      // to an existing account kept opening the administrator panel).
-      // Now every login reconciles the two. Parent/student roles are derived from
-      // parent_links/student_links, never from pre_approved_roles, so they're left
-      // alone unless an entry explicitly exists for that email.
-      // Тепер синхронізуємо ВЕСЬ набір ролей, а не одну: директор міг додати
-      // другу роль (напр. вчитель + адміністратор) вже після першого входу.
+      // ЄДИНА СИНХРОНІЗАЦІЯ ДОСТУПУ. Службові ролі живуть у
+      // pre_approved_roles, батьківська — у parent_links. Раніше два
+      // незалежні блоки по черзі перезаписували roles, через що вчителька-
+      // мама втрачала батьківський кабінет при кожному вході.
       try{
-        const prs=await get(child(ref(db),`pre_approved_roles/${se}`));
-        if(prs.exists()){
-          const approved=normalizeRoles(prs.val());
-          const known=getUserRoles(currentUserData);
-          const same=approved.length===known.length&&approved.every(r=>known.includes(r));
-          if(approved.length>0&&!same){
-            currentUserData.roles=approved;
-            // Активну роль зберігаємо, якщо вона ще дозволена; інакше беремо першу.
-            if(!approved.includes(currentUserData.role))currentUserData.role=approved[0];
-            await update(ref(db,`users/${user.uid}`),{roles:approved,role:currentUserData.role});
-          }
+        const [prs,pls]=await Promise.all([
+          get(child(ref(db),`pre_approved_roles/${se}`)),
+          get(child(ref(db),`parent_links/${se}`))
+        ]);
+        const staff=prs.exists()?prs.val():getUserRoles(currentUserData);
+        const parentLink=pls.exists()?pls.val():null;
+        const roles=mergeAccountRoles(staff,parentLink);
+        // Для чистого учнівського акаунта джерелом лишається student_links.
+        if(currentUserData.role==='student'&&!prs.exists()&&!pls.exists())roles.push('student');
+        if(roles.length){
+          const patch={roles};
+          if(!roles.includes(currentUserData.role))patch.role=roles[0];
+          if(normalizeChildren(parentLink).length)Object.assign(patch,parentAccountPatch(parentLink,currentUserData));
+          else if(getUserRoles(currentUserData).includes('parent')&&roles.some(r=>r!=='parent'))
+            Object.assign(patch,parentAccountPatch(null,currentUserData));
+          await update(ref(db,`users/${user.uid}`),patch);
+          Object.assign(currentUserData,patch);
         }
-      }catch(e){console.warn('Role sync skipped:',e.message);}
+      }catch(e){console.warn('Синхронізація доступу пропущена:',e.message);}
       if(isTeacherRole(currentUserData.role))await fetchTeacherAccess(se);
       await loadGradeTypesCache();initUserSession();
     }
-    else{const rs=await get(child(ref(db),`pre_approved_roles/${se}`));if(rs.exists()){const roles=normalizeRoles(rs.val());const primary=roles[0];const nd={role:primary,roles,email:user.email};if(isTeacherRole(primary))await fetchTeacherAccess(se);await set(ref(db,`users/${user.uid}`),nd);currentUserData=nd;await loadGradeTypesCache();initUserSession();}
-    else{const ls=await get(child(ref(db),`parent_links/${se}`));if(ls.exists()){
-      // Дітей може бути кілька; studentName/class зберігаємо як АКТИВНУ дитину,
-      // щоб уся наявна логіка (getActiveClass, дашборди) працювала без змін.
-      const kids=normalizeChildren(ls.val());
-      // ЗАПИС Є, А ДИТИНИ В НЬОМУ НЕМАЄ.
-      //
-      // Так буває, коли привʼязку почали й не завершили: пошту внесли,
-      // дитину не додали, або її потім відвʼязали й лишився порожній
-      // вузол. Раніше тут підставлялася заглушка
-      // {studentName:'', class:'class_2'} — жорстко зашитий другий клас.
-      // Далі одне з двох, і обидва погані: або правила відхиляли запис
-      // (бо порожнє імʼя не збігається з привʼязкою) і людина бачила
-      // незрозумілу відмову в правах, або запис проходив — і батько
-      // опинявся в кабінеті ЧУЖОГО другого класу.
-      //
-      // Правильна відповідь тут одна: сказати як є. Пошта в школі відома,
-      // дитини до неї не привʼязано — це виправляє класний керівник.
-      if(!kids.length){
-        const say = () => {
-          if(window.showLoginScreen){
-            window.showLoginScreen(user.email,
-              'Вашу пошту школа знає, але дитину до неї ще не привʼязано. '
-              + 'Зверніться до класного керівника — він додасть її за хвилину.');
-          } else alert('Вашу пошту школа знає, але дитину до неї ще не привʼязано.');
-        };
-        await signOut(auth);   // акаунт лишаємо — див. пояснення нижче
-        say();
-        return;
-      }
-      const first=kids[0];
-      const nd={role:"parent",children:kids,studentName:first.studentName,studentId:first.studentId||null,class:first.class,parentRole:first.role||'guardian',email:user.email};
-      await set(ref(db,`users/${user.uid}`),nd);currentUserData=nd;await loadGradeTypesCache();initUserSession();}else{const sls=await get(child(ref(db),`student_links/${se}`));if(sls.exists()){const sd=sls.val();const nd={role:"student",studentName:sd.studentName,studentId:sd.studentId||null,class:sd.class,email:user.email};await set(ref(db,`users/${user.uid}`),nd);currentUserData=nd;await loadGradeTypesCache();initUserSession();}else{
+    else{
+      const [rs,ls,sls]=await Promise.all([
+        get(child(ref(db),`pre_approved_roles/${se}`)),
+        get(child(ref(db),`parent_links/${se}`)),
+        get(child(ref(db),`student_links/${se}`))
+      ]);
+      if(rs.exists()){
+        const parentLink=ls.exists()?ls.val():null;
+        const roles=mergeAccountRoles(rs.val(),parentLink);
+        const primary=roles[0];
+        const nd={role:primary,roles,email:user.email};
+        if(normalizeChildren(parentLink).length)Object.assign(nd,parentAccountPatch(parentLink));
+        if(isTeacherRole(primary))await fetchTeacherAccess(se);
+        await set(ref(db,`users/${user.uid}`),nd);currentUserData=nd;
+        await loadGradeTypesCache();initUserSession();
+      }else if(ls.exists()){
+        const kids=normalizeChildren(ls.val());
+        if(!kids.length){
+          await signOut(auth);
+          if(window.showLoginScreen)window.showLoginScreen(user.email,
+            'Вашу пошту школа знає, але дитину до неї ще не привʼязано. '
+            + 'Зверніться до класного керівника — він додасть її за хвилину.');
+          else alert('Вашу пошту школа знає, але дитину до неї ще не привʼязано.');
+          return;
+        }
+        const nd={role:'parent',roles:['parent'],email:user.email,...parentAccountPatch(ls.val())};
+        await set(ref(db,`users/${user.uid}`),nd);currentUserData=nd;
+        await loadGradeTypesCache();initUserSession();
+      }else if(sls.exists()){
+        const sd=sls.val();
+        const nd={role:'student',studentName:sd.studentName,studentId:sd.studentId||null,class:sd.class,email:user.email};
+        await set(ref(db,`users/${user.uid}`),nd);currentUserData=nd;
+        await loadGradeTypesCache();initUserSession();
+      }else{
       // ПОШТИ НЕМАЄ В ЖОДНОМУ СПИСКУ ШКОЛИ.
       //
       // Якщо акаунт щойно створила форма «Перший вхід» — прибираємо його.
@@ -2332,7 +2314,8 @@ onAuthStateChanged(auth,async user=>{
         window.showFirstLoginScreen();
         setMsg('fl-error','Цей email ще не додано школою. Зверніться до класного керівника або директора.','login-err');
       } else alert('Цей email ще не додано школою. Зверніться до класного керівника або директора.');
-    }}}}
+      }
+    }
   }else{
     document.getElementById('login-screen').style.display='block';
     // Підпис малюємо разом з екраном входу, а не при завантаженні
@@ -2367,7 +2350,8 @@ async function healStaffRegistry(){
   try{
     const u = currentUserData;
     if(!u || !u.email) return;
-    const roles = getUserRoles(u);
+    // parent/student — похідні ролі, їм не місце у службовому реєстрі.
+    const roles = getUserRoles(u).filter(r=>r!=='parent'&&r!=='student');
     if(!roles.length) return;
     const isAdmin = roles.includes('director') || roles.includes('administrator');
     if(!isAdmin) return;                       // тільки адміністрація має право запису
@@ -2393,16 +2377,20 @@ export async function publishContactCard(){
     const se = emailKey(u.email);
     const name = [u.firstName, u.lastName].filter(Boolean).join(' ') || u.email;
     const roles = getUserRoles(u);
-    const role = roles[0] || u.role || '';
+    const staffRole=roles.find(r=>r!=='parent'&&r!=='student')||'';
+    let written=false;
 
-    if(role === 'parent' || role === 'student'){
-      if(!u.class) return 'без класу нема куди писати';
-      const kids = u.studentName || '';
+    // Для подвійного акаунта roles[0] зазвичай «teacher», але коли зараз
+    // відкрито батьківський кабінет, картка матері теж має оновитися.
+    // Правила дозволяють цей запис саме при активній сімейній ролі.
+    if((u.role==='parent'||u.role==='student')&&u.class){
+      const kids=getUserChildren(u).filter(k=>k.class===u.class)
+        .map(k=>k.studentName).filter(Boolean).join(', ')||u.studentName||'';
       await update(ref(db, `class_parents/${u.class}/${se}`),
-                   { name: String(name).slice(0,120), children: String(kids).slice(0,200), ts: Date.now() });
-      return true;
+                   {name:String(name).slice(0,120),children:String(kids).slice(0,200),ts:Date.now()});
+      written=true;
     }
-    if(!role) return 'роль не визначено';
+    if(!staffRole)return written?true:'роль не визначено';
     // Класи та предмети вчителя беремо з його власного рядка teacher_access.
     // Записуємо саме ПЕРЕЛІК ПРЕДМЕТІВ на клас, а не просто «має цей клас»:
     // батькові номер класу нічого не каже, йому треба знати, що це вчитель
@@ -2417,7 +2405,7 @@ export async function publishContactCard(){
         if(!Object.keys(classes).length) classes = null;
       }
     }catch(e){ /* не всі ролі мають доступ — не біда */ }
-    const rec = { name: String(name).slice(0,120), role: String(role), ts: Date.now() };
+    const rec = { name: String(name).slice(0,120), role: String(staffRole), ts: Date.now() };
     // Своє фото публікуємо разом із карткою — щоб у чаті була мініатюра.
     const myPhoto = currentUserData?.photoURL || '';
     if(myPhoto && String(myPhoto).length <= 60000 && !/flaticon/.test(myPhoto)) rec.photo = myPhoto;
@@ -2807,6 +2795,16 @@ export async function pushState(){
   const snap=await get(child(ref(db),`push_tokens/${uid}`));
   return snap.exists()?'on':'off';
 }
+// Один токен належить людині, а не відкритому зараз кабінету. Передаємо
+// серверу всі ролі й усіх дітей, щоб учителька-мама отримувала обидва
+// типи подій без постійного перемикання кабінету.
+export function pushIdentityFields(u){
+  const children=getUserChildren(u).slice(0,6).map(k=>({
+    studentName:k.studentName||'',studentId:k.studentId||'',class:k.class||''
+  }));
+  return {role:u?.role||'',roles:getUserRoles(u),email:u?.email||'',
+    studentName:u?.studentName||'',studentId:u?.studentId||'',class:u?.class||'',children};
+}
 window.enablePush=async function(){
   if(!await pushSupported())return showToast('⚠️ Ваш браузер не підтримує сповіщення');
   if(!pushConfigured)return showToast('⚠️ Сповіщення ще не налаштовані адміністратором');
@@ -2827,11 +2825,7 @@ window.enablePush=async function(){
     // Зберігаємо разом із роллю і дитиною — щоб сервер знав, кому що слати
     await set(ref(db,`push_tokens/${uid}`),{
       token,
-      role:currentUserData?.role||'',
-      email:currentUserData?.email||'',
-      studentName:currentUserData?.studentName||'',
-      studentId:currentUserData?.studentId||'',
-      class:currentUserData?.class||'',
+      ...pushIdentityFields(currentUserData),
       updatedAt:Date.now()
     });
     showToast('🔔 Сповіщення увімкнено');
@@ -2888,11 +2882,7 @@ export async function refreshPushReg(){
     if(!token) return;                          // без токена запис безглуздий
     await update(ref(db,`push_tokens/${uid}`),{
       token,
-      role: currentUserData?.role || prev.role || '',
-      email: currentUserData?.email || prev.email || '',
-      studentName: currentUserData?.studentName || '',
-      studentId: currentUserData?.studentId || '',
-      class: currentUserData?.class || '',
+      ...pushIdentityFields(currentUserData),
       updatedAt: Date.now()
     });
   }catch(e){ console.warn('Підписку на сповіщення не освіжено:', e.message); }
@@ -3983,14 +3973,12 @@ async function syncParentUserChildren(safeEmail,kids){
     // «підкреслення → крапка» бреше на адресах, де підкреслення справжнє:
     // i_petrenko@szkola.pl перетворилося б на i.petrenko@szkola.pl, і
     // потрібного користувача ми б не знайшли взагалі.
-    if(emailKey(u[uid].email||'')!==safeEmail||u[uid].role!=='parent')continue;
-    const patch={children:kids};
-    const still=kids.find(k=>k.studentName===u[uid].studentName&&k.class===u[uid].class);
-    if(!still&&kids[0]){
-      // Активна дитина зникла зі списку — перемикаємо на першу доступну
-      patch.studentName=kids[0].studentName;patch.class=kids[0].class;
-      patch.parentRole=kids[0].role||'guardian';
-    } else if(!kids.length){
+    if(emailKey(u[uid].email||'')!==safeEmail)continue;
+    const roles=mergeAccountRoles(getUserRoles(u[uid]),{children:kids});
+    const patch={children:kids,roles};
+    if(kids.length){
+      Object.assign(patch,parentAccountPatch({children:kids},u[uid]));
+    } else {
       // ДІТЕЙ НЕ ЛИШИЛОСЯ — ПРИБИРАЄМО Й КЛАС.
       //
       // Раніше тут не робилося нічого: писався лише порожній children, а
@@ -4000,6 +3988,8 @@ async function syncParentUserChildren(safeEmail,kids){
       // усього класу — попри те, що вікно підтвердження обіцяло
       // протилежне: «зникне лише доступ цих батьків до неї».
       patch.studentName=null;patch.class=null;patch.studentId=null;
+      patch.parentRole=null;
+      if(u[uid].role==='parent'&&roles.length)patch.role=roles[0];
     }
     // Писати в чужий users/{uid} має право лише адміністрація. Класний
     // керівник відвʼязати може (parent_links його), а профіль оновити —
