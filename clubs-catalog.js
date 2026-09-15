@@ -107,7 +107,7 @@ window.renderClubsCatalog=async function(){
     const options=email=>`<option value="">— учителя не призначено —</option>`+teachers.map(t=>`<option value="${escHtml(t.email)}"${emailKey(t.email)===emailKey(email)?' selected':''}>${escHtml(t.name)}</option>`).join('')+
       (email&&!teachers.some(t=>emailKey(t.email)===emailKey(email))?`<option value="${escHtml(email)}" selected>${escHtml(email)} (немає серед активних)</option>`:'');
     box.innerHTML=`<div class="sc-list">${catalogList(node).map(e=>`<div class="sc-item"><div class="sc-name">${escHtml(e.name)}</div><select onchange="setClubTeacher('${escJs(e.key)}',this.value)">${options(e.teacherEmail)}</select><button type="button" onclick="removeClubFromCatalog('${escJs(e.key)}')">×</button></div>`).join('')||'<p class="empty-msg">Гуртків ще немає.</p>'}</div>
-      <div class="sc-add"><input id="cc-new" placeholder="Назва гуртка"><select id="cc-new-teacher">${options('')}</select><button type="button" onclick="addClubFromCard()">+ Додати</button></div>
+      <div class="sc-add"><input type="text" id="cc-new" placeholder="Назва гуртка"><select id="cc-new-teacher">${options('')}</select><button type="button" onclick="addClubFromCard()">+ Додати</button></div>
       <div class="sc-tools"><button type="button" onclick="fillClubsFromSchedule()">📥 Зібрати з розкладу</button><button type="button" onclick="carryOverClubs()">🗓 Перенести з минулого року</button><button type="button" onclick="copyClubsFromClass()">📋 Скопіювати з іншого класу</button></div>`;
   }catch(e){if(gen===generation)box.innerHTML=`<p class="empty-msg" style="color:var(--red);">Не вдалося завантажити гуртки: ${escHtml(e.message)}</p>`;}
 };
