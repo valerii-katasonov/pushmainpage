@@ -4425,6 +4425,23 @@
     <button onclick="closeVisualMatrixModal()" style="background:#333;color:#fff;width:auto;min-width:180px;margin-top:18px;display:block;margin-left:auto;margin-right:auto;">Закрити</button>
   </div>
 </div>
+<!-- Швидке створення гуртка з конструктора розкладу -->
+<div id="quick-club-modal" class="modal-overlay" style="z-index:1003;">
+  <div class="modal-content" style="max-width:410px;">
+    <h3 style="margin-top:0;color:#2e7d32;">🎨 Створити гурток</h3>
+    <p id="qcc-class-label" style="font-size:.8rem;color:#687b72;"></p>
+    <label for="qcc-name">Назва гуртка:</label>
+    <input id="qcc-name" maxlength="80" placeholder="Наприклад, Робототехніка">
+    <label for="qcc-teacher">Учитель:</label>
+    <select id="qcc-teacher"><option value="">— учителя не призначено —</option></select>
+    <p id="qcc-error" style="display:none;color:var(--red);font-size:.78rem;"></p>
+    <div style="display:flex;gap:9px;margin-top:14px;">
+      <button type="button" id="qcc-save" onclick="saveQuickClub()" style="background:#2e7d32;color:#fff;">Створити й вибрати</button>
+      <button type="button" onclick="closeQuickClubCreator()" style="background:#eef2f0;color:#465b54;">Скасувати</button>
+    </div>
+  </div>
+</div>
+
 <!-- Edit Cell Modal -->
 <div id="edit-cell-modal" class="modal-overlay" style="z-index:1001;">
   <div class="modal-content" style="max-width:440px;">
