@@ -78,16 +78,60 @@ async function readDb(token, path) {
   return d;
 }
 
+// Старі токени мають одну role/дитину, нові — весь набір. Обидва
+// формати читаються одночасно, тому оновлення не вимагає від усіх
+// користувачів негайно перевмикати сповіщення.
+function roleValues(raw){
+  if(typeof raw==='string')return[raw];
+  return Array.isArray(raw)?[...raw]:(raw&&typeof raw==='object'?Object.values(raw):[]);
+}
+function tokenRoles(t) {
+  const list = roleValues(t&&t.roles);
+  if(t && t.role && !list.includes(t.role)) list.push(t.role);
+  return list.filter(Boolean);
+}
+function tokenHasRole(t, role) { return tokenRoles(t).includes(role); }
+function tokenChildren(t) {
+  const raw=t&&t.children;
+  const list=Array.isArray(raw)?raw:(raw&&typeof raw==='object'?Object.values(raw):[]);
+  const good=list.filter(k=>k&&k.class&&(k.studentName||k.studentId));
+  if(good.length)return good;
+  return t&&t.class&&(t.studentName||t.studentId)
+    ?[{class:t.class,studentName:t.studentName||'',studentId:t.studentId||''}]:[];
+}
+function linkedChildren(raw){
+  if(!raw)return[];
+  if(typeof raw==='string')return[{studentName:raw,class:'class_2'}];
+  const c=raw.children;
+  const list=Array.isArray(c)?c:(c&&typeof c==='object'?Object.values(c):[]);
+  if(list.length)return list.filter(k=>k&&k.class&&(k.studentName||k.studentId));
+  return raw.class&&(raw.studentName||raw.studentId)?[raw]:[];
+}
+function effectiveChildren(t,parents,students){
+  // Якщо сервер прочитав реєстри, вони є джерелом правди. Це одразу
+  // припиняє пуші після відв'язки й одразу вмикає їх після прив'язки,
+  // навіть якщо інший телефон ще не відкривав портал і токен застарів.
+  if((parents&&typeof parents==='object')||(students&&typeof students==='object')){
+    const se=emailKey(t&&t.email);
+    const fromParent=linkedChildren(parents&&parents[se]);
+    if(fromParent.length)return fromParent;
+    const st=students&&students[se];
+    return st&&st.class&&(st.studentName||st.studentId)?[st]:[];
+  }
+  return tokenChildren(t);
+}
+
 async function findTargets(token, cls, studentName) {
-  const all = await readDb(token, 'push_tokens');
+  const [all,parents,students] = await Promise.all([
+    readDb(token,'push_tokens'),readDb(token,'parent_links'),readDb(token,'student_links')
+  ]);
   if (!all || typeof all !== 'object') return [];
   const out = [];
   for (const uid in all) {
     const t = all[uid];
     if (!t || !t.token) continue;
-    const isParent = t.role === 'parent', isStudent = t.role === 'student';
-    if (!isParent && !isStudent) continue;
-    if (t.class !== cls || t.studentName !== studentName) continue;
+    const kids=effectiveChildren(t,parents,students);
+    if (!kids.some(k=>k.class===cls&&(k.studentName===studentName||k.studentId===studentName))) continue;
     out.push(t.token);
   }
   return [...new Set(out)];
@@ -96,14 +140,15 @@ async function findTargets(token, cls, studentName) {
 // Домашнє завдання адресоване КЛАСУ, а не окремій дитині: імені учня тут
 // немає й бути не може. Тому окрема вибірка — усі батьки й учні класу.
 async function findClassTargets(token, cls) {
-  const all = await readDb(token, 'push_tokens');
+  const [all,parents,students] = await Promise.all([
+    readDb(token,'push_tokens'),readDb(token,'parent_links'),readDb(token,'student_links')
+  ]);
   if (!all || typeof all !== 'object') return [];
   const out = [];
   for (const uid in all) {
     const t = all[uid];
     if (!t || !t.token) continue;
-    if (t.role !== 'parent' && t.role !== 'student') continue;
-    if (t.class !== cls) continue;
+    if (!effectiveChildren(t,parents,students).some(k=>k.class===cls)) continue;
     out.push(t.token);
   }
   return [...new Set(out)];
@@ -151,7 +196,9 @@ async function findByEmails(token, emails) {
 // відмовилися від обідів, не отримували шкільних оголошень узагалі, і
 // побачити цей звʼязок ззовні було неможливо.
 async function findNewsTargets(token, cls) {
-  const all = await readDb(token, 'push_tokens');
+  const [all,parents,students] = await Promise.all([
+    readDb(token,'push_tokens'),readDb(token,'parent_links'),readDb(token,'student_links')
+  ]);
   if (!all || typeof all !== 'object') return [];
   // 'ALL' шле news.js, коли оголошення на всю школу
   const one = cls && cls !== 'ALL' ? cls : '';
@@ -159,8 +206,9 @@ async function findNewsTargets(token, cls) {
   for (const uid in all) {
     const t = all[uid];
     if (!t || !t.token) continue;
-    if (t.role !== 'parent' && t.role !== 'student') continue;
-    if (one && t.class !== one) continue;
+    const kids=effectiveChildren(t,parents,students);
+    if (!kids.length) continue;
+    if (one&&!kids.some(k=>k.class===one)) continue;
     out.push(t.token);
   }
   return [...new Set(out)];
@@ -169,9 +217,9 @@ async function findNewsTargets(token, cls) {
 // Меню стосується всіх одразу, тому шлемо однією розсилкою: 165 окремих
 // викликів функції поклали б і ліміти Netlify, і квоту FCM.
 async function findMealTargets(token) {
-  const [all, plansRaw] = await Promise.all([
+  const [all, plansRaw,parents,students] = await Promise.all([
     readDb(token, 'push_tokens'),
-    readDb(token, 'meal_plan')
+    readDb(token, 'meal_plan'),readDb(token,'parent_links'),readDb(token,'student_links')
   ]);
   const plans = plansRaw || {};
   if (!all || typeof all !== 'object') return [];
@@ -179,12 +227,16 @@ async function findMealTargets(token) {
   for (const uid in all) {
     const t = all[uid];
     if (!t || !t.token) continue;
-    if (t.role !== 'parent' && t.role !== 'student') continue;
-    // meal_plan ключується постійним ідентифікатором учня. Імʼя лишаємо
-    // як запасний варіант для токенів, збережених до переходу.
-    const byClass = plans[t.class] || {};
-    const plan = (t.studentId && byClass[t.studentId]) || byClass[t.studentName];
-    if (plan && plan.lunch === false) continue; // не харчується — не турбуємо
+    const kids=effectiveChildren(t,parents,students);
+    if (!kids.length) continue;
+    // Для кількох дітей достатньо, щоб харчувалася хоча б одна. Один токен
+    // однаково отримає одне повідомлення, дублювати його по дітях не треба.
+    const eats=kids.some(k=>{
+      const byClass=plans[k.class]||{};
+      const plan=(k.studentId&&byClass[k.studentId])||byClass[k.studentName];
+      return !(plan&&plan.lunch===false);
+    });
+    if(!eats)continue;
     out.push(t.token);
   }
   return [...new Set(out)];
@@ -193,14 +245,17 @@ async function findMealTargets(token) {
 // Родина попереджає вчителів свого класу, а не інші родини.
 // Клас у токені вчителя не є призначенням: звіряємо реєстр і матрицю.
 async function findTeacherTargets(token, cls) {
-  const [all, access, heads] = await Promise.all([
-    readDb(token, 'push_tokens'), readDb(token, 'teacher_access'), readDb(token, 'class_teachers')
+  const [all, access, heads, approved] = await Promise.all([
+    readDb(token, 'push_tokens'), readDb(token, 'teacher_access'),
+    readDb(token, 'class_teachers'),readDb(token,'pre_approved_roles')
   ]);
   const head = emailKey(heads?.[cls]?.teacherEmail);
   const roles = ['teacher', 'class_teacher', 'art_school_teacher', 'music_teacher', 'master_class_teacher'];
   return [...new Set(Object.values(all || {}).filter(t => {
-    if (!t?.token || !t.email || !roles.includes(t.role)) return false;
+    if (!t?.token || !t.email) return false;
     const key = emailKey(t.email);
+    const actual=(approved&&typeof approved==='object')?roleValues(approved[key]):tokenRoles(t);
+    if(!roles.some(r=>actual.includes(r)))return false;
     const assigned = access?.[key]?.[cls];
     const subjects = Array.isArray(assigned) ? assigned : Object.values(assigned || {});
     return key === head || subjects.some(v => typeof v === 'string' && v.trim());
