@@ -7,10 +7,11 @@
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, push, remove, update, onValue } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { renderNewsFeed } from './news.js';
-import { db, auth, CLOUDINARY_URL, UPLOAD_PRESET, HW_FILE_EXT, HW_FILE_MAX_MB, fileExt, getActiveClass, currentUserData, showToast, displayGrade, renderHwItem, renderHwList, dayKeys, formatAttendanceSlotLabel, STICKER_GOAL, stickerGoal, escJs, escHtml, safeUrl, normalizeChildren, notifyEvent, logAction, renderBirthdays, teacherAccessMatrix, getUsersSnap, stuName, gradeWritePaths, localDateString, isMasterTeacher, gradeTypesCache, subjKey, emailKey, subjectsForClassWeek } from './common.js';
+import { db, auth, CLOUDINARY_URL, UPLOAD_PRESET, HW_FILE_EXT, HW_FILE_MAX_MB, fileExt, isImageUrl, isAudioUrl, cldImage, safeHttpUrl, getActiveClass, currentUserData, showToast, displayGrade, renderHwItem, renderHwList, dayKeys, formatAttendanceSlotLabel, STICKER_GOAL, stickerGoal, escJs, escHtml, safeUrl, normalizeChildren, notifyEvent, logAction, renderBirthdays, teacherAccessMatrix, getUsersSnap, stuName, gradeWritePaths, localDateString, isMasterTeacher, gradeTypesCache, subjKey, emailKey, subjectsForClassWeek } from './common.js';
 import { populateTopicSelector, availableTopicsCache, planKey, loadAliases } from './curriculum.js';
 
 let currentHwImages=[];
+let hwLoadGeneration=0;
 const HW_AUDIO_EXT=new Set(['mp3','m4a','wav','ogg','oga','aac','flac','webm','opus']);
 const hwAudioPreviewUrls=new Map();
 function clearHwAudioPreview(id){
@@ -33,6 +34,33 @@ function showHwAudioPreview(input,id){
   box.innerHTML=urls.map(({file,url})=>`<div class="hw-audio"><span>🎧 ${escHtml(file.name)}</span>`
     + `<audio controls preload="metadata" src="${escHtml(url)}"></audio></div>`).join('');
 }
+function hwAttachmentName(url){
+  const raw=String(url||'').split('/').pop().split(/[?#]/)[0]||'файл';
+  try{return decodeURIComponent(raw);}catch(e){return raw;}
+}
+function hwSavedAttachmentsHtml(urls,removeFn,id){
+  return (urls||[]).map((url,index)=>{
+    const su=safeHttpUrl(url);if(!su)return '';
+    const name=hwAttachmentName(su);
+    let view='';
+    if(isAudioUrl(su))view=`<div class="hw-audio"><span>🎧 ${escHtml(name)}</span><audio controls preload="metadata" src="${escHtml(su)}"></audio></div>`;
+    else if(isImageUrl(su))view=`<a class="hw-saved-photo" href="${escHtml(cldImage(su))}" target="_blank" rel="noopener noreferrer"><img src="${escHtml(cldImage(su,'c_fill,w_140,h_140'))}" alt="${escHtml(name)}"></a><span class="hw-saved-name">📷 ${escHtml(name)}</span>`;
+    else view=`<a class="hw-doc" href="${escHtml(su)}" target="_blank" rel="noopener noreferrer"><span>📎 ${escHtml(name)}</span></a>`;
+    const call=id===undefined?`${removeFn}(${index})`:`${removeFn}('${escJs(id)}',${index})`;
+    return `<div class="hw-saved-item"><div class="hw-saved-main">${view}</div><button type="button" class="hw-saved-remove" onclick="${call}" aria-label="Прибрати ${escHtml(name)}">✕</button></div>`;
+  }).join('');
+}
+function renderMainHwAttachments(note){
+  const box=document.getElementById('existing-image-info');if(!box)return;
+  const rows=hwSavedAttachmentsHtml(currentHwImages,'removeHomeworkAttachment');
+  box.innerHTML=(note?`<div class="hw-saved-note">${escHtml(note)}</div>`:'')+rows;
+  box.style.display=(rows||note)?'block':'none';
+}
+window.removeHomeworkAttachment=function(index){
+  if(index<0||index>=currentHwImages.length)return;
+  currentHwImages.splice(index,1);
+  renderMainHwAttachments('Вкладення прибрано зі списку. Натисніть «Зберегти ДЗ».');
+};
 // teacherAttendanceListener is reassigned only here and read/invoked from
 // common.js's logoutUser — plain export/import.
 export let teacherAttendanceListener=null;
@@ -142,6 +170,7 @@ window.handleSubjectChange=function(){
   if(document.getElementById('hw-textbook')) fillHwTextbooks();
 };
 export function loadCurrentTopicAndHW(){
+  const gen=++hwLoadGeneration;
   loadTextbooksForTeacher();
   const date=document.getElementById('global-date').value;const subject=document.getElementById('t-subject').value;const cls=getActiveClass();
   // Підручники прив'язані до пари «клас + предмет», тож після зміни класу
@@ -168,6 +197,7 @@ export function loadCurrentTopicAndHW(){
   if(bookCustomEl)bookCustomEl.value='';
   /* Topic loading is now handled by populateTopicSelector() → loadSavedTopicForLesson() */
   get(ref(db,`homeworks/${cls}/${date}/${subject}`)).then(snap=>{
+    if(gen!==hwLoadGeneration||getActiveClass()!==cls||document.getElementById('global-date')?.value!==date||document.getElementById('t-subject')?.value!==subject)return;
     if(!snap.exists())return;
     const val=snap.val();
     const hwEl=document.getElementById('t-hw');
@@ -187,11 +217,10 @@ export function loadCurrentTopicAndHW(){
     }
     if(val.images&&Array.isArray(val.images))currentHwImages=val.images;
     else if(val.image)currentHwImages=[val.image];
-    const info=document.getElementById('existing-image-info');
-    if(currentHwImages.length>0&&info){
-      info.innerText=`📎 Вкладень: ${currentHwImages.length} шт.`;
-      info.style.display='block';
-    }
+    renderMainHwAttachments();
+  }).catch(e=>{
+    if(gen!==hwLoadGeneration)return;
+    renderMainHwAttachments('Не вдалося завантажити вкладення: '+e.message);
   });
 }
 window.loadCurrentTopicAndHW=loadCurrentTopicAndHW;
@@ -808,29 +837,33 @@ window.saveHomework=function(){
     if(fileInput&&fileInput.files.length>0){
       sm.style.display='block';sm.innerText='⏳ Завантаження файлів...';
       sm.style.color='#f39c12';sm.style.background='#fff8e1';
-      finalImageUrls=await Promise.all(Array.from(fileInput.files).map(async file=>{
+      const uploaded=await Promise.all(Array.from(fileInput.files).map(async file=>{
         const fd=new FormData(); fd.append('file',file); fd.append('upload_preset',UPLOAD_PRESET);
         const r=await fetch(CLOUDINARY_URL,{method:'POST',body:fd});
         const d=await r.json();
         if(!d.secure_url) throw new Error('файл не завантажився: '+(d.error&&d.error.message||'невідома причина'));
         return d.secure_url;
       }));
+      finalImageUrls=[...finalImageUrls,...uploaded];
     }
-
-    if(!hwText&&finalImageUrls.length===0){
-      showToast('⚠️ Завдання порожнє — нічого зберігати');
-      return false;
-    }
-
-    // Автора пишемо тільки разом із завданням: сам по собі запис про те,
-    // хто відкривав урок, нікому не потрібен.
-    await set(ref(db,`authors/${cls}/${date}/${subject}`),uid);
 
     const hwRef=ref(db,`homeworks/${cls}/${date}/${subject}`);
     // Чи це ПЕРШЕ завдання з предмета на цей день. Учитель зберігає той
     // самий урок по три-чотири рази — виправляє текст, дописує сторінки.
     // Слати push щоразу означало б навчити батьків не звертати уваги.
     const existed=(await get(hwRef)).exists();
+    // Якщо прибрали останнє вкладення з завдання без тексту, зберігати
+    // порожню картку немає сенсу. Кнопка «Зберегти ДЗ» у цьому випадку
+    // підтверджує видалення самого порожнього завдання.
+    if(!hwText&&finalImageUrls.length===0){
+      if(!existed){showToast('⚠️ Завдання порожнє — нічого зберігати');return false;}
+      await update(ref(db),{[`homeworks/${cls}/${date}/${subject}`]:null,[`authors/${cls}/${date}/${subject}`]:null});
+      currentHwImages=[];renderMainHwAttachments();setTimeout(()=>loadTeacherDashboard(),300);
+      return '✅ Порожнє ДЗ видалено';
+    }
+    // Автора пишемо тільки разом із завданням: сам по собі запис про те,
+    // хто відкривав урок, нікому не потрібен.
+    await set(ref(db,`authors/${cls}/${date}/${subject}`),uid);
     // ts — коли завдання внесли. Дата в ключі каже, НА який день задано.
     const rec={text:hwText,images:finalImageUrls,ts:Date.now()};
     if(bookTitle&&bookUrl)rec.book={title:bookTitle,url:bookUrl};
@@ -847,6 +880,8 @@ window.saveHomework=function(){
 
     if(fileInput)fileInput.value='';
     clearHwAudioPreview('hw-audio-preview');
+    currentHwImages=finalImageUrls;
+    renderMainHwAttachments();
     const lbl=document.getElementById('hw-file-name');
     if(lbl){lbl.textContent='Файл не обрано';lbl.style.color='#78909c';}
     setTimeout(()=>loadTeacherDashboard(),300);
@@ -1678,13 +1713,13 @@ export async function renderTeacherHwDay(){
                  onchange="hwdFilesPicked('${id}')">
           <div class="hw-file-row">
             <label for="${id}-file" class="hw-file-btn">📂 Обрати файли</label>
-            <span id="${id}-fname" class="hw-file-name">${have.length
-              ? `Уже додано: ${have.length} шт. — нові замінять їх`
-              : 'Файл не обрано'}</span>
+            <span id="${id}-fname" class="hw-file-name">Файл не обрано</span>
           </div>
           <div id="${id}-audio-preview" class="hw-audio-preview"></div>
+          <div id="${id}-saved-files" class="hw-saved-list">${hwSavedAttachmentsHtml(have,'hwdRemoveAttachment',id)}</div>
           <p class="hw-file-hint">Фото, аудіо (MP3, M4A, WAV, OGG, AAC), документ
-            (DOC, DOCX) або таблиця (XLS, XLSX, CSV). До ${HW_FILE_MAX_MB} МБ на файл.</p>
+            (DOC, DOCX) або таблиця (XLS, XLSX, CSV). До ${HW_FILE_MAX_MB} МБ на файл.
+            Нові файли додаються до збережених; непотрібні видаляються кнопкою ✕.</p>
           <div class="hwd-actions">
             <span class="hwd-dirty" id="${id}-dirty"></span>
             <button type="button" class="qa-btn qa-save" id="${id}-save"
@@ -1734,6 +1769,19 @@ window.hwdDirty=function(id){
            if(hwDayState[s]) hwDayState[s].dirty=true; }
 };
 
+function renderHwdSavedAttachments(id,urls){
+  const box=document.getElementById(id+'-saved-files');
+  if(box)box.innerHTML=hwSavedAttachmentsHtml(urls,'hwdRemoveAttachment',id);
+}
+window.hwdRemoveAttachment=function(id,index){
+  const row=document.getElementById(id+'-row');if(!row)return;
+  const state=hwDayState[row.dataset.subject];
+  if(!state||index<0||index>=state.images.length)return;
+  state.images.splice(index,1);renderHwdSavedAttachments(id,state.images);hwdDirty(id);
+  const mark=document.getElementById(id+'-dirty');
+  if(mark)mark.textContent='● вкладення буде видалено після збереження';
+};
+
 // Перевірка файлів одразу при виборі — щоб не дізнатися про неправильний
 // формат уже після того, як завдання написане й натиснуто «Зберегти».
 window.hwdFilesPicked=function(id){
@@ -1778,27 +1826,35 @@ window.hwdSave=function(id){
     if(!hwText&&(bookTitle||pages))
       hwText=(bookUrl&&pages)?pages:[bookTitle,pages].filter(Boolean).join(' — ');
 
-    // Вкладення: нові замінюють старі, а якщо нових немає — лишаються ті,
-    // що вже були. Порожній список тут означав би «стерти прикріплене».
+    // Нові вкладення ДОДАЮТЬСЯ до списку. Видалення вчитель робить окремою
+    // кнопкою в картці файла й підтверджує звичайним збереженням ДЗ.
     const fileInput=document.getElementById(id+'-file');
     let images=(hwDayState[subject]&&hwDayState[subject].images)||[];
     if(fileInput&&fileInput.files.length>0){
       const dm=document.getElementById(id+'-dirty');
       if(dm) dm.textContent='⏳ Завантаження файлів...';
-      images=await Promise.all(Array.from(fileInput.files).map(async file=>{
+      const uploaded=await Promise.all(Array.from(fileInput.files).map(async file=>{
         const fd=new FormData(); fd.append('file',file); fd.append('upload_preset',UPLOAD_PRESET);
         const r=await fetch(CLOUDINARY_URL,{method:'POST',body:fd});
         const d=await r.json();
         if(!d.secure_url) throw new Error('файл не завантажився: '+((d.error&&d.error.message)||'невідома причина'));
         return d.secure_url;
       }));
+      images=[...images,...uploaded];
     }
-
-    // Саме завдання може бути й самим фото — тоді текст не обов'язковий.
-    if(!hwText&&images.length===0){ showToast('⚠️ Завдання порожнє'); return false; }
 
     const hwRef=ref(db,`homeworks/${cls}/${date}/${subject}`);
     const existed=(await get(hwRef)).exists();
+    if(!hwText&&images.length===0){
+      if(!existed){showToast('⚠️ Завдання порожнє');return false;}
+      await update(ref(db),{[`homeworks/${cls}/${date}/${subject}`]:null,[`authors/${cls}/${date}/${subject}`]:null});
+      row.classList.remove('done','dirty');hwDayState[subject]={saved:false,dirty:false,images:[]};
+      renderHwdSavedAttachments(id,[]);
+      const mk=row.querySelector('.hwd-mark');if(mk)mk.textContent='○';
+      const st=document.getElementById(id+'-state');if(st)st.textContent='не задано';
+      const dm=document.getElementById(id+'-dirty');if(dm)dm.textContent='';
+      showToast(`✅ ${subject}: порожнє ДЗ видалено`);return false;
+    }
     const rec={text:hwText, images, ts:Date.now()};
     if(bookTitle&&bookUrl) rec.book={title:bookTitle,url:bookUrl};
     if(pages) rec.pages=pages;
@@ -1809,13 +1865,13 @@ window.hwdSave=function(id){
     // Успіх: галочка, згортаємо, знімаємо позначку про зміни.
     row.classList.add('done'); row.classList.remove('dirty');
     hwDayState[subject]={saved:true, dirty:false, images};
+    renderHwdSavedAttachments(id,images);
     // Поле вибору очищаємо, а підпис показує, скільки тепер прикріплено:
     // інакше при наступному збереженні ті самі файли завантажилися б удруге.
     if(fileInput) fileInput.value='';
     clearHwAudioPreview(id+'-audio-preview');
     const fn=document.getElementById(id+'-fname');
-    if(fn){ fn.style.color='#78909c';
-      fn.textContent=images.length?`Уже додано: ${images.length} шт. — нові замінять їх`:'Файл не обрано'; }
+    if(fn){ fn.style.color='#78909c';fn.textContent='Файл не обрано'; }
     const mk=row.querySelector('.hwd-mark'); if(mk) mk.textContent='✓';
     const st=document.getElementById(id+'-state'); if(st) st.textContent='задано';
     const dm=document.getElementById(id+'-dirty'); if(dm) dm.textContent='';
