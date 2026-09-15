@@ -7,7 +7,7 @@
 // header for why.)
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, push, remove, update, query, limitToLast } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { auth, db, showToast, getClassNum, displayGrade, gradeClass6, teacherAccessMatrix, getWeekDates, formatAttendanceSlotLabel, gradeTypesCache, loadGradeTypesCache, calculateStudentWeightedAvg, escJs, escHtml, localDateString, normalizeRoles, getUserRoles, ROLE_LABELS, currentUserData, dayNamesUA, sendPasswordReset, normalizeChildren, renderParentsBlock, logAction, AUDIT_LABELS, getParentProfile, parentFullName, getSchoolRange, getAllUsers, invalidateUsersCache, getUsersSnap, stuName, invalidateStudentDir, subjectsLabel, syncStaffCard, shrinkImage, dayKeys, invalidateParentLinks, emailKey } from './common.js';
+import { auth, db, showToast, getClassNum, displayGrade, gradeClass6, teacherAccessMatrix, getWeekDates, formatAttendanceSlotLabel, gradeTypesCache, loadGradeTypesCache, calculateStudentWeightedAvg, escJs, escHtml, localDateString, normalizeRoles, getUserRoles, mergeAccountRoles, parentAccountPatch, ROLE_LABELS, currentUserData, dayNamesUA, sendPasswordReset, normalizeChildren, renderParentsBlock, logAction, AUDIT_LABELS, getParentProfile, parentFullName, getSchoolRange, getAllUsers, invalidateUsersCache, getUsersSnap, stuName, invalidateStudentDir, subjectsLabel, syncStaffCard, shrinkImage, dayKeys, invalidateParentLinks, emailKey } from './common.js';
 
 let directorSkillsTemp=[];
 
@@ -585,8 +585,12 @@ window.grantStaffRole=async function(){
       const u=us.val();
       for(let uid in u){
         if((u[uid].email||'').toLowerCase()===raw){
-          const patch={roles,disabled:null};
-          if(!roles.includes(u[uid].role))patch.role=roles[0];
+          // Посада не повинна забирати батьківський кабінет. parent_links —
+          // окреме джерело доступу, тому додаємо derived-роль назад.
+          const pl=await get(child(ref(db),`parent_links/${se}`));
+          const allRoles=mergeAccountRoles(roles,pl.exists()?pl.val():null);
+          const patch={roles:allRoles,disabled:null};
+          if(!allRoles.includes(u[uid].role))patch.role=allRoles[0];
           await update(ref(db,`users/${uid}`),patch);
         }
       }
@@ -723,13 +727,21 @@ window.removeStaffMember=async function(safeEmail){
       remove(ref(db,`staff_directory/${safeEmail}`))
     ]);
     if(window.invalidateContactDir) window.invalidateContactDir();
-    // 2. Позначаємо профіль як відключений (блокує вхід)
+    // 2. Прибираємо службові ролі з профілю. Якщо це також мама/тато,
+    // батьківський кабінет і доступ до дітей залишаються.
     const usersSnap=await getUsersSnap();
     if(usersSnap.exists()){
       const users=usersSnap.val();
       for(let uid in users){
         if(users[uid].email&&emailKey(users[uid].email)===safeEmail){
-          await update(ref(db,`users/${uid}`),{disabled:true,roles:null,role:null});
+          const pl=await get(child(ref(db),`parent_links/${safeEmail}`));
+          const parentLink=pl.exists()?pl.val():null;
+          const roles=mergeAccountRoles([],parentLink);
+          if(roles.length){
+            await update(ref(db,`users/${uid}`),{
+              roles,role:'parent',disabled:null,...parentAccountPatch(parentLink,users[uid])
+            });
+          }else await update(ref(db,`users/${uid}`),{disabled:true,roles:null,role:null});
         }
       }
     }
@@ -1030,9 +1042,9 @@ window.loadParentLinkStudents=async function(){
   if(!cls){sel.innerHTML='<option value="">Спочатку оберіть клас</option>';return;}
   sel.innerHTML='<option value="">Завантаження...</option>';
   const snap=await get(child(ref(db),`students_list/${cls}`));
-  const names=snap.exists()?Object.values(snap.val()).sort((a,b)=>String(a).localeCompare(String(b),'uk')):[];
-  sel.innerHTML=names.length
-    ? '<option value="">-- Оберіть учня --</option>'+names.map(n=>`<option value="${escHtml(n)}">${escHtml(n)}</option>`).join('')
+  const students=snap.exists()?Object.entries(snap.val()).sort((a,b)=>String(a[1]).localeCompare(String(b[1]),'uk')):[];
+  sel.innerHTML=students.length
+    ? '<option value="">-- Оберіть учня --</option>'+students.map(([id,name])=>`<option value="${escHtml(id)}">${escHtml(name)}</option>`).join('')
     : '<option value="">У класі немає учнів</option>';
   }catch(err){
     // Читання не вдалося. Без цього блоку на екрані назавжди лишався б
@@ -1056,22 +1068,43 @@ window.directorLinkParent=async function(){
     const snap=await get(child(ref(db),`parent_links/${se}`));
     const rec=snap.exists()?snap.val():{};
     const kids=normalizeChildren(rec);
-    const stNm=stuName(cls,st);
+    // Список завантажено напряму з Firebase, тому глобальний довідник
+    // stuName може ще не бути прогрітий. Видиме ім'я беремо з option,
+    // а стабільний ID — з value.
+    const stNm=document.getElementById('pl-student').selectedOptions[0]?.textContent?.trim()||st;
     if(kids.some(k=>k.studentId===st||(k.studentName===stNm&&k.class===cls)))
       return alert(`Ця дитина вже прив'язана.`);
+    // Правила профілю звіряють максимум шістьох дітей. Не створюємо
+    // сьомий запис, у який потім неможливо буде перемкнутися.
+    if(kids.length>=6)return alert('До одного акаунта можна прив’язати не більше 6 дітей.');
     kids.push({studentId:st,studentName:stNm,class:cls,role});
     await update(ref(db,`parent_links/${se}`),{children:kids});
     invalidateParentLinks();   // список змінився — кеш більше не чинний
-    // Якщо батьки вже заходили — одразу оновлюємо їхній профіль
-    const us=await getUsersSnap();
+    // Якщо людина вже заходила як співробітник — одразу додаємо їй роль
+    // батьків і дані дитини. Після цього перемикач кабінетів працює без
+    // другого акаунта та без повторного входу.
+    const [us,staffSnap]=await Promise.all([
+      getUsersSnap(),get(child(ref(db),`pre_approved_roles/${se}`))
+    ]);
     if(us.exists()){
       const u=us.val();
-      for(const uid in u)
-        if((u[uid].email||'').toLowerCase()===raw&&u[uid].role==='parent')
-          await update(ref(db,`users/${uid}`),{children:kids});
+      for(const uid in u){
+        if(emailKey(u[uid].email||'')!==se)continue;
+        // Службові ролі беремо лише з директорського реєстру. Старий
+        // disabled-профіль не повинен випадково повернути звільненій
+        // людині права вчителя тільки через прив'язку дитини.
+        const roles=mergeAccountRoles(staffSnap.exists()?staffSnap.val():[],{children:kids});
+        const patch={roles,...parentAccountPatch({children:kids},u[uid]),disabled:null};
+        await update(ref(db,`users/${uid}`),patch);
+        if(uid===auth.currentUser?.uid&&currentUserData){
+          Object.assign(currentUserData,patch);
+          if(window.renderRoleSwitcher)window.renderRoleSwitcher();
+          if(window.refreshPushReg)window.refreshPushReg();
+        }
+      }
     }
     logAction('parent_link',{cls,target:stNm,value:raw,role});
-    showToast(kids.length>1?`✅ Прив'язано. Дітей у цих батьків: ${kids.length}`:'✅ Прив\'язано');
+    showToast(kids.length>1?`✅ Прив'язано. Дітей у профілі: ${kids.length}`:'✅ Прив\'язано. Кабінет батьків додано до цього акаунта');
     document.getElementById('pl-email').value='';
     window.loadParentsOverview();
   }catch(e){alert('Помилка: '+e.message);}
