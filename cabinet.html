@@ -45,7 +45,7 @@
     h2{color:var(--teal);text-align:center;margin-top:0;font-size:var(--text-xl);}
     h3{color:#333;border-bottom:2px solid #eee;padding-bottom:var(--space-2);margin-top:var(--space-5);font-size:var(--text-lg);}
     label{display:block;margin-top:var(--space-4);font-weight:600;color:#555;font-size:var(--text-base);}
-    input[type=email],input[type=password],input[type=text],input[type=date],input[type=month],select,textarea{width:100%;padding:11px;margin-top:4px;border:1px solid #ccc;border-radius:11px;font-family:inherit;font-size:.95rem;}
+    input[type=email],input[type=password],input[type=text],input[type=number],input[type=search],input[type=date],input[type=month],input:not([type]),select,textarea{width:100%;max-width:100%;min-width:0;padding:11px;margin-top:4px;border:1px solid #ccc;border-radius:11px;font-family:inherit;font-size:.95rem;}
     input[type=file]{margin-top:4px;font-size:.88rem;border:1px dashed var(--teal);padding:9px;border-radius:11px;width:100%;background:#fafafa;cursor:pointer;}
     button{width:100%;padding:14px;border:none;border-radius:11px;cursor:pointer;font-weight:700;font-size:var(--text-base);transition:.25s;margin-top:var(--space-4);font-family:inherit;}
     /* ── DESIGN SYSTEM: primary/save/danger(logout) share the `button` base above, only color differs ── */
@@ -1851,7 +1851,7 @@
        ═══════════════════════════════════════════════════════ */
     /* === Touch targets: prevent iOS zoom on input focus === */
     @media (pointer: coarse) {
-      input[type=text], input[type=email], input[type=password], input[type=date], input[type=month], select, textarea { font-size: 16px !important; }
+      input[type=text], input[type=email], input[type=password], input[type=number], input[type=search], input[type=date], input[type=month], input:not([type]), select, textarea { font-size: 16px !important; }
       button { min-height: 44px; }
       .reaction-btn { min-height: 44px !important; min-width: 44px !important; }
       .g-cell { min-height: 32px; min-width: 32px; }
@@ -1864,7 +1864,7 @@
       h3 { font-size: 1rem; margin-top: 18px; }
       label { font-size: .85rem; margin-top: 11px; }
       button { padding: 12px; font-size: .9rem; margin-top: 13px; }
-      input[type=email], input[type=password], input[type=text], input[type=date], input[type=month], select, textarea { padding: 10px; font-size: 15px; }
+      input[type=email], input[type=password], input[type=text], input[type=number], input[type=search], input[type=date], input[type=month], input:not([type]), select, textarea { padding: 10px; font-size: 15px; }
       /* Profile bar — compact */
       #profile-bar { gap: 10px; padding: 10px; }
       #pb-avatar { width: 42px !important; height: 42px !important; }
@@ -2300,7 +2300,8 @@
   border-radius:8px;padding:7px 9px;margin:6px 0;line-height:1.4;}
 .curr-warn.danger{color:#b3261e;background:#fdecea;border-color:#f5c6cb;}
 .curr-subj-fix{width:100%;margin:4px 0 8px 0;font-size:.84rem;}
-.mb-box{background:#f4fbf5;border:1px solid #c8e6c9;border-radius:14px;padding:14px}.mb-head{background:#e8f5e9;border-radius:12px;padding:14px;color:#256029}.mb-head.bad{background:#ffebee;color:#b71c1c}.mb-head.low{background:#fff8e1;color:#8a6d00}.mb-head span,.mb-head small{display:block}.mb-head b{display:block;font-size:1.75rem;margin:4px 0}.mb-pending{margin-top:9px;padding:10px;border-radius:9px;background:#fff8e1;font-size:.8rem;color:#795d00}.mb-note{margin:10px 0;font-size:.76rem;color:#677}.mb-form{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}.mb-form label{font-size:.7rem;color:#657;font-weight:700}.mb-form input,.mb-form button{margin:3px 0 0}.mb-form button,.mb-form small{grid-column:1/-1}.mb-form small{font-size:.7rem;color:#777}.mb-history{margin-top:12px}.mb-history summary{cursor:pointer;font-weight:700;color:#356b3a}.mb-history>div{display:grid;grid-template-columns:85px 90px 1fr;gap:7px;padding:7px 0;border-bottom:1px solid #e0ece1;font-size:.76rem}.mb-history b{color:#2e7d32}.mb-history b.neg{color:#c62828}.mb-history small{color:#777}
+.mb-box{background:#f4fbf5;border:1px solid #c8e6c9;border-radius:14px;padding:14px;min-width:0;max-width:100%}.mb-person-pick{display:flex;gap:8px;min-width:0}.mb-person-pick select{min-width:0;margin-top:0;text-overflow:ellipsis}.mb-person-pick #k-balance-class{flex:1}.mb-person-pick #k-balance-student{flex:2}.mb-head{background:#e8f5e9;border-radius:12px;padding:14px;color:#256029;min-width:0;overflow-wrap:anywhere}.mb-head.bad{background:#ffebee;color:#b71c1c}.mb-head.low{background:#fff8e1;color:#8a6d00}.mb-head span,.mb-head small{display:block}.mb-head b{display:block;font-size:1.75rem;margin:4px 0}.mb-pending{margin-top:9px;padding:10px;border-radius:9px;background:#fff8e1;font-size:.8rem;color:#795d00}.mb-note{margin:10px 0;font-size:.76rem;color:#677;overflow-wrap:anywhere}.mb-form{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;margin-top:12px;min-width:0}.mb-form>*{min-width:0;max-width:100%}.mb-form label{font-size:.7rem;color:#657;font-weight:700;overflow-wrap:anywhere}.mb-form input,.mb-form button{margin:3px 0 0;width:100%}.mb-form button,.mb-form small{grid-column:1/-1}.mb-form small{font-size:.7rem;color:#777;overflow-wrap:anywhere}.mb-history{margin-top:12px;min-width:0}.mb-history summary{cursor:pointer;font-weight:700;color:#356b3a;overflow-wrap:anywhere}.mb-history>div{display:grid;grid-template-columns:85px 90px minmax(0,1fr);gap:7px;padding:7px 0;border-bottom:1px solid #e0ece1;font-size:.76rem}.mb-history>div>*{min-width:0;overflow-wrap:anywhere}.mb-history b{color:#2e7d32}.mb-history b.neg{color:#c62828}.mb-history small{color:#777}
+@media(max-width:30em){.mb-person-pick{flex-direction:column}.mb-form{grid-template-columns:minmax(0,1fr)}.mb-form button,.mb-form small{grid-column:1}.mb-history>div{grid-template-columns:72px 78px minmax(0,1fr)}.k-prices-grid{grid-template-columns:minmax(0,1fr)}}
 </style>
 </head>
 <!-- auth-mode СТОЇТЬ ТУТ ОДРАЗУ, а не чекає на скрипт.
@@ -2668,9 +2669,9 @@
       <h3>💳 Баланс харчування</h3>
       <div class="data-card" style="border-left-color:#2e7d32;margin-top:0;">
         <p style="font-size:.76rem;color:#777;margin-top:0;">Внесіть надходження з банківського рахунку. Перша дата «рахувати від» відкриває особовий рахунок.</p>
-        <div style="display:flex;gap:8px;">
-          <select id="k-balance-class" onchange="loadMealAccountStudents()" style="flex:1;"><option value="">Клас...</option><option value="class_1">1 клас</option><option value="class_2">2 клас</option><option value="class_3">3 клас</option><option value="class_4">4 клас</option><option value="class_5">5 клас</option><option value="class_6">6 клас</option><option value="class_7">7 клас</option><option value="class_8">8 клас</option><option value="class_9">9 клас</option><option value="class_10">10 клас</option><option value="class_11">11 клас</option></select>
-          <select id="k-balance-student" onchange="loadKitchenMealAccount()" style="flex:2;"><option value="">Оберіть дитину...</option></select>
+        <div class="mb-person-pick">
+          <select id="k-balance-class" onchange="loadMealAccountStudents()"><option value="">Клас...</option><option value="class_1">1 клас</option><option value="class_2">2 клас</option><option value="class_3">3 клас</option><option value="class_4">4 клас</option><option value="class_5">5 клас</option><option value="class_6">6 клас</option><option value="class_7">7 клас</option><option value="class_8">8 клас</option><option value="class_9">9 клас</option><option value="class_10">10 клас</option><option value="class_11">11 клас</option></select>
+          <select id="k-balance-student" onchange="loadKitchenMealAccount()"><option value="">Оберіть дитину...</option></select>
         </div>
         <div id="k-meal-balance"><p class="empty-msg">Оберіть клас і дитину.</p></div>
       </div>
@@ -3355,8 +3356,8 @@
         <div style="margin-top:13px;">
           <div id="gt-types-table"><p class="empty-msg">Відкрийте блок для завантаження...</p></div>
           <div style="display:flex;gap:7px;margin-top:12px;flex-wrap:wrap;">
-            <input id="gt-new-code" placeholder="Код (напр. ЛР)" style="width:90px;margin:0;">
-            <input id="gt-new-label" placeholder="Назва" style="flex:1;min-width:140px;margin:0;">
+            <input type="text" id="gt-new-code" placeholder="Код (напр. ЛР)" style="width:90px;margin:0;">
+            <input type="text" id="gt-new-label" placeholder="Назва" style="flex:1;min-width:140px;margin:0;">
             <input id="gt-new-weight" type="number" step="0.1" min="0.1" placeholder="Коеф." style="width:80px;margin:0;">
             <button onclick="addGradeType()" style="background:var(--green);color:#fff;width:auto;padding:8px 14px;margin:0;">➕ Додати</button>
           </div>
@@ -4451,7 +4452,7 @@
     <h3 style="margin-top:0;color:#2e7d32;">🎨 Створити гурток</h3>
     <p id="qcc-class-label" style="font-size:.8rem;color:#687b72;"></p>
     <label for="qcc-name">Назва гуртка:</label>
-    <input id="qcc-name" maxlength="80" placeholder="Наприклад, Робототехніка">
+    <input type="text" id="qcc-name" maxlength="80" placeholder="Наприклад, Робототехніка">
     <label for="qcc-teacher">Учитель:</label>
     <select id="qcc-teacher"><option value="">— учителя не призначено —</option></select>
     <p id="qcc-error" style="display:none;color:var(--red);font-size:.78rem;"></p>
@@ -4760,7 +4761,7 @@ document.addEventListener('DOMContentLoaded', function(){
 <script type="module" src="parent-student.js?v=20260915-1"></script>
 <script type="module" src="teacher.js?v=20260915-1"></script>
 <script type="module" src="kitchen.js?v=20260915-3"></script>
-<script type="module" src="meal-balance.js?v=20260915-2"></script>
+<script type="module" src="meal-balance.js?v=20260915-3"></script>
 <script type="module" src="news.js"></script>
 <script type="module" src="chat.js"></script>
 <script type="module" src="breaks.js"></script>
@@ -4782,7 +4783,7 @@ document.addEventListener('DOMContentLoaded', function(){
 <script type="module" src="payment.js"></script>
 <script type="module" src="materials-audit.js"></script>
 <script type="module" src="workload.js?v=20260915-2"></script>
-<script type="module" src="clubs-catalog.js?v=20260915-2"></script>
+<script type="module" src="clubs-catalog.js?v=20260915-3"></script>
 
   <!-- ═══ ЕКРАН ЗГОДИ ПРИ ВХОДІ ═══
        Модалка без кнопки закриття: GDPR вимагає поінформувати ДО обробки,
