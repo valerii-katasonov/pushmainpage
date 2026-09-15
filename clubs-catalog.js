@@ -49,6 +49,46 @@ async function staff(){
   return Object.values(snap.exists()?snap.val():{}).filter(u=>u?.email&&!u.disabled&&getUserRoles(u).some(isTeacherRole))
     .map(u=>({email:u.email,name:[u.firstName,u.lastName].filter(Boolean).join(' ')||u.email})).sort((a,b)=>a.name.localeCompare(b.name,'uk'));
 }
+export async function createClub(c,name,email){
+  const clean=String(name||'').trim();
+  if(!clean||clean.length>80)throw Error('Введіть назву гуртка до 80 символів');
+  const [snap,teachers]=await Promise.all([get(ref(db,path(c))),staff()]);
+  const node=snap.exists()?snap.val():{};
+  if(catalogList(node).some(e=>subjKey(e.name)===subjKey(clean)))throw Error('Цей гурток уже є у списку');
+  const teacher=teachers.find(t=>emailKey(t.email)===emailKey(email));
+  if(email&&!teacher)throw Error('Оберіть активного учителя');
+  const record={name:clean,teacherEmail:teacher?.email||'',teacherName:teacher?.name||''};
+  await update(ref(db),await clubWritePaths(c,subjKey(clean),record));
+  (cache[c.year]||={})[c.cls]={...node,[subjKey(clean)]:record};
+  return record;
+}
+window.openQuickClubCreator=async function(){
+  const error=document.getElementById('qcc-error'),modal=document.getElementById('quick-club-modal');
+  if(!allowed()){showToast('Створювати гуртки може директор або адміністратор');return;}
+  const cls=document.getElementById('cell-edit-class')?.value;if(!cls||!modal)return;
+  modal.dataset.cls=cls;document.getElementById('qcc-class-label').textContent=`${cls.replace('class_','')} клас · ${ACTIVE_YEAR}`;
+  document.getElementById('qcc-name').value='';if(error){error.textContent='';error.style.display='none';}
+  modal.style.display='flex';
+  const select=document.getElementById('qcc-teacher');select.innerHTML='<option value="">Завантажую вчителів...</option>';select.disabled=true;
+  try{const teachers=await staff();if(modal.dataset.cls!==cls)return;select.innerHTML='<option value="">— учителя не призначено —</option>'+teachers.map(t=>`<option value="${escHtml(t.email)}">${escHtml(t.name)}</option>`).join('');select.disabled=false;document.getElementById('qcc-name').focus();}
+  catch(e){if(modal.dataset.cls===cls){error.textContent='Не вдалося завантажити вчителів: '+e.message;error.style.display='block';}}
+};
+window.closeQuickClubCreator=function(){const modal=document.getElementById('quick-club-modal');if(modal)modal.style.display='none';};
+window.saveQuickClub=async function(){
+  const modal=document.getElementById('quick-club-modal'),button=document.getElementById('qcc-save'),error=document.getElementById('qcc-error');
+  if(!allowed()||!modal||button.disabled)return;
+  const cls=modal.dataset.cls,name=document.getElementById('qcc-name').value,email=document.getElementById('qcc-teacher').value;
+  button.disabled=true;error.style.display='none';
+  try{
+    const record=await createClub({year:ACTIVE_YEAR,cls},name,email);
+    if(document.getElementById('cell-edit-class')?.value===cls&&document.getElementById('cell-type-select')?.value==='extra'){
+      await window.fillCellSubjects(cls,record.name,'extra');
+      window.updateCellEditorTeacherOptions(cls,record.name,'');
+    }
+    window.closeQuickClubCreator();showToast('✅ Гурток створено й вибрано');
+  }catch(e){error.textContent=e.message;error.style.display='block';}
+  finally{button.disabled=false;}
+};
 window.openClubsCatalog=async function(){
   if(!allowed())return;
   const ys=document.getElementById('cc-year'),cs=document.getElementById('cc-class');if(!ys||!cs)return;
@@ -92,13 +132,7 @@ export async function clubWritePaths(c,key,record){
 window.addClubFromCard=async function(){
   const c=context(),name=document.getElementById('cc-new')?.value.trim(),email=document.getElementById('cc-new-teacher')?.value||'';
   if(!name||name.length>80)return showToast('Введіть назву гуртка до 80 символів');
-  const ok=await mutate(async()=>{
-    const snap=await get(ref(db,path(c))),node=snap.exists()?snap.val():{};
-    if(catalogList(node).some(e=>subjKey(e.name)===subjKey(name)))throw Error('Цей гурток уже є у списку');
-    const teacher=(await staff()).find(t=>emailKey(t.email)===emailKey(email));
-    if(email&&!teacher)throw Error('Оберіть активного учителя');
-    await update(ref(db),await clubWritePaths(c,subjKey(name),{name,teacherEmail:teacher?.email||'',teacherName:teacher?.name||''}));
-  });if(ok)await window.renderClubsCatalog();
+  const ok=await mutate(()=>createClub(c,name,email));if(ok)await window.renderClubsCatalog();
 };
 window.setClubTeacher=async function(key,email){
   const c=context();
