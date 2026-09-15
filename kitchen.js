@@ -1734,6 +1734,7 @@ window.setMealDay = async function(date, field, value){
     ? `✓ Обрано ${field==='breakfastPick'?'сніданок ':'варіант '}${String(value).toUpperCase()}`
     : (value ? '✓ Записано'
              : (plannedValue(plan, field, wd) ? '✕ Відмову зафіксовано' : '✓ Скасовано')));
+  if(window.invalidateMealBalance) window.invalidateMealBalance();
   renderParentMenu();
 };
 
@@ -1852,7 +1853,10 @@ export async function listenMyMeals(){
   if(!cls) return;
   const sid = await mealKey(cls);
   if(!sid || gen !== mealGen) return;
-  const redraw = () => { try{ renderParentMenu(); }catch(e){} };
+  const redraw = () => {
+    if(window.invalidateMealBalance) window.invalidateMealBalance();
+    try{ renderParentMenu(); }catch(e){}
+  };
   [`meal_plan/${cls}/${sid}`].forEach(path => {
     try{ mealUnsub.push(onValue(ref(db, path), redraw,
       err => console.warn('meal listen:', err.message))); }
@@ -1968,6 +1972,7 @@ window.saveMealSettings = async function(){
   }
   document.getElementById('meal-settings-modal').style.display = 'none';
   showToast('✅ Налаштування збережено');
+  if(window.invalidateMealBalance) window.invalidateMealBalance();
   renderParentMenu();
 };
 
@@ -2541,7 +2546,9 @@ window.setTakeaway = async function(date, itemId, qty){
   try{
     // 0 прибирає запис зовсім, щоб у базі не накопичувалися нулі
     await set(ref(db,`takeaway_orders/${date}/${cls}/${sid}/${itemId}`), q>0 ? q : null);
+    if(window.invalidateMealBalance) window.invalidateMealBalance();
     renderTakeaway(date);
+    if(window.loadFamilyMealBalance) window.loadFamilyMealBalance();
   }catch(e){ alert('Не вдалося зберегти: ' + e.message); }
 };
 
@@ -2557,6 +2564,7 @@ window.setLunchPlan = async function(yes){
       lunch: !!yes, by: currentUserData.email || '', ts: Date.now()
     });
     showToast(yes ? '✅ Обіди замовлено' : 'Обіди не замовляються');
+    if(window.invalidateMealBalance) window.invalidateMealBalance();
     renderParentMenu();
   }catch(e){
     alert('Не вдалося зберегти: ' + e.message);
