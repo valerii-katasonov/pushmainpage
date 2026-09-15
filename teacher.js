@@ -101,6 +101,9 @@ window.refreshClassTabPickers = async function(){
   if(document.getElementById('t-subject-for-comment')) await fillCommentSubjects();
   if(document.getElementById('t-sticker-subject'))
     await fillActionSubject('t-sticker-subject', actionSubject('t-sticker-subject'));
+  const sticker=document.getElementById('t-sticker-subject');
+  if(sticker&&!Array.from(sticker.options).some(o=>o.value==='Інше'))sticker.insertAdjacentHTML('beforeend','<option value="Інше">Інше — вказати причину</option>');
+  if(sticker)window.toggleStickerOther();
 };
 
 window.handleSubjectChange=function(){
@@ -1407,12 +1410,28 @@ export function loadTeacherDashboard(){
   listenTeacherAttendance();
 }
 window.loadTeacherDashboard=loadTeacherDashboard;
+window.toggleStickerOther=function(){
+  const other=document.getElementById('t-sticker-subject')?.value==='Інше',wrap=document.getElementById('t-sticker-other-wrap');
+  if(wrap)wrap.style.display=other?'block':'none';
+  if(!other){const input=document.getElementById('t-sticker-other');if(input)input.value='';}
+};
+export function stickerRecord(subject,reason,date,by='',now=Date.now()){
+  const subj=String(subject||'').trim(),text=String(reason||'').trim();
+  if(!subj)throw Error('Оберіть предмет або «Інше»');
+  if(subj==='Інше'&&!text)throw Error('Напишіть, за що видається наліпка');
+  if(text.length>160)throw Error('Причина наліпки задовга');
+  return {subject:subj,reason:subj==='Інше'?text:'',date,by,ts:now};
+}
 window.giveStickerToStudent=async function(){const st=document.getElementById('t-sticker-student').value;
   // Наліпка живе на вкладці «Клас» і не має залежати від предмета, обраного
   // на вкладці «Урок»: це різні екрани, і людина не бачить того селектора.
   const subj=actionSubject('t-sticker-subject');
+  const reason=document.getElementById('t-sticker-other')?.value||'';
   const date=document.getElementById('global-date').value;const cls=getActiveClass();
-  if(!st||!subj){showToast("⚠️ Оберіть учня та предмет");return;}await set(ref(db,`stickers/${cls}/${st}/${date}_${subj}`),true);showToast(`🌟 Наліпка: ${st}!`);};
+  if(!st){showToast('⚠️ Оберіть учня');return;}
+  try{const record=stickerRecord(subj,reason,date,auth.currentUser?.uid||'');await push(ref(db,`stickers/${cls}/${st}`),record);document.getElementById('t-sticker-other').value='';showToast(`🌟 Наліпка: ${stuName(cls,st)}!`);}
+  catch(e){showToast('⚠️ '+e.message);}
+};
 window.saveComment=async function(){const st=document.getElementById('t-student').value;const subj=document.getElementById('t-subject-for-comment').value;const cm=document.getElementById('t-comment').value.trim();const date=document.getElementById('global-date').value;const cls=getActiveClass();if(!st||!subj){showToast("⚠️ Оберіть учня та предмет!");return;}if(!cm){showToast("⚠️ Введіть коментар!");return;}await set(ref(db,`comments/${cls}/${date}/${subj}/${st}`),cm);document.getElementById('t-comment').value='';showToast(`💬 Коментар збережено: ${st}`);
   // Сам текст коментаря в сповіщення не кладемо — воно видно на екрані
   // блокування, а коментар може бути делікатним
@@ -1428,7 +1447,7 @@ window.deleteExam=function(ds,s){const cls=getActiveClass();remove(ref(db,`exams
 // ══════════ REACTIONS & WRAPPED (teacher side) ══════════
 window.showReactionsDetails=function(){document.getElementById('reactions-modal').style.display='flex';const list=document.getElementById('reactions-list');list.innerHTML='';if(!window.myDetailedReactions?.length){list.innerHTML='<p class="empty-msg" style="text-align:center;">Немає реакцій.</p>';return;}let h='<ul style="list-style:none;padding:0;margin:0;">';window.myDetailedReactions.forEach(r=>{const[y,m,d]=r.date.split('-');h+=`<li style="background:#fdfbfb;border:1px solid #eee;border-radius:8px;padding:11px;margin-bottom:9px;"><div style="display:flex;justify-content:space-between;border-bottom:1px dashed #ddd;padding-bottom:4px;margin-bottom:7px;"><span style="font-weight:700;color:var(--teal);">${r.student}</span><span style="font-size:1.3rem;">${r.emoji}</span></div><div style="font-size:.78rem;color:#888;margin-bottom:4px;">📅 ${d}.${m}.${y} | 📚 ${escHtml(r.subject)}</div><div style="font-size:.88rem;color:#444;background:#f0f8ff;padding:7px;border-radius:6px;font-style:italic;">"${escHtml(r.comment)}"</div></li>`;});h+='</ul>';list.innerHTML=h;};
 window.closeReactionsModal=function(){document.getElementById('reactions-modal').style.display='none';};
-window.showWeeklyWrapped=function(){confetti({particleCount:200,spread:90,origin:{y:0.6},zIndex:2000});document.getElementById('wrapped-modal').style.display='flex';document.body.style.overflow='hidden';const uid=auth.currentUser.uid;const cls=getActiveClass();Promise.all([get(child(ref(db),`homeworks/${cls}`)),get(child(ref(db),`comments/${cls}`)),get(child(ref(db),`stickers/${cls}`)),get(child(ref(db),`authors/${cls}`))]).then(([hs,cs,ss,as])=>{const a=as.exists()?as.val():{};let hw=0;if(hs.exists()){const d=hs.val();for(let dt in d)for(let s in d[dt])if(a[dt]&&a[dt][s]===uid)hw++;}document.getElementById('w-hw').innerText=hw;let com=0;if(cs.exists()){const d=cs.val();for(let dt in d)for(let s in d[dt])if(a[dt]&&a[dt][s]===uid)com+=Object.keys(d[dt][s]).length;}document.getElementById('w-com').innerText=com;let st=0;if(ss.exists()){const d=ss.val();for(let student in d)for(let k in d[student]){const[dt,s]=k.split('_');if(a[dt]&&a[dt][s]===uid)st++;}}document.getElementById('w-st').innerText=st;});};
+window.showWeeklyWrapped=function(){confetti({particleCount:200,spread:90,origin:{y:0.6},zIndex:2000});document.getElementById('wrapped-modal').style.display='flex';document.body.style.overflow='hidden';const uid=auth.currentUser.uid;const cls=getActiveClass();Promise.all([get(child(ref(db),`homeworks/${cls}`)),get(child(ref(db),`comments/${cls}`)),get(child(ref(db),`stickers/${cls}`)),get(child(ref(db),`authors/${cls}`))]).then(([hs,cs,ss,as])=>{const a=as.exists()?as.val():{};let hw=0;if(hs.exists()){const d=hs.val();for(let dt in d)for(let s in d[dt])if(a[dt]&&a[dt][s]===uid)hw++;}document.getElementById('w-hw').innerText=hw;let com=0;if(cs.exists()){const d=cs.val();for(let dt in d)for(let s in d[dt])if(a[dt]&&a[dt][s]===uid)com+=Object.keys(d[dt][s]).length;}document.getElementById('w-com').innerText=com;let st=0;if(ss.exists()){const d=ss.val();for(let student in d)for(let k in d[student]){const rec=d[student][k];if(rec&&typeof rec==='object'){if(rec.by===uid)st++;continue;}const[dt,s]=k.split('_');if(a[dt]&&a[dt][s]===uid)st++;}}document.getElementById('w-st').innerText=st;});};
 window.closeModal=function(){document.getElementById('wrapped-modal').style.display='none';document.body.style.overflow='';};
 // ══════════ PHASE 7: STICKER STATS ══════════
 // Reuses #reactions-modal's markup/structure (new modal id: sticker-stats-modal,
