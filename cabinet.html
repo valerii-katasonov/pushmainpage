@@ -813,6 +813,13 @@
             background:#f4f9ff;border:1px solid #cfe0f5;border-radius:8px;
             font-size:.8rem;color:#2b5aa8;text-decoration:none;max-width:220px;}
     .hw-doc span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+    .hw-audio{flex:1 1 100%;min-width:0;max-width:430px;padding:9px 11px;
+              background:#f4f9ff;border:1px solid #cfe0f5;border-radius:10px;}
+    .hw-audio>span{display:block;margin-bottom:6px;font-size:.76rem;font-weight:700;
+                   color:#2b5aa8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+    .hw-audio audio{display:block;width:100%;max-width:100%;height:38px;}
+    .hw-audio-preview{margin-top:7px;}
+    .hw-audio-preview:empty{display:none;}
     .hw-book-link{color:#2b5aa8;font-weight:700;text-decoration:underline;}
     /* Сторінки — окремим рядком під текстом завдання: це те, що дитина
        відкриває в підручнику, і воно має бути помітним, а не губитися. */
@@ -3583,14 +3590,15 @@
              це не міняється. Тому input сховано, а видима кнопка — це label,
              підпис якого вже наш. Клік по label відкриває той самий діалог. -->
         <input type="file" id="t-image" class="hw-file-input"
-               accept="image/*,.doc,.docx,.xls,.xlsx,.csv" multiple
+               accept="image/*,audio/*,.doc,.docx,.xls,.xlsx,.csv,.mp3,.m4a,.wav,.ogg,.oga,.aac,.flac,.webm,.opus" multiple
                onchange="hwFilesPicked(this)">
         <div class="hw-file-row">
           <label for="t-image" class="hw-file-btn">📂 Обрати файли</label>
           <span id="hw-file-name" class="hw-file-name">Файл не обрано</span>
         </div>
-        <p class="hw-file-hint">Можна: фото (JPG, PNG, HEIC), документ (DOC, DOCX),
-          таблиця (XLS, XLSX, CSV). До 10 МБ на файл.</p>
+        <div id="hw-audio-preview" class="hw-audio-preview"></div>
+        <p class="hw-file-hint">Можна: фото, аудіо (MP3, M4A, WAV, OGG, AAC), документ
+          (DOC, DOCX) або таблиця (XLS, XLSX, CSV). До 10 МБ на файл.</p>
         <div id="existing-image-info" style="display:none;font-size:.83rem;color:#e67e22;margin-top:4px;"></div>
         <button type="button" class="qa-btn qa-save" id="btn-save-hw"
                 onclick="saveHomework()" style="margin-top:11px;">💾 Зберегти ДЗ</button>
@@ -4759,7 +4767,7 @@ document.addEventListener('DOMContentLoaded', function(){
 <script type="module" src="director.js"></script>
 <script type="module" src="journal.js"></script>
 <script type="module" src="parent-student.js?v=20260915-1"></script>
-<script type="module" src="teacher.js?v=20260915-1"></script>
+<script type="module" src="teacher.js?v=20260915-2"></script>
 <script type="module" src="kitchen.js?v=20260915-3"></script>
 <script type="module" src="meal-balance.js?v=20260915-3"></script>
 <script type="module" src="news.js"></script>
