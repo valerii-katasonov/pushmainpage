@@ -820,6 +820,18 @@
     .hw-audio audio{display:block;width:100%;max-width:100%;height:38px;}
     .hw-audio-preview{margin-top:7px;}
     .hw-audio-preview:empty{display:none;}
+    .hw-saved-list{display:flex;flex-direction:column;gap:7px;margin-top:8px;min-width:0;}
+    .hw-saved-list:empty{display:none;}
+    .hw-saved-item{display:flex;align-items:center;gap:8px;padding:7px;background:#fff;
+                   border:1px solid #dfe8ef;border-radius:10px;min-width:0;}
+    .hw-saved-main{display:flex;align-items:center;gap:8px;flex:1;min-width:0;}
+    .hw-saved-main .hw-audio{max-width:none;}
+    .hw-saved-photo{flex:0 0 auto;line-height:0;}
+    .hw-saved-photo img{width:54px;height:54px;object-fit:cover;border-radius:7px;}
+    .hw-saved-name{min-width:0;font-size:.76rem;color:#546e7a;overflow-wrap:anywhere;}
+    .hw-saved-remove{flex:0 0 36px;width:36px;min-height:36px;margin:0;padding:0;
+                     border-radius:50%;background:#ffebee;color:#b71c1c;font-size:1rem;}
+    .hw-saved-note{font-size:.74rem;line-height:1.4;color:#e65100;font-weight:700;}
     .hw-book-link{color:#2b5aa8;font-weight:700;text-decoration:underline;}
     /* Сторінки — окремим рядком під текстом завдання: це те, що дитина
        відкриває в підручнику, і воно має бути помітним, а не губитися. */
@@ -3598,8 +3610,9 @@
         </div>
         <div id="hw-audio-preview" class="hw-audio-preview"></div>
         <p class="hw-file-hint">Можна: фото, аудіо (MP3, M4A, WAV, OGG, AAC), документ
-          (DOC, DOCX) або таблиця (XLS, XLSX, CSV). До 10 МБ на файл.</p>
-        <div id="existing-image-info" style="display:none;font-size:.83rem;color:#e67e22;margin-top:4px;"></div>
+          (DOC, DOCX) або таблиця (XLS, XLSX, CSV). До 10 МБ на файл.
+          Нові файли додаються до збережених; непотрібні видаляються кнопкою ✕.</p>
+        <div id="existing-image-info" class="hw-saved-list" style="display:none;"></div>
         <button type="button" class="qa-btn qa-save" id="btn-save-hw"
                 onclick="saveHomework()" style="margin-top:11px;">💾 Зберегти ДЗ</button>
       </div>
@@ -4767,7 +4780,7 @@ document.addEventListener('DOMContentLoaded', function(){
 <script type="module" src="director.js"></script>
 <script type="module" src="journal.js"></script>
 <script type="module" src="parent-student.js?v=20260915-1"></script>
-<script type="module" src="teacher.js?v=20260915-2"></script>
+<script type="module" src="teacher.js?v=20260915-4"></script>
 <script type="module" src="kitchen.js?v=20260915-3"></script>
 <script type="module" src="meal-balance.js?v=20260915-3"></script>
 <script type="module" src="news.js"></script>
