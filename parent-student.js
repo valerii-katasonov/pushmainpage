@@ -13,6 +13,16 @@ import { renderNewsFeed } from './news.js';
 // parentLessonInterval is reassigned only here and read/cleared from
 // common.js's logoutUser — plain export/import.
 export let parentLessonInterval=null;
+export function stickerEntries(data){
+  return Object.entries(data||{}).map(([key,value])=>{
+    const modern=value&&typeof value==='object';
+    return {date:modern&&value.date?String(value.date):String(key).slice(0,10),subject:modern&&value.subject?String(value.subject):String(key).split('_').slice(1).join('_'),reason:modern?String(value.reason||''):''};
+  }).filter(x=>x.subject).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5);
+}
+export function renderStickerHistory(data){
+  const rows=stickerEntries(data);if(!rows.length)return '';
+  return `<div style="font-size:.76rem;color:#66551b;"><b>Останні наліпки</b>${rows.map(x=>`<div style="padding:7px 0;border-bottom:1px solid #f3e4aa;"><span style="color:#8a7528;">${escHtml(x.date.split('-').reverse().join('.'))}</span> · <b>${escHtml(x.subject)}</b>${x.reason?`<br><span>${escHtml(x.reason)}</span>`:''}</div>`).join('')}</div>`;
+}
 
 const SELF_REPORT_SLOT='all';
 // Checks today's attendance/{cls}/{date}/{student} slot-map for teacher-marked
@@ -661,7 +671,7 @@ export function loadParentDashboard(){
   // Dynamic schedule
   if(window.schedule){renderDynamicSchedule();if(parentLessonInterval)clearInterval(parentLessonInterval);parentLessonInterval=setInterval(renderDynamicSchedule,30000);}
   // Stickers
-  get(child(ref(db),`stickers/${cls}/${currentUserData.studentId||currentUserData.studentName}`)).then(snap=>{const goal=stickerGoal(cls);const cnt=snap.exists()?Object.keys(snap.val()).length:0;const pct=Math.min((cnt/goal)*100,100);document.getElementById('p-ribbon-progress').style.width=pct+'%';document.getElementById('p-ribbon-count').innerText=`${cnt} / ${goal} наліпок до призу`;const me=document.getElementById('p-ribbon-msg');if(me){if(cnt>=goal){me.innerText="🎉 Ура! Ти досяг мети!";confetti({particleCount:150,spread:80,origin:{y:0.5}});}else me.innerText='';}}).catch(()=>document.getElementById('p-ribbon-count').innerText="Помилка");
+  get(child(ref(db),`stickers/${cls}/${currentUserData.studentId||currentUserData.studentName}`)).then(snap=>{const goal=stickerGoal(cls);const data=snap.exists()?snap.val():{};const cnt=Object.keys(data).length;const pct=Math.min((cnt/goal)*100,100);document.getElementById('p-ribbon-progress').style.width=pct+'%';const history=document.getElementById('p-sticker-history');if(history)history.innerHTML=renderStickerHistory(data);document.getElementById('p-ribbon-count').innerText=`${cnt} / ${goal} наліпок до призу`;const me=document.getElementById('p-ribbon-msg');if(me){if(cnt>=goal){me.innerText="🎉 Ура! Ти досяг мети!";confetti({particleCount:150,spread:80,origin:{y:0.5}});}else me.innerText='';}}).catch(()=>document.getElementById('p-ribbon-count').innerText="Помилка");
   // Att status (self-report confirmation lives under the "all" slot)
   get(child(ref(db),`attendance/${cls}/${date}/${currentUserData.studentId||currentUserData.studentName}/${SELF_REPORT_SLOT}`)).then(snap=>{const se=document.getElementById('p-att-status');if(snap.exists()){const d=snap.val();se.innerText=`✅ Ви повідомили: ${d.status==='late'?'Запізнення':'Відсутність'} (${d.reason})`;se.style.display='block';}else se.style.display='none';});
   // Persistent alert if the teacher marked something the parent hasn't acknowledged
@@ -972,7 +982,7 @@ export function loadStudentDashboard(){
   if(!currentUserData)return;const date=document.getElementById('global-date').value;const cls=getActiveClass();
   fillAttReasons('s');
   if(window.schedule){renderDynamicSchedule('student');if(parentLessonInterval)clearInterval(parentLessonInterval);parentLessonInterval=setInterval(()=>renderDynamicSchedule('student'),30000);}
-  get(child(ref(db),`stickers/${cls}/${currentUserData.studentId||currentUserData.studentName}`)).then(snap=>{const goal=stickerGoal(cls);const cnt=snap.exists()?Object.keys(snap.val()).length:0;const pct=Math.min((cnt/goal)*100,100);document.getElementById('s-ribbon-progress').style.width=pct+'%';document.getElementById('s-ribbon-count').innerText=`${cnt} / ${goal} наліпок до призу`;});
+  get(child(ref(db),`stickers/${cls}/${currentUserData.studentId||currentUserData.studentName}`)).then(snap=>{const goal=stickerGoal(cls);const data=snap.exists()?snap.val():{};const cnt=Object.keys(data).length;const pct=Math.min((cnt/goal)*100,100);document.getElementById('s-ribbon-progress').style.width=pct+'%';const history=document.getElementById('s-sticker-history');if(history)history.innerHTML=renderStickerHistory(data);document.getElementById('s-ribbon-count').innerText=`${cnt} / ${goal} наліпок до призу`;});
   get(child(ref(db),`attendance/${cls}/${date}/${currentUserData.studentId||currentUserData.studentName}/${SELF_REPORT_SLOT}`)).then(snap=>{const se=document.getElementById('s-att-status');if(snap.exists()){const d=snap.val();se.innerText=`✅ Повідомлено: ${d.status==='late'?'Запізнення':'Відсутність'} (${d.reason})`;se.style.display='block';}else se.style.display='none';});
   checkTeacherAttendanceAlert('student');
   renderParentCalendar('student');loadParentBellSchedule('student');
