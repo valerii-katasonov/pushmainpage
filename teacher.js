@@ -11,6 +11,28 @@ import { db, auth, CLOUDINARY_URL, UPLOAD_PRESET, HW_FILE_EXT, HW_FILE_MAX_MB, f
 import { populateTopicSelector, availableTopicsCache, planKey, loadAliases } from './curriculum.js';
 
 let currentHwImages=[];
+const HW_AUDIO_EXT=new Set(['mp3','m4a','wav','ogg','oga','aac','flac','webm','opus']);
+const hwAudioPreviewUrls=new Map();
+function clearHwAudioPreview(id){
+  for(const url of (hwAudioPreviewUrls.get(id)||[])){
+    try{URL.revokeObjectURL(url);}catch(e){}
+  }
+  hwAudioPreviewUrls.delete(id);
+  const box=document.getElementById(id);if(box)box.innerHTML='';
+}
+function clearAllHwAudioPreviews(){
+  for(const id of [...hwAudioPreviewUrls.keys()])clearHwAudioPreview(id);
+}
+function showHwAudioPreview(input,id){
+  clearHwAudioPreview(id);
+  const box=document.getElementById(id);
+  const files=Array.from(input?.files||[]).filter(f=>HW_AUDIO_EXT.has(fileExt(f.name)));
+  if(!box||!files.length||typeof globalThis.URL?.createObjectURL!=='function')return;
+  const urls=files.map(file=>({file,url:URL.createObjectURL(file)}));
+  hwAudioPreviewUrls.set(id,urls.map(x=>x.url));
+  box.innerHTML=urls.map(({file,url})=>`<div class="hw-audio"><span>🎧 ${escHtml(file.name)}</span>`
+    + `<audio controls preload="metadata" src="${escHtml(url)}"></audio></div>`).join('');
+}
 // teacherAttendanceListener is reassigned only here and read/invoked from
 // common.js's logoutUser — plain export/import.
 export let teacherAttendanceListener=null;
@@ -135,6 +157,7 @@ export function loadCurrentTopicAndHW(){
   populateTopicSelector();
   if(document.getElementById('t-hw'))document.getElementById('t-hw').value='';
   if(document.getElementById('existing-image-info'))document.getElementById('existing-image-info').style.display='none';
+  clearHwAudioPreview('hw-audio-preview');
   currentHwImages=[];
   // Поля контексту теж СКИДАЄМО. Вони не скидалися ніколи, тож перейшовши
   // з математики на читання, учитель ніс із собою сторінки з математики —
@@ -574,11 +597,12 @@ window.improveCommentAI=async function(){
 window.hwFilesPicked=function(input){
   const lbl=document.getElementById('hw-file-name');
   const files=Array.from(input.files||[]);
-  if(!files.length){ if(lbl){lbl.textContent='Файл не обрано';lbl.style.color='#78909c';} return; }
+  if(!files.length){ clearHwAudioPreview('hw-audio-preview');if(lbl){lbl.textContent='Файл не обрано';lbl.style.color='#78909c';} return; }
   const bad=files.filter(f=>!HW_FILE_EXT.includes(fileExt(f.name)));
   const big=files.filter(f=>f.size>HW_FILE_MAX_MB*1024*1024);
   if(bad.length||big.length){
     input.value='';
+    clearHwAudioPreview('hw-audio-preview');
     if(lbl){lbl.style.color='#b71c1c';
       lbl.textContent=bad.length
         ? `Не підходить: ${bad.map(f=>f.name).join(', ')}. Можна лише ${HW_FILE_EXT.join(', ')}.`
@@ -587,6 +611,7 @@ window.hwFilesPicked=function(input){
   }
   if(lbl){lbl.style.color='#2e7d32';
     lbl.textContent=files.length===1?files[0].name:`Обрано файлів: ${files.length}`;}
+  showHwAudioPreview(input,'hw-audio-preview');
 };
 // ── ЗБЕРЕЖЕННЯ УРОКУ: ТЕМА Й ДЗ ОКРЕМО ──────────────────────────
 //
@@ -821,6 +846,7 @@ window.saveHomework=function(){
     if(!existed)notifyEvent('homework',{class:cls,subject}).catch(()=>{});
 
     if(fileInput)fileInput.value='';
+    clearHwAudioPreview('hw-audio-preview');
     const lbl=document.getElementById('hw-file-name');
     if(lbl){lbl.textContent='Файл не обрано';lbl.style.color='#78909c';}
     setTimeout(()=>loadTeacherDashboard(),300);
@@ -1606,6 +1632,7 @@ export async function renderTeacherHwDay(){
     const saved=hwSnap.exists()?(hwSnap.val()||{}):{};
     const allBooks=(tbSnap&&tbSnap.exists())?tbSnap.val():{};
 
+    clearAllHwAudioPreviews();
     hwDayState={};
     box.innerHTML=lessons.map((l,i)=>{
       const rec=saved[l.subject]||null;
@@ -1647,7 +1674,7 @@ export async function renderTeacherHwDay(){
           <!-- Нативну кнопку вибору файлу малює браузер, і напис на ній —
                мовою браузера. Тому input сховано, а видима кнопка — label. -->
           <input type="file" id="${id}-file" class="hw-file-input" multiple
-                 accept="image/*,.doc,.docx,.xls,.xlsx,.csv"
+                 accept="image/*,audio/*,.doc,.docx,.xls,.xlsx,.csv,.mp3,.m4a,.wav,.ogg,.oga,.aac,.flac,.webm,.opus"
                  onchange="hwdFilesPicked('${id}')">
           <div class="hw-file-row">
             <label for="${id}-file" class="hw-file-btn">📂 Обрати файли</label>
@@ -1655,8 +1682,9 @@ export async function renderTeacherHwDay(){
               ? `Уже додано: ${have.length} шт. — нові замінять їх`
               : 'Файл не обрано'}</span>
           </div>
-          <p class="hw-file-hint">Фото (JPG, PNG, HEIC), документ (DOC, DOCX),
-            таблиця (XLS, XLSX, CSV). До ${HW_FILE_MAX_MB} МБ на файл.</p>
+          <div id="${id}-audio-preview" class="hw-audio-preview"></div>
+          <p class="hw-file-hint">Фото, аудіо (MP3, M4A, WAV, OGG, AAC), документ
+            (DOC, DOCX) або таблиця (XLS, XLSX, CSV). До ${HW_FILE_MAX_MB} МБ на файл.</p>
           <div class="hwd-actions">
             <span class="hwd-dirty" id="${id}-dirty"></span>
             <button type="button" class="qa-btn qa-save" id="${id}-save"
@@ -1712,11 +1740,12 @@ window.hwdFilesPicked=function(id){
   const input=document.getElementById(id+'-file');
   const lbl=document.getElementById(id+'-fname');
   const files=Array.from((input&&input.files)||[]);
-  if(!files.length){ if(lbl){lbl.textContent='Файл не обрано';lbl.style.color='#78909c';} return; }
+  if(!files.length){ clearHwAudioPreview(id+'-audio-preview');if(lbl){lbl.textContent='Файл не обрано';lbl.style.color='#78909c';} return; }
   const bad=files.filter(f=>!HW_FILE_EXT.includes(fileExt(f.name)));
   const big=files.filter(f=>f.size>HW_FILE_MAX_MB*1024*1024);
   if(bad.length||big.length){
     input.value='';
+    clearHwAudioPreview(id+'-audio-preview');
     if(lbl){ lbl.style.color='#b71c1c';
       lbl.textContent=bad.length
         ? `Не підходить: ${bad.map(f=>f.name).join(', ')}`
@@ -1725,6 +1754,7 @@ window.hwdFilesPicked=function(id){
   }
   if(lbl){ lbl.style.color='#2e7d32';
     lbl.textContent=files.length===1?files[0].name:`Обрано файлів: ${files.length}`; }
+  showHwAudioPreview(input,id+'-audio-preview');
   hwdDirty(id);
 };
 
@@ -1782,6 +1812,7 @@ window.hwdSave=function(id){
     // Поле вибору очищаємо, а підпис показує, скільки тепер прикріплено:
     // інакше при наступному збереженні ті самі файли завантажилися б удруге.
     if(fileInput) fileInput.value='';
+    clearHwAudioPreview(id+'-audio-preview');
     const fn=document.getElementById(id+'-fname');
     if(fn){ fn.style.color='#78909c';
       fn.textContent=images.length?`Уже додано: ${images.length} шт. — нові замінять їх`:'Файл не обрано'; }
