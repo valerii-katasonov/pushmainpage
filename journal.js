@@ -1218,7 +1218,7 @@ window.fillCellSubjects = async function(clsId, current, type){
     : (names.length ? (type==='extra'?'— оберіть гурток —':'— оберіть предмет —') : '— каталог порожній —');
   sel.innerHTML = `<option value="">${empty}</option>`
     + names.map(n => `<option value="${escHtml(n)}">${escHtml(n)}</option>`).join('')
-    + `<option value="__other__">➕ Інший…</option>`;
+    + `<option value="__other__">${type==='extra'?'➕ Створити новий гурток…':'➕ Інший…'}</option>`;
   sel.value = current || '';
   const hint = document.getElementById('cell-subj-hint');
   if(hint) hint.textContent = (type === 'break' || names.length)
@@ -1230,6 +1230,12 @@ window.handleSubjInput=async function(){
   const sel=document.getElementById('cell-subj-ua');
   const type=document.getElementById('cell-type-select').value;
   if(sel.value === '__other__'){
+    if(type==='extra'){
+      sel.value='';
+      if(window.openQuickClubCreator)await window.openQuickClubCreator();
+      else showToast('Модуль каталогу гуртків не завантажено. Оновіть сторінку.');
+      return;
+    }
     const name=(prompt(type==='break'?'Назва перерви:':type==='extra'?'Назва нового гуртка:':'Назва нового предмета:','')||'').trim();
     if(!name){ sel.value=''; return; }
     // Новий предмет одразу лягає в каталог — інакше наступного разу
