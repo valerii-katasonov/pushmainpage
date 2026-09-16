@@ -2939,7 +2939,15 @@ export async function renderPushInvite(containerId){
     }
     let snoozed = 0;
     try{ snoozed = Number(localStorage.getItem(PUSH_NAG_KEY)) || 0; }catch(e){}
-    if(Date.now() - snoozed < 7*24*3600*1000) return;
+    // ТИЖДЕНЬ ТИШІ — ЗАБАГАТО ДЛЯ ТОГО, ХТО ПРАЦЮЄ В ШКОЛІ.
+    //
+    // Батько, який відклав сповіщення, ризикує лише своїм спокоєм. Учитель,
+    // який відклав, — не дізнається, що дитина не прийде. А відкласти легко:
+    // після переїзду на новий домен дозвіл треба давати заново, і банер
+    // зʼявляється в усіх одразу, у найневдаліший момент.
+    const staff = isTeacherRole(currentUserData?.role)
+      || ['director','administrator','kitchen'].includes(currentUserData?.role);
+    if(Date.now() - snoozed < (staff ? 24*3600*1000 : 7*24*3600*1000)) return;
     box.style.display = 'block';
     box.className = 'push-invite';
     box.innerHTML = st === 'denied'
