@@ -414,7 +414,7 @@ window.saveQuickJournal=async function(){
   const btn=document.getElementById('btn-qj-save');
   btn.disabled=true;btn.textContent='⏳ Збереження...';
   try{
-    const gPatch={},tPatch={};let nG=0,nA=0;
+    const gPatch={},tPatch={},gradeNotices=[];let nG=0,nA=0;
     for(const r of rows){
       const sid=r.dataset.sid, name=r.dataset.name;
       const v=r.querySelector('.qj-g').value.trim().replace('−','-');
@@ -422,7 +422,7 @@ window.saveQuickJournal=async function(){
       if(v!==orig){
         gPatch[sid]=v||null;
         tPatch[sid]=v?gtype:null;
-        if(v){nG++;notifyEvent('grade',{class:cls,studentName:name,subject:subj,value:displayGrade(v,cls,document.getElementById('qj-body').dataset.numericScale==='1')});}
+        if(v){nG++;gradeNotices.push({class:cls,studentName:name,subject:subj,value:displayGrade(v,cls,document.getElementById('qj-body').dataset.numericScale==='1')});}
       }
       // Відвідуваність пишемо лише там, де вчитель щось позначив
       const status=r.dataset.status;
@@ -440,6 +440,7 @@ window.saveQuickJournal=async function(){
       for(const sid in gPatch)
         Object.assign(upd, gradeWritePaths(cls,ym,subj,date,sid,gPatch[sid],tPatch[sid]));
       await update(ref(db), upd);
+      gradeNotices.forEach(payload=>notifyEvent('grade',payload));
     }
     logAction('quick_journal',{cls,subject:subj,date,value:`оцінок: ${nG}, відміток: ${nA}`});
     showToast(`✅ Збережено — оцінок ${nG}, відміток ${nA}`);
@@ -1505,11 +1506,31 @@ window.giveStickerToStudent=async function(){const st=document.getElementById('t
   try{const record=stickerRecord(subj,reason,date,auth.currentUser?.uid||'');await push(ref(db,`stickers/${cls}/${st}`),record);document.getElementById('t-sticker-other').value='';showToast(`🌟 Наліпка: ${stuName(cls,st)}!`);}
   catch(e){showToast('⚠️ '+e.message);}
 };
-window.saveComment=async function(){const st=document.getElementById('t-student').value;const subj=document.getElementById('t-subject-for-comment').value;const cm=document.getElementById('t-comment').value.trim();const date=document.getElementById('global-date').value;const cls=getActiveClass();if(!st||!subj){showToast("⚠️ Оберіть учня та предмет!");return;}if(!cm){showToast("⚠️ Введіть коментар!");return;}await set(ref(db,`comments/${cls}/${date}/${subj}/${st}`),cm);document.getElementById('t-comment').value='';showToast(`💬 Коментар збережено: ${st}`);
-  // Сам текст коментаря в сповіщення не кладемо — воно видно на екрані
-  // блокування, а коментар може бути делікатним
+let commentSaving=false;
+window.saveComment=async function(){
+  if(commentSaving)return;
+  const st=document.getElementById('t-student').value;
+  const subj=document.getElementById('t-subject-for-comment').value;
+  const area=document.getElementById('t-comment');
+  const cm=area.value.trim(),date=document.getElementById('global-date').value,cls=getActiveClass();
+  if(!st||!subj){showToast('⚠️ Оберіть учня та предмет!');return;}
+  if(!cm){showToast('⚠️ Введіть коментар!');return;}
+  const btn=document.getElementById('btn-save-comment');
+  commentSaving=true;if(btn){btn.disabled=true;btn.textContent='⏳ Збереження...';}
+  try{
+    await set(ref(db,`comments/${cls}/${date}/${subj}/${st}`),cm);
+  }catch(e){
+    showToast('❌ Коментар не збережено: '+(e.message||e));
+    return;
+  }finally{
+    commentSaving=false;if(btn){btn.disabled=false;btn.textContent='💬 Зберегти коментар';}
+  }
+  if(area.value.trim()===cm)area.value='';
+  showToast(`💬 Коментар збережено: ${stuName(cls,st)}`);
+  // Текст коментаря не кладемо в сповіщення на екрані блокування.
   notifyEvent('comment',{class:cls,studentName:stuName(cls,st),subject:subj});
-  logAction('comment',{cls,target:stuName(cls,st),subject:subj,date});};
+  logAction('comment',{cls,target:stuName(cls,st),subject:subj,date});
+};
 // ══════════ EXAMS ══════════
 window.openExamsCalendar=function(){document.getElementById('exams-modal').style.display='flex';document.getElementById('exam-class-label').innerText=document.getElementById('t-class-selector').options[document.getElementById('t-class-selector').selectedIndex].text;document.getElementById('exams-day-details').style.display='none';const mi=document.getElementById('exam-month-select');const dp=document.getElementById('global-date').value.split('-');mi.value=`${dp[0]}-${dp[1]}`;renderExamsCalendar();};
 window.closeExamsModal=function(){document.getElementById('exams-modal').style.display='none';};
