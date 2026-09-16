@@ -97,7 +97,10 @@
     .att-late{background:#fff8e1;color:#a04a02;font-weight:800;border-radius:4px;padding:1px 4px;}
     /* ── JOURNAL TABLE ── */
     .journal-wrap{overflow-x:auto;background:#fff;border-radius:11px;border:1px solid #ddd;max-height:58vh;}
-    .journal-table .j-add-column{display:block;width:auto;min-width:1.6em;margin:.22em auto 0;padding:0 .25em;background:#e5f7ed;color:#176b39;border:1px solid #b5dfc4;border-radius:5px;font-size:.9em;line-height:1.35;}
+    .journal-table .j-column-actions{display:flex;justify-content:center;gap:.2em;margin:.22em auto 0;}
+    .journal-table .j-add-column,.journal-table .j-remove-column{display:block;width:auto;min-width:1.6em;margin:0;padding:0 .25em;border-radius:5px;font-size:.9em;line-height:1.35;}
+    .journal-table .j-add-column{background:#e5f7ed;color:#176b39;border:1px solid #b5dfc4;}
+    .journal-table .j-remove-column{background:#fff0ef;color:#a53430;border:1px solid #efc2bf;}
     #journal-modal.journal-fullscreen{padding:0;align-items:stretch;}
     #journal-modal.journal-fullscreen .modal-content{max-width:none!important;width:100vw;height:100dvh;max-height:none;border-radius:0;display:flex;flex-direction:column;overflow:hidden;padding:12px;}
     #journal-modal.journal-fullscreen .journal-wrap{flex:1;min-height:0;max-height:none;}
@@ -2367,7 +2370,7 @@
   </div>
   <div class="editor-actions">
     <button id="gep-save" class="btn-confirm" onclick="confirmGrade()">✔ Зберегти</button>
-    <button class="btn-delete" onclick="deleteGrade()">✖</button>
+    <button class="btn-delete" type="button" onclick="deleteGrade()" title="Видалити оцінку">🗑 Видалити</button>
     <button class="btn-cancel" onclick="closeGradeEditor()">Скас.</button>
   </div>
 </div>
@@ -4587,7 +4590,7 @@
     </div>
 
     <div id="j-edit-hint" style="display:none;background:#e0f7fa;padding:8px 12px;border-radius:8px;margin-bottom:7px;font-size:.8rem;color:#006064;">
-      💡 Клікніть на клітинку щоб виставити або змінити оцінку. Tab/Enter — наступний учень.
+      💡 Клікніть на клітинку, щоб виставити чи змінити оцінку. Помилкову оцінку видаліть у клітинці, порожній додатковий стовпець — кнопкою «−» у заголовку.
     </div>
     <div id="journal-type-legend" style="margin:4px 0 6px 0;"></div>
     <div id="j-range-summary" style="font-size:var(--text-xs);color:#999;margin:0 0 6px 2px;"></div>
