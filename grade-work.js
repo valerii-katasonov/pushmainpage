@@ -27,7 +27,7 @@ export async function loadGradeWork(cls,sid,ym,subj,date){
 window.removeGradeWorkPhoto=function(index){if(busy||loading||readError)return;photos.splice(index,1);changed=true;renderEditorWork();};
 export function setGradeWorkBusy(value){busy=value;
   const grade=document.getElementById('gep-value');if(grade)grade.disabled=value;
-  document.querySelectorAll('#grade-editor-popup .type-btn, #grade-editor-popup .level-btn').forEach(button=>button.disabled=value);
+  document.querySelectorAll('#grade-editor-popup .type-btn, #grade-editor-popup .level-btn, #grade-editor-popup .gep-modifiers button').forEach(button=>button.disabled=value);
   const input=document.getElementById('gep-work-files');if(input)input.disabled=value;renderEditorWork();}
 export async function prepareGradeWork(){
   if(loading)throw Error('Фото ще завантажуються. Спробуйте за мить.');
