@@ -2069,6 +2069,12 @@ export function switchTab(screenId, tab, btn){
     const feed = scr.querySelector('.nw-feed');
     if(feed && feed.id) window.renderNewsFeed(feed.id);
   }
+  // Оцінки можуть змінитися, поки батьки тримають кабінет відкритим.
+  // При поверненні на вкладку перечитуємо їх разом із коментарями.
+  if(tab==='grades'&&(screenId==='parent-screen'||screenId==='student-screen')){
+    if(window.renderGradesWeek)window.renderGradesWeek();
+    if(window.renderGradesSubject)window.renderGradesSubject();
+  }
 }
 window.switchTab = switchTab;
 
