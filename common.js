@@ -975,8 +975,18 @@ export const LEVEL_TO_NUM = { 'П':2, 'С':3, 'Д':4, 'В':5 };
 export function levelNum(val){
   const s = String(val == null ? '' : val).trim().toUpperCase();
   if(LEVEL_TO_NUM[s] !== undefined) return LEVEL_TO_NUM[s];
-  const n = parseFloat(s);
-  return isNaN(n) ? null : n;
+  if(!s)return null;
+  const marked=/^([1-9]\d*)([+\-−])$/.exec(s);
+  if(marked)return Number(marked[1])+(marked[2]==='+'?0.5:-0.25);
+  const n=Number(s);
+  return Number.isFinite(n)?n:null;
+}
+// Знаки дозволені лише для поточних оцінок за шестибальною шкалою.
+// Підсумкові/семестрові перевіряються окремо й лишаються цілими.
+export function validDailyGrade(val,max){
+  const s=String(val==null?'':val).trim();
+  const m=/^([1-9]\d*)([+\-−])?$/.exec(s);
+  return !!m&&Number(m[1])<=max&&(!m[2]||max===6);
 }
 
 export function displayGrade(val,clsId,numericScale){
@@ -990,6 +1000,7 @@ export function displayGrade(val,clsId,numericScale){
   // Дитина з високим рівнем виглядала як дитина з початковим.
   const s = String(val).trim().toUpperCase();
   if(LEVEL_LETTERS.includes(s)) return s;
+  if(/^\d+[+\-−]$/.test(s))return s;
   const n=parseInt(val);
   const cn=getClassNum(clsId||getActiveClass());
   // РІВНІ — ЛИШЕ 1–4 КЛАСИ. У пʼятому вже звичайні оцінки; тут довго стояло
@@ -1010,7 +1021,7 @@ export function displayGrade(val,clsId,numericScale){
 export function gradeClass6(val){
   // Літера-рівень має отримати той самий колір, що й відповідна цифра,
   // інакше «В» і «5» виглядають у журналі по-різному
-  const n=levelNum(val);
+  const n=/^\d+[+\-−]$/.test(String(val).trim())?parseInt(val,10):levelNum(val);
   if(n===null) return 'g-letter';
   if(n>=6) return 'g6';
   if(n===5) return 'g5';
@@ -1020,7 +1031,7 @@ export function gradeClass6(val){
   return 'g1';
 }
 export function gradeColorInline(val){
-  const n=levelNum(val);
+  const n=/^\d+[+\-−]$/.test(String(val).trim())?parseInt(val,10):levelNum(val);
   if(n===null) return '#8e44ad';
   if(n>=5) return '#1565c0';
   if(n===4) return '#2e7d32';
