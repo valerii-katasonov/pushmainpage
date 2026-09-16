@@ -10,6 +10,18 @@ function fresher(a, b) {
 function byKeyOrName(map, sid, name) {
   return fresher(map?.[sid], name ? map?.[name] : null);
 }
+function mealDayByKeyOrName(map,sid,name){
+  const a=map?.[sid],b=name?map?.[name]:null;
+  const newest=fresher(a,b);
+  if(!newest)return {};
+  const older=newest===a?b:a;
+  const row={...newest};
+  if(older){
+    if(row.pick===undefined&&row.lunch!==0&&row.lunch!==false&&['a','b'].includes(older.pick))row.pick=older.pick;
+    if(row.breakfastPick===undefined&&row.breakfast!==0&&row.breakfast!==false&&['a','b'].includes(older.breakfastPick))row.breakfastPick=older.breakfastPick;
+  }
+  return row;
+}
 function optionPlanned(plan, field, weekday) {
   if (!plan || !plan[field] || plan[field] === 'no') return false;
   if (plan[field] === 'all') return true;
@@ -38,7 +50,7 @@ function buildDayCharge(date, cls, sid, name, data) {
   const schoolDay = weekday >= 1 && weekday <= 5 && !noSchool(date, data.academic_year);
   const menu = data.menu?.[date] || {};
   const plan = byKeyOrName(data.meal_plan?.[cls], sid, name) || {};
-  const override = byKeyOrName(data.meal_day?.[date]?.[cls], sid, name) || {};
+  const override = mealDayByKeyOrName(data.meal_day?.[date]?.[cls], sid, name);
   const absent = absentOn(data.attendance?.[cls]?.[date], sid, name);
   const lunchMenu = !!(menu.first || menu.second || menu.second2 || menu.side || menu.side2);
   const lunch = schoolDay && !absent && lunchMenu &&
