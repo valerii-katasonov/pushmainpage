@@ -6,7 +6,7 @@
 import { ref, set, get, child, update } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { loadGradeWork, prepareGradeWork, setGradeWorkBusy, hasGradeWorkChanges } from './grade-work.js';
 import { ACTIVE_YEAR } from './director.js';
-import { db, getActiveClass, currentUserData, displayGrade, gradeClass6, calculateStudentWeightedAvg, getClassNum, LEVEL_MAX_CLASS, GRADE_WEIGHTS, dayKeys, dayNamesUA, showToast, normalizeTimeRange, localDateString, summarizeAttendanceSlots, gradeTypesCache, escJs, escHtml, notifyEvent, logAction, getUserRoles, getUsersSnap, stuName, gradeWritePaths, isBreakItem, insertSlot, removeSlot, makeBreak, withBreaks, slotBounds, hhmmFromMins, emailKey } from './common.js';
+import { db, getActiveClass, currentUserData, displayGrade, gradeClass6, calculateStudentWeightedAvg, getClassNum, LEVEL_MAX_CLASS, GRADE_WEIGHTS, dayKeys, dayNamesUA, showToast, normalizeTimeRange, localDateString, summarizeAttendanceSlots, gradeTypesCache, escJs, escHtml, notifyEvent, logAction, getUserRoles, getUsersSnap, stuName, gradeWritePaths, journalGradeKey, journalBaseDate, journalSlot, expandAltSubjects, isBreakItem, insertSlot, removeSlot, makeBreak, withBreaks, slotBounds, hhmmFromMins, emailKey } from './common.js';
 
 // globalTeacherAccess is reassigned only in this file (openVisualMatrixModal)
 // and read from common.js (window.getDefaultTeacher) — plain export/import.
@@ -40,6 +40,7 @@ window.globalTeachersList = window.globalTeachersList || [];
 let journalMode='view'; let journalIsTeacher=false;
 let gradeSaving=false;
 let gepCls=''; let gepSubj=''; let gepDate=''; let gepStudent=''; let gepType='П'; let gepCellEl=null; let gepYMonth='';
+let journalScaleMax=6,journalNumericScale=false,journalRenderSeq=0,semesterRenderSeq=0,journalVisibleColumns=[];
 // Phase 4b/9: journal zoom state (10% steps, 40%-150%), applied via --journal-scale on
 // .journal-table. journalZoomIsAuto=true means "recompute fit-to-width after every
 // render" (the default); it flips to false the moment the teacher manually zooms
@@ -109,7 +110,7 @@ function renderLevelButtons(cls, current){
   const input = document.getElementById('gep-value');
   const hint = document.getElementById('gep-type-hint');
   if(!box) return;
-  const junior = getClassNum(cls) <= LEVEL_MAX_CLASS;
+  const junior = getClassNum(cls) <= LEVEL_MAX_CLASS && !journalNumericScale;
   box.style.display = junior ? 'flex' : 'none';
   if(input) input.style.display = junior ? 'none' : 'block';
   if(hint) hint.style.display = junior ? 'block' : 'none';
@@ -130,8 +131,9 @@ function openGradeEditor(cls,subj,dateStr,student,yMonth,cellEl,existingVal,exis
   if(gradeSaving)return;
   loadGradeWork(cls,student,yMonth,subj,dateStr);
   gepCls=cls;gepSubj=subj;gepDate=dateStr;gepStudent=student;gepYMonth=yMonth;gepCellEl=cellEl;gepType=existingType||presetType||'П';
-  document.getElementById('gep-label').textContent=`${stuName(cls,student)} | ${subj} | ${dateStr.split('-').reverse().join('.')}`;
+  document.getElementById('gep-label').textContent=`${stuName(cls,student)} | ${subj} | ${journalBaseDate(dateStr).split('-').reverse().join('.')} · стовпець ${journalSlot(dateStr)}`;
   document.getElementById('gep-value').value=existingVal||'';
+  document.getElementById('gep-value').placeholder=`1–${journalScaleMax}`;
   renderLevelButtons(cls, existingVal);
   renderGradeTypeButtons();
   selectGradeType(gepType);
@@ -156,11 +158,9 @@ window.confirmGrade=async function(){
   // Рівень зберігаємо великою літерою: інакше в базі опиняться і «в», і «В»,
   // і будь-яке порівняння почне брехати
   const up=val.toUpperCase();
-  if(['П','С','Д','В'].includes(up)) val=up;
-  else{
-    // validate 1-6 scale
-    const n=parseInt(val);
-    if(!isNaN(n)&&(n<1||n>6)){showToast('⚠️ Оцінка має бути від 1 до 6!');return;}
+  if(!journalNumericScale&&getClassNum(gepCls)<=LEVEL_MAX_CLASS&&['П','С','Д','В'].includes(up)) val=up;
+  else if(!/^[1-9]\d*$/.test(val)||Number(val)>journalScaleMax){
+    showToast(`⚠️ Оцінка має бути цілим числом від 1 до ${journalScaleMax}!`);return;
   }
   // Основа і дзеркало — одним атомарним записом.
   // Під try: якщо запис не пройде, вікно не має закриватися з бадьорим
@@ -181,10 +181,10 @@ window.confirmGrade=async function(){
       : '❌ Оцінку не збережено: '+(e.message||''));
     return;
   }finally{gradeSaving=false;setGradeWorkBusy(false);if(save){save.disabled=false;save.textContent='✔ Зберегти';}}
-  closeGradeEditor();renderJournalTable();showToast(`✅ ${stuName(gepCls,gepStudent)}: ${displayGrade(val,gepCls)} (${gepType})`);
+  closeGradeEditor();renderJournalTable();showToast(`✅ ${stuName(gepCls,gepStudent)}: ${displayGrade(val,gepCls,journalNumericScale)} (${gepType})`);
   // Сповіщаємо батьків/учня. Оцінку показуємо у вигляді, який бачить сім'я
   // (для 1-5 класів — літерою, а не цифрою).
-  notifyEvent('grade',{class:gepCls,studentName:stuName(gepCls,gepStudent),subject:gepSubj,value:displayGrade(val,gepCls)});
+  notifyEvent('grade',{class:gepCls,studentName:stuName(gepCls,gepStudent),subject:gepSubj,value:displayGrade(val,gepCls,journalNumericScale)});
   logAction('grade_set',{cls:gepCls,target:stuName(gepCls,gepStudent),subject:gepSubj,date:gepDate,value:val,gtype:gepType});
 };
 window.deleteGrade=async function(){
@@ -210,7 +210,7 @@ document.addEventListener('click',function(e){const p=document.getElementById('g
 // підсумкової, і будь-яку правку видно в журналі дій.
 // Зберігаємо і те, що запропонувала система, і те, що поставив учитель —
 // інакше потім не розібрати, чи оцінку змінювали вручну.
-// semester_grades/{cls}/{semId}/{subject}/{ІМ'Я} = {value, auto, by, ts}
+// semester_grades/{cls}/{semId}/{subject}/{ключ учня} = {value, auto, by, ts}
 let semCache={};
 window.openSemesterGrades=async function(){
   try{
@@ -251,6 +251,7 @@ function monthsBetween(a,b){
   return out;
 }
 window.renderSemesterTable=async function(){
+  const request=++semesterRenderSeq;
   const cls=document.getElementById('j-class-select').value;
   const subj=document.getElementById('j-subj-select').value;
   const semId=document.getElementById('sem-period').value;
@@ -261,14 +262,20 @@ window.renderSemesterTable=async function(){
   box.innerHTML='<p class="empty-msg">Обчислення...</p>';
   try{
     const months=monthsBetween(sem.startDate.slice(0,7),sem.endDate.slice(0,7));
-    const [stSnap,savedSnap,...monthSnaps]=await Promise.all([
+    const [stSnap,savedSnap,scaleSnap,...monthSnaps]=await Promise.all([
       get(child(ref(db),`students_list/${cls}`)),
       get(child(ref(db),`semester_grades/${cls}/${semId}/${subj}`)),
+      get(child(ref(db),`grade_scales/${cls}/${subj}`)).catch(()=>null),
       ...months.flatMap(ym=>[
         get(child(ref(db),`grades/${cls}/${ym}/${subj}`)),
         get(child(ref(db),`grade_types/${cls}/${ym}/${subj}`))
       ])
     ]);
+    if(request!==semesterRenderSeq)return;
+    const numericScale=!!scaleSnap?.exists();
+    const configuredMax=numericScale?Number(scaleSnap.val().max||scaleSnap.val()):6;
+    const scaleMax=Number.isInteger(configuredMax)&&configuredMax>=2&&configuredMax<=2000?configuredMax:6;
+    box.dataset.scaleMax=String(scaleMax);
     const students=stSnap.exists()
       ?Object.entries(stSnap.val()).map(([sid,nm])=>({sid,nm:String(nm)}))
         .sort((a,b)=>a.nm.localeCompare(b.nm,'uk')):[];
@@ -281,7 +288,7 @@ window.renderSemesterTable=async function(){
       if(!gSnap.exists())continue;
       const gd=gSnap.val(), td=tSnap.exists()?tSnap.val():{};
       for(const date in gd){
-        if(date<sem.startDate||date>sem.endDate)continue;
+        if(journalBaseDate(date)<sem.startDate||journalBaseDate(date)>sem.endDate)continue;
         for(const st in gd[date]){
           if(!per[st])continue;
           per[st].g[date]=gd[date][st];
@@ -300,9 +307,9 @@ window.renderSemesterTable=async function(){
       rows+=`<tr>
         <td class="sem-name">${escHtml(st.nm)}</td>
         <td class="sem-avg">${avg!==null?avg.toFixed(2):'—'}<br><span class="sem-cnt">${cnt} оц.</span></td>
-        <td class="sem-auto">${auto?escHtml(displayGrade(auto,cls)):'—'}</td>
+        <td class="sem-auto">${auto?escHtml(displayGrade(auto,cls,numericScale)):'—'}</td>
         <td><input type="text" class="sem-in" id="sem-${escHtml(st.sid)}" value="${escHtml(cur||auto)}"
-             data-auto="${escHtml(auto)}" data-sid="${escHtml(st.sid)}" data-name="${escHtml(st.nm)}" maxlength="1"></td>
+             data-auto="${escHtml(auto)}" data-sid="${escHtml(st.sid)}" data-name="${escHtml(st.nm)}" maxlength="${String(scaleMax).length}"></td>
         <td class="sem-flag">${changed?'<span data-tip="Відрізняється від запропонованої">✎</span>':''}</td>
       </tr>`;
     });
@@ -310,16 +317,18 @@ window.renderSemesterTable=async function(){
       <div class="sem-wrap"><table class="sem-table">
         <thead><tr><th>Учень</th><th>Серед.<br>зваж.</th><th>Пропо-<br>новано</th><th>Підсум-<br>кова</th><th></th></tr></thead>
         <tbody>${rows}</tbody></table></div>`;
-  }catch(e){box.innerHTML=`<p style="color:red;font-size:.8rem;">Помилка: ${escHtml(e.message)}</p>`;}
+  }catch(e){if(request===semesterRenderSeq)box.innerHTML=`<p style="color:red;font-size:.8rem;">Помилка: ${escHtml(e.message)}</p>`;}
 };
 window.saveSemesterGrades=async function(){
   const cls=document.getElementById('j-class-select').value;
   const subj=document.getElementById('j-subj-select').value;
   const semId=document.getElementById('sem-period').value;
   if(!semId)return;
+  const scaleMax=Number(document.getElementById('sem-body').dataset.scaleMax||6);
   const inputs=Array.from(document.querySelectorAll('.sem-in'));
-  const bad=inputs.find(i=>i.value.trim()&&!/^[1-6]$/.test(i.value.trim()));
-  if(bad)return alert(`Оцінка «${bad.value}» некоректна. Допустимі значення — від 1 до 6.`);
+  if(!inputs.length)return showToast('⚠️ Дочекайтеся завантаження оцінок');
+  const bad=inputs.find(i=>i.value.trim()&&(!/^[1-9]\d*$/.test(i.value.trim())||Number(i.value)>scaleMax));
+  if(bad)return alert(`Оцінка «${bad.value}» некоректна. Допустимі значення — від 1 до ${scaleMax}.`);
   const btn=document.getElementById('btn-sem-save');
   btn.disabled=true;btn.textContent='⏳ Збереження...';
   try{
@@ -367,7 +376,10 @@ window.openJournalModal=function(role){
   journalZoomIsAuto=true;journalZoomLevel=100;applyJournalZoom();
   renderGradeTypesLegend();
   const dp=document.getElementById('global-date').value.split('-');const curYM=`${dp[0]}-${dp[1]}`;
-  document.getElementById('j-month-from').value=curYM;document.getElementById('j-month-to').value=curYM;
+  const firstYM=`${ACTIVE_YEAR.split('-')[0]}-09`;
+  document.getElementById('j-month-from').value=firstYM<=curYM?firstYM:curYM;
+  document.getElementById('j-month-to').value=curYM;
+  document.getElementById('j-scale-controls').style.display=journalIsTeacher?'flex':'none';
   const cs=document.getElementById('j-class-select');const cf=document.getElementById('j-class-field');const mw=document.getElementById('j-mode-toggle-wrap');
   mw.style.display=journalIsTeacher?'flex':'none';
   document.getElementById('j-edit-hint').style.display=journalIsTeacher&&journalMode==='edit'?'block':'none';
@@ -380,7 +392,11 @@ window.openJournalModal=function(role){
   if(role==='director'||role==='administrator'){cf.style.display='block';cs.innerHTML='<option value="">Оберіть клас...</option>';for(let i=1;i<=11;i++)cs.innerHTML+=`<option value="class_${i}">${i} Клас</option>`;document.getElementById('j-subj-select').innerHTML='<option value="">Спочатку клас</option>';document.getElementById('journal-table-el').innerHTML='';}
   else{cf.style.display='none';cs.innerHTML=`<option value="${getActiveClass()}">${getActiveClass()}</option>`;updateJournalSubjects();}
 };
-window.closeJournalModal=function(){document.getElementById('journal-modal').style.display='none';};
+window.closeJournalModal=function(){
+  const modal=document.getElementById('journal-modal');
+  modal.style.display='none';modal.classList.remove('journal-fullscreen');
+  const btn=document.getElementById('j-fullscreen');if(btn)btn.textContent='⛶ На весь екран';
+};
 window.openJournalForGrading=function(){
   openJournalModal('teacher');const subj=document.getElementById('t-subject').value;
   setTimeout(()=>{const s=document.getElementById('j-subj-select');if(subj&&Array.from(s.options).some(o=>o.value===subj))s.value=subj;renderJournalTable();},300);
@@ -391,7 +407,7 @@ window.updateJournalSubjects=function(){
   if(!cls){ss.innerHTML='<option value="">Спочатку клас</option>';return;}
   ss.innerHTML='<option value="">Завантаження...</option>';
   window.loadScheduleScript(cls,()=>{
-    let unique=new Set();if(window.schedule)dayKeys.forEach(d=>window.getTodayLessonsFlattened(d).forEach(i=>{let s=window.getValidSubjectName(i);if(s)unique.add(s);}));
+    let unique=new Set();if(window.schedule)dayKeys.forEach(d=>window.getTodayLessonsFlattened(d).forEach(i=>expandAltSubjects(i).forEach(s=>unique.add(s))));
     if(unique.size===0){get(child(ref(db),`grades/${cls}`)).then(snap=>{if(snap.exists()){const md=snap.val();for(let m in md)for(let s in md[m])unique.add(s);}finishJournalSubjectsRender(unique,cls,ss);});return;}
     finishJournalSubjectsRender(unique,cls,ss);
   });
@@ -440,7 +456,45 @@ window.handleJournalRangeChange=function(){
   if(fromEl.value&&toEl.value&&toEl.value<fromEl.value){toEl.value=fromEl.value;showToast('⚠️ "До" не може бути раніше "Від" — виправлено.');}
   renderJournalTable();
 };
+// Кожен запис предмета в розкладі — окремий урок, включно з двома
+// уроками в один день. Порожні слоти й перерви не рахуються.
+export function scheduledSubjectCount(schedule,dayName,subject){
+  const raw=schedule?.[dayName]||{};
+  const slots=Array.isArray(raw)?raw:Object.values(raw);
+  let count=0;
+  slots.forEach(slot=>{
+    const lessons=Array.isArray(slot)?slot:(slot&&slot.subject?[slot]:[]);
+    lessons.forEach(lesson=>{
+      if(isBreakItem(lesson))return;
+      if(expandAltSubjects(lesson).includes(subject))count++;
+    });
+  });
+  return count;
+}
+export function buildJournalColumns(months,gradesData,attData,manualCounts,schedule,subject,today,firstDate){
+  const columns=[];
+  months.forEach(ym=>{
+    const [y,m]=ym.split('-').map(Number);
+    const daysInMonth=new Date(y,m,0).getDate();
+    for(let day=1;day<=daysInMonth;day++){
+      const ds=`${ym}-${String(day).padStart(2,'0')}`;
+      if(ds<firstDate||ds>today)continue;
+      const dow=new Date(y,m-1,day).getDay();
+      const dayName=dayKeys[dow];
+      const scheduled=(dow===0||dow===6)?0:scheduledSubjectCount(schedule,dayName,subject);
+      const gradeSlots=Object.keys(gradesData).filter(k=>journalBaseDate(k)===ds)
+        .reduce((max,k)=>Math.max(max,journalSlot(k)),0);
+      const manual=Number(manualCounts[ds]?.count||0);
+      const hasAtt=!!attData[ds]&&Object.keys(attData[ds]).length>0;
+      const count=Math.max(scheduled,gradeSlots,manual,hasAtt?1:0,(ds===today&&dow!==0&&dow!==6)?1:0);
+      for(let slot=1;slot<=Math.min(count,30);slot++)
+        columns.push({ds,key:journalGradeKey(ds,slot),slot,scheduled,day,dow,ym});
+    }
+  });
+  return columns;
+}
 window.renderJournalTable=async function(){
+  const request=++journalRenderSeq;
   const cls=document.getElementById('j-class-select').value;
   const subj=document.getElementById('j-subj-select').value;
   const months=getJournalMonths();
@@ -452,16 +506,27 @@ window.renderJournalTable=async function(){
   table.innerHTML='<tr><td style="padding:20px;color:#aaa;">⏳ Завантаження...</td></tr>';
   const clsNum=getClassNum(cls);
   try{
-    const [studSnap,attSnap,retakeSnap,...perMonth]=await Promise.all([
+    const [studSnap,attSnap,retakeSnap,scheduleSnap,scaleSnap,...perMonth]=await Promise.all([
       get(child(ref(db),`students_list/${cls}`)),
       get(child(ref(db),`attendance/${cls}`)),
       get(child(ref(db),`retake_requests/${cls}/${subj}`)),
+      get(child(ref(db),`schedules/${cls}/lessons`)),
+      get(child(ref(db),`grade_scales/${cls}/${subj}`)),
       ...months.flatMap(ym=>[
         get(child(ref(db),`grades/${cls}/${ym}/${subj}`)),
         get(child(ref(db),`grade_types/${cls}/${ym}/${subj}`)),
-        get(child(ref(db),`journal_column_types/${cls}/${ym}/${subj}`))
+        get(child(ref(db),`journal_column_types/${cls}/${ym}/${subj}`)),
+        get(child(ref(db),`journal_columns/${cls}/${ym}/${subj}`))
       ])
     ]);
+    if(request!==journalRenderSeq)return;
+    journalNumericScale=scaleSnap.exists();
+    journalScaleMax=journalNumericScale?Number(scaleSnap.val().max||scaleSnap.val()):6;
+    if(!Number.isInteger(journalScaleMax)||journalScaleMax<2||journalScaleMax>2000)journalScaleMax=6;
+    const scaleInput=document.getElementById('j-scale-max');
+    if(scaleInput)scaleInput.value=journalScaleMax;
+    const scaleInfo=document.getElementById('j-scale-info');
+    if(scaleInfo)scaleInfo.textContent=journalNumericScale?`Шкала 1–${journalScaleMax}`:'Стандартна шкала 1–6';
     // [{sid, nm}] — дані ключуються ідентифікатором, у таблиці показуємо імʼя
     let students=[];
     if(studSnap.exists())students=Object.entries(studSnap.val())
@@ -469,12 +534,13 @@ window.renderJournalTable=async function(){
       .sort((a,b)=>a.nm.localeCompare(b.nm,'uk'));
     if(students.length===0){table.innerHTML='<tr><td style="padding:20px;">Учнів немає.</td></tr>';return;}
     // Merge each month's grades/types/column-types into one flat, date-keyed object.
-    const gradesData={};const typesData={};const journalColumnTypes={};
+    const gradesData={};const typesData={};const journalColumnTypes={};const manualCounts={};
     months.forEach((ym,i)=>{
-      const [gradesSnap,typesSnap,colTypesSnap]=[perMonth[i*3],perMonth[i*3+1],perMonth[i*3+2]];
+      const [gradesSnap,typesSnap,colTypesSnap,colSnap]=[perMonth[i*4],perMonth[i*4+1],perMonth[i*4+2],perMonth[i*4+3]];
       if(gradesSnap.exists())Object.assign(gradesData,gradesSnap.val());
       if(typesSnap.exists())Object.assign(typesData,typesSnap.val());
       if(colTypesSnap.exists())Object.assign(journalColumnTypes,colTypesSnap.val());
+      if(colSnap.exists())Object.assign(manualCounts,colSnap.val());
     });
     const attDataAll=attSnap.exists()?attSnap.val():{};
     const retakeData=retakeSnap.exists()?retakeSnap.val():{};
@@ -482,22 +548,9 @@ window.renderJournalTable=async function(){
     // Build date columns across every month in the range (each column remembers
     // its own source month `ym`, since grade writes/reads need the *correct*
     // Firebase month key, not just the range's start month).
-    let dateCols=[];
-    months.forEach(ym=>{
-      const [y,m]=ym.split('-');const daysInMonth=new Date(y,m,0).getDate();
-      for(let i=1;i<=daysInMonth;i++){
-        const ds=`${ym}-${String(i).padStart(2,'0')}`;
-        const dow=new Date(y,parseInt(m)-1,i).getDay();
-        if(dow===0||dow===6)continue;
-        const hasGrade=gradesData[ds]&&Object.keys(gradesData[ds]).length>0;
-        const hasAtt=attData[ds]&&Object.keys(attData[ds]).length>0;
-        const isToday=ds===localDateString;
-        if(hasGrade||hasAtt||isToday)dateCols.push({ds,day:i,dow,ym});
-      }
-    });
-    for(let ds in gradesData)if(!dateCols.find(c=>c.ds===ds)){const[yy,mm,dd]=ds.split('-');dateCols.push({ds,day:parseInt(dd),dow:new Date(ds).getDay(),ym:`${yy}-${mm}`});}
-    dateCols.sort((a,b)=>a.ds.localeCompare(b.ds));
-    dateCols=[...new Map(dateCols.map(c=>[c.ds,c])).values()];
+    const dateCols=buildJournalColumns(months,gradesData,attData,manualCounts,
+      scheduleSnap.exists()?scheduleSnap.val():{},subj,localDateString,`${ACTIVE_YEAR.split('-')[0]}-09-01`);
+    journalVisibleColumns=dateCols;
     const canEdit=journalIsTeacher&&journalMode==='edit';
     const dayN=['Нд','Пн','Вт','Ср','Чт','Пт','Сб'];
     // Phase 9: without an explicit month label, a multi-month range just shows
@@ -524,14 +577,14 @@ window.renderJournalTable=async function(){
     // top-to-bottom, not just from the label row.
     let dayRow='<tr class="jt-day-row">';
     let bandPtr=0,bandRemaining=monthBands.length?monthBands[0].count:0;
-    dateCols.forEach(({ds,day,dow,ym})=>{
+    dateCols.forEach(({ds,key,slot,scheduled,day,dow,ym})=>{
       const isToday=ds===localDateString;
       if(bandRemaining===0){bandPtr++;bandRemaining=monthBands[bandPtr].count;}
       const bandColor=bandColorOf(monthBands[bandPtr].bandIdx);bandRemaining--;
       // Phase 4b: replaced the passive, grade-derived type/weight hint with an editable
       // pre-set "expected type" control (journal_column_types), used by openGradeEditor()
       // to prefill gepType for cells that don't have a grade yet.
-      const presetType=journalColumnTypes[ds]||'';
+      const presetType=journalColumnTypes[key]||'';
       // Phase 5: option list now sourced from gradeTypesCache (falls back to
       // GRADE_WEIGHTS' codes if the cache hasn't loaded yet), same as elsewhere.
       const typeCodes=Object.keys(gradeTypesCache).length>0?Object.keys(gradeTypesCache):Object.keys(GRADE_WEIGHTS);
@@ -540,14 +593,17 @@ window.renderJournalTable=async function(){
       if(canEdit){
         // Phase 8: use this column's own source month (`ym`), not a single outer
         // yMonth — the range can now span several Firebase month-keys at once.
-        typeCell=`<br><select class="jct-type-select" onclick="event.stopPropagation();" onchange="setJournalColumnType('${cls}','${escJs(subj)}','${ym}','${ds}',this.value)" data-tip="Тип оцінки на цю дату">
+        typeCell=`<br><select class="jct-type-select" onclick="event.stopPropagation();" onchange="setJournalColumnType('${cls}','${escJs(subj)}','${ym}','${key}',this.value)" data-tip="Тип оцінки на цей стовпець">
           <option value="">—</option>
           ${typeCodes.map(t=>`<option value="${t}" ${presetType===t?'selected':''}>${t} ×${weightOf(t)}</option>`).join('')}
         </select>`;
       } else {
         typeCell=presetType?`<br><span style="font-size:.69em;color:#e67e22;">${presetType}${weightOf(presetType)?` ×${weightOf(presetType)}`:''}</span>`:'';
       }
-      dayRow+=`<th class="${isToday?'today-col':''}" style="background:${bandColor};" title="${ds}">${day}<br><span style="font-size:.78em;font-weight:400;">${dayN[dow]}</span>${typeCell}</th>`;
+      const label=slot<=scheduled?`Урок ${slot}`:`Оцінка ${slot}`;
+      const add=canEdit&&slot===Math.max(...dateCols.filter(c=>c.ds===ds).map(c=>c.slot))
+        ?`<button type="button" class="j-add-column" onclick="addJournalColumn('${ds}')" data-tip="Додати ще одну оцінку на цей день">＋</button>`:'';
+      dayRow+=`<th class="${isToday?'today-col':''}" style="background:${bandColor};" title="${ds} · ${label}">${day}<br><span style="font-size:.78em;font-weight:400;">${dayN[dow]} · ${label}</span>${typeCell}${add}</th>`;
     });
     dayRow+='</tr>';
     let thead='<thead>'+monthRow+dayRow+'</thead>';
@@ -555,37 +611,37 @@ window.renderJournalTable=async function(){
     let tbody='<tbody>';let classWeightedAvg=0;let classCount=0;
     students.forEach((st)=>{
       let stGrades={};let stTypes={};
-      dateCols.forEach(({ds})=>{
-        const v=(gradesData[ds]&&gradesData[ds][st.sid])?gradesData[ds][st.sid]:'';
-        const tp=(typesData[ds]&&typesData[ds][st.sid])?typesData[ds][st.sid]:'П';
-        if(v){stGrades[ds]=v;stTypes[ds]=tp;}
+      dateCols.forEach(({key})=>{
+        const v=gradesData[key]?.[st.sid]||'';
+        const tp=typesData[key]?.[st.sid]||'П';
+        if(v){stGrades[key]=v;stTypes[key]=tp;}
       });
       const avg=calculateStudentWeightedAvg(stGrades,stTypes);
       if(avg!==null){classWeightedAvg+=avg;classCount++;}
       const avgStr=avg!==null?avg.toFixed(2):'-';
       let rowHtml=`<tr><td class="sn" title="${escHtml(st.nm)}">${escHtml(st.nm)}</td>`;
-      dateCols.forEach(({ds,ym})=>{
+      dateCols.forEach(({ds,key,slot,ym})=>{
         const isToday=ds===localDateString;
-        const attInfo=summarizeAttendanceSlots(attData[ds]&&attData[ds][st.sid]);
-        const gradeVal=(gradesData[ds]&&gradesData[ds][st.sid])?gradesData[ds][st.sid]:'';
-        const gradeType=(typesData[ds]&&typesData[ds][st.sid])?typesData[ds][st.sid]:'';
-        const dispVal=displayGrade(gradeVal,cls);
-        const presetType=journalColumnTypes[ds]||'';
+        const attInfo=slot===1?summarizeAttendanceSlots(attData[ds]&&attData[ds][st.sid]):null;
+        const gradeVal=gradesData[key]?.[st.sid]||'';
+        const gradeType=typesData[key]?.[st.sid]||'';
+        const dispVal=displayGrade(gradeVal,cls,journalNumericScale);
+        const presetType=journalColumnTypes[key]||'';
         let cell='';
         // escJs on subject + student name — both routinely contain apostrophes in
         // Ukrainian (Комп'ютерні науки, Дем'яненко) which would otherwise terminate
         // the onclick's string literal early and kill the handler.
         if(gradeVal){
-          const gc=gradeClass6(gradeVal);
-          cell+=`<span class="g-cell ${gc}" onclick="handleGradeClick(event,'${cls}','${escJs(subj)}','${ds}','${escJs(st.sid)}','${ym}','${gradeVal}','${gradeType}','${presetType}')"><span class="g-val">${dispVal}</span>${gradeType?`<span class="g-type">${gradeType}</span>`:''}</span>`;
+          const gc=journalNumericScale?'g-scale':gradeClass6(gradeVal);
+          cell+=`<span class="g-cell ${gc}" onclick="handleGradeClick(event,'${cls}','${escJs(subj)}','${key}','${escJs(st.sid)}','${ym}','${escJs(String(gradeVal))}','${escJs(String(gradeType))}','${escJs(String(presetType))}')"><span class="g-val">${escHtml(String(dispVal))}</span>${gradeType?`<span class="g-type">${escHtml(String(gradeType))}</span>`:''}</span>`;
         } else if(canEdit){
-          cell+=`<span class="g-cell g-empty" onclick="handleGradeClick(event,'${cls}','${escJs(subj)}','${ds}','${escJs(st.sid)}','${ym}','','','${presetType}')">＋</span>`;
+          cell+=`<span class="g-cell g-empty" onclick="handleGradeClick(event,'${cls}','${escJs(subj)}','${key}','${escJs(st.sid)}','${ym}','','','${escJs(String(presetType))}')">＋</span>`;
         }
         if(attInfo){const ac=attInfo.status==='absent'?'att-absent':'att-late';const al=attInfo.status==='absent'?'н':'з';cell+=`<span class="${ac}" data-tip="${attInfo.reason}">${al}</span>`;}
         rowHtml+=`<td class="${isToday?'today-col':''}">${cell}</td>`;
       });
-      const avgGc=avg!==null?gradeClass6(Math.round(avg)):'';
-      rowHtml+=`<td class="avg-col"><span class="${avgGc}" style="border-radius:6px;padding:.16em .39em;font-weight:800;">${displayGrade(avgStr!=='-'?String(Math.round(avg)):'-',cls)}</span><br><span style="font-size:.78em;color:#aaa;">${avgStr}</span></td>`;
+      const avgGc=avg!==null?(journalNumericScale?'g-scale':gradeClass6(Math.round(avg))):'';
+      rowHtml+=`<td class="avg-col"><span class="${avgGc}" style="border-radius:6px;padding:.16em .39em;font-weight:800;">${displayGrade(avgStr!=='-'?String(Math.round(avg)):'-',cls,journalNumericScale)}</span><br><span style="font-size:.78em;color:#aaa;">${avgStr}</span></td>`;
       rowHtml+='</tr>';tbody+=rowHtml;
     });
     tbody+='</tbody>';
@@ -601,7 +657,7 @@ window.renderJournalTable=async function(){
       const periodStr=months.length>1?`${fmtYM(months[0])} – ${fmtYM(months[months.length-1])}`:fmtYM(months[0]);
       const studentsWord=pluralUA(students.length,['учень','учні','учнів']);
       const lessonsWord=pluralUA(dateCols.length,['урок','уроки','уроків']);
-      rangeSummary.textContent=`👥 ${students.length} ${studentsWord} · 🗓️ ${dateCols.length} ${lessonsWord} · ${periodStr}`;
+      rangeSummary.textContent=`👥 ${students.length} ${studentsWord} · 🗓️ ${dateCols.length} ${lessonsWord} / стовпці · ${periodStr} · шкала 1–${journalScaleMax}`;
     }
     // Weighted avg summary
     if(classCount>0){
@@ -630,8 +686,44 @@ window.handleGradeClick=function(e,cls,subj,ds,student,yMonth,existingVal,existi
 };
 // ══════════ PHASE 4b: PER-DATE PRESET "ТИП" (before any grades exist) ══════════
 window.setJournalColumnType=async function(cls,subj,yMonth,date,type){
-  await set(ref(db,`journal_column_types/${cls}/${yMonth}/${subj}/${date}`),type||null);
-  showToast(type?`✅ Тип на ${date.split('-').reverse().join('.')}: ${type}`:'🗑️ Тип знято');
+  try{
+    await set(ref(db,`journal_column_types/${cls}/${yMonth}/${subj}/${date}`),type||null);
+    showToast(type?`✅ Тип на ${journalBaseDate(date).split('-').reverse().join('.')}: ${type}`:'🗑️ Тип знято');
+  }catch(e){showToast('❌ Тип не збережено: '+e.message);renderJournalTable();}
+};
+window.addJournalColumn=async function(day){
+  if(!journalIsTeacher||journalMode!=='edit')return;
+  const cls=document.getElementById('j-class-select').value;
+  const subj=document.getElementById('j-subj-select').value;
+  const count=journalVisibleColumns.filter(c=>c.ds===day).length;
+  if(!cls||!subj||!count)return;
+  if(count>=30)return showToast('⚠️ Не більше 30 стовпців на день');
+  try{
+    await set(ref(db,`journal_columns/${cls}/${day.slice(0,7)}/${subj}/${day}/count`),count+1);
+    await renderJournalTable();
+    showToast('✅ Стовпець додано');
+  }catch(e){showToast('❌ Стовпець не додано: '+e.message);}
+};
+window.saveJournalScale=async function(){
+  if(!journalIsTeacher)return;
+  const cls=document.getElementById('j-class-select').value;
+  const subj=document.getElementById('j-subj-select').value;
+  const max=Number(document.getElementById('j-scale-max').value);
+  if(!cls||!subj)return showToast('⚠️ Оберіть предмет');
+  if(!Number.isInteger(max)||max<2||max>2000)return showToast('⚠️ Максимальний бал має бути від 2 до 2000');
+  try{
+    await set(ref(db,`grade_scales/${cls}/${subj}`),{max});
+    journalScaleMax=max;journalNumericScale=true;
+    await renderJournalTable();
+    showToast(`✅ Шкала з ${subj}: 1–${max}`);
+  }catch(e){showToast('❌ Шкалу не збережено: '+e.message);}
+};
+window.toggleJournalFullscreen=function(){
+  const modal=document.getElementById('journal-modal');
+  const on=modal.classList.toggle('journal-fullscreen');
+  const btn=document.getElementById('j-fullscreen');
+  if(btn)btn.textContent=on?'🗗 Звичайний розмір':'⛶ На весь екран';
+  if(journalZoomIsAuto)setTimeout(window.journalZoomFit,0);
 };
 // ══════════ PHASE 4b/9/10: JOURNAL ZOOM (40%–150%, 10% steps, smart fit-to-width) ══════════
 // Metric-based zoom: --journal-scale multiplies the table's font-size (see the
