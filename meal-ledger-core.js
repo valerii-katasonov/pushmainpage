@@ -48,6 +48,10 @@ function buildDayCharge(date, cls, sid, name, data) {
   const snack = schoolDay && !absent && !!String(menu.snack || '').trim() &&
     (override.snack === undefined ? optionPlanned(plan, 'snack', weekday) : !!override.snack);
   const prices = priceAt(date, data.meal_prices, data.meal_price_history);
+  for (const [used, key] of [[lunch, 'lunch'], [breakfast, 'breakfast'], [snack, 'snack']]) {
+    if (used && (!Number.isFinite(Number(prices[key])) || Number(prices[key]) <= 0))
+      throw new Error(`Не задано ціну ${key} на ${date}; день не закрито`);
+  }
   const amounts = {
     lunch: money(lunch ? prices.lunch : 0),
     breakfast: money(breakfast ? prices.breakfast : 0),
@@ -62,6 +66,8 @@ function buildDayCharge(date, cls, sid, name, data) {
     const all = Object.keys(history).sort();
     const price = old.length ? history[old.at(-1)]
       : all.length ? history[all[0]] : data.takeaway_items?.[itemId]?.price;
+    if (!Number.isFinite(Number(price)) || Number(price) <= 0)
+      throw new Error(`Не задано ціну позиції ${itemId} на ${date}; день не закрито`);
     amounts.takeaway = money(amounts.takeaway + Number(qty) * (Number(price) || 0));
   }
   const total = money(Object.values(amounts).reduce((s, v) => s + v, 0));
