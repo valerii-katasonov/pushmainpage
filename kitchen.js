@@ -47,6 +47,16 @@ export const MEAL_CUTOFF_HOUR = 9;   // до 09:00 можна відмовити
 // позицій на винос. Обід лишається з власним, пізнішим дедлайном (09:00) —
 // його готують із уже закупленого, і відмова о 08:59 нікому не шкодить.
 export const BREAKFAST_CUTOFF_HOUR = 7;
+// ПІДВЕЧІРОК ЇДЯТЬ ПІСЛЯ ОБІДУ — І ДЕДЛАЙН У НЬОГО СВІЙ.
+//
+// Досі кнопка підвечірка жила під дедлайном ОБІДУ: після 9:00 вона
+// зникала разом із обідньою, і батько вже не міг зняти сьогоднішній
+// підвечірок, хоча до нього лишалося пів дня. Виглядало це як «кнопка не
+// працює»: замість неї стояв замок із текстом про обіди, який до
+// підвечірка не має стосунку.
+//
+// Якщо кухня скаже іншу годину — міняти тут, одне число.
+export const SNACK_CUTOFF_HOUR = 12;
 
 // О КОТРІЙ БАТЬКАМ ПОКАЗУВАТИ ВЖЕ ЗАВТРАШНЄ МЕНЮ.
 //
@@ -153,6 +163,29 @@ export function breakfastEditable(dateStr, now = new Date(), today = localDateSt
   return now.getHours() < BREAKFAST_CUTOFF_HOUR
     ? { ok:true }
     : { ok:false, msg:`Сніданки на сьогодні приймалися до ${BREAKFAST_CUTOFF_HOUR}:00 — його вже готують. Можна замовити на завтра.` };
+}
+
+// ЖОДНА КНОПКА ХАРЧУВАННЯ НЕ МАЄ ПРАВА МОВЧАТИ.
+//
+// У пʼяти місцях стояло просто `return`, коли дитину не вдалося знайти в
+// списку класу: зберегти налаштування, відповісти на питання про обіди,
+// зняти підвечірок, замовити на винос, відкрити статистику. Для людини це
+// виглядало однаково — натиснув, і нічого. Ні запису, ні пояснення, ні
+// приводу комусь поскаржитися; вона просто тисне ще раз завтра.
+function mealNoChild(){
+  const msg = 'Не вдалося визначити дитину — оновіть сторінку. '
+            + 'Якщо не мине, покажіть це повідомлення класному керівнику.';
+  // mealMsg сам віддає це тостом, якщо картки меню на екрані немає.
+  try{ mealMsg('⚠️ ' + msg, true); }catch(e){ try{ showToast('⚠️ ' + msg); }catch(e2){} }
+  return false;
+}
+
+export function snackEditable(dateStr, now = new Date(), today = localDateString){
+  if(dateStr > today) return { ok:true };
+  if(dateStr < today) return { ok:false, msg:'Цей день уже минув.' };
+  return now.getHours() < SNACK_CUTOFF_HOUR
+    ? { ok:true }
+    : { ok:false, msg:`Підвечірок на сьогодні приймався до ${SNACK_CUTOFF_HOUR}:00 — його вже готують. Можна змінити на завтра.` };
 }
 
 // ── ЛОГІКА: хто що їсть ──
@@ -1585,6 +1618,7 @@ export async function renderParentMenu(cls, studentKey, date){
     const isAbsent = attSnap.exists() && Object.values(attSnap.val()||{}).some(r=>r && r.status==='absent');
     const eff  = effectiveMeals(plan, ov, isAbsent, weekdayIdx(cur));
     const gate = mealsEditable(cur);
+    const sGate = snackEditable(cur);
     const notEating = plan.lunch === false;
     const noAnswer  = !lunchChosen(plan);   // батько ще не відповів про обіди
 
@@ -1647,16 +1681,20 @@ export async function renderParentMenu(cls, studentKey, date){
     const oneOff = notEating && !!m
       ? `<button class="pm-btn ${eff.lunch?'back':'once'}" onclick="setMealDay('${escJs(cur)}','lunch',${eff.lunch?0:1})">${eff.lunch?'Скасувати обід на цей день':'🍽 Беру обід цього дня'}</button>`
       : '';
+    // Обід і підвечірок розведено: у кожного свій дедлайн, і закритий обід
+    // більше не забирає із собою кнопку підвечірка.
     const lunchBtns = gate.ok
       ? (noAnswer ? '' : (notEating ? oneOff
           : `<button class="pm-btn ${eff.lunch?'':'back'}" onclick="setMealDay('${escJs(cur)}','lunch',${eff.lunch?0:1})">${eff.lunch?'Не буде обідати':'Поверну обід'}</button>`))
-        + `<button class="pm-btn snack" onclick="setMealDay('${escJs(cur)}','snack',${eff.snack?0:1})">${eff.snack?'Без підвечірка':'+ Підвечірок'}</button>`
       : `<span class="pm-locked">🔒 ${escHtml(gate.msg)}</span>`;
+    const snackBtn = sGate.ok
+      ? `<button class="pm-btn snack" onclick="setMealDay('${escJs(cur)}','snack',${eff.snack?0:1})">${eff.snack?'Без підвечірка':'+ Підвечірок'}</button>`
+      : `<span class="pm-locked small">🔒 ${escHtml(sGate.msg)}</span>`;
     const brkBtn = !hasBrk ? ''
       : (bGate.ok
           ? `<button class="pm-btn brk" onclick="setMealDay('${escJs(cur)}','breakfast',${eff.breakfast?0:1})">${eff.breakfast?'Без сніданку':'+ Сніданок'}</button>`
           : `<span class="pm-locked small">🔒 ${escHtml(bGate.msg)}</span>`);
-    const actions = lunchBtns + brkBtn;
+    const actions = lunchBtns + snackBtn + brkBtn;
 
     // ПИТАННЯ ПРО ОБІДИ. Поки батько не відповів, кухня цю дитину не
     // рахує — тож питання має бути помітним, а не рядком у налаштуваннях.
@@ -1727,9 +1765,17 @@ export async function renderParentMenu(cls, studentKey, date){
 
 window.setMealDay = async function(date, field, value){
   const cls = currentUserData?.class, sid = await mealKey(cls);
-  if(!cls || !sid) return;
+  // МОВЧАЗНОГО ВИХОДУ ТУТ БУТИ НЕ МОЖЕ.
+  //
+  // Раніше стояло просто `return`. Якщо дитину не вдалося знайти у списку
+  // класу, кнопка не робила рівно нічого: ні запису, ні повідомлення. Для
+  // людини це «кнопка не працює», і поскаржиться вона в кращому разі через
+  // тиждень — а до того щодня тиснутиме її знову.
+  if(!cls || !sid) return mealNoChild();
   // У сніданку власний дедлайн: його готують до уроків, тож 09:00 не годиться
-  const gate = (field === 'breakfast' || field === 'breakfastPick') ? breakfastEditable(date) : mealsEditable(date);
+  const gate = (field === 'breakfast' || field === 'breakfastPick') ? breakfastEditable(date)
+             : (field === 'snack') ? snackEditable(date)
+             : mealsEditable(date);
   if(!gate.ok) return alert(gate.msg);
   const planSnap = await get(child(ref(db), `meal_plan/${cls}/${sid}`));
   const plan = planSnap.exists() ? planSnap.val() : {};
@@ -2032,7 +2078,7 @@ window.msToggleDays = function(){
 };
 window.saveMealSettings = async function(){
   const cls = currentUserData?.class, sid = await mealKey(cls);
-  if(!cls || !sid) return;
+  if(!cls || !sid) return mealNoChild();
   const snack = document.getElementById('ms-snack').value;
   const brk   = document.getElementById('ms-brk')?.value || 'no';
   const plan = {
@@ -2169,7 +2215,7 @@ export async function computeMyMealStats(from, to, cls, sid, withCost=false){
 
 window.openMyMealStats = async function(){
   const cls = currentUserData?.class, sid = await mealKey(cls);
-  if(!cls || !sid) return;
+  if(!cls || !sid) return mealNoChild();
   const modal = document.getElementById('meal-stats-modal');
   const body  = document.getElementById('meal-stats-body');
   if(!modal || !body) return;
@@ -2662,7 +2708,7 @@ window.renderTakeaway = renderTakeaway;
 window.setTakeaway = async function(date, itemId, qty){
   const cls = currentUserData?.class;
   const sid = await mealKey(currentUserData?.class);
-  if(!cls || !sid) return;
+  if(!cls || !sid) return mealNoChild();
   // Перевіряємо ще раз тут, а не лише при показі: між відкриттям сторінки
   // і натисканням могло минути пів дня, і 07:00 уже позаду.
   const gate = takeawayEditable(date);
@@ -2683,7 +2729,7 @@ window.setTakeaway = async function(date, itemId, qty){
 window.setLunchPlan = async function(yes){
   const cls = currentUserData?.class;
   const sid = await mealKey(cls);
-  if(!cls || !sid) return;
+  if(!cls || !sid) return mealNoChild();
   try{
     await update(ref(db, `meal_plan/${cls}/${sid}`), {
       lunch: !!yes, by: currentUserData.email || '', ts: Date.now()
