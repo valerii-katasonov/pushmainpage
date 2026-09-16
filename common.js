@@ -189,17 +189,20 @@ export const app=initializeApp(firebaseConfig); export const auth=getAuth(app); 
 // з хронологічним. Це дозволяє попросити Firebase віддати лише потрібний
 // відрізок замість усього вузла. Раніше дашборди тягнули ВСЮ відвідуваність
 // школи за весь рік, щоб показати один день.
-export async function getDateRange(path, from, to){
+export async function getDateRange(path, from, to, strict=false){
   try{
     const snap = await get(query(ref(db, path), orderByKey(), startAt(from), endAt(to)));
     return snap.exists() ? snap.val() : {};
-  }catch(e){ console.warn('getDateRange', path, e.message); return {}; }
+  }catch(e){
+    if(strict) throw e;
+    console.warn('getDateRange', path, e.message); return {};
+  }
 }
 // Той самий діапазон, але одразу по всіх класах: {class_1:{дата:{...}}, ...}
-export async function getSchoolRange(node, from, to){
+export async function getSchoolRange(node, from, to, strict=false){
   const classes = [];
   for(let i=1;i<=11;i++) classes.push(`class_${i}`);
-  const parts = await Promise.all(classes.map(c=>getDateRange(`${node}/${c}`, from, to)));
+  const parts = await Promise.all(classes.map(c=>getDateRange(`${node}/${c}`, from, to, strict)));
   const out = {};
   classes.forEach((c,i)=>{ if(parts[i] && Object.keys(parts[i]).length) out[c]=parts[i]; });
   return out;
