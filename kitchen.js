@@ -580,7 +580,8 @@ export async function loadWeekCounts(){
         ${today.closed
           ? `<b>—</b><span>${escHtml(human(today.date))}: ${escHtml(today.closed)}</span>
              <div class="k-total-snack">школа не годує цього дня</div>`
-          : `<b>${today.lunch}</b><span>обідів на ${escHtml(human(today.date))}${today.hasChoice?` · А ${today.pa} / Б ${today.pb}`:''}</span>
+          : `<b>${today.lunch}</b><span class="k-meal-summary">обідів на ${escHtml(human(today.date))}</span>
+             ${today.hasChoice?`<span class="k-meal-split">А <strong>${today.pa}</strong><i>/</i> Б <strong>${today.pb}</strong></span>`:''}
              <div class="k-total-snack">${today.hasBrkMenu ? `${today.brk} сніданків${today.hasBrkChoice?` (А ${today.bpa} / Б ${today.bpb})`:''} · ` : ''}${today.snack} підвечірків</div>`}
       </div>
       <div class="k-sub">відсутні: ${today.absent} · не харчуються: ${today.off} · відмови: ${today.skips.length}${today.extras.length ? ` · <b style="color:var(--green);">разові обіди: ${today.extras.length}</b>` : ''}${today.unset ? ` · <b style="color:var(--orange);">батьки не відповіли: ${today.unset}</b>` : ''}</div>
