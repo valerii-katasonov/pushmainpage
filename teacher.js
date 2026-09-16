@@ -7,7 +7,7 @@
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, push, remove, update, onValue } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { renderNewsFeed } from './news.js';
-import { db, auth, CLOUDINARY_URL, UPLOAD_PRESET, HW_FILE_EXT, HW_FILE_MAX_MB, fileExt, isImageUrl, isAudioUrl, cldImage, safeHttpUrl, getActiveClass, currentUserData, showToast, displayGrade, renderHwItem, renderHwList, dayKeys, formatAttendanceSlotLabel, STICKER_GOAL, stickerGoal, escJs, escHtml, safeUrl, normalizeChildren, notifyEvent, logAction, renderBirthdays, teacherAccessMatrix, getUsersSnap, stuName, gradeWritePaths, localDateString, isMasterTeacher, gradeTypesCache, subjKey, emailKey, subjectsForClassWeek } from './common.js';
+import { db, auth, CLOUDINARY_URL, UPLOAD_PRESET, HW_FILE_EXT, HW_FILE_MAX_MB, fileExt, isImageUrl, isAudioUrl, cldImage, safeHttpUrl, getActiveClass, currentUserData, showToast, displayGrade, renderHwItem, renderHwList, dayKeys, formatAttendanceSlotLabel, STICKER_GOAL, stickerGoal, escJs, escHtml, safeUrl, normalizeChildren, notifyEvent, logAction, renderBirthdays, teacherAccessMatrix, getUsersSnap, getStudentDir, stuName, gradeWritePaths, journalBaseDate, journalSlot, localDateString, isMasterTeacher, gradeTypesCache, subjKey, emailKey, subjectsForClassWeek } from './common.js';
 import { populateTopicSelector, availableTopicsCache, planKey, loadAliases } from './curriculum.js';
 
 let currentHwImages=[];
@@ -332,13 +332,17 @@ window.openQuickJournal=async function(){
   document.getElementById('quick-journal-modal').style.display='flex';
   try{
     const ym=date.slice(0,7);
-    const [stSnap,gSnap,tSnap,aSnap,cardSnap]=await Promise.all([
+    const [stSnap,gSnap,tSnap,aSnap,cardSnap,scaleSnap]=await Promise.all([
       get(child(ref(db),`students_list/${cls}`)),
       get(child(ref(db),`grades/${cls}/${ym}/${subj}/${date}`)),
       get(child(ref(db),`grade_types/${cls}/${ym}/${subj}/${date}`)),
       get(child(ref(db),`attendance/${cls}/${date}`)),
-      get(child(ref(db),`student_cards/${cls}`))
+      get(child(ref(db),`student_cards/${cls}`)),
+      get(child(ref(db),`grade_scales/${cls}/${subj}`))
     ]);
+    const scaleMax=scaleSnap.exists()?Number(scaleSnap.val().max||scaleSnap.val()):6;
+    box.dataset.scale=Number.isInteger(scaleMax)?scaleMax:6;
+    box.dataset.numericScale=scaleSnap.exists()?'1':'';
     // [{sid, nm}] — дані ключуються ідентифікатором, людині показуємо імʼя
     const students=stSnap.exists()
       ?Object.entries(stSnap.val()).map(([sid,nm])=>({sid,nm:String(nm)}))
@@ -368,8 +372,8 @@ window.openQuickJournal=async function(){
           <button type="button" class="qj-b lt${status==='late'?' on':''}" onclick="qjSet(this,'late')">З</button>
           <button type="button" class="qj-b ab${status==='absent'?' on':''}" onclick="qjSet(this,'absent')">Н</button>
         </div>
-        <input type="text" class="qj-g" maxlength="1" value="${escHtml(g[s.sid]||'')}"
-               data-orig="${escHtml(g[s.sid]||'')}" placeholder="—">
+        <input type="text" class="qj-g" maxlength="${String(box.dataset.scale).length}" value="${escHtml(g[s.sid]||'')}"
+               data-orig="${escHtml(g[s.sid]||'')}" placeholder="1–${box.dataset.scale}">
       </div>`;
     }).join('');
     // Тип оцінки — один на весь урок, як зазвичай і буває
@@ -397,8 +401,9 @@ window.saveQuickJournal=async function(){
   const gtype=document.getElementById('qj-type').value;
   const slotKey=document.getElementById('qj-body').dataset.slot||'all';
   const rows=Array.from(document.querySelectorAll('.qj-row'));
-  const bad=rows.find(r=>{const v=r.querySelector('.qj-g').value.trim();return v&&!/^[1-6]$/.test(v);});
-  if(bad)return alert('Оцінки мають бути від 1 до 6.');
+  const max=Number(document.getElementById('qj-body').dataset.scale||6);
+  const bad=rows.find(r=>{const v=r.querySelector('.qj-g').value.trim();return v&&(!/^[1-9]\d*$/.test(v)||Number(v)>max);});
+  if(bad)return alert(`Оцінки мають бути від 1 до ${max}.`);
   const btn=document.getElementById('btn-qj-save');
   btn.disabled=true;btn.textContent='⏳ Збереження...';
   try{
@@ -410,7 +415,7 @@ window.saveQuickJournal=async function(){
       if(v!==orig){
         gPatch[sid]=v||null;
         tPatch[sid]=v?gtype:null;
-        if(v){nG++;notifyEvent('grade',{class:cls,studentName:name,subject:subj,value:displayGrade(v,cls)});}
+        if(v){nG++;notifyEvent('grade',{class:cls,studentName:name,subject:subj,value:displayGrade(v,cls,document.getElementById('qj-body').dataset.numericScale==='1')});}
       }
       // Відвідуваність пишемо лише там, де вчитель щось позначив
       const status=r.dataset.status;
@@ -1062,7 +1067,7 @@ window.openRetakeRequestsModal=async function(){
         const statusLabel=req.status==='approved'?'✅ Схвалено':req.status==='rejected'?'❌ Відхилено':'⏳ Очікує';
         html+=`<div style="background:#fafafa;border:1px solid #eee;border-radius:9px;padding:11px;margin-bottom:9px;">
           <div style="display:flex;justify-content:space-between;align-items:center;">
-            <div><b>${escHtml(stuName(cls,student))}</b> | ${escHtml(subj)} | ${date.split('-').reverse().join('.')}</div>
+            <div><b>${escHtml(stuName(cls,student))}</b> | ${escHtml(subj)} | ${journalBaseDate(date).split('-').reverse().join('.')}${journalSlot(date)>1?` · оцінка ${journalSlot(date)}`:''}</div>
             <span style="color:${statusColor};font-size:.8rem;font-weight:700;">${statusLabel}</span>
           </div>
           <div style="font-size:.8rem;color:#888;margin-top:5px;">Поточна оцінка: <b>${req.grade||'—'}</b></div>
@@ -1506,7 +1511,30 @@ window.manageDayExams=function(ds){const cls=getActiveClass();const dd=document.
 window.addExam=function(ds){const s=document.getElementById('exam-add-subj').value;if(!s)return;const cls=getActiveClass();const ym=ds.substring(0,7);get(child(ref(db),`exams/${cls}/${ym}/${ds}`)).then(snap=>{let cnt=snap.exists()?Object.keys(snap.val()).length:0;if(cnt>=2)return alert('❌ Ліміт: більше 2 контрольних не можна!');set(ref(db,`exams/${cls}/${ym}/${ds}/${s}`),auth.currentUser.uid).then(()=>{renderExamsCalendar();manageDayExams(ds);});});};
 window.deleteExam=function(ds,s){const cls=getActiveClass();remove(ref(db,`exams/${cls}/${ds.substring(0,7)}/${ds}/${s}`)).then(()=>{renderExamsCalendar();manageDayExams(ds);});};
 // ══════════ REACTIONS & WRAPPED (teacher side) ══════════
-window.showReactionsDetails=function(){document.getElementById('reactions-modal').style.display='flex';const list=document.getElementById('reactions-list');list.innerHTML='';if(!window.myDetailedReactions?.length){list.innerHTML='<p class="empty-msg" style="text-align:center;">Немає реакцій.</p>';return;}let h='<ul style="list-style:none;padding:0;margin:0;">';window.myDetailedReactions.forEach(r=>{const[y,m,d]=r.date.split('-');h+=`<li style="background:#fdfbfb;border:1px solid #eee;border-radius:8px;padding:11px;margin-bottom:9px;"><div style="display:flex;justify-content:space-between;border-bottom:1px dashed #ddd;padding-bottom:4px;margin-bottom:7px;"><span style="font-weight:700;color:var(--teal);">${r.student}</span><span style="font-size:1.3rem;">${r.emoji}</span></div><div style="font-size:.78rem;color:#888;margin-bottom:4px;">📅 ${d}.${m}.${y} | 📚 ${escHtml(r.subject)}</div><div style="font-size:.88rem;color:#444;background:#f0f8ff;padding:7px;border-radius:6px;font-style:italic;">"${escHtml(r.comment)}"</div></li>`;});h+='</ul>';list.innerHTML=h;};
+window.showReactionsDetails=async function(){
+  document.getElementById('reactions-modal').style.display='flex';
+  const list=document.getElementById('reactions-list');
+  list.innerHTML='<p class="empty-msg" style="text-align:center;">⏳ Завантаження імен...</p>';
+  if(!window.myDetailedReactions?.length){list.innerHTML='<p class="empty-msg" style="text-align:center;">Немає реакцій.</p>';return;}
+  const cls=getActiveClass();
+  try{await getStudentDir(cls,true);}
+  catch(e){list.innerHTML='<p class="empty-msg" style="color:var(--red);">Не вдалося завантажити імена учнів.</p>';return;}
+  let h='<ul style="list-style:none;padding:0;margin:0;">';
+  window.myDetailedReactions.forEach(r=>{
+    const [y,m,d]=r.date.split('-');
+    const resolved=stuName(cls,r.student);
+    const name=resolved===r.student&&/^-[A-Za-z0-9_-]{15,}$/.test(r.student)
+      ?'Учня немає у списку класу':resolved;
+    h+=`<li style="background:#fdfbfb;border:1px solid #eee;border-radius:8px;padding:11px;margin-bottom:9px;">
+      <div style="display:flex;justify-content:space-between;border-bottom:1px dashed #ddd;padding-bottom:4px;margin-bottom:7px;">
+        <span style="font-weight:700;color:var(--teal);">${escHtml(name)}</span><span style="font-size:1.3rem;">${escHtml(r.emoji)}</span>
+      </div>
+      <div style="font-size:.78rem;color:#888;margin-bottom:4px;">📅 ${d}.${m}.${y} | 📚 ${escHtml(r.subject)}</div>
+      <div style="font-size:.88rem;color:#444;background:#f0f8ff;padding:7px;border-radius:6px;font-style:italic;">"${escHtml(r.comment)}"</div>
+    </li>`;
+  });
+  list.innerHTML=h+'</ul>';
+};
 window.closeReactionsModal=function(){document.getElementById('reactions-modal').style.display='none';};
 window.showWeeklyWrapped=function(){confetti({particleCount:200,spread:90,origin:{y:0.6},zIndex:2000});document.getElementById('wrapped-modal').style.display='flex';document.body.style.overflow='hidden';const uid=auth.currentUser.uid;const cls=getActiveClass();Promise.all([get(child(ref(db),`homeworks/${cls}`)),get(child(ref(db),`comments/${cls}`)),get(child(ref(db),`stickers/${cls}`)),get(child(ref(db),`authors/${cls}`))]).then(([hs,cs,ss,as])=>{const a=as.exists()?as.val():{};let hw=0;if(hs.exists()){const d=hs.val();for(let dt in d)for(let s in d[dt])if(a[dt]&&a[dt][s]===uid)hw++;}document.getElementById('w-hw').innerText=hw;let com=0;if(cs.exists()){const d=cs.val();for(let dt in d)for(let s in d[dt])if(a[dt]&&a[dt][s]===uid)com+=Object.keys(d[dt][s]).length;}document.getElementById('w-com').innerText=com;let st=0;if(ss.exists()){const d=ss.val();for(let student in d)for(let k in d[student]){const rec=d[student][k];if(rec&&typeof rec==='object'){if(rec.by===uid)st++;continue;}const[dt,s]=k.split('_');if(a[dt]&&a[dt][s]===uid)st++;}}document.getElementById('w-st').innerText=st;});};
 window.closeModal=function(){document.getElementById('wrapped-modal').style.display='none';document.body.style.overflow='';};
@@ -1538,7 +1566,7 @@ window.openStickerStatsModal=async function(){
     const medal=i===0?'🥇 ':i===1?'🥈 ':i===2?'🥉 ':'';
     h+=`<li style="background:#fdfbfb;border:1px solid #eee;border-radius:8px;padding:11px;margin-bottom:9px;">
       <div style="display:flex;justify-content:space-between;align-items:center;">
-        <span style="font-weight:700;color:var(--teal);">${medal}${s.name}</span>
+        <span style="font-weight:700;color:var(--teal);">${medal}${escHtml(s.name)}</span>
         <span style="font-size:1.05rem;font-weight:800;color:#f39c12;">🌟 ${s.count}</span>
       </div>
       <div style="background:#eee;border-radius:6px;height:8px;margin-top:7px;overflow:hidden;">
