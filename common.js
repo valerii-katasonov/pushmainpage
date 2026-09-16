@@ -255,6 +255,13 @@ export async function getStudentDir(cls, force){
   return _stuDir[cls];
 }
 export function invalidateStudentDir(cls){ if(cls) delete _stuDir[cls]; else Object.keys(_stuDir).forEach(k=>delete _stuDir[k]); }
+// Чи вже прочитано список класу. Питання не пусте: половина кабінету
+// будує шляхи в базі з ключа учня, а ключ бере звідси. Поки довідника
+// немає, stuId() чесно повертає null — і той, хто цього не перевірив,
+// іде в базу за іменем або за застарілим ідентифікатором із профілю,
+// нічого не знаходить і показує «нічого немає».
+export function hasStudentDir(cls){ return !!(cls && _stuDir[cls]); }
+window.hasStudentDir = hasStudentDir;
 window.invalidateStudentDir = invalidateStudentDir;
 
 // ── КЛЮЧ ПРЕДМЕТА В БАЗІ ────────────────────────────────────────
