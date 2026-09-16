@@ -6,7 +6,7 @@
 import { ref, set, get, child, update } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { loadGradeWork, prepareGradeWork, setGradeWorkBusy, hasGradeWorkChanges } from './grade-work.js';
 import { ACTIVE_YEAR } from './director.js';
-import { db, getActiveClass, currentUserData, displayGrade, gradeClass6, calculateStudentWeightedAvg, getClassNum, LEVEL_MAX_CLASS, GRADE_WEIGHTS, dayKeys, dayNamesUA, showToast, normalizeTimeRange, localDateString, summarizeAttendanceSlots, gradeTypesCache, escJs, escHtml, notifyEvent, logAction, getUserRoles, getUsersSnap, stuName, gradeWritePaths, journalGradeKey, journalBaseDate, journalSlot, expandAltSubjects, isBreakItem, insertSlot, removeSlot, makeBreak, withBreaks, slotBounds, hhmmFromMins, emailKey } from './common.js';
+import { db, getActiveClass, currentUserData, displayGrade, gradeClass6, calculateStudentWeightedAvg, validDailyGrade, getClassNum, LEVEL_MAX_CLASS, GRADE_WEIGHTS, dayKeys, dayNamesUA, showToast, normalizeTimeRange, localDateString, summarizeAttendanceSlots, gradeTypesCache, escJs, escHtml, notifyEvent, logAction, getUserRoles, getUsersSnap, stuName, gradeWritePaths, journalGradeKey, journalBaseDate, journalSlot, expandAltSubjects, isBreakItem, insertSlot, removeSlot, makeBreak, withBreaks, slotBounds, hhmmFromMins, emailKey } from './common.js';
 
 // globalTeacherAccess is reassigned only in this file (openVisualMatrixModal)
 // and read from common.js (window.getDefaultTeacher) — plain export/import.
@@ -127,6 +127,23 @@ window.selectGradeLevel = function(v){
   document.querySelectorAll('#gep-level-btns .level-btn')
     .forEach(b => b.classList.toggle('active', b.dataset.lv === v));
 };
+function gradeModifiersAllowed(cls){
+  return journalScaleMax===6&&(journalNumericScale||getClassNum(cls)>LEVEL_MAX_CLASS);
+}
+function syncGradeModifierButtons(){
+  const value=document.getElementById('gep-value')?.value.trim().replace('−','-')||'';
+  document.querySelectorAll('#gep-modifiers button').forEach(btn=>
+    btn.classList.toggle('active',value.endsWith(btn.dataset.mod)));
+}
+window.setGradeModifier=function(mod){
+  if(!gradeModifiersAllowed(gepCls))return;
+  const input=document.getElementById('gep-value');
+  const match=/^([1-6])([+\-−])?$/.exec(input.value.trim());
+  if(!match)return showToast('⚠️ Спершу введіть бал від 1 до 6.');
+  const old=match[2]==='−'?'-':match[2];
+  input.value=match[1]+(old===mod?'':mod);
+  syncGradeModifierButtons();input.focus();
+};
 
 function openGradeEditor(cls,subj,dateStr,student,yMonth,cellEl,existingVal,existingType,presetType){
   if(gradeSaving)return;
@@ -134,8 +151,10 @@ function openGradeEditor(cls,subj,dateStr,student,yMonth,cellEl,existingVal,exis
   gepCls=cls;gepSubj=subj;gepDate=dateStr;gepStudent=student;gepYMonth=yMonth;gepCellEl=cellEl;gepType=existingType||presetType||'П';
   document.getElementById('gep-label').textContent=`${stuName(cls,student)} | ${subj} | ${journalBaseDate(dateStr).split('-').reverse().join('.')} · стовпець ${journalSlot(dateStr)}`;
   document.getElementById('gep-value').value=existingVal||'';
-  document.getElementById('gep-value').placeholder=`1–${journalScaleMax}`;
+  document.getElementById('gep-value').placeholder=gradeModifiersAllowed(cls)?'1–6, напр. 5+':`1–${journalScaleMax}`;
   renderLevelButtons(cls, existingVal);
+  document.getElementById('gep-modifiers').style.display=gradeModifiersAllowed(cls)?'flex':'none';
+  syncGradeModifierButtons();
   renderGradeTypeButtons();
   selectGradeType(gepType);
   const popup=document.getElementById('grade-editor-popup');popup.style.display='block';
@@ -151,7 +170,7 @@ function openGradeEditor(cls,subj,dateStr,student,yMonth,cellEl,existingVal,exis
 window.closeGradeEditor=function(){if(gradeSaving)return;document.getElementById('grade-editor-popup').style.display='none';gepCellEl=null;};
 window.confirmGrade=async function(){
   if(gradeSaving)return;
-  let val=document.getElementById('gep-value').value.trim();
+  let val=document.getElementById('gep-value').value.trim().replace('−','-');
   if(!val){
     if(hasGradeWorkChanges())return showToast('⚠️ Спершу вкажіть оцінку. Фото роботи не зберігаються без оцінки.');
     return window.deleteGrade();
@@ -160,8 +179,10 @@ window.confirmGrade=async function(){
   // і будь-яке порівняння почне брехати
   const up=val.toUpperCase();
   if(!journalNumericScale&&getClassNum(gepCls)<=LEVEL_MAX_CLASS&&['П','С','Д','В'].includes(up)) val=up;
-  else if(!/^[1-9]\d*$/.test(val)||Number(val)>journalScaleMax){
-    showToast(`⚠️ Оцінка має бути цілим числом від 1 до ${journalScaleMax}!`);return;
+  else if(!validDailyGrade(val,journalScaleMax)||(/[+\-]$/.test(val)&&!gradeModifiersAllowed(gepCls))){
+    showToast(gradeModifiersAllowed(gepCls)
+      ? '⚠️ Оцінка: від 1 до 6; можна додати + або −.'
+      : `⚠️ Оцінка має бути цілим числом від 1 до ${journalScaleMax}!`);return;
   }
   // Основа і дзеркало — одним атомарним записом.
   // Під try: якщо запис не пройде, вікно не має закриватися з бадьорим
@@ -202,6 +223,7 @@ window.deleteGrade=async function(){
   logAction('grade_del',{cls:gepCls,target:stuName(gepCls,gepStudent),subject:gepSubj,date:gepDate});
 };
 document.getElementById('gep-value').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();window.confirmGrade();}if(e.key==='Escape'){e.preventDefault();window.closeGradeEditor();}});
+document.getElementById('gep-value').addEventListener('input',syncGradeModifierButtons);
 document.addEventListener('click',function(e){const p=document.getElementById('grade-editor-popup');if(p.style.display==='block'&&!p.contains(e.target)&&!e.target.closest('.g-cell'))closeGradeEditor();});
 // ══════════════════════════════════════════════════════════════════
 //  ПІДСУМКОВІ (СЕМЕСТРОВІ) ОЦІНКИ
@@ -301,7 +323,7 @@ window.renderSemesterTable=async function(){
     students.forEach(st=>{
       const avg=calculateStudentWeightedAvg(per[st.sid].g,per[st.sid].t);
       const cnt=Object.keys(per[st.sid].g).length;
-      const auto=avg!==null?String(Math.round(avg)):'';
+      const auto=avg!==null?String(Math.min(scaleMax,Math.max(1,Math.round(avg)))):'';
       const cur=saved[st.sid]?String(saved[st.sid].value):'';
       if(cur)filled++;
       const changed=saved[st.sid]&&saved[st.sid].auto&&String(saved[st.sid].auto)!==String(saved[st.sid].value);
@@ -645,8 +667,9 @@ window.renderJournalTable=async function(){
         if(attInfo){const ac=attInfo.status==='absent'?'att-absent':'att-late';const al=attInfo.status==='absent'?'н':'з';cell+=`<span class="${ac}" data-tip="${attInfo.reason}">${al}</span>`;}
         rowHtml+=`<td class="${isToday?'today-col':''}">${cell}</td>`;
       });
-      const avgGc=avg!==null?(journalNumericScale?'g-scale':gradeClass6(Math.round(avg))):'';
-      rowHtml+=`<td class="avg-col"><span class="${avgGc}" style="border-radius:6px;padding:.16em .39em;font-weight:800;">${displayGrade(avgStr!=='-'?String(Math.round(avg)):'-',cls,journalNumericScale)}</span><br><span style="font-size:.78em;color:#aaa;">${avgStr}</span></td>`;
+      const roundedAvg=avg!==null?Math.min(journalScaleMax,Math.max(1,Math.round(avg))):null;
+      const avgGc=roundedAvg!==null?(journalNumericScale?'g-scale':gradeClass6(roundedAvg)):'';
+      rowHtml+=`<td class="avg-col"><span class="${avgGc}" style="border-radius:6px;padding:.16em .39em;font-weight:800;">${displayGrade(roundedAvg!==null?String(roundedAvg):'-',cls,journalNumericScale)}</span><br><span style="font-size:.78em;color:#aaa;">${avgStr}</span></td>`;
       rowHtml+='</tr>';tbody+=rowHtml;
     });
     tbody+='</tbody>';
