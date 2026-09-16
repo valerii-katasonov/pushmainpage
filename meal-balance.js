@@ -2,7 +2,7 @@
 // витрати обчислюються з фактичного харчування та замовлень на винос.
 import { ref, get, child, push, update } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { db, currentUserData, showToast, escHtml, localDateString, stuName } from './common.js';
-import { computeMyMealStats, loadMealPrices, mealCost, MEAL_CUTOFF_HOUR, BREAKFAST_CUTOFF_HOUR, TA_CUTOFF_HOUR } from './kitchen.js';
+import { computeMyMealStats, loadMealPrices, mealCost, mealPriceAt, MEAL_CUTOFF_HOUR, BREAKFAST_CUTOFF_HOUR, TA_CUTOFF_HOUR } from './kitchen.js';
 
 const money=n=>(Math.round((Number(n)||0)*100)/100);
 const moneyText=n=>money(n).toFixed(2);
@@ -40,11 +40,7 @@ async function mealCounts(from,to,cls,sid){
   }
   return all;
 }
-export function priceAt(date,current,history){
-  const all=Object.keys(history||{}).sort(),keys=all.filter(d=>d<=date);
-  return keys.length ? (history[keys[keys.length-1]]||current||{})
-       : all.length ? (history[all[0]]||current||{}) : (current||{});
-}
+export const priceAt=mealPriceAt;
 async function pricedMeals(from,to,cls,sid,current,history){
   if(!from||from>to)return {total:0,lunch:0,brk:0,snack:0};
   const changes=Object.keys(history||{}).filter(d=>d>from&&d<=to).sort();
@@ -68,7 +64,7 @@ async function takeawayCostHistoric(from,to,cls,sid,items,history){
   for(let i=0;i<dates.length;i+=60){
     const part=dates.slice(i,i+60);
     const sums=await Promise.all(part.map(async date=>{
-      const s=await get(child(ref(db),`takeaway_orders/${date}/${cls}/${sid}`)).catch(()=>null),order=s&&s.exists()?s.val():{};
+      const s=await get(child(ref(db),`takeaway_orders/${date}/${cls}/${sid}`)),order=s.exists()?s.val():{};
       return Object.entries(order||{}).reduce((n,[id,q])=>n+(Number(q)||0)*takeawayPrice(id,date,items,history),0);
     }));
     total+=sums.reduce((a,b)=>a+b,0);
@@ -76,57 +72,108 @@ async function takeawayCostHistoric(from,to,cls,sid,items,history){
   return money(total);
 }
 
+export function ledgerTotals(from,to,ledger){
+  const parts={lunch:0,brk:0,snack:0,takeaway:0,total:0},missing=[];
+  if(!from||from>to)return {parts,missing};
+  for(const date of datesBetween(from,to)){
+    const row=ledger?.[date];
+    if(!row||!Number.isFinite(Number(row.total))){missing.push(date);continue;}
+    parts.lunch=money(parts.lunch+Number(row.lunch||0));
+    parts.brk=money(parts.brk+Number(row.breakfast||0));
+    parts.snack=money(parts.snack+Number(row.snack||0));
+    parts.takeaway=money(parts.takeaway+Number(row.takeaway||0));
+    parts.total=money(parts.total+Number(row.total));
+  }
+  return {parts,missing};
+}
+function contiguousRanges(dates){
+  const ranges=[];
+  for(const date of dates){
+    const last=ranges.at(-1);
+    if(last&&dayBefore(date)===last.to)last.to=date;
+    else ranges.push({from:date,to:date});
+  }
+  return ranges;
+}
+
 export async function computeMealAccount(cls,sid,entries,now=new Date()){
   const start=accountStart(entries),today=iso(now);
-  const prices=await loadMealPrices(true);
+  const prices=await loadMealPrices(true,true);
   const [itemSnap,priceHistorySnap,taHistorySnap]=await Promise.all([
     get(child(ref(db),'takeaway_items')),get(child(ref(db),'meal_price_history')),get(child(ref(db),'takeaway_price_history'))
   ]);
   const items=itemSnap.exists()?itemSnap.val():{};
   const priceHistory=priceHistorySnap.exists()?priceHistorySnap.val():{};
   const taHistory=taHistorySnap.exists()?taHistorySnap.val():{};
-  if(!start)return {start:'',entries,prices,...balanceResult(credited(entries,today),0,0),parts:{}};
+  if(!start||start>today)return {start,entries,prices,...balanceResult(credited(entries,today),0,0),parts:{}};
+  const [ledgerSnap, adjustmentSnap]=await Promise.all([
+    get(child(ref(db),`meal_ledger/${cls}/${sid}`)),
+    get(child(ref(db),`meal_ledger_adjustments/${cls}/${sid}`))
+  ]);
+  const ledger=ledgerSnap.exists()?ledgerSnap.val():{};
+  const adjustments=adjustmentSnap.exists()?adjustmentSnap.val():{};
   const pastEnd=dayBefore(today);
-  const pastMeals=await pricedMeals(start,pastEnd,cls,sid,prices,priceHistory);
-  const pastTa=await takeawayCostHistoric(start,pastEnd,cls,sid,items,taHistory);
-  const todayCounts=(await mealCounts(today,today,cls,sid));
+  const sealed=ledgerTotals(start,pastEnd,ledger);
+  const pastMeals={lunch:sealed.parts.lunch,brk:sealed.parts.brk,snack:sealed.parts.snack,
+    total:money(sealed.parts.lunch+sealed.parts.brk+sealed.parts.snack)};
+  let pastTa=sealed.parts.takeaway;
+  for(const range of contiguousRanges(sealed.missing)){
+    const dynamic=await pricedMeals(range.from,range.to,cls,sid,prices,priceHistory);
+    for(const k of Object.keys(pastMeals))pastMeals[k]=money(pastMeals[k]+dynamic[k]);
+    pastTa=money(pastTa+await takeawayCostHistoric(range.from,range.to,cls,sid,items,taHistory));
+  }
+  const todaySealed=ledger[today]&&Number.isFinite(Number(ledger[today].total));
+  const todayCounts=todaySealed?{lunch:0,brk:0,snack:0}:await mealCounts(today,today,cls,sid);
   const todayPrices=priceAt(today,prices,priceHistory);
-  const brkCost=money(todayCounts.brk*todayPrices.breakfast);
-  const lunchCost=money(todayCounts.lunch*todayPrices.lunch);
-  const snackCost=money(todayCounts.snack*todayPrices.snack);
-  const todayTa=await takeawayCostHistoric(today,today,cls,sid,items,taHistory);
-  const brkClosed=cutoffState(today,BREAKFAST_CUTOFF_HOUR,now,today);
-  const mealClosed=cutoffState(today,MEAL_CUTOFF_HOUR,now,today);
-  const taClosed=cutoffState(today,TA_CUTOFF_HOUR,now,today);
-  const charged=money(pastMeals.total+pastTa+(brkClosed?brkCost:0)+(mealClosed?lunchCost+snackCost:0)+(taClosed?todayTa:0));
+  const brkCost=todaySealed?money(ledger[today].breakfast):money(todayCounts.brk*todayPrices.breakfast);
+  const lunchCost=todaySealed?money(ledger[today].lunch):money(todayCounts.lunch*todayPrices.lunch);
+  const snackCost=todaySealed?money(ledger[today].snack):money(todayCounts.snack*todayPrices.snack);
+  const todayTa=todaySealed?money(ledger[today].takeaway):await takeawayCostHistoric(today,today,cls,sid,items,taHistory);
+  const brkClosed=todaySealed||cutoffState(today,BREAKFAST_CUTOFF_HOUR,now,today);
+  const mealClosed=todaySealed||cutoffState(today,MEAL_CUTOFF_HOUR,now,today);
+  const taClosed=todaySealed||cutoffState(today,TA_CUTOFF_HOUR,now,today);
+  const adjustmentTotal=money(Object.values(adjustments).filter(x=>x&&x.date>=start&&x.date<=today)
+    .reduce((sum,x)=>sum+Number(x.amount||0),0));
+  const charged=money(pastMeals.total+pastTa+(brkClosed?brkCost:0)+(mealClosed?lunchCost+snackCost:0)+(taClosed?todayTa:0)+adjustmentTotal);
   const pending=money((brkClosed?0:brkCost)+(mealClosed?0:lunchCost+snackCost)+(taClosed?0:todayTa));
   const chargedParts={
     lunch:money(pastMeals.lunch+(mealClosed?lunchCost:0)),
     breakfast:money(pastMeals.brk+(brkClosed?brkCost:0)),
     snack:money(pastMeals.snack+(mealClosed?snackCost:0)),
-    takeaway:money(pastTa+(taClosed?todayTa:0))
+    takeaway:money(pastTa+(taClosed?todayTa:0)),
+    adjustments:adjustmentTotal
   };
-  return {start,entries,prices,parts:{pastMeals,pastTa,brkCost,lunchCost,snackCost,todayTa,chargedParts},...balanceResult(credited(entries,today),charged,pending)};
+  return {start,entries,prices,parts:{pastMeals,pastTa,brkCost,lunchCost,snackCost,todayTa,
+    chargedParts,ledger,adjustments,unsealed:sealed.missing.length},
+    ...balanceResult(credited(entries,today),charged,pending)};
 }
 
 function renderAccount(box,a,name,editable){
   const cls=a.balance<0?' bad':a.balance<50?' low':'';
   const rows=Object.entries(a.entries||{}).sort((x,y)=>String(y[1]?.date||'').localeCompare(String(x[1]?.date||''))).slice(0,12);
+  const ledgerRows=Object.entries(a.parts.ledger||{}).filter(([date])=>date>=a.start)
+    .sort((x,y)=>y[0].localeCompare(x[0])).slice(0,30);
+  const adjustmentRows=Object.values(a.parts.adjustments||{})
+    .sort((x,y)=>String(y.date||'').localeCompare(String(x.date||''))).slice(0,20);
   box.innerHTML=`<div class="mb-head${cls}"><span>${escHtml(name||'Рахунок')}</span><b>${moneyText(a.balance)} zł</b><small>надходження ${moneyText(a.income)} · списано ${moneyText(a.charged)}</small></div>
     ${a.pending?`<div class="mb-pending">Після сьогоднішніх дедлайнів: <b>${moneyText(a.afterPending)} zł</b> (очікує списання ${moneyText(a.pending)} zł)</div>`:''}
-    ${a.start?`<div class="mb-note">Харчування рахується від ${escHtml(a.start)}. Списано: обіди ${moneyText(a.parts.chargedParts?.lunch||0)} · сніданки ${moneyText(a.parts.chargedParts?.breakfast||0)} · підвечірки ${moneyText(a.parts.chargedParts?.snack||0)} · винос ${moneyText(a.parts.chargedParts?.takeaway||0)} zł.</div>`:'<div class="mb-note">Рахунок ще не відкрито: додайте перше надходження.</div>'}
-    ${editable?`<div class="mb-form"><label>Дата надходження<input type="date" id="mb-date" value="${iso(new Date())}"></label><label>Рахувати харчування від<input type="date" id="mb-start" value="${a.start||iso(new Date())}" ${a.start?'disabled':''}></label><input type="text" id="mb-amount" inputmode="decimal" placeholder="Сума, zl"><input type="text" id="mb-note" maxlength="120" placeholder="Примітка"><button id="mb-add" onclick="addMealAccountEntry()">Додати</button><small>${a.start?`Початок розрахунку зафіксовано: ${escHtml(a.start)}. `:''}Для повернення або корекції введіть від’ємну суму.</small></div>`:''}
-    <details class="mb-history"><summary>Історія надходжень і корекцій</summary>${rows.length?rows.map(([,x])=>`<div><span>${escHtml(x.date||'')}</span><b class="${Number(x.amount)<0?'neg':''}">${Number(x.amount)>0?'+':''}${moneyText(x.amount)} zł</b><small>${escHtml(x.note||'')}</small></div>`).join(''):'<p class="empty-msg">Записів ще немає.</p>'}</details>`;
+    ${a.start?`<div class="mb-note">Харчування рахується від ${escHtml(a.start)}. Списано: обіди ${moneyText(a.parts.chargedParts?.lunch||0)} · сніданки ${moneyText(a.parts.chargedParts?.breakfast||0)} · підвечірки ${moneyText(a.parts.chargedParts?.snack||0)} · винос ${moneyText(a.parts.chargedParts?.takeaway||0)} · корекції ${moneyText(a.parts.chargedParts?.adjustments||0)} zł.</div>`:'<div class="mb-note">Рахунок ще не відкрито: додайте перше надходження.</div>'}
+    ${a.parts.unsealed?`<div class="mb-pending">Ще не зафіксовано днів: ${a.parts.unsealed}. Для них показано попередній розрахунок; після нічного закриття суми стануть незмінними.</div>`:''}
+    ${editable?`<div class="mb-form"><label>Дата надходження<input type="date" id="mb-date" value="${iso(new Date())}"></label><label>Рахувати харчування від<input type="date" id="mb-start" value="${a.start||iso(new Date())}" ${a.start?'disabled':''}></label><input type="text" id="mb-amount" inputmode="decimal" placeholder="Сума, zl"><input type="text" id="mb-note" maxlength="120" placeholder="Примітка"><button id="mb-add" onclick="addMealAccountEntry()">Додати</button><small>${a.start?`Початок розрахунку зафіксовано: ${escHtml(a.start)}. `:''}Для повернення платежу введіть від’ємну суму.</small></div>`:''}
+    <details class="mb-history"><summary>Історія надходжень і корекцій</summary>${rows.length?rows.map(([,x])=>`<div><span>${escHtml(x.date||'')}</span><b class="${Number(x.amount)<0?'neg':''}">${Number(x.amount)>0?'+':''}${moneyText(x.amount)} zł</b><small>${escHtml(x.note||'')}</small></div>`).join(''):'<p class="empty-msg">Записів ще немає.</p>'}</details>
+    <details class="mb-history mb-ledger"><summary>Щоденний журнал списань</summary>${ledgerRows.length?ledgerRows.map(([date,x])=>`<div><span>${escHtml(date)}</span><b>${moneyText(x.total)} zł</b><small>сніданок ${moneyText(x.breakfast)}${x.breakfastChoice?` (${escHtml(x.breakfastChoice)})`:''} · обід ${moneyText(x.lunch)}${x.lunchChoice?` (${escHtml(x.lunchChoice)})`:''} · підвечірок ${moneyText(x.snack)} · винос ${moneyText(x.takeaway)}</small></div>`).join(''):'<p class="empty-msg">Закритих днів ще немає.</p>'}</details>
+    <details class="mb-history"><summary>Корекції списань</summary>${adjustmentRows.length?adjustmentRows.map(x=>`<div><span>${escHtml(x.date||'')}</span><b class="${Number(x.amount)<0?'neg':''}">${Number(x.amount)>0?'+':''}${moneyText(x.amount)} zł</b><small>${escHtml(x.reason||'')}</small></div>`).join(''):'<p class="empty-msg">Корекцій немає.</p>'}</details>
+    ${editable&&ledgerRows.length?`<div class="mb-adjust"><b>Виправити закритий день</b><p>Початкове списання лишиться в журналі. Плюс — додаткове списання, мінус — повернення.</p><div><input type="date" id="mb-adj-date" value="${escHtml(ledgerRows[0][0])}"><input type="text" id="mb-adj-amount" inputmode="decimal" placeholder="+ або − сума, zł"><input type="text" id="mb-adj-reason" maxlength="160" placeholder="Причина корекції"><button id="mb-adj-add" onclick="addMealChargeAdjustment()">Додати корекцію</button></div></div>`:''}`;
 }
 
-let selected={cls:'',sid:'',name:'',start:'',entries:{}};
-let accountSaving=false,kitchenLoadSeq=0,familyLoadSeq=0,familyCache=null;
+let selected={cls:'',sid:'',name:'',start:'',entries:{},ledger:{}};
+let accountSaving=false,adjustmentSaving=false,kitchenLoadSeq=0,familyLoadSeq=0,familyCache=null;
 window.invalidateMealBalance=()=>{familyCache=null;};
 window.loadMealAccountStudents=async function(){
   kitchenLoadSeq++;
   const cls=document.getElementById('k-balance-class')?.value||'';
   const sel=document.getElementById('k-balance-student');if(!sel)return;
-  selected={cls,sid:'',name:'',start:'',entries:{}};sel.innerHTML='<option value="">Оберіть дитину...</option>';
+  selected={cls,sid:'',name:'',start:'',entries:{},ledger:{}};sel.innerHTML='<option value="">Оберіть дитину...</option>';
   if(!cls)return;
   try{
     const s=await get(child(ref(db),`students_list/${cls}`));
@@ -141,17 +188,17 @@ window.loadKitchenMealAccount=async function(){
   const cls=document.getElementById('k-balance-class')?.value||'',sid=document.getElementById('k-balance-student')?.value||'',box=document.getElementById('k-meal-balance');
   if(!box||!cls||!sid){if(box)box.innerHTML='<p class="empty-msg">Оберіть клас і дитину.</p>';return;}
   const seq=++kitchenLoadSeq;
-  box.innerHTML='<p class="empty-msg">Рахуємо...</p>';selected={cls,sid,name:stuName(cls,sid),start:'',entries:{}};
+  box.innerHTML='<p class="empty-msg">Рахуємо...</p>';selected={cls,sid,name:stuName(cls,sid),start:'',entries:{},ledger:{}};
   try{
     const s=await get(child(ref(db),`meal_accounts/${cls}/${sid}`)),entries=s.exists()?s.val():{};
     const a=await computeMealAccount(cls,sid,entries);
     if(seq!==kitchenLoadSeq||document.getElementById('k-balance-class')?.value!==cls||document.getElementById('k-balance-student')?.value!==sid)return;
-    selected.entries=entries;selected.start=a.start;renderAccount(box,a,selected.name,true);
+    selected.entries=entries;selected.start=a.start;selected.ledger=a.parts.ledger||{};renderAccount(box,a,selected.name,true);
   }catch(e){if(seq===kitchenLoadSeq)box.innerHTML=`<p class="empty-msg">Помилка: ${escHtml(e.message)}</p>`;}
 };
 window.addMealAccountEntry=async function(){
   const amount=Number(String(document.getElementById('mb-amount')?.value||'').replace(',','.')),date=document.getElementById('mb-date')?.value,startDate=selected.start||document.getElementById('mb-start')?.value,note=(document.getElementById('mb-note')?.value||'').trim();
-  if(accountSaving||!selected.cls||!selected.sid)return;if(!Number.isFinite(amount)||!amount||Math.abs(amount)>100000)return alert('Введіть коректну ненульову суму.');if(!date||!startDate)return alert('Вкажіть дати.');
+  if(accountSaving||!selected.cls||!selected.sid)return;if(!Number.isFinite(amount)||!money(amount)||Math.abs(amount)>100000)return alert('Введіть коректну ненульову суму щонайменше 0,01 zł.');if(!date||!startDate)return alert('Вкажіть дати.');
   if(amount<0&&!selected.start)return alert('Спочатку додайте перше надходження і відкрийте рахунок.');
   const button=document.getElementById('mb-add');accountSaving=true;if(button)button.disabled=true;
   try{
@@ -167,6 +214,28 @@ window.addMealAccountEntry=async function(){
   }catch(e){
     alert('Не вдалося додати операцію: '+e.message);
   }finally{accountSaving=false;if(button&&document.body.contains(button))button.disabled=false;}
+};
+
+window.addMealChargeAdjustment=async function(){
+  if(adjustmentSaving||!selected.cls||!selected.sid||!selected.start)return;
+  const date=document.getElementById('mb-adj-date')?.value||'';
+  const amount=Number(String(document.getElementById('mb-adj-amount')?.value||'').replace(',','.'));
+  const reason=String(document.getElementById('mb-adj-reason')?.value||'').trim();
+  if(!date||date<selected.start||date>iso(new Date())||!selected.ledger?.[date])return alert('Оберіть день, який уже зафіксовано в журналі.');
+  if(!Number.isFinite(amount)||!money(amount)||Math.abs(amount)>100000)return alert('Введіть ненульову суму корекції щонайменше 0,01 zł.');
+  if(!reason)return alert('Вкажіть причину корекції.');
+  const button=document.getElementById('mb-adj-add');
+  adjustmentSaving=true;if(button)button.disabled=true;
+  try{
+    const path=`meal_ledger_adjustments/${selected.cls}/${selected.sid}`;
+    const id=push(ref(db,path)).key;
+    await update(ref(db),{[`${path}/${id}`]:{
+      amount:money(amount),date,reason:reason.slice(0,160),by:currentUserData?.email||'',ts:Date.now()
+    }});
+    if(window.invalidateMealBalance)window.invalidateMealBalance();
+    showToast('✅ Корекцію додано');await window.loadKitchenMealAccount();
+  }catch(e){alert('Не вдалося додати корекцію: '+e.message);}
+  finally{adjustmentSaving=false;if(button&&document.body.contains(button))button.disabled=false;}
 };
 
 window.loadFamilyMealBalance=async function(){
