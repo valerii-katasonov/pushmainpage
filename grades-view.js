@@ -48,7 +48,8 @@ import { ref, get, child, query, orderByKey, startAt, endAt, onValue }
   from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { db, currentUserData, getActiveClass, escHtml, escJs, mondayOf,
          localDateString, displayGrade, gradeClass6, levelNum, getGradeWeight,
-         calculateStudentWeightedAvg, renderGradeFormulaInfo, dayNamesUA, dayKeys, journalBaseDate, journalSlot, stuId }
+         calculateStudentWeightedAvg, renderGradeFormulaInfo, dayNamesUA, dayKeys, journalBaseDate, journalSlot,
+         stuId, hasStudentDir, getStudentDir }
   from './common.js';
 
 // Кабінети батьків і учня лежать у розмітці ОДНОЧАСНО, тож «взяти той
@@ -154,6 +155,30 @@ function subscribeScales(cls){
 // чесне «не визначено» краще за вічний спінер.
 let gvRetry=null;
 const RETRY_LIMIT=14;
+
+// ЧОМУ МАЛО ЗНАТИ КЛАС І ДИТИНУ.
+//
+// Коментарі й реакції лежать у вузлах класу під КЛЮЧЕМ учня зі списку
+// класу (-P-K75Gb…), а не під іменем. Цей ключ дає stuId() — із довідника
+// класу, який кабінет дочитує окремо й пізніше, ніж малює екран.
+//
+// Поки довідника немає, stuId() повертає null, і mySid() відкочується на
+// ідентифікатор із профілю або взагалі на імʼя. Дані при цьому приходять
+// правильні — просто свій рядок у них шукається під чужим ключем, і
+// батько бачить «Цього тижня оцінок і коментарів немає» над днем, у
+// якому вчитель залишив коментар. Саме це й було видно при перезавантаженні
+// сторінки на вкладці «Оцінки»: заходиш на вкладку — все на місці (довідник
+// уже дочитано), перезавантажуєш — порожньо.
+//
+// Тому не малюємо, доки довідник не приїхав. getStudentDir() або віддасть
+// уже прочитане, або дочитає — і тоді малюємо один раз, з правильним ключем.
+function waitForDir(cls, attempt, again){
+  if(hasStudentDir(cls)) return true;
+  if(attempt>=RETRY_LIMIT) return true;   // довше не чекаємо: краще показати з тим, що є
+  getStudentDir(cls).then(()=>again(attempt+1)).catch(()=>{ planRetry(attempt, again); });
+  return false;
+}
+
 function planRetry(attempt, run){
   if(attempt>=RETRY_LIMIT) return false;
   clearTimeout(gvRetry);
@@ -294,12 +319,16 @@ export function renderGradesWeek(weekStart, attempt=0){
     }
     box.innerHTML = '<p class="empty-msg">Дитину не визначено.</p>'; return;
   }
+  if(!waitForDir(cls, attempt, n=>renderGradesWeek(weekStart,n))){
+    if(!(box.innerHTML||'').trim()) box.innerHTML='<p class="empty-msg">Завантаження...</p>';
+    return;
+  }
   stopRetry();
-  gvCls=cls; gvSid=sid;
-  gvName=currentUserData?.studentName||''; gvProfileSid=currentUserData?.studentId||'';
+  gvCls=cls; gvSid=mySid(cls); gvName=currentUserData?.studentName||'';
+  gvProfileSid=currentUserData?.studentId||'';
   gvWeek = weekStart || gvWeek || mondayOf(localDateString);
   subscribeScales(cls);
-  subscribeMirror(cls,sid);
+  subscribeMirror(cls,gvSid);
   subscribeWeek(cls,weekDays(gvWeek));
   paintWeek();
 }
@@ -382,12 +411,16 @@ export function renderGradesSubject(subj, attempt=0){
     }
     box.innerHTML = '<p class="empty-msg">Дитину не визначено.</p>'; return;
   }
+  if(!waitForDir(cls, attempt, n=>renderGradesSubject(subj,n))){
+    if(!(box.innerHTML||'').trim()) box.innerHTML='<p class="empty-msg">Завантаження...</p>';
+    return;
+  }
   stopRetry();
-  gvCls=cls; gvSid=sid;
-  gvName=currentUserData?.studentName||''; gvProfileSid=currentUserData?.studentId||'';
+  gvCls=cls; gvSid=mySid(cls); gvName=currentUserData?.studentName||'';
+  gvProfileSid=currentUserData?.studentId||'';
   if(subj) gvSubject = subj;
   subscribeScales(cls);
-  subscribeMirror(cls,sid);
+  subscribeMirror(cls,gvSid);
   paintSubject();
 }
 
