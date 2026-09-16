@@ -285,6 +285,21 @@ export function pickFresher(a, b){
   return tb > ta ? b : a;
 }
 
+// Старі відповіді можуть жити під ім'ям, нові — під ID. Пізніший запис
+// іноді містить лише змінене поле; зберігаємо інший вибір А/Б, якщо його
+// явно не скасували разом із відповідним прийомом їжі.
+export function mealDayFresher(a,b){
+  const newest=pickFresher(a,b);
+  if(!newest)return null;
+  const older=newest===a?b:a;
+  const row={...newest};
+  if(older){
+    if(row.pick===undefined && row.lunch!==0 && row.lunch!==false && ['a','b'].includes(older.pick))row.pick=older.pick;
+    if(row.breakfastPick===undefined && row.breakfast!==0 && row.breakfast!==false && ['a','b'].includes(older.breakfastPick))row.breakfastPick=older.breakfastPick;
+  }
+  return row;
+}
+
 export function takeawayPriceAt(id,date,items,history){
   const prices=history?.[id]||{},all=Object.keys(prices).sort();
   const past=all.filter(d=>d<=date);
@@ -300,7 +315,8 @@ async function readMealCopies(base,sid,name){
   };
   const keys=name&&name!==sid?[sid,name]:[sid];
   const copies=await Promise.all(keys.map(read));
-  return pickFresher(copies[0],copies[1]);
+  return base.startsWith('meal_day/') ? mealDayFresher(copies[0],copies[1])
+    : pickFresher(copies[0],copies[1]);
 }
 
 export function dayFieldPatch(plan, field, value, wd){
@@ -598,7 +614,7 @@ export async function loadWeekCounts(){
       const brkChoice = breakfastChoicePair(menuDay);
       const hasBrkChoice = !!brkChoice;
       const wd = weekdayIdx(date);
-      let lunch=0, snack=0, brk=0, pa=0, pb=0, unpicked=0, bpa=0, bpb=0, absent=0, off=0, unset=0;
+      let lunch=0, snack=0, brk=0, pa=0, pb=0, bpa=0, bpb=0, absent=0, off=0, unset=0;
       const classes = {}, skips = [], extras = [], unanswered = [], orphans=[];
       for(let i=1;i<=11;i++){
         const cls = `class_${i}`;
@@ -611,7 +627,7 @@ export async function loadWeekCounts(){
           const name = students[cls][key];
           const plan = byKeyOrName(plans[cls], key, name);
           const isAbsent = !!(absentToday[key] || absentToday[name]);
-          const ov = byKeyOrName(overrides[cls], key, name);
+          const ov = mealDayFresher(overrides[cls]?.[key],overrides[cls]?.[name]);
           const e = effectiveMeals(plan, ov, isAbsent, wd);
           if(e.absent){ absent++; continue; }
           const permanentlyOff = plan && plan.lunch === false;
@@ -626,7 +642,6 @@ export async function loadWeekCounts(){
             if(hasChoice){
               const p = pickedSecond(menuDay, ov);
               if(p === 'b'){ pb++; cbb++; } else { pa++; ca++; }
-              if(ov?.pick!=='a'&&ov?.pick!=='b')unpicked++;
             }
           }
           else if(permanentlyOff){ off++; }
@@ -646,7 +661,7 @@ export async function loadWeekCounts(){
         }
         if(cl||cs||cb) classes[i] = { lunch:cl, snack:cs, brk:cb, a:ca, b:cbb, ba:cba, bb:cbbb };
       }
-      return { date, lunch, snack, brk, pa, pb, unpicked, bpa, bpb, hasChoice, hasBrkMenu, hasBrkChoice,
+      return { date, lunch, snack, brk, pa, pb, bpa, bpb, hasChoice, hasBrkMenu, hasBrkChoice,
                menuA:choice?choice.a:'', menuB:choice?choice.b:'',
                breakfastA:brkChoice?brkChoice.a:'', breakfastB:brkChoice?brkChoice.b:'',
                absent, off, unset, classes, skips, extras, unanswered, orphans };
@@ -659,7 +674,7 @@ export async function loadWeekCounts(){
           ? `<b>—</b><span>${escHtml(human(today.date))}: ${escHtml(today.closed)}</span>
              <div class="k-total-snack">школа не годує цього дня</div>`
           : `<b>${today.lunch}</b><span class="k-meal-summary">обідів на ${escHtml(human(today.date))}</span>
-             ${today.hasChoice?`<span class="k-meal-split">А <strong>${today.pa}</strong><i>/</i> Б <strong>${today.pb}</strong></span><div class="k-total-snack">Без вибору: ${today.unpicked||0} (планово готуємо А)</div>`:''}
+             ${today.hasChoice?`<span class="k-meal-split">А <strong>${today.pa}</strong><i>/</i> Б <strong>${today.pb}</strong></span>`:''}
              <div class="k-total-snack">${today.brk} сніданків${today.hasBrkChoice?` (А ${today.bpa} / Б ${today.bpb})`:''}${!today.hasBrkMenu&&today.brk?' (меню ще немає)':''} · ${today.snack} підвечірків</div>`}
       </div>
       <div class="k-sub">відсутні: ${today.absent} · не харчуються: ${today.off} · відмови: ${today.skips.length}${today.extras.length ? ` · <b style="color:var(--green);">разові обіди: ${today.extras.length}</b>` : ''}${today.unset ? ` · <b style="color:var(--orange);">батьки не відповіли: ${today.unset}</b>` : ''}</div>
@@ -771,7 +786,6 @@ window.setMealPlan = async function(cls, sid, field, value){
     if(field==='snack' && value!=='days') delete plan.snackDays;
     plan.by = currentUserData?.email || ''; plan.ts = Date.now();
     const patch={[`meal_plan/${cls}/${sid}`]:plan};
-    if(name!==sid)patch[`meal_plan/${cls}/${name}`]=null;
     await update(ref(db),patch);
   }catch(e){ return alert('Не вдалося зберегти: ' + e.message); }
   logAction('meal_plan',{ date:stuName(cls,sid), value:`${field}=${value}` });
@@ -819,10 +833,9 @@ window.loadClassOrders = async function(){
 
     const rows = Object.entries(stSnap.val()).sort((a,b)=>String(a[1]).localeCompare(String(b[1]),'uk')).map(([sid,name])=>{
       const plan = byKeyOrName(plans, sid, name) || {};
-      const ov = byKeyOrName(overrides, sid, name);
+      const ov = mealDayFresher(overrides?.[sid],overrides?.[name]);
       const e = effectiveMeals(plan, ov, !!(absent[sid] || absent[name]), wd);
-      const pick = (e.lunch && hasChoice && ['a','b'].includes(ov?.pick)) ? ov.pick : null;
-      const prepPick = (e.lunch && hasChoice) ? pickedSecond(menuDay, ov) : null;
+      const pick = (e.lunch && hasChoice) ? pickedSecond(menuDay, ov) : null;
       const breakfastPick = (e.breakfast && hasBrkChoice) ? pickedBreakfast(menuDay, ov) : null;
       let note = '';
       if(e.absent) note = 'відсутній';
@@ -835,15 +848,14 @@ window.loadClassOrders = async function(){
       // цього не вирішував. Кухня має бачити його першим, тому окремо й
       // помітно.
       const noReply = !e.absent && !lunchChosen(plan);
-      return { sid, name, ...e, pick, prepPick, breakfastPick, note, noReply };
+      return { sid, name, ...e, pick, breakfastPick, note, noReply };
     });
     const lunch = rows.filter(r=>r.lunch).length;
     const snack = rows.filter(r=>r.snack).length;
     const brk   = rows.filter(r=>r.breakfast).length;
     const showBrk=hasBrkMenu||brk>0;
-    const pa    = rows.filter(r=>r.prepPick==='a').length;
-    const pb    = rows.filter(r=>r.prepPick==='b').length;
-    const unpicked=rows.filter(r=>r.prepPick&&!r.pick).length;
+    const pa    = rows.filter(r=>r.pick==='a').length;
+    const pb    = rows.filter(r=>r.pick==='b').length;
     const bpa   = rows.filter(r=>r.breakfastPick==='a').length;
     const bpb   = rows.filter(r=>r.breakfastPick==='b').length;
     window.__classOrders = { cls, date, rows };
@@ -852,7 +864,7 @@ window.loadClassOrders = async function(){
       <div class="k-ord-sum">${showBrk?`<b>${brk}</b> сніданків${!hasBrkMenu?' (меню ще немає)':''}${hasBrkChoice?` <span class="k-ord-ab">А ${bpa} / Б ${bpb}</span>`:''} · `:''}<b>${lunch}</b> обідів${hasChoice?` <span class="k-ord-ab">А ${pa} / Б ${pb}</span>`:''} · <b>${snack}</b> підвечірків
         <span>${escHtml(cls.replace('class_',''))} клас, ${escHtml(human(date))}</span></div>
       ${hasBrkChoice?`<div class="k-ord-menu">Сніданок: А — ${escHtml(brkChoice.a)} · Б — ${escHtml(brkChoice.b)}</div>`:''}
-      ${hasChoice?`<div class="k-ord-menu">Вибір на ${escHtml(choice.label)}: А — ${escHtml(choice.a)} · Б — ${escHtml(choice.b)}. Без відповіді: ${unpicked} (у плані порцій А).</div>`:''}
+      ${hasChoice?`<div class="k-ord-menu">Вибір на ${escHtml(choice.label)}: А — ${escHtml(choice.a)} · Б — ${escHtml(choice.b)}. Якщо варіант не змінювали, діє А.</div>`:''}
       <!-- data-l на кожній клітинці — це підпис колонки. Коли шрифт великий,
            таблиця розкладається на картки (див. @media у cabinet.html), шапка
            ховається, і без цих підписів не було б зрозуміло, де обід, а де
@@ -1056,9 +1068,7 @@ window.kitchenSetMeal = async function(cls, sid, date, field, value){
     cur.by = currentUserData?.email || '';
     cur.ts = Date.now();
     cur.manual = true;
-    const meaningful = ['lunch','snack','breakfast','pick','breakfastPick'].some(k => cur[k] !== undefined);
-    const writes={[path]:meaningful?cur:null};
-    if(name!==sid)writes[`meal_day/${date}/${cls}/${name}`]=null;
+    const writes={[path]:cur};
     await update(ref(db),writes);
     logAction('meal_day', { date, target:name,
       value:`кухня: ${LABEL[field]||field} ${value ? 'додано' : 'знято'}` });
@@ -1175,7 +1185,6 @@ window.kitchenSetPick = async function(cls, sid, date, value){
     cur.ts = Date.now();
     cur.manual = true;
     const writes={[path]:cur};
-    if(name!==sid)writes[`meal_day/${date}/${cls}/${name}`]=null;
     await update(ref(db),writes);
     logAction('meal_day', { date, target:name, value:`кухня: варіант ${v.toUpperCase()}` });
     showToast(`✓ Варіант ${v.toUpperCase()}`);
@@ -1199,7 +1208,6 @@ window.kitchenSetBreakfastPick = async function(cls, sid, date, value){
     cur.ts = Date.now();
     cur.manual = true;
     const writes={[path]:cur};
-    if(name!==sid)writes[`meal_day/${date}/${cls}/${name}`]=null;
     await update(ref(db),writes);
     logAction('meal_day', { date, target:name, value:`кухня: сніданок ${v.toUpperCase()}` });
     showToast(`✓ Сніданок ${v.toUpperCase()}`);
@@ -1432,7 +1440,7 @@ export async function computeMealStats(from, to, onlyCls, onlyName, withCost=fal
           const nowAbsent=absentSet(att[cls]?.[date]);
           if(!!(nowAbsent[key]||nowAbsent[name])!==!!fixed.absent)
             flags.push(`${name} · ${human(date)}: відвідуваність змінена після закриття`);
-          const nowOverride=byKeyOrName(days[date]?.[cls],key,name);
+          const nowOverride=mealDayFresher(days[date]?.[cls]?.[key],days[date]?.[cls]?.[name]);
           if(Number(nowOverride?.ts)>Number(fixed.sealedAt||Infinity))
             flags.push(`${name} · ${human(date)}: замовлення змінене після закриття`);
           lunch+=Number(fixed.counts?.lunch)||0;
@@ -1457,7 +1465,7 @@ export async function computeMealStats(from, to, onlyCls, onlyName, withCost=fal
         }
         const absentToday=absentSet(att[cls] && att[cls][date]);
         const isAbsent = !!(absentToday[key] || absentToday[name]);
-        const ov = byKeyOrName(days[date] && days[date][cls],key,name);
+        const ov = mealDayFresher(days[date]?.[cls]?.[key],days[date]?.[cls]?.[name]);
         const e = effectiveMeals(plan, ov, isAbsent, weekdayIdx(date));
         if(e.absent){ absent++; return; }
         const served=servedMeals(e,menus[date]);
@@ -1716,8 +1724,9 @@ export async function renderParentMenu(cls, studentKey, date){
       ]);
       // Свіжіша з двох — те саме правило, що й у кухні. Інакше батько
       // й кухня дивилися б на різні копії однієї відповіді.
-      return pickFresher(a && a.exists() ? a.val() : null,
-                         b && b.exists() ? b.val() : null);
+      return base.startsWith('meal_day/')
+        ? mealDayFresher(a && a.exists() ? a.val() : null,b && b.exists() ? b.val() : null)
+        : pickFresher(a && a.exists() ? a.val() : null,b && b.exists() ? b.val() : null);
     };
     const [planV, dayV, attSnap] = await Promise.all([
       both(`meal_plan/${cls}`),
@@ -1737,7 +1746,7 @@ export async function renderParentMenu(cls, studentKey, date){
         onclick="pmShowDay('${escJs(d)}')">
         <span>${DOW_SHORT[i]}</span><b>${escHtml(human(d).slice(0,5))}</b></button>`).join('');
 
-    const pick = ['a','b'].includes(ov?.pick) ? ov.pick : null;
+    const pick = pickedSecond(m, ov);
     const bGate = breakfastEditable(cur);
     const hasBrk = !!(m && String(m.breakfast||'').trim());
     const brkPair = breakfastChoicePair(m);
@@ -1753,7 +1762,7 @@ export async function renderParentMenu(cls, studentKey, date){
       .filter(k=>m && m[k]).map(k=>`<div class="pm-dish">${escHtml(m[k])}</div>`).join('');
     const secondBlock = (!m || !ch || !eff.lunch || noAnswer) ? '' :
       `<div class="pm-choice">
-         <div class="pm-choice-title">Оберіть ${escHtml(ch.label)}${pick?'':' — ще не обрано, планово А'}${gate.ok?'':' — вибір закрито'}</div>
+         <div class="pm-choice-title">Оберіть ${escHtml(ch.label)}${gate.ok?'':' — вибір закрито'}</div>
          ${['a','b'].map(v=>`
            <button type="button" class="pm-opt${pick===v?' on':''}"
                    ${gate.ok?`onclick="setMealDay('${escJs(cur)}','pick','${v}')"`:'disabled'}>
@@ -1918,9 +1927,8 @@ window.setMealDay = async function(date, field, value){
   }
   if(reason) cur.reason = reason.trim().slice(0,120);
   cur.by = currentUserData.email || ''; cur.ts = Date.now();
-  // Порожня поправка — це сміття в базі й фальшивий рядок у звітах кухні
-  const meaningful = ['lunch','snack','breakfast','pick','breakfastPick']
-    .some(k => cur[k] !== undefined);
+  // Навіть якщо поправку скасували, лишаємо запис із новим ts: старіша
+  // копія під ім'ям не має знову стати чинною. Її саму не видаляємо.
   // ЗБІЙ ЗАПИСУ БІЛЬШЕ НЕ МОВЧИТЬ.
   //
   // Раніше тут не було жодного try. Якщо база відмовляла в правах, помилка
@@ -1942,28 +1950,14 @@ window.setMealDay = async function(date, field, value){
   // цей шлях старі правила приймають. Кухня вміє читати обидва ключі, тож
   // відповідь не загубиться. Коли школа опублікує нові правила, перша
   // спроба почне проходити й запасна більше не знадобиться.
-  const writeAt = async (key) => {
-    const p = `meal_day/${date}/${cls}/${key}`;
-    if(meaningful) await set(ref(db, p), cur);
-    else await remove(ref(db, p));
-  };
-  // ДВОХ КОПІЙ БУТИ НЕ МАЄ. Після вдалого запису прибираємо запис під
-  // другим ключем: поки їх дві, будь-яка сторона може дивитися не на ту.
-  // Помилку прибирання ковтаємо свідомо — головна дія вже відбулася, а
-  // прав на чужий ключ може й не бути.
-  const dropOther = async (other) => {
-    if(!other || other === sid && other === fallbackKey) return;
-    try{ await remove(ref(db, `meal_day/${date}/${cls}/${other}`)); }catch(e){}
-  };
+  const writeAt = async (key) => set(ref(db,`meal_day/${date}/${cls}/${key}`),cur);
   try{
     try{
       await writeAt(sid);
-      if(fallbackKey && fallbackKey !== sid) await dropOther(fallbackKey);
     }catch(e1){
       if(!/permission/i.test(e1.message || '') || !fallbackKey || fallbackKey === sid) throw e1;
       console.warn('meal_day: запис за ідентифікатором відхилено, пробую за імʼям');
       await writeAt(fallbackKey);
-      await dropOther(sid);
     }
   }catch(e){
     const denied = /permission/i.test(e.message || '');
@@ -2222,7 +2216,6 @@ window.saveMealSettings = async function(){
     if((Number(latest.ts)||0)!==loaded)
       return alert('Харчування змінили з іншого кабінету. Закрийте налаштування і відкрийте їх знову, щоб не стерти новий вибір.');
     const patch={[`meal_plan/${cls}/${sid}`]:plan};
-    if(name&&name!==sid)patch[`meal_plan/${cls}/${name}`]=null;
     await update(ref(db),patch);
   }catch(e){
     alert('Не вдалося зберегти налаштування: ' + e.message
@@ -2292,7 +2285,7 @@ export async function computeMyMealStats(from, to, cls, sid, withCost=false){
         Promise.all(chunk.map(date => get(child(ref(db), `menu/${date}`))))
       ]);
       chunk.forEach((date,j)=>{
-        const ov=pickFresher(ovs[j].exists()?ovs[j].val():null,
+        const ov=mealDayFresher(ovs[j].exists()?ovs[j].val():null,
           altOvs&&altOvs[j].exists()?altOvs[j].val():null);
         if(ov) ovByDate[date]=ov;
         menuByDate[date]=menus[j].exists()?(menus[j].val()||{}):null;
@@ -2880,7 +2873,6 @@ window.setLunchPlan = async function(yes){
     const plan={...(await readMealCopies(`meal_plan/${cls}`,sid,name)||{}),
       lunch:!!yes,by:currentUserData.email||'',ts:Date.now()};
     const patch={[`meal_plan/${cls}/${sid}`]:plan};
-    if(name&&name!==sid)patch[`meal_plan/${cls}/${name}`]=null;
     await update(ref(db),patch);
     showToast(yes ? '✅ Обіди замовлено' : 'Обіди не замовляються');
     if(window.invalidateMealBalance) window.invalidateMealBalance();
