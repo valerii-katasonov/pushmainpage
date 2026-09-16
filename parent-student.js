@@ -5,7 +5,7 @@
 // lives in teacher.js).
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, getActiveClass, currentUserData, STICKER_GOAL, stickerGoal, getWeekDates, displayGrade, gradeClass6, showToast, renderHwItem, renderHwList, dayKeys, dayNamesUA, isBreakItem, parseTimeRange, fmtTimeRange, localDateString, formatAttendanceSlotLabel, renderGradeFormulaInfo, escJs, escHtml, safeUrl, renderBirthdays, stuName, auth, normalizeChildren, gradesFromMirror, mondayOf, altChoiceFor, resolveAlt, classHourItem, insertAtTime, minsOf, subjKey, planKeyWith, notifyEvent, getStudentDir, resolveStudentKey } from './common.js';
+import { db, getActiveClass, currentUserData, STICKER_GOAL, stickerGoal, getWeekDates, displayGrade, gradeClass6, showToast, renderHwItem, renderHwList, dayKeys, dayNamesUA, isBreakItem, parseTimeRange, fmtTimeRange, localDateString, formatAttendanceSlotLabel, renderGradeFormulaInfo, escJs, escHtml, safeUrl, renderBirthdays, stuName, stuId, auth, normalizeChildren, gradesFromMirror, mondayOf, altChoiceFor, resolveAlt, classHourItem, insertAtTime, minsOf, subjKey, planKeyWith, notifyEvent, getStudentDir, resolveStudentKey } from './common.js';
 import { ACTIVE_YEAR } from './director.js';
 import { renderParentMenu } from './kitchen.js';
 import { renderNewsFeed } from './news.js';
@@ -637,7 +637,8 @@ window.loadParentBellSchedule=async function(role='parent'){
   container.innerHTML=h;
 };
 // Ключ дитини в дзеркалі — той самий, яким пише вчитель
-function mySid(){ return currentUserData?.studentId || currentUserData?.studentName || ''; }
+function mySid(){ return stuId(getActiveClass(),currentUserData?.studentName)
+  || currentUserData?.studentId || currentUserData?.studentName || ''; }
 
 // ══════════ RETAKE REQUEST (parent/student submit side) ══════════
 async function sendRetakeRequest(cls,subj,date,student,grade){
@@ -690,8 +691,8 @@ export function loadParentDashboard(){
   loadTextbooksForParent();
   renderBirthdays('p-birthdays',cls,currentUserData.studentName);
   renderFinalGrades('p-final-grades',cls,currentUserData.studentName);
-  // Оцінки за тиждень і за предметом. Дзеркало читається один раз і
-  // кешується в модулі, тож два виклики поспіль — це один запит у базу.
+  // Оцінки за тиждень і за предметом: одночасні виклики ділять один
+  // запит, а при наступному відкритті вкладки перечитують зміни з бази.
   if(window.renderGradesWeek) window.renderGradesWeek();
   if(window.renderGradesSubject) window.renderGradesSubject();
   Promise.all([loadTodaySubstitutions(cls,date),loadDayTopics(cls,date)])
@@ -1367,6 +1368,8 @@ function mineOf(map){
   if(!map) return undefined;
   const id = mySid();
   if(id && map[id] !== undefined) return map[id];
+  const oldId=currentUserData?.studentId;
+  if(oldId && map[oldId] !== undefined) return map[oldId];
   const nm = currentUserData?.studentName;
   return (nm && map[nm] !== undefined) ? map[nm] : undefined;
 }
