@@ -735,18 +735,23 @@ export async function renderFinalGrades(containerId,cls,studentName){
   const box=document.getElementById(containerId);
   if(!box)return;
   try{
-    const [semSnap,gradesSnap]=await Promise.all([
+    const [semSnap,gradesSnap,scaleSnap,dir]=await Promise.all([
       get(child(ref(db),`academic_year/${ACTIVE_YEAR}/semesters`)),
-      get(child(ref(db),`semester_grades/${cls}`))
+      get(child(ref(db),`semester_grades/${cls}`)),
+      get(child(ref(db),`grade_scales/${cls}`)).catch(()=>null),
+      getStudentDir(cls).catch(()=>null)
     ]);
     if(!gradesSnap.exists()){box.style.display='none';return;}
     const sems=semSnap.exists()?semSnap.val():{};
+    const scales=scaleSnap?.exists()?scaleSnap.val():{};
+    const sid=resolveStudentKey(dir,currentUserData?.studentId,studentName).key;
     const all=gradesSnap.val();
     let html='';
     for(const semId in all){
       const rows=[];
       for(const subj in all[semId]){
-        const rec=all[semId][subj]&&all[semId][subj][studentName];
+        const byStudent=all[semId][subj]||{};
+        const rec=(sid&&byStudent[sid])||byStudent[studentName];
         if(rec&&rec.value)rows.push({subj,v:rec.value});
       }
       if(rows.length===0)continue;
@@ -754,7 +759,7 @@ export async function renderFinalGrades(containerId,cls,studentName){
       html+=`<div class="fin-title">🎓 ${escHtml(sems[semId]?.name||semId)}</div>`+
         rows.map(r=>`<div class="fin-row">
           <span>${escHtml(r.subj)}</span>
-          <span class="g-cell ${gradeClass6(r.v)}" style="padding:3px 9px;">${escHtml(displayGrade(r.v,cls))}</span>
+          <span class="g-cell ${scales[r.subj]?.max?'g-scale':gradeClass6(r.v)}" style="padding:3px 9px;">${escHtml(displayGrade(r.v,cls,!!scales[r.subj]?.max))}</span>
         </div>`).join('');
     }
     if(!html){box.style.display='none';return;}
