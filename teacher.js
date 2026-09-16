@@ -7,7 +7,7 @@
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, push, remove, update, onValue } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { renderNewsFeed } from './news.js';
-import { db, auth, CLOUDINARY_URL, UPLOAD_PRESET, HW_FILE_EXT, HW_FILE_MAX_MB, fileExt, isImageUrl, isAudioUrl, cldImage, safeHttpUrl, getActiveClass, currentUserData, showToast, displayGrade, renderHwItem, renderHwList, dayKeys, formatAttendanceSlotLabel, STICKER_GOAL, stickerGoal, escJs, escHtml, safeUrl, normalizeChildren, notifyEvent, logAction, renderBirthdays, teacherAccessMatrix, getUsersSnap, getStudentDir, stuName, gradeWritePaths, journalBaseDate, journalSlot, localDateString, isMasterTeacher, gradeTypesCache, subjKey, emailKey, subjectsForClassWeek } from './common.js';
+import { db, auth, CLOUDINARY_URL, UPLOAD_PRESET, HW_FILE_EXT, HW_FILE_MAX_MB, fileExt, isImageUrl, isAudioUrl, cldImage, safeHttpUrl, getActiveClass, currentUserData, showToast, displayGrade, validDailyGrade, getClassNum, LEVEL_MAX_CLASS, renderHwItem, renderHwList, dayKeys, formatAttendanceSlotLabel, STICKER_GOAL, stickerGoal, escJs, escHtml, safeUrl, normalizeChildren, notifyEvent, logAction, renderBirthdays, teacherAccessMatrix, getUsersSnap, getStudentDir, stuName, gradeWritePaths, journalBaseDate, journalSlot, localDateString, isMasterTeacher, gradeTypesCache, subjKey, emailKey, subjectsForClassWeek } from './common.js';
 import { populateTopicSelector, availableTopicsCache, planKey, loadAliases } from './curriculum.js';
 
 let currentHwImages=[];
@@ -343,6 +343,7 @@ window.openQuickJournal=async function(){
     const scaleMax=scaleSnap.exists()?Number(scaleSnap.val().max||scaleSnap.val()):6;
     box.dataset.scale=Number.isInteger(scaleMax)?scaleMax:6;
     box.dataset.numericScale=scaleSnap.exists()?'1':'';
+    box.dataset.modifiers=box.dataset.scale==='6'&&(box.dataset.numericScale==='1'||getClassNum(cls)>LEVEL_MAX_CLASS)?'1':'0';
     // [{sid, nm}] — дані ключуються ідентифікатором, людині показуємо імʼя
     const students=stSnap.exists()
       ?Object.entries(stSnap.val()).map(([sid,nm])=>({sid,nm:String(nm)}))
@@ -372,8 +373,8 @@ window.openQuickJournal=async function(){
           <button type="button" class="qj-b lt${status==='late'?' on':''}" onclick="qjSet(this,'late')">З</button>
           <button type="button" class="qj-b ab${status==='absent'?' on':''}" onclick="qjSet(this,'absent')">Н</button>
         </div>
-        <input type="text" class="qj-g" maxlength="${String(box.dataset.scale).length}" value="${escHtml(g[s.sid]||'')}"
-               data-orig="${escHtml(g[s.sid]||'')}" placeholder="1–${box.dataset.scale}">
+        <input type="text" class="qj-g" maxlength="${String(box.dataset.scale).length+(box.dataset.modifiers==='1'?1:0)}" value="${escHtml(g[s.sid]||'')}"
+               data-orig="${escHtml(g[s.sid]||'')}" placeholder="${box.dataset.modifiers==='1'?'1–6 ±':`1–${box.dataset.scale}`}">
       </div>`;
     }).join('');
     // Тип оцінки — один на весь урок, як зазвичай і буває
@@ -402,16 +403,22 @@ window.saveQuickJournal=async function(){
   const slotKey=document.getElementById('qj-body').dataset.slot||'all';
   const rows=Array.from(document.querySelectorAll('.qj-row'));
   const max=Number(document.getElementById('qj-body').dataset.scale||6);
-  const bad=rows.find(r=>{const v=r.querySelector('.qj-g').value.trim();return v&&(!/^[1-9]\d*$/.test(v)||Number(v)>max);});
-  if(bad)return alert(`Оцінки мають бути від 1 до ${max}.`);
+  const modifiers=document.getElementById('qj-body').dataset.modifiers==='1';
+  const bad=rows.find(r=>{
+    const input=r.querySelector('.qj-g');
+    const v=input.value.trim().replace('−','-');
+    const original=String(input.dataset.orig||'').trim().replace('−','-');
+    return v!==original&&v&&(!validDailyGrade(v,max)||(/[+\-]$/.test(v)&&!modifiers));
+  });
+  if(bad)return alert(modifiers?'Оцінки мають бути від 1 до 6; можна додати + або −.':`Оцінки мають бути від 1 до ${max}.`);
   const btn=document.getElementById('btn-qj-save');
   btn.disabled=true;btn.textContent='⏳ Збереження...';
   try{
     const gPatch={},tPatch={};let nG=0,nA=0;
     for(const r of rows){
       const sid=r.dataset.sid, name=r.dataset.name;
-      const v=r.querySelector('.qj-g').value.trim();
-      const orig=r.querySelector('.qj-g').dataset.orig||'';
+      const v=r.querySelector('.qj-g').value.trim().replace('−','-');
+      const orig=String(r.querySelector('.qj-g').dataset.orig||'').trim().replace('−','-');
       if(v!==orig){
         gPatch[sid]=v||null;
         tPatch[sid]=v?gtype:null;
