@@ -222,6 +222,21 @@ async function findNewsTargets(token, cls) {
 
 // Меню стосується всіх одразу, тому шлемо однією розсилкою: 165 окремих
 // викликів функції поклали б і ліміти Netlify, і квоту FCM.
+// ХАРЧУВАННЯ — ЦЕ НЕ ЛИШЕ ОБІД.
+//
+// Тут стояла одна перевірка: plan.lunch === false — значить не харчується,
+// не турбуємо. Але дитина може не обідати й при цьому щодня брати
+// підвечірок або сніданок. Такі родини не отримували жодного сповіщення
+// про оновлення меню — хоча підвечірок у тому меню теж є.
+//
+// Мовчання тут особливо підступне: ніхто не скаржиться на сповіщення,
+// які не прийшли. Тому відсіюємо лише тих, хто не бере НІЧОГО.
+function takesAnyMeal(plan){
+  if(!plan) return true;                 // не відповідали — не наша справа вирішувати за них
+  if(plan.lunch !== false) return true;
+  return ['snack','breakfast'].some(k => plan[k] && plan[k] !== 'no');
+}
+
 async function findMealTargets(token) {
   const [all, plansRaw,parents,students] = await Promise.all([
     readDb(token, 'push_tokens'),
@@ -240,7 +255,7 @@ async function findMealTargets(token) {
     const eats=kids.some(k=>{
       const byClass=plans[k.class]||{};
       const plan=(k.studentId&&byClass[k.studentId])||byClass[k.studentName];
-      return !(plan&&plan.lunch===false);
+      return takesAnyMeal(plan);
     });
     if(!eats)continue;
     out.push(t.token);
