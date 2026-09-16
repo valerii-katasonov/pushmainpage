@@ -39,28 +39,52 @@
 //   reactions/{клас}/{дата}/{предмет}/{учень}
 //
 // Вузол дзеркала читаємо ЦІЛКОМ, за рік: це дані однієї дитини, вони
-// маленькі, зате з них одразу виходять обидва погляди — і тиждень, і
-// будь-який предмет, — без повторного походу в базу на кожне клацання.
+// маленькі, і з них одразу виходять обидва погляди. Паралельні читання
+// об'єднуємо, але після відкриття вкладки читаємо знову: оцінка могла
+// змінитися на іншому пристрої, поки кабінет був відкритий.
 // ═══════════════════════════════════════════════════════════════
 import { renderWorkPhotos } from './grade-work.js';
 import { ref, get, child, query, orderByKey, startAt, endAt }
   from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { db, currentUserData, getActiveClass, escHtml, escJs, mondayOf,
          localDateString, displayGrade, gradeClass6, levelNum, getGradeWeight,
-         calculateStudentWeightedAvg, renderGradeFormulaInfo, dayNamesUA, dayKeys, journalBaseDate, journalSlot }
+         calculateStudentWeightedAvg, renderGradeFormulaInfo, dayNamesUA, dayKeys, journalBaseDate, journalSlot, stuId }
   from './common.js';
 
 // Кабінети батьків і учня лежать у розмітці ОДНОЧАСНО, тож «взяти той
 // елемент, що існує» тут не працює — питаємо роль (як у games.js).
 const isPupil = () => currentUserData?.role === 'student';
-const mySid   = () => currentUserData?.studentId || currentUserData?.studentName || '';
+// Профіль може ще містити старий studentId після повторного заведення учня.
+// Довідник класу (завантажений до відкриття кабінету) — джерело чинного ключа.
+const mySid   = cls => stuId(cls,currentUserData?.studentName)
+  || currentUserData?.studentId || currentUserData?.studentName || '';
 const boxWeek = () => isPupil() ? 's-grades-week' : 'p-grades-week';
 const boxSubj = () => isPupil() ? 's-grades-subject' : 'p-grades-subject';
 
 let gvWeek = null;        // понеділок показаного тижня
-let gvMirror = null;      // дзеркало оцінок за рік, прочитане один раз
 let gvSubject = '';       // обраний предмет
 let gvScales = null;
+let gvGeneration=0, gvWeekRequest=0, gvSubjectRequest=0;
+let gvMirrorPending=null;
+
+// Два блоки на екрані стартують одночасно: ділимо лише запит, який ще йде.
+// Наступне відкриття вкладки перечитує базу, щоб нові/видалені оцінки
+// іншого пристрою не залишалися в старому кеші до виходу з кабінету.
+function readGradesMirror(cls,sid){
+  const key=`${cls}/${sid}`;
+  if(gvMirrorPending?.key===key)return gvMirrorPending.promise;
+  const pending={key,promise:null};
+  pending.promise=get(child(ref(db),`student_grades/${cls}/${sid}`))
+    .then(snap=>snap.exists()?(snap.val()||{}):{})
+    .finally(()=>{if(gvMirrorPending===pending)gvMirrorPending=null;});
+  gvMirrorPending=pending;
+  return pending.promise;
+}
+function stillViewing(cls,sid,role,generation,request,kind){
+  return generation===gvGeneration
+    &&request===(kind==='week'?gvWeekRequest:gvSubjectRequest)
+    &&getActiveClass()===cls&&mySid(cls)===sid&&currentUserData?.role===role;
+}
 
 // ── ЧИСТА ЧАСТИНА ───────────────────────────────────────────────
 // Усе нижче — без бази й без DOM, щоб перевірялося тестами.
@@ -145,12 +169,11 @@ const dayName = ds => {
 
 // Своє значення з вузла «{учень: значення}»: запис міг лягти і під
 // ідентифікатором, і під імʼям — так само, як у решті кабінету.
-function mineOf(map){
+function mineOf(map,sid,name,profileSid){
   if(!map) return undefined;
-  const id = mySid();
-  if(id && map[id] !== undefined) return map[id];
-  const nm = currentUserData?.studentName;
-  return (nm && map[nm] !== undefined) ? map[nm] : undefined;
+  if(sid && map[sid] !== undefined) return map[sid];
+  if(profileSid && map[profileSid] !== undefined) return map[profileSid];
+  return (name && map[name] !== undefined) ? map[name] : undefined;
 }
 
 function gradeChip(v, t, cls, numericScale){
@@ -183,34 +206,35 @@ export async function renderGradesWeek(weekStart){
   const box = document.getElementById(boxWeek());
   if(!box) return;
   const cls = getActiveClass();
-  const sid = mySid();
+  const sid = mySid(cls), name=currentUserData?.studentName, profileSid=currentUserData?.studentId, role=currentUserData?.role;
+  const generation=gvGeneration, request=++gvWeekRequest;
   if(!cls || !sid){ box.innerHTML = '<p class="empty-msg">Дитину не визначено.</p>'; return; }
 
   gvWeek = weekStart || gvWeek || mondayOf(localDateString);
-  const days = weekDays(gvWeek);
+  const week=gvWeek, days = weekDays(week);
   box.innerHTML = '<p class="empty-msg">Завантаження...</p>';
 
-  let comments = {}, reactions = {};
+  let comments = {}, reactions = {}, mirror={}, commentsError=null;
   try{
-    // Дзеркало читаємо один раз на сеанс показу: воно вже містить увесь
-    // рік, тож перегортання тижнів більше не ходить у базу.
     const [mirSnap, cmSnap, rxSnap, scaleSnap] = await Promise.all([
-      gvMirror ? Promise.resolve(null) : get(child(ref(db), `student_grades/${cls}/${sid}`)),
-      get(query(child(ref(db),`comments/${cls}`), orderByKey(), startAt(days[0]), endAt(days[4]+''))).catch(()=>null),
-      get(query(child(ref(db),`reactions/${cls}`), orderByKey(), startAt(days[0]), endAt(days[4]+''))).catch(()=>null),
+      readGradesMirror(cls,sid),
+      get(query(child(ref(db),`comments/${cls}`), orderByKey(), startAt(days[0]), endAt(days[4]))).catch(e=>{commentsError=e;return null;}),
+      get(query(child(ref(db),`reactions/${cls}`), orderByKey(), startAt(days[0]), endAt(days[4]))).catch(()=>null),
       gvScales?Promise.resolve(null):get(child(ref(db),`grade_scales/${cls}`)).catch(()=>null)
     ]);
-    if(mirSnap) gvMirror = mirSnap.exists() ? (mirSnap.val() || {}) : {};
+    if(!stillViewing(cls,sid,role,generation,request,'week'))return;
+    mirror=mirSnap;
     if(scaleSnap)gvScales=scaleSnap.exists()?scaleSnap.val():{};
     comments  = (cmSnap && cmSnap.exists()) ? (cmSnap.val() || {}) : {};
     reactions = (rxSnap && rxSnap.exists()) ? (rxSnap.val() || {}) : {};
   }catch(e){
+    if(!stillViewing(cls,sid,role,generation,request,'week'))return;
     // Мовчазний спінер — головна повторювана вада порталу.
     box.innerHTML = `<p class="empty-msg" style="color:var(--red);">Не вдалося завантажити оцінки: ${escHtml(e.message||'')}</p>`;
     return;
   }
 
-  const byDay = gradesByDay(gvMirror, days);
+  const byDay = gradesByDay(mirror, days);
   const total = days.reduce((n,d) => n + (byDay[d] ? byDay[d].length : 0), 0);
 
   const nav = `<div class="hw-nav">
@@ -219,7 +243,8 @@ export async function renderGradesWeek(weekStart){
         <span>${total ? `оцінок: ${total}` : 'оцінок немає'}</span></div>
       <button type="button" onclick="gvShiftWeek(1)">→</button>
     </div>
-    ${gvWeek !== mondayOf(localDateString)
+    <button type="button" class="hw-today" onclick="renderGradesWeek();renderGradesSubject()">↻ Оновити оцінки й коментарі</button>
+    ${week !== mondayOf(localDateString)
       ? `<button type="button" class="hw-today" onclick="gvShiftWeek(0)">Повернутися до поточного тижня</button>` : ''}`;
 
   const blocks = days.map(ds => {
@@ -228,12 +253,12 @@ export async function renderGradesWeek(weekStart){
     // Предмети дня: ті, де є оцінка, плюс ті, де є лише коментар —
     // коментар без оцінки теж адресований батькам.
     const subjs = [...new Set([...items.map(i=>i.subj),
-      ...Object.keys(cmDay).filter(s => mineOf(cmDay[s]))])].sort((a,b)=>a.localeCompare(b,'uk'));
+      ...Object.keys(cmDay).filter(s => mineOf(cmDay[s],sid,name,profileSid))])].sort((a,b)=>a.localeCompare(b,'uk'));
     if(!subjs.length) return '';
     const rows = subjs.map(s => {
       const grades=items.filter(i => i.subj === s);
-      const cm = mineOf(cmDay[s]) || '';
-      const rx = mineOf((reactions[ds]||{})[s]) || null;
+      const cm = mineOf(cmDay[s],sid,name,profileSid) || '';
+      const rx = mineOf((reactions[ds]||{})[s],sid,name,profileSid) || null;
       return `<li style="margin-bottom:9px;"><b>${escHtml(s)}</b><br>`
         + grades.map(g=>gradeChip(g.v,g.t,cls,gvScales?.[s]?.max)
           +retakeBtn(cls,s,g.date,g.v,gvScales?.[s]?.max)+renderWorkPhotos(g.workPhotos)).join(' ')
@@ -245,7 +270,11 @@ export async function renderGradesWeek(weekStart){
       <ul class="list-dash" style="margin:0;">${rows}</ul></div>`;
   }).join('');
 
-  box.innerHTML = nav + (blocks || '<p class="empty-msg">Цього тижня оцінок і коментарів немає.</p>');
+  const commentWarning=commentsError
+    ? '<p class="empty-msg" style="color:var(--red);">Не вдалося завантажити коментарі. <button type="button" onclick="renderGradesWeek()">Повторити</button></p>' : '';
+  box.innerHTML = nav + commentWarning + (blocks || (commentsError
+    ? '<p class="empty-msg">Оцінок цього тижня немає.</p>'
+    : '<p class="empty-msg">Цього тижня оцінок і коментарів немає.</p>'));
 }
 window.renderGradesWeek = renderGradesWeek;
 
@@ -265,25 +294,28 @@ export async function renderGradesSubject(subj){
   const box = document.getElementById(boxSubj());
   if(!box) return;
   const cls = getActiveClass();
-  const sid = mySid();
+  const sid = mySid(cls), role=currentUserData?.role;
+  const generation=gvGeneration, request=++gvSubjectRequest;
   if(!cls || !sid){ box.innerHTML = '<p class="empty-msg">Дитину не визначено.</p>'; return; }
 
-  if(!gvMirror){
-    box.innerHTML = '<p class="empty-msg">Завантаження...</p>';
-    try{
-      const snap = await get(child(ref(db), `student_grades/${cls}/${sid}`));
-      gvMirror = snap.exists() ? (snap.val() || {}) : {};
-    }catch(e){
+  box.innerHTML = '<p class="empty-msg">Завантаження...</p>';
+  let mirror;
+  try{mirror=await readGradesMirror(cls,sid);}
+  catch(e){
+    if(stillViewing(cls,sid,role,generation,request,'subject'))
       box.innerHTML = `<p class="empty-msg" style="color:var(--red);">Не вдалося завантажити: ${escHtml(e.message||'')}</p>`;
-      return;
-    }
+    return;
   }
-  if(!gvScales){
-    try{const snap=await get(child(ref(db),`grade_scales/${cls}`));gvScales=snap.exists()?snap.val():{};}
-    catch(e){gvScales={};}
+  if(!stillViewing(cls,sid,role,generation,request,'subject'))return;
+  let scales=gvScales;
+  if(!scales){
+    try{const snap=await get(child(ref(db),`grade_scales/${cls}`));scales=snap.exists()?snap.val():{};}
+    catch(e){scales={};}
   }
+  if(!stillViewing(cls,sid,role,generation,request,'subject'))return;
+  gvScales=scales;
 
-  const subjects = subjectsWithGrades(gvMirror);
+  const subjects = subjectsWithGrades(mirror);
   if(!subjects.length){ box.innerHTML = '<p class="empty-msg">Оцінок ще немає.</p>'; return; }
   gvSubject = subj || gvSubject || subjects[0];
   if(!subjects.includes(gvSubject)) gvSubject = subjects[0];
@@ -292,8 +324,8 @@ export async function renderGradesSubject(subj){
     + subjects.map(s => `<option value="${escHtml(s)}"${s===gvSubject?' selected':''}>${escHtml(s)}</option>`).join('')
     + `</select>`;
 
-  const { rows, avg, counted } = subjectStats(gvMirror, gvSubject);
-  const scaleMax=gvScales?.[gvSubject]?.max||null;
+  const { rows, avg, counted } = subjectStats(mirror, gvSubject);
+  const scaleMax=scales?.[gvSubject]?.max||null;
   const avgTxt = avg === null ? '—' : avg.toFixed(2);
   // Підпис під числом обовʼязковий. Батьки читають будь-яке середнє як
   // «яка буде оцінка в табелі», а підсумкову ставить учитель — і має
@@ -319,7 +351,10 @@ export async function renderGradesSubject(subj){
 }
 window.renderGradesSubject = renderGradesSubject;
 
-// Дзеркало перечитуємо, коли кабінет перемикають на іншу дитину: інакше
-// мама, що клацнула другого сина, побачила б оцінки першого.
-export function resetGradesCache(){ gvMirror = null; gvSubject = ''; gvScales=null; }
+// Завершення старих запитів після перемикання дитини не має перемалювати
+// екран нової дитини, навіть якщо відповідь із бази прийшла пізніше.
+export function resetGradesCache(){
+  gvGeneration++;gvWeekRequest++;gvSubjectRequest++;
+  gvMirrorPending=null;gvSubject='';gvScales=null;gvWeek=null;
+}
 window.resetGradesCache = resetGradesCache;
