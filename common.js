@@ -639,6 +639,14 @@ export function gradeWritePaths(cls, ym, subj, date, sid, value, type){
   else{out[`${mirror}/v`]=value;out[`${mirror}/t`]=type||'';}
   return out;
 }
+// Перший стовпець дня лишається у старому ключі YYYY-MM-DD. Наступні
+// мають суфікс, тому старі оцінки й дзеркало родини не потребують міграції.
+export function journalGradeKey(day,slot){return slot>1?`${day}__${slot}`:day;}
+export function journalBaseDate(key){return String(key||'').slice(0,10);}
+export function journalSlot(key){
+  const m=/^\d{4}-\d{2}-\d{2}__(\d+)$/.exec(String(key||''));
+  return m?Number(m[1]):1;
+}
 
 // Дзеркало → форма, яку очікує наявний код відображення: gr[предмет][дата][імʼя].
 // Так кабінет читає вузько, а малювання лишається недоторканим.
@@ -968,7 +976,7 @@ export function levelNum(val){
   return isNaN(n) ? null : n;
 }
 
-export function displayGrade(val,clsId){
+export function displayGrade(val,clsId,numericScale){
   if(!val&&val!==0) return '';
   // ЛІТЕРУ ПОВЕРТАЄМО ЯК Є.
   //
@@ -983,9 +991,12 @@ export function displayGrade(val,clsId){
   const cn=getClassNum(clsId||getActiveClass());
   // РІВНІ — ЛИШЕ 1–4 КЛАСИ. У пʼятому вже звичайні оцінки; тут довго стояло
   // «<=5», і цифри пʼятого класу показувалися літерами.
-  if(cn<=LEVEL_MAX_CLASS){
+  if(cn<=LEVEL_MAX_CLASS&&!numericScale){
     // цифру показуємо тією ж літерою, що й рівень
     if(isNaN(n)) return String(val);
+    // Значення понад стару шкалу 1–6 може належати новій предметній
+    // шкалі, навіть якщо її довідник тимчасово не вдалося прочитати.
+    if(n>6) return String(val);
     if(n>=5) return 'В';
     if(n===4) return 'Д';
     if(n===3) return 'С';
@@ -3538,11 +3549,12 @@ window.renderBirthdays=renderBirthdays;
 // «кракозябрами». Так само вже зроблено в експорті журналу.
 window.downloadReportCard=async function(cls,studentName){
   // Дані лежать під постійним ідентифікатором; імʼя потрібне лише для шапки
-  const sid = stuId(cls, studentName) || studentName;
   if(!window.html2canvas||!window.jspdf)return alert('Бібліотеки експорту не завантажились. Оновіть сторінку.');
   const holder=document.getElementById('report-card-render');
   holder.innerHTML='<p style="padding:20px;">Готую табель...</p>';
   try{
+    const dir=await getStudentDir(cls).catch(()=>null);
+    const sid=resolveStudentKey(dir,null,studentName).key||studentName;
     // ЧОМУ КОЖНЕ ЧИТАННЯ ОКРЕМО. Promise.all падає на першій відмові й не
     // каже, на якій саме — а шляхів тут чотири. Читаємо кожен зі своїм
     // перехопленням: тоді видно і що вдалося, і що ні.
@@ -3555,11 +3567,12 @@ window.downloadReportCard=async function(cls,studentName){
       try{ return { snap: await get(child(ref(db), path)) }; }
       catch(e){ return { err: `${path}: ${e.message || e.code || 'відмова'}` }; }
     };
-    const [semR,gradesR,cardR,stR] = await Promise.all([
+    const [semR,gradesR,cardR,stR,scaleR] = await Promise.all([
       readOpt(`academic_year/${ACADEMIC_YEAR_ID_LOCAL}/semesters`),
       readOpt(`semester_grades/${cls}`),
       readOpt(`student_cards/${cls}/${sid}`),
-      readOpt(`students_list/${cls}`)
+      readOpt(`students_list/${cls}`),
+      readOpt(`grade_scales/${cls}`)
     ]);
     // Без підсумкових оцінок табеля не буде — це єдине обовʼязкове читання
     if(gradesR.err){
@@ -3571,18 +3584,20 @@ window.downloadReportCard=async function(cls,studentName){
     if(cardR.err) console.warn('Табель без картки учня —', cardR.err);
     const sems=semSnap&&semSnap.exists()?semSnap.val():{};
     const all=gradesSnap.exists()?gradesSnap.val():{};
+    const scales=scaleR.snap&&scaleR.snap.exists()?scaleR.snap.val():{};
     const card = (cardSnap && cardSnap.exists()) ? cardSnap.val() : {};
     // Предмети — об'єднання по всіх семестрах, щоб таблиця була рівна
     const semIds=Object.keys(all);
     const subjects=[...new Set(semIds.flatMap(id=>Object.keys(all[id]||{})))]
-      .filter(s=>semIds.some(id=>all[id][s]&&all[id][s][sid]))
+      .filter(s=>semIds.some(id=>all[id][s]&&(all[id][s][sid]||all[id][s][studentName])))
       .sort((a,b)=>a.localeCompare(b,'uk'));
     if(subjects.length===0){holder.innerHTML='';return alert('Для цього учня ще немає підсумкових оцінок.');}
     const head=semIds.map(id=>`<th>${escHtml(sems[id]?.name||id)}</th>`).join('');
     const body=subjects.map(s=>`<tr><td class="rc-subj">${escHtml(s)}</td>`+
       semIds.map(id=>{
-        const rec=all[id][s]&&all[id][s][sid];
-        return `<td class="rc-val">${rec&&rec.value?escHtml(displayGrade(rec.value,cls)):'—'}</td>`;
+        const byStudent=all[id][s]||{};
+        const rec=byStudent[sid]||byStudent[studentName];
+        return `<td class="rc-val">${rec&&rec.value?escHtml(displayGrade(rec.value,cls,!!scales[s]?.max)):'—'}</td>`;
       }).join('')+'</tr>').join('');
     holder.innerHTML=`<div class="rc-page">
       <div class="rc-head">
