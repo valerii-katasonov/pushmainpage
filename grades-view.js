@@ -42,11 +42,12 @@
 // маленькі, зате з них одразу виходять обидва погляди — і тиждень, і
 // будь-який предмет, — без повторного походу в базу на кожне клацання.
 // ═══════════════════════════════════════════════════════════════
+import { renderWorkPhotos } from './grade-work.js';
 import { ref, get, child, query, orderByKey, startAt, endAt }
   from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { db, currentUserData, getActiveClass, escHtml, escJs, mondayOf,
          localDateString, displayGrade, gradeClass6, levelNum, getGradeWeight,
-         calculateStudentWeightedAvg, renderGradeFormulaInfo, dayNamesUA, dayKeys }
+         calculateStudentWeightedAvg, renderGradeFormulaInfo, dayNamesUA, dayKeys, journalBaseDate, journalSlot }
   from './common.js';
 
 // Кабінети батьків і учня лежать у розмітці ОДНОЧАСНО, тож «взяти той
@@ -59,6 +60,7 @@ const boxSubj = () => isPupil() ? 's-grades-subject' : 'p-grades-subject';
 let gvWeek = null;        // понеділок показаного тижня
 let gvMirror = null;      // дзеркало оцінок за рік, прочитане один раз
 let gvSubject = '';       // обраний предмет
+let gvScales = null;
 
 // ── ЧИСТА ЧАСТИНА ───────────────────────────────────────────────
 // Усе нижче — без бази й без DOM, щоб перевірялося тестами.
@@ -74,7 +76,8 @@ export function flatGrades(mirror){
         // Якщо її не відсіяти, у тижні з'являться рядки-привиди: предмет
         // є, оцінки немає.
         if(cell.v === undefined || cell.v === null || cell.v === '') continue;
-        out.push({ date, subj, v: cell.v, t: cell.t || '' });
+        out.push({ date, day:journalBaseDate(date), slot:journalSlot(date),
+          subj, v: cell.v, t: cell.t || '', workPhotos:cell.workPhotos||[] });
       }
     }
   }
@@ -87,8 +90,8 @@ export function gradesByDay(mirror, days){
   const want = new Set(days || []);
   const byDay = {};
   flatGrades(mirror).forEach(g => {
-    if(!want.has(g.date)) return;
-    (byDay[g.date] ||= []).push(g);
+    if(!want.has(g.day)) return;
+    (byDay[g.day] ||= []).push(g);
   });
   for(const d in byDay) byDay[d].sort((a,b) => a.subj.localeCompare(b.subj,'uk'));
   return byDay;
@@ -150,16 +153,17 @@ function mineOf(map){
   return (nm && map[nm] !== undefined) ? map[nm] : undefined;
 }
 
-function gradeChip(v, t, cls){
-  return `<span class="g-cell ${gradeClass6(v)}" style="display:inline-flex;padding:4px 9px;border-radius:8px;gap:5px;">`
-    + `<span class="g-val">${escHtml(displayGrade(v, cls))}</span>`
+function gradeChip(v, t, cls, numericScale){
+  return `<span class="g-cell ${numericScale?'g-scale':gradeClass6(v)}" style="display:inline-flex;padding:4px 9px;border-radius:8px;gap:5px;">`
+    + `<span class="g-val">${escHtml(displayGrade(v, cls, numericScale))}</span>`
     + (t ? `<span class="g-type">${escHtml(t)}</span>` : '') + `</span>`;
 }
 
 // Кнопка перездачі — лише там, де вона доречна: оцінка низька й це
 // цифра. Для літер (1–4 класи) перездача не пропонується: у рівнях її
 // сенс інший, і вчителі про неї не просили.
-function retakeBtn(cls, subj, date, v){
+function retakeBtn(cls, subj, date, v, numericScale){
+  if(numericScale&&numericScale!==6)return '';
   const n = parseInt(v, 10);
   if(isNaN(n) || n > 3) return '';
   const who = currentUserData?.studentId || currentUserData?.studentName || '';
@@ -190,12 +194,14 @@ export async function renderGradesWeek(weekStart){
   try{
     // Дзеркало читаємо один раз на сеанс показу: воно вже містить увесь
     // рік, тож перегортання тижнів більше не ходить у базу.
-    const [mirSnap, cmSnap, rxSnap] = await Promise.all([
+    const [mirSnap, cmSnap, rxSnap, scaleSnap] = await Promise.all([
       gvMirror ? Promise.resolve(null) : get(child(ref(db), `student_grades/${cls}/${sid}`)),
       get(query(child(ref(db),`comments/${cls}`), orderByKey(), startAt(days[0]), endAt(days[4]+''))).catch(()=>null),
-      get(query(child(ref(db),`reactions/${cls}`), orderByKey(), startAt(days[0]), endAt(days[4]+''))).catch(()=>null)
+      get(query(child(ref(db),`reactions/${cls}`), orderByKey(), startAt(days[0]), endAt(days[4]+''))).catch(()=>null),
+      gvScales?Promise.resolve(null):get(child(ref(db),`grade_scales/${cls}`)).catch(()=>null)
     ]);
     if(mirSnap) gvMirror = mirSnap.exists() ? (mirSnap.val() || {}) : {};
+    if(scaleSnap)gvScales=scaleSnap.exists()?scaleSnap.val():{};
     comments  = (cmSnap && cmSnap.exists()) ? (cmSnap.val() || {}) : {};
     reactions = (rxSnap && rxSnap.exists()) ? (rxSnap.val() || {}) : {};
   }catch(e){
@@ -225,19 +231,14 @@ export async function renderGradesWeek(weekStart){
       ...Object.keys(cmDay).filter(s => mineOf(cmDay[s]))])].sort((a,b)=>a.localeCompare(b,'uk'));
     if(!subjs.length) return '';
     const rows = subjs.map(s => {
-      const g = items.find(i => i.subj === s);
+      const grades=items.filter(i => i.subj === s);
       const cm = mineOf(cmDay[s]) || '';
       const rx = mineOf((reactions[ds]||{})[s]) || null;
-      // Реакція — на весь рядок предмета, а не лише на коментар. Спершу
-      // вона стояла всередині коментаря, і на «голу» оцінку без
-      // коментаря відреагувати було нічим, хоча раніше — можна: у
-      // денному блоці кнопки малювалися завжди, коли є оцінка АБО
-      // коментар. Батько тисне 🔥 саме на хорошу оцінку частіше, ніж на
-      // текст учителя.
       return `<li style="margin-bottom:9px;"><b>${escHtml(s)}</b><br>`
-        + (g ? gradeChip(g.v, g.t, cls) + retakeBtn(cls, s, ds, g.v) : '')
-        + (cm ? `<div style="background:#f0f8ff;padding:5px 9px;border-radius:6px;font-style:italic;font-size:.88rem;margin-top:4px;">${escHtml(cm)}</div>` : '')
-        + reactionRow(ds, s, rx)
+        + grades.map(g=>gradeChip(g.v,g.t,cls,gvScales?.[s]?.max)
+          +retakeBtn(cls,s,g.date,g.v,gvScales?.[s]?.max)+renderWorkPhotos(g.workPhotos)).join(' ')
+        + (cm ? `<div style="background:#f0f8ff;padding:5px 9px;border-radius:6px;font-style:italic;font-size:.88rem;margin-top:4px;">${escHtml(cm)}</div>`
+                + reactionRow(ds, s, rx) : '')
         + `</li>`;
     }).join('');
     return `<div class="gv-day"><div class="gv-day-head">${escHtml(dayName(ds))}, ${escHtml(human(ds))}</div>
@@ -277,6 +278,10 @@ export async function renderGradesSubject(subj){
       return;
     }
   }
+  if(!gvScales){
+    try{const snap=await get(child(ref(db),`grade_scales/${cls}`));gvScales=snap.exists()?snap.val():{};}
+    catch(e){gvScales={};}
+  }
 
   const subjects = subjectsWithGrades(gvMirror);
   if(!subjects.length){ box.innerHTML = '<p class="empty-msg">Оцінок ще немає.</p>'; return; }
@@ -288,6 +293,7 @@ export async function renderGradesSubject(subj){
     + `</select>`;
 
   const { rows, avg, counted } = subjectStats(gvMirror, gvSubject);
+  const scaleMax=gvScales?.[gvSubject]?.max||null;
   const avgTxt = avg === null ? '—' : avg.toFixed(2);
   // Підпис під числом обовʼязковий. Батьки читають будь-яке середнє як
   // «яка буде оцінка в табелі», а підсумкову ставить учитель — і має
@@ -295,16 +301,16 @@ export async function renderGradesSubject(subj){
   const head = `<div style="background:#fff;border:1px solid #d1c4e9;border-radius:12px;padding:12px;margin-bottom:11px;text-align:center;">
       <div style="font-size:1.9rem;font-weight:800;color:var(--purple,#7b1fa2);line-height:1.1;">${escHtml(avgTxt)}</div>
       <div style="font-size:.78rem;color:#555;margin-top:3px;">середній бал з предмета «${escHtml(gvSubject)}»
-        · оцінок: ${counted}</div>
+        · оцінок: ${counted} · шкала: 1–${scaleMax||6}</div>
       <div style="font-size:.72rem;color:#888;margin-top:5px;">Це не підсумкова оцінка й не прогноз:
         підсумкову виставляє вчитель.</div>
     </div>`;
 
   const list = rows.length
     ? `<ul class="list-dash" style="margin:0;">` + rows.slice().reverse().map(r =>
-        `<li style="display:flex;align-items:center;gap:9px;padding:5px 0;">
-           <span style="color:#888;font-size:.82rem;min-width:52px;">${escHtml(human(r.date))}</span>
-           ${gradeChip(r.v, r.t, cls)}
+        `<li style="display:flex;align-items:center;gap:9px;padding:5px 0;flex-wrap:wrap;">
+           <span style="color:#888;font-size:.82rem;min-width:52px;">${escHtml(human(r.day))}${r.slot>1?` · ${r.slot}`:''}</span>
+           ${gradeChip(r.v, r.t, cls, scaleMax)}${renderWorkPhotos(r.workPhotos)}
            <span style="font-size:.74rem;color:#999;">${r.t ? `вага ×${escHtml(String(getGradeWeight(r.t)))}` : ''}</span>
          </li>`).join('') + `</ul>`
     : '<p class="empty-msg">З цього предмета оцінок ще немає.</p>';
@@ -315,5 +321,5 @@ window.renderGradesSubject = renderGradesSubject;
 
 // Дзеркало перечитуємо, коли кабінет перемикають на іншу дитину: інакше
 // мама, що клацнула другого сина, побачила б оцінки першого.
-export function resetGradesCache(){ gvMirror = null; gvSubject = ''; }
+export function resetGradesCache(){ gvMirror = null; gvSubject = ''; gvScales=null; }
 window.resetGradesCache = resetGradesCache;
