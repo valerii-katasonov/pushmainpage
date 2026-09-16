@@ -126,12 +126,12 @@ export async function renderStaffMeals(){
     const lunchOn = staffLunchOn(plan, dayR);
     const gate = mealsEditable(day);
     const choice = m ? choicePair(m) : null;
-    const pick = ['a','b'].includes(dayR?.pick) ? dayR.pick : null;
+    const pick = dayR?.pick === 'b' ? 'b' : 'a';
 
     const dish = m ? [
       m.first  ? `<div class="stm-dish"><span>Перше</span><b>${escHtml(m.first)}</b></div>` : '',
       choice
-        ? `<div class="stm-choice">${!pick?'<span>Ще не обрано · планово А</span>':''}
+        ? `<div class="stm-choice">
              <button type="button" class="stm-ab${pick==='a'?' on':''}"
                ${gate.ok?`onclick="smPick('${escJs(day)}','a')"`:'disabled'}>А · ${escHtml(choice.a)}</button>
              <button type="button" class="stm-ab${pick==='b'?' on':''}"
