@@ -264,10 +264,12 @@ export function dayFieldPatch(plan, field, value, wd){
 // журнал замовлень за минулий місяць почне брехати.
 export function choicePair(menuDay){
   if(!menuDay) return null;
+  const side = String(menuDay.side || '').trim();
   const side2 = String(menuDay.side2 || '').trim();
-  if(side2) return { field:'side', a:String(menuDay.side||'').trim(), b:side2, label:'гарнір' };
+  if(side && side2) return { field:'side', a:side, b:side2, label:'гарнір' };
+  const sec = String(menuDay.second || '').trim();
   const sec2 = String(menuDay.second2 || '').trim();
-  if(sec2) return { field:'second', a:String(menuDay.second||'').trim(), b:sec2, label:'основну страву' };
+  if(sec && sec2) return { field:'second', a:sec, b:sec2, label:'основну страву' };
   return null;
 }
 
@@ -376,11 +378,17 @@ export async function loadWeekMenu(){
 window.saveWeekMenu = async function(){
   const monday = currentMonday(), dates = weekDates(monday);
   for(const date of dates){
-    const a = document.getElementById(`km-${date}-breakfast`)?.value.trim() || '';
-    const b = document.getElementById(`km-${date}-breakfast2`)?.value.trim() || '';
-    if(b && !a){
-      document.getElementById(`km-${date}-breakfast`)?.focus();
-      return alert(`Спочатку заповніть варіант А сніданку на ${human(date)}.`);
+    for(const [first,second,label] of [
+      ['breakfast','breakfast2','сніданку'],
+      ['side','side2','гарніру'],
+      ['second','second2','основної страви']
+    ]){
+      const a = document.getElementById(`km-${date}-${first}`)?.value.trim() || '';
+      const b = document.getElementById(`km-${date}-${second}`)?.value.trim() || '';
+      if(b && !a){
+        document.getElementById(`km-${date}-${first}`)?.focus();
+        return alert(`Спочатку заповніть варіант А ${label} на ${human(date)}.`);
+      }
     }
   }
   const snaps = await Promise.all(dates.map(d=>get(child(ref(db),`menu/${d}`))));
@@ -456,26 +464,31 @@ window.saveWeekMenu = async function(){
 // НАВІЩО. Підрахунок порцій будується на постійних планах батьків, а не
 // на меню. Тому на канікулах кухня бачила ті самі 80 обідів, що й у
 // звичайний вівторок. Тепер такі дні позначені й у підрахунок не йдуть.
-async function loadNoSchoolDays(dates){
+async function loadNoSchoolDays(dates, strict=false){
   const out = {};
+  if(!dates.length) return out;
   try{
-    const cur = await get(child(ref(db), 'academic_year/current'));
-    const now = new Date(); const y = now.getFullYear(), mo = now.getMonth() + 1;
-    const year = (cur.exists() && /^\d{4}-\d{4}$/.test(String(cur.val() || '')))
-      ? String(cur.val())
-      : (mo >= 8 ? `${y}-${y+1}` : `${y-1}-${y}`);
-    const [hSnap, bSnap] = await Promise.all([
-      get(child(ref(db), `academic_year/${year}/holidays`)),
-      get(child(ref(db), `academic_year/${year}/breaks`))
-    ]);
-    if(hSnap.exists()) Object.values(hSnap.val()).forEach(h => {
-      if(h && h.date && dates.includes(h.date)) out[h.date] = h.title || 'Свято';
-    });
-    if(bSnap.exists()) Object.values(bSnap.val()).forEach(b => {
-      if(!b || !b.startDate || !b.endDate) return;
-      dates.forEach(d => { if(d >= b.startDate && d <= b.endDate) out[d] = b.title || 'Канікули'; });
-    });
-  }catch(e){ console.warn('academic_year:', e.message); }
+    const years=[...new Set(dates.map(date=>{
+      const y=Number(date.slice(0,4)),mo=Number(date.slice(5,7));
+      return mo>=8?`${y}-${y+1}`:`${y-1}-${y}`;
+    }))];
+    for(const year of years){
+      const [hSnap, bSnap] = await Promise.all([
+        get(child(ref(db), `academic_year/${year}/holidays`)),
+        get(child(ref(db), `academic_year/${year}/breaks`))
+      ]);
+      if(hSnap.exists()) Object.values(hSnap.val()).forEach(h => {
+        if(h && h.date && dates.includes(h.date)) out[h.date] = h.title || 'Свято';
+      });
+      if(bSnap.exists()) Object.values(bSnap.val()).forEach(b => {
+        if(!b || !b.startDate || !b.endDate) return;
+        dates.forEach(d => { if(d >= b.startDate && d <= b.endDate) out[d] = b.title || 'Канікули'; });
+      });
+    }
+  }catch(e){
+    if(strict) throw e;
+    console.warn('academic_year:', e.message);
+  }
   return out;
 }
 
@@ -567,20 +580,23 @@ export async function loadWeekCounts(){
         ${today.closed
           ? `<b>—</b><span>${escHtml(human(today.date))}: ${escHtml(today.closed)}</span>
              <div class="k-total-snack">школа не годує цього дня</div>`
-          : `<b>${today.lunch}</b><span>обідів на ${escHtml(human(today.date))}</span>
-             <div class="k-total-snack">${today.hasBrkMenu ? `${today.brk} сніданків${today.hasBrkChoice?` (A ${today.bpa} / Б ${today.bpb})`:''} · ` : ''}+ ${today.snack} підвечірків</div>`}
+          : `<b>${today.lunch}</b><span>обідів на ${escHtml(human(today.date))}${today.hasChoice?` · А ${today.pa} / Б ${today.pb}`:''}</span>
+             <div class="k-total-snack">${today.hasBrkMenu ? `${today.brk} сніданків${today.hasBrkChoice?` (А ${today.bpa} / Б ${today.bpb})`:''} · ` : ''}${today.snack} підвечірків</div>`}
       </div>
       <div class="k-sub">відсутні: ${today.absent} · не харчуються: ${today.off} · відмови: ${today.skips.length}${today.extras.length ? ` · <b style="color:var(--green);">разові обіди: ${today.extras.length}</b>` : ''}${today.unset ? ` · <b style="color:var(--orange);">батьки не відповіли: ${today.unset}</b>` : ''}</div>
 
       <!-- Сніданок у тижневій таблиці нарівні з обідом: його теж треба
            готувати, і кухня планувала його наосліп — число було лише
            в розрізі класів нижче. -->
-      <div class="k-scroll"><table class="k-table"><thead><tr><th>День</th><th>Снід.</th><th>Обіди</th><th>Підвеч.</th><th>Відсутні</th></tr></thead><tbody>
+      <div class="k-scroll"><table class="k-table"><thead><tr><th>День</th><th>Снід.</th><th>Снід. А / Б</th><th>Обіди</th><th>Обід А / Б</th><th>Підвеч.</th><th>Відсутні</th></tr></thead><tbody>
         ${perDay.map((d,i)=>`<tr class="${d.date===localDateString?'k-now':''}${d.closed?' k-closed':''}">
           <td>${DOW_SHORT[i]} ${escHtml(human(d.date).slice(0,5))}</td>
           ${d.closed
-            ? `<td colspan="4" class="k-closed-cell">${escHtml(d.closed)}</td>`
-            : `<td>${d.hasBrkMenu?(d.brk||'0'):'<span class="k-no">—</span>'}</td><td><b>${d.lunch}</b></td><td>${d.snack||''}</td><td class="k-off">${d.absent||''}</td>`}
+            ? `<td colspan="6" class="k-closed-cell">${escHtml(d.closed)}</td>`
+            : `<td>${d.hasBrkMenu?(d.brk||'0'):'<span class="k-no">—</span>'}</td>
+               <td>${d.hasBrkChoice?`А ${d.bpa} / Б ${d.bpb}`:'—'}</td>
+               <td><b>${d.lunch}</b></td><td>${d.hasChoice?`А ${d.pa} / Б ${d.pb}`:'—'}</td>
+               <td>${d.snack||''}</td><td class="k-off">${d.absent||''}</td>`}
           </tr>`).join('')}
       </tbody></table></div>
 
@@ -1124,34 +1140,42 @@ window.loadMealStats = async function(){
   if(!from || !to || from > to) return alert('Оберіть коректний період.');
   box.innerHTML = '<p class="empty-msg">Рахуємо...</p>';
   try{
-    const rows = await computeMealStats(from, to);
+    const rows = await computeMealStats(from, to, null, null, true);
     if(!rows.length){ box.innerHTML = '<p class="empty-msg">За цей період даних немає.</p>'; return; }
     const tot = rows.reduce((a,r)=>({lunch:a.lunch+r.lunch, snack:a.snack+r.snack, brk:a.brk+(r.brk||0)}),{lunch:0,snack:0,brk:0});
     const byClass = {};
-    rows.forEach(r=>{ byClass[r.cls] = byClass[r.cls] || {lunch:0,snack:0,brk:0}; byClass[r.cls].lunch+=r.lunch; byClass[r.cls].snack+=r.snack; byClass[r.cls].brk+=(r.brk||0); });
+    rows.forEach(r=>{
+      byClass[r.cls] = byClass[r.cls] || {lunch:0,snack:0,brk:0,cost:0};
+      byClass[r.cls].lunch+=r.lunch; byClass[r.cls].snack+=r.snack;
+      byClass[r.cls].brk+=(r.brk||0);
+      byClass[r.cls].cost=Math.round((byClass[r.cls].cost+r.cost.total)*100)/100;
+    });
     // Гроші показуємо, лише якщо ціни задані: колонка з нулями в кожному
     // рядку виглядає як «усе безкоштовно», а це не так — це «ціну ще не
     // внесли», і сплутати їх дорожче, ніж не показати колонку.
     const prices = await loadMealPrices();
-    const money$ = hasPrices(prices);
-    const sumAll = mealCost(tot, prices);
+    const sumAll = rows.reduce((a,r)=>{
+      for(const k of ['lunch','brk','snack','total']) a[k]=Math.round((a[k]+r.cost[k])*100)/100;
+      return a;
+    },{lunch:0,brk:0,snack:0,total:0});
+    const money$ = hasPrices(prices) || sumAll.total !== 0;
     box.innerHTML = `
       <div class="k-total"><b>${tot.lunch}</b><span>людино-днів з обідом</span>
         <div class="k-total-snack">${tot.brk?`${tot.brk} зі сніданком · `:''}+ ${tot.snack} з підвечірком</div></div>
-      ${money$ ? `<div class="k-total k-total-money"><b>${taMoney(sumAll.total)} zł</b><span>разом за період</span>
+      ${money$ ? `<div class="k-total k-total-money"><b>${taMoney(sumAll.total)} zł</b><span>разом за період за цінами відповідних днів</span>
         <div class="k-total-snack">обіди ${taMoney(sumAll.lunch)}${
           sumAll.brk?` · сніданки ${taMoney(sumAll.brk)}`:''}${
           sumAll.snack?` · підвечірки ${taMoney(sumAll.snack)}`:''}</div></div>` : ''}
       <div class="k-sub">${escHtml(human(from))} — ${escHtml(human(to))}</div>
       <div class="k-scroll"><table class="k-table"><thead><tr><th>Клас</th><th>Снід.</th><th>Обіди</th><th>Підвеч.</th>${money$?'<th>Сума</th>':''}</tr></thead><tbody>
         ${Object.keys(byClass).sort((a,b)=>a-b).map(c=>`<tr><td>${c}</td><td>${byClass[c].brk||''}</td><td><b>${byClass[c].lunch}</b></td><td>${byClass[c].snack||''}</td>${
-          money$?`<td>${taMoney(mealCost(byClass[c], prices).total)} zł</td>`:''}</tr>`).join('')}
+          money$?`<td>${taMoney(byClass[c].cost)} zł</td>`:''}</tr>`).join('')}
       </tbody></table></div>
       <div class="k-skip-title">Поіменно</div>
       <div class="k-scroll"><table class="k-table"><thead><tr><th>Учень</th><th>Кл.</th><th>Снід.</th><th>Обіди</th><th>Підвеч.</th>${money$?'<th>Сума</th>':''}</tr></thead><tbody>
         ${rows.sort((a,b)=>b.lunch-a.lunch || a.name.localeCompare(b.name,'uk'))
               .map(r=>`<tr><td>${escHtml(r.name)}</td><td>${r.cls}</td><td>${r.brk||''}</td><td><b>${r.lunch}</b></td><td>${r.snack||''}</td>${
-                money$?`<td>${taMoney(mealCost(r, prices).total)} zł</td>`:''}</tr>`).join('')}
+                money$?`<td>${taMoney(r.cost.total)} zł</td>`:''}</tr>`).join('')}
       </tbody></table></div>
       <button onclick="exportMealStats()" style="background:#e0f7fa;color:#00838f;border:1px solid #80deea;margin-top:11px;">📄 Вивантажити CSV</button>`;
     window.__mealStats = { from, to, rows };
@@ -1175,7 +1199,7 @@ window.loadMealStats = async function(){
 // й «безкоштовно» — різні речі, тому показ вирішує окремо: там, де
 // жодної ціни не задано, сум не показуємо взагалі.
 let pricesCache = null;
-export async function loadMealPrices(force){
+export async function loadMealPrices(force, strict=false){
   if(pricesCache && !force) return pricesCache;
   try{
     const snap = await get(child(ref(db),'meal_prices'));
@@ -1183,6 +1207,7 @@ export async function loadMealPrices(force){
     pricesCache = { lunch: Number(v.lunch)||0, breakfast: Number(v.breakfast)||0,
                     snack: Number(v.snack)||0, staff: Number(v.staff)||0 };
   }catch(e){
+    if(strict) throw e;
     // Ціни — прикраса звіту, а не умова його роботи: без них показуємо
     // кількості, як і раніше.
     console.warn('[Push School] ціни харчування:', e.message);
@@ -1203,24 +1228,46 @@ export function mealCost(counts, prices){
   const r = v => Math.round(v*100)/100;
   return { lunch:r(lunch), brk:r(brk), snack:r(snack), total:r(lunch+brk+snack) };
 }
+export function mealPriceAt(date,current,history){
+  const all=Object.keys(history||{}).sort(),keys=all.filter(d=>d<=date);
+  return keys.length ? (history[keys[keys.length-1]]||current||{})
+       : all.length ? (history[all[0]]||current||{}) : (current||{});
+}
 // Чи є сенс показувати гроші взагалі
 export function hasPrices(prices){
   const p = prices || {};
   return !!(Number(p.lunch) || Number(p.breakfast) || Number(p.snack) || Number(p.staff));
 }
 
+// Для звітів і балансу рахуємо тільки страви, які справді були в меню.
+// Вибір А/Б впливає на кухонний розподіл порцій, але не подвоює їхню ціну.
+export function servedMeals(e, menuDay){
+  const m=menuDay||{};
+  if(!menuHasFood(m)) return {lunch:false, snack:false, breakfast:false};
+  return {
+    lunch:!!e.lunch && !!(m.first || m.second || m.second2 || m.side || m.side2),
+    snack:!!e.snack && !!m.snack,
+    breakfast:!!e.breakfast && !!String(m.breakfast||'').trim()
+  };
+}
+
 // Спільний рахунок для кухні і для батьків. onlyCls/onlyName звужують вибірку.
-export async function computeMealStats(from, to, onlyCls, onlyName){
+export async function computeMealStats(from, to, onlyCls, onlyName, withCost=false){
   // Обидва вузли ключуються датою, тож просимо лише обраний період.
   // Раніше статистика за тиждень качала весь навчальний рік.
   const [stSnap, planSnap, att, days] = await Promise.all([
     get(child(ref(db),'students_list')),
     get(child(ref(db),'meal_plan')),
-    getSchoolRange('attendance', from, to),
-    getDateRange('meal_day', from, to)
+    getSchoolRange('attendance', from, to, withCost),
+    getDateRange('meal_day', from, to, withCost)
   ]);
   const students = stSnap.exists()?stSnap.val():{};
   const plans    = planSnap.exists()?planSnap.val():{};
+  const [currentPrices, priceHistory, ledgerAll] = withCost ? await Promise.all([
+    loadMealPrices(true,true),
+    get(child(ref(db),'meal_price_history')).then(s=>s.exists()?s.val():{}),
+    get(child(ref(db),'meal_ledger')).then(s=>s.exists()?s.val():{})
+  ]) : [{},{},{}];
 
   const dateList = [];
   const d = new Date(from+'T12:00:00'), end = new Date(to+'T12:00:00');
@@ -1229,6 +1276,28 @@ export async function computeMealStats(from, to, onlyCls, onlyName){
     if(wd>=1 && wd<=5) dateList.push(iso(d));   // вихідні не рахуємо
     d.setDate(d.getDate()+1);
   }
+  const noSchool = await loadNoSchoolDays(dateList, true);
+  const menus = {};
+  for(let i=0;i<dateList.length;i+=30){
+    const chunk=dateList.slice(i,i+30);
+    const snaps=await Promise.all(chunk.map(date=>get(child(ref(db),`menu/${date}`))));
+    chunk.forEach((date,j)=>{ menus[date]=snaps[j].exists()?snaps[j].val():null; });
+  }
+  // Закритий день лишається робочим у звіті, навіть якщо згодом меню
+  // видалили або заднім числом змінили навчальний календар.
+  const ledgerServiceDays=new Set();
+  if(withCost){
+    for(const [cls, classRows] of Object.entries(ledgerAll||{})){
+      if(onlyCls&&cls!==onlyCls)continue;
+      for(const studentRows of Object.values(classRows||{})){
+        for(const [date, row] of Object.entries(studentRows||{})){
+          if(row&&!row.closed)ledgerServiceDays.add(date);
+        }
+      }
+    }
+  }
+  const serviceDays=dateList.filter(date=>ledgerServiceDays.has(date) ||
+    (!noSchool[date]&&menuHasFood(menus[date]))).length;
   const out = [];
   for(let i=1;i<=11;i++){
     const cls = `class_${i}`;
@@ -1237,18 +1306,39 @@ export async function computeMealStats(from, to, onlyCls, onlyName){
     for(const key in students[cls]){
       const name = students[cls][key];
       if(onlyName && name !== onlyName && key !== onlyName) continue;
-      const plan = plans[cls] && plans[cls][key];
+      const plan = byKeyOrName(plans[cls],key,name);
       let lunch=0, snack=0, brk=0, absent=0;
+      const cost={lunch:0,brk:0,snack:0,total:0};
       dateList.forEach(date=>{
-        const isAbsent = !!absentSet(att[cls] && att[cls][date])[key];
-        const ov = days[date] && days[date][cls] && days[date][cls][key];
+        const fixed=withCost&&ledgerAll?.[cls]?.[key]?.[date];
+        if(fixed&&Number.isFinite(Number(fixed.total))){
+          lunch+=Number(fixed.counts?.lunch)||0;
+          brk+=Number(fixed.counts?.breakfast)||0;
+          snack+=Number(fixed.counts?.snack)||0;
+          if(fixed.absent)absent++;
+          cost.lunch=Math.round((cost.lunch+Number(fixed.lunch||0))*100)/100;
+          cost.brk=Math.round((cost.brk+Number(fixed.breakfast||0))*100)/100;
+          cost.snack=Math.round((cost.snack+Number(fixed.snack||0))*100)/100;
+          cost.total=Math.round((cost.lunch+cost.brk+cost.snack)*100)/100;
+          return;
+        }
+        if(noSchool[date]) return;
+        const absentToday=absentSet(att[cls] && att[cls][date]);
+        const isAbsent = !!(absentToday[key] || absentToday[name]);
+        const ov = byKeyOrName(days[date] && days[date][cls],key,name);
         const e = effectiveMeals(plan, ov, isAbsent, weekdayIdx(date));
         if(e.absent){ absent++; return; }
-        if(e.lunch) lunch++;
-        if(e.snack) snack++;
-        if(e.breakfast) brk++;
+        const served=servedMeals(e,menus[date]);
+        if(served.lunch) lunch++;
+        if(served.snack) snack++;
+        if(served.breakfast) brk++;
+        if(withCost){
+          const daily=mealCost({lunch:+served.lunch,brk:+served.breakfast,snack:+served.snack},
+            mealPriceAt(date,currentPrices,priceHistory));
+          for(const k of Object.keys(cost)) cost[k]=Math.round((cost[k]+daily[k])*100)/100;
+        }
       });
-      if(lunch || snack || brk) out.push({ cls:i, name, lunch, snack, brk, absent, days:dateList.length });
+      if(lunch || snack || brk) out.push({ cls:i, name, lunch, snack, brk, absent, days:serviceDays, cost });
     }
   }
   return out;
@@ -1984,12 +2074,18 @@ window.saveMealSettings = async function(){
 // батька щоразу падав на Permission denied, а без обробки помилки напис
 // «Рахуємо...» лишався назавжди. Тут читаємо рівно те, що дозволено:
 // свій клас і свою дитину.
-export async function computeMyMealStats(from, to, cls, sid){
-  const [planSnap, attRange] = await Promise.all([
-    get(child(ref(db), `meal_plan/${cls}/${sid}`)),
-    getDateRange(`attendance/${cls}`, from, to)
+export async function computeMyMealStats(from, to, cls, sid, withCost=false){
+  const [nameSnap, attRange] = await Promise.all([
+    get(child(ref(db), `students_list/${cls}/${sid}`)),
+    getDateRange(`attendance/${cls}`, from, to, true)
   ]);
-  const plan = planSnap.exists() ? planSnap.val() : null;
+  const name=nameSnap.exists()?String(nameSnap.val()||''):String(currentUserData?.studentName||'');
+  const [planSnap, altPlanSnap] = await Promise.all([
+    get(child(ref(db), `meal_plan/${cls}/${sid}`)),
+    name&&name!==sid?get(child(ref(db), `meal_plan/${cls}/${name}`)):null
+  ]);
+  const plan = pickFresher(planSnap.exists()?planSnap.val():null,
+    altPlanSnap&&altPlanSnap.exists()?altPlanSnap.val():null);
 
   const dates = [];
   const d = new Date(from + 'T12:00:00'), end = new Date(to + 'T12:00:00');
@@ -2002,44 +2098,72 @@ export async function computeMyMealStats(from, to, cls, sid){
   // Дні, коли школи немає: канікули та свята. Раніше статистика їх не
   // знала й рахувала обіди за постійним планом навіть тоді, коли кухня
   // не працювала.
-  const noSchool = await loadNoSchoolDays(dates);
+  const noSchool = await loadNoSchoolDays(dates, true);
+  const [currentPrices, priceHistory, ledger] = withCost ? await Promise.all([
+    loadMealPrices(true,true),
+    get(child(ref(db),'meal_price_history')).then(s=>s.exists()?s.val():{}),
+    get(child(ref(db),`meal_ledger/${cls}/${sid}`)).then(s=>s.exists()?s.val():{})
+  ]) : [{},{},{}];
 
   // Разові зміни на день лежать у meal_day, а меню — у menu/{дата}.
-  // Корінь meal_day родині закритий, тож читаємо поденно. Для довгих
-  // періодів це були б сотні запитів — там рахуємо за планом і чесно
-  // про це попереджаємо.
+  // Корінь meal_day родині закритий, тож читаємо поденно. Баланс викликає
+  // цю функцію відрізками до 60 днів, щоб врахувати кожну разову зміну.
+  // Дуже довгий звіт у вікні статистики поки показує тільки постійний план.
   const OVERRIDE_LIMIT = 70;
-  const withOverrides = dates.length <= OVERRIDE_LIMIT;
+  const withOverrides = withCost || dates.length <= OVERRIDE_LIMIT;
   const ovByDate = {}, menuByDate = {};
   if(withOverrides){
-    const [ovs, menus] = await Promise.all([
-      Promise.all(dates.map(date =>
-        get(child(ref(db), `meal_day/${date}/${cls}/${sid}`)).catch(() => null))),
-      Promise.all(dates.map(date =>
-        get(child(ref(db), `menu/${date}`)).catch(() => null)))
-    ]);
-    dates.forEach((date, i) => {
-      if(ovs[i] && ovs[i].exists()) ovByDate[date] = ovs[i].val();
-      const mv = menus[i] && menus[i].exists() ? (menus[i].val() || {}) : null;
-      // День рахуємо лише тоді, коли кухня справді щось готувала.
-      menuByDate[date] = menuHasFood(mv);
-    });
+    for(let i=0;i<dates.length;i+=30){
+      const chunk=dates.slice(i,i+30);
+      const [ovs, altOvs, menus] = await Promise.all([
+        Promise.all(chunk.map(date => get(child(ref(db), `meal_day/${date}/${cls}/${sid}`)))),
+        name&&name!==sid?Promise.all(chunk.map(date=>get(child(ref(db), `meal_day/${date}/${cls}/${name}`)))):null,
+        Promise.all(chunk.map(date => get(child(ref(db), `menu/${date}`))))
+      ]);
+      chunk.forEach((date,j)=>{
+        const ov=pickFresher(ovs[j].exists()?ovs[j].val():null,
+          altOvs&&altOvs[j].exists()?altOvs[j].val():null);
+        if(ov) ovByDate[date]=ov;
+        menuByDate[date]=menus[j].exists()?(menus[j].val()||{}):null;
+      });
+    }
   }
 
   let lunch = 0, snack = 0, brk = 0, absent = 0, skipped = 0;
+  const cost={lunch:0,brk:0,snack:0,total:0};
   dates.forEach(date => {
+    const fixed=withCost&&ledger?.[date];
+    if(fixed&&Number.isFinite(Number(fixed.total))){
+      if(fixed.closed)skipped++;
+      if(fixed.absent)absent++;
+      lunch+=Number(fixed.counts?.lunch)||0;
+      brk+=Number(fixed.counts?.breakfast)||0;
+      snack+=Number(fixed.counts?.snack)||0;
+      cost.lunch=Math.round((cost.lunch+Number(fixed.lunch||0))*100)/100;
+      cost.brk=Math.round((cost.brk+Number(fixed.breakfast||0))*100)/100;
+      cost.snack=Math.round((cost.snack+Number(fixed.snack||0))*100)/100;
+      cost.total=Math.round((cost.lunch+cost.brk+cost.snack)*100)/100;
+      return;
+    }
     // Канікули, свято або день без меню — кухня не готувала, рахувати нічого
-    if(noSchool[date] || (withOverrides && menuByDate[date] === false)){ skipped++; return; }
-    const att = (attRange && attRange[date] && attRange[date][sid]) || null;
+    if(noSchool[date] || (withOverrides && !menuHasFood(menuByDate[date]))){ skipped++; return; }
+    const att = (attRange && attRange[date] &&
+      (attRange[date][sid] || attRange[date][name])) || null;
     const isAbsent = !!(att && Object.values(att).some(r => r && r.status === 'absent'));
     if(isAbsent){ absent++; return; }
     const ov = ovByDate[date] || null;
     const e = effectiveMeals(plan, ov, false, weekdayIdx(date));
-    if(e.lunch) lunch++;
-    if(e.snack) snack++;
-    if(e.breakfast) brk++;
+    const served=withOverrides ? servedMeals(e,menuByDate[date]) : e;
+    if(served.lunch) lunch++;
+    if(served.snack) snack++;
+    if(served.breakfast) brk++;
+    if(withCost){
+      const daily=mealCost({lunch:+served.lunch,brk:+served.breakfast,snack:+served.snack},
+        mealPriceAt(date,currentPrices,priceHistory));
+      for(const k of Object.keys(cost)) cost[k]=Math.round((cost[k]+daily[k])*100)/100;
+    }
   });
-  return [{ lunch, snack, brk, absent, days: dates.length - skipped, skipped, withOverrides }];
+  return [{ lunch, snack, brk, absent, days: dates.length - skipped, skipped, withOverrides, cost }];
 }
 
 window.openMyMealStats = async function(){
@@ -2100,7 +2224,7 @@ window.reloadMyMealStats = async function(){
   body.innerHTML = '<p class="empty-msg">Рахуємо...</p>';
   let rows;
   try{
-    rows = await computeMyMealStats(from, to, cls, sid);
+    rows = await computeMyMealStats(from, to, cls, sid, true);
   }catch(e){
     body.innerHTML = `<p class="empty-msg" style="color:var(--red);">Не вдалося порахувати: ${escHtml(e.message||'відмова')}</p>`;
     return;
@@ -2110,14 +2234,14 @@ window.reloadMyMealStats = async function(){
   // mealCost(): дві копії розійшлися б у першому ж місяці, і батько
   // побачив би не те число, яке назве кухня.
   const prices = await loadMealPrices();
-  const cost = mealCost(r, prices);
-  const moneyBlock = hasPrices(prices) ? `
+  const cost = r.cost || mealCost(r, prices);
+  const moneyBlock = (hasPrices(prices) || cost.total !== 0) ? `
     <div class="pms-money">
       <b>${taMoney(cost.total)} zł</b>
       <span>за період${cost.lunch?` · обіди ${taMoney(cost.lunch)}`:''}${
         cost.brk?` · сніданки ${taMoney(cost.brk)}`:''}${
         cost.snack?` · підвечірки ${taMoney(cost.snack)}`:''}</span>
-      <small>Рахунок довідковий: оплата — у школі, як завжди.</small>
+      <small>Сума за харчування за період за цінами відповідних днів, без урахування поповнень.</small>
     </div>` : '';
   body.innerHTML = `
     <div class="pms-grid">
