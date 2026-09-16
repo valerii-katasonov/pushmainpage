@@ -76,18 +76,54 @@ let gvMirrorPending=null, gvMirrorDone=null;
 let gvLastWeek=null, gvLastSubj=null;   // {key, html}
 const weekKey = (cls,sid,week) => `${cls}|${sid}|${week}`;
 const subjKeyOf = (cls,sid,subj) => `${cls}|${sid}|${subj}`;
+// ПРОФІЛЬ ГОТОВИЙ НЕ ОДРАЗУ — І ЦЕ ГОЛОВНА ПРИЧИНА ПОРОЖНІХ ОЦІНОК.
+//
+// При вході кабінет малює все підряд, а дані про дитину (клас, ключ у
+// списку класу) в цю мить ще дочитуються. Показ оцінок стартував раніше,
+// ніж зʼявлялася дитина: або відразу писав «Дитину не визначено», або
+// встигав прочитати базу, поки профіль змінювався під ним, і скасовувався
+// власною ж перевіркою. Малювати вдруге було нікому — і блок лишався
+// порожнім до ручного дотику до вкладки чи кнопки «Оновити».
+//
+// Тому показ уміє повторити сам себе. Спершу часто (профіль зазвичай
+// доходить за пів секунди), далі рідше, і не довше ніж кілька секунд:
+// нескінченне тупцювання по базі гірше за чесне «не завантажилося».
+let gvWeekRetry=null, gvSubjRetry=null;
+const RETRY_LIMIT=12;
+function planRetry(kind, attempt, run){
+  if(attempt>=RETRY_LIMIT) return false;
+  const delay = attempt<4 ? 250 : 700;
+  if(kind==='week'){ clearTimeout(gvWeekRetry); gvWeekRetry=setTimeout(()=>run(attempt+1), delay); }
+  else { clearTimeout(gvSubjRetry); gvSubjRetry=setTimeout(()=>run(attempt+1), delay); }
+  return true;
+}
+function stopRetry(kind){
+  if(kind==='week'){ clearTimeout(gvWeekRetry); gvWeekRetry=null; }
+  else { clearTimeout(gvSubjRetry); gvSubjRetry=null; }
+}
+
 // Показуємо спінер лише тоді, коли показувати більше нічого.
 function beginBox(box, cached){
   if(cached && cached.html){ box.innerHTML = cached.html; return; }
   box.innerHTML = '<p class="empty-msg">Завантаження...</p>';
 }
-// Запит скасовано (перемкнули дитину, прийшов свіжіший) — екран не
-// можна лишати на «Завантаження...». Повертаємо те, що було.
-function abortBox(box, cached){
+// Запит скасовано. Дві різні причини — дві різні відповіді.
+//
+// Якщо блок уже перехопив СВІЖІШИЙ показ (mine=false), чіпати його не
+// можна взагалі: він сам домалює. Саме звідси при вході блимало
+// «Оцінки не завантажилися» — кабінет запускає показ двічі (дашборд і
+// відновлення вкладки з памʼяті браузера), і перший писав помилку поверх
+// роботи другого.
+//
+// Якщо ж свіжішого немає, а показ усе одно скасовано, значить змінилася
+// дитина. Тоді повертаємо те, що було, — але тільки якщо нам більше нічим
+// зайнятися: повтор уже заплановано вище за викликом.
+function abortBox(box, cached, mine){
+  if(mine === false) return;
   if(cached && cached.html) box.innerHTML = cached.html;
   else if(/Завантаження/.test(box.innerHTML||''))
     box.innerHTML = '<p class="empty-msg">Оцінки не завантажилися. '
-      + '<button type="button" onclick="renderGradesWeek()">Спробувати ще раз</button></p>';
+      + '<button type="button" onclick="renderGradesWeek(null,true)">Спробувати ще раз</button></p>';
 }
 
 // Два блоки на екрані стартують одночасно: ділимо лише запит, який ще йде.
@@ -242,13 +278,25 @@ function reactionRow(date, subj, mine){
     + btn('👍') + btn('❤️') + btn('🔥') + `</div>`;
 }
 
-export async function renderGradesWeek(weekStart, force){
+export async function renderGradesWeek(weekStart, force, attempt=0){
   const box = document.getElementById(boxWeek());
   if(!box) return;
   const cls = getActiveClass();
   const sid = mySid(cls), name=currentUserData?.studentName, profileSid=currentUserData?.studentId, role=currentUserData?.role;
   const generation=gvGeneration, request=++gvWeekRequest;
-  if(!cls || !sid){ box.innerHTML = '<p class="empty-msg">Дитину не визначено.</p>'; return; }
+  const again = n => renderGradesWeek(weekStart, force, n);
+  if(!cls || !sid){
+    // Не «Дитину не визначено» одразу: при вході профіль дочитується ще
+    // пару секунд, і ця напис була неправдою — дитина є, просто ще не
+    // доїхала. Чекаємо на неї, і лише коли справді не дочекалися — кажемо.
+    if(planRetry('week', attempt, again)){
+      if(!/Завантаження/.test(box.innerHTML||'') && !(box.innerHTML||'').trim())
+        box.innerHTML = '<p class="empty-msg">Завантаження...</p>';
+      return;
+    }
+    box.innerHTML = '<p class="empty-msg">Дитину не визначено.</p>'; return;
+  }
+  stopRetry('week');
 
   gvWeek = weekStart || gvWeek || mondayOf(localDateString);
   const week=gvWeek, days = weekDays(week);
@@ -264,13 +312,23 @@ export async function renderGradesWeek(weekStart, force){
       get(query(child(ref(db),`reactions/${cls}`), orderByKey(), startAt(days[0]), endAt(days[4]))).catch(()=>null),
       gvScales?Promise.resolve(null):get(child(ref(db),`grade_scales/${cls}`)).catch(()=>null)
     ]);
-    if(!stillViewing(cls,name,role,generation,request,'week')){ abortBox(box,cached); return; }
+    if(!stillViewing(cls,name,role,generation,request,'week')){
+      // Нас не витіснив свіжіший показ, а показ усе одно не наш —
+      // отже, дитина змінилася під час читання. Малюємо для нової.
+      const mine = request===gvWeekRequest;
+      if(mine) planRetry('week', attempt, again);
+      abortBox(box,cached,mine); return;
+    }
     mirror=mirSnap;
     if(scaleSnap)gvScales=scaleSnap.exists()?scaleSnap.val():{};
     comments  = (cmSnap && cmSnap.exists()) ? (cmSnap.val() || {}) : {};
     reactions = (rxSnap && rxSnap.exists()) ? (rxSnap.val() || {}) : {};
   }catch(e){
-    if(!stillViewing(cls,name,role,generation,request,'week')){ abortBox(box,cached); return; }
+    if(!stillViewing(cls,name,role,generation,request,'week')){
+      const mine = request===gvWeekRequest;
+      if(mine) planRetry('week', attempt, again);
+      abortBox(box,cached,mine); return;
+    }
     // Мовчазний спінер — головна повторювана вада порталу.
     // Якщо оцінки вже були на екрані, лишаємо їх і дописуємо рядок про
     // невдале оновлення: стерти показане через збій мережі — гірше, ніж
@@ -342,13 +400,21 @@ window.gvShiftWeek = function(delta){
 };
 
 // ── ЗА ПРЕДМЕТОМ ────────────────────────────────────────────────
-export async function renderGradesSubject(subj, force){
+export async function renderGradesSubject(subj, force, attempt=0){
   const box = document.getElementById(boxSubj());
   if(!box) return;
   const cls = getActiveClass();
   const sid = mySid(cls), name=currentUserData?.studentName, role=currentUserData?.role;
   const generation=gvGeneration, request=++gvSubjectRequest;
-  if(!cls || !sid){ box.innerHTML = '<p class="empty-msg">Дитину не визначено.</p>'; return; }
+  const again = n => renderGradesSubject(subj, force, n);
+  if(!cls || !sid){
+    if(planRetry('subject', attempt, again)){
+      if(!(box.innerHTML||'').trim()) box.innerHTML = '<p class="empty-msg">Завантаження...</p>';
+      return;
+    }
+    box.innerHTML = '<p class="empty-msg">Дитину не визначено.</p>'; return;
+  }
+  stopRetry('subject');
 
   const wantSubj = subj || gvSubject || '';
   const cached = (gvLastSubj && gvLastSubj.key===subjKeyOf(cls,sid,wantSubj)) ? gvLastSubj : null;
@@ -361,13 +427,21 @@ export async function renderGradesSubject(subj, force){
         + `<p class="empty-msg" style="color:var(--red);">Не вдалося оновити: ${escHtml(e.message||'')}</p>`;
     return;
   }
-  if(!stillViewing(cls,name,role,generation,request,'subject')){ abortBox(box,cached); return; }
+  if(!stillViewing(cls,name,role,generation,request,'subject')){
+    const mine = request===gvSubjectRequest;
+    if(mine) planRetry('subject', attempt, again);
+    abortBox(box,cached,mine); return;
+  }
   let scales=gvScales;
   if(!scales){
     try{const snap=await get(child(ref(db),`grade_scales/${cls}`));scales=snap.exists()?snap.val():{};}
     catch(e){scales={};}
   }
-  if(!stillViewing(cls,name,role,generation,request,'subject')){ abortBox(box,cached); return; }
+  if(!stillViewing(cls,name,role,generation,request,'subject')){
+    const mine = request===gvSubjectRequest;
+    if(mine) planRetry('subject', attempt, again);
+    abortBox(box,cached,mine); return;
+  }
   gvScales=scales;
 
   const subjects = subjectsWithGrades(mirror);
@@ -412,6 +486,7 @@ window.renderGradesSubject = renderGradesSubject;
 // екран нової дитини, навіть якщо відповідь із бази прийшла пізніше.
 export function resetGradesCache(){
   gvGeneration++;gvWeekRequest++;gvSubjectRequest++;
+  stopRetry('week');stopRetry('subject');
   gvMirrorPending=null;gvMirrorDone=null;
   gvLastWeek=null;gvLastSubj=null;
   gvSubject='';gvScales=null;gvWeek=null;
