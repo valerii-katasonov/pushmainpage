@@ -971,11 +971,23 @@ window.submitAttendance=async function(role='parent'){
   el.style.display='block';
   checkTeacherAttendanceAlert(role);
   const result=await notifyEvent('attendance_report',{class:cls,studentName:profile.studentName,value:type});
-  // Запис уже збережений: помилка push не означає втрату відмітки.
-  el.innerText+=result.ok&&result.sent
-    ? ' · Сповіщення вчителям надіслано.'
-    : result.ok ? ' · Запис видно в кабінеті вчителя; немає підписаних отримувачів push.'
-                : ` · Запис збережено, але push учителям не надіслано: ${result.error}`;
+  // ЩО ТУТ ВАЖЛИВО СКАЗАТИ БАТЬКОВІ, А ЩО НІ.
+  //
+  // Відмітка вже в базі, і вчитель побачить її в кабінеті незалежно від
+  // того, чи дійшов push. Тому головне речення — «школа це бачить».
+  //
+  // Раніше сюди виводився дослівний текст помилки Firebase, і батько о
+  // восьмій ранку читав «Device unregistered». Він не може з цим нічого
+  // зробити, і зрозуміти з цього, чи попередив він школу, теж не може.
+  // Технічна причина (мертві токени після переїзду на новий домен) —
+  // наша робота, а не його.
+  el.innerText += result.ok && result.sent
+    ? ' · Учителям надіслано сповіщення.'
+    : ' · Учитель побачить це в кабінеті.';
+  // А от у консоль пишемо все як є: без цього мертві підписки знову
+  // стануть невидимими.
+  if(!(result.ok && result.sent))
+    console.warn('Відмітка збережена, push не надіслано:', result.error || 'немає підписаних отримувачів');
 };
 window.updateAttOptionsStudent=function(){ fillAttReasons('s'); };
 window.sendReaction=function(date,subject,emoji){if(!currentUserData)return;
