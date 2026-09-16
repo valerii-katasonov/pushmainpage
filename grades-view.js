@@ -65,25 +65,65 @@ let gvWeek = null;        // понеділок показаного тижня
 let gvSubject = '';       // обраний предмет
 let gvScales = null;
 let gvGeneration=0, gvWeekRequest=0, gvSubjectRequest=0;
-let gvMirrorPending=null;
+let gvMirrorPending=null, gvMirrorDone=null;
+
+// ОСТАННІЙ ВДАЛИЙ ПОКАЗ. Вкладка «Оцінки» перечитує базу щоразу, коли
+// батько на неї повертається, — і це правильно. Неправильно було стирати
+// при цьому вже показані оцінки на «Завантаження...»: на телефоні з
+// поганим звʼязком екран блимав порожнечею при кожному дотику до вкладки,
+// а якщо відповідь не приходила — так порожнім і лишався. Тому тримаємо
+// останню намальовану розмітку й підміняємо її лише готовою новою.
+let gvLastWeek=null, gvLastSubj=null;   // {key, html}
+const weekKey = (cls,sid,week) => `${cls}|${sid}|${week}`;
+const subjKeyOf = (cls,sid,subj) => `${cls}|${sid}|${subj}`;
+// Показуємо спінер лише тоді, коли показувати більше нічого.
+function beginBox(box, cached){
+  if(cached && cached.html){ box.innerHTML = cached.html; return; }
+  box.innerHTML = '<p class="empty-msg">Завантаження...</p>';
+}
+// Запит скасовано (перемкнули дитину, прийшов свіжіший) — екран не
+// можна лишати на «Завантаження...». Повертаємо те, що було.
+function abortBox(box, cached){
+  if(cached && cached.html) box.innerHTML = cached.html;
+  else if(/Завантаження/.test(box.innerHTML||''))
+    box.innerHTML = '<p class="empty-msg">Оцінки не завантажилися. '
+      + '<button type="button" onclick="renderGradesWeek()">Спробувати ще раз</button></p>';
+}
 
 // Два блоки на екрані стартують одночасно: ділимо лише запит, який ще йде.
 // Наступне відкриття вкладки перечитує базу, щоб нові/видалені оцінки
 // іншого пристрою не залишалися в старому кеші до виходу з кабінету.
-function readGradesMirror(cls,sid){
+const MIRROR_TTL = 20000;   // мс
+function readGradesMirror(cls,sid,force){
   const key=`${cls}/${sid}`;
   if(gvMirrorPending?.key===key)return gvMirrorPending.promise;
+  // Вкладку відкривають і закривають десятки разів за урок. Читати заради
+  // кожного дотику весь рік оцінок — зайвий трафік і зайва нагода впасти.
+  // Двадцяти секунд досить, щоб дотик «туди-назад» не ходив у базу, і
+  // замало, щоб батько встиг не побачити щойно виставлену оцінку.
+  if(!force && gvMirrorDone?.key===key && Date.now()-gvMirrorDone.at < MIRROR_TTL)
+    return Promise.resolve(gvMirrorDone.value);
   const pending={key,promise:null};
   pending.promise=get(child(ref(db),`student_grades/${cls}/${sid}`))
-    .then(snap=>snap.exists()?(snap.val()||{}):{})
+    .then(snap=>{
+      const v=snap.exists()?(snap.val()||{}):{};
+      gvMirrorDone={key,value:v,at:Date.now()};
+      return v;
+    })
     .finally(()=>{if(gvMirrorPending===pending)gvMirrorPending=null;});
   gvMirrorPending=pending;
   return pending.promise;
 }
-function stillViewing(cls,sid,role,generation,request,kind){
+// ДИТИНУ ВПІЗНАЄМО ЗА ІМʼЯМ І КЛАСОМ, А НЕ ЗА ВИВЕДЕНИМ КЛЮЧЕМ.
+// mySid() щоразу заглядає в довідник класу, а той живе в памʼяті модуля й
+// може бути перезавантажений під час польоту запиту. Тоді те саме
+// звернення «переставало бути своїм» на півдорозі, показ скасовувався — і
+// на екрані назавжди лишалося «Завантаження...».
+function stillViewing(cls,name,role,generation,request,kind){
   return generation===gvGeneration
     &&request===(kind==='week'?gvWeekRequest:gvSubjectRequest)
-    &&getActiveClass()===cls&&mySid(cls)===sid&&currentUserData?.role===role;
+    &&getActiveClass()===cls&&currentUserData?.studentName===name
+    &&currentUserData?.role===role;
 }
 
 // ── ЧИСТА ЧАСТИНА ───────────────────────────────────────────────
@@ -202,7 +242,7 @@ function reactionRow(date, subj, mine){
     + btn('👍') + btn('❤️') + btn('🔥') + `</div>`;
 }
 
-export async function renderGradesWeek(weekStart){
+export async function renderGradesWeek(weekStart, force){
   const box = document.getElementById(boxWeek());
   if(!box) return;
   const cls = getActiveClass();
@@ -212,25 +252,32 @@ export async function renderGradesWeek(weekStart){
 
   gvWeek = weekStart || gvWeek || mondayOf(localDateString);
   const week=gvWeek, days = weekDays(week);
-  box.innerHTML = '<p class="empty-msg">Завантаження...</p>';
+  const key=weekKey(cls,sid,week);
+  const cached = (gvLastWeek && gvLastWeek.key===key) ? gvLastWeek : null;
+  beginBox(box, cached);
 
   let comments = {}, reactions = {}, mirror={}, commentsError=null;
   try{
     const [mirSnap, cmSnap, rxSnap, scaleSnap] = await Promise.all([
-      readGradesMirror(cls,sid),
+      readGradesMirror(cls,sid,force),
       get(query(child(ref(db),`comments/${cls}`), orderByKey(), startAt(days[0]), endAt(days[4]))).catch(e=>{commentsError=e;return null;}),
       get(query(child(ref(db),`reactions/${cls}`), orderByKey(), startAt(days[0]), endAt(days[4]))).catch(()=>null),
       gvScales?Promise.resolve(null):get(child(ref(db),`grade_scales/${cls}`)).catch(()=>null)
     ]);
-    if(!stillViewing(cls,sid,role,generation,request,'week'))return;
+    if(!stillViewing(cls,name,role,generation,request,'week')){ abortBox(box,cached); return; }
     mirror=mirSnap;
     if(scaleSnap)gvScales=scaleSnap.exists()?scaleSnap.val():{};
     comments  = (cmSnap && cmSnap.exists()) ? (cmSnap.val() || {}) : {};
     reactions = (rxSnap && rxSnap.exists()) ? (rxSnap.val() || {}) : {};
   }catch(e){
-    if(!stillViewing(cls,sid,role,generation,request,'week'))return;
+    if(!stillViewing(cls,name,role,generation,request,'week')){ abortBox(box,cached); return; }
     // Мовчазний спінер — головна повторювана вада порталу.
-    box.innerHTML = `<p class="empty-msg" style="color:var(--red);">Не вдалося завантажити оцінки: ${escHtml(e.message||'')}</p>`;
+    // Якщо оцінки вже були на екрані, лишаємо їх і дописуємо рядок про
+    // невдале оновлення: стерти показане через збій мережі — гірше, ніж
+    // показати трохи несвіже.
+    box.innerHTML = (cached && cached.html ? cached.html : '')
+      + `<p class="empty-msg" style="color:var(--red);">Не вдалося оновити оцінки: ${escHtml(e.message||'')} `
+      + `<button type="button" onclick="renderGradesWeek(null,true)">Повторити</button></p>`;
     return;
   }
 
@@ -243,7 +290,7 @@ export async function renderGradesWeek(weekStart){
         <span>${total ? `оцінок: ${total}` : 'оцінок немає'}</span></div>
       <button type="button" onclick="gvShiftWeek(1)">→</button>
     </div>
-    <button type="button" class="hw-today" onclick="renderGradesWeek();renderGradesSubject()">↻ Оновити оцінки й коментарі</button>
+    <button type="button" class="hw-today" onclick="renderGradesWeek(null,true);renderGradesSubject(null,true)">↻ Оновити оцінки й коментарі</button>
     ${week !== mondayOf(localDateString)
       ? `<button type="button" class="hw-today" onclick="gvShiftWeek(0)">Повернутися до поточного тижня</button>` : ''}`;
 
@@ -271,10 +318,15 @@ export async function renderGradesWeek(weekStart){
   }).join('');
 
   const commentWarning=commentsError
-    ? '<p class="empty-msg" style="color:var(--red);">Не вдалося завантажити коментарі. <button type="button" onclick="renderGradesWeek()">Повторити</button></p>' : '';
-  box.innerHTML = nav + commentWarning + (blocks || (commentsError
+    ? '<p class="empty-msg" style="color:var(--red);">Не вдалося завантажити коментарі. <button type="button" onclick="renderGradesWeek(null,true)">Повторити</button></p>' : '';
+  const html = nav + commentWarning + (blocks || (commentsError
     ? '<p class="empty-msg">Оцінок цього тижня немає.</p>'
     : '<p class="empty-msg">Цього тижня оцінок і коментарів немає.</p>'));
+  // Запамʼятовуємо ЛИШЕ повний показ: якщо коментарі не прочиталися,
+  // підставляти цю розмітку наступного разу замість спінера не можна —
+  // батько подумає, що коментарів немає.
+  if(!commentsError) gvLastWeek={key,html};
+  box.innerHTML = html;
 }
 window.renderGradesWeek = renderGradesWeek;
 
@@ -290,29 +342,32 @@ window.gvShiftWeek = function(delta){
 };
 
 // ── ЗА ПРЕДМЕТОМ ────────────────────────────────────────────────
-export async function renderGradesSubject(subj){
+export async function renderGradesSubject(subj, force){
   const box = document.getElementById(boxSubj());
   if(!box) return;
   const cls = getActiveClass();
-  const sid = mySid(cls), role=currentUserData?.role;
+  const sid = mySid(cls), name=currentUserData?.studentName, role=currentUserData?.role;
   const generation=gvGeneration, request=++gvSubjectRequest;
   if(!cls || !sid){ box.innerHTML = '<p class="empty-msg">Дитину не визначено.</p>'; return; }
 
-  box.innerHTML = '<p class="empty-msg">Завантаження...</p>';
+  const wantSubj = subj || gvSubject || '';
+  const cached = (gvLastSubj && gvLastSubj.key===subjKeyOf(cls,sid,wantSubj)) ? gvLastSubj : null;
+  beginBox(box, cached);
   let mirror;
-  try{mirror=await readGradesMirror(cls,sid);}
+  try{mirror=await readGradesMirror(cls,sid,force);}
   catch(e){
-    if(stillViewing(cls,sid,role,generation,request,'subject'))
-      box.innerHTML = `<p class="empty-msg" style="color:var(--red);">Не вдалося завантажити: ${escHtml(e.message||'')}</p>`;
+    if(stillViewing(cls,name,role,generation,request,'subject'))
+      box.innerHTML = (cached && cached.html ? cached.html : '')
+        + `<p class="empty-msg" style="color:var(--red);">Не вдалося оновити: ${escHtml(e.message||'')}</p>`;
     return;
   }
-  if(!stillViewing(cls,sid,role,generation,request,'subject'))return;
+  if(!stillViewing(cls,name,role,generation,request,'subject')){ abortBox(box,cached); return; }
   let scales=gvScales;
   if(!scales){
     try{const snap=await get(child(ref(db),`grade_scales/${cls}`));scales=snap.exists()?snap.val():{};}
     catch(e){scales={};}
   }
-  if(!stillViewing(cls,sid,role,generation,request,'subject'))return;
+  if(!stillViewing(cls,name,role,generation,request,'subject')){ abortBox(box,cached); return; }
   gvScales=scales;
 
   const subjects = subjectsWithGrades(mirror);
@@ -347,7 +402,9 @@ export async function renderGradesSubject(subj){
          </li>`).join('') + `</ul>`
     : '<p class="empty-msg">З цього предмета оцінок ще немає.</p>';
 
-  box.innerHTML = sel + head + `<ul class="list-dash" style="margin:0 0 9px 0;">${renderGradeFormulaInfo()}</ul>` + list;
+  const html = sel + head + `<ul class="list-dash" style="margin:0 0 9px 0;">${renderGradeFormulaInfo()}</ul>` + list;
+  gvLastSubj={key:subjKeyOf(cls,sid,gvSubject),html};
+  box.innerHTML = html;
 }
 window.renderGradesSubject = renderGradesSubject;
 
@@ -355,6 +412,8 @@ window.renderGradesSubject = renderGradesSubject;
 // екран нової дитини, навіть якщо відповідь із бази прийшла пізніше.
 export function resetGradesCache(){
   gvGeneration++;gvWeekRequest++;gvSubjectRequest++;
-  gvMirrorPending=null;gvSubject='';gvScales=null;gvWeek=null;
+  gvMirrorPending=null;gvMirrorDone=null;
+  gvLastWeek=null;gvLastSubj=null;
+  gvSubject='';gvScales=null;gvWeek=null;
 }
 window.resetGradesCache = resetGradesCache;
