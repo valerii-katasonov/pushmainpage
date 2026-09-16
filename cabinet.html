@@ -163,6 +163,10 @@
     /* ── GRADE EDITOR POPUP ── */
     .grade-editor-popup{position:fixed;z-index:5000;background:#fff;border-radius:13px;box-shadow:0 8px 30px rgba(0,0,0,.25);padding:13px;display:none;min-width:210px;max-width:min(360px,calc(100vw - 20px));max-height:80vh;overflow:auto;border:2px solid var(--teal);animation:popIn .15s ease-out;}
     .grade-editor-popup input[type=text]{width:100%;padding:8px 12px;border:2px solid var(--teal);border-radius:8px;font-size:1.1rem;font-weight:800;text-align:center;color:var(--teal);margin-top:0;}
+    .gep-modifiers{display:none;gap:7px;margin:7px 0 3px;}
+    .gep-modifiers button{flex:1;width:auto;margin:0;padding:6px 8px;border:1px solid #b0bec5;border-radius:8px;background:#f5f8fa;color:#34454d;font-size:.9rem;font-weight:800;}
+    .gep-modifiers button.active{border-color:var(--teal);background:#dff4f2;color:#075b65;}
+    .gep-modifiers small{font-size:.7rem;font-weight:600;}
     /* ПІДКАЗКИ БЕЗ ЗАТРИМКИ.
        Нативний title браузер показує приблизно через секунду, і змінити
        це неможливо — ні CSS, ні скриптом. У редакторі оцінки кнопок два
@@ -2366,6 +2370,10 @@
        у цих класах оцінка і є літера, і набирати її вручну ніде не треба. -->
   <div class="level-btns" id="gep-level-btns" style="display:none;"></div>
   <input type="text" id="gep-value" placeholder="1-6" autocomplete="off">
+  <div class="gep-modifiers" id="gep-modifiers">
+    <button type="button" data-mod="+" onclick="setGradeModifier('+')">+ <small>додає 0,5</small></button>
+    <button type="button" data-mod="-" onclick="setGradeModifier('-')">− <small>знімає 0,25</small></button>
+  </div>
   <div class="gep-hint" id="gep-type-hint">Вид роботи:</div>
   <div class="type-btns" id="gep-type-btns"></div>
   <div style="margin-top:9px;border-top:1px solid #eee;padding-top:8px;">
