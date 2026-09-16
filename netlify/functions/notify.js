@@ -71,6 +71,12 @@ async function getAccessToken(sa) {
 
 // Кому слати: усі, хто увімкнув сповіщення і кого стосується подія.
 // Батьки — за прив'язаною дитиною; учень — за власним іменем.
+// Видалення потрібне рівно для одного: прибрати мертвий токен.
+async function deleteDb(token, path) {
+  const r = await fetch(`${DB}/${path}.json?access_token=${encodeURIComponent(token)}`, { method: 'DELETE' });
+  if (!r.ok) throw new Error(`не вдалося прибрати ${path}: ${r.status}`);
+}
+
 async function readDb(token, path) {
   const r = await fetch(`${DB}/${path}.json?access_token=${encodeURIComponent(token)}`);
   const d = await r.json().catch(() => null);
@@ -388,19 +394,57 @@ exports.handler = async (event) => {
       })
     ));
     const sent = results.filter(r => r.status === 'fulfilled' && r.value.ok).length;
-    let firstError = '';
+
+    // ── МЕРТВІ ТОКЕНИ ТРЕБА ПРИБИРАТИ ──────────────────────────────
+    //
+    // FCM відповідає UNREGISTERED, коли підписки браузера більше немає:
+    // людина перевстановила застосунок, почистила дані сайту або —
+    // найчастіше — портал переїхав на інший домен. Дозвіл на сповіщення
+    // і токен привʼязані до АДРЕСИ сайту, а не до акаунта, тож після
+    // переїзду всі старі токени стають мертвими одночасно.
+    //
+    // Раніше такий рядок лишався в базі назавжди. Наслідків два, і обидва
+    // кепські: у розсилці щоразу числиться отримувач, якого насправді
+    // немає («надіслано 0 з 3»), а батько бачить у кабінеті англійське
+    // «Device unregistered» і не розуміє, збереглося щось чи ні.
+    //
+    // Тепер такий токен видаляємо. Наступного разу людина просто не буде
+    // в списку отримувачів — чесно й тихо, — а щойно вона знову натисне
+    // «Увімкнути», запис зʼявиться сам.
+    const DEAD = /UNREGISTERED|NOT_FOUND|INVALID_ARGUMENT|Requested entity was not found/i;
+    let firstError = '', cleaned = 0;
     if (sent < targets.length) {
-      const bad = results.find(r => r.status === 'rejected' || !r.value.ok);
-      if (bad) {
-        if (bad.status === 'rejected') firstError = bad.reason && bad.reason.message || 'мережева помилка';
-        else {
-          const d = await bad.value.json().catch(() => null);
-          firstError = (d && d.error && (d.error.message || d.error.status)) || `HTTP ${bad.value.status}`;
-        }
+      const problems = [];
+      for (let i = 0; i < results.length; i++) {
+        const r = results[i];
+        if (r.status === 'rejected') { problems.push({ i, msg: r.reason && r.reason.message || 'мережева помилка', dead: false }); continue; }
+        if (r.value.ok) continue;
+        const d = await r.value.json().catch(() => null);
+        const msg = (d && d.error && (d.error.message || d.error.status)) || `HTTP ${r.value.status}`;
+        const code = (d && d.error && d.error.details || []).map(x => x && x.errorCode).join(' ');
+        problems.push({ i, msg, dead: DEAD.test(msg) || DEAD.test(code) || r.value.status === 404 });
       }
+      const deadTokens = new Set(problems.filter(p => p.dead).map(p => targets[p.i]));
+      if (deadTokens.size) {
+        // Токен не знає свого власника — шукаємо його в тому ж вузлі,
+        // з якого щойно брали адресатів.
+        try {
+          const all = await readDb(token, 'push_tokens') || {};
+          for (const uid in all) {
+            if (all[uid] && deadTokens.has(all[uid].token)) {
+              await deleteDb(token, `push_tokens/${uid}`).then(() => { cleaned++; }).catch(() => {});
+            }
+          }
+        } catch (e) { /* прибирання не має зривати саму розсилку */ }
+      }
+      // Про мертві токени окремо не звітуємо: для того, хто натиснув
+      // кнопку, це не помилка. Показуємо лише справжні збої.
+      const real = problems.find(p => !p.dead);
+      firstError = real ? real.msg : '';
     }
     return { statusCode: 200, headers: cors(origin),
-             body: JSON.stringify({ sent, total: targets.length, firstError }) };
+             body: JSON.stringify({ sent, total: targets.length, firstError,
+                                    stale: cleaned || undefined }) };
   } catch (e) {
     return fail(500, 'Не вдалося надіслати: ' + e.message, origin);
   }
