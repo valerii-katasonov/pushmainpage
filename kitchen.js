@@ -40,6 +40,7 @@
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, update, remove, onValue } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { db, auth, currentUserData, showToast, escHtml, escJs, localDateString, logAction, notifyEvent, pushConfigured, renderPushWarning, getSchoolRange, sidOf, getStudentDir, resolveStudentKey, getDateRange, stuName, mondayOf } from './common.js';
+import {renderMealOrphanList} from './meal-orphans.js';
 
 export const MEAL_CUTOFF_HOUR = 9;   // до 09:00 можна відмовитися від сьогоднішнього
 // Сніданок їдять до уроків, тож дедлайн 09:00 для нього безглуздий — його
@@ -590,13 +591,14 @@ export async function loadWeekCounts(){
   box.innerHTML = '<p class="empty-msg">Обчислення...</p>';
   try{
     // Відвідуваність беремо лише за цей тиждень, а не за весь рік
-    const [stSnap, planSnap, att, daySnaps, menuSnaps] = await Promise.all([
+    const [stSnap, planSnap, att, daySnaps, menuSnaps, resolutionSnap] = await Promise.all([
       get(child(ref(db),'students_list')),
       get(child(ref(db),'meal_plan')),
       getSchoolRange('attendance', dates[0], dates[4], true),
       Promise.all(dates.map(d=>get(child(ref(db),`meal_day/${d}`)))),
       // Меню потрібне, щоб знати, чи є того дня вибір основної страви
-      Promise.all(dates.map(d=>get(child(ref(db),`menu/${d}`))))
+      Promise.all(dates.map(d=>get(child(ref(db),`menu/${d}`)))),
+      get(child(ref(db),'meal_orphan_resolutions')).catch(e=>({val:()=>({}),readError:e.message}))
     ]);
     const noSchool = await loadNoSchoolDays(dates,true);
     const students = stSnap.exists()?stSnap.val():{};
@@ -618,9 +620,9 @@ export async function loadWeekCounts(){
       const classes = {}, skips = [], extras = [], unanswered = [], orphans=[];
       for(let i=1;i<=11;i++){
         const cls = `class_${i}`;
-        if(!students[cls]) continue;
         orphans.push(...orphanKeys(overrides[cls],plans[cls],students[cls])
-          .map(o=>`${i} клас · ${o.key} (${o.what})`));
+          .map(o=>({...o,cls,kind:o.what==='постійні налаштування'?'plan':'day'})));
+        if(!students[cls]) continue;
         const absentToday = absentSet(att[cls] && att[cls][date]);
         let cl=0, cs=0, cb=0, ca=0, cbb=0, cba=0, cbbb=0;
         for(const key in students[cls]){
@@ -678,7 +680,7 @@ export async function loadWeekCounts(){
              <div class="k-total-snack">${today.brk} сніданків${today.hasBrkChoice?` (А ${today.bpa} / Б ${today.bpb})`:''}${!today.hasBrkMenu&&today.brk?' (меню ще немає)':''} · ${today.snack} підвечірків</div>`}
       </div>
       <div class="k-sub">відсутні: ${today.absent} · не харчуються: ${today.off} · відмови: ${today.skips.length}${today.extras.length ? ` · <b style="color:var(--green);">разові обіди: ${today.extras.length}</b>` : ''}${today.unset ? ` · <b style="color:var(--orange);">батьки не відповіли: ${today.unset}</b>` : ''}</div>
-      ${today.orphans?.length?`<div class="k-orphan"><b>⚠️ ${today.orphans.length} записів не привʼязано до учнів.</b><p>Ці замовлення не входять у кількість порцій. Звірте список класу й профіль дитини.</p><ul>${today.orphans.map(x=>`<li>${escHtml(x)}</li>`).join('')}</ul></div>`:''}
+      ${renderMealOrphanList(today.orphans||[],resolutionSnap.val()||{},!resolutionSnap.readError)}
 
       <!-- Сніданок у тижневій таблиці нарівні з обідом: його теж треба
            готувати, і кухня планувала його наосліп — число було лише
@@ -688,7 +690,7 @@ export async function loadWeekCounts(){
           <td>${DOW_SHORT[i]} ${escHtml(human(d.date).slice(0,5))}</td>
           ${d.closed
             ? `<td colspan="6" class="k-closed-cell">${escHtml(d.closed)}</td>`
-            : `<td>${d.hasBrkMenu?(d.brk||'0'):'<span class="k-no">—</span>'}</td>
+            : `<td>${d.brk||0}${!d.hasBrkMenu&&d.brk?' (меню ще немає)':''}</td>
                <td>${d.hasBrkChoice?`А ${d.bpa} / Б ${d.bpb}`:'—'}</td>
                <td><b>${d.lunch}</b></td><td>${d.hasChoice?`А ${d.pa} / Б ${d.pb}`:'—'}</td>
                <td>${d.snack||''}</td><td class="k-off">${d.absent||''}</td>`}
@@ -812,12 +814,13 @@ window.loadClassOrders = async function(){
   if(!cls || !date){ box.innerHTML = '<p class="empty-msg">Оберіть клас і дату.</p>'; return; }
   box.innerHTML = '<p class="empty-msg">Завантаження...</p>';
   try{
-    const [stSnap, plSnap, daySnap, attSnap, menuSnap] = await Promise.all([
+    const [stSnap, plSnap, daySnap, attSnap, menuSnap, resolutionSnap] = await Promise.all([
       get(child(ref(db),`students_list/${cls}`)),
       get(child(ref(db),`meal_plan/${cls}`)),
       get(child(ref(db),`meal_day/${date}/${cls}`)),
       get(child(ref(db),`attendance/${cls}/${date}`)),
-      get(child(ref(db),`menu/${date}`))
+      get(child(ref(db),`menu/${date}`)),
+      get(child(ref(db),`meal_orphan_resolutions/${cls}`)).catch(e=>({val:()=>({}),readError:e.message}))
     ]);
     const menuDay = menuSnap.exists()?menuSnap.val():{};
     const choice = choicePair(menuDay);
@@ -884,7 +887,7 @@ window.loadClassOrders = async function(){
             : escHtml(r.note)}</td></tr>`).join('')}
       </tbody></table>
       </div>
-      ${orphanBlock(overrides, plans, stSnap.val())}
+      ${renderMealOrphanList(orphanKeys(overrides,plans,stSnap.val()).map(o=>({...o,cls,kind:o.what==='постійні налаштування'?'plan':'day'})),{[cls]:resolutionSnap.val()||{}},!resolutionSnap.readError)}
       <p class="k-ord-hint">Натисніть ✓ або —, щоб додати чи зняти порцію вручну; кожна колонка А/Б перемикає свій варіант.
         Це для тих, хто звернувся вже після дедлайну; дію буде записано в журнал.</p>
       <button onclick="exportClassOrders()" style="background:#e0f7fa;color:#00838f;border:1px solid #80deea;margin-top:11px;">📄 Вивантажити CSV</button>`;
@@ -1454,15 +1457,14 @@ export async function computeMealStats(from, to, onlyCls, onlyName, withCost=fal
           cost.total=Math.round((cost.total+Number(fixed.total||0))*100)/100;
           return;
         }
-        if(noSchool[date]){
-          if(withCost){
-            const order=byKeyOrName(takeawayDays[date]?.[cls],key,name)||{};
-            const ta=Object.entries(order).reduce((sum,[id,q])=>sum+(Number(q)||0)*takeawayPriceAt(id,date,takeawayItems,takeawayHistory),0);
-            cost.takeaway=Math.round((cost.takeaway+ta)*100)/100;
-            cost.total=Math.round((cost.total+ta)*100)/100;
-          }
-          return;
+        // Відсутність скасовує страви, але не замовлення на винос.
+        if(withCost){
+          const order=byKeyOrName(takeawayDays[date]?.[cls],key,name)||{};
+          const ta=Object.entries(order).reduce((sum,[id,q])=>sum+(Number(q)||0)*takeawayPriceAt(id,date,takeawayItems,takeawayHistory),0);
+          cost.takeaway=Math.round((cost.takeaway+ta)*100)/100;
+          cost.total=Math.round((cost.total+ta)*100)/100;
         }
+        if(noSchool[date])return;
         const absentToday=absentSet(att[cls] && att[cls][date]);
         const isAbsent = !!(absentToday[key] || absentToday[name]);
         const ov = mealDayFresher(days[date]?.[cls]?.[key],days[date]?.[cls]?.[name]);
@@ -1476,10 +1478,6 @@ export async function computeMealStats(from, to, onlyCls, onlyName, withCost=fal
           const daily=mealCost({lunch:+served.lunch,brk:+served.breakfast,snack:+served.snack},
             mealPriceAt(date,currentPrices,priceHistory));
           for(const k of ['lunch','brk','snack','total']) cost[k]=Math.round((cost[k]+daily[k])*100)/100;
-          const order=byKeyOrName(takeawayDays[date]?.[cls],key,name)||{};
-          const ta=Object.entries(order).reduce((sum,[id,q])=>sum+(Number(q)||0)*takeawayPriceAt(id,date,takeawayItems,takeawayHistory),0);
-          cost.takeaway=Math.round((cost.takeaway+ta)*100)/100;
-          cost.total=Math.round((cost.total+ta)*100)/100;
         }
       });
       if(withCost){
