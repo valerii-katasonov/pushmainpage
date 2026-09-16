@@ -6,7 +6,7 @@
 import { ref, set, get, child, update } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { loadGradeWork, prepareGradeWork, setGradeWorkBusy, hasGradeWorkChanges } from './grade-work.js';
 import { ACTIVE_YEAR } from './director.js';
-import { db, getActiveClass, currentUserData, displayGrade, gradeClass6, calculateStudentWeightedAvg, validDailyGrade, getClassNum, LEVEL_MAX_CLASS, GRADE_WEIGHTS, dayKeys, dayNamesUA, showToast, normalizeTimeRange, localDateString, summarizeAttendanceSlots, gradeTypesCache, escJs, escHtml, notifyEvent, logAction, getUserRoles, getUsersSnap, stuName, gradeWritePaths, journalGradeKey, journalBaseDate, journalSlot, expandAltSubjects, isBreakItem, insertSlot, removeSlot, makeBreak, withBreaks, slotBounds, hhmmFromMins, emailKey } from './common.js';
+import { db, getActiveClass, currentUserData, displayGrade, gradeClass6, calculateStudentWeightedAvg, validDailyGrade, getClassNum, LEVEL_MAX_CLASS, GRADE_WEIGHTS, dayKeys, dayNamesUA, showToast, normalizeTimeRange, localDateString, summarizeAttendanceSlots, gradeTypesCache, escJs, escHtml, notifyEvent, logAction, getUserRoles, getUsersSnap, stuName, gradeWritePaths, journalGradeKey, journalBaseDate, journalSlot, expandAltSubjects, altOptions, altPairKey, mondayOf, isBreakItem, insertSlot, removeSlot, makeBreak, withBreaks, slotBounds, hhmmFromMins, emailKey } from './common.js';
 
 // globalTeacherAccess is reassigned only in this file (openVisualMatrixModal)
 // and read from common.js (window.getDefaultTeacher) — plain export/import.
@@ -481,20 +481,24 @@ window.handleJournalRangeChange=function(){
 };
 // Кожен запис предмета в розкладі — окремий урок, включно з двома
 // уроками в один день. Порожні слоти й перерви не рахуються.
-export function scheduledSubjectCount(schedule,dayName,subject){
+export function scheduledSubjectCount(schedule,dayName,subject,weekChoices={}){
   const raw=schedule?.[dayName]||{};
   const slots=Array.isArray(raw)?raw:Object.values(raw);
   let count=0;
-  slots.forEach(slot=>{
-    const lessons=Array.isArray(slot)?slot:(slot&&slot.subject?[slot]:[]);
+  slots.forEach((slot,slotIdx)=>{
+    const lessons=Array.isArray(slot)?slot:(slot&&(slot.subject||slot.alt)?[slot]:[]);
     lessons.forEach(lesson=>{
-      if(isBreakItem(lesson))return;
-      if(expandAltSubjects(lesson).includes(subject))count++;
+      const options=altOptions(lesson);
+      const selected=options&&(weekChoices?.pairs?.[altPairKey(options)]
+        ||weekChoices?.[dayName]?.[slotIdx]
+        ||weekChoices?.[dayName]?.[String(slotIdx)]);
+      const subjects=options&&options.includes(selected)?[selected]:expandAltSubjects(lesson);
+      if(subjects.includes(subject))count++;
     });
   });
   return count;
 }
-export function buildJournalColumns(months,gradesData,attData,manualCounts,schedule,subject,today,firstDate){
+export function buildJournalColumns(months,gradesData,attData,manualCounts,schedule,subject,today,firstDate,altChoices={}){
   const columns=[];
   months.forEach(ym=>{
     const [y,m]=ym.split('-').map(Number);
@@ -504,12 +508,16 @@ export function buildJournalColumns(months,gradesData,attData,manualCounts,sched
       if(ds<firstDate||ds>today)continue;
       const dow=new Date(y,m-1,day).getDay();
       const dayName=dayKeys[dow];
-      const scheduled=(dow===0||dow===6)?0:scheduledSubjectCount(schedule,dayName,subject);
-      const gradeSlots=Object.keys(gradesData).filter(k=>journalBaseDate(k)===ds)
+      const scheduled=(dow===0||dow===6)?0:scheduledSubjectCount(schedule,dayName,subject,altChoices[mondayOf(ds)]);
+      const gradeSlots=Object.keys(gradesData).filter(k=>journalBaseDate(k)===ds&&
+          Object.values(gradesData[k]||{}).some(v=>v!==null&&v!==''))
         .reduce((max,k)=>Math.max(max,journalSlot(k)),0);
       const manual=Number(manualCounts[ds]?.count||0);
-      const hasAtt=!!attData[ds]&&Object.keys(attData[ds]).length>0;
-      const count=Math.max(scheduled,gradeSlots,manual,hasAtt?1:0,(ds===today&&dow!==0&&dow!==6)?1:0);
+      // Відвідуваність — спільна для класу, не для предмета. Вона не має
+      // створювати «урок математики» в день, коли математики немає.
+      // Залишаємо лише уроки розкладу, явно додані стовпці та дні з
+      // уже виставленими оцінками (історичні дані не можна приховати).
+      const count=Math.max(scheduled,gradeSlots,manual);
       for(let slot=1;slot<=Math.min(count,30);slot++)
         columns.push({ds,key:journalGradeKey(ds,slot),slot,scheduled,manual,day,dow,ym});
     }
@@ -529,11 +537,12 @@ window.renderJournalTable=async function(){
   table.innerHTML='<tr><td style="padding:20px;color:#aaa;">⏳ Завантаження...</td></tr>';
   const clsNum=getClassNum(cls);
   try{
-    const [studSnap,attSnap,retakeSnap,scheduleSnap,scaleSnap,...perMonth]=await Promise.all([
+    const [studSnap,attSnap,retakeSnap,scheduleSnap,altSnap,scaleSnap,...perMonth]=await Promise.all([
       get(child(ref(db),`students_list/${cls}`)),
       get(child(ref(db),`attendance/${cls}`)),
       get(child(ref(db),`retake_requests/${cls}/${subj}`)),
       get(child(ref(db),`schedules/${cls}/lessons`)),
+      get(child(ref(db),`schedule_alt/${cls}`)).catch(()=>null),
       get(child(ref(db),`grade_scales/${cls}/${subj}`)),
       ...months.flatMap(ym=>[
         get(child(ref(db),`grades/${cls}/${ym}/${subj}`)),
@@ -572,7 +581,8 @@ window.renderJournalTable=async function(){
     // its own source month `ym`, since grade writes/reads need the *correct*
     // Firebase month key, not just the range's start month).
     const dateCols=buildJournalColumns(months,gradesData,attData,manualCounts,
-      scheduleSnap.exists()?scheduleSnap.val():{},subj,localDateString,`${ACTIVE_YEAR.split('-')[0]}-09-01`);
+      scheduleSnap.exists()?scheduleSnap.val():{},subj,localDateString,`${ACTIVE_YEAR.split('-')[0]}-09-01`,
+      altSnap?.exists()?altSnap.val():{});
     journalVisibleColumns=dateCols;
     const canEdit=journalIsTeacher&&journalMode==='edit';
     const dayN=['Нд','Пн','Вт','Ср','Чт','Пт','Сб'];
@@ -754,7 +764,7 @@ window.removeJournalColumn=async function(day){
       showToast('⚠️ Спочатку видаліть оцінки в цьому стовпці.');return;
     }
     await update(ref(db),{
-      [countPath]:last.slot-1,
+      [countPath]:last.slot>1?last.slot-1:null,
       [`journal_column_types/${cls}/${ym}/${subj}/${last.key}`]:null
     });
     await renderJournalTable();
