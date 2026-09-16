@@ -39,7 +39,7 @@ import { ref, get, child, update, set } from "https://www.gstatic.com/firebasejs
 import { db, auth, currentUserData, escHtml, escJs, showToast, localDateString,
          logAction, emailKey } from './common.js';
 import { mealsEditable, choicePair, takeawayDay, takeawayEditable,
-         menuAnchor, loadMealPrices } from './kitchen.js';
+         menuAnchor, loadMealPrices, mealPriceAt, takeawayPriceAt } from './kitchen.js';
 
 // Ключ співробітника — його пошта, тим самим способом, що й усюди в базі.
 const myKey = () => emailKey(currentUserData?.email || auth.currentUser?.email || '');
@@ -72,12 +72,12 @@ export function staffLunchOn(plan, dayRec){
 }
 
 // Сума за день: обід (якщо ціна задана) плюс винос.
-export function staffDaySum({ lunchOn, price, order, items }){
+export function staffDaySum({ lunchOn, price, order, items, date, takeawayHistory }){
   let sum = lunchOn && price ? Number(price) : 0;
   for(const id in (order || {})){
     const q = Number(order[id]) || 0;
     if(q <= 0) continue;
-    sum += q * Number((items && items[id] && items[id].price) || 0);
+    sum += q * (date ? takeawayPriceAt(id,date,items,takeawayHistory) : Number(items?.[id]?.price)||0);
   }
   return Math.round(sum * 100) / 100;
 }
@@ -103,32 +103,35 @@ export async function renderStaffMeals(){
   box.innerHTML = '<p class="empty-msg">Завантаження...</p>';
 
   try{
-    const [menuSnap, planSnap, daySnap, priceSnap, itSnap, ordSnap] = await Promise.all([
+    const [menuSnap, planSnap, daySnap, priceSnap, itSnap, ordSnap, priceHistorySnap, takeawayHistorySnap] = await Promise.all([
       get(child(ref(db), `menu/${day}`)),
       get(child(ref(db), `staff_meals/${se}`)),
       get(child(ref(db), `staff_meal_day/${day}/${se}`)),
       loadMealPrices(true),
       get(child(ref(db), 'takeaway_items')),
-      get(child(ref(db), `takeaway_orders/${day}/staff/${se}`))
+      get(child(ref(db), `takeaway_orders/${day}/staff/${se}`)),
+      get(child(ref(db), 'meal_price_history')),
+      get(child(ref(db), 'takeaway_price_history'))
     ]);
     const m     = menuSnap.exists() ? menuSnap.val() : null;
     const plan  = planSnap.exists() ? planSnap.val() : {};
     const dayR  = daySnap.exists() ? daySnap.val() : null;
     // Ціна обіду для персоналу — з того самого вузла, що й дитячі:
     // одна форма в кухні, одне джерело, нічому розходитися.
-    smPrice     = Number((priceSnap||{}).staff) || 0;
+    smPrice     = Number(mealPriceAt(day,priceSnap,priceHistorySnap.exists()?priceHistorySnap.val():{}).staff) || 0;
     const items = itSnap.exists() ? itSnap.val() : {};
     const order = ordSnap.exists() ? ordSnap.val() : {};
+    const takeawayHistory=takeawayHistorySnap.exists()?takeawayHistorySnap.val():{};
 
     const lunchOn = staffLunchOn(plan, dayR);
     const gate = mealsEditable(day);
     const choice = m ? choicePair(m) : null;
-    const pick = dayR && dayR.pick ? dayR.pick : 'a';
+    const pick = ['a','b'].includes(dayR?.pick) ? dayR.pick : null;
 
     const dish = m ? [
       m.first  ? `<div class="stm-dish"><span>Перше</span><b>${escHtml(m.first)}</b></div>` : '',
       choice
-        ? `<div class="stm-choice">
+        ? `<div class="stm-choice">${!pick?'<span>Ще не обрано · планово А</span>':''}
              <button type="button" class="stm-ab${pick==='a'?' on':''}"
                ${gate.ok?`onclick="smPick('${escJs(day)}','a')"`:'disabled'}>А · ${escHtml(choice.a)}</button>
              <button type="button" class="stm-ab${pick==='b'?' on':''}"
@@ -150,24 +153,25 @@ export async function renderStaffMeals(){
       : `<span class="pm-locked">🔒 ${escHtml(gate.msg)}</span>`;
 
     // Винос — ті самі позиції, що й у батьків, і та сама гілка в базі.
-    const taIds = Object.keys(items).filter(id => items[id] && items[id].active !== false);
+    const taIds = [...new Set([...Object.keys(items),...Object.keys(order)])]
+      .filter(id => (items[id] && items[id].active !== false) || Number(order[id])>0);
     const taGateDay = (() => { const f = takeawayDay(); return day > f ? day : f; })();
     const taGate = takeawayEditable(taGateDay);
     const taRows = taIds.map(id => {
-      const it = items[id], q = Number(order[id]) || 0;
+      const it = items[id]||{}, q = Number(order[id]) || 0;
       return `<div class="ta-row${q?' on':''}">
         <div class="ta-row-main"><b>${escHtml(it.title||'')}</b>
           ${it.note?`<span class="ta-item-note">${escHtml(it.note)}</span>`:''}</div>
-        <span class="ta-price">${money(it.price)} zł</span>
+        <span class="ta-price">${money(takeawayPriceAt(id,day,items,takeawayHistory))} zł${it.active===false?' · вимкнено':''}</span>
         ${taGate.ok ? `<div class="ta-qty">
           <button onclick="smTakeaway('${escJs(taGateDay)}','${escJs(id)}',${q-1})" ${q?'':'disabled'}>−</button>
           <span>${q}</span>
-          <button onclick="smTakeaway('${escJs(taGateDay)}','${escJs(id)}',${q+1})" ${q>=9?'disabled':''}>+</button>
+          <button onclick="smTakeaway('${escJs(taGateDay)}','${escJs(id)}',${q+1})" ${q>=9||it.active===false||!items[id]?'disabled':''}>+</button>
         </div>` : `<span class="ta-qty-locked">${q||0}</span>`}
       </div>`;
     }).join('');
 
-    const sum = staffDaySum({ lunchOn, price: smPrice, order, items });
+    const sum = staffDaySum({ lunchOn, price: smPrice, order, items, date:day, takeawayHistory });
     // Ціни немає — сум не показуємо взагалі. Нуль читався б як
     // «безкоштовно», а це рішення школи, а не порталу.
     const sumLine = (smPrice || Object.keys(order).length)
@@ -218,7 +222,9 @@ window.smSetLunch = async function(day, value){
   const gate = mealsEditable(day);
   if(!gate.ok) return alert(gate.msg);
   try{
-    await update(ref(db, `staff_meal_day/${day}/${se}`), { lunch: value ? 1 : 0, ts: Date.now() });
+    await update(ref(db, `staff_meal_day/${day}/${se}`), {
+      lunch: value ? 1 : 0, ...(value?{}:{pick:null}), ts: Date.now()
+    });
     logAction('staff_meal', { value: `${day}: ${value ? 'обід' : 'відмова'}` });
     showToast(value ? '🍽 Обід замовлено' : 'Обід скасовано');
   }catch(e){ alert('Не вдалося зберегти: ' + e.message); }
@@ -253,6 +259,11 @@ window.smTakeaway = async function(day, itemId, qty){
   if(!gate.ok) return alert(gate.msg);
   const q = Math.max(0, Math.min(9, Number(qty) || 0));
   try{
+    if(q>0){
+      const itemSnap=await get(child(ref(db),`takeaway_items/${itemId}`));
+      if(!itemSnap.exists()||itemSnap.val()?.active===false)
+        return alert('Цю позицію вже вимкнено. Нове замовлення недоступне.');
+    }
     await set(ref(db, `takeaway_orders/${day}/staff/${se}/${itemId}`), q > 0 ? q : null);
   }catch(e){ alert('Не вдалося зберегти: ' + e.message); }
   renderStaffMeals();
