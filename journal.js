@@ -41,6 +41,7 @@ let journalMode='view'; let journalIsTeacher=false;
 let gradeSaving=false;
 let gepCls=''; let gepSubj=''; let gepDate=''; let gepStudent=''; let gepType='П'; let gepCellEl=null; let gepYMonth='';
 let journalScaleMax=6,journalNumericScale=false,journalRenderSeq=0,semesterRenderSeq=0,journalVisibleColumns=[];
+let journalColumnBusy=false;
 // Phase 4b/9: journal zoom state (10% steps, 40%-150%), applied via --journal-scale on
 // .journal-table. journalZoomIsAuto=true means "recompute fit-to-width after every
 // render" (the default); it flips to false the moment the teacher manually zooms
@@ -488,7 +489,7 @@ export function buildJournalColumns(months,gradesData,attData,manualCounts,sched
       const hasAtt=!!attData[ds]&&Object.keys(attData[ds]).length>0;
       const count=Math.max(scheduled,gradeSlots,manual,hasAtt?1:0,(ds===today&&dow!==0&&dow!==6)?1:0);
       for(let slot=1;slot<=Math.min(count,30);slot++)
-        columns.push({ds,key:journalGradeKey(ds,slot),slot,scheduled,day,dow,ym});
+        columns.push({ds,key:journalGradeKey(ds,slot),slot,scheduled,manual,day,dow,ym});
     }
   });
   return columns;
@@ -577,7 +578,7 @@ window.renderJournalTable=async function(){
     // top-to-bottom, not just from the label row.
     let dayRow='<tr class="jt-day-row">';
     let bandPtr=0,bandRemaining=monthBands.length?monthBands[0].count:0;
-    dateCols.forEach(({ds,key,slot,scheduled,day,dow,ym})=>{
+    dateCols.forEach(({ds,key,slot,scheduled,manual,day,dow,ym})=>{
       const isToday=ds===localDateString;
       if(bandRemaining===0){bandPtr++;bandRemaining=monthBands[bandPtr].count;}
       const bandColor=bandColorOf(monthBands[bandPtr].bandIdx);bandRemaining--;
@@ -601,9 +602,13 @@ window.renderJournalTable=async function(){
         typeCell=presetType?`<br><span style="font-size:.69em;color:#e67e22;">${presetType}${weightOf(presetType)?` ×${weightOf(presetType)}`:''}</span>`:'';
       }
       const label=slot<=scheduled?`Урок ${slot}`:`Оцінка ${slot}`;
-      const add=canEdit&&slot===Math.max(...dateCols.filter(c=>c.ds===ds).map(c=>c.slot))
-        ?`<button type="button" class="j-add-column" onclick="addJournalColumn('${ds}')" data-tip="Додати ще одну оцінку на цей день">＋</button>`:'';
-      dayRow+=`<th class="${isToday?'today-col':''}" style="background:${bandColor};" title="${ds} · ${label}">${day}<br><span style="font-size:.78em;font-weight:400;">${dayN[dow]} · ${label}</span>${typeCell}${add}</th>`;
+      const last=slot===Math.max(...dateCols.filter(c=>c.ds===ds).map(c=>c.slot));
+      const add=canEdit&&last&&slot<30
+        ?`<button type="button" class="j-add-column" onclick="addJournalColumn('${ds}')" aria-label="Додати стовпець" data-tip="Додати ще одну оцінку на цей день">＋</button>`:'';
+      const remove=canEdit&&last&&manual===slot&&slot>scheduled
+        ?`<button type="button" class="j-remove-column" onclick="removeJournalColumn('${ds}')" aria-label="Видалити додатковий стовпець" data-tip="Видалити порожній додатковий стовпець">−</button>`:'';
+      const actions=add||remove?`<div class="j-column-actions">${remove}${add}</div>`:'';
+      dayRow+=`<th class="${isToday?'today-col':''}" style="background:${bandColor};" title="${ds} · ${label}">${day}<br><span style="font-size:.78em;font-weight:400;">${dayN[dow]} · ${label}</span>${typeCell}${actions}</th>`;
     });
     dayRow+='</tr>';
     let thead='<thead>'+monthRow+dayRow+'</thead>';
@@ -692,17 +697,47 @@ window.setJournalColumnType=async function(cls,subj,yMonth,date,type){
   }catch(e){showToast('❌ Тип не збережено: '+e.message);renderJournalTable();}
 };
 window.addJournalColumn=async function(day){
-  if(!journalIsTeacher||journalMode!=='edit')return;
+  if(!journalIsTeacher||journalMode!=='edit'||journalColumnBusy)return;
   const cls=document.getElementById('j-class-select').value;
   const subj=document.getElementById('j-subj-select').value;
   const count=journalVisibleColumns.filter(c=>c.ds===day).length;
   if(!cls||!subj||!count)return;
   if(count>=30)return showToast('⚠️ Не більше 30 стовпців на день');
+  journalColumnBusy=true;
   try{
     await set(ref(db,`journal_columns/${cls}/${day.slice(0,7)}/${subj}/${day}/count`),count+1);
     await renderJournalTable();
     showToast('✅ Стовпець додано');
   }catch(e){showToast('❌ Стовпець не додано: '+e.message);}
+  finally{journalColumnBusy=false;}
+};
+window.removeJournalColumn=async function(day){
+  if(!journalIsTeacher||journalMode!=='edit'||journalColumnBusy)return;
+  const cls=document.getElementById('j-class-select').value;
+  const subj=document.getElementById('j-subj-select').value;
+  const columns=journalVisibleColumns.filter(c=>c.ds===day);
+  const last=columns[columns.length-1];
+  if(!cls||!subj||!last||last.manual!==last.slot||last.slot<=last.scheduled)return;
+  const ym=day.slice(0,7);
+  const countPath=`journal_columns/${cls}/${ym}/${subj}/${day}/count`;
+  journalColumnBusy=true;
+  try{
+    const [countSnap,gradeSnap]=await Promise.all([
+      get(child(ref(db),countPath)),
+      get(child(ref(db),`grades/${cls}/${ym}/${subj}/${last.key}`))
+    ]);
+    if(Number(countSnap.val())!==last.slot){showToast('⚠️ Стовпці вже змінилися. Оновлюємо журнал.');await renderJournalTable();return;}
+    if(gradeSnap.exists()&&Object.keys(gradeSnap.val()||{}).length){
+      showToast('⚠️ Спочатку видаліть оцінки в цьому стовпці.');return;
+    }
+    await update(ref(db),{
+      [countPath]:last.slot-1,
+      [`journal_column_types/${cls}/${ym}/${subj}/${last.key}`]:null
+    });
+    await renderJournalTable();
+    showToast('🗑️ Додатковий стовпець видалено');
+  }catch(e){showToast('❌ Стовпець не видалено: '+e.message);}
+  finally{journalColumnBusy=false;}
 };
 window.saveJournalScale=async function(){
   if(!journalIsTeacher)return;
