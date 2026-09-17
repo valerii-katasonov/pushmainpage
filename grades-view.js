@@ -300,7 +300,7 @@ function reactionRow(date, subj, mine){
   const btn = (em) => `<button style="background:none;border:none;font-size:1.2rem;cursor:pointer;`
     + `filter:${mine===em?'none':'grayscale(100%)'};opacity:${mine===em?'1':'.5'};padding:3px;width:auto;margin:0;"`
     + ` onclick="sendReaction('${escJs(date)}','${escJs(subj)}','${em}')">${em}</button>`;
-  return `<div style="display:flex;gap:6px;margin-top:6px;padding-top:6px;border-top:1px dashed #eee;align-items:center;">`
+  return `<div style="display:flex;gap:6px;margin-top:6px;padding-top:6px;border-top:1px dashed var(--line-soft);align-items:center;">`
     + btn('👍') + btn('❤️') + btn('🔥') + `</div>`;
 }
 
@@ -374,7 +374,7 @@ function paintWeek(){
       return `<li style="margin-bottom:9px;"><b>${escHtml(s)}</b><br>`
         + grades.map(g=>gradeChip(g.v,g.t,cls,gvScales?.[s]?.max)
           +retakeBtn(cls,s,g.date,g.v,gvScales?.[s]?.max)+renderWorkPhotos(g.workPhotos)).join(' ')
-        + (cm ? `<div style="background:#f0f8ff;padding:5px 9px;border-radius:6px;font-style:italic;font-size:.88rem;margin-top:4px;">${escHtml(cm)}</div>`
+        + (cm ? `<div style="background:var(--surface-2);padding:5px 9px;border-radius:6px;font-style:italic;font-size:.88rem;margin-top:4px;">${escHtml(cm)}</div>`
                 + reactionRow(ds, s, rx) : '')
         + `</li>`;
     }).join('');
@@ -451,20 +451,20 @@ function paintSubject(){
   // Підпис під числом обовʼязковий. Батьки читають будь-яке середнє як
   // «яка буде оцінка в табелі», а підсумкову ставить учитель — і має
   // ставити її сам, а не підтверджувати пораховане порталом.
-  const head = `<div style="background:#fff;border:1px solid #d1c4e9;border-radius:12px;padding:12px;margin-bottom:11px;text-align:center;">
-      <div style="font-size:1.9rem;font-weight:800;color:var(--purple,#7b1fa2);line-height:1.1;">${escHtml(avgTxt)}</div>
-      <div style="font-size:.78rem;color:#555;margin-top:3px;">середній бал з предмета «${escHtml(gvSubject)}»
+  const head = `<div style="background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:11px;text-align:center;">
+      <div style="font-size:1.9rem;font-weight:800;color:var(--purple,var(--brand-deep));line-height:1.1;">${escHtml(avgTxt)}</div>
+      <div style="font-size:.78rem;color:var(--ink-2);margin-top:3px;">середній бал з предмета «${escHtml(gvSubject)}»
         · оцінок: ${counted} · шкала: 1–${scaleMax||6}</div>
-      <div style="font-size:.72rem;color:#888;margin-top:5px;">Це не підсумкова оцінка й не прогноз:
+      <div style="font-size:.72rem;color:var(--ink-3);margin-top:5px;">Це не підсумкова оцінка й не прогноз:
         підсумкову виставляє вчитель.</div>
     </div>`;
 
   const list = rows.length
     ? `<ul class="list-dash" style="margin:0;">` + rows.slice().reverse().map(r =>
         `<li style="display:flex;align-items:center;gap:9px;padding:5px 0;flex-wrap:wrap;">
-           <span style="color:#888;font-size:.82rem;min-width:52px;">${escHtml(human(r.day))}${r.slot>1?` · ${r.slot}`:''}</span>
+           <span style="color:var(--ink-3);font-size:.82rem;min-width:52px;">${escHtml(human(r.day))}${r.slot>1?` · ${r.slot}`:''}</span>
            ${gradeChip(r.v, r.t, cls, scaleMax)}${renderWorkPhotos(r.workPhotos)}
-           <span style="font-size:.74rem;color:#999;">${r.t ? `вага ×${escHtml(String(getGradeWeight(r.t)))}` : ''}</span>
+           <span style="font-size:.74rem;color:var(--ink-3);">${r.t ? `вага ×${escHtml(String(getGradeWeight(r.t)))}` : ''}</span>
          </li>`).join('') + `</ul>`
     : '<p class="empty-msg">З цього предмета оцінок ще немає.</p>';
 
