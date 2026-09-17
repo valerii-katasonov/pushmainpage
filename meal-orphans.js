@@ -79,7 +79,7 @@ window.openMealOrphanRepair=async function(cls,key){
   const overlay=document.createElement('div');overlay.id='meal-orphan-dialog';
   overlay.setAttribute('role','dialog');overlay.setAttribute('aria-modal','true');
   overlay.style.cssText='position:fixed;inset:0;z-index:10050;background:#0008;display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box';
-  overlay.innerHTML='<div style="background:white;color:#263238;border-radius:16px;padding:20px;width:600px;max-width:100%;max-height:90vh;overflow:auto;box-sizing:border-box"><h3>Перевірка налаштувань харчування</h3><div id="meal-orphan-body">Завантаження…</div><button type="button" onclick="closeMealOrphanRepair()">Закрити</button></div>';
+  overlay.innerHTML='<div style="background:white;color:var(--ink);border-radius:16px;padding:20px;width:600px;max-width:100%;max-height:90vh;overflow:auto;box-sizing:border-box"><h3>Перевірка налаштувань харчування</h3><div id="meal-orphan-body">Завантаження…</div><button type="button" onclick="closeMealOrphanRepair()">Закрити</button></div>';
   document.body.appendChild(overlay);
   const body=document.getElementById('meal-orphan-body');
   try{
