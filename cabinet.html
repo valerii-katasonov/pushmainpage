@@ -583,6 +583,11 @@
     .att-item-head .badge{font-size:.68rem;padding:2px 7px;}
     .att-item-sub{font-size:.75rem;color:#777;margin-top:3px;overflow-wrap:anywhere;
       line-height:1.35;}
+    /* Тост, що веде на потрібну вкладку: має виглядати натискним, інакше
+       на нього просто не натиснуть. */
+    .toast-tap{cursor:pointer;display:flex;align-items:center;gap:10px;}
+    .toast-tap:active{transform:scale(.98);}
+    .toast-go{flex:0 0 auto;font-size:.76rem;text-decoration:underline;white-space:nowrap;}
     .att-item-who{font-size:.7rem;color:#9aa;margin-top:2px;overflow-wrap:anywhere;}
     /* Смуга «це не сьогоднішній день». Майбутній — червоним: саме він
        коштував чотирьох помилкових відміток. */
