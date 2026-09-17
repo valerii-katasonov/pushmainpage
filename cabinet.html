@@ -15,7 +15,15 @@
   <link rel="apple-touch-icon" sizes="152x152" href="apple-touch-icon-152.png">
   <meta name="apple-mobile-web-app-title" content="Push School">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;800&display=swap" rel="stylesheet">
+  <!-- ФІРМОВИЙ ШРИФТ ШКОЛИ — Nunito (брендбук, стор. 9: Light / Regular / SemiBold / ExtraBold).
+       Беремо діапазоном 300..900 однією змінною гарнітурою, а не переліком накреслень.
+       ЧОМУ ДІАПАЗОН. У порталі найчастіше вживане накреслення — 700 (понад двісті місць),
+       а підключено раніше було лише 400;600;800. Браузер такі місця малював синтетичним
+       жирним: літери розтягувалися по горизонталі, і в вузьких колонках журналу це
+       помітно псувало рядок. Діапазон закриває всі накреслення, які є в стилях, одним файлом. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@300..900&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -36,11 +44,24 @@
       --text-xs:.72rem; --text-sm:.82rem; --text-base:.92rem; --text-lg:1.15rem; --text-xl:1.6rem;
       /* ── shared card tokens (unifies .data-card/.payment-card/.schedule-box) ── */
       --card-radius:12px; --card-shadow:0 2px 10px rgba(0,0,0,.07);
+      /* ── шрифт ──
+         Одне місце на весь портал. Запасні гарнітури — системні, схожої
+         ширини: поки Nunito вантажиться, сторінка не стрибає. */
+      --font-ui:'Nunito','Segoe UI',system-ui,-apple-system,sans-serif;
       /* ── shared badge tokens ── */
       --badge-radius:8px;
     }
     *{box-sizing:border-box;}
-    body{font-family:'Montserrat',sans-serif;background:linear-gradient(135deg,#f0f8ff,#e6e6fa);min-height:100vh;margin:0;display:flex;justify-content:center;align-items:flex-start;padding:20px;}
+    /* ЦИФРИ В ТАБЛИЦЯХ — МОНОШИРИННІ.
+       У Nunito цифри пропорційні: «1» вужча за «4», тож у вузьких колонках
+       журналу оцінки й час злегка «пливуть» рядок від рядка, а колонки
+       перестають вирівнюватися по вертикалі. tabular-nums вмикає табличні
+       цифри тієї самої гарнітури — ширина стає однаковою, накреслення не
+       змінюється. Застосовуємо тільки там, де цифри стоять стовпчиком;
+       у звичайному тексті пропорційні читаються краще. */
+    .journal-table,.sem-table,.k-table,.rs-table,.si-table,.ps-table,.rc-table,
+    .matrix-table,.wl-table,.bell-row,.grade-cell,.avg-col{font-variant-numeric:tabular-nums;}
+    body{font-family:var(--font-ui);background:linear-gradient(135deg,#f0f8ff,#e6e6fa);min-height:100vh;margin:0;display:flex;justify-content:center;align-items:flex-start;padding:20px;}
     .container{background:rgba(255,255,255,.95);backdrop-filter:blur(10px);max-width:560px;width:100%;padding:28px;border-radius:20px;box-shadow:0 10px 30px rgba(0,0,0,.1);margin-bottom:40px;}
     h2{color:var(--teal);text-align:center;margin-top:0;font-size:var(--text-xl);}
     h3{color:#333;border-bottom:2px solid #eee;padding-bottom:var(--space-2);margin-top:var(--space-5);font-size:var(--text-lg);}
@@ -1159,7 +1180,7 @@
     .qj-g:focus{border-color:#0072ff;outline:none;}
     /* ── Друк розкладу ── */
     #print-area{display:none;}
-    .ps-sheet{font-family:'Montserrat',sans-serif;color:#000;}
+    .ps-sheet{font-family:var(--font-ui);color:#000;}
     .ps-head{text-align:center;margin-bottom:12px;}
     .ps-title{font-size:20px;font-weight:800;}
     .ps-cls{font-size:13px;color:#444;margin-top:2px;}
@@ -1242,7 +1263,7 @@
     .ug-name{color:#333;font-weight:600;}
     .ug-when{color:#888;font-size:.76rem;white-space:nowrap;}
     /* ── Табель (рендер для PDF) ── */
-    .rc-page{font-family:'Montserrat',sans-serif;padding:26px 30px;background:#fff;color:#222;width:760px;box-sizing:border-box;}
+    .rc-page{font-family:var(--font-ui);padding:26px 30px;background:#fff;color:#222;width:760px;box-sizing:border-box;}
     .rc-head{text-align:center;border-bottom:3px solid #22b8cf;padding-bottom:11px;margin-bottom:16px;}
     .rc-title{font-size:24px;font-weight:800;color:#00796b;}
     .rc-school{font-size:13px;color:#777;margin-top:3px;}
