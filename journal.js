@@ -6,7 +6,7 @@
 import { ref, set, get, child, update } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { loadGradeWork, prepareGradeWork, setGradeWorkBusy, hasGradeWorkChanges } from './grade-work.js';
 import { ACTIVE_YEAR } from './director.js';
-import { db, getActiveClass, currentUserData, displayGrade, gradeClass6, calculateStudentWeightedAvg, validDailyGrade, getClassNum, LEVEL_MAX_CLASS, GRADE_WEIGHTS, dayKeys, dayNamesUA, showToast, normalizeTimeRange, localDateString, summarizeAttendanceSlots, attendanceForLesson, gradeTypesCache, escJs, escHtml, notifyEvent, logAction, getUserRoles, getUsersSnap, stuName, gradeWritePaths, journalGradeKey, journalBaseDate, journalSlot, expandAltSubjects, altOptions, altPairKey, mondayOf, isBreakItem, insertSlot, removeSlot, makeBreak, withBreaks, slotBounds, hhmmFromMins, emailKey } from './common.js';
+import { db, getActiveClass, currentUserData, displayGrade, gradeClass6, calculateStudentWeightedAvg, validDailyGrade, getClassNum, LEVEL_MAX_CLASS, GRADE_WEIGHTS, dayKeys, dayNamesUA, showToast, normalizeTimeRange, localDateString, summarizeAttendanceSlots, attendanceForLesson, gradeTypesCache, escJs, escHtml, notifyEvent, logAction, getUserRoles, getUsersSnap, stuName, gradeWritePaths, journalGradeKey, journalBaseDate, journalSlot, expandAltSubjects, altOptions, splitAltName, altPairKey, mondayOf, isBreakItem, insertSlot, removeSlot, makeBreak, withBreaks, slotBounds, hhmmFromMins, emailKey } from './common.js';
 
 // globalTeacherAccess is reassigned only in this file (openVisualMatrixModal)
 // and read from common.js (window.getDefaultTeacher) — plain export/import.
@@ -1371,6 +1371,10 @@ window.toggleCellType=async function(){
   if(document.getElementById('cell-type-select').value!==t||document.getElementById('cell-edit-class').value!==cls)return;
   const teacherSelect=document.getElementById('cell-teacher-select');
   window.updateCellEditorTeacherOptions(cls,cur,teacherSelect.value);
+  // Чергування можливе лише для уроку, і саме toggleCellAlt ховає галочку
+  // на перерві та гуртку. Викликаємо ПІСЛЯ fillCellSubjects: другий список
+  // будується з тих самих предметів класу мінус уже обраний перший.
+  await window.toggleCellAlt();
   window.triggerSmartCheck();
 };
 window.toggleExtraFormat=function(){const f=document.getElementById('cell-extra-format').value;document.getElementById('extra-individual-wrap').style.display=f==='individual'?'block':'none';document.getElementById('extra-group-wrap').style.display=f==='group'?'block':'none';if(f==='group')toggleExtraGroupType();};
@@ -1403,6 +1407,95 @@ window.fillCellSubjects = async function(clsId, current, type){
     ? '' : type==='extra'?'Заповніть «🎨 Гуртки класу й учителі» або додайте через «Інший…».':'Каталог цього класу порожній. Заповніть «📗 Предмети класу й учителі» або додайте через «Інший…».';
 };
 
+// ── ЧЕРГУВАННЯ УРОКІВ У КОНСТРУКТОРІ ────────────────────────────
+//
+// ЩО ЦЕ. «Музичне мистецтво / Фізичне виховання» — один урок у сітці,
+// але цього тижня одне, наступного інше. У базі це ОДИН запис із полем
+// alt:['Музичне мистецтво','Фізичне виховання'] і парною назвою в
+// subject. Такий самий запис робить імпорт із Word, тож обидва джерела
+// дають однакову структуру, і читає її одна функція — altOptions.
+//
+// ЧОМУ ДВА ПОЛЯ, А НЕ ОДИН РЯДОК ЧЕРЕЗ КОСУ. Коса риска заборонена в
+// ключах Firebase, тому предмет із нею не заводиться в каталог класу: за
+// ним нема кому призначити вчителя, і журналу в нього теж нема. Раніше
+// конструктор просто відмовлявся зберігати таку назву, і чергування
+// можна було завести хіба що імпортом документа. Тепер пара збирається з
+// двох справжніх предметів каталогу, а коса лишається тільки в тому, що
+// бачить людина.
+let cellAltGeneration=0;
+
+// Другий предмет пари. Список той самий, що й у першого поля — це
+// звичайні предмети класу. Сам із собою предмет не чергується, тому вже
+// обраний перший із переліку прибираємо.
+async function fillAltSubjects(clsId, current){
+  const sel=document.getElementById('cell-subj-alt');
+  if(!sel) return;
+  const gen=++cellAltGeneration;
+  let names=[];
+  if(window.catalogNames){ try{ names=await window.catalogNames(clsId); }catch(e){ names=[]; } }
+  if(gen!==cellAltGeneration) return;
+  const first=(document.getElementById('cell-subj-ua').value||'').trim();
+  names=names.filter(n=>n!==first);
+  if(current&&!names.includes(current)) names=[current,...names];
+  sel.innerHTML=`<option value="">${names.length?'— оберіть другий предмет —':'— каталог порожній —'}</option>`
+    +names.map(n=>`<option value="${escHtml(n)}">${escHtml(n)}</option>`).join('')
+    +`<option value="__other__">➕ Інший…</option>`;
+  sel.value=current||'';
+}
+
+// Показати/сховати другий предмет. forceAlt — коли назву щойно створили
+// й у списку її ще немає (див. handleSubjInput і handleAltSubjInput).
+window.toggleCellAlt=async function(forceAlt){
+  const box=document.getElementById('cell-alt-on');
+  const wrap=document.getElementById('cell-alt-wrapper');
+  const lbl=document.getElementById('cell-alt-toggle');
+  const hint=document.getElementById('cell-alt-hint');
+  const ts=document.getElementById('cell-teacher-select');
+  if(!box||!wrap||!lbl||!ts) return;
+  const type=document.getElementById('cell-type-select').value;
+  const cls=document.getElementById('cell-edit-class').value;
+  // Чергуватися можуть тільки уроки: перерва й гурток пари не утворюють
+  if(type!=='lesson'){ lbl.style.display='none'; box.checked=false; }
+  else lbl.style.display='flex';
+  const on=type==='lesson'&&box.checked;
+  wrap.style.display=on?'block':'none';
+  const sel=document.getElementById('cell-subj-alt');
+  if(on){
+    const cur=forceAlt||(sel&&sel.value==='__other__'?'':(sel?sel.value:''));
+    await fillAltSubjects(cls,cur);
+  }
+  const first=(document.getElementById('cell-subj-ua').value||'').trim();
+  const second=on&&sel?(sel.value==='__other__'?'':sel.value.trim()):'';
+  // Учителя показуємо за парою: altTeacherLabel розбере назву через косу
+  // і візьме по вчителю на кожен предмет із каталогу класу.
+  window.updateCellEditorTeacherOptions(cls, on&&second?`${first} / ${second}`:first, on?'':ts.value);
+  if(on){
+    // ЧОМУ «АВТО» І БЕЗ ВИБОРУ. Поле teacherEmail у записі одне, а
+    // предмети два. Один учитель, записаний на пару, пів року стояв би
+    // в розкладі не на своєму уроці. Тому вчителя кожного предмета
+    // портал бере з каталогу класу — там він свій у кожного.
+    ts.value=''; ts.disabled=true;
+    hint.innerHTML='Учителя кожного предмета портал бере з каталогу «📗 Предмети класу й учителі» — тут його не обирають.<br>Який предмет буде цього тижня, позначають у картці «🔁 Чергування уроків».';
+  }else{
+    ts.disabled=false;
+    hint.textContent='';
+  }
+};
+
+window.handleAltSubjInput=async function(){
+  const c=document.getElementById('cell-edit-class').value;
+  const sel=document.getElementById('cell-subj-alt');
+  let forced='';
+  if(sel.value==='__other__'){
+    const name=(prompt('Назва другого предмета пари:','')||'').trim();
+    if(!name){ sel.value=''; await window.toggleCellAlt(); return; }
+    if(window.addCatalogSubject && !await window.addCatalogSubject(c,name)){ sel.value=''; await window.toggleCellAlt(); return; }
+    forced=name;
+  }
+  await window.toggleCellAlt(forced);
+  window.triggerSmartCheck();
+};
+
 window.handleSubjInput=async function(){
   const c=document.getElementById('cell-edit-class').value;
   const sel=document.getElementById('cell-subj-ua');
@@ -1416,6 +1509,21 @@ window.handleSubjInput=async function(){
     }
     const name=(prompt(type==='break'?'Назва перерви:':type==='extra'?'Назва нового гуртка:':'Назва нового предмета:','')||'').trim();
     if(!name){ sel.value=''; return; }
+    // «Музика / Фізкультура» — це не назва предмета, а ДВА предмети.
+    // Раніше конструктор на такий рядок просто лаявся («не можна /»), і
+    // чергування лишалося доступним тільки через імпорт документа. Тепер
+    // пара розкладається по двох полях, обидва предмети окремо йдуть у
+    // каталог класу, а галочка чергування вмикається сама.
+    const pair = type==='lesson' ? splitAltName(name) : null;
+    if(pair){
+      if(window.addCatalogSubject) for(const part of pair) await window.addCatalogSubject(c, part);
+      await window.fillCellSubjects(c, pair[0], type);
+      const box=document.getElementById('cell-alt-on');
+      if(box) box.checked=true;
+      await window.toggleCellAlt(pair[1]);
+      window.triggerSmartCheck();
+      return;
+    }
     // Новий предмет одразу лягає в каталог — інакше наступного разу
     // його знову довелося б вписувати руками, і розбіжності повернулися б
     if(type==='lesson' && window.addCatalogSubject) await window.addCatalogSubject(c, name);
@@ -1424,6 +1532,9 @@ window.handleSubjInput=async function(){
   const s=sel.value.trim();
   const ts=document.getElementById('cell-teacher-select');
   window.updateCellEditorTeacherOptions(c,s,ts.value);
+  // Перший предмет змінився — другий список треба перебрати, щоб той
+  // самий предмет не опинився обома половинами пари.
+  await window.toggleCellAlt();
   window.triggerSmartCheck();
 };
 window.updateCellEditorTeacherOptions=function(clsId,sName,curE){const ts=document.getElementById('cell-teacher-select');const isClub=document.getElementById('cell-type-select').value==='extra';const dt=isClub?window.getClubTeacher?.(clsId,sName):window.getDefaultTeacher(clsId,sName);
@@ -1431,6 +1542,21 @@ window.updateCellEditorTeacherOptions=function(clsId,sName,curE){const ts=docume
   const auto=dt?dt.name:(isClub?'—':window.altTeacherLabel(clsId,{subject:sName})||'—');
   ts.innerHTML=`<option value="">-- Авто (${escHtml(auto)}) --</option>`;window.globalTeachersList.forEach(t=>ts.innerHTML+=`<option value="${escHtml(t.email)}">${escHtml(t.name)} (${escHtml(t.email)})</option>`);if(curE&&Array.from(ts.options).some(o=>o.value===curE))ts.value=curE;else ts.value='';};
 window.triggerSmartCheck=function(){if(currentMatrixMode==='live')return;const te=document.getElementById('cell-teacher-select').value;const wb=document.getElementById('cell-live-warnings');if(!te){wb.style.display='none';return;}const day=document.getElementById('matrix-day-select').value;const clsId=document.getElementById('cell-edit-class').value;const tB=parseInt(clsId.replace('class_',''))<=5?1:2;const row=parseInt(document.getElementById('cell-edit-row').value);let conf=[];let trav=[];for(let c=1;c<=11;c++){let cc=`class_${c}`;if(cc===clsId)continue;let b=c<=5?1:2;let da=dayArr(globalAllSchedules[cc]?.lessons?.[day]);let ss=da[row];let si=Array.isArray(ss)?ss:(ss?[ss]:[]);si.forEach(item=>{if(item.type!=='break'&&item.teacherEmail===te)conf.push(`Накладка: ${c} клас!`);});[row-1,row+1].forEach(nr=>{if(nr<0)return;let ns=da[nr];let ni=Array.isArray(ns)?ns:(ns?[ns]:[]);ni.forEach(item=>{if(item.type!=='break'&&item.teacherEmail===te&&b!==tB)trav.push(`Переїзд: ${c} клас`);});});}if(conf.length>0||trav.length>0){let h=conf.length>0?`<div style="color:#c0392b;font-weight:700;">❌ ${conf[0]}</div>`:'';if(trav.length>0)h+=`<div style="color:#e67e22;font-weight:700;">⚠️ ${trav[0]}</div>`;wb.innerHTML=h;wb.style.display='block';wb.style.background=conf.length>0?'#fdedec':'#fdf2e9';wb.style.border=`1px solid ${conf.length>0?'var(--red)':'#e67e22'}`;}else{wb.innerHTML='<div style="color:#27ae60;font-weight:700;">✅ Вільний, переїзд не потрібен.</div>';wb.style.display='block';wb.style.background='#eafaf1';wb.style.border='1px solid #2ecc71';}};
+// Поставити значення в <select> ДО того, як список перебудують.
+//
+// Списки предметів наповнюються асинхронно (fillCellSubjects чекає на
+// каталог класу), а при відкритті вікна в них ще лежать варіанти з
+// минулого разу. Присвоєння sel.value назві, якої серед них немає,
+// браузер мовчки ігнорує — і toggleCellType потім читав порожньо, тобто
+// відкритий урок втрачав свою назву. Тому спершу дописуємо потрібний
+// варіант, а вже тоді обираємо.
+function presetCellSelect(sel, val){
+  if(!sel) return;
+  const v=val||'';
+  if(v && !Array.from(sel.options).some(o=>o.value===v))
+    sel.insertAdjacentHTML('afterbegin', `<option value="${escHtml(v)}">${escHtml(v)}</option>`);
+  sel.value=v;
+}
 window.openCellEditor=async function(clsId,rowIdx,subIdx,lessonObj){
   // Підказки з назв, які вже вживає цей клас: щоб «English» і «english»
   // не стали двома різними предметами з двома різними журналами
@@ -1443,9 +1569,16 @@ window.openCellEditor=async function(clsId,rowIdx,subIdx,lessonObj){
   const is=document.getElementById('extra-ind-student');const gc=document.getElementById('extra-group-classes');const gs=document.getElementById('extra-group-students');
   is.innerHTML='<option value="">-- Учень --</option>';gc.innerHTML='';gs.innerHTML='';
   for(let i=1;i<=11;i++){const cId=`class_${i}`;gc.innerHTML+=`<option value="${cId}">${i} Клас</option>`;if(globalAllStudents[cId]){const og1=document.createElement('optgroup');og1.label=`${i} Клас`;const og2=document.createElement('optgroup');og2.label=`${i} Клас`;Object.values(globalAllStudents[cId]).sort().forEach(st=>{og1.innerHTML+=`<option value="${st}">${st}</option>`;og2.innerHTML+=`<option value="${st}">${st}</option>`;});is.appendChild(og1);gs.appendChild(og2.cloneNode(true));}}
+  // Відкриваємо урок, що чергується: у полях мають стояти ДВА предмети
+  // окремо, а не парний рядок через косу. altOptions розбере і новий
+  // запис із alt, і старий, де пара лишилася просто в назві.
+  const altOpts=lessonObj?altOptions(lessonObj):null;
+  const altBox=document.getElementById('cell-alt-on');
+  if(altBox) altBox.checked=!!(altOpts&&altOpts.length>1);
+  presetCellSelect(document.getElementById('cell-subj-alt'), altOpts&&altOpts.length>1?altOpts[1]:'');
   let sn='';const ts=document.getElementById('cell-type-select');
-  if(lessonObj){sn=typeof lessonObj.subject==='string'?lessonObj.subject:(lessonObj.subject.ua||'');document.getElementById('cell-subj-ua').value=sn;document.getElementById('cell-number').value=lessonObj.number||'';document.getElementById('cell-time').value=lessonObj.time||'';const isB=sn.toLowerCase().includes('перерва')||sn.toLowerCase().includes('обід');ts.value=lessonObj.type||(isB?'break':'lesson');if(lessonObj.type==='extra'&&lessonObj.extraData){document.getElementById('cell-extra-format').value=lessonObj.extraData.format||'group';if(lessonObj.extraData.format==='individual')setTimeout(()=>document.getElementById('extra-ind-student').value=lessonObj.extraData.student||'',50);else{document.getElementById('extra-group-type').value=lessonObj.extraData.groupType||'classes';}}}
-  else{document.getElementById('cell-subj-ua').value='';document.getElementById('cell-number').value='';document.getElementById('cell-time').value='';ts.value=isArt?'extra':'lesson';}
+  if(lessonObj){sn=(altOpts&&altOpts.length>1)?altOpts[0]:(typeof lessonObj.subject==='string'?lessonObj.subject:(lessonObj.subject.ua||''));presetCellSelect(document.getElementById('cell-subj-ua'),sn);document.getElementById('cell-number').value=lessonObj.number||'';document.getElementById('cell-time').value=lessonObj.time||'';const isB=sn.toLowerCase().includes('перерва')||sn.toLowerCase().includes('обід');ts.value=lessonObj.type||(isB?'break':'lesson');if(lessonObj.type==='extra'&&lessonObj.extraData){document.getElementById('cell-extra-format').value=lessonObj.extraData.format||'group';if(lessonObj.extraData.format==='individual')setTimeout(()=>document.getElementById('extra-ind-student').value=lessonObj.extraData.student||'',50);else{document.getElementById('extra-group-type').value=lessonObj.extraData.groupType||'classes';}}}
+  else{presetCellSelect(document.getElementById('cell-subj-ua'),'');document.getElementById('cell-number').value='';document.getElementById('cell-time').value='';ts.value=isArt?'extra':'lesson';}
   if(isArt)Array.from(ts.options).forEach(o=>o.disabled=(o.value!=='extra'));else Array.from(ts.options).forEach(o=>o.disabled=false);
   window.updateCellEditorTeacherOptions(clsId,sn,lessonObj?lessonObj.teacherEmail:'');await toggleCellType();if(currentMatrixMode!=='live')window.triggerSmartCheck();
 };
@@ -1529,7 +1662,17 @@ window.saveMatrixCell=async function(){
   const type=document.getElementById('cell-type-select').value;const subj=document.getElementById('cell-subj-ua').value.trim();const time=normalizeTimeRange(document.getElementById('cell-time').value);   /* «13:55-14:40» і «13:55 - 14:40» — той самий урок. Різнобій у базі колись зламав кабінет 5 класу: кінець уроку не розбирався, і день «закінчувався» за останньою перервою. */const num=type==='break'?'':document.getElementById('cell-number').value.trim();
   const ts=document.getElementById('cell-teacher-select');const clubDefault=type==='extra'&&!ts.value?window.getClubTeacher?.(clsId,subj):null;const te=type==='break'?'':ts.value||clubDefault?.email||'';const tn=clubDefault?.name||(te?ts.options[ts.selectedIndex].text.split(' (')[0]:'');
   let ed=null;if(type==='extra'){const fmt=document.getElementById('cell-extra-format').value;ed={format:fmt};if(fmt==='individual')ed.student=document.getElementById('extra-ind-student').value;else{ed.groupType=document.getElementById('extra-group-type').value;const opts=ed.groupType==='classes'?document.getElementById('extra-group-classes').selectedOptions:document.getElementById('extra-group-students').selectedOptions;ed[ed.groupType==='classes'?'classes':'students']=Array.from(opts).map(o=>o.value);}}
-  const nc={number:num,time,subject:{ua:subj,pl:subj},teacherEmail:te,teacherName:tn,type,extraData:ed};
+  // ЧЕРГУВАННЯ. Зберігаємо рівно в тому вигляді, у якому його пише імпорт
+  // із Word: одна клітинка, subject — парний рядок через косу (його бачать
+  // люди і старі версії кабінету), alt — два справжніх предмети каталогу
+  // (за ними працюють журнал, каталог, навантаження й картка чергування).
+  const altOn=type==='lesson'&&document.getElementById('cell-alt-on').checked;
+  const subj2=altOn?document.getElementById('cell-subj-alt').value.trim():'';
+  if(altOn&&(!subj||!subj2)){alert('Для чергування потрібні обидва предмети — або зніміть галочку «Уроки чергуються».');return;}
+  if(altOn&&subj2===subj){alert('Предмети пари мають бути різні.');return;}
+  const display=altOn?`${subj} / ${subj2}`:subj;
+  const nc={number:num,time,subject:{ua:display,pl:display},teacherEmail:te,teacherName:tn,type,extraData:ed};
+  if(altOn) nc.alt=[subj,subj2];
   let tClasses=[clsId];if(type==='extra'&&ed?.format==='group'){if(ed.groupType==='classes'&&ed.classes?.length>0)tClasses=ed.classes;else if(ed.groupType==='students'&&ed.students?.length>0){let ac=new Set();ed.students.forEach(st=>{for(let c in globalAllStudents)if(Object.values(globalAllStudents[c]).includes(st)){ac.add(c);break;}});if(ac.size>0)tClasses=Array.from(ac);}}
   const dp=currentMatrixMode==='live'?'schedules':`schedule_drafts/${currentMatrixMode}`;
   // Чинний розклад видно всій школі, а історії змін портал не веде —
