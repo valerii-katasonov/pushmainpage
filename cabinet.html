@@ -565,6 +565,15 @@
               text-align:center;vertical-align:middle;box-shadow:0 0 0 2px rgba(255,255,255,.6);}
     .chat-dot.show{display:inline-block;animation:dotPop .25s ease;}
     @keyframes dotPop{from{transform:scale(.5);opacity:0}to{transform:scale(1);opacity:1}}
+    /* Скасування відмітки відсутності — навмисно скромна кнопка: дія
+       рідкісна й виправна, тиснути її щодня ніхто не має. */
+    .att-undo{display:inline-block;background:#fff;border:1px solid var(--red,#e74c3c);
+      color:var(--red,#e74c3c);border-radius:7px;padding:2px 9px;font-size:.74rem;
+      font-weight:700;cursor:pointer;width:auto;margin:0 0 0 6px;vertical-align:middle;}
+    .att-undo:hover{background:var(--red,#e74c3c);color:#fff;}
+    .att-undo-note{display:block;font-size:.72rem;color:#888;font-weight:400;margin-top:3px;}
+    /* Підказка «відмічено на іншому уроці» у швидкому журналі */
+    .qj-elsewhere{display:block;font-size:.68rem;color:#c0392b;font-weight:600;}
     .push-invite{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#e0f7fa;
                  border:1px solid #80deea;border-radius:12px;padding:11px 14px;margin-bottom:14px;
                  font-size:.84rem;color:#00646e;line-height:1.45;}
