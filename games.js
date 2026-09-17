@@ -204,7 +204,7 @@ function catalogHtml(cls, progress){
   const list = CATALOG.filter(g => g.classes.includes(n));
 
   if(!list.length){
-    return `<div class="data-card"><p style="margin:0;color:#78909c;font-size:.9rem;">
+    return `<div class="data-card"><p style="margin:0;color:var(--ink-3);font-size:.9rem;">
       Для цього класу ігор поки немає — вони з'являються за темами, які клас проходить.
     </p></div>`;
   }
