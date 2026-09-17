@@ -657,19 +657,19 @@ window.improveCommentAI=async function(){
 window.hwFilesPicked=function(input){
   const lbl=document.getElementById('hw-file-name');
   const files=Array.from(input.files||[]);
-  if(!files.length){ clearHwAudioPreview('hw-audio-preview');if(lbl){lbl.textContent='Файл не обрано';lbl.style.color='#78909c';} return; }
+  if(!files.length){ clearHwAudioPreview('hw-audio-preview');if(lbl){lbl.textContent='Файл не обрано';lbl.style.color='var(--ink-3)';} return; }
   const bad=files.filter(f=>!HW_FILE_EXT.includes(fileExt(f.name)));
   const big=files.filter(f=>f.size>HW_FILE_MAX_MB*1024*1024);
   if(bad.length||big.length){
     input.value='';
     clearHwAudioPreview('hw-audio-preview');
-    if(lbl){lbl.style.color='#b71c1c';
+    if(lbl){lbl.style.color='var(--danger)';
       lbl.textContent=bad.length
         ? `Не підходить: ${bad.map(f=>f.name).join(', ')}. Можна лише ${HW_FILE_EXT.join(', ')}.`
         : `Завеликий файл: ${big.map(f=>f.name).join(', ')} — понад ${HW_FILE_MAX_MB} МБ.`;}
     return;
   }
-  if(lbl){lbl.style.color='#2e7d32';
+  if(lbl){lbl.style.color='var(--ok)';
     lbl.textContent=files.length===1?files[0].name:`Обрано файлів: ${files.length}`;}
   showHwAudioPreview(input,'hw-audio-preview');
 };
@@ -721,7 +721,7 @@ async function runSave(btnId, label, sm, job){
   try{
     const msg=await job();
     if(msg!==false&&sm){
-      sm.style.display='block'; sm.style.color='#1a7d3a'; sm.style.background='#e8f5e9';
+      sm.style.display='block'; sm.style.color='var(--ok)'; sm.style.background='var(--ok-soft)';
       sm.innerText=msg||'✅ Збережено!';
       setTimeout(()=>{ sm.style.display='none'; },2500);
     }
@@ -730,7 +730,7 @@ async function runSave(btnId, label, sm, job){
     // PERMISSION_DENIED — це не поломка, а незаповнена матриця доступу.
     const denied=/permission[_ ]denied/i.test((e&&e.message)||'');
     if(sm){
-      sm.style.display='block'; sm.style.color='#b71c1c'; sm.style.background='#ffebee';
+      sm.style.display='block'; sm.style.color='var(--danger)'; sm.style.background='var(--danger-soft)';
       sm.innerText=denied
         ? '⛔ Немає прав на запис у цей клас. Директор має відкрити його вам у «Матриці доступу вчителів».'
         : ('❌ Не збережено: '+((e&&e.message)||'невідома помилка'));
@@ -867,7 +867,7 @@ window.saveHomework=function(){
     let finalImageUrls=[...currentHwImages];
     if(fileInput&&fileInput.files.length>0){
       sm.style.display='block';sm.innerText='⏳ Завантаження файлів...';
-      sm.style.color='#f39c12';sm.style.background='#fff8e1';
+      sm.style.color='var(--warn)';sm.style.background='var(--warn-soft)';
       const uploaded=await Promise.all(Array.from(fileInput.files).map(async file=>{
         const fd=new FormData(); fd.append('file',file); fd.append('upload_preset',UPLOAD_PRESET);
         const r=await fetch(CLOUDINARY_URL,{method:'POST',body:fd});
@@ -914,7 +914,7 @@ window.saveHomework=function(){
     currentHwImages=finalImageUrls;
     renderMainHwAttachments();
     const lbl=document.getElementById('hw-file-name');
-    if(lbl){lbl.textContent='Файл не обрано';lbl.style.color='#78909c';}
+    if(lbl){lbl.textContent='Файл не обрано';lbl.style.color='var(--ink-3)';}
     setTimeout(()=>loadTeacherDashboard(),300);
     return '✅ ДЗ збережено';
   });
@@ -1036,8 +1036,8 @@ async function loadCurriculumTopics(){
     if(t.covered){coveredHours+=t.hours;coveredCount++;}
     container.innerHTML+=`<div class="topic-row ${t.covered?'covered':''}">
       <input type="checkbox" ${t.covered?'checked':''} onchange="toggleTopicCovered('${cls}','${escJs(subj)}','${t.key}',this.checked)">
-      <span style="flex:1;${t.covered?'text-decoration:line-through;color:#aaa;':''}">${escHtml(t.title)}</span>
-      <span style="font-size:.75rem;color:#888;flex-shrink:0;">${t.hours} год.</span>
+      <span style="flex:1;${t.covered?'text-decoration:line-through;color:var(--ink-3);':''}">${escHtml(t.title)}</span>
+      <span style="font-size:.75rem;color:var(--ink-3);flex-shrink:0;">${t.hours} год.</span>
     </div>`;
   });
   // Календарний план — окрема картка нижче. Якщо він є, тут пояснюємо це,
@@ -1091,12 +1091,12 @@ window.openRetakeRequestsModal=async function(){
         const req=data[subj][date][student];
         const statusColor=req.status==='approved'?'var(--green)':req.status==='rejected'?'var(--red)':'var(--orange)';
         const statusLabel=req.status==='approved'?'✅ Схвалено':req.status==='rejected'?'❌ Відхилено':'⏳ Очікує';
-        html+=`<div style="background:#fafafa;border:1px solid #eee;border-radius:9px;padding:11px;margin-bottom:9px;">
+        html+=`<div style="background:var(--surface-2);border:1px solid var(--line-soft);border-radius:9px;padding:11px;margin-bottom:9px;">
           <div style="display:flex;justify-content:space-between;align-items:center;">
             <div><b>${escHtml(stuName(cls,student))}</b> | ${escHtml(subj)} | ${journalBaseDate(date).split('-').reverse().join('.')}${journalSlot(date)>1?` · оцінка ${journalSlot(date)}`:''}</div>
             <span style="color:${statusColor};font-size:.8rem;font-weight:700;">${statusLabel}</span>
           </div>
-          <div style="font-size:.8rem;color:#888;margin-top:5px;">Поточна оцінка: <b>${req.grade||'—'}</b></div>
+          <div style="font-size:.8rem;color:var(--ink-3);margin-top:5px;">Поточна оцінка: <b>${req.grade||'—'}</b></div>
           ${req.status==='pending'?`<div style="display:flex;gap:7px;margin-top:8px;">
             <button onclick="processRetake('${cls}','${escJs(subj)}','${date}','${escJs(student)}','approved')" style="flex:1;background:var(--green);color:#fff;padding:7px;border-radius:8px;border:none;cursor:pointer;font-weight:700;font-size:.82rem;margin:0;">✅ Дозволити</button>
             <button onclick="processRetake('${cls}','${escJs(subj)}','${date}','${escJs(student)}','rejected')" style="flex:1;background:var(--red);color:#fff;padding:7px;border-radius:8px;border:none;cursor:pointer;font-weight:700;font-size:.82rem;margin:0;">❌ Відхилити</button>
@@ -1535,7 +1535,7 @@ export async function listenTeacherAttendance(){
             const bc = r.status==='late'?'badge-late':'badge-absent';
             const lb = r.status==='late'?'Запізнення':'Відсутність';
             const mi = r.markedBy==='teacher'?'👨‍🏫':(r.markedBy==='student'?'🎒':'👪');
-            h += `<li style="margin-bottom:7px;border-bottom:1px dashed #eee;padding-bottom:4px;"><span style="font-size:.72rem;background:var(--teal);color:#fff;padding:2px 5px;border-radius:4px;margin-right:4px;">${i} Кл</span> <b>${escHtml(stuName(`class_${i}`, st))}</b> <span class="badge ${bc}">${lb}</span> <span style="font-size:.72rem;color:#888;">${escHtml(formatAttendanceSlotLabel(sk))} ${mi}</span></li>`;
+            h += `<li style="margin-bottom:7px;border-bottom:1px dashed var(--line-soft);padding-bottom:4px;"><span style="font-size:.72rem;background:var(--teal);color:#fff;padding:2px 5px;border-radius:4px;margin-right:4px;">${i} Кл</span> <b>${escHtml(stuName(`class_${i}`, st))}</b> <span class="badge ${bc}">${lb}</span> <span style="font-size:.72rem;color:var(--ink-3);">${escHtml(formatAttendanceSlotLabel(sk))} ${mi}</span></li>`;
           }
         }
       }
@@ -1651,7 +1651,7 @@ window.saveComment=async function(){
 window.openExamsCalendar=function(){document.getElementById('exams-modal').style.display='flex';document.getElementById('exam-class-label').innerText=document.getElementById('t-class-selector').options[document.getElementById('t-class-selector').selectedIndex].text;document.getElementById('exams-day-details').style.display='none';const mi=document.getElementById('exam-month-select');const dp=document.getElementById('global-date').value.split('-');mi.value=`${dp[0]}-${dp[1]}`;renderExamsCalendar();};
 window.closeExamsModal=function(){document.getElementById('exams-modal').style.display='none';};
 window.renderExamsCalendar=function(){const cls=getActiveClass();const ym=document.getElementById('exam-month-select').value;if(!ym)return;const[y,m]=ym.split('-');get(child(ref(db),`exams/${cls}/${y}-${m}`)).then(snap=>{const d=snap.exists()?snap.val():{};let h='<div class="cal-grid">';['Пн','Вт','Ср','Чт','Пт','Сб','Нд'].forEach(d2=>h+=`<div class="cal-header">${d2}</div>`);const dim=new Date(y,parseInt(m),0).getDate();let fd=new Date(y,parseInt(m)-1,1).getDay();if(fd===0)fd=7;for(let i=1;i<fd;i++)h+=`<div></div>`;for(let i=1;i<=dim;i++){const cd=`${y}-${m}-${String(i).padStart(2,'0')}`;const cnt=d[cd]?Object.keys(d[cd]).length:0;const cc=cnt===1?'has-1':cnt>=2?'has-2':'';h+=`<div class="cal-day ${cc}" onclick="manageDayExams('${cd}')">${i}<br><small style="font-size:.68rem;">${cnt>0?cnt+' к.р.':''}</small></div>`;}h+='</div>';document.getElementById('exams-cal-container').innerHTML=h;});};
-window.manageDayExams=function(ds){const cls=getActiveClass();const dd=document.getElementById('exams-day-details');dd.style.display='block';get(child(ref(db),`exams/${cls}/${ds.substring(0,7)}/${ds}`)).then(snap=>{let ex=snap.exists()?snap.val():{};let lh='';for(let s in ex){const me=ex[s]===auth.currentUser.uid;const db2=me?`<button onclick="deleteExam('${ds}','${escJs(s)}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-weight:700;padding:0 4px;width:auto;margin:0;font-size:1.1rem;">✖</button>`:'';lh+=`<li style="margin-bottom:7px;display:flex;justify-content:space-between;align-items:center;background:#fff;padding:7px 11px;border-radius:8px;border:1px solid #eee;"><span><b>${s}</b></span>${db2}</li>`;}let h=`<h4 style="margin-top:0;color:#d35400;border-bottom:1px dashed var(--orange);padding-bottom:9px;">Контрольні: ${ds.split('-').reverse().join('.')}</h4>`;h+=`<ul style="padding-left:0;list-style:none;margin-bottom:13px;">${lh||'<li class="empty-msg">Жодної</li>'}</ul>`;const[yy,mm,dd2]=ds.split('-');const dn=dayKeys[new Date(yy,mm-1,dd2).getDay()];let ds2=new Set();window.getTodayLessonsFlattened(dn).forEach(item=>{const sn=window.getValidSubjectName(item);if(sn)ds2.add(sn);});let fe=currentUserData.role==='teacher'?[...ds2].filter(s=>window.isSubjectAllowed(cls,s)).sort():[...ds2].sort();let so=fe.map(s=>`<option value="${s}">${s}</option>`).join('');if(!so){so='<option disabled>Немає предметів</option>';}h+=`<div style="display:flex;gap:9px;"><select id="exam-add-subj" style="flex:1;margin:0;">${so}</select><button style="background:var(--green);color:#fff;width:auto;padding:9px 13px;margin:0;" onclick="addExam('${ds}')">Додати</button></div>`;dd.innerHTML=h;});};
+window.manageDayExams=function(ds){const cls=getActiveClass();const dd=document.getElementById('exams-day-details');dd.style.display='block';get(child(ref(db),`exams/${cls}/${ds.substring(0,7)}/${ds}`)).then(snap=>{let ex=snap.exists()?snap.val():{};let lh='';for(let s in ex){const me=ex[s]===auth.currentUser.uid;const db2=me?`<button onclick="deleteExam('${ds}','${escJs(s)}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-weight:700;padding:0 4px;width:auto;margin:0;font-size:1.1rem;">✖</button>`:'';lh+=`<li style="margin-bottom:7px;display:flex;justify-content:space-between;align-items:center;background:#fff;padding:7px 11px;border-radius:8px;border:1px solid var(--line-soft);"><span><b>${s}</b></span>${db2}</li>`;}let h=`<h4 style="margin-top:0;color:var(--warn);border-bottom:1px dashed var(--orange);padding-bottom:9px;">Контрольні: ${ds.split('-').reverse().join('.')}</h4>`;h+=`<ul style="padding-left:0;list-style:none;margin-bottom:13px;">${lh||'<li class="empty-msg">Жодної</li>'}</ul>`;const[yy,mm,dd2]=ds.split('-');const dn=dayKeys[new Date(yy,mm-1,dd2).getDay()];let ds2=new Set();window.getTodayLessonsFlattened(dn).forEach(item=>{const sn=window.getValidSubjectName(item);if(sn)ds2.add(sn);});let fe=currentUserData.role==='teacher'?[...ds2].filter(s=>window.isSubjectAllowed(cls,s)).sort():[...ds2].sort();let so=fe.map(s=>`<option value="${s}">${s}</option>`).join('');if(!so){so='<option disabled>Немає предметів</option>';}h+=`<div style="display:flex;gap:9px;"><select id="exam-add-subj" style="flex:1;margin:0;">${so}</select><button style="background:var(--green);color:#fff;width:auto;padding:9px 13px;margin:0;" onclick="addExam('${ds}')">Додати</button></div>`;dd.innerHTML=h;});};
 window.addExam=function(ds){const s=document.getElementById('exam-add-subj').value;if(!s)return;const cls=getActiveClass();const ym=ds.substring(0,7);get(child(ref(db),`exams/${cls}/${ym}/${ds}`)).then(snap=>{let cnt=snap.exists()?Object.keys(snap.val()).length:0;if(cnt>=2)return alert('❌ Ліміт: більше 2 контрольних не можна!');set(ref(db,`exams/${cls}/${ym}/${ds}/${s}`),auth.currentUser.uid).then(()=>{renderExamsCalendar();manageDayExams(ds);});});};
 window.deleteExam=function(ds,s){const cls=getActiveClass();remove(ref(db,`exams/${cls}/${ds.substring(0,7)}/${ds}/${s}`)).then(()=>{renderExamsCalendar();manageDayExams(ds);});};
 // ══════════ REACTIONS & WRAPPED (teacher side) ══════════
@@ -1669,12 +1669,12 @@ window.showReactionsDetails=async function(){
     const resolved=stuName(cls,r.student);
     const name=resolved===r.student&&/^-[A-Za-z0-9_-]{15,}$/.test(r.student)
       ?'Учня немає у списку класу':resolved;
-    h+=`<li style="background:#fdfbfb;border:1px solid #eee;border-radius:8px;padding:11px;margin-bottom:9px;">
-      <div style="display:flex;justify-content:space-between;border-bottom:1px dashed #ddd;padding-bottom:4px;margin-bottom:7px;">
+    h+=`<li style="background:var(--surface-2);border:1px solid var(--line-soft);border-radius:8px;padding:11px;margin-bottom:9px;">
+      <div style="display:flex;justify-content:space-between;border-bottom:1px dashed var(--line);padding-bottom:4px;margin-bottom:7px;">
         <span style="font-weight:700;color:var(--teal);">${escHtml(name)}</span><span style="font-size:1.3rem;">${escHtml(r.emoji)}</span>
       </div>
-      <div style="font-size:.78rem;color:#888;margin-bottom:4px;">📅 ${d}.${m}.${y} | 📚 ${escHtml(r.subject)}</div>
-      <div style="font-size:.88rem;color:#444;background:#f0f8ff;padding:7px;border-radius:6px;font-style:italic;">"${escHtml(r.comment)}"</div>
+      <div style="font-size:.78rem;color:var(--ink-3);margin-bottom:4px;">📅 ${d}.${m}.${y} | 📚 ${escHtml(r.subject)}</div>
+      <div style="font-size:.88rem;color:var(--ink);background:var(--surface-2);padding:7px;border-radius:6px;font-style:italic;">"${escHtml(r.comment)}"</div>
     </li>`;
   });
   list.innerHTML=h+'</ul>';
@@ -1708,15 +1708,15 @@ window.openStickerStatsModal=async function(){
   stats.forEach((s,i)=>{
     const pct=Math.min((s.count/goal)*100,100);
     const medal=i===0?'🥇 ':i===1?'🥈 ':i===2?'🥉 ':'';
-    h+=`<li style="background:#fdfbfb;border:1px solid #eee;border-radius:8px;padding:11px;margin-bottom:9px;">
+    h+=`<li style="background:var(--surface-2);border:1px solid var(--line-soft);border-radius:8px;padding:11px;margin-bottom:9px;">
       <div style="display:flex;justify-content:space-between;align-items:center;">
         <span style="font-weight:700;color:var(--teal);">${medal}${escHtml(s.name)}</span>
-        <span style="font-size:1.05rem;font-weight:800;color:#f39c12;">🌟 ${s.count}</span>
+        <span style="font-size:1.05rem;font-weight:800;color:var(--warn);">🌟 ${s.count}</span>
       </div>
-      <div style="background:#eee;border-radius:6px;height:8px;margin-top:7px;overflow:hidden;">
-        <div style="background:linear-gradient(90deg,#f39c12,#f1c40f);height:100%;width:${pct}%;"></div>
+      <div style="background:var(--line-soft);border-radius:6px;height:8px;margin-top:7px;overflow:hidden;">
+        <div style="background:linear-gradient(90deg,var(--warn-line),var(--warn-line));height:100%;width:${pct}%;"></div>
       </div>
-      <div style="font-size:.72rem;color:#888;margin-top:3px;text-align:right;">${s.count}/${goal} до призу</div>
+      <div style="font-size:.72rem;color:var(--ink-3);margin-top:3px;text-align:right;">${s.count}/${goal} до призу</div>
     </li>`;
   });
   h+='</ul>';
@@ -1960,19 +1960,19 @@ window.hwdFilesPicked=function(id){
   const input=document.getElementById(id+'-file');
   const lbl=document.getElementById(id+'-fname');
   const files=Array.from((input&&input.files)||[]);
-  if(!files.length){ clearHwAudioPreview(id+'-audio-preview');if(lbl){lbl.textContent='Файл не обрано';lbl.style.color='#78909c';} return; }
+  if(!files.length){ clearHwAudioPreview(id+'-audio-preview');if(lbl){lbl.textContent='Файл не обрано';lbl.style.color='var(--ink-3)';} return; }
   const bad=files.filter(f=>!HW_FILE_EXT.includes(fileExt(f.name)));
   const big=files.filter(f=>f.size>HW_FILE_MAX_MB*1024*1024);
   if(bad.length||big.length){
     input.value='';
     clearHwAudioPreview(id+'-audio-preview');
-    if(lbl){ lbl.style.color='#b71c1c';
+    if(lbl){ lbl.style.color='var(--danger)';
       lbl.textContent=bad.length
         ? `Не підходить: ${bad.map(f=>f.name).join(', ')}`
         : `Завеликий файл: ${big.map(f=>f.name).join(', ')} — понад ${HW_FILE_MAX_MB} МБ`; }
     return;
   }
-  if(lbl){ lbl.style.color='#2e7d32';
+  if(lbl){ lbl.style.color='var(--ok)';
     lbl.textContent=files.length===1?files[0].name:`Обрано файлів: ${files.length}`; }
   showHwAudioPreview(input,id+'-audio-preview');
   hwdDirty(id);
@@ -2043,7 +2043,7 @@ window.hwdSave=function(id){
     if(fileInput) fileInput.value='';
     clearHwAudioPreview(id+'-audio-preview');
     const fn=document.getElementById(id+'-fname');
-    if(fn){ fn.style.color='#78909c';fn.textContent='Файл не обрано'; }
+    if(fn){ fn.style.color='var(--ink-3)';fn.textContent='Файл не обрано'; }
     const mk=row.querySelector('.hwd-mark'); if(mk) mk.textContent='✓';
     const st=document.getElementById(id+'-state'); if(st) st.textContent='задано';
     const dm=document.getElementById(id+'-dirty'); if(dm) dm.textContent='';
