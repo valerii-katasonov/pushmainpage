@@ -28,8 +28,6 @@ import { db, currentUserData, getActiveClass, teacherAccessMatrix, showToast,
          escHtml, escJs, mondayOf, altOptions, altPairKey, resolveAlt,
          freeBellSlots, logAction } from './common.js';
 
-export const ALT_BUILD = '2026-09-05 · alt v3 (пари предметів, правильний екран)';
-
 const DIR_ROLES  = ['director', 'administrator'];
 const TEACH_ROLES = ['teacher', 'class_teacher', 'art_school_teacher', 'music_teacher', 'master_class_teacher'];
 const DAY_UA = { Monday:'Понеділок', Tuesday:'Вівторок', Wednesday:'Середа',
@@ -48,7 +46,8 @@ export function nextMonday(week){
 
 // «2026-09-07» → «7 вер.» (для заголовка тижня)
 const MON_SHORT = ['січ.','лют.','бер.','квіт.','трав.','черв.','лип.','серп.','вер.','жовт.','лист.','груд.'];
-export function weekLabel(week){
+// Понеділок–пʼятниця: у чергуванні уроків вихідні не показуємо.
+export function schoolWeekLabel(week){
   const [y, m, d] = String(week).split('-').map(Number);
   if(!y || !m || !d) return week;
   const end = new Date(y, m - 1, d + 4);      // понеділок + 4 = пʼятниця
@@ -229,8 +228,10 @@ function renderAltCard(){
   if(!list.length){
     box.innerHTML = picker
       + '<p class="empty-msg">У розкладі цього класу немає уроків, що чергуються.<br>'
-      + 'Портал вважає урок таким, коли в назві предмета стоять дві назви через '
-      + 'косу риску з пробілами: <b>Музичне мистецтво / Фізичне виховання</b>.</p>';
+      + 'Такий урок ставить директор у конструкторі розкладу: у вікні слота — '
+      + 'галочка <b>🔁 Уроки чергуються</b> і другий предмет. Уроки з імпорту '
+      + 'документа, де дві назви стоять через косу риску з пробілами '
+      + '(<b>Музичне мистецтво / Фізичне виховання</b>), теж потрапляють сюди.</p>';
     return;
   }
 
@@ -238,7 +239,7 @@ function renderAltCard(){
   let html = picker;
   altState.weeks.forEach((w, wi) => {
     html += `<div class="alt-week"><div class="alt-week-head">${wi === 0 ? 'Цей тиждень' : 'Наступний тиждень'}
-      <span>${escHtml(weekLabel(w))}</span></div>`;
+      <span>${escHtml(schoolWeekLabel(w))}</span></div>`;
     groups.forEach((G, gi) => {
       const may = canSetAlt(G.options, role, teacherAccessMatrix, altState.cls, altState.isCT);
       const cur = groupChoice(G, altState.chosen[w]);
@@ -250,7 +251,7 @@ function renderAltCard(){
               ${may ? '' : 'disabled'}
               onclick="setAltGroup('${escJs(w)}',${gi},'${escJs(o)}')">${escHtml(o)}</button>`).join('')}
           ${cur && may ? `<button type="button" class="alt-clear"
-              onclick="setAltGroup('${escJs(w)}',${gi},'')" title="Прибрати вибір">×</button>` : ''}
+              onclick="setAltGroup('${escJs(w)}',${gi},'')" data-tip="Прибрати вибір">×</button>` : ''}
         </div>
         ${cur === 'mixed'
           ? '<div class="alt-none">у різних днях позначено по-різному — оберіть заново</div>'
@@ -260,7 +261,6 @@ function renderAltCard(){
     });
     html += '</div>';
   });
-  html += `<div class="alt-build">версія модуля: ${escHtml(ALT_BUILD)}</div>`;
   box.innerHTML = html;
 }
 
@@ -395,7 +395,7 @@ function renderClassHourCard(){
         ? `<select id="ch-time">${times}</select>
            <button type="button" class="ch-save" onclick="saveClassHour()">Поставити</button>`
         : `<span class="ch-full">цього дня вільних уроків немає</span>`}
-      ${H && H.time ? '<button type="button" class="ch-clear" onclick="clearClassHour()" title="Прибрати">×</button>' : ''}
+      ${H && H.time ? '<button type="button" class="ch-clear" onclick="clearClassHour()" data-tip="Прибрати">×</button>' : ''}
     </div>`
     + (Object.keys(chState.bells || {}).length ? ''
        : '<p class="empty-msg" style="color:#ef6c00;">У цього класу не заповнено розклад дзвінків — директор задає його в кабінеті директора. Без дзвінків немає з чого обирати час.</p>');
