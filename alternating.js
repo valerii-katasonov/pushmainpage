@@ -218,11 +218,11 @@ function renderAltCard(){
   const clsNum = String(altState.cls || '').replace('class_', '');
 
   const picker = DIR_ROLES.includes(role)
-    ? `<label style="font-size:.8rem;color:#4527a0;font-weight:600;">Клас:</label>
+    ? `<label style="font-size:.8rem;color:var(--brand-deep);font-weight:600;">Клас:</label>
        <select id="alt-class" onchange="changeAltClass(this.value)" style="margin-top:4px;">
          ${Array.from({length:11}, (_,i)=>`<option value="class_${i+1}"${altState.cls===`class_${i+1}`?' selected':''}>${i+1} клас</option>`).join('')}
        </select>`
-    : `<div style="font-size:.8rem;color:#4527a0;font-weight:600;margin-bottom:8px;">${escHtml(clsNum)} клас</div>`;
+    : `<div style="font-size:.8rem;color:var(--brand-deep);font-weight:600;margin-bottom:8px;">${escHtml(clsNum)} клас</div>`;
   // Підпис класу береться з altState.cls — того самого, з якого читали розклад
 
   if(!list.length){
@@ -398,7 +398,7 @@ function renderClassHourCard(){
       ${H && H.time ? '<button type="button" class="ch-clear" onclick="clearClassHour()" data-tip="Прибрати">×</button>' : ''}
     </div>`
     + (Object.keys(chState.bells || {}).length ? ''
-       : '<p class="empty-msg" style="color:#ef6c00;">У цього класу не заповнено розклад дзвінків — директор задає його в кабінеті директора. Без дзвінків немає з чого обирати час.</p>');
+       : '<p class="empty-msg" style="color:var(--warn);">У цього класу не заповнено розклад дзвінків — директор задає його в кабінеті директора. Без дзвінків немає з чого обирати час.</p>');
 }
 
 window.changeClassHourDay = function(day){ chState.day = day; renderClassHourCard(); };
