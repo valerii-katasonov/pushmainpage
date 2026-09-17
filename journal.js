@@ -6,7 +6,7 @@
 import { ref, set, get, child, update } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { loadGradeWork, prepareGradeWork, setGradeWorkBusy, hasGradeWorkChanges } from './grade-work.js';
 import { ACTIVE_YEAR } from './director.js';
-import { db, getActiveClass, currentUserData, displayGrade, gradeClass6, calculateStudentWeightedAvg, validDailyGrade, getClassNum, LEVEL_MAX_CLASS, GRADE_WEIGHTS, dayKeys, dayNamesUA, showToast, normalizeTimeRange, localDateString, summarizeAttendanceSlots, gradeTypesCache, escJs, escHtml, notifyEvent, logAction, getUserRoles, getUsersSnap, stuName, gradeWritePaths, journalGradeKey, journalBaseDate, journalSlot, expandAltSubjects, altOptions, altPairKey, mondayOf, isBreakItem, insertSlot, removeSlot, makeBreak, withBreaks, slotBounds, hhmmFromMins, emailKey } from './common.js';
+import { db, getActiveClass, currentUserData, displayGrade, gradeClass6, calculateStudentWeightedAvg, validDailyGrade, getClassNum, LEVEL_MAX_CLASS, GRADE_WEIGHTS, dayKeys, dayNamesUA, showToast, normalizeTimeRange, localDateString, summarizeAttendanceSlots, attendanceForLesson, gradeTypesCache, escJs, escHtml, notifyEvent, logAction, getUserRoles, getUsersSnap, stuName, gradeWritePaths, journalGradeKey, journalBaseDate, journalSlot, expandAltSubjects, altOptions, altPairKey, mondayOf, isBreakItem, insertSlot, removeSlot, makeBreak, withBreaks, slotBounds, hhmmFromMins, emailKey } from './common.js';
 
 // globalTeacherAccess is reassigned only in this file (openVisualMatrixModal)
 // and read from common.js (window.getDefaultTeacher) — plain export/import.
@@ -481,10 +481,19 @@ window.handleJournalRangeChange=function(){
 };
 // Кожен запис предмета в розкладі — окремий урок, включно з двома
 // уроками в один день. Порожні слоти й перерви не рахуються.
-export function scheduledSubjectCount(schedule,dayName,subject,weekChoices={}){
+// НОМЕРИ УРОКІВ ЦЬОГО ПРЕДМЕТА В ЦЕЙ ДЕНЬ — у тому ж порядку, що й
+// стовпці журналу. Потрібні, щоб зіставити стовпець із відміткою
+// відвідуваності: та зберігається за НОМЕРОМ УРОКУ в розкладі, а стовпці
+// журналу нумеруються окремо («перший урок цього предмета, другий...»).
+// Дві різні нумерації — і саме через їх плутанину «Н» не потрапляла в
+// потрібну клітинку.
+//
+// Порожній рядок означає «номера немає»: у такому розкладі зіставляти
+// нема з чим, і тоді в стовпці лишиться тільки відмітка за весь день.
+export function scheduledSubjectLessons(schedule,dayName,subject,weekChoices={}){
   const raw=schedule?.[dayName]||{};
   const slots=Array.isArray(raw)?raw:Object.values(raw);
-  let count=0;
+  const keys=[];
   slots.forEach((slot,slotIdx)=>{
     const lessons=Array.isArray(slot)?slot:(slot&&(slot.subject||slot.alt)?[slot]:[]);
     lessons.forEach(lesson=>{
@@ -493,10 +502,13 @@ export function scheduledSubjectCount(schedule,dayName,subject,weekChoices={}){
         ||weekChoices?.[dayName]?.[slotIdx]
         ||weekChoices?.[dayName]?.[String(slotIdx)]);
       const subjects=options&&options.includes(selected)?[selected]:expandAltSubjects(lesson);
-      if(subjects.includes(subject))count++;
+      if(subjects.includes(subject))keys.push(String(lesson&&lesson.number||''));
     });
   });
-  return count;
+  return keys;
+}
+export function scheduledSubjectCount(schedule,dayName,subject,weekChoices={}){
+  return scheduledSubjectLessons(schedule,dayName,subject,weekChoices).length;
 }
 export function buildJournalColumns(months,gradesData,attData,manualCounts,schedule,subject,today,firstDate,altChoices={}){
   const columns=[];
@@ -508,7 +520,8 @@ export function buildJournalColumns(months,gradesData,attData,manualCounts,sched
       if(ds<firstDate||ds>today)continue;
       const dow=new Date(y,m-1,day).getDay();
       const dayName=dayKeys[dow];
-      const scheduled=(dow===0||dow===6)?0:scheduledSubjectCount(schedule,dayName,subject,altChoices[mondayOf(ds)]);
+      const lessonKeys=(dow===0||dow===6)?[]:scheduledSubjectLessons(schedule,dayName,subject,altChoices[mondayOf(ds)]);
+      const scheduled=lessonKeys.length;
       const gradeSlots=Object.keys(gradesData).filter(k=>journalBaseDate(k)===ds&&
           Object.values(gradesData[k]||{}).some(v=>v!==null&&v!==''))
         .reduce((max,k)=>Math.max(max,journalSlot(k)),0);
@@ -519,7 +532,8 @@ export function buildJournalColumns(months,gradesData,attData,manualCounts,sched
       // уже виставленими оцінками (історичні дані не можна приховати).
       const count=Math.max(scheduled,gradeSlots,manual);
       for(let slot=1;slot<=Math.min(count,30);slot++)
-        columns.push({ds,key:journalGradeKey(ds,slot),slot,scheduled,manual,day,dow,ym});
+        columns.push({ds,key:journalGradeKey(ds,slot),slot,scheduled,manual,day,dow,ym,
+          lessonKey:lessonKeys[slot-1]||''});
     }
   });
   return columns;
@@ -657,9 +671,13 @@ window.renderJournalTable=async function(){
       if(avg!==null){classWeightedAvg+=avg;classCount++;}
       const avgStr=avg!==null?avg.toFixed(2):'-';
       let rowHtml=`<tr><td class="sn" title="${escHtml(st.nm)}">${escHtml(st.nm)}</td>`;
-      dateCols.forEach(({ds,key,slot,ym})=>{
+      dateCols.forEach(({ds,key,slot,ym,lessonKey})=>{
         const isToday=ds===localDateString;
-        const attInfo=slot===1?summarizeAttendanceSlots(attData[ds]&&attData[ds][st.sid]):null;
+        // «Весь день» — у кожному стовпці дня; відмітка за уроком — у своєму.
+        // І за ідентифікатором, і за імʼям: самозвіт родини донедавна лягав
+        // під імʼям, і в журналі його не було видно взагалі.
+        const slotsOf=(attData[ds]&&(attData[ds][st.sid]||attData[ds][st.nm]))||null;
+        const attInfo=attendanceForLesson(slotsOf,lessonKey);
         const gradeVal=gradesData[key]?.[st.sid]||'';
         const gradeType=typesData[key]?.[st.sid]||'';
         const dispVal=displayGrade(gradeVal,cls,journalNumericScale);
