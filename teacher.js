@@ -7,7 +7,7 @@
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, push, remove, update, onValue } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { renderNewsFeed } from './news.js';
-import { db, auth, canClearDayAbsence, clearDayAbsence, CLOUDINARY_URL, UPLOAD_PRESET, HW_FILE_EXT, HW_FILE_MAX_MB, fileExt, isImageUrl, isAudioUrl, cldImage, safeHttpUrl, getActiveClass, currentUserData, showToast, displayGrade, validDailyGrade, getClassNum, LEVEL_MAX_CLASS, renderHwItem, renderHwList, dayKeys, formatAttendanceSlotLabel, STICKER_GOAL, stickerGoal, escJs, escHtml, safeUrl, normalizeChildren, notifyEvent, logAction, renderBirthdays, teacherAccessMatrix, getUsersSnap, getStudentDir, stuName, gradeWritePaths, journalBaseDate, journalSlot, localDateString, isMasterTeacher, gradeTypesCache, subjKey, emailKey, subjectsForClassWeek } from './common.js';
+import { db, auth, attendanceAuthor, canClearDayAbsence, clearDayAbsence, CLOUDINARY_URL, UPLOAD_PRESET, HW_FILE_EXT, HW_FILE_MAX_MB, fileExt, isImageUrl, isAudioUrl, cldImage, safeHttpUrl, getActiveClass, currentUserData, showToast, displayGrade, validDailyGrade, getClassNum, LEVEL_MAX_CLASS, renderHwItem, renderHwList, dayKeys, formatAttendanceSlotLabel, STICKER_GOAL, stickerGoal, escJs, escHtml, safeUrl, normalizeChildren, notifyEvent, logAction, renderBirthdays, teacherAccessMatrix, getUsersSnap, getStudentDir, stuName, gradeWritePaths, journalBaseDate, journalSlot, localDateString, isMasterTeacher, gradeTypesCache, subjKey, emailKey, subjectsForClassWeek } from './common.js';
 import { populateTopicSelector, availableTopicsCache, planKey, loadAliases } from './curriculum.js';
 
 let currentHwImages=[];
@@ -426,6 +426,8 @@ window.saveQuickJournal=async function(){
     return v!==original&&v&&(!validDailyGrade(v,max)||(/[+\-]$/.test(v)&&!modifiers));
   });
   if(bad)return alert(modifiers?'Оцінки мають бути від 1 до 6; можна додати + або −.':`Оцінки мають бути від 1 до ${max}.`);
+  // У швидкому журналі та сама пастка: дата береться з поля вгорі сторінки.
+  if(rows.some(r=>r.dataset.status!==undefined)&&!confirmAttendanceDate(date))return;
   const btn=document.getElementById('btn-qj-save');
   btn.disabled=true;btn.textContent='⏳ Збереження...';
   try{
@@ -445,7 +447,8 @@ window.saveQuickJournal=async function(){
       if(status===''){await remove(ref(db,`attendance/${cls}/${date}/${sid}/${slotKey}`));}
       else{
         await set(ref(db,`attendance/${cls}/${date}/${sid}/${slotKey}`),
-          {status,reason:status==='late'?'запізнення':'Відмічено вчителем',markedBy:'teacher',ts:Date.now()});
+          {status,reason:status==='late'?'запізнення':'Відмічено вчителем',markedBy:'teacher',
+           by:(currentUserData&&currentUserData.email)||'',ts:Date.now()});
         nA++;notifyEvent(status==='late'?'late':'absence',{class:cls,studentName:name,subject:subj});
       }
     }
@@ -1294,10 +1297,11 @@ window.teacherMarkAbsent=function(){
   const slotKey=document.getElementById('t-mark-absent-lesson')?.value||'all';
   const date=document.getElementById('global-date').value;
   if(!st)return alert('Оберіть учня!');
+  if(!confirmAttendanceDate(date))return;
   const status=rs==='запізнення'?'late':'absent';
   // .catch обов'язковий: якщо відмітка не запишеться, учитель має це
   // побачити одразу — інакше він певен, що батьків уже сповістили.
-  set(ref(db,`attendance/${getActiveClass()}/${date}/${st}/${slotKey}`),{status,reason:rs,markedBy:'teacher',ts:Date.now()})
+  set(ref(db,`attendance/${getActiveClass()}/${date}/${st}/${slotKey}`),{status,reason:rs,markedBy:'teacher',by:(currentUserData&&currentUserData.email)||'',ts:Date.now()})
   .catch(e=>{alert('Не вдалося відмітити: '+e.message);throw e;})
   .then(()=>{
     showToast(`✅ ${stuName(getActiveClass(), st)} відмічений.`);
@@ -1424,6 +1428,19 @@ window.linkParent=async function(){
 // Підпис над списком. Раніше тут завжди стояло «сьогодні», навіть коли
 // вгорі обрано інший день, — учитель бачив чуже слово й вирішував, що
 // минулу дату відмітити не можна. Тепер дата видно прямо в заголовку.
+// Питаємо ОДИН раз і лише тоді, коли день не сьогоднішній. На сьогодні —
+// мовчки: це звичайна робота, і зайве питання її б лише сповільнило.
+export function confirmAttendanceDate(date, today = localDateString){
+  if(!date || date === today) return true;
+  const human = String(date).split('-').reverse().join('.');
+  if(date > today)
+    return confirm(`Дата вгорі сторінки — ${human}, це МАЙБУТНІЙ день, а не сьогодні.\n\n`
+      + 'Відмітка за нього виглядатиме як справжня: батькам піде сповіщення, '
+      + 'а кухня зніме харчування на той день.\n\nВсе одно відмітити на ' + human + '?');
+  return confirm(`Дата вгорі сторінки — ${human}, а не сьогодні.\n\nВідмітити за ${human}?`);
+}
+window.confirmAttendanceDate = confirmAttendanceDate;
+
 function setAttHeader(limited){
   const h=document.getElementById('t-att-header');
   const hint=document.getElementById('t-att-hint');
@@ -1432,8 +1449,25 @@ function setAttHeader(limited){
   const isToday=d===localDateString;   // це рядок дати, а не функція
   if(h)h.innerText=`🚨 Відвідуваність ${limited?'на ваших уроках':'класу'} — `
     +(isToday?`сьогодні, ${human}`:human);
-  if(hint)hint.innerHTML='Щоб відмітити за інший день — змініть дату вгорі сторінки, у полі «📅 Оберіть дату».'
-    +(limited?' Показано лише ваші уроки; класний керівник бачить усі.':'');
+  // ВІДСУТНІСТЬ ВІДМІЧАЮТЬ ЗАДНІМ ЧИСЛОМ І НАПЕРЕД — І ЦЕ РІЗНІ РЕЧІ.
+  //
+  // Поле дати вгорі сторінки живе окремо від цього блоку, і його легко
+  // лишити на іншому дні. Раніше про це говорила лише ВІДСУТНІСТЬ слова
+  // «сьогодні» в заголовку — цього ніхто не помічає.
+  //
+  // Так класний керівник 16 вересня відмітив чотирьох дітей, а відмітки
+  // лягли на 17-те: наступного ранку діти прийшли до школи й були в
+  // системі відсутні, батькам пішли push, а кухня зняла обіди. Дізналися
+  // про це лише тому, що почали розбиратися вручну.
+  if(hint){
+    const warn = isToday ? ''
+      : (d > localDateString
+          ? `<b class="att-daywarn future">⚠️ Це МАЙБУТНІЙ день — ${human}. Відмітки за нього побачать як справжні: батькам піде сповіщення, кухня зніме харчування.</b>`
+          : `<b class="att-daywarn past">📅 Ви відмічаєте минулий день — ${human}, не сьогодні.</b>`);
+    hint.innerHTML = warn
+      + 'Щоб відмітити за інший день — змініть дату вгорі сторінки, у полі «📅 Оберіть дату».'
+      + (limited?' Показано лише ваші уроки; класний керівник бачить усі.':'');
+  }
 }
 
 // ЛІЧИЛЬНИК ПОКОЛІНЬ. Стару підписку знімаємо на початку, а нову ставимо
@@ -1503,7 +1537,16 @@ export async function listenTeacherAttendance(){
       // чи директору: пропуск окремого уроку лишається за тим, хто його веде.
       const undo=(sk==='all'&&canClearDayAbsence(currentUserData&&currentUserData.role))
         ? ` <button type="button" class="att-undo" onclick="clearDayAbsence('${escJs(cls)}','${escJs(st)}','${escJs(date)}')">Зняти</button>` : '';
-      h+=`<li style="margin-bottom:7px;border-bottom:1px dashed #eee;padding-bottom:4px;"><b>${escHtml(stuName(cls, st))}</b> <span class="badge ${bc}">${lb}</span> <span style="font-size:.72rem;color:#888;">${escHtml(formatAttendanceSlotLabel(sk))} ${markerIcon}</span> <i style="font-size:.78rem;color:#666;">(${escHtml(r.reason)})</i>${undo}</li>`;}}list.innerHTML=h||'<li class="empty-msg">Усі на місці.</li>';}else list.innerHTML='<li class="empty-msg">Усі на місці.</li>';}, err=>{list.innerHTML=`<li class="empty-msg" style="color:var(--red);">Не вдалося прочитати відвідуваність: ${escHtml(err.message||'')}</li>`;});
+      // РЯДОК — ДВІ КОЛОНКИ, А НЕ ПОТІК ТЕКСТУ.
+      // Кнопка, вставлена всередину речення, на телефоні опинялася то під
+      // іменем, то посеред причини: текст обтікав її як слово. Тепер зліва
+      // все про учня, справа кнопка, і вони не залежать одне від одного.
+      h+=`<li class="att-item">
+        <div class="att-item-main">
+          <div class="att-item-head"><b>${escHtml(stuName(cls, st))}</b> <span class="badge ${bc}">${lb}</span></div>
+          <div class="att-item-sub">${escHtml(formatAttendanceSlotLabel(sk))} ${markerIcon}${r.reason?` · ${escHtml(r.reason)}`:''}</div>
+          ${attendanceAuthor(r)?`<div class="att-item-who">поставив: ${escHtml(attendanceAuthor(r))}</div>`:''}
+        </div>${undo}</li>`;}}list.innerHTML=h||'<li class="empty-msg">Усі на місці.</li>';}else list.innerHTML='<li class="empty-msg">Усі на місці.</li>';}, err=>{list.innerHTML=`<li class="empty-msg" style="color:var(--red);">Не вдалося прочитати відвідуваність: ${escHtml(err.message||'')}</li>`;});
   }
 }
 window.listenTeacherAttendance=listenTeacherAttendance;
