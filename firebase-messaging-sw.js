@@ -37,7 +37,7 @@ messaging.onBackgroundMessage((payload) => {
     // tag: сповіщення того самого типу заміняють одне одного, а не
     // накопичуються десятком однакових рядків
     tag: d.tag || 'push-school',
-    data: { url: d.url || './cabinet.html' },
+    data: { url: d.url || '/cabinet' },
     lang: 'uk'
   });
 });
@@ -45,7 +45,7 @@ messaging.onBackgroundMessage((payload) => {
 // Клік по сповіщенню: піднімаємо вже відкриту вкладку, якщо вона є
 self.addEventListener('notificationclick', (e) => {
   e.notification.close();
-  const target = (e.notification.data && e.notification.data.url) || './cabinet.html';
+  const target = (e.notification.data && e.notification.data.url) || '/cabinet';
   e.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
       for (const c of list) {
