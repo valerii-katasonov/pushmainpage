@@ -1129,7 +1129,23 @@ export function renderGradeFormulaInfo(){
 // ══════════ UTILITIES ══════════
 // Toast messages routinely embed user-sourced values (student names, subjects),
 // so the whole message is escaped — no caller passes intentional HTML.
-export function showToast(msg){const c=document.getElementById('toast-container');const t=document.createElement('div');t.className='toast';t.innerHTML=`<span>🔔 ${escHtml(msg)}</span>`;c.appendChild(t);setTimeout(()=>{t.style.opacity='0';setTimeout(()=>t.remove(),300);},4000);}
+// onTap — необовʼязковий: тост стає клікабельним і веде туди ж, куди
+// повело б саме сповіщення. Без цього людина з відкритим порталом бачить
+// «нова оцінка» й не може на неї натиснути — на відміну від тих, у кого
+// портал закритий. Дивна несправедливість, яку ніхто не помічав, бо
+// перевіряють сповіщення завжди при закритому порталі.
+export function showToast(msg, onTap){
+  const c=document.getElementById('toast-container');
+  const t=document.createElement('div');
+  t.className='toast'+(onTap?' toast-tap':'');
+  t.innerHTML=`<span>🔔 ${escHtml(msg)}</span>`+(onTap?'<b class="toast-go">Відкрити →</b>':'');
+  if(onTap){
+    t.addEventListener('click',()=>{ t.remove(); try{ onTap(); }catch(e){ console.warn(e.message); } });
+  }
+  c.appendChild(t);
+  // Клікабельний тримаємо довше: на нього ще треба встигнути натиснути.
+  setTimeout(()=>{t.style.opacity='0';setTimeout(()=>t.remove(),300);},onTap?9000:4000);
+}
 // Escapes a value for interpolation into a single-quoted JS string inside an
 // inline onclick="fn('...')" attribute. Ukrainian names and subjects routinely
 // contain apostrophes (Дем'яненко, Комп'ютерні науки, Мар'яна) — unescaped,
@@ -2463,24 +2479,75 @@ export async function publishContactCard(){
 export function tabFromUrl(search){
   const m = /(?:^|[?&])open=([a-z]+)/i.exec(String(search || ''));
   const v = m ? m[1].toLowerCase() : '';
-  // Вкладки різних кабінетів. Батьківські: day, grades, school, profile.
-  // Учительські: day, lesson, class, news. Збігається лише «day», і в обох
-  // кабінетах це та сама вкладка «Сьогодні», тож плутанини немає.
-  return ['day','grades','school','profile','chat','lesson','class','news'].includes(v) ? v : null;
+  // Вкладки всіх кабінетів в одному переліку. Назви між кабінетами не
+  // конфліктують: «day» і в батьків, і у вчителя — це «Сьогодні», «news»
+  // і там, і там — новини. Якщо такої вкладки в цьому кабінеті немає,
+  // openFromNotification просто нічого не зробить.
+  return ['day','hw','meals','games','grades','school','profile','chat',
+          'lesson','class','news',
+          'ogl','uchni','study','rozklad','staff','stat','nalash'].includes(v) ? v : null;
 }
 
-window.openFromNotification = function(screenId){
+// ══════════════════════════════════════════════════════════════════
+//  ПЕРЕХІД ІЗ СПОВІЩЕННЯ НА ПОТРІБНУ ВКЛАДКУ
+// ══════════════════════════════════════════════════════════════════
+//
+// Сповіщення без цього — половина роботи: людина отримує «нова оцінка»,
+// натискає, і бачить «Сьогодні». Далі вона мусить сама здогадатися, куди
+// йти, а на телефоні це ще й кілька дотиків.
+//
+// Підказка їде в адресі (?open=grades) — її ставить netlify/functions/
+// notify.js, а Service Worker веде вкладку саме туди.
+//
+// ДВА ВИДИ ВКЛАДОК. У батьків, учня й учителя — switchTab за смугою
+// {екран}-tabs. У директора й адміністрації — switchDirTab за спільною
+// смугою #dtab-bar. Тому тут одна функція на обидва випадки: інакше
+// довелося б тримати дві копії правила «куди вести».
+export function screenIdForRole(role){
+  if(role==='parent') return 'parent-screen';
+  if(role==='student') return 'student-screen';
+  if(role==='director'||role==='administrator') return 'director-screen';
+  if(role) return 'teacher-screen';
+  return '';
+}
+window.screenIdForRole = screenIdForRole;
+
+const TAB_OPEN_HOOKS = { hw:'openHwTab', games:'openGamesTab' };
+export function openTabByKey(screenId, want){
+  if(!want) return false;
+  if(want === 'chat'){
+    if(window.openChatModal){ window.openChatModal(); return true; }
+    return false;
+  }
+  const dir = screenId === 'director-screen' || screenId === 'admin-screen';
+  const bar = document.getElementById(dir ? 'dtab-bar' : screenId + '-tabs');
+  const btn = bar && bar.querySelector(`.dtab[data-t="${want}"]`);
+  if(!btn) return false;
+  if(dir){ if(window.switchDirTab) window.switchDirTab(want, btn); }
+  else if(window.switchTab) window.switchTab(screenId, want, btn);
+  else return false;
+  // Вкладки, які самі себе не малюють (ДЗ, ігри), наповнює функція з
+  // onclick кнопки. Натискання тут не відбувається, тож викликаємо самі —
+  // інакше людина зі сповіщення про ДЗ побачить «Завантаження...».
+  const hook = TAB_OPEN_HOOKS[want];
+  if(hook && window[hook]){ try{ window[hook](); }catch(e){ console.warn(hook, e.message); } }
+  return true;
+}
+window.openTabByKey = openTabByKey;
+
+window.openFromNotification = function(screenId, attempt = 0){
   const want = tabFromUrl(location.search);
   if(!want) return;
-  try{ history.replaceState(null, '', location.pathname); }catch(e){}
-  if(want === 'chat'){
-    // Функція називається openChatModal — саме її вішає chat.js
-    if(window.openChatModal) window.openChatModal();
+  // Кнопки вкладок можуть ще не існувати: кабінет малюється не миттєво.
+  // Кілька коротких спроб краще за мовчазну відмову — саме через неї
+  // перехід «іноді працює, іноді ні».
+  if(!openTabByKey(screenId, want)){
+    if(attempt < 10) return setTimeout(()=>window.openFromNotification(screenId, attempt+1), 300);
     return;
   }
-  const bar = document.getElementById(screenId + '-tabs');
-  const btn = bar && bar.querySelector(`.dtab[data-t="${want}"]`);
-  if(btn && window.switchTab) window.switchTab(screenId, want, btn);
+  // Адресу чистимо ЛИШЕ після вдалого переходу, інакше повторна спроба
+  // вже не знала б, куди вести.
+  try{ history.replaceState(null, '', location.pathname); }catch(e){}
 };
 
 async function initUserSession(){
@@ -2531,7 +2598,7 @@ async function initUserSession(){
   document.querySelectorAll('.panel').forEach(p=>p.style.display='none');
   document.getElementById('calendar-block').style.display='block';updateProfileBar();
   const r=currentUserData.role;
-  if(r==='director'){document.getElementById('director-screen').style.display='block';callWhenReady('initDirTabs');document.getElementById('teacher-class-selector-box').style.display='none';loadTeachersListForDirector();loadDirectorTeacherSkillsList();handleDateChange();loadDrafts();callWhenReady('loadBellCoverage');
+  if(r==='director'){document.getElementById('director-screen').style.display='block';callWhenReady('initDirTabs');callWhenReady('openFromNotification', 600, ['director-screen']);document.getElementById('teacher-class-selector-box').style.display='none';loadTeachersListForDirector();loadDirectorTeacherSkillsList();handleDateChange();loadDrafts();callWhenReady('loadBellCoverage');
     // Календарне планування. Раніше цю перевірку викликав лише
     // handleClassChange() — обробник селектора класу з кабінету вчителя.
     // У директора такого селектора немає (він прихований), тож функція не
@@ -2606,6 +2673,7 @@ async function initUserSession(){
   else if(r==='student'){
     callWhenReady('initTabs', 0, ['student-screen']);
     callWhenReady('renderPushInvite', 600, ['s-push-invite']);
+    callWhenReady('openFromNotification', 500, ['student-screen']);
     document.getElementById('student-screen').style.display='block';
     
     loadScheduleScript(currentUserData.class,()=>handleDateChange());
@@ -3118,7 +3186,11 @@ window.addEventListener('unhandledrejection', (ev) => {
   try{
     onMessage(getMessaging(app),(payload)=>{
       const d=payload.data||{};
-      showToast(`${d.title||'Сповіщення'}: ${d.body||''}`);
+      // Та сама підказка, що й у самому сповіщенні: ?open=grades у d.url.
+      const want=tabFromUrl(String(d.url||'').split('?')[1]||'');
+      const screen=screenIdForRole(currentUserData&&currentUserData.role);
+      showToast(`${d.title||'Сповіщення'}: ${d.body||''}`,
+        (want&&screen)?()=>openTabByKey(screen,want):null);
     });
   }catch(e){/* messaging недоступний — не критично */}
 })();
