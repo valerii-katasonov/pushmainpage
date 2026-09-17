@@ -7,7 +7,7 @@
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, push, remove, update, onValue } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { renderNewsFeed } from './news.js';
-import { db, auth, CLOUDINARY_URL, UPLOAD_PRESET, HW_FILE_EXT, HW_FILE_MAX_MB, fileExt, isImageUrl, isAudioUrl, cldImage, safeHttpUrl, getActiveClass, currentUserData, showToast, displayGrade, validDailyGrade, getClassNum, LEVEL_MAX_CLASS, renderHwItem, renderHwList, dayKeys, formatAttendanceSlotLabel, STICKER_GOAL, stickerGoal, escJs, escHtml, safeUrl, normalizeChildren, notifyEvent, logAction, renderBirthdays, teacherAccessMatrix, getUsersSnap, getStudentDir, stuName, gradeWritePaths, journalBaseDate, journalSlot, localDateString, isMasterTeacher, gradeTypesCache, subjKey, emailKey, subjectsForClassWeek } from './common.js';
+import { db, auth, canClearDayAbsence, clearDayAbsence, CLOUDINARY_URL, UPLOAD_PRESET, HW_FILE_EXT, HW_FILE_MAX_MB, fileExt, isImageUrl, isAudioUrl, cldImage, safeHttpUrl, getActiveClass, currentUserData, showToast, displayGrade, validDailyGrade, getClassNum, LEVEL_MAX_CLASS, renderHwItem, renderHwList, dayKeys, formatAttendanceSlotLabel, STICKER_GOAL, stickerGoal, escJs, escHtml, safeUrl, normalizeChildren, notifyEvent, logAction, renderBirthdays, teacherAccessMatrix, getUsersSnap, getStudentDir, stuName, gradeWritePaths, journalBaseDate, journalSlot, localDateString, isMasterTeacher, gradeTypesCache, subjKey, emailKey, subjectsForClassWeek } from './common.js';
 import { populateTopicSelector, availableTopicsCache, planKey, loadAliases } from './curriculum.js';
 
 let currentHwImages=[];
@@ -358,16 +358,31 @@ window.openQuickJournal=async function(){
     }
     const slotKey=document.getElementById('t-mark-absent-lesson')?.value||'all';
     box.innerHTML=students.map((s,i)=>{
-      // Поточний статус: беремо будь-яку відмітку на цей день
-      let status='';
+      // СТАТУС — САМЕ ЦЬОГО УРОКУ, А НЕ БУДЬ-ЯКОГО ЗА ДЕНЬ.
+      //
+      // Тут стояв перебір усіх слотів із break на першому знайденому. Через
+      // це на ДРУГОМУ однаковому уроці поспіль (дві фізкультури підряд)
+      // учителька відкривала журнал і бачила «Н», поставлену на першому. Вона
+      // вважала, що вже відмітила, нічого не тиснула — і запис про другий
+      // урок не зʼявлявся. У системі дитина пропустила один урок із двох.
+      //
+      // Відмітку на ВЕСЬ день показуємо теж: заявка родини «дитини не буде»
+      // стосується і цього уроку. А от чужий урок — окремо, підписом нижче.
       // І за ідентифікатором, і за імʼям: повідомлення про запізнення пише
       // родина, а її записи донедавна лягали під імʼям. Та сама причина, через
       // яку кухня не бачила обраний гарнір.
       const slots=a[s.sid]||a[s.nm]||{};
-      for(const sk in slots){if(slots[sk]?.status){status=slots[sk].status;break;}}
+      const here=slots[slotKey]||(slotKey!=='all'?slots.all:null);
+      let status=here?.status||'';
+      // Підпис «відмічено на іншому уроці» — щоб порожня строчка не читалася
+      // як «учитель ще не дивився».
+      const elsewhere=Object.entries(slots)
+        .filter(([sk,r])=>r?.status&&sk!==slotKey&&sk!=='all')
+        .map(([sk])=>formatAttendanceSlotLabel(sk));
       return `<div class="qj-row" data-sid="${escHtml(s.sid)}" data-name="${escHtml(s.nm)}">
         <div class="qj-n">${i+1}</div>
-        <div class="qj-name">${escHtml(s.nm)}${allerg[s.sid]?` <span class="po-allergy" data-tip="${escHtml(allerg[s.sid])}">⚠️</span>`:''}</div>
+        <div class="qj-name">${escHtml(s.nm)}${allerg[s.sid]?` <span class="po-allergy" data-tip="${escHtml(allerg[s.sid])}">⚠️</span>`:''}${
+          elsewhere.length?`<span class="qj-elsewhere" data-tip="Відмічено на іншому уроці">· ${escHtml(elsewhere.join(', '))}</span>`:''}</div>
         <div class="qj-att">
           <button type="button" class="qj-b ok${status===''?' on':''}"   onclick="qjSet(this,'')">✓</button>
           <button type="button" class="qj-b lt${status==='late'?' on':''}" onclick="qjSet(this,'late')">З</button>
@@ -430,7 +445,7 @@ window.saveQuickJournal=async function(){
       if(status===''){await remove(ref(db,`attendance/${cls}/${date}/${sid}/${slotKey}`));}
       else{
         await set(ref(db,`attendance/${cls}/${date}/${sid}/${slotKey}`),
-          {status,reason:status==='late'?'запізнення':'Відмічено вчителем',markedBy:'teacher'});
+          {status,reason:status==='late'?'запізнення':'Відмічено вчителем',markedBy:'teacher',ts:Date.now()});
         nA++;notifyEvent(status==='late'?'late':'absence',{class:cls,studentName:name,subject:subj});
       }
     }
@@ -1194,6 +1209,25 @@ function myAttendanceSlots(cls){
   return new Set(myLessonsForDay(cls).filter(l=>l.mine).map(l=>l.key));
 }
 
+// Який з уроків іде просто зараз (або найближчий попереду). Час у розкладі
+// лежить рядком «08:00-08:45»; на інший день, ніж сьогодні, не гадаємо.
+function currentLessonKey(shown){
+  const dateStr=document.getElementById('global-date').value;
+  if(dateStr!==localDateString) return '';
+  const now=new Date().getHours()*60+new Date().getMinutes();
+  const parsed=shown.map(l=>{
+    const m=/(\d{1,2})[:.](\d{2})\s*[-–—]\s*(\d{1,2})[:.](\d{2})/.exec(l.time||'');
+    if(!m) return null;
+    return { key:l.key, from:+m[1]*60+ +m[2], to:+m[3]*60+ +m[4] };
+  }).filter(Boolean);
+  if(!parsed.length) return '';
+  const inside=parsed.find(l=>now>=l.from&&now<=l.to);
+  if(inside) return inside.key;
+  const ahead=parsed.filter(l=>l.from>now).sort((a,b)=>a.from-b.from)[0];
+  if(ahead) return ahead.key;
+  return parsed.sort((a,b)=>b.to-a.to)[0].key;   // день скінчився — останній урок
+}
+
 function buildMarkAbsentLessonOptions(){
   const sel=document.getElementById('t-mark-absent-lesson');
   if(!sel)return;
@@ -1228,12 +1262,20 @@ function buildMarkAbsentLessonOptions(){
     // учитель бачив «2», у базу йшло «3». Тепер обидва з key, і розійтися
     // їм більше нема як. Та сама формула стоїть у myLessonsForDay —
     // звідки приходить mine, і порівнювати їх треба однаковими ключами.
-    const shown=flat.map((l,i)=>({sn:window.getValidSubjectName(l),key:String(l.number||(i+1))}))
+    const shown=flat.map((l,i)=>({sn:window.getValidSubjectName(l),key:String(l.number||(i+1)),time:l.time||''}))
       .filter(({sn})=>!!sn)
       .filter(({key})=>!mine||mine.has(key));
-    shown.forEach(({sn,key})=>{
-      sel.innerHTML+=`<option value="${escHtml(key)}">${escHtml(key)}. ${escHtml(sn)}</option>`;
+    shown.forEach(({sn,key,time})=>{
+      sel.innerHTML+=`<option value="${escHtml(key)}">${escHtml(key)}. ${escHtml(sn)}${time?` · ${escHtml(time)}`:''}</option>`;
     });
+    // ВІДКРИВАЄМОСЯ НА ТОМУ УРОЦІ, ЩО ЙДЕ ЗАРАЗ.
+    //
+    // Список щоразу будується наново, тож браузер обирав ПЕРШИЙ пункт. У
+    // вчительки з двома однаковими уроками поспіль це означало, що і на
+    // другому уроці вікно відкривалося на першому — і відмітка лягала
+    // вдруге в той самий ключ. Два уроки, один запис.
+    const nowPick=currentLessonKey(shown);
+    if(nowPick) sel.value=nowPick;
     if(!shown.length&&mine)
       sel.innerHTML='<option value="all">Увесь день (ваших уроків цього дня немає)</option>';
   } else {
@@ -1255,7 +1297,7 @@ window.teacherMarkAbsent=function(){
   const status=rs==='запізнення'?'late':'absent';
   // .catch обов'язковий: якщо відмітка не запишеться, учитель має це
   // побачити одразу — інакше він певен, що батьків уже сповістили.
-  set(ref(db,`attendance/${getActiveClass()}/${date}/${st}/${slotKey}`),{status,reason:rs,markedBy:'teacher'})
+  set(ref(db,`attendance/${getActiveClass()}/${date}/${st}/${slotKey}`),{status,reason:rs,markedBy:'teacher',ts:Date.now()})
   .catch(e=>{alert('Не вдалося відмітити: '+e.message);throw e;})
   .then(()=>{
     showToast(`✅ ${stuName(getActiveClass(), st)} відмічений.`);
@@ -1456,7 +1498,12 @@ export async function listenTeacherAttendance(){
     teacherAttendanceListener=onValue(ref(db,`attendance/${cls}/${date}`),snap=>{list.innerHTML='';if(snap.exists()){const d=snap.val();let h='';for(let st in d){const slots=d[st];for(let sk in slots){const r=slots[sk];if(!r?.status)continue;
       // Чужий урок ховаємо. «all» лишаємо всім: це заявка батьків на цілий
       // день — дитини не буде і на вашому уроці теж.
-      if(mine&&sk!=='all'&&!mine.has(String(sk)))continue;const bc=r.status==='late'?'badge-late':'badge-absent';const lb=r.status==='late'?'Запізнення':'Відсутність';const markerIcon=r.markedBy==='teacher'?'👨‍🏫':(r.markedBy==='student'?'🎒':'👪');h+=`<li style="margin-bottom:7px;border-bottom:1px dashed #eee;padding-bottom:4px;"><b>${escHtml(stuName(cls, st))}</b> <span class="badge ${bc}">${lb}</span> <span style="font-size:.72rem;color:#888;">${escHtml(formatAttendanceSlotLabel(sk))} ${markerIcon}</span> <i style="font-size:.78rem;color:#666;">(${escHtml(r.reason)})</i></li>`;}}list.innerHTML=h||'<li class="empty-msg">Усі на місці.</li>';}else list.innerHTML='<li class="empty-msg">Усі на місці.</li>';}, err=>{list.innerHTML=`<li class="empty-msg" style="color:var(--red);">Не вдалося прочитати відвідуваність: ${escHtml(err.message||'')}</li>`;});
+      if(mine&&sk!=='all'&&!mine.has(String(sk)))continue;const bc=r.status==='late'?'badge-late':'badge-absent';const lb=r.status==='late'?'Запізнення':'Відсутність';const markerIcon=r.markedBy==='teacher'?'👨‍🏫':(r.markedBy==='student'?'🎒':'👪');
+      // Зняти можна лише відмітку за ВЕСЬ день і лише класному керівнику
+      // чи директору: пропуск окремого уроку лишається за тим, хто його веде.
+      const undo=(sk==='all'&&canClearDayAbsence(currentUserData&&currentUserData.role))
+        ? ` <button type="button" class="att-undo" onclick="clearDayAbsence('${escJs(cls)}','${escJs(st)}','${escJs(date)}')">Зняти</button>` : '';
+      h+=`<li style="margin-bottom:7px;border-bottom:1px dashed #eee;padding-bottom:4px;"><b>${escHtml(stuName(cls, st))}</b> <span class="badge ${bc}">${lb}</span> <span style="font-size:.72rem;color:#888;">${escHtml(formatAttendanceSlotLabel(sk))} ${markerIcon}</span> <i style="font-size:.78rem;color:#666;">(${escHtml(r.reason)})</i>${undo}</li>`;}}list.innerHTML=h||'<li class="empty-msg">Усі на місці.</li>';}else list.innerHTML='<li class="empty-msg">Усі на місці.</li>';}, err=>{list.innerHTML=`<li class="empty-msg" style="color:var(--red);">Не вдалося прочитати відвідуваність: ${escHtml(err.message||'')}</li>`;});
   }
 }
 window.listenTeacherAttendance=listenTeacherAttendance;
