@@ -2,7 +2,7 @@
 // витрати обчислюються з фактичного харчування та замовлень на винос.
 import { ref, get, child, push, update } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { db, currentUserData, showToast, escHtml, localDateString, stuName } from './common.js';
-import { computeMyMealStats, loadMealPrices, mealCost, mealPriceAt, MEAL_CUTOFF_HOUR, BREAKFAST_CUTOFF_HOUR, TA_CUTOFF_HOUR } from './kitchen.js';
+import { computeMyMealStats, loadMealPrices, mealCost, mealPriceAt, MEAL_CUTOFF_HOUR, BREAKFAST_CUTOFF_HOUR, SNACK_CUTOFF_HOUR, TA_CUTOFF_HOUR } from './kitchen.js';
 
 const money=n=>(Math.round((Number(n)||0)*100)/100);
 const moneyText=n=>money(n).toFixed(2);
@@ -131,15 +131,21 @@ export async function computeMealAccount(cls,sid,entries,now=new Date()){
   const todayTa=todaySealed?money(ledger[today].takeaway):await takeawayCostHistoric(today,today,cls,sid,items,taHistory);
   const brkClosed=todaySealed||cutoffState(today,BREAKFAST_CUTOFF_HOUR,now,today);
   const mealClosed=todaySealed||cutoffState(today,MEAL_CUTOFF_HOUR,now,today);
+  // У підвечірка власна межа (SNACK_CUTOFF_HOUR). Поки вона не минула,
+  // батько ще може зняти підвечірок, тож списувати його разом з обідом не
+  // можна: сума спершу зростала, а після скасування стрибала назад. Зараз
+  // обидві години збігаються, але звʼязувати їх у коді не варто — саме
+  // через таке звʼязування кнопка підвечірка колись жила під чужим замком.
+  const snackClosed=todaySealed||cutoffState(today,SNACK_CUTOFF_HOUR,now,today);
   const taClosed=todaySealed||cutoffState(today,TA_CUTOFF_HOUR,now,today);
   const adjustmentTotal=money(Object.values(adjustments).filter(x=>x&&x.date>=start&&x.date<=today)
     .reduce((sum,x)=>sum+Number(x.amount||0),0));
-  const charged=money(pastMeals.total+pastTa+(brkClosed?brkCost:0)+(mealClosed?lunchCost+snackCost:0)+(taClosed?todayTa:0)+adjustmentTotal);
-  const pending=money((brkClosed?0:brkCost)+(mealClosed?0:lunchCost+snackCost)+(taClosed?0:todayTa));
+  const charged=money(pastMeals.total+pastTa+(brkClosed?brkCost:0)+(mealClosed?lunchCost:0)+(snackClosed?snackCost:0)+(taClosed?todayTa:0)+adjustmentTotal);
+  const pending=money((brkClosed?0:brkCost)+(mealClosed?0:lunchCost)+(snackClosed?0:snackCost)+(taClosed?0:todayTa));
   const chargedParts={
     lunch:money(pastMeals.lunch+(mealClosed?lunchCost:0)),
     breakfast:money(pastMeals.brk+(brkClosed?brkCost:0)),
-    snack:money(pastMeals.snack+(mealClosed?snackCost:0)),
+    snack:money(pastMeals.snack+(snackClosed?snackCost:0)),
     takeaway:money(pastTa+(taClosed?todayTa:0)),
     adjustments:adjustmentTotal
   };
@@ -246,7 +252,8 @@ window.loadFamilyMealBalance=async function(){
   try{sid=await studentKey(cls,currentUserData.studentId,currentUserData.studentName);}
   catch(e){if(seq===familyLoadSeq)box.innerHTML=`<p class="empty-msg">Не вдалося визначити дитину: ${escHtml(e.message)}</p>`;return;}
   if(!sid||seq!==familyLoadSeq)return;
-  const phase=`${new Date().getHours()>=BREAKFAST_CUTOFF_HOUR}:${new Date().getHours()>=MEAL_CUTOFF_HOUR}:${new Date().getHours()>=TA_CUTOFF_HOUR}`;
+  const h=new Date().getHours();
+  const phase=`${h>=BREAKFAST_CUTOFF_HOUR}:${h>=MEAL_CUTOFF_HOUR}:${h>=SNACK_CUTOFF_HOUR}:${h>=TA_CUTOFF_HOUR}`;
   const cacheKey=`${cls}/${sid}/${iso(new Date())}/${phase}`;
   if(familyCache?.key===cacheKey&&Date.now()-familyCache.at<30000){renderAccount(box,familyCache.account,currentUserData.studentName,false);return;}
   box.innerHTML='<p class="empty-msg">Рахуємо...</p>';
