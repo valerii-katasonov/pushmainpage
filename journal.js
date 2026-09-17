@@ -390,7 +390,7 @@ function renderGradeTypesLegend(){
   c.innerHTML=codes.map(code=>{
     const w=(gradeTypesCache[code]&&gradeTypesCache[code].weight)??GRADE_WEIGHTS[code]??1.0;
     const label=(gradeTypesCache[code]&&gradeTypesCache[code].label)||code;
-    return `<span style="display:inline-block;background:#f8f9fa;border:1px solid #e6e6e6;border-radius:var(--badge-radius);padding:2px 8px;margin:2px 4px 2px 0;font-size:var(--text-xs);color:#666;"><b style="color:#333;">${code}</b> ${label} ×${w}</span>`;
+    return `<span style="display:inline-block;background:var(--surface-2);border:1px solid var(--line-soft);border-radius:var(--badge-radius);padding:2px 8px;margin:2px 4px 2px 0;font-size:var(--text-xs);color:var(--ink-2);"><b style="color:var(--ink);">${code}</b> ${label} ×${w}</span>`;
   }).join('');
 }
 window.openJournalModal=function(role){
@@ -548,7 +548,7 @@ window.renderJournalTable=async function(){
   const rangeSummary=document.getElementById('j-range-summary');
   if(!cls||!subj||months.length===0){table.innerHTML='';wAvgDiv.style.display='none';if(rangeSummary)rangeSummary.textContent='';return;}
   if(months.length>12){showToast('⚠️ Максимальний період перегляду — 12 місяців.');return;}
-  table.innerHTML='<tr><td style="padding:20px;color:#aaa;">⏳ Завантаження...</td></tr>';
+  table.innerHTML='<tr><td style="padding:20px;color:var(--ink-3);">⏳ Завантаження...</td></tr>';
   const clsNum=getClassNum(cls);
   try{
     const [studSnap,attSnap,retakeSnap,scheduleSnap,altSnap,scaleSnap,...perMonth]=await Promise.all([
@@ -611,7 +611,12 @@ window.renderJournalTable=async function(){
       if(last&&last.ym===c.ym)last.count++;
       else monthBands.push({ym:c.ym,count:1,bandIdx:monthBands.length});
     });
-    const bandColorOf=idx=>idx%2===0?'#e8f4fd':'#e8f5e9';
+    // Смуги місяців у журналі. Тут навмисно ЛІТЕРАЛИ, а не var(--…):
+    // ця таблиця йде на друк через html2canvas, а він перемальовує
+    // сторінку у власне полотно, і покладатися на те, що змінні доїдуть
+    // туди правильно, не хочеться. Значення — ті самі, що в токенах
+    // --brand-soft і --surface-2; міняти їх треба парою.
+    const bandColorOf=idx=>idx%2===0?'#E0F7FA':'#F4F8F9';
     // Row 1: month bands, with rowspan-2 corner cells for the sticky student/avg columns
     let monthRow='<tr class="jt-month-row"><th class="sn" rowspan="2">Учень</th>';
     monthBands.forEach(({ym,count,bandIdx})=>{
@@ -645,7 +650,7 @@ window.renderJournalTable=async function(){
           ${typeCodes.map(t=>`<option value="${t}" ${presetType===t?'selected':''}>${t} ×${weightOf(t)}</option>`).join('')}
         </select>`;
       } else {
-        typeCell=presetType?`<br><span style="font-size:.69em;color:#e67e22;">${presetType}${weightOf(presetType)?` ×${weightOf(presetType)}`:''}</span>`:'';
+        typeCell=presetType?`<br><span style="font-size:.69em;color:var(--warn);">${presetType}${weightOf(presetType)?` ×${weightOf(presetType)}`:''}</span>`:'';
       }
       const label=slot<=scheduled?`Урок ${slot}`:`Оцінка ${slot}`;
       const last=slot===Math.max(...dateCols.filter(c=>c.ds===ds).map(c=>c.slot));
@@ -697,7 +702,7 @@ window.renderJournalTable=async function(){
       });
       const roundedAvg=avg!==null?Math.min(journalScaleMax,Math.max(1,Math.round(avg))):null;
       const avgGc=roundedAvg!==null?(journalNumericScale?'g-scale':gradeClass6(roundedAvg)):'';
-      rowHtml+=`<td class="avg-col"><span class="${avgGc}" style="border-radius:6px;padding:.16em .39em;font-weight:800;">${displayGrade(roundedAvg!==null?String(roundedAvg):'-',cls,journalNumericScale)}</span><br><span style="font-size:.78em;color:#aaa;">${avgStr}</span></td>`;
+      rowHtml+=`<td class="avg-col"><span class="${avgGc}" style="border-radius:6px;padding:.16em .39em;font-weight:800;">${displayGrade(roundedAvg!==null?String(roundedAvg):'-',cls,journalNumericScale)}</span><br><span style="font-size:.78em;color:var(--ink-3);">${avgStr}</span></td>`;
       rowHtml+='</tr>';tbody+=rowHtml;
     });
     tbody+='</tbody>';
@@ -731,8 +736,8 @@ window.renderJournalTable=async function(){
         .join(', ');
       wAvgDiv.style.display='block';
       wAvgDiv.innerHTML=`<b style="color:var(--purple);">📊 Середньозважений бал класу з ${subj}${periodLabel}:</b><br>
-        <span style="font-size:1.6rem;font-weight:800;color:#7b1fa2;">${ca}</span>
-        ${weightHint?`<span style="font-size:.8rem;color:#888;margin-left:8px;">(зважений: ${weightHint})</span>`:''}`;
+        <span style="font-size:1.6rem;font-weight:800;color:var(--brand-deep);">${ca}</span>
+        ${weightHint?`<span style="font-size:.8rem;color:var(--ink-3);margin-left:8px;">(зважений: ${weightHint})</span>`:''}`;
     } else wAvgDiv.style.display='none';
   }catch(e){console.error(e);table.innerHTML=`<tr><td style="padding:20px;color:red;">Помилка: ${e.message}</td></tr>`;}
 };
@@ -950,7 +955,7 @@ window.openVisualMatrixModal=async function(mode){
   if(daySel) daySel.value='Monday';
   const info=document.getElementById('matrix-load-info');
   const say=(t,bad)=>{ if(info){ info.style.display=t?'block':'none'; info.textContent=t||'';
-                                 info.style.color=bad?'var(--red)':'#78909c'; } };
+                                 info.style.color=bad?'var(--red)':'var(--ink-3)'; } };
   say('Завантаження...');
   try{
   let dbPath=mode==='live'?'schedules':`schedule_drafts/${mode}`;
@@ -1060,7 +1065,7 @@ window.openVisualMatrixModal=async function(mode){
   // нема чим — історії змін розкладу портал не веде.
   const mb=document.getElementById('matrix-mode-banner');
   if(mode!=='live'){
-    title.innerHTML=`🛠️ Конструктор: <span style="color:#e67e22">${mode}</span>`;
+    title.innerHTML=`🛠️ Конструктор: <span style="color:var(--warn)">${mode}</span>`;
     wb.style.display='block';
     if(mb){ mb.className='mx-mode draft'; mb.style.display='block';
       mb.textContent='Це чернетка. На чинний розклад вона не впливає, доки ви не натиснете «Опублікувати».'; }
@@ -1181,16 +1186,16 @@ window.calculateMatrixWarnings=function(){
 
   const okBtn=(k)=>`<button type="button" onclick="approveWarn('${escJs(k)}')" class="wo-btn">Це нормально</button>`;
   const line=({kind,g})=>kind==='c'
-    ? `<li style="color:#c0392b;"><b>Накладка!</b> ${escHtml(g.email)}: `
+    ? `<li style="color:var(--danger);"><b>Накладка!</b> ${escHtml(g.email)}: `
       + `${escHtml([...g.classes].join(', '))} (Слот ${g.row+1}) ${okBtn(g.key)}</li>`
-    : `<li style="color:#e67e22;"><b>Переїзд:</b> ${escHtml(g.email)} `
+    : `<li style="color:var(--warn);"><b>Переїзд:</b> ${escHtml(g.email)} `
       + `між слотами ${g.from+1}→${g.to+1} ${okBtn(g.key)}</li>`;
 
   let html='<b>⚠️ Аналіз накладок:</b>';
   if(open.length) html+=`<ul style="margin:4px 0 0 0;padding-left:18px;">${open.map(line).join('')}</ul>`;
   else html+=okd.length
-    ? ' <span style="color:#2e7d32;">усі погоджені.</span>'
-    : ' <span style="color:#2e7d32;">накладок не виявлено.</span>';
+    ? ' <span style="color:var(--ok);">усі погоджені.</span>'
+    : ' <span style="color:var(--ok);">накладок не виявлено.</span>';
 
   // Погоджені — згорнутим рядком. Не ховаємо назовсім: інакше через місяць
   // ніхто не згадає, що саме визнали нормальним і чому в сітці тиша.
@@ -1205,7 +1210,7 @@ window.calculateMatrixWarnings=function(){
     }).join('');
     html+=`<div style="margin-top:7px;">`
       + `<button type="button" onclick="toggleWarnOkList()" class="wo-btn wo-toggle">✔️ Погоджено: ${okd.length}</button>`
-      + `<ul id="warn-ok-list" style="display:none;margin:5px 0 0 0;padding-left:18px;color:#7a7a7a;">${items}</ul>`
+      + `<ul id="warn-ok-list" style="display:none;margin:5px 0 0 0;padding-left:18px;color:var(--ink-2);">${items}</ul>`
       + `</div>`;
   }
 
@@ -1306,11 +1311,11 @@ function hasWC(row,clsId,subIdx){if(currentMatrixMode==='live')return'';const w=
 function noTeacherCell(){
   const known = globalTeacherAccess && Object.keys(globalTeacherAccess).length;
   return known
-    ? '<div class="cell-teacher" style="color:#aaa;">—</div>'
-    : '<div class="cell-teacher" style="color:#e65100;" data-tip="Учителя визначає матриця доступу, а вона зараз недоступна. Це не означає, що вчителя не призначено.">?</div>';
+    ? '<div class="cell-teacher" style="color:var(--ink-3);">—</div>'
+    : '<div class="cell-teacher" style="color:var(--warn);" data-tip="Учителя визначає матриця доступу, а вона зараз недоступна. Це не означає, що вчителя не призначено.">?</div>';
 }
 
-function rsmcc(lesson,dTName,isOvr,clsId,row,si){const sn=typeof lesson.subject==='string'?lesson.subject:(lesson.subject.ua||'');const ts=lesson.time||'';const isB=isBreakItem(lesson);const isX=lesson.type==='extra';const sl=JSON.stringify(lesson).replace(/'/g,"&apos;").replace(/"/g,"&quot;");const oc=`event.stopPropagation();openCellEditor('${clsId}',${row},${si},${sl})`;const wc=hasWC(row,clsId,si);if(isB)return`<div class="matrix-cell cell-break" onclick="${oc}"><div class="cell-subj">${escHtml(sn)}</div><div class="cell-time">${escHtml(ts)}</div></div>`;if(isX){let xi='';if(lesson.extraData){if(lesson.extraData.format==='individual')xi=`<div class="cell-student-linked">👤${escHtml(lesson.extraData.student||'')}</div>`;else xi=`<div class="cell-student-linked" style="background:#e8f8f5;color:#16a085;">👥Група</div>`;}const th=dTName?`<div class="cell-teacher">👨‍🏫${escHtml(dTName)}${isOvr?' <span data-tip="Веде не той, хто закріплений за предметом — заміна">🔄</span>':''}</div>`:noTeacherCell();return`<div class="matrix-cell cell-club ${wc}" onclick="${oc}"><div class="cell-subj">🎸${escHtml(sn)}</div>${th}${xi}<div class="cell-time">🕘${escHtml(ts)}</div></div>`;}const th=dTName?`<div class="cell-teacher">👨‍🏫${escHtml(dTName)}${isOvr?' <span data-tip="Веде не той, хто закріплений за предметом — заміна">🔄</span>':''}</div>`:noTeacherCell();return`<div class="matrix-cell cell-lesson ${wc}" onclick="${oc}"><div class="cell-subj">${escHtml(sn)}</div>${th}<div class="cell-time">🕘${escHtml(ts)}</div></div>`;}
+function rsmcc(lesson,dTName,isOvr,clsId,row,si){const sn=typeof lesson.subject==='string'?lesson.subject:(lesson.subject.ua||'');const ts=lesson.time||'';const isB=isBreakItem(lesson);const isX=lesson.type==='extra';const sl=JSON.stringify(lesson).replace(/'/g,"&apos;").replace(/"/g,"&quot;");const oc=`event.stopPropagation();openCellEditor('${clsId}',${row},${si},${sl})`;const wc=hasWC(row,clsId,si);if(isB)return`<div class="matrix-cell cell-break" onclick="${oc}"><div class="cell-subj">${escHtml(sn)}</div><div class="cell-time">${escHtml(ts)}</div></div>`;if(isX){let xi='';if(lesson.extraData){if(lesson.extraData.format==='individual')xi=`<div class="cell-student-linked">👤${escHtml(lesson.extraData.student||'')}</div>`;else xi=`<div class="cell-student-linked" style="background:var(--surface-2);color:var(--brand-ink);">👥Група</div>`;}const th=dTName?`<div class="cell-teacher">👨‍🏫${escHtml(dTName)}${isOvr?' <span data-tip="Веде не той, хто закріплений за предметом — заміна">🔄</span>':''}</div>`:noTeacherCell();return`<div class="matrix-cell cell-club ${wc}" onclick="${oc}"><div class="cell-subj">🎸${escHtml(sn)}</div>${th}${xi}<div class="cell-time">🕘${escHtml(ts)}</div></div>`;}const th=dTName?`<div class="cell-teacher">👨‍🏫${escHtml(dTName)}${isOvr?' <span data-tip="Веде не той, хто закріплений за предметом — заміна">🔄</span>':''}</div>`:noTeacherCell();return`<div class="matrix-cell cell-lesson ${wc}" onclick="${oc}"><div class="cell-subj">${escHtml(sn)}</div>${th}<div class="cell-time">🕘${escHtml(ts)}</div></div>`;}
 // Класні години цього дня — рядком під сіткою.
 //
 // ЧОМУ РЯДКОМ, А НЕ КЛІТИНКОЮ В СІТЦІ. Сітка редагована: натискання на
@@ -1329,11 +1334,11 @@ window.renderClassHourNote=function(day){
   box.style.display=list.length?'block':'none';
   box.innerHTML=list.length
     ? `🕘 <b>Класні години цього дня:</b> ${escHtml(list.join(' · '))}<br>
-       <span style="color:#7a8b7c;">Їх немає в сітці — вони зберігаються окремо від розкладу. Не ставте на цей час уроки.</span>`
+       <span style="color:var(--ink-3);">Їх немає в сітці — вони зберігаються окремо від розкладу. Не ставте на цей час уроки.</span>`
     : '';
 };
 
-window.renderMatrixGrid=function(){const day=document.getElementById('matrix-day-select').value;window.renderClassHourNote(day);const th=document.getElementById('matrix-thead-row');const tb=document.getElementById('matrix-tbody');th.innerHTML='<th class="time-col">№/Час</th>';for(let i=1;i<=11;i++)th.innerHTML+=`<th>${i} Кл</th>`;tb.innerHTML='';let maxR=8;for(let i=1;i<=11;i++){const cls=`class_${i}`;maxR=Math.max(maxR,dayArr(globalAllSchedules[cls]?.lessons?.[day]).length);}maxR+=1;let lc=1;for(let row=0;row<maxR;row++){let tr=document.createElement('tr');let bc=0;let lsc=0;for(let c=1;c<=11;c++){const clsId=`class_${c}`;const la=dayArr(globalAllSchedules[clsId]?.lessons?.[day]);const raw=la[row];let items=Array.isArray(raw)?raw:(raw&&raw.subject?[raw]:[]);items.forEach(l=>{if(l&&l.subject){if(isBreakItem(l))bc++;else lsc++;}});}const isB=bc>0&&bc>=lsc;const isE=bc===0&&lsc===0;if(isB)tr.innerHTML='<td class="time-col" style="background:#fce4ec;color:#e91e63;">☕</td>';else if(isE)tr.innerHTML='<td class="time-col" style="color:#ccc;font-size:1.1rem;">+</td>';else tr.innerHTML=`<td class="time-col">Ур.${lc++}</td>`;for(let c=1;c<=11;c++){const clsId=`class_${c}`;const la=dayArr(globalAllSchedules[clsId]?.lessons?.[day]);const raw=la[row];let items=Array.isArray(raw)?raw:(raw&&raw.subject?[raw]:[]);let td=document.createElement('td');let h='';if(items.length>0){h+=`<div class="matrix-cell-container">`;items.forEach((lesson,si)=>{const sn=typeof lesson.subject==='string'?lesson.subject:(lesson.subject.ua||'');const te=lesson.teacherEmail||'';let dn=lesson.teacherName||'';let isOvr=false;const isB2=isBreakItem(lesson);if(!isB2){if(!te&&sn){const dt=lesson.type==='extra'?window.getClubTeacher?.(clsId,sn):window.getDefaultTeacher(clsId,sn);if(dt)dn=dt.name;
+window.renderMatrixGrid=function(){const day=document.getElementById('matrix-day-select').value;window.renderClassHourNote(day);const th=document.getElementById('matrix-thead-row');const tb=document.getElementById('matrix-tbody');th.innerHTML='<th class="time-col">№/Час</th>';for(let i=1;i<=11;i++)th.innerHTML+=`<th>${i} Кл</th>`;tb.innerHTML='';let maxR=8;for(let i=1;i<=11;i++){const cls=`class_${i}`;maxR=Math.max(maxR,dayArr(globalAllSchedules[cls]?.lessons?.[day]).length);}maxR+=1;let lc=1;for(let row=0;row<maxR;row++){let tr=document.createElement('tr');let bc=0;let lsc=0;for(let c=1;c<=11;c++){const clsId=`class_${c}`;const la=dayArr(globalAllSchedules[clsId]?.lessons?.[day]);const raw=la[row];let items=Array.isArray(raw)?raw:(raw&&raw.subject?[raw]:[]);items.forEach(l=>{if(l&&l.subject){if(isBreakItem(l))bc++;else lsc++;}});}const isB=bc>0&&bc>=lsc;const isE=bc===0&&lsc===0;if(isB)tr.innerHTML='<td class="time-col" style="background:var(--accent-soft);color:var(--accent-ink);">☕</td>';else if(isE)tr.innerHTML='<td class="time-col" style="color:var(--ink-3);font-size:1.1rem;">+</td>';else tr.innerHTML=`<td class="time-col">Ур.${lc++}</td>`;for(let c=1;c<=11;c++){const clsId=`class_${c}`;const la=dayArr(globalAllSchedules[clsId]?.lessons?.[day]);const raw=la[row];let items=Array.isArray(raw)?raw:(raw&&raw.subject?[raw]:[]);let td=document.createElement('td');let h='';if(items.length>0){h+=`<div class="matrix-cell-container">`;items.forEach((lesson,si)=>{const sn=typeof lesson.subject==='string'?lesson.subject:(lesson.subject.ua||'');const te=lesson.teacherEmail||'';let dn=lesson.teacherName||'';let isOvr=false;const isB2=isBreakItem(lesson);if(!isB2){if(!te&&sn){const dt=lesson.type==='extra'?window.getClubTeacher?.(clsId,sn):window.getDefaultTeacher(clsId,sn);if(dt)dn=dt.name;
         // Урок-чергування: повної назви «А / Б» немає в жодному
         // довіднику, тож шукаємо вчителя окремо для кожного предмета пари.
         else{const al=window.altTeacherLabel(clsId,lesson);if(al)dn=al;}}
@@ -1541,7 +1546,7 @@ window.updateCellEditorTeacherOptions=function(clsId,sName,curE){const ts=docume
   // Для пари чергування «Авто» — це двоє вчителів, по одному на предмет
   const auto=dt?dt.name:(isClub?'—':window.altTeacherLabel(clsId,{subject:sName})||'—');
   ts.innerHTML=`<option value="">-- Авто (${escHtml(auto)}) --</option>`;window.globalTeachersList.forEach(t=>ts.innerHTML+=`<option value="${escHtml(t.email)}">${escHtml(t.name)} (${escHtml(t.email)})</option>`);if(curE&&Array.from(ts.options).some(o=>o.value===curE))ts.value=curE;else ts.value='';};
-window.triggerSmartCheck=function(){if(currentMatrixMode==='live')return;const te=document.getElementById('cell-teacher-select').value;const wb=document.getElementById('cell-live-warnings');if(!te){wb.style.display='none';return;}const day=document.getElementById('matrix-day-select').value;const clsId=document.getElementById('cell-edit-class').value;const tB=parseInt(clsId.replace('class_',''))<=5?1:2;const row=parseInt(document.getElementById('cell-edit-row').value);let conf=[];let trav=[];for(let c=1;c<=11;c++){let cc=`class_${c}`;if(cc===clsId)continue;let b=c<=5?1:2;let da=dayArr(globalAllSchedules[cc]?.lessons?.[day]);let ss=da[row];let si=Array.isArray(ss)?ss:(ss?[ss]:[]);si.forEach(item=>{if(item.type!=='break'&&item.teacherEmail===te)conf.push(`Накладка: ${c} клас!`);});[row-1,row+1].forEach(nr=>{if(nr<0)return;let ns=da[nr];let ni=Array.isArray(ns)?ns:(ns?[ns]:[]);ni.forEach(item=>{if(item.type!=='break'&&item.teacherEmail===te&&b!==tB)trav.push(`Переїзд: ${c} клас`);});});}if(conf.length>0||trav.length>0){let h=conf.length>0?`<div style="color:#c0392b;font-weight:700;">❌ ${conf[0]}</div>`:'';if(trav.length>0)h+=`<div style="color:#e67e22;font-weight:700;">⚠️ ${trav[0]}</div>`;wb.innerHTML=h;wb.style.display='block';wb.style.background=conf.length>0?'#fdedec':'#fdf2e9';wb.style.border=`1px solid ${conf.length>0?'var(--red)':'#e67e22'}`;}else{wb.innerHTML='<div style="color:#27ae60;font-weight:700;">✅ Вільний, переїзд не потрібен.</div>';wb.style.display='block';wb.style.background='#eafaf1';wb.style.border='1px solid #2ecc71';}};
+window.triggerSmartCheck=function(){if(currentMatrixMode==='live')return;const te=document.getElementById('cell-teacher-select').value;const wb=document.getElementById('cell-live-warnings');if(!te){wb.style.display='none';return;}const day=document.getElementById('matrix-day-select').value;const clsId=document.getElementById('cell-edit-class').value;const tB=parseInt(clsId.replace('class_',''))<=5?1:2;const row=parseInt(document.getElementById('cell-edit-row').value);let conf=[];let trav=[];for(let c=1;c<=11;c++){let cc=`class_${c}`;if(cc===clsId)continue;let b=c<=5?1:2;let da=dayArr(globalAllSchedules[cc]?.lessons?.[day]);let ss=da[row];let si=Array.isArray(ss)?ss:(ss?[ss]:[]);si.forEach(item=>{if(item.type!=='break'&&item.teacherEmail===te)conf.push(`Накладка: ${c} клас!`);});[row-1,row+1].forEach(nr=>{if(nr<0)return;let ns=da[nr];let ni=Array.isArray(ns)?ns:(ns?[ns]:[]);ni.forEach(item=>{if(item.type!=='break'&&item.teacherEmail===te&&b!==tB)trav.push(`Переїзд: ${c} клас`);});});}if(conf.length>0||trav.length>0){let h=conf.length>0?`<div style="color:var(--danger);font-weight:700;">❌ ${conf[0]}</div>`:'';if(trav.length>0)h+=`<div style="color:var(--warn);font-weight:700;">⚠️ ${trav[0]}</div>`;wb.innerHTML=h;wb.style.display='block';wb.style.background=conf.length>0?'var(--danger-soft)':'var(--warn-soft)';wb.style.border=`1px solid ${conf.length>0?'var(--danger)':'var(--warn)'}`;}else{wb.innerHTML='<div style="color:var(--ok);font-weight:700;">✅ Вільний, переїзд не потрібен.</div>';wb.style.display='block';wb.style.background='var(--surface-2)';wb.style.border='1px solid var(--ok-line)';}};
 // Поставити значення в <select> ДО того, як список перебудують.
 //
 // Списки предметів наповнюються асинхронно (fillCellSubjects чекає на
