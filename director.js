@@ -39,12 +39,12 @@ window.findSubstitute=async function(){
   }
   candidates.sort((a,b)=>b.priority-a.priority);
   if(candidates.length===0){results.innerHTML='<p style="color:var(--red);font-size:.85rem;">😔 Немає вчителів з потрібним скілом. Додайте скіли у профілях.</p>';return;}
-  let html=`<p style="font-size:.82rem;color:#555;margin-bottom:8px;">Знайдено <b>${candidates.length}</b> кандидатів для заміни <b>${subj}</b>:</p>`;
+  let html=`<p style="font-size:.82rem;color:var(--ink-2);margin-bottom:8px;">Знайдено <b>${candidates.length}</b> кандидатів для заміни <b>${subj}</b>:</p>`;
   candidates.forEach(c=>{
     const priority=c.teachesClass?'⭐ Вже веде цей клас':'';
-    html+=`<div style="background:#fff;border:1px solid #4caf50;border-radius:9px;padding:10px;margin-bottom:7px;display:flex;justify-content:space-between;align-items:center;">
-      <div><b>${c.name}</b><br><span style="font-size:.75rem;color:#888;">${c.email}</span> ${priority?`<br><span style="font-size:.72rem;color:var(--green);font-weight:700;">${priority}</span>`:''}</div>
-      <button onclick="confirmSubstitute('${c.email}','${cls}','${escJs(subj)}','${date}')" style="background:#1b5e20;color:#fff;padding:7px 12px;border-radius:8px;border:none;cursor:pointer;font-weight:700;font-size:.78rem;margin:0;width:auto;">Призначити</button>
+    html+=`<div style="background:#fff;border:1px solid var(--ok);border-radius:9px;padding:10px;margin-bottom:7px;display:flex;justify-content:space-between;align-items:center;">
+      <div><b>${c.name}</b><br><span style="font-size:.75rem;color:var(--ink-3);">${c.email}</span> ${priority?`<br><span style="font-size:.72rem;color:var(--green);font-weight:700;">${priority}</span>`:''}</div>
+      <button onclick="confirmSubstitute('${c.email}','${cls}','${escJs(subj)}','${date}')" style="background:var(--ok);color:#fff;padding:7px 12px;border-radius:8px;border:none;cursor:pointer;font-weight:700;font-size:.78rem;margin:0;width:auto;">Призначити</button>
     </div>`;
   });
   results.innerHTML=html;
@@ -91,7 +91,7 @@ window.saveTeacherSkills=async function(){const se=document.getElementById('d-sk
 // відкрити, ні опублікувати, ні навіть видалити, щоб позбутися.
 //
 // escHtml для тексту, escJs для onclick — як і скрізь у порталі.
-export function loadDrafts(){get(ref(db,'schedule_drafts')).then(snap=>{const c=document.getElementById('drafts-list-container');if(snap.exists()){let h='';const dr=snap.val();for(let dn in dr){const t=escHtml(dn),j=escJs(dn);h+=`<div style="background:#f4f9fd;padding:13px;border-radius:8px;border:1px solid var(--blue);margin-bottom:9px;"><b style="color:var(--teal);">📝 ${t}</b><div style="display:flex;gap:8px;margin-top:9px;flex-wrap:wrap;"><button style="flex:1;background:#f39c12;color:#fff;padding:11px;margin:0;min-width:100px;" onclick="openVisualMatrixModal('${j}')">✏️ Відкрити</button><button style="background:var(--red);color:#fff;padding:11px 13px;margin:0;" onclick="deleteDraft('${j}')">🗑</button><button style="flex:100%;background:var(--green);color:#fff;padding:11px;margin:0;" onclick="activateDraft('${j}','replace')">🚀 Опублікувати як увесь розклад школи</button><button style="flex:100%;background:#0288d1;color:#fff;padding:10px;margin:0;font-size:.83rem;" onclick="activateDraft('${j}','merge')">➕ Оновити лише класи з чернетки</button></div></div>`;}c.innerHTML=h;}else c.innerHTML='<p class="empty-msg">Чернеток немає.</p>';});}
+export function loadDrafts(){get(ref(db,'schedule_drafts')).then(snap=>{const c=document.getElementById('drafts-list-container');if(snap.exists()){let h='';const dr=snap.val();for(let dn in dr){const t=escHtml(dn),j=escJs(dn);h+=`<div style="background:var(--surface-2);padding:13px;border-radius:8px;border:1px solid var(--blue);margin-bottom:9px;"><b style="color:var(--teal);">📝 ${t}</b><div style="display:flex;gap:8px;margin-top:9px;flex-wrap:wrap;"><button style="flex:1;background:var(--warn-line);color:#fff;padding:11px;margin:0;min-width:100px;" onclick="openVisualMatrixModal('${j}')">✏️ Відкрити</button><button style="background:var(--red);color:#fff;padding:11px 13px;margin:0;" onclick="deleteDraft('${j}')">🗑</button><button style="flex:100%;background:var(--green);color:#fff;padding:11px;margin:0;" onclick="activateDraft('${j}','replace')">🚀 Опублікувати як увесь розклад школи</button><button style="flex:100%;background:var(--brand-deep);color:#fff;padding:10px;margin:0;font-size:.83rem;" onclick="activateDraft('${j}','merge')">➕ Оновити лише класи з чернетки</button></div></div>`;}c.innerHTML=h;}else c.innerHTML='<p class="empty-msg">Чернеток немає.</p>';});}
 window.loadDrafts=loadDrafts;
 window.createNewDraft=async function(){const name=document.getElementById('new-draft-name').value.trim();if(!name)return alert("Введіть назву!");const ok=confirm("Скопіювати поточний розклад?");if(ok){const s=await get(ref(db,'schedules'));if(s.exists())await set(ref(db,`schedule_drafts/${name}`),s.val());else await set(ref(db,`schedule_drafts/${name}`),{placeholder:true});}else await set(ref(db,`schedule_drafts/${name}`),{placeholder:true});document.getElementById('new-draft-name').value='';showToast("✅ Чернетку створено!");loadDrafts();};
 // Разом із чернеткою прибираємо і погодження накладок по ній.
@@ -443,7 +443,7 @@ window.switchAcademicYear = async function(){
 function formatClassesLabel(classes){if(classes==='all')return '🌟 Усі класи';if(Array.isArray(classes)&&classes.length>0)return classes.map(c=>c.replace('class_','')).sort((a,b)=>a-b).join(', ')+' кл.';return '—';}
 window.loadAcademicYear=function(){const lbl=document.getElementById('ay-year-label');if(lbl)lbl.innerText=ACTIVE_YEAR;window.fillYearSelect();window.fillCopyFromSelect();loadSemesters();loadBreaks();loadHolidays();};
 // --- Семестри ---
-function loadSemesters(){get(ref(db,`academic_year/${ACTIVE_YEAR}/semesters`)).then(snap=>{const c=document.getElementById('ay-semesters-list');if(snap.exists()){const d=snap.val();let h='';for(let id in d){const s=d[id];h+=`<div style="background:#fff;padding:9px 11px;border-radius:8px;border:1px solid #ffe0b2;margin-bottom:7px;display:flex;justify-content:space-between;align-items:center;"><div><b>${escHtml(s.name)}</b><br><span style="font-size:.78rem;color:#888;">${(s.startDate||'').split('-').reverse().join('.')} — ${(s.endDate||'').split('-').reverse().join('.')}</span></div><button onclick="removeSemester('${id}')" style="background:var(--red);color:#fff;width:auto;padding:6px 10px;margin:0;border-radius:7px;font-size:.78rem;">🗑</button></div>`;}c.innerHTML=h||'<p class="empty-msg">Семестрів ще немає.</p>';}else c.innerHTML='<p class="empty-msg">Семестрів ще немає.</p>';});}
+function loadSemesters(){get(ref(db,`academic_year/${ACTIVE_YEAR}/semesters`)).then(snap=>{const c=document.getElementById('ay-semesters-list');if(snap.exists()){const d=snap.val();let h='';for(let id in d){const s=d[id];h+=`<div style="background:#fff;padding:9px 11px;border-radius:8px;border:1px solid var(--warn-line);margin-bottom:7px;display:flex;justify-content:space-between;align-items:center;"><div><b>${escHtml(s.name)}</b><br><span style="font-size:.78rem;color:var(--ink-3);">${(s.startDate||'').split('-').reverse().join('.')} — ${(s.endDate||'').split('-').reverse().join('.')}</span></div><button onclick="removeSemester('${id}')" style="background:var(--red);color:#fff;width:auto;padding:6px 10px;margin:0;border-radius:7px;font-size:.78rem;">🗑</button></div>`;}c.innerHTML=h||'<p class="empty-msg">Семестрів ще немає.</p>';}else c.innerHTML='<p class="empty-msg">Семестрів ще немає.</p>';});}
 window.addSemester=async function(){
   const name=document.getElementById('ay-sem-name').value.trim();
   const startDate=document.getElementById('ay-sem-start').value;
@@ -457,7 +457,7 @@ window.addSemester=async function(){
 window.removeSemester=function(id){if(confirm("Видалити цей семестр?"))remove(ref(db,`academic_year/${ACTIVE_YEAR}/semesters/${id}`)).then(()=>{showToast("🗑️ Семестр видалено");loadSemesters();});};
 // --- Канікули ---
 window.toggleAllClasses=function(kind){const cb=document.getElementById(`ay-${kind}-all-classes`);const sel=document.getElementById(`ay-${kind}-classes`);sel.disabled=cb.checked;if(cb.checked)Array.from(sel.options).forEach(o=>o.selected=false);};
-function loadBreaks(){get(ref(db,`academic_year/${ACTIVE_YEAR}/breaks`)).then(snap=>{const c=document.getElementById('ay-breaks-list');if(snap.exists()){const d=snap.val();let h='';for(let id in d){const b=d[id];h+=`<div style="background:#fff;padding:9px 11px;border-radius:8px;border:1px solid #ffe0b2;margin-bottom:7px;display:flex;justify-content:space-between;align-items:center;"><div><b>${escHtml(b.title)}</b><br><span style="font-size:.78rem;color:#888;">${(b.startDate||'').split('-').reverse().join('.')} — ${(b.endDate||'').split('-').reverse().join('.')} | ${formatClassesLabel(b.classes)}</span></div><button onclick="removeBreak('${id}')" style="background:var(--red);color:#fff;width:auto;padding:6px 10px;margin:0;border-radius:7px;font-size:.78rem;">🗑</button></div>`;}c.innerHTML=h||'<p class="empty-msg">Канікул ще немає.</p>';}else c.innerHTML='<p class="empty-msg">Канікул ще немає.</p>';});}
+function loadBreaks(){get(ref(db,`academic_year/${ACTIVE_YEAR}/breaks`)).then(snap=>{const c=document.getElementById('ay-breaks-list');if(snap.exists()){const d=snap.val();let h='';for(let id in d){const b=d[id];h+=`<div style="background:#fff;padding:9px 11px;border-radius:8px;border:1px solid var(--warn-line);margin-bottom:7px;display:flex;justify-content:space-between;align-items:center;"><div><b>${escHtml(b.title)}</b><br><span style="font-size:.78rem;color:var(--ink-3);">${(b.startDate||'').split('-').reverse().join('.')} — ${(b.endDate||'').split('-').reverse().join('.')} | ${formatClassesLabel(b.classes)}</span></div><button onclick="removeBreak('${id}')" style="background:var(--red);color:#fff;width:auto;padding:6px 10px;margin:0;border-radius:7px;font-size:.78rem;">🗑</button></div>`;}c.innerHTML=h||'<p class="empty-msg">Канікул ще немає.</p>';}else c.innerHTML='<p class="empty-msg">Канікул ще немає.</p>';});}
 window.addBreak=async function(){
   const title=document.getElementById('ay-break-title').value.trim();
   const startDate=document.getElementById('ay-break-start').value;
@@ -475,7 +475,7 @@ window.addBreak=async function(){
 };
 window.removeBreak=function(id){if(confirm("Видалити ці канікули?"))remove(ref(db,`academic_year/${ACTIVE_YEAR}/breaks/${id}`)).then(()=>{showToast("🗑️ Видалено");loadBreaks();});};
 // --- Свята ---
-function loadHolidays(){get(ref(db,`academic_year/${ACTIVE_YEAR}/holidays`)).then(snap=>{const c=document.getElementById('ay-holidays-list');if(snap.exists()){const d=snap.val();let h='';for(let id in d){const hd=d[id];const typeLabel=hd.calendarType==='art_school'?'🎵 Школа мистецтв':'🏫 Загальна школа';h+=`<div style="background:#fff;padding:9px 11px;border-radius:8px;border:1px solid #ffe0b2;margin-bottom:7px;display:flex;justify-content:space-between;align-items:center;"><div><b>${escHtml(hd.title)}</b><br><span style="font-size:.78rem;color:#888;">${(hd.date||'').split('-').reverse().join('.')} | ${formatClassesLabel(hd.classes)} | ${typeLabel}</span></div><button onclick="removeHoliday('${id}')" style="background:var(--red);color:#fff;width:auto;padding:6px 10px;margin:0;border-radius:7px;font-size:.78rem;">🗑</button></div>`;}c.innerHTML=h||'<p class="empty-msg">Свят ще немає.</p>';}else c.innerHTML='<p class="empty-msg">Свят ще немає.</p>';});}
+function loadHolidays(){get(ref(db,`academic_year/${ACTIVE_YEAR}/holidays`)).then(snap=>{const c=document.getElementById('ay-holidays-list');if(snap.exists()){const d=snap.val();let h='';for(let id in d){const hd=d[id];const typeLabel=hd.calendarType==='art_school'?'🎵 Школа мистецтв':'🏫 Загальна школа';h+=`<div style="background:#fff;padding:9px 11px;border-radius:8px;border:1px solid var(--warn-line);margin-bottom:7px;display:flex;justify-content:space-between;align-items:center;"><div><b>${escHtml(hd.title)}</b><br><span style="font-size:.78rem;color:var(--ink-3);">${(hd.date||'').split('-').reverse().join('.')} | ${formatClassesLabel(hd.classes)} | ${typeLabel}</span></div><button onclick="removeHoliday('${id}')" style="background:var(--red);color:#fff;width:auto;padding:6px 10px;margin:0;border-radius:7px;font-size:.78rem;">🗑</button></div>`;}c.innerHTML=h||'<p class="empty-msg">Свят ще немає.</p>';}else c.innerHTML='<p class="empty-msg">Свят ще немає.</p>';});}
 window.addHoliday=async function(){
   const title=document.getElementById('ay-holiday-title').value.trim();
   const date=document.getElementById('ay-holiday-date').value;
@@ -506,7 +506,7 @@ window.loadDirectorMatrixSubjects=function(){
   const ss=document.getElementById('d-acc-subjects');
   const info=document.getElementById('d-acc-subj-src');
   const say=(t,bad)=>{ if(info){ info.style.display=t?'block':'none'; info.textContent=t||'';
-                                 info.style.color=bad?'var(--red)':'#78909c'; } };
+                                 info.style.color=bad?'var(--red)':'var(--ink-3)'; } };
   if(!cls){ ss.innerHTML='<option disabled>Оберіть клас...</option>'; say(''); return; }
   ss.innerHTML='<option disabled>Завантаження...</option>'; say('Читаю розклад класу...');
   window.loadScheduleScript(cls,()=>{
@@ -519,7 +519,7 @@ window.loadDirectorMatrixSubjects=function(){
       items.forEach(i=>{ const s=window.getValidSubjectName(i); if(s){ u.add(s); n++; } });
       if(n) withLessons.push(UA[d]);
     });
-    ss.innerHTML='<option value="Всі предмети" style="font-weight:700;color:#d35400;">🌟 Всі предмети</option>';
+    ss.innerHTML='<option value="Всі предмети" style="font-weight:700;color:var(--warn);">🌟 Всі предмети</option>';
     if(u.size>0){
       [...u].sort((a,b)=>a.localeCompare(b,'uk')).forEach(subj=>{
         ss.innerHTML+=`<option value="${escHtml(subj)}">${escHtml(subj)}</option>`;
@@ -637,7 +637,7 @@ window.loadStaffList=async function(){invalidateUsersCache();
         <span class="staff-av">${escHtml((name==='—'?email:name).trim().slice(0,1).toUpperCase())}${
           /^(data:image\/|https:\/\/)/.test(ph)?`<img src="${escHtml(ph)}" alt="" loading="lazy" onerror="this.remove()">`:''}</span>
         <div class="staff-main">
-          <div><b>${escHtml(name)}</b>${isMe?' <span style="font-size:.7rem;color:var(--teal);">(це ви)</span>':''}${neverLoggedIn?' <span style="font-size:.68rem;color:#f39c12;">ще не входив</span>':''}</div>
+          <div><b>${escHtml(name)}</b>${isMe?' <span style="font-size:.7rem;color:var(--teal);">(це ви)</span>':''}${neverLoggedIn?' <span style="font-size:.68rem;color:var(--warn);">ще не входив</span>':''}</div>
           <div class="staff-email">${escHtml(email)}</div>
           <div class="staff-roles">${roles.map(r=>`<span class="staff-role-tag">${escHtml(ROLE_LABELS[r]||r)}</span>`).join('')}</div>
         </div>
@@ -782,10 +782,10 @@ window.renderDirectorStats=async function(){const cls=document.getElementById('d
   // a TODO admitting the mismatch between label and calculation.
   const numericScale=!!scaleSnap?.exists();
   const scaleMax=numericScale?Number(scaleSnap.val().max||scaleSnap.val()):6;
-  let h='<table style="width:100%;border-collapse:collapse;font-size:.85rem;"><thead><tr><th style="text-align:left;padding:5px;background:#e8f4fd;">Учень</th><th style="background:#e8f4fd;">Зважений сер.</th><th style="background:#e8f4fd;">Оцінок</th></tr></thead><tbody>';
+  let h='<table style="width:100%;border-collapse:collapse;font-size:.85rem;"><thead><tr><th style="text-align:left;padding:5px;background:var(--brand-soft);">Учень</th><th style="background:var(--brand-soft);">Зважений сер.</th><th style="background:var(--brand-soft);">Оцінок</th></tr></thead><tbody>';
   let totalAvg=0;let cnt=0;
-  stList.forEach(st=>{const g=stats[st].grades;const count=Object.keys(g).length;const avg=calculateStudentWeightedAvg(g,stats[st].types);const rounded=avg!==null?Math.min(scaleMax,Math.max(1,Math.round(avg))):null;const disp=rounded!==null?displayGrade(String(rounded),cls,numericScale)+' ('+avg.toFixed(2)+')':'-';if(avg!==null){totalAvg+=avg;cnt++;}const gc=rounded!==null?(numericScale?'g-scale':gradeClass6(rounded)):'';h+=`<tr><td style="padding:5px;border-bottom:1px solid #eee;"><b>${escHtml(stuName(cls, st))}</b></td><td style="text-align:center;"><span class="g-cell ${gc}" style="display:inline-block;padding:3px 8px;">${disp}</span></td><td style="text-align:center;">${count}</td></tr>`;});
-  const ca=cnt>0?(totalAvg/cnt).toFixed(2):'-';const classRounded=cnt>0?Math.min(scaleMax,Math.max(1,Math.round(Number(ca)))):'-';h+=`</tbody></table><div style="background:#f4ecf7;border:1px solid #d2b4de;padding:12px;border-radius:8px;text-align:center;margin-top:10px;"><b style="color:var(--purple);">🏆 Середній бал класу (шкала 1–${scaleMax}):</b><br><span style="font-size:1.5rem;font-weight:800;color:#7b1fa2;">${cnt?displayGrade(String(classRounded),cls,numericScale):'—'} (${ca})</span></div>`;rd.innerHTML=h;}catch(e){rd.innerHTML=`<p style="color:red;">Помилка: ${e.message}</p>`;}};
+  stList.forEach(st=>{const g=stats[st].grades;const count=Object.keys(g).length;const avg=calculateStudentWeightedAvg(g,stats[st].types);const rounded=avg!==null?Math.min(scaleMax,Math.max(1,Math.round(avg))):null;const disp=rounded!==null?displayGrade(String(rounded),cls,numericScale)+' ('+avg.toFixed(2)+')':'-';if(avg!==null){totalAvg+=avg;cnt++;}const gc=rounded!==null?(numericScale?'g-scale':gradeClass6(rounded)):'';h+=`<tr><td style="padding:5px;border-bottom:1px solid var(--line-soft);"><b>${escHtml(stuName(cls, st))}</b></td><td style="text-align:center;"><span class="g-cell ${gc}" style="display:inline-block;padding:3px 8px;">${disp}</span></td><td style="text-align:center;">${count}</td></tr>`;});
+  const ca=cnt>0?(totalAvg/cnt).toFixed(2):'-';const classRounded=cnt>0?Math.min(scaleMax,Math.max(1,Math.round(Number(ca)))):'-';h+=`</tbody></table><div style="background:var(--brand-soft);border:1px solid var(--line);padding:12px;border-radius:8px;text-align:center;margin-top:10px;"><b style="color:var(--purple);">🏆 Середній бал класу (шкала 1–${scaleMax}):</b><br><span style="font-size:1.5rem;font-weight:800;color:var(--brand-deep);">${cnt?displayGrade(String(classRounded),cls,numericScale):'—'} (${ca})</span></div>`;rd.innerHTML=h;}catch(e){rd.innerHTML=`<p style="color:red;">Помилка: ${e.message}</p>`;}};
 // ══════════ DIRECTOR DASHBOARD ══════════
 export async function loadDirectorDashboard(){
   // Басейн і автобус — ПЕРШИМ ділом і під власним try. Виклик стояв у кінці
@@ -836,9 +836,9 @@ function renderBellSlotsTable(){
   let h='<div style="display:flex;flex-direction:column;gap:6px;">';
   bellSlotsTemp.forEach((s,i)=>{
     h+=`<div style="display:flex;gap:7px;align-items:center;">
-      <span style="width:26px;text-align:center;font-weight:800;color:#283593;">${s.number}</span>
+      <span style="width:26px;text-align:center;font-weight:800;color:var(--brand-deep);">${s.number}</span>
       <input type="time" value="${s.start}" onchange="updateBellSlot(${i},'start',this.value)" style="flex:1;margin:0;">
-      <span style="color:#888;">—</span>
+      <span style="color:var(--ink-3);">—</span>
       <input type="time" value="${s.end}" onchange="updateBellSlot(${i},'end',this.value)" style="flex:1;margin:0;">
       <button onclick="removeBellSlot(${i})" style="background:var(--red);color:#fff;width:auto;padding:6px 9px;margin:0;border-radius:7px;">✖</button>
     </div>`;
@@ -912,7 +912,7 @@ window.loadBellCoverage=async function(){
     }
     const head=missing.length>0
       ? `<div class="bell-missing">⚠️ Розклад не вказано: ${missing.join(', ')} клас</div>`
-      : `<div style="background:#e8f5e9;border:1px solid #a5d6a7;color:#1b5e20;border-radius:9px;padding:8px 11px;font-size:.8rem;font-weight:700;margin-bottom:8px;">✓ Розклад заповнено в усіх 11 класах</div>`;
+      : `<div style="background:var(--ok-soft);border:1px solid var(--ok-line);color:var(--ok);border-radius:9px;padding:8px 11px;font-size:.8rem;font-weight:700;margin-bottom:8px;">✓ Розклад заповнено в усіх 11 класах</div>`;
     box.innerHTML=head+rows;
   }catch(e){box.innerHTML=`<p style="color:red;font-size:.78rem;">Помилка: ${escHtml(e.message)}</p>`;}
 };
@@ -936,10 +936,10 @@ function renderGradeTypesTable(){
   let h='<div style="display:flex;flex-direction:column;gap:6px;">';
   codes.forEach(code=>{
     const t=gradeTypesCache[code]||{};
-    h+=`<div style="display:flex;gap:7px;align-items:center;background:#fff;border:1px solid #e0e0e0;border-radius:8px;padding:7px 9px;">
-      <span style="width:38px;text-align:center;font-weight:800;color:#283593;">${code}</span>
-      <span style="flex:1;font-size:.85rem;color:#555;">${t.label||code}</span>
-      <span style="font-size:.75rem;color:#888;">×</span>
+    h+=`<div style="display:flex;gap:7px;align-items:center;background:#fff;border:1px solid var(--line);border-radius:8px;padding:7px 9px;">
+      <span style="width:38px;text-align:center;font-weight:800;color:var(--brand-deep);">${code}</span>
+      <span style="flex:1;font-size:.85rem;color:var(--ink-2);">${t.label||code}</span>
+      <span style="font-size:.75rem;color:var(--ink-3);">×</span>
       <input type="number" step="0.1" min="0.1" value="${t.weight??1.0}" onchange="updateGradeTypeWeight('${code}',this.value)" style="width:64px;margin:0;padding:5px;">
       <button onclick="removeGradeType('${code}')" style="background:var(--red);color:#fff;width:auto;padding:6px 9px;margin:0;border-radius:7px;">🗑</button>
     </div>`;
@@ -1524,7 +1524,7 @@ function renderAuditRows(){
     ? `<button type="button" class="audit-more" onclick="loadAuditMore()"${auditBusy?' disabled':''}>`
       + (auditBusy?'⏳ Читаю...':`↓ Показати ще ${AUDIT_PAGE} старіших`)+'</button>'
     : '<p class="empty-msg" style="font-size:.74rem;">Це всі записи за місяць.</p>';
-  const head=`<p style="font-size:.75rem;color:#888;margin:0 0 6px 0;">`
+  const head=`<p style="font-size:.75rem;color:var(--ink-3);margin:0 0 6px 0;">`
     + (fAction||fText ? `Знайдено ${rows.length} серед ${loaded} завантажених` : `Завантажено ${loaded} записів`)
     + (auditMore?' · за місяць є старіші':' · це весь місяць')+'</p>';
   if(rows.length===0){
@@ -1696,7 +1696,7 @@ window.saveStudentName=async function(cls,key,oldName){
   }
   if(!confirm(`Перейменувати «${oldName}» → «${newName}»?\n\nІсторія оцінок і відвідуваності збережеться: вона привʼязана до постійного ідентифікатора учня, а не до імені.`))return refreshRoster(cls);
   const row=document.getElementById(`ds-row-${key}`);
-  if(row)row.innerHTML='<span style="font-size:.82rem;color:#888;">⏳ Перейменування...</span>';
+  if(row)row.innerHTML='<span style="font-size:.82rem;color:var(--ink-3);">⏳ Перейменування...</span>';
   try{
     // Після переходу на ідентифікатори перейменування — це один запис.
     // Переносити історію більше не треба: вона лежить під ключем, який
@@ -1781,7 +1781,7 @@ window.transferStudent=async function(){
     await remove(ref(db,`students_list/${fromCls}/${key}`));
     const changes=await repointStudentAccounts(name,fromCls,toCls);
     await push(ref(db,'migration_log'),{type:'transfer',student:name,from:fromCls,to:toCls,at:localDateString,by:'director'});
-    out.innerHTML=`<div class="data-card" style="border-left-color:var(--green);background:#f0fff4;margin-top:0;"><b style="color:var(--green);">✅ ${escHtml(name)} → ${toCls.replace('class_','')} клас</b><br><span style="font-size:.8rem;color:#666;">Оновлено: ${changes.length?escHtml(changes.join(', ')):'лише список класу (акаунтів ще немає)'}</span></div>`;
+    out.innerHTML=`<div class="data-card" style="border-left-color:var(--green);background:var(--surface-2);margin-top:0;"><b style="color:var(--green);">✅ ${escHtml(name)} → ${toCls.replace('class_','')} клас</b><br><span style="font-size:.8rem;color:var(--ink-2);">Оновлено: ${changes.length?escHtml(changes.join(', ')):'лише список класу (акаунтів ще немає)'}</span></div>`;
     showToast(`✅ ${name} переведено у ${toCls.replace('class_','')} клас`);
     loadTransferStudents();
   }catch(e){out.innerHTML=`<p style="color:red;font-size:.85rem;">Помилка: ${escHtml(e.message)}</p>`;}
@@ -1798,17 +1798,17 @@ window.previewYearRollover=async function(){
     // Show 11 first (graduating), then 10→11 … 1→2
     const grads=lists['class_11']?Object.values(lists['class_11']):[];
     graduating=grads.length;
-    if(graduating>0)rows+=`<div style="background:#fdecea;border:1px solid #f5c6cb;border-radius:8px;padding:9px 12px;margin-bottom:6px;font-size:.85rem;"><b style="color:var(--red);">🎓 11 клас → випуск (архів)</b><br><span style="color:#666;">${escHtml(grads.sort().join(', '))}</span></div>`;
+    if(graduating>0)rows+=`<div style="background:var(--danger-soft);border:1px solid var(--danger-line);border-radius:8px;padding:9px 12px;margin-bottom:6px;font-size:.85rem;"><b style="color:var(--red);">🎓 11 клас → випуск (архів)</b><br><span style="color:var(--ink-2);">${escHtml(grads.sort().join(', '))}</span></div>`;
     for(let i=10;i>=1;i--){
       const from=`class_${i}`,to=`class_${i+1}`;
       const st=lists[from]?Object.values(lists[from]):[];
       if(st.length===0)continue;
       total+=st.length;
-      rows+=`<div style="background:#fff;border:1px solid #e0e0e0;border-radius:8px;padding:9px 12px;margin-bottom:6px;font-size:.85rem;"><b>${i} клас → ${i+1} клас</b> <span style="color:#888;">(${st.length})</span><br><span style="color:#666;">${escHtml(st.sort().join(', '))}</span></div>`;
+      rows+=`<div style="background:#fff;border:1px solid var(--line);border-radius:8px;padding:9px 12px;margin-bottom:6px;font-size:.85rem;"><b>${i} клас → ${i+1} клас</b> <span style="color:var(--ink-3);">(${st.length})</span><br><span style="color:var(--ink-2);">${escHtml(st.sort().join(', '))}</span></div>`;
     }
     if(!rows){box.innerHTML='<p class="empty-msg">Немає учнів для переведення.</p>';return;}
     box.innerHTML=`<div style="max-height:280px;overflow-y:auto;margin-bottom:10px;">${rows}</div>
-      <div style="background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:10px 12px;font-size:.83rem;color:#856404;">
+      <div style="background:var(--warn-soft);border:1px solid var(--warn-line);border-radius:8px;padding:10px 12px;font-size:.83rem;color:var(--warn);">
         Буде переведено <b>${total}</b> учнів, випущено <b>${graduating}</b>.<br>
         Для підтвердження введіть слово <b>ПЕРЕВЕСТИ</b>:
       </div>
@@ -1856,7 +1856,7 @@ window.runYearRollover=async function(){
       await remove(ref(db,`students_list/${from}`));
     }
     await push(ref(db,'migration_log'),{type:'year_rollover',year,moved,graduated,at:localDateString,by:'director'});
-    out.innerHTML=`<div class="data-card" style="border-left-color:var(--green);background:#f0fff4;margin-top:0;"><b style="color:var(--green);">✅ Переведення завершено</b><br><span style="font-size:.85rem;color:#555;">Переведено: <b>${moved}</b> · Випущено: <b>${graduated}</b></span><br><span style="font-size:.78rem;color:#888;">Оцінки та відвідуваність залишились в архіві своїх класів. Не забудьте перепризначити класних керівників.</span></div>`;
+    out.innerHTML=`<div class="data-card" style="border-left-color:var(--green);background:var(--surface-2);margin-top:0;"><b style="color:var(--green);">✅ Переведення завершено</b><br><span style="font-size:.85rem;color:var(--ink-2);">Переведено: <b>${moved}</b> · Випущено: <b>${graduated}</b></span><br><span style="font-size:.78rem;color:var(--ink-3);">Оцінки та відвідуваність залишились в архіві своїх класів. Не забудьте перепризначити класних керівників.</span></div>`;
     showToast(`✅ Переведено ${moved} учнів, випущено ${graduated}`);
   }catch(e){out.innerHTML=`<p style="color:red;font-size:.85rem;">Помилка: ${escHtml(e.message)}</p>`;}
 };
@@ -1885,16 +1885,16 @@ window.findDuplicateStudents = async function(){
     }
   }
   if(!problems.length){
-    box.innerHTML = '<p style="color:#1b5e20;font-size:.85rem;margin:0;">✅ Тезок не знайдено. Дані в порядку.</p>';
+    box.innerHTML = '<p style="color:var(--ok);font-size:.85rem;margin:0;">✅ Тезок не знайдено. Дані в порядку.</p>';
     return;
   }
-  box.innerHTML = `<p style="color:#b71c1c;font-weight:700;font-size:.85rem;margin:0 0 7px 0;">Знайдено збігів: ${problems.length}</p>`
-    + problems.map(p=>`<div style="font-size:.82rem;padding:5px 0;border-bottom:1px dashed #eee;">
+  box.innerHTML = `<p style="color:var(--danger);font-weight:700;font-size:.85rem;margin:0 0 7px 0;">Знайдено збігів: ${problems.length}</p>`
+    + problems.map(p=>`<div style="font-size:.82rem;padding:5px 0;border-bottom:1px dashed var(--line-soft);">
         <b>${p.cls} клас</b> — «${escHtml(p.a)}» та «${escHtml(p.b)}»
-        ${p.exact?'<span style="color:#b71c1c;"> · повний збіг, дані вже спільні</span>'
-                 :'<span style="color:#e65100;"> · різне написання, дані розділені</span>'}
+        ${p.exact?'<span style="color:var(--danger);"> · повний збіг, дані вже спільні</span>'
+                 :'<span style="color:var(--warn);"> · різне написання, дані розділені</span>'}
       </div>`).join('')
-    + `<p style="font-size:.78rem;color:#666;margin-top:9px;">Виправляйте перейменуванням: додайте по батькові або другу літеру імені. Перейменування переносить усю історію.</p>`;
+    + `<p style="font-size:.78rem;color:var(--ink-2);margin-top:9px;">Виправляйте перейменуванням: додайте по батькові або другу літеру імені. Перейменування переносить усю історію.</p>`;
 };
 
 // ══════════ АУДИТ ПЕРЕХОДУ НА ІДЕНТИФІКАТОРИ ══════════
@@ -1958,19 +1958,19 @@ window.auditStudentKeys = async function(){
     const total = rows.reduce((a,n)=>a+report[n].found+report[n].orphan, 0);
 
     box.innerHTML = `
-      <div style="background:#e0f7fa;border-radius:10px;padding:10px 13px;margin-bottom:9px;">
-        <b style="font-size:1.05rem;color:#00838f;">${total}</b>
-        <span style="font-size:.82rem;color:#555;"> записів ключовано імʼям учня</span>
+      <div style="background:var(--brand-soft);border-radius:10px;padding:10px 13px;margin-bottom:9px;">
+        <b style="font-size:1.05rem;color:var(--brand-ink);">${total}</b>
+        <span style="font-size:.82rem;color:var(--ink-2);"> записів ключовано імʼям учня</span>
       </div>
       <table class="k-table"><thead><tr><th>Розділ</th><th>Знайдено учня</th><th>Немає в списку</th></tr></thead><tbody>
       ${rows.map(n=>`<tr><td>${escHtml(n)}</td><td>${report[n].found}</td>
-        <td style="color:${report[n].orphan?'#b71c1c':'#999'};">${report[n].orphan||''}</td></tr>`).join('')}
+        <td style="color:${report[n].orphan?'var(--danger)':'var(--ink-3)'};">${report[n].orphan||''}</td></tr>`).join('')}
       </tbody></table>
       ${orphanTotal ? `<div class="k-skip-title">Імена, яких немає у списках класу (${orphanTotal})</div>
-        <p style="font-size:.76rem;color:#666;margin:0 0 6px 0;">Це або вибулі учні, або описки в написанні. Такі записи при переході на ідентифікатори втратять звʼязок з дитиною — їх треба або виправити, або свідомо лишити в архіві.</p>
+        <p style="font-size:.76rem;color:var(--ink-2);margin:0 0 6px 0;">Це або вибулі учні, або описки в написанні. Такі записи при переході на ідентифікатори втратять звʼязок з дитиною — їх треба або виправити, або свідомо лишити в архіві.</p>
         ${orphanSamples.map(x=>`<div style="font-size:.79rem;padding:2px 0;">${escHtml(x)}</div>`).join('')}
-        ${orphanTotal>12?`<div style="font-size:.76rem;color:#999;padding-top:4px;">…та ще ${orphanTotal-12}</div>`:''}`
-      : '<p style="color:#1b5e20;font-size:.82rem;margin-top:9px;">✅ Усі імена в даних збігаються зі списками класів. Перехід пройде без втрат.</p>'}`;
+        ${orphanTotal>12?`<div style="font-size:.76rem;color:var(--ink-3);padding-top:4px;">…та ще ${orphanTotal-12}</div>`:''}`
+      : '<p style="color:var(--ok);font-size:.82rem;margin-top:9px;">✅ Усі імена в даних збігаються зі списками класів. Перехід пройде без втрат.</p>'}`;
   }catch(e){
     box.innerHTML = `<p style="color:red;font-size:.8rem;">Помилка: ${escHtml(e.message)}</p>`;
   }
@@ -2015,11 +2015,11 @@ window.wipeLegacyStudentKeys = async function(){
       if(snap.exists()) walk(snap.val(), null, n);
     }
     const cnt = Object.keys(del).length;
-    if(!cnt){ box.innerHTML = '<p style="color:#1b5e20;font-size:.85rem;">✅ Старих записів немає — усе вже на ідентифікаторах.</p>'; return; }
+    if(!cnt){ box.innerHTML = '<p style="color:var(--ok);font-size:.85rem;">✅ Старих записів немає — усе вже на ідентифікаторах.</p>'; return; }
     await update(ref(db), del);
     logAction('migration',{ value:`видалено застарілих записів: ${cnt}` });
     box.className = 'k-notify ok';
-    box.innerHTML = `<p style="color:#1b5e20;font-size:.85rem;margin:0;">✅ Видалено записів: ${cnt}. Оновіть сторінку.</p>`;
+    box.innerHTML = `<p style="color:var(--ok);font-size:.85rem;margin:0;">✅ Видалено записів: ${cnt}. Оновіть сторінку.</p>`;
   }catch(e){
     box.innerHTML = `<p style="color:red;font-size:.8rem;">Помилка: ${escHtml(e.message)}</p>`;
   }
@@ -2192,7 +2192,7 @@ window.initTabs = initTabs;
 // одразу. Персональних даних сюди не потрапляє: імʼя, роль, класи.
 window.rebuildContactDirs = async function(){
   const info = document.getElementById('d-dirs-info');
-  const say = (t, bad) => { if(info){ info.style.display='block'; info.style.color = bad?'var(--red)':'#2e7d32'; info.innerText = t; } };
+  const say = (t, bad) => { if(info){ info.style.display='block'; info.style.color = bad?'var(--red)':'var(--ok)'; info.innerText = t; } };
   say('Заповнюю...');
   try{
     const [usersSnap, plSnap, taSnap, prSnap] = await Promise.all([
@@ -2533,7 +2533,7 @@ window.toggleCommentsBreakdown = async function(){
       rows.forEach(r => {
         total++;
         h += `<div class="hwb-row">
-          <div class="hwb-subj">${escHtml(stuName(c, r.st))} <span style="font-weight:400;color:#90a4ae;">· ${escHtml(r.subj)}</span></div>
+          <div class="hwb-subj">${escHtml(stuName(c, r.st))} <span style="font-weight:400;color:var(--ink-3);">· ${escHtml(r.subj)}</span></div>
           <div class="hwb-text">${escHtml(r.text)}</div>
         </div>`;
       });
