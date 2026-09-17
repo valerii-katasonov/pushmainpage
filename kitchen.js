@@ -130,11 +130,9 @@ function weekHint(monday){
 }
 
 // Чи можна ще змінювати харчування на цю дату
-export function mealsEditable(dateStr){
-  const today = localDateString;
+export function mealsEditable(dateStr, now = new Date(), today = localDateString){
   if(dateStr > today) return { ok:true };
   if(dateStr < today) return { ok:false, msg:'Цей день уже минув.' };
-  const now = new Date();
   if(now.getHours() < MEAL_CUTOFF_HOUR) return { ok:true };
   return { ok:false, msg:`Після ${MEAL_CUTOFF_HOUR}:00 змінити харчування на сьогодні не можна — обіди вже готуються. Зверніться до адміністрації школи.` };
 }
@@ -189,6 +187,53 @@ export function snackEditable(dateStr, now = new Date(), today = localDateString
     ? { ok:true }
     : { ok:false, msg:`Підвечірок на сьогодні приймався до ${SNACK_CUTOFF_HOUR}:00 — його вже готують. Можна змінити на завтра.` };
 }
+
+// ══════════════════════════════════════════════════════════════════
+//  ЩО З ХАРЧУВАННЯМ, КОЛИ ВІДМІТКУ ПРО ВІДСУТНІСТЬ ЗНІМАЮТЬ
+// ══════════════════════════════════════════════════════════════════
+//
+// Відсутність знімає харчування на день. Зняли відмітку — у кабінеті обід
+// знову зʼявляється, бо рахунок іде від плану. Але кухня свій підрахунок
+// уже зробила: обіди о 9:00, сніданки о 7:00, підвечірки о 12:00. Після
+// цього порції на цю дитину просто немає, скільки б галочок не було на
+// екрані. Дитина приходить до школи й лишається без обіду — а всі
+// впевнені, що все гаразд.
+//
+// ЧАС ВІДМІТКИ ВАЖЛИВИЙ. Якщо відсутність поставили ВЖЕ ПІСЛЯ дедлайну,
+// кухня порахувала дитину як таку, що їсть, — і зняття відмітки нічого не
+// ламає. Попереджати тут означало б лякати дарма. Тому дивимося на ts
+// запису; у старих записів його немає, і тоді попереджаємо (краще зайва
+// обережність, ніж дитина без обіду).
+export function mealsAfterAbsenceCleared(date, markedTs, now = new Date(), today = localDateString){
+  const cutoffs = [
+    ['сніданок',   BREAKFAST_CUTOFF_HOUR, breakfastEditable(date, now, today)],
+    ['обід',       MEAL_CUTOFF_HOUR,      mealsEditable(date, now, today)],
+    ['підвечірок', SNACK_CUTOFF_HOUR,     snackEditable(date, now, today)]
+  ];
+  const back = [], gone = [];
+  for(const [label, hour, gate] of cutoffs){
+    if(gate.ok){ back.push(label); continue; }
+    // Відмітку поставили після дедлайну — з підрахунку кухні вона не
+    // випала, отже й повертати нема чого.
+    const ts = Number(markedTs) || 0;
+    if(ts){
+      const at = new Date(ts);
+      const sameDay = `${at.getFullYear()}-${String(at.getMonth()+1).padStart(2,'0')}-${String(at.getDate()).padStart(2,'0')}`;
+      if(sameDay === date && at.getHours() >= hour){ back.push(label); continue; }
+      if(sameDay > date){ back.push(label); continue; }
+    }
+    gone.push(label);
+  }
+  return { back, gone };
+}
+// Один текст на всі три місця, де відмітку знімають.
+export function absenceClearedMealNote(date, markedTs, now = new Date(), today = localDateString){
+  const { gone } = mealsAfterAbsenceCleared(date, markedTs, now, today);
+  if(!gone.length) return '';
+  return `Увага: кухня вже порахувала цей день — ${gone.join(', ')} на дитину не замовлено. `
+       + `Щоб додати порцію, зверніться до адміністрації школи.`;
+}
+window.absenceClearedMealNote = absenceClearedMealNote;
 
 // ── ЛОГІКА: хто що їсть ──
 // Один розрахунок для підвечірка і сніданку: обидва вмикаються за
