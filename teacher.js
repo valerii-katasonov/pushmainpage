@@ -1428,6 +1428,22 @@ window.linkParent=async function(){
 // Підпис над списком. Раніше тут завжди стояло «сьогодні», навіть коли
 // вгорі обрано інший день, — учитель бачив чуже слово й вирішував, що
 // минулу дату відмітити не можна. Тепер дата видно прямо в заголовку.
+// Дата в блоці відвідуваності й дата вгорі сторінки — одна й та сама.
+// Порожнє значення означає «поверни на сьогодні»: так кнопка повернення
+// не мусить знати, яка сьогодні дата.
+window.setAttDate = function(value){
+  const want = value || localDateString;
+  const top = document.getElementById('global-date');
+  if(top && top.value !== want){
+    top.value = want;
+    if(window.handleDateChange) window.handleDateChange();
+    return;                     // handleDateChange перемалює блок і поле
+  }
+  const el = document.getElementById('t-att-date');
+  if(el) el.value = want;
+  if(window.listenTeacherAttendance) window.listenTeacherAttendance();
+};
+
 // Питаємо ОДИН раз і лише тоді, коли день не сьогоднішній. На сьогодні —
 // мовчки: це звичайна робота, і зайве питання її б лише сповільнило.
 export function confirmAttendanceDate(date, today = localDateString){
@@ -1459,13 +1475,23 @@ function setAttHeader(limited){
   // лягли на 17-те: наступного ранку діти прийшли до школи й були в
   // системі відсутні, батькам пішли push, а кухня зняла обіди. Дізналися
   // про це лише тому, що почали розбиратися вручну.
+  // Поле дати поруч із кнопкою «Відмітити» — те саме, що й угорі сторінки.
+  // Двох різних дат на одному екрані бути не може: інакше знову вийде, що
+  // список показує один день, а відмітка лягає в інший.
+  const dateEl = document.getElementById('t-att-date');
+  if(dateEl){
+    if(dateEl.value !== d) dateEl.value = d;
+    dateEl.classList.toggle('other-day', !isToday);
+    dateEl.classList.toggle('future-day', d > localDateString);
+    dateEl.title = isToday ? 'Сьогодні' : `Ви відмічаєте ${human}, не сьогодні`;
+  }
   if(hint){
     const warn = isToday ? ''
       : (d > localDateString
-          ? `<b class="att-daywarn future">⚠️ Це МАЙБУТНІЙ день — ${human}. Відмітки за нього побачать як справжні: батькам піде сповіщення, кухня зніме харчування.</b>`
-          : `<b class="att-daywarn past">📅 Ви відмічаєте минулий день — ${human}, не сьогодні.</b>`);
+          ? `<b class="att-daywarn future">⚠️ Це МАЙБУТНІЙ день — ${human}. Відмітки за нього побачать як справжні: батькам піде сповіщення, кухня зніме харчування. <button type="button" class="att-today-btn" onclick="setAttDate('')">Повернутися на сьогодні</button></b>`
+          : `<b class="att-daywarn past">📅 Ви відмічаєте минулий день — ${human}, не сьогодні. <button type="button" class="att-today-btn" onclick="setAttDate('')">Повернутися на сьогодні</button></b>`);
     hint.innerHTML = warn
-      + 'Щоб відмітити за інший день — змініть дату вгорі сторінки, у полі «📅 Оберіть дату».'
+      + 'День відмітки — у полі дати внизу блоку. Він же керує списком вище.'
       + (limited?' Показано лише ваші уроки; класний керівник бачить усі.':'');
   }
 }
