@@ -416,7 +416,7 @@ function renderCurriculumPreview(data){
 
     html+=`<div class="topic-preview">
       <div class="topic-preview-subj">📚 ${escHtml(s.meta.subject)}
-        <span style="font-size:.72rem;color:#888;font-weight:400;">
+        <span style="font-size:.72rem;color:var(--ink-3);font-weight:400;">
           ${s.topics.length} тем · ${hours} год</span></div>`;
 
     if(simple){
@@ -467,7 +467,7 @@ function renderCurriculumPreview(data){
       html+=`<div class="topic-preview-row">
         <span class="num">${escHtml(label)}</span>
         <span><b>${escHtml(t.title)}</b><br>
-          <span style="color:#888;font-size:.7rem;">${t.plannedHours} год${
+          <span style="color:var(--ink-3);font-size:.7rem;">${t.plannedHours} год${
             t.plannedDate?` · ${escHtml(t.plannedDate)}`:''}</span></span></div>`;
     });
     html+=`</div>`;
@@ -631,7 +631,7 @@ async function loadCurrentCurriculumDisplay(){
     const total=Object.keys(topics).length;
     let coveredCount=0;
     for(let id in topics) if((topics[id].hoursUsed||0)>=topics[id].plannedHours) coveredCount++;
-    html+=`<div style="padding:7px 0;border-bottom:1px dashed #ccc;"><b>${meta.subject||sk}</b> — ${coveredCount}/${total} тем пройдено <span style="color:#888;font-size:.72rem;">(${meta.year||''})</span></div>`;
+    html+=`<div style="padding:7px 0;border-bottom:1px dashed var(--line);"><b>${meta.subject||sk}</b> — ${coveredCount}/${total} тем пройдено <span style="color:var(--ink-3);font-size:.72rem;">(${meta.year||''})</span></div>`;
   }
   el.innerHTML=html||'<p class="empty-msg">План порожній.</p>';
 }
@@ -967,10 +967,10 @@ window.loadClassTeacherInfo=async function(){
   const snap=await get(ref(db,`class_teachers/${cls}`));
   if(snap.exists()){
     const d=snap.val();
-    info.innerHTML=`🎓 Поточний кл. керівник: <b>${d.teacherName}</b> <span style="color:#888;">(${d.teacherEmail})</span><br><span style="font-size:.72rem;color:#888;">з ${d.assignedAt}</span>`;
+    info.innerHTML=`🎓 Поточний кл. керівник: <b>${d.teacherName}</b> <span style="color:var(--ink-3);">(${d.teacherEmail})</span><br><span style="font-size:.72rem;color:var(--ink-3);">з ${d.assignedAt}</span>`;
     info.style.display='block';
   } else {
-    info.innerHTML=`<i style="color:#888;">Кл. керівник ще не призначений.</i>`;
+    info.innerHTML=`<i style="color:var(--ink-3);">Кл. керівник ще не призначений.</i>`;
     info.style.display='block';
   }
 };
