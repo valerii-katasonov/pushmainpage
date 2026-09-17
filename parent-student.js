@@ -1038,7 +1038,7 @@ window.submitAttendance=async function(role='parent'){
     const dir=await getStudentDir(cls);
     const {key}=resolveStudentKey(dir,profile.studentId,profile.studentName);
     if(!key)throw new Error('Учня не знайдено у списку класу');
-    await set(ref(db,`attendance/${cls}/${date}/${key}/${SELF_REPORT_SLOT}`),{status:type,reason,markedBy,ts:Date.now()});
+    await set(ref(db,`attendance/${cls}/${date}/${key}/${SELF_REPORT_SLOT}`),{status:type,reason,markedBy,by:(currentUserData&&currentUserData.email)||'',ts:Date.now()});
   }catch(e){
     alert('Не вдалося надіслати: '+e.message+'\n\nШкола цього не побачила. Спробуйте ще раз або зателефонуйте.');
     return;
