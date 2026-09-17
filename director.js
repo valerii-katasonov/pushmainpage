@@ -6,7 +6,7 @@
 // (Class Teacher Assignment lives in curriculum.js — see that file's
 // header for why.)
 // ═══════════════════════════════════════════════════════════════
-import { ref, set, get, child, push, remove, update, query, limitToLast } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+import { ref, set, get, child, push, remove, update, query, limitToLast, orderByKey, endBefore } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { auth, db, attendanceAuthor, canClearDayAbsence, clearDayAbsence, showToast, getClassNum, displayGrade, gradeClass6, teacherAccessMatrix, getWeekDates, formatAttendanceSlotLabel, gradeTypesCache, loadGradeTypesCache, calculateStudentWeightedAvg, escJs, escHtml, localDateString, normalizeRoles, getUserRoles, mergeAccountRoles, parentAccountPatch, ROLE_LABELS, currentUserData, dayNamesUA, sendPasswordReset, normalizeChildren, renderParentsBlock, logAction, AUDIT_LABELS, getParentProfile, parentFullName, getSchoolRange, getAllUsers, invalidateUsersCache, getUsersSnap, stuName, invalidateStudentDir, subjectsLabel, syncStaffCard, shrinkImage, dayKeys, invalidateParentLinks, emailKey } from './common.js';
 
 let directorSkillsTemp=[];
@@ -1484,43 +1484,105 @@ window.loadAttendanceStats=async function(){
 // ══════════ ЖУРНАЛ ДІЙ: перегляд ══════════
 // Читаємо лише обраний місяць і лише останні 300 записів — інакше з часом
 // сторінка почне вантажити десятки тисяч рядків.
-const AUDIT_LIMIT=300;
+// ЧОМУ СТОРІНКАМИ, А НЕ «ОСТАННІ 300 ЗА МІСЯЦЬ».
+//
+// Тут стояло limitToLast(300) на весь місяць — і фільтри працювали вже
+// ПІСЛЯ цього відсікання. У школи виходить близько півтори тисячі записів
+// на місяць, тобто 300 останніх — це приблизно одна доба. Директор
+// обирав місяць, шукав дію тижневої давнини й не знаходив нічого: у
+// вибірці її просто не було. Напис «з останніх 300» був, але прочитати
+// його як «лише за вчора» неможливо.
+//
+// Тепер сторінка — 500 записів, і кнопка «Показати ще» дочитує старіші
+// (endBefore за ключем: push-ключі Firebase хронологічні, тож окремий
+// індекс у правилах не потрібен). Фільтри застосовуються до всього, що
+// вже завантажено, і видно, скільки саме завантажено.
+const AUDIT_PAGE=500;
+let auditRows=[], auditYm='', auditOldest='', auditMore=true, auditBusy=false;
+
+async function auditFetch(ym, before){
+  const base=child(ref(db),`audit_log/${ym}`);
+  const q=before
+    ? query(base, orderByKey(), endBefore(before), limitToLast(AUDIT_PAGE))
+    : query(base, orderByKey(), limitToLast(AUDIT_PAGE));
+  const snap=await get(q);
+  const out=[];
+  if(snap.exists()) snap.forEach(ch=>{ out.push({__k:ch.key, ...(ch.val()||{})}); });
+  return out;   // у порядку ключів: перший — найстаріший у цій порції
+}
+
+function renderAuditRows(){
+  const box=document.getElementById('audit-list');
+  if(!box)return;
+  const fAction=document.getElementById('audit-action').value;
+  const fText=document.getElementById('audit-search').value.trim().toLowerCase();
+  let rows=auditRows.slice().sort((a,b)=>b.ts-a.ts);
+  const loaded=rows.length;
+  if(fAction)rows=rows.filter(r=>r.action===fAction);
+  if(fText)rows=rows.filter(r=>JSON.stringify(r).toLowerCase().includes(fText));
+  const more=auditMore
+    ? `<button type="button" class="audit-more" onclick="loadAuditMore()"${auditBusy?' disabled':''}>`
+      + (auditBusy?'⏳ Читаю...':`↓ Показати ще ${AUDIT_PAGE} старіших`)+'</button>'
+    : '<p class="empty-msg" style="font-size:.74rem;">Це всі записи за місяць.</p>';
+  const head=`<p style="font-size:.75rem;color:#888;margin:0 0 6px 0;">`
+    + (fAction||fText ? `Знайдено ${rows.length} серед ${loaded} завантажених` : `Завантажено ${loaded} записів`)
+    + (auditMore?' · за місяць є старіші':' · це весь місяць')+'</p>';
+  if(rows.length===0){
+    box.innerHTML=head+`<p class="empty-msg">${(fAction||fText)
+      ? 'Серед завантажених нічого не знайдено.'+(auditMore?' Дочитайте старіші й спробуйте ще раз.':'')
+      : 'Записів немає.'}</p>`+more;
+    return;
+  }
+  const fmt=ts=>{const d=new Date(ts);return d.toLocaleString('uk-UA',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});};
+  box.innerHTML=head+rows.map(r=>{
+    // Деталі показуємо лише ті, що є — щоб рядок не рябів порожнечею
+    const bits=[];
+    if(r.cls)bits.push(`${escHtml(String(r.cls).replace('class_',''))} кл.`);
+    if(r.target)bits.push(escHtml(r.target));
+    if(r.subject)bits.push(escHtml(r.subject));
+    if(r.value)bits.push(`<b>${escHtml(r.value)}</b>`);
+    if(r.from)bits.push(`було: ${escHtml(r.from)}`);
+    if(r.date)bits.push(escHtml(String(r.date).split('-').reverse().join('.')));
+    return `<div class="audit-row">
+      <span class="audit-time">${fmt(r.ts)}</span>
+      <span class="audit-act">${escHtml(AUDIT_LABELS[r.action]||r.action)}</span>
+      <span class="audit-det">${bits.join(' · ')}</span>
+      <span class="audit-who">${escHtml(r.actor||'—')}</span>
+    </div>`;
+  }).join('')+more;
+}
+
 window.loadAuditLog=async function(){
   const box=document.getElementById('audit-list');
   if(!box)return;
   const ym=document.getElementById('audit-month').value||localDateString.slice(0,7);
-  const fAction=document.getElementById('audit-action').value;
-  const fText=document.getElementById('audit-search').value.trim().toLowerCase();
+  // Зміна фільтра чи пошуку не має перечитувати базу: усе, що завантажено,
+  // уже в памʼяті. Читаємо лише коли змінився місяць.
+  if(ym===auditYm){ renderAuditRows(); return; }
+  auditYm=ym; auditRows=[]; auditOldest=''; auditMore=true;
   box.innerHTML='<p class="empty-msg">Завантаження...</p>';
   try{
-    // Сортуємо за ключем, а не за полем ts: push-ключі Firebase генеруються
-    // хронологічно, тож limitToLast без orderByChild дає ті самі останні
-    // записи — і не потребує оголошення індексу ".indexOn" у правилах.
-    const snap=await get(query(child(ref(db),`audit_log/${ym}`),limitToLast(AUDIT_LIMIT)));
-    if(!snap.exists()){box.innerHTML='<p class="empty-msg">За цей місяць записів немає.</p>';return;}
-    let rows=Object.values(snap.val()).sort((a,b)=>b.ts-a.ts);
-    if(fAction)rows=rows.filter(r=>r.action===fAction);
-    if(fText)rows=rows.filter(r=>JSON.stringify(r).toLowerCase().includes(fText));
-    if(rows.length===0){box.innerHTML='<p class="empty-msg">Нічого не знайдено за фільтром.</p>';return;}
-    const fmt=ts=>{const d=new Date(ts);return d.toLocaleString('uk-UA',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});};
-    box.innerHTML=`<p style="font-size:.75rem;color:#888;margin:0 0 6px 0;">Показано ${rows.length} з останніх ${AUDIT_LIMIT} за місяць</p>`+
-      rows.map(r=>{
-        // Деталі показуємо лише ті, що є — щоб рядок не рябів порожнечею
-        const bits=[];
-        if(r.cls)bits.push(`${escHtml(String(r.cls).replace('class_',''))} кл.`);
-        if(r.target)bits.push(escHtml(r.target));
-        if(r.subject)bits.push(escHtml(r.subject));
-        if(r.value)bits.push(`<b>${escHtml(r.value)}</b>`);
-        if(r.from)bits.push(`було: ${escHtml(r.from)}`);
-        if(r.date)bits.push(escHtml(String(r.date).split('-').reverse().join('.')));
-        return `<div class="audit-row">
-          <span class="audit-time">${fmt(r.ts)}</span>
-          <span class="audit-act">${escHtml(AUDIT_LABELS[r.action]||r.action)}</span>
-          <span class="audit-det">${bits.join(' · ')}</span>
-          <span class="audit-who">${escHtml(r.actor||'—')}</span>
-        </div>`;
-      }).join('');
+    const page=await auditFetch(ym,'');
+    auditRows=page;
+    auditOldest=page.length?page[0].__k:'';
+    auditMore=page.length===AUDIT_PAGE;
+    if(!page.length){box.innerHTML='<p class="empty-msg">За цей місяць записів немає.</p>';return;}
+    renderAuditRows();
   }catch(e){box.innerHTML=`<p style="color:red;font-size:.8rem;">Помилка: ${escHtml(e.message)}</p>`;}
+};
+
+window.loadAuditMore=async function(){
+  if(auditBusy||!auditMore||!auditOldest)return;
+  auditBusy=true; renderAuditRows();
+  try{
+    const page=await auditFetch(auditYm,auditOldest);
+    if(page.length){ auditRows=page.concat(auditRows); auditOldest=page[0].__k; }
+    auditMore=page.length===AUDIT_PAGE;
+  }catch(e){
+    showToast('Не вдалося дочитати журнал: '+(e.message||''));
+  }finally{
+    auditBusy=false; renderAuditRows();
+  }
 };
 window.fillAuditActions=function(){
   const sel=document.getElementById('audit-action');
