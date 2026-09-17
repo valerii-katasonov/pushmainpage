@@ -752,21 +752,38 @@ function renderAllPlans(){
       : 'На цей план не дивиться жоден урок розкладу, тож у журналі його тем не видно.'
         + (free.length ? '' : ' У всіх предметів розкладу вже є власний план — перевірте, чи це не стара копія.');
 
+    // ЧОМУ СПОЧАТКУ ПРЕДМЕТИ БЕЗ ПЛАНУ. Зв’язати загубленця з предметом,
+    // у якого вже є свій план, — майже завжди помилка: розкладовий
+    // предмет після цього почне показувати чужі теми, а власні зникнуть.
+    const opts = orphan
+      ? (free.length ? free : sched)
+      : sched.filter(x => !who.includes(x));     // хто ще НЕ дивиться сюди
+    const picker = opts.length
+      ? `<select id="pl-pick-${i}"><option value="">— предмет із розкладу —</option>
+           ${opts.map(x => `<option value="${escHtml(x)}">${escHtml(x)}</option>`).join('')}</select>
+         <button type="button" onclick="bindLostPlan(${i})">${orphan ? 'Прив’язати' : 'Додати'}</button>`
+      : '';
+
     let fix = '';
     if(orphan){
-      // ЧОМУ СПОЧАТКУ ПРЕДМЕТИ БЕЗ ПЛАНУ. Зв’язати загубленця з предметом,
-      // у якого вже є свій план, — майже завжди помилка: розкладовий
-      // предмет після цього почне показувати чужі теми, а власні зникнуть.
-      const opts = (free.length ? free : sched);
       fix = `<div class="pl-fix">
-        ${opts.length
-          ? `<select id="pl-pick-${i}"><option value="">— предмет із розкладу —</option>
-               ${opts.map(s => `<option value="${escHtml(s)}">${escHtml(s)}</option>`).join('')}</select>
-             <button type="button" onclick="bindLostPlan(${i})">Прив’язати</button>`
-          : '<span class="pl-note">У розкладі цього класу немає жодного предмета — спершу опублікуйте розклад.</span>'}
+        ${picker || '<span class="pl-note">У розкладі цього класу немає жодного предмета — спершу опублікуйте розклад.</span>'}
         <button type="button" class="pl-drop" onclick="dropLostPlan(${i})">Видалити</button>
         <div class="pl-note">${why}</div>
       </div>`;
+    }else if(picker){
+      // ПЛАН ОДИН НА ДВОХ — ЗВИЧАЙНА РІЧ, А НЕ ВИНЯТОК.
+      //
+      // Пару чергування то веде один учитель за спільним планом, то двоє
+      // за своїми — залежить від школи й від року. Обидва стани мають
+      // робитися однаково легко, тому додати предмет до вже живого плану
+      // можна просто тут, поруч із ним, а не лише через «Спільний план»
+      // над завантаженням: туди ще треба здогадатися піти.
+      fix = `<details class="pl-add"><summary>➕ додати ще предмет до цього плану</summary>
+        <div class="pl-fix">${picker}
+          <div class="pl-note">Обидва предмети братимуть теми звідси. Відв’язати — у «Спільний план»
+            над завантаженням: там для предмета є «окремий власний план».</div>
+        </div></details>`;
     }
     return `<div class="pl-row">
       <div class="pl-main"><div class="pl-name">${escHtml(name)}${keyHtml}</div>
@@ -792,6 +809,10 @@ function renderAllPlans(){
 // їх заливають з інших екранів і з іншого пристрою.
 window.reloadClassPlans = loadCurrentCurriculumDisplay;
 
+// Порядок рядків у списку — для тестів: у розмітці план адресується
+// номером, і перевірці треба знати, який номер у якого ключа.
+export function __plansOrder(){ return plansCache.keys.slice(); }
+
 window.bindLostPlan = async function(i){
   const { cls, plans, keys } = plansCache;
   const pk = keys[i];
@@ -812,7 +833,14 @@ window.bindLostPlan = async function(i){
       + 'чи збігається назва предмета в розкладі точно, включно з пробілами.');
     return;
   }
-  if(!confirm(`«${subj}» братиме теми з плану «${target}».\n\nПродовжити?`)) return;
+  // У предмета може бути свій заповнений план. Звʼязування його не
+  // видаляє — запис лишається під власною назвою, — але з очей він
+  // зникає, і збоку це виглядає рівно як «мій план стерли».
+  const own = await ownTopicCount(cls, subj);
+  if(!confirm(`«${subj}» братиме теми з плану «${target}».`
+    + (own ? `\n\n⚠️ У «${subj}» уже є власний план: тем — ${own}. Він не видаляється, `
+             + 'але перестане показуватись; повернути можна через «окремий власний план».' : '')
+    + '\n\nПродовжити?')) return;
   try{
     await set(ref(db, `curriculum_aliases/${cls}/${subjKey(subj)}`), target);
     await logAction('curriculum_bind', { cls, subject: subj, plan: target });
@@ -1405,19 +1433,37 @@ window.saveCurrAlias = async function(){
   const subj = chosenSubject();
   const cls = currClass();
   if(!sel || !subj || !cls) return;
-  const target = sel.value.trim();
+  const picked = sel.value.trim();
   const key = subjKey(subj);
+
+  // ЛАНЦЮЖКИ РОЗГОРТАЄМО, А НЕ ЗАБОРОНЯЄМО.
+  //
+  // Читання плану робить рівно один крок (див. planKeyWith): А→Б→В не
+  // спрацював би — за ключем Б лежить не план, а лише вказівник. Раніше
+  // ми через це просто відмовляли: «Б сам користується чужим планом».
+  //
+  // І заганяли в глухий кут рівно там, де спільний план найпотрібніший.
+  // Пара чергування: обидва предмети мають брати один вузол. Перший
+  // прив’язали — він тепер «користується чужим планом», і другий
+  // прив’язати вже нічим: у списку є тільки предмети розкладу, а сам
+  // вузол пари називається інакше.
+  //
+  // Тому тепер крок робимо МИ, при записі: якщо обраний предмет сам
+  // кудись указує, ставимо той самий кінцевий вузол. Ланцюжка в базі не
+  // виникає — обидва предмети вказують в одне місце, — а людина отримує
+  // те, чого й хотіла.
+  let target = picked;
+  const through = (picked && aliasMap[subjKey(picked)]) ? String(aliasMap[subjKey(picked)]).trim() : '';
+  if(through) target = through;
 
   // Нічого не змінилося — просто згортаємось. Зайвий запис у базу й
   // зайвий рядок у журналі дій нікому не потрібні.
   if((aliasMap[key] || '') === target){ renderAliasBox(subj); return; }
 
-  // ЗАБОРОНА ЛАНЦЮЖКІВ. Якщо предмет, на який вказують, сам кудись
-  // указує, вийшло б А→Б→В: план шукали б у Б, а він там лише
-  // псевдонімом. Розв'язувати ланцюжки складніше, ніж не давати їх
-  // будувати, а користі від них ніякої.
-  if(target && aliasMap[subjKey(target)]){
-    showToast(`«${target}» сам користується чужим планом. Оберіть предмет, у якого план власний.`);
+  // Після розгортання предмет може вказати сам на себе: Б→А, коли А→Б.
+  // Це не ланцюжок, а петля, і плану в ній немає взагалі.
+  if(target && subjKey(target) === key){
+    showToast(`«${picked}» уже бере план «${subj}». Щоб поміняти напрямок, спершу зніміть звʼязок у «${picked}».`);
     return;
   }
 
@@ -1442,7 +1488,12 @@ window.saveCurrAlias = async function(){
   try{
     await set(ref(db, `curriculum_aliases/${cls}/${key}`), target || null);
     logAction('curriculum_alias', { cls, subject: subj, target: target || '(знято)' });
-    showToast(target ? `План спільний з «${target}»` : 'Повернули власний план');
+    // Якщо крок розгорнувся, кажемо про це: людина обрала одне, а в базі
+    // опинилось інше, і мовчати про таке не можна.
+    showToast(target
+      ? (through ? `План спільний з «${target}» — «${picked}» бере той самий`
+                 : `План спільний з «${target}»`)
+      : 'Повернули власний план');
     loadCurrentCurriculumDisplay();
     refreshPlanEditorIfOpen();
   }catch(e){
