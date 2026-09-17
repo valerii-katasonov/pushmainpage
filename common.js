@@ -1039,11 +1039,14 @@ export function gradeClass6(val){
 }
 export function gradeColorInline(val){
   const n=/^\d+[+\-−]$/.test(String(val).trim())?parseInt(val,10):levelNum(val);
-  if(n===null) return '#8e44ad';
-  if(n>=5) return '#1565c0';
-  if(n===4) return '#2e7d32';
-  if(n===3) return '#f57f17';
-  return '#b71c1c';
+  // Ті самі шість ступенів, що й --g1…--g6 у cabinet.html. Повертаємо
+  // токени, а не hex: інакше шкала має два джерела правди й одне з них
+  // неминуче відстає.
+  if(n===null) return 'var(--brand-deep)';
+  if(n>=5) return 'var(--g5)';
+  if(n===4) return 'var(--g4)';
+  if(n===3) return 'var(--g3)';
+  return 'var(--g1)';
 }
 // Phase 5: weight now comes from the Firebase-backed grade_types cache
 // (getGradeWeight below), with GRADE_WEIGHTS only as a fallback default for
@@ -1119,9 +1122,9 @@ export function renderGradeFormulaInfo(){
   const items=codes.map(code=>{
     const w=getGradeWeight(code);
     const label=(gradeTypesCache[code]&&gradeTypesCache[code].label)||code;
-    return `<span style="display:inline-block;background:#fff;border:1px solid #d1c4e9;border-radius:6px;padding:2px 7px;margin:2px 3px 2px 0;font-size:.72rem;"><b>${code}</b> ${label} ×${w}</span>`;
+    return `<span style="display:inline-block;background:#fff;border:1px solid var(--line);border-radius:6px;padding:2px 7px;margin:2px 3px 2px 0;font-size:.72rem;"><b>${code}</b> ${label} ×${w}</span>`;
   }).join('');
-  return `<li style="list-style:none;background:#f4ecf7;border:1px solid #d2b4de;border-radius:8px;padding:8px 10px;margin-bottom:9px;font-size:.78rem;color:#555;">
+  return `<li style="list-style:none;background:var(--brand-soft);border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-bottom:9px;font-size:.78rem;color:var(--ink-2);">
     <b style="color:var(--purple);">ℹ️ Як рахується середній бал:</b> Σ(оцінка × коефіцієнт) / Σ(коефіцієнт)
     <div style="margin-top:5px;">${items}</div>
   </li>`;
@@ -2674,8 +2677,8 @@ async function initUserSession(){
         cs.innerHTML='<option value="" disabled>Класи не призначено</option>';
         const banner=document.createElement('div');
         banner.className='data-card';
-        banner.style.cssText='border-left-color:var(--orange);background:#fff8e1;';
-        banner.innerHTML='<h4 style="margin-top:0;color:#e65100;">⚠️ Класи ще не призначено</h4><p style="font-size:.85rem;color:#555;margin:0;">Директор має надати вам доступ до класу (Кабінет директора → «Матриця доступу вчителів»). Якщо ви класний керівник — доступ призначається автоматично при призначенні на клас.</p>';
+        banner.style.cssText='border-left-color:var(--orange);background:var(--warn-soft);';
+        banner.innerHTML='<h4 style="margin-top:0;color:var(--warn);">⚠️ Класи ще не призначено</h4><p style="font-size:.85rem;color:var(--ink-2);margin:0;">Директор має надати вам доступ до класу (Кабінет директора → «Матриця доступу вчителів»). Якщо ви класний керівник — доступ призначається автоматично при призначенні на клас.</p>';
         const screen=document.getElementById('teacher-screen');
         screen.insertBefore(banner,screen.querySelector('.screen-section'));
         return;
@@ -3230,7 +3233,17 @@ export function initials(name){
   const p = String(name||'').trim().split(/\s+/);
   return ((p[0]||'')[0] || '?').toUpperCase() + ((p[1]||'')[0] || '').toUpperCase();
 }
-const AV_COLORS = ['#5c6bc0','#26a69a','#ef6c00','#8e24aa','#00838f','#c2185b','#558b2f','#4527a0'];
+// КОЛЬОРИ АВАТАРІВ.
+//
+// Вони розрізняють ЛЮДЕЙ, а не стани, тому набір має бути помітно
+// різним — одним відтінком бірюзи вісім співрозмовників не розвести.
+// Але попередній набір був просто райдугою (фіолетовий, помаранчевий,
+// оливковий), і саме такі плями й просила прибрати школа.
+//
+// Тут вісім кольорів, зібраних із фірмової гами та статусних: усі
+// достатньо різні на вигляд і всі дають із білим текстом щонайменше
+// 4.5:1, бо на аватарі стоять ініціали.
+const AV_COLORS = ['#01579B','#00697C','#C2185B','#1E7E4A','#075B65','#9A5B00','#46585E','#0277BD'];
 export function avatarColor(name){
   let h = 0; const s = String(name||'');
   for(let i=0;i<s.length;i++) h = (h*31 + s.charCodeAt(i)) >>> 0;
@@ -4088,7 +4101,7 @@ function renderParentKids(safeEmail,kids){
   if(kids.length===0)h+=`<p class="empty-msg" style="font-size:.8rem;">Дітей не прив'язано.</p>`;
   else kids.forEach((k,i)=>{
     h+=`<div class="pe-kid">
-      <span class="pe-kid-name">${escHtml(k.studentName)} <span style="color:#999;">(${escHtml(String(k.class||'').replace('class_',''))} кл.)</span></span>
+      <span class="pe-kid-name">${escHtml(k.studentName)} <span style="color:var(--ink-3);">(${escHtml(String(k.class||'').replace('class_',''))} кл.)</span></span>
       <select onchange="setParentChildRole('${escJs(safeEmail)}',${i},this.value)">${opts(k.role||'guardian')}</select>
       <button class="pe-unlink" onclick="unlinkParentChild('${escJs(safeEmail)}',${i},'${escJs(k.studentName)}')" data-tip="Відв'язати">✖</button>
     </div>`;
@@ -4100,12 +4113,12 @@ function renderParentKids(safeEmail,kids){
 function renderEmailChange(safeEmail){
   return `<div class="pe-section">
     <b>✉️ Змінити email</b>
-    <p style="font-size:.75rem;color:#888;margin:4px 0 6px 0;">
+    <p style="font-size:.75rem;color:var(--ink-3);margin:4px 0 6px 0;">
       Контакти й діти перенесуться на нову адресу. Але вхід у портал прив'язаний
       до старої пошти — з новою людина заходить як «Перший вхід» і задає пароль наново.
     </p>
     <input type="email" id="pe-new-email" placeholder="нова@пошта.com" autocapitalize="none" spellcheck="false">
-    <button onclick="changeParentEmail('${escJs(safeEmail)}')" style="background:#e67e22;color:#fff;margin-top:6px;">✉️ Перенести на новий email</button>
+    <button onclick="changeParentEmail('${escJs(safeEmail)}')" style="background:var(--warn);color:#fff;margin-top:6px;">✉️ Перенести на новий email</button>
   </div>`;
 }
 async function refreshParentEditorAndList(safeEmail){
@@ -4719,7 +4732,7 @@ window.logoutUser=async function(){
   signOut(auth);
 };
 // ══════════ ADMIN DASHBOARD ══════════
-window.loadAdminDashboard=async function(){try{const date=document.getElementById('global-date').value;document.getElementById('a-att-header').innerText=`🚨 Відсутні (${date.split('-').reverse().slice(0,2).join('.')})`;const wd=getWeekDates(date);let wl=0,wa=0,hw=0,com=0;const _lo=wd[0]<date?wd[0]:date, _hi=wd[wd.length-1]>date?wd[wd.length-1]:date;const[_ad,_hd,_cd]=await Promise.all([getSchoolRange('attendance',_lo,_hi),getSchoolRange('homeworks',_lo,_hi),getSchoolRange('comments',_lo,_hi)]);const s={exists:()=>true,val:()=>_ad},hwS={exists:()=>true,val:()=>_hd},comS={exists:()=>true,val:()=>_cd};let h='';if(s.exists()){const d=s.val();for(let i=1;i<=11;i++){const c=`class_${i}`;if(d[c]&&d[c][date])for(let st in d[c][date]){const slots=d[c][date][st];for(let sk in slots){const r=slots[sk];if(r?.status){const bc=r.status==='late'?'badge-late':'badge-absent';const markerIcon=r.markedBy==='teacher'?'👨‍🏫':(r.markedBy==='student'?'🎒':(r.markedBy==='administrator'?'🛡️':'👪'));h+=`<li style="margin-bottom:9px;border-bottom:1px solid #eee;padding-bottom:4px;"><span style="font-size:.72rem;background:var(--teal);color:#fff;padding:2px 5px;border-radius:4px;margin-right:4px;">${i} Кл</span> <b>${escHtml(stuName(c, st))}</b> <span class="badge ${bc}">${r.status==='late'?'Запізнення':'Відсутність'}</span> <span style="font-size:.72rem;color:#888;">${escHtml(formatAttendanceSlotLabel(sk))} ${markerIcon}</span></li>`;}}}
+window.loadAdminDashboard=async function(){try{const date=document.getElementById('global-date').value;document.getElementById('a-att-header').innerText=`🚨 Відсутні (${date.split('-').reverse().slice(0,2).join('.')})`;const wd=getWeekDates(date);let wl=0,wa=0,hw=0,com=0;const _lo=wd[0]<date?wd[0]:date, _hi=wd[wd.length-1]>date?wd[wd.length-1]:date;const[_ad,_hd,_cd]=await Promise.all([getSchoolRange('attendance',_lo,_hi),getSchoolRange('homeworks',_lo,_hi),getSchoolRange('comments',_lo,_hi)]);const s={exists:()=>true,val:()=>_ad},hwS={exists:()=>true,val:()=>_hd},comS={exists:()=>true,val:()=>_cd};let h='';if(s.exists()){const d=s.val();for(let i=1;i<=11;i++){const c=`class_${i}`;if(d[c]&&d[c][date])for(let st in d[c][date]){const slots=d[c][date][st];for(let sk in slots){const r=slots[sk];if(r?.status){const bc=r.status==='late'?'badge-late':'badge-absent';const markerIcon=r.markedBy==='teacher'?'👨‍🏫':(r.markedBy==='student'?'🎒':(r.markedBy==='administrator'?'🛡️':'👪'));h+=`<li style="margin-bottom:9px;border-bottom:1px solid var(--line-soft);padding-bottom:4px;"><span style="font-size:.72rem;background:var(--teal);color:#fff;padding:2px 5px;border-radius:4px;margin-right:4px;">${i} Кл</span> <b>${escHtml(stuName(c, st))}</b> <span class="badge ${bc}">${r.status==='late'?'Запізнення':'Відсутність'}</span> <span style="font-size:.72rem;color:var(--ink-3);">${escHtml(formatAttendanceSlotLabel(sk))} ${markerIcon}</span></li>`;}}}
     // Week counters (same aggregation the director dashboard does)
     if(d[c])wd.forEach(w=>{if(d[c][w]&&typeof d[c][w]==='object')Object.values(d[c][w]).forEach(slots=>{if(slots&&typeof slots==='object')Object.values(slots).forEach(r=>{if(r?.status==='late')wl++;else if(r?.status==='absent')wa++;});});});
   }}
@@ -4774,7 +4787,7 @@ window.loadAdminBellSchedule=async function(){
   if(!snap.exists()){box.innerHTML='<p class="empty-msg">Розклад дзвінків не задано.</p>';return;}
   const d=snap.val();
   const rows=Object.keys(d).sort((a,b)=>(parseInt(a)||0)-(parseInt(b)||0))
-    .map(k=>`<div style="display:flex;justify-content:space-between;padding:6px 9px;background:#fff;border:1px solid #e8eaf6;border-radius:7px;margin-bottom:5px;font-size:.85rem;"><b>Урок ${escHtml(d[k].number??k)}</b><span style="color:#555;">${escHtml(d[k].start||'—')} – ${escHtml(d[k].end||'—')}</span></div>`).join('');
+    .map(k=>`<div style="display:flex;justify-content:space-between;padding:6px 9px;background:#fff;border:1px solid var(--brand-line);border-radius:7px;margin-bottom:5px;font-size:.85rem;"><b>Урок ${escHtml(d[k].number??k)}</b><span style="color:var(--ink-2);">${escHtml(d[k].start||'—')} – ${escHtml(d[k].end||'—')}</span></div>`).join('');
   box.innerHTML=rows||'<p class="empty-msg">Уроків немає.</p>';
   }catch(err){
     // Читання не вдалося. Без цього блоку на екрані назавжди лишався б
@@ -4794,14 +4807,14 @@ window.loadAdminAcademicYear=async function(){
   const years=snap.val();const yearId=Object.keys(years)[0];const y=years[yearId]||{};
   const section=(title,obj,fmt)=>{
     const items=obj?Object.values(obj):[];
-    if(items.length===0)return `<h4 style="margin:12px 0 6px 0;color:#e65100;font-size:.86rem;">${title}</h4><p class="empty-msg" style="margin:0;">Немає.</p>`;
-    return `<h4 style="margin:12px 0 6px 0;color:#e65100;font-size:.86rem;">${title}</h4>`+
-      items.map(it=>`<div style="background:#fff;border:1px solid #ffe0b2;border-radius:7px;padding:6px 9px;margin-bottom:5px;font-size:.83rem;">${fmt(it)}</div>`).join('');
+    if(items.length===0)return `<h4 style="margin:12px 0 6px 0;color:var(--warn);font-size:.86rem;">${title}</h4><p class="empty-msg" style="margin:0;">Немає.</p>`;
+    return `<h4 style="margin:12px 0 6px 0;color:var(--warn);font-size:.86rem;">${title}</h4>`+
+      items.map(it=>`<div style="background:#fff;border:1px solid var(--warn-line);border-radius:7px;padding:6px 9px;margin-bottom:5px;font-size:.83rem;">${fmt(it)}</div>`).join('');
   };
   box.innerHTML=
-    section('Семестри',y.semesters,s=>`<b>${escHtml(s.name||'—')}</b><br><span style="color:#666;">${escHtml(s.start||'')} – ${escHtml(s.end||'')}</span>`)+
-    section('Канікули',y.breaks,b=>`<b>${escHtml(b.title||'—')}</b><br><span style="color:#666;">${escHtml(b.start||'')} – ${escHtml(b.end||'')}</span>`)+
-    section('Свята',y.holidays,h=>`<b>${escHtml(h.title||'—')}</b><br><span style="color:#666;">${escHtml(h.date||'')}</span>`);
+    section('Семестри',y.semesters,s=>`<b>${escHtml(s.name||'—')}</b><br><span style="color:var(--ink-2);">${escHtml(s.start||'')} – ${escHtml(s.end||'')}</span>`)+
+    section('Канікули',y.breaks,b=>`<b>${escHtml(b.title||'—')}</b><br><span style="color:var(--ink-2);">${escHtml(b.start||'')} – ${escHtml(b.end||'')}</span>`)+
+    section('Свята',y.holidays,h=>`<b>${escHtml(h.title||'—')}</b><br><span style="color:var(--ink-2);">${escHtml(h.date||'')}</span>`);
   }catch(err){
     // Читання не вдалося. Без цього блоку на екрані назавжди лишався б
     // напис-заглушка, і людина не знала б, зламалося чи просто повільно.
