@@ -1125,7 +1125,7 @@ export function renderGradeFormulaInfo(){
     return `<span style="display:inline-block;background:#fff;border:1px solid var(--line);border-radius:6px;padding:2px 7px;margin:2px 3px 2px 0;font-size:.72rem;"><b>${code}</b> ${label} ×${w}</span>`;
   }).join('');
   return `<li style="list-style:none;background:var(--brand-soft);border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-bottom:9px;font-size:.78rem;color:var(--ink-2);">
-    <b style="color:var(--purple);">ℹ️ Як рахується середній бал:</b> Σ(оцінка × коефіцієнт) / Σ(коефіцієнт)
+    <b style="color:var(--brand-deep);">ℹ️ Як рахується середній бал:</b> Σ(оцінка × коефіцієнт) / Σ(коефіцієнт)
     <div style="margin-top:5px;">${items}</div>
   </li>`;
 }
@@ -2677,7 +2677,7 @@ async function initUserSession(){
         cs.innerHTML='<option value="" disabled>Класи не призначено</option>';
         const banner=document.createElement('div');
         banner.className='data-card';
-        banner.style.cssText='border-left-color:var(--orange);background:var(--warn-soft);';
+        banner.style.cssText='border-left-color:var(--warn);background:var(--warn-soft);';
         banner.innerHTML='<h4 style="margin-top:0;color:var(--warn);">⚠️ Класи ще не призначено</h4><p style="font-size:.85rem;color:var(--ink-2);margin:0;">Директор має надати вам доступ до класу (Кабінет директора → «Матриця доступу вчителів»). Якщо ви класний керівник — доступ призначається автоматично при призначенні на клас.</p>';
         const screen=document.getElementById('teacher-screen');
         screen.insertBefore(banner,screen.querySelector('.screen-section'));
@@ -2744,6 +2744,8 @@ async function initUserSession(){
 // стануть десятки тисяч, і читати одну спільну гілку було б повільно.
 // Читаємо завжди лише потрібний місяць і лише останні N записів.
 export const AUDIT_LABELS={
+  curriculum_bind:'🔗 План прив’язано до предмета',
+  curriculum_drop:'🗑️ Календарний план видалено',
   grade_set:'📊 Оцінку виставлено', grade_del:'📊 Оцінку видалено',
   attendance:'🚨 Відмітка відсутності', attendance_clear:'✅ Відмітку за день знято', comment:'💬 Коментар учню',
   homework:'📚 Домашнє завдання', behavior:'🤝 Оцінка поведінки',
@@ -3481,7 +3483,7 @@ window.openStudentCard=async function(cls,key,name){
     // напис-заглушка, і людина не знала б, зламалося чи просто повільно.
     console.error("common.js → sc-fields", err);
     const _b=document.getElementById("sc-fields");
-    if(_b)_b.innerHTML='<p class="empty-msg" style="color:var(--red);">Не вдалося завантажити: '+((err&&err.message)||'невідома помилка')+'</p>';
+    if(_b)_b.innerHTML='<p class="empty-msg" style="color:var(--danger);">Не вдалося завантажити: '+((err&&err.message)||'невідома помилка')+'</p>';
   }
 };
 window.closeStudentCard=function(){document.getElementById('student-card-modal').style.display='none';};
@@ -4090,7 +4092,7 @@ window.openParentEditor=async function(safeEmail){
     // напис-заглушка, і людина не знала б, зламалося чи просто повільно.
     console.error("common.js → pe-fields", err);
     const _b=document.getElementById("pe-fields");
-    if(_b)_b.innerHTML='<p class="empty-msg" style="color:var(--red);">Не вдалося завантажити: '+((err&&err.message)||'невідома помилка')+'</p>';
+    if(_b)_b.innerHTML='<p class="empty-msg" style="color:var(--danger);">Не вдалося завантажити: '+((err&&err.message)||'невідома помилка')+'</p>';
   }
 };
 // Прив'язані діти: можна змінити роль або відв'язати
@@ -4732,7 +4734,7 @@ window.logoutUser=async function(){
   signOut(auth);
 };
 // ══════════ ADMIN DASHBOARD ══════════
-window.loadAdminDashboard=async function(){try{const date=document.getElementById('global-date').value;document.getElementById('a-att-header').innerText=`🚨 Відсутні (${date.split('-').reverse().slice(0,2).join('.')})`;const wd=getWeekDates(date);let wl=0,wa=0,hw=0,com=0;const _lo=wd[0]<date?wd[0]:date, _hi=wd[wd.length-1]>date?wd[wd.length-1]:date;const[_ad,_hd,_cd]=await Promise.all([getSchoolRange('attendance',_lo,_hi),getSchoolRange('homeworks',_lo,_hi),getSchoolRange('comments',_lo,_hi)]);const s={exists:()=>true,val:()=>_ad},hwS={exists:()=>true,val:()=>_hd},comS={exists:()=>true,val:()=>_cd};let h='';if(s.exists()){const d=s.val();for(let i=1;i<=11;i++){const c=`class_${i}`;if(d[c]&&d[c][date])for(let st in d[c][date]){const slots=d[c][date][st];for(let sk in slots){const r=slots[sk];if(r?.status){const bc=r.status==='late'?'badge-late':'badge-absent';const markerIcon=r.markedBy==='teacher'?'👨‍🏫':(r.markedBy==='student'?'🎒':(r.markedBy==='administrator'?'🛡️':'👪'));h+=`<li style="margin-bottom:9px;border-bottom:1px solid var(--line-soft);padding-bottom:4px;"><span style="font-size:.72rem;background:var(--teal);color:#fff;padding:2px 5px;border-radius:4px;margin-right:4px;">${i} Кл</span> <b>${escHtml(stuName(c, st))}</b> <span class="badge ${bc}">${r.status==='late'?'Запізнення':'Відсутність'}</span> <span style="font-size:.72rem;color:var(--ink-3);">${escHtml(formatAttendanceSlotLabel(sk))} ${markerIcon}</span></li>`;}}}
+window.loadAdminDashboard=async function(){try{const date=document.getElementById('global-date').value;document.getElementById('a-att-header').innerText=`🚨 Відсутні (${date.split('-').reverse().slice(0,2).join('.')})`;const wd=getWeekDates(date);let wl=0,wa=0,hw=0,com=0;const _lo=wd[0]<date?wd[0]:date, _hi=wd[wd.length-1]>date?wd[wd.length-1]:date;const[_ad,_hd,_cd]=await Promise.all([getSchoolRange('attendance',_lo,_hi),getSchoolRange('homeworks',_lo,_hi),getSchoolRange('comments',_lo,_hi)]);const s={exists:()=>true,val:()=>_ad},hwS={exists:()=>true,val:()=>_hd},comS={exists:()=>true,val:()=>_cd};let h='';if(s.exists()){const d=s.val();for(let i=1;i<=11;i++){const c=`class_${i}`;if(d[c]&&d[c][date])for(let st in d[c][date]){const slots=d[c][date][st];for(let sk in slots){const r=slots[sk];if(r?.status){const bc=r.status==='late'?'badge-late':'badge-absent';const markerIcon=r.markedBy==='teacher'?'👨‍🏫':(r.markedBy==='student'?'🎒':(r.markedBy==='administrator'?'🛡️':'👪'));h+=`<li style="margin-bottom:9px;border-bottom:1px solid var(--line-soft);padding-bottom:4px;"><span style="font-size:.72rem;background:var(--brand-ink);color:#fff;padding:2px 5px;border-radius:4px;margin-right:4px;">${i} Кл</span> <b>${escHtml(stuName(c, st))}</b> <span class="badge ${bc}">${r.status==='late'?'Запізнення':'Відсутність'}</span> <span style="font-size:.72rem;color:var(--ink-3);">${escHtml(formatAttendanceSlotLabel(sk))} ${markerIcon}</span></li>`;}}}
     // Week counters (same aggregation the director dashboard does)
     if(d[c])wd.forEach(w=>{if(d[c][w]&&typeof d[c][w]==='object')Object.values(d[c][w]).forEach(slots=>{if(slots&&typeof slots==='object')Object.values(slots).forEach(r=>{if(r?.status==='late')wl++;else if(r?.status==='absent')wa++;});});});
   }}
@@ -4794,7 +4796,7 @@ window.loadAdminBellSchedule=async function(){
     // напис-заглушка, і людина не знала б, зламалося чи просто повільно.
     console.error("common.js → a-bell-view", err);
     const _b=document.getElementById("a-bell-view");
-    if(_b)_b.innerHTML='<p class="empty-msg" style="color:var(--red);">Не вдалося завантажити: '+((err&&err.message)||'невідома помилка')+'</p>';
+    if(_b)_b.innerHTML='<p class="empty-msg" style="color:var(--danger);">Не вдалося завантажити: '+((err&&err.message)||'невідома помилка')+'</p>';
   }
 };
 window.loadAdminAcademicYear=async function(){
@@ -4820,7 +4822,7 @@ window.loadAdminAcademicYear=async function(){
     // напис-заглушка, і людина не знала б, зламалося чи просто повільно.
     console.error("common.js → a-academic-view", err);
     const _b=document.getElementById("a-academic-view");
-    if(_b)_b.innerHTML='<p class="empty-msg" style="color:var(--red);">Не вдалося завантажити: '+((err&&err.message)||'невідома помилка')+'</p>';
+    if(_b)_b.innerHTML='<p class="empty-msg" style="color:var(--danger);">Не вдалося завантажити: '+((err&&err.message)||'невідома помилка')+'</p>';
   }
 };
 // ══════════ UNIFIED INBOX (Chat) ══════════
