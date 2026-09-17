@@ -565,12 +565,42 @@
               text-align:center;vertical-align:middle;box-shadow:0 0 0 2px rgba(255,255,255,.6);}
     .chat-dot.show{display:inline-block;animation:dotPop .25s ease;}
     @keyframes dotPop{from{transform:scale(.5);opacity:0}to{transform:scale(1);opacity:1}}
+    /* СПИСОК ВІДСУТНІХ — ДВІ КОЛОНКИ.
+       Кнопка «Зняти» стояла всередині речення, і на телефоні текст обтікав
+       її як звичайне слово: ім'я, бейдж, причина й кнопка змішувалися в
+       кашу. Тепер зліва колонка про учня (вона й тільки вона стискається),
+       справа кнопка сталої ширини. min-width:0 обов'язковий — без нього
+       довге прізвище розпирає рядок і виштовхує кнопку за екран. */
+    .att-item{display:flex;align-items:flex-start;gap:10px;list-style:none;
+      margin:0 0 7px 0;padding:0 0 7px 0;border-bottom:1px dashed #eee;}
+    .att-item:last-child{border-bottom:none;margin-bottom:0;}
+    .att-item-main{flex:1;min-width:0;}
+    .att-item-head{display:flex;flex-wrap:wrap;align-items:center;gap:4px 7px;
+      overflow-wrap:anywhere;line-height:1.25;}
+    /* Трохи дрібніше за картку: так «Прізвище Імʼя» і бейдж стають в один
+       рядок на екрані 390px, і список не розтягується вдвічі. */
+    .att-item-head b{font-size:.9rem;}
+    .att-item-head .badge{font-size:.68rem;padding:2px 7px;}
+    .att-item-sub{font-size:.75rem;color:#777;margin-top:3px;overflow-wrap:anywhere;
+      line-height:1.35;}
+    .att-item-who{font-size:.7rem;color:#9aa;margin-top:2px;overflow-wrap:anywhere;}
+    /* Смуга «це не сьогоднішній день». Майбутній — червоним: саме він
+       коштував чотирьох помилкових відміток. */
+    .att-daywarn{display:block;padding:7px 10px;border-radius:8px;margin-bottom:7px;
+      font-size:.78rem;line-height:1.35;}
+    .att-daywarn.future{background:#fdecea;color:#c0392b;border:1px solid #f5b7b1;}
+    .att-daywarn.past{background:#eef3fb;color:#2c5282;border:1px solid #cfdcf0;}
+    .att-cls{font-size:.72rem;background:var(--teal);color:#fff;padding:2px 6px;
+      border-radius:4px;white-space:nowrap;}
     /* Скасування відмітки відсутності — навмисно скромна кнопка: дія
        рідкісна й виправна, тиснути її щодня ніхто не має. */
-    .att-undo{display:inline-block;background:#fff;border:1px solid var(--red,#e74c3c);
-      color:var(--red,#e74c3c);border-radius:7px;padding:2px 9px;font-size:.74rem;
-      font-weight:700;cursor:pointer;width:auto;margin:0 0 0 6px;vertical-align:middle;}
+    .att-undo{flex:0 0 auto;align-self:center;display:inline-block;background:#fff;
+      border:1px solid var(--red,#e74c3c);color:var(--red,#e74c3c);border-radius:8px;
+      padding:6px 12px;font-size:.75rem;font-weight:700;cursor:pointer;width:auto;
+      margin:0;white-space:nowrap;min-height:32px;}
     .att-undo:hover{background:var(--red,#e74c3c);color:#fff;}
+    /* У статусі родини кнопка живе в потоці тексту — там їй потрібен відступ */
+    #p-att-status .att-undo,#s-att-status .att-undo{margin-left:7px;vertical-align:middle;}
     .att-undo-note{display:block;font-size:.72rem;color:#888;font-weight:400;margin-top:3px;}
     /* Підказка «відмічено на іншому уроці» у швидкому журналі */
     .qj-elsewhere{display:block;font-size:.68rem;color:#c0392b;font-weight:600;}
