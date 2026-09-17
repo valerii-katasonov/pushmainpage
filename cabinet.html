@@ -4605,6 +4605,20 @@
     <label id="cell-subj-label">Назва предмету:</label>
     <select id="cell-subj-ua" style="margin-bottom:2px;border-color:var(--blue);" onchange="handleSubjInput()"></select>
     <div id="cell-subj-hint" style="font-size:.7rem;color:#e65100;margin-bottom:9px;text-align:left;"></div>
+    <!-- ЧЕРГУВАННЯ. Один слот, два предмети по черзі: тиждень одне, тиждень
+         інше. Пара збирається з ДВОХ окремих назв, а не з одного рядка через
+         косу: коса риска заборонена в ключах Firebase, тож предмет із нею не
+         заводиться в каталог і лишається без учителя та без журналу.
+         Зберігається так само, як його пише імпорт із Word (див. saveMatrixCell). -->
+    <label id="cell-alt-toggle" style="display:flex;align-items:center;gap:7px;font-weight:600;color:#8e44ad;margin:0 0 7px;cursor:pointer;">
+      <input type="checkbox" id="cell-alt-on" onchange="toggleCellAlt()" style="width:auto;margin:0;">
+      <span>🔁 Уроки чергуються (тиждень одне, тиждень інше)</span>
+    </label>
+    <div id="cell-alt-wrapper" style="display:none;margin-bottom:9px;">
+      <label>Другий предмет:</label>
+      <select id="cell-subj-alt" style="margin-bottom:2px;border-color:#8e44ad;" onchange="handleAltSubjInput()"></select>
+      <div id="cell-alt-hint" style="font-size:.7rem;color:#8e44ad;margin-top:5px;text-align:left;line-height:1.35;"></div>
+    </div>
     <div id="cell-extra-wrapper" style="display:none;margin-bottom:9px;background:#f0f8ff;padding:14px;border-radius:12px;border:1px solid var(--blue);text-align:left;">
       <label style="color:#2980b9;margin-top:0;">Формат:</label>
       <select id="cell-extra-format" style="border-color:var(--blue);margin-bottom:9px;" onchange="toggleExtraFormat()"><option value="group">👥 Групове</option><option value="individual">👤 Індивідуальне</option></select>
