@@ -4,7 +4,7 @@
 // grade reactions, and retake-request submission (the review side
 // lives in teacher.js).
 // ═══════════════════════════════════════════════════════════════
-import { ref, set, get, child } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+import { ref, set, get, child, remove } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { db, getActiveClass, currentUserData, STICKER_GOAL, stickerGoal, getWeekDates, displayGrade, gradeClass6, showToast, renderHwItem, renderHwList, dayKeys, dayNamesUA, isBreakItem, parseTimeRange, fmtTimeRange, localDateString, formatAttendanceSlotLabel, renderGradeFormulaInfo, escJs, escHtml, safeUrl, renderBirthdays, stuName, stuId, auth, normalizeChildren, gradesFromMirror, mondayOf, altChoiceFor, resolveAlt, classHourItem, insertAtTime, minsOf, subjKey, planKeyWith, notifyEvent, getStudentDir, resolveStudentKey } from './common.js';
 import { ACTIVE_YEAR } from './director.js';
 import { renderParentMenu } from './kitchen.js';
@@ -50,6 +50,83 @@ async function checkTeacherAttendanceAlert(role='parent'){
     banner.style.display='block';
   } else banner.style.display='none';
 }
+
+
+// ══════════ ПОВІДОМЛЕННЯ РОДИНИ ПРО ВІДСУТНІСТЬ ══════════
+//
+// Батько натиснув «Відсутній» не на ту дитину, не той день або просто
+// передумав — дитина все-таки пішла до школи. Досі зняти це було нічим:
+// запис лежав у базі, кухня не рахувала обід, учитель бачив «не буде».
+// Лишалося дзвонити до школи.
+//
+// СКАСУВАТИ МОЖНА ЛИШЕ СЬОГОДНІШНЄ і лише СВОЄ повідомлення. Вчорашній
+// пропуск — це вже факт відвідуваності, і переписувати його родина не
+// може; відмітку вчителя родина не чіпає взагалі. Обидва випадки
+// прибирає класний керівник або директор, у них обмеження за днем немає.
+export async function renderSelfAttStatus(role='parent'){
+  const prefix=role==='student'?'s':'p';
+  const el=document.getElementById(`${prefix}-att-status`);
+  if(!el||!currentUserData)return;
+  const cls=getActiveClass(), date=document.getElementById('global-date').value;
+  let rec=null;
+  try{
+    const dir=await getStudentDir(cls).catch(()=>null);
+    const key=resolveStudentKey(dir,currentUserData.studentId,currentUserData.studentName).key
+      ||currentUserData.studentId||currentUserData.studentName;
+    const snap=await get(child(ref(db),`attendance/${cls}/${date}/${key}/${SELF_REPORT_SLOT}`));
+    rec=snap.exists()?snap.val():null;
+  }catch(e){ el.style.display='none'; return; }
+  if(!rec||!rec.status){ el.style.display='none'; return; }
+  const mine=rec.markedBy==='parent'||rec.markedBy==='student';
+  const label=rec.status==='late'?'Запізнення':'Відсутність';
+  const today=date===localDateString;
+  el.style.display='block';
+  el.innerHTML=`${mine?'✅ Ви повідомили':'🚨 Відмітила школа'}: ${escHtml(label)}`
+    +(rec.reason?` (${escHtml(rec.reason)})`:'')
+    +(mine&&today
+      ? ` <button type="button" class="att-undo" onclick="cancelSelfAttendance('${escJs(role)}')">Скасувати</button>`
+      : mine ? ` <span class="att-undo-note">Скасувати можна лише того самого дня — зверніться до класного керівника.</span>` : '');
+}
+window.renderSelfAttStatus=renderSelfAttStatus;
+
+window.cancelSelfAttendance=async function(role='parent'){
+  const cls=getActiveClass(), date=document.getElementById('global-date').value;
+  if(date!==localDateString)
+    return alert('Скасувати повідомлення можна лише того самого дня. Зверніться до класного керівника.');
+  let key='', rec=null;
+  try{
+    const dir=await getStudentDir(cls).catch(()=>null);
+    key=resolveStudentKey(dir,currentUserData.studentId,currentUserData.studentName).key
+      ||currentUserData.studentId||currentUserData.studentName;
+    // Перечитуємо ДО питання: за цей час відмітку могла поставити школа,
+    // і стерти чужу відмітку родина не має права.
+    const snap=await get(child(ref(db),`attendance/${cls}/${date}/${key}/${SELF_REPORT_SLOT}`));
+    rec=snap.exists()?snap.val():null;
+  }catch(e){
+    return alert('Не вдалося прочитати відмітку: '+e.message+'\n\nСпробуйте ще раз або зателефонуйте до школи.');
+  }
+  if(!rec){ await renderSelfAttStatus(role); return; }
+  if(!(rec.markedBy==='parent'||rec.markedBy==='student'))
+    return alert('Цю відмітку поставила школа — скасувати її може класний керівник або директор.');
+  // ОБІД САМ НЕ ПОВЕРНЕТЬСЯ. Кухня рахує обіди до 9:00, сніданки до 7:00,
+  // підвечірки до 12:00. Якщо родина передумала пізніше, на екрані обід
+  // знову зʼявиться, а порції на кухні не буде — і дитина прийде до школи
+  // голодною, бо всі вважали, що питання закрите.
+  const note=(window.absenceClearedMealNote&&window.absenceClearedMealNote(date,rec.ts))||'';
+  if(!confirm('Скасувати повідомлення про відсутність? Школа побачить, що дитина буде.'
+      +(note?`\n\n${note}`:'')))return;
+  try{
+    await remove(ref(db,`attendance/${cls}/${date}/${key}/${SELF_REPORT_SLOT}`));
+  }catch(e){
+    return alert('Не вдалося скасувати: '+e.message+'\n\nСпробуйте ще раз або зателефонуйте до школи.');
+  }
+  await renderSelfAttStatus(role);
+  checkTeacherAttendanceAlert(role);
+  if(window.invalidateMealBalance) window.invalidateMealBalance();
+  if(window.renderParentMenu) window.renderParentMenu();
+  if(note) alert('Повідомлення скасовано.\n\n'+note);
+  else showToast('✓ Повідомлення скасовано — харчування на сьогодні повернуто');
+};
 
 // ══════════ DYNAMIC SCHEDULE (PARENT/STUDENT) ══════════
 // Розклад дня для кабінету родини.
@@ -674,7 +751,7 @@ export function loadParentDashboard(){
   // Stickers
   get(child(ref(db),`stickers/${cls}/${currentUserData.studentId||currentUserData.studentName}`)).then(snap=>{const goal=stickerGoal(cls);const data=snap.exists()?snap.val():{};const cnt=Object.keys(data).length;const pct=Math.min((cnt/goal)*100,100);document.getElementById('p-ribbon-progress').style.width=pct+'%';const history=document.getElementById('p-sticker-history');if(history)history.innerHTML=renderStickerHistory(data);document.getElementById('p-ribbon-count').innerText=`${cnt} / ${goal} наліпок до призу`;const me=document.getElementById('p-ribbon-msg');if(me){if(cnt>=goal){me.innerText="🎉 Ура! Ти досяг мети!";confetti({particleCount:150,spread:80,origin:{y:0.5}});}else me.innerText='';}}).catch(()=>document.getElementById('p-ribbon-count').innerText="Помилка");
   // Att status (self-report confirmation lives under the "all" slot)
-  get(child(ref(db),`attendance/${cls}/${date}/${currentUserData.studentId||currentUserData.studentName}/${SELF_REPORT_SLOT}`)).then(snap=>{const se=document.getElementById('p-att-status');if(snap.exists()){const d=snap.val();se.innerText=`✅ Ви повідомили: ${d.status==='late'?'Запізнення':'Відсутність'} (${d.reason})`;se.style.display='block';}else se.style.display='none';});
+  renderSelfAttStatus('parent');
   // Persistent alert if the teacher marked something the parent hasn't acknowledged
   checkTeacherAttendanceAlert('parent');
   // Calendar (holidays/breaks/exams) + bell schedule — Phase 3
@@ -961,14 +1038,13 @@ window.submitAttendance=async function(role='parent'){
     const dir=await getStudentDir(cls);
     const {key}=resolveStudentKey(dir,profile.studentId,profile.studentName);
     if(!key)throw new Error('Учня не знайдено у списку класу');
-    await set(ref(db,`attendance/${cls}/${date}/${key}/${SELF_REPORT_SLOT}`),{status:type,reason,markedBy});
+    await set(ref(db,`attendance/${cls}/${date}/${key}/${SELF_REPORT_SLOT}`),{status:type,reason,markedBy,ts:Date.now()});
   }catch(e){
     alert('Не вдалося надіслати: '+e.message+'\n\nШкола цього не побачила. Спробуйте ще раз або зателефонуйте.');
     return;
   }
   const el=document.getElementById(`${prefix}-att-status`);
-  el.innerText=`✅ ${type==='late'?'Запізнення':'Відсутність'} (${reason})`;
-  el.style.display='block';
+  await renderSelfAttStatus(role);
   checkTeacherAttendanceAlert(role);
   const result=await notifyEvent('attendance_report',{class:cls,studentName:profile.studentName,value:type});
   // ЩО ТУТ ВАЖЛИВО СКАЗАТИ БАТЬКОВІ, А ЩО НІ.
@@ -981,7 +1057,7 @@ window.submitAttendance=async function(role='parent'){
   // зробити, і зрозуміти з цього, чи попередив він школу, теж не може.
   // Технічна причина (мертві токени після переїзду на новий домен) —
   // наша робота, а не його.
-  el.innerText += result.ok && result.sent
+  el.innerHTML += result.ok && result.sent
     ? ' · Учителям надіслано сповіщення.'
     : ' · Учитель побачить це в кабінеті.';
   // А от у консоль пишемо все як є: без цього мертві підписки знову
@@ -1001,7 +1077,7 @@ export function loadStudentDashboard(){
   fillAttReasons('s');
   if(window.schedule){renderDynamicSchedule('student');if(parentLessonInterval)clearInterval(parentLessonInterval);parentLessonInterval=setInterval(()=>renderDynamicSchedule('student'),30000);}
   get(child(ref(db),`stickers/${cls}/${currentUserData.studentId||currentUserData.studentName}`)).then(snap=>{const goal=stickerGoal(cls);const data=snap.exists()?snap.val():{};const cnt=Object.keys(data).length;const pct=Math.min((cnt/goal)*100,100);document.getElementById('s-ribbon-progress').style.width=pct+'%';const history=document.getElementById('s-sticker-history');if(history)history.innerHTML=renderStickerHistory(data);document.getElementById('s-ribbon-count').innerText=`${cnt} / ${goal} наліпок до призу`;});
-  get(child(ref(db),`attendance/${cls}/${date}/${currentUserData.studentId||currentUserData.studentName}/${SELF_REPORT_SLOT}`)).then(snap=>{const se=document.getElementById('s-att-status');if(snap.exists()){const d=snap.val();se.innerText=`✅ Повідомлено: ${d.status==='late'?'Запізнення':'Відсутність'} (${d.reason})`;se.style.display='block';}else se.style.display='none';});
+  renderSelfAttStatus('student');
   checkTeacherAttendanceAlert('student');
   renderParentCalendar('student');loadParentBellSchedule('student');
   renderHwList(cls,date,'s-daily-hw-list');
