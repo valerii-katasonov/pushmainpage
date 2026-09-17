@@ -474,7 +474,7 @@ export async function loadWeekMenu(){
       </summary>
       <div class="k-day-body">
         ${MENU_FIELDS.map(f=>`
-          <label for="km-${date}-${f.k}" ${f.danger?'style="color:var(--red);"':(f.snack?'style="color:#6a1b9a;"':(f.meal?'style="color:#e65100;"':(f.choice?'style="color:#8e44ad;"':'')))}>${escHtml(f.label)}</label>
+          <label for="km-${date}-${f.k}" ${f.danger?'style="color:var(--red);"':(f.snack?'style="color:var(--brand-deep);"':(f.meal?'style="color:var(--warn);"':(f.choice?'style="color:var(--brand-deep);"':'')))}>${escHtml(f.label)}</label>
           <input type="text" id="km-${date}-${f.k}" value="${escHtml(m[f.k]||'')}" placeholder="${escHtml(f.ph)}">`).join('')}
         <p class="k-day-ts">${m.ts?`Оновлено ${new Date(m.ts).toLocaleString('uk-UA')}`:'Ще не публікувалося'}</p>
         ${snaps[i].exists() ? `<button type="button" class="k-day-clear" onclick="clearMenuDay('${escJs(date)}')">🗑 Прибрати меню цього дня</button>` : ''}
@@ -938,7 +938,7 @@ window.loadClassOrders = async function(){
       ${renderMealOrphanList(orphanKeys(overrides,plans,stSnap.val()).map(o=>({...o,cls,kind:o.what==='постійні налаштування'?'plan':'day'})),{[cls]:resolutionSnap.val()||{}},!resolutionSnap.readError)}
       <p class="k-ord-hint">Натисніть ✓ або —, щоб додати чи зняти порцію вручну; кожна колонка А/Б перемикає свій варіант.
         Це для тих, хто звернувся вже після дедлайну; дію буде записано в журнал.</p>
-      <button onclick="exportClassOrders()" style="background:#e0f7fa;color:#00838f;border:1px solid #80deea;margin-top:11px;">📄 Вивантажити CSV</button>`;
+      <button onclick="exportClassOrders()" style="background:var(--brand-soft);color:var(--brand-ink);border:1px solid var(--brand-line);margin-top:11px;">📄 Вивантажити CSV</button>`;
   }catch(e){
     box.innerHTML = `<p style="color:red;font-size:.8rem;">Помилка: ${escHtml(e.message)}</p>`;
   }
@@ -1345,7 +1345,7 @@ window.loadMealStats = async function(){
               .map(r=>`<tr><td>${escHtml(r.name)}</td><td>${r.cls}</td><td>${r.brk||''}</td><td><b>${r.lunch}</b></td><td>${r.snack||''}</td>${
                 money$?`<td>${taMoney(r.cost.total)} zł</td>`:''}</tr>`).join('')}
       </tbody></table></div>
-      <button onclick="exportMealStats()" style="background:#e0f7fa;color:#00838f;border:1px solid #80deea;margin-top:11px;">📄 Вивантажити CSV</button>`;
+      <button onclick="exportMealStats()" style="background:var(--brand-soft);color:var(--brand-ink);border:1px solid var(--brand-line);margin-top:11px;">📄 Вивантажити CSV</button>`;
     window.__mealStats = { from, to, rows };
   }catch(e){
     box.innerHTML = `<p style="color:red;font-size:.8rem;">Помилка: ${escHtml(e.message)}</p>`;
