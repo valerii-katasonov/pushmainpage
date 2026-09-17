@@ -618,23 +618,219 @@ window.saveCurriculumToDb=async function(){
   }catch(e){alert("Помилка: "+e.message);}
   btn.disabled=false;btn.innerText="💾 Зберегти план у систему";
 };
-async function loadCurrentCurriculumDisplay(){
-  const cls=currClass();
-  const snap=await get(ref(db,`curriculum_plans/${cls}`));
-  const el=document.getElementById('current-curriculum-display');
-  if(!el)return;
-  if(!snap.exists()){el.innerHTML='<p class="empty-msg">План ще не завантажено.</p>';return;}
-  const data=snap.val();let html='';
-  for(let sk in data){
-    const meta=data[sk].meta||{};
-    const topics=data[sk].topics||{};
-    const total=Object.keys(topics).length;
-    let coveredCount=0;
-    for(let id in topics) if((topics[id].hoursUsed||0)>=topics[id].plannedHours) coveredCount++;
-    html+=`<div style="padding:7px 0;border-bottom:1px dashed var(--line);"><b>${meta.subject||sk}</b> — ${coveredCount}/${total} тем пройдено <span style="color:var(--ink-3);font-size:.72rem;">(${meta.year||''})</span></div>`;
-  }
-  el.innerHTML=html||'<p class="empty-msg">План порожній.</p>';
+// ══════════════════════════════════════════════════════════════════
+//  УСІ ПЛАНИ КЛАСУ — І ТІ, ЩО ЗАГУБИЛИСЯ
+// ══════════════════════════════════════════════════════════════════
+//
+// ЩО БУЛО НЕ ТАК. План лежить у вузлі curriculum_plans/{клас}/{ключ},
+// де ключ — це назва предмета. Картка показувала план ЛИШЕ обраного
+// предмета, тобто дивилася в базу за ключем, який будує розклад. Якщо
+// ключ у бази й ключ у розкладу розійшлися — план ставав невидимим.
+//
+// Розходяться вони легко й непомітно:
+//   • предмет у розкладі перейменували («Я досліджую світ» → «ЯДС»);
+//   • у назві з’явився зайвий пробіл або інший регістр;
+//   • план залили, коли предмета в розкладі ще не було;
+//   • предмет став парою чергування, і назва змінилася на подвійну.
+//
+// Учитель у всіх цих випадках бачив порожній список тем і був упевнений,
+// що плану немає — хоч він лежав поруч, під сусіднім ключем. Дістати
+// його з інтерфейсу було нічим.
+//
+// ЩО ТЕПЕР. Показуємо ВСІ вузли класу й проти кожного кажемо, чи дивиться
+// на нього хоч один урок розкладу. Той, на кого не дивиться ніхто, —
+// загубленець: до нього одразу дається вибір предмета й кнопка зв’язати.
+//
+// ЧОМУ ЗВ’ЯЗУЄМО ПСЕВДОНІМОМ, А НЕ ПЕРЕЙМЕНОВУЄМО ВУЗОЛ. Перейменування
+// пересуває теми разом із витраченими годинами й може накрити план, що
+// вже лежить під новим ключем. Псевдонім нічого не пересуває: він лише
+// каже, де шукати, і знімається так само одним рухом.
+const YEARKEY = /^\d{4}-\d{4}$/;
+
+function planStats(node){
+  const topics = (node && node.topics) || {};
+  const ids = Object.keys(topics);
+  let covered = 0, hours = 0;
+  ids.forEach(id => {
+    const t = topics[id] || {};
+    hours += Number(t.plannedHours) || 0;
+    if((t.hoursUsed || 0) >= t.plannedHours) covered++;
+  });
+  return { total: ids.length, covered, hours };
 }
+
+let plansCache = { cls:'', plans:{}, sched:[], keys:[] };
+
+export async function loadCurrentCurriculumDisplay(){
+  const el = document.getElementById('current-curriculum-display');
+  if(!el) return;
+  const cls = currClass();
+  el.innerHTML = '<p class="empty-msg">Читаю плани…</p>';
+  let plans = {}, sched = [];
+  try{
+    const [pSnap, sSnap] = await Promise.all([
+      get(ref(db, `curriculum_plans/${cls}`)),
+      get(ref(db, `schedules/${cls}`))
+    ]);
+    plans = pSnap.exists() ? (pSnap.val() || {}) : {};
+    sched = sSnap.exists() ? subjectsFromSchedule((sSnap.val() || {}).lessons) : [];
+  }catch(e){
+    el.innerHTML = `<p class="empty-msg" style="color:var(--danger);">Не вдалося прочитати плани: ${escHtml(e.message)}</p>`;
+    return;
+  }
+  // Псевдоніми читаємо примусово: могли щойно змінитися тут же, у картці.
+  await loadAliases(cls, true);
+  plansCache = { cls, plans, sched, keys:[] };
+  renderAllPlans();
+}
+
+function renderAllPlans(){
+  const el = document.getElementById('current-curriculum-display');
+  const badge = document.getElementById('pl-orphan-count');
+  if(!el) return;
+  const { cls, plans, sched } = plansCache;
+
+  // Хто з розкладу на який вузол дивиться. Саме тут і застосовуються
+  // псевдоніми: предмет «Matematyka» може вказувати на план «Математика».
+  const watchers = new Map();
+  sched.forEach(subj => {
+    const pk = planKey(cls, subj);
+    if(!watchers.has(pk)) watchers.set(pk, []);
+    watchers.get(pk).push(subj);
+  });
+
+  // ЧОМУ В РОЗМІТЦІ НОМЕР, А НЕ САМ КЛЮЧ. Ключ плану — це назва предмета
+  // з пробілами («Українська мова»), а id елемента з пробілом невалідний
+  // і в атрибут onclick такий рядок теж лізе погано. Номер у списку не
+  // має ні пробілів, ні лапок.
+  const keys = Object.keys(plans).filter(k => !YEARKEY.test(k))
+    .sort((a, b) => a.localeCompare(b, 'uk'));
+  plansCache.keys = keys;
+  if(!keys.length){
+    el.innerHTML = '<p class="empty-msg">У цього класу ще немає жодного плану.</p>';
+    if(badge) badge.style.display = 'none';
+    return;
+  }
+
+  // Предмети розкладу, у яких власного плану ще немає, — саме їм
+  // найімовірніше й належить загубленець.
+  const free = sched.filter(s => !plans[planKey(cls, s)]);
+
+  let lost = 0;
+  const rows = keys.map((pk, i) => {
+    const node = plans[pk] || {};
+    const meta = node.meta || {};
+    const st = planStats(node);
+    const who = watchers.get(pk) || [];
+    const name = meta.subject || pk;
+    const orphan = who.length === 0;
+    if(orphan) lost++;
+
+    const badgeHtml = orphan
+      ? '<span class="pl-badge pl-lost">⚠️ нічий</span>'
+      : (who.length > 1 || who[0] !== name
+          ? `<span class="pl-badge pl-shared">🔗 ${escHtml(who.join(', '))}</span>`
+          : '<span class="pl-badge pl-ok">✅ у розкладі</span>');
+
+    const bits = [`${st.covered}/${st.total} тем пройдено`];
+    if(st.hours) bits.push(`${st.hours} год.`);
+    if(meta.year) bits.push(`рік у файлі: ${escHtml(meta.year)}`);
+    if(meta.uploadedAt) bits.push(`залито ${escHtml(meta.uploadedAt)}`);
+
+    // Ключ показуємо завжди: саме в ньому видно зайвий пробіл або старий
+    // правопис, а це найчастіша причина розходження.
+    const keyHtml = (subjKey(name) === pk) ? '' : ` <span class="pl-key">${escHtml(pk)}</span>`;
+
+    let fix = '';
+    if(orphan){
+      // ЧОМУ СПОЧАТКУ ПРЕДМЕТИ БЕЗ ПЛАНУ. Зв’язати загубленця з предметом,
+      // у якого вже є свій план, — майже завжди помилка: розкладовий
+      // предмет після цього почне показувати чужі теми, а власні зникнуть.
+      const opts = (free.length ? free : sched);
+      fix = `<div class="pl-fix">
+        ${opts.length
+          ? `<select id="pl-pick-${i}"><option value="">— предмет із розкладу —</option>
+               ${opts.map(s => `<option value="${escHtml(s)}">${escHtml(s)}</option>`).join('')}</select>
+             <button type="button" onclick="bindLostPlan(${i})">Прив’язати</button>`
+          : '<span class="pl-note">У розкладі цього класу немає жодного предмета — спершу опублікуйте розклад.</span>'}
+        <button type="button" class="pl-drop" onclick="dropLostPlan(${i})">Видалити</button>
+        <div class="pl-note">На цей план не дивиться жоден урок розкладу, тож у журналі його тем не видно.
+          ${free.length ? '' : 'У всіх предметів розкладу вже є власний план — перевірте, чи це не стара копія.'}</div>
+      </div>`;
+    }
+    return `<div class="pl-row">
+      <div class="pl-main"><div class="pl-name">${escHtml(name)}${keyHtml}</div>
+        <div class="pl-sub">${bits.join(' · ')}</div></div>
+      ${badgeHtml}${fix}</div>`;
+  });
+
+  el.innerHTML = rows.join('');
+  if(badge){
+    badge.style.display = lost ? 'inline-block' : 'none';
+    badge.textContent = lost ? `загублених: ${lost}` : '';
+  }
+}
+
+// Зв’язати загубленця з предметом розкладу.
+//
+// Псевдонім читається як «предмет X бере план предмета Y», тому пишемо
+// його для ОБРАНОГО предмета, а значенням ставимо назву, під якою план
+// лежить. Якщо ключ вузла не виводиться з цієї назви (план колись залили
+// під зіпсованою назвою), псевдонім такий зв’язок висловити не може —
+// тоді чесно кажемо про це, а не робимо вигляд, що зв’язали.
+// Розділ перечитується при розгортанні: плани міняє не лише ця картка —
+// їх заливають з інших екранів і з іншого пристрою.
+window.reloadClassPlans = loadCurrentCurriculumDisplay;
+
+window.bindLostPlan = async function(i){
+  const { cls, plans, keys } = plansCache;
+  const pk = keys[i];
+  if(!pk) return;
+  const sel = document.getElementById(`pl-pick-${i}`);
+  const subj = sel ? sel.value.trim() : '';
+  if(!subj) return alert('Оберіть предмет розкладу, якому належить цей план.');
+  const node = plans[pk] || {};
+  const target = String((node.meta && node.meta.subject) || '').trim();
+  if(!target || subjKey(target) !== pk){
+    alert('Цей план лежить під ключем, який не виводиться з його назви предмета.\n\n'
+      + `Ключ у базі: ${pk}\nНазва в плані: ${target || '(немає)'}\n\n`
+      + 'Зв’язати псевдонімом не вийде — перезалийте файл, обравши потрібний предмет.');
+    return;
+  }
+  if(subjKey(subj) === pk){
+    alert('Цей предмет і так указує на цей план. Якщо тем не видно — перевірте, '
+      + 'чи збігається назва предмета в розкладі точно, включно з пробілами.');
+    return;
+  }
+  if(!confirm(`«${subj}» братиме теми з плану «${target}».\n\nПродовжити?`)) return;
+  try{
+    await set(ref(db, `curriculum_aliases/${cls}/${subjKey(subj)}`), target);
+    await logAction('curriculum_bind', { cls, subject: subj, plan: target });
+    showToast(`✅ «${subj}» тепер бере план «${target}»`);
+    await loadCurrentCurriculumDisplay();
+    populateTopicSelector();
+  }catch(e){ alert('Не вдалося зв’язати: ' + e.message); }
+};
+
+// Видалення — окремо й із числом тем у питанні: план на сто рядків
+// відновлювати нема звідки, портал версій не зберігає.
+window.dropLostPlan = async function(i){
+  const { cls, plans, keys } = plansCache;
+  const pk = keys[i];
+  if(!pk) return;
+  const node = plans[pk] || {};
+  const st = planStats(node);
+  const name = (node.meta && node.meta.subject) || pk;
+  if(!confirm(`Видалити план «${name}» (${st.total} тем)?\n\n`
+    + 'Відновити його можна буде лише повторним завантаженням файлу.')) return;
+  try{
+    await remove(ref(db, `curriculum_plans/${cls}/${pk}`));
+    await logAction('curriculum_drop', { cls, plan: name, topics: st.total });
+    showToast('🗑️ План видалено');
+    await loadCurrentCurriculumDisplay();
+  }catch(e){ alert('Не вдалося видалити: ' + e.message); }
+};
+
 // ═══════ Topic Selector (Phase 6: up to 2 topics/lesson) ═══════
 // Native <select> replaced with a custom div-list dropdown per slot (1 and 2) —
 // background-color on <option> isn't reliably stylable cross-browser, so each
@@ -1477,7 +1673,7 @@ export async function renderPlanEditor(){
     planOrderSnapshot();
   }catch(e){
     console.error('Редактор плану:', e);
-    box.innerHTML = `<p class="empty-msg" style="color:var(--red);">Не вдалося завантажити: ${escHtml(e.message||'')}</p>`;
+    box.innerHTML = `<p class="empty-msg" style="color:var(--danger);">Не вдалося завантажити: ${escHtml(e.message||'')}</p>`;
   }
 }
 window.renderPlanEditor = renderPlanEditor;
