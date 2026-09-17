@@ -296,14 +296,14 @@ window.renderRenameSubject = async function(){
     ${scope === 'all'
       ? '<div class="rs-warn">Обрано <b>всю школу</b>. Якщо в різних класах предмет свідомо називається по-різному, оберіть конкретний клас — інакше зміните всі одразу.</div>'
       : `<div class="rs-warn">Обрано <b>лише ${escHtml(scope.replace('class_',''))} клас</b>. В інших класах назва лишиться старою.</div>`}
-    <label style="font-size:.8rem;color:#ad1457;font-weight:600;">Який предмет перейменувати:</label>
+    <label style="font-size:.8rem;color:var(--accent-ink);font-weight:600;">Який предмет перейменувати:</label>
     <select id="rs-old" style="margin-top:4px;">
       ${names.map(n => `<option value="${escHtml(n)}">${escHtml(n)}</option>`).join('')}
     </select>
-    <label style="font-size:.8rem;color:#ad1457;font-weight:600;">Нова назва:</label>
+    <label style="font-size:.8rem;color:var(--accent-ink);font-weight:600;">Нова назва:</label>
     <input type="text" id="rs-new" placeholder="Наприклад: Англійська мова" style="margin-top:4px;">
     <button type="button" id="rs-check" onclick="checkRenameSubject()"
-            style="background:#ad1457;color:#fff;margin-top:11px;">🔍 Порахувати, що зміниться</button>
+            style="background:var(--accent-ink);color:#fff;margin-top:11px;">🔍 Порахувати, що зміниться</button>
     <div id="rs-report"></div>`;
 };
 
@@ -438,7 +438,7 @@ window.checkRenameSubject = async function(){
     ${totalMerged ? `<div class="rs-warn">У ${totalMerged} гілках уже є записи з новою назвою — вони зіллються, а не перезапишуться.</div>` : ''}
     <div class="rs-warn">Перенесення не можна відмінити однією кнопкою. Переконайтеся, що назва написана правильно.</div>
     <button type="button" id="rs-go" onclick="applyRenameSubject()"
-            style="background:#c62828;color:#fff;margin-top:11px;">
+            style="background:var(--danger);color:#fff;margin-top:11px;">
       Перейменувати «${escHtml(oldName)}» → «${escHtml(newName)}»</button>`;
 };
 
