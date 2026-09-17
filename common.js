@@ -1798,6 +1798,34 @@ export function formatAttendanceSlotLabel(slotKey){
 // Collapses a student's slot-map for one day into a single {status,reason}
 // summary (absent takes priority over late) — used where UI space only
 // allows one badge per day (e.g. the journal table cell).
+// ВІДМІТКА ДЛЯ КОНКРЕТНОГО СТОВПЦЯ ЖУРНАЛУ.
+//
+// У журналі «Н» показувалося ЛИШЕ в першому стовпці дня, і це була
+// зведена відмітка за весь день. Наслідків два, і обидва бачили вчителі:
+//   • відсутність на ВЕСЬ день у дні з двома уроками того самого предмета
+//     зʼявлялася тільки на першому — на другому порожньо, ніби дитина
+//     прийшла;
+//   • відмітка на конкретному уроці не зʼявлялася взагалі, якщо цей урок
+//     не був першим стовпцем.
+//
+// Правило просте: «весь день» стосується кожного уроку; відмітка за
+// номером уроку — лише свого стовпця. Чужий урок у цьому журналі не
+// показуємо взагалі: це журнал предмета, а не табель відвідуваності.
+export function attendanceForLesson(slotsObj, lessonKey){
+  if(!slotsObj) return null;
+  const pick = [];
+  for(const sk in slotsObj){
+    const r = slotsObj[sk];
+    if(!r || !r.status) continue;
+    if(sk === 'all' || (lessonKey && String(sk) === String(lessonKey))) pick.push(r);
+  }
+  if(!pick.length) return null;
+  // Відсутність важливіша за запізнення: якщо є обидві, показуємо гіршу.
+  const chosen = pick.find(r => r.status === 'absent') || pick[0];
+  const reasons = [...new Set(pick.map(r => r.reason).filter(Boolean))];
+  return { status: chosen.status, reason: reasons.join('; ') };
+}
+
 export function summarizeAttendanceSlots(slotsObj){
   if(!slotsObj)return null;
   const entries=Object.values(slotsObj).filter(r=>r&&r.status);
