@@ -3584,6 +3584,26 @@ window.renderBirthdays=renderBirthdays;
 // Знімаємо ТІЛЬКИ слот 'all'. Відмітки за окремими уроками лишаються за
 // тим, хто веде урок: класний керівник не має мовчки стирати те, що
 // поставив предметник на своєму занятті.
+// Хто і коли поставив відмітку — одним рядком під нею.
+//
+// Це питання виникає першим, щойно хтось бачить у списку дитину, яка
+// насправді в школі. Досі відповіді не було ніде, крім журналу дій, куди
+// ще треба здогадатися зайти й знайти потрібний рядок серед півтори
+// тисячі. У старих записів автора немає — тоді показуємо хоч роль.
+export function attendanceAuthor(rec){
+  if(!rec) return '';
+  const who = rec.by || (rec.markedBy==='parent' ? 'батьки'
+            : rec.markedBy==='student' ? 'учень'
+            : rec.markedBy==='administrator' ? 'адміністрація'
+            : rec.markedBy==='teacher' ? 'учитель' : '');
+  const ts = Number(rec.ts) || 0;
+  if(!ts) return who;
+  const d = new Date(ts);
+  const p2 = n => String(n).padStart(2,'0');
+  return `${who}, ${p2(d.getDate())}.${p2(d.getMonth()+1)} ${p2(d.getHours())}:${p2(d.getMinutes())}`;
+}
+window.attendanceAuthor = attendanceAuthor;
+
 export function canClearDayAbsence(role){
   return ['class_teacher','director','administrator'].includes(role) || isMasterTeacher(role);
 }
@@ -4638,7 +4658,7 @@ window.adminMarkAbsent=async function(){
   if(!cls||!st)return alert('Оберіть клас та учня!');
   const date=document.getElementById('global-date').value;
   const status=reason==='запізнення'?'late':'absent';
-  await set(ref(db,`attendance/${cls}/${date}/${st}/all`),{status,reason,markedBy:'administrator',ts:Date.now()});
+  await set(ref(db,`attendance/${cls}/${date}/${st}/all`),{status,reason,markedBy:'administrator',by:(currentUserData&&currentUserData.email)||'',ts:Date.now()});
   showToast(`✅ ${stuName(cls, st)}: ${status==='late'?'запізнення':'відсутність'} (${reason})`);
   loadAdminDashboard();
 };
