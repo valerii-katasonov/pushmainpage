@@ -587,6 +587,14 @@
        на нього просто не натиснуть. */
     /* «Показати ще» в журналі дій — на всю ширину, щоб не шукати її очима
        після трьохсот рядків. */
+    /* Дата відмітки: поки це сьогодні — звичайне поле; щойно інший день —
+       поле саме стає помітним. Напис помічають не всі, колір помічають усі. */
+    #t-att-date.other-day{border:2px solid var(--red,#e74c3c)!important;background:#fff5f4;
+      font-weight:700;color:#c0392b;}
+    #t-att-date.future-day{border:2px solid #c0392b!important;background:#fdecea;}
+    .att-today-btn{flex:0 0 auto;margin:0;width:auto;padding:9px 12px;font-size:.8rem;
+      background:#fff;border:1px solid var(--red,#e74c3c);color:var(--red,#e74c3c);
+      border-radius:9px;font-weight:700;cursor:pointer;white-space:nowrap;}
     .audit-more{display:block;width:100%;margin:10px 0 0 0;padding:10px;
       background:#fff;border:1px dashed var(--purple,#7b1fa2);color:var(--purple,#7b1fa2);
       border-radius:9px;font-size:.82rem;font-weight:700;cursor:pointer;}
@@ -3528,17 +3536,24 @@
       <!-- Відвідуваність -->
       <div class="data-card" style="border-left-color:var(--red);background:#fdfbfb;margin-top:0;">
         <h4 id="t-att-header" style="margin-top:0;color:var(--red);">🚨 Відвідуваність</h4>
-        <p id="t-att-hint" style="margin:-6px 0 8px 0;font-size:.74rem;color:#90a4ae;line-height:1.4;">
-          Щоб відмітити за інший день — змініть дату вгорі сторінки, у полі «📅 Оберіть дату».</p>
+        <p id="t-att-hint" style="margin:-6px 0 8px 0;font-size:.74rem;color:#90a4ae;line-height:1.4;"></p>
         <ul id="t-attendance-list" class="list-dash" style="list-style:none;padding-left:0;"><li class="empty-msg">Завантаження...</li></ul>
-        <div id="t-mark-absent-block" style="margin-top:13px;display:flex;gap:8px;border-top:1px dashed #f5b7b1;padding-top:13px;">
-          <select id="t-mark-absent-student" style="flex:1;margin-top:0;border:1px solid #f5b7b1;"><option value="">Учень...</option></select>
-          <select id="t-mark-absent-lesson" style="flex:1;margin-top:0;border:1px solid #f5b7b1;"><option value="all">Увесь день</option></select>
-          <select id="t-mark-absent-reason" style="flex:1;margin-top:0;border:1px solid #f5b7b1;">
+        <!-- ДАТА СТОЇТЬ ПОРУЧ ІЗ КНОПКОЮ, А НЕ ВГОРІ СТОРІНКИ.
+             Поле дати жило окремо від цього блоку, і його легко було
+             лишити на іншому дні: 16 вересня класний керівник відмітив
+             чотирьох дітей, а відмітки лягли на 17-те. Тепер день видно
+             там, де натискають «Відмітити», і він же керує списком вище —
+             двох різних дат на одному екрані бути не може. -->
+        <div id="t-mark-absent-block" style="margin-top:13px;display:flex;gap:8px;flex-wrap:wrap;border-top:1px dashed #f5b7b1;padding-top:13px;">
+          <input type="date" id="t-att-date" onchange="setAttDate(this.value)"
+                 style="flex:1 1 100%;min-width:0;margin-top:0;border:1px solid #f5b7b1;">
+          <select id="t-mark-absent-student" style="flex:1 1 140px;min-width:0;margin-top:0;border:1px solid #f5b7b1;"><option value="">Учень...</option></select>
+          <select id="t-mark-absent-lesson" style="flex:1 1 140px;min-width:0;margin-top:0;border:1px solid #f5b7b1;"><option value="all">Увесь день</option></select>
+          <select id="t-mark-absent-reason" style="flex:1 1 140px;min-width:0;margin-top:0;border:1px solid #f5b7b1;">
             <option value="Відмічено вчителем">Без причини</option><option value="через хворобу">Хвороба</option>
             <option value="за сімейними обставинами">Сімейні обставини</option><option value="запізнення">Запізнення</option>
           </select>
-          <button onclick="teacherMarkAbsent()" style="margin-top:0;background:var(--red);color:#fff;width:auto;padding:9px 13px;font-size:.85rem;">Відмітити</button>
+          <button onclick="teacherMarkAbsent()" style="flex:0 0 auto;margin-top:0;background:var(--red);color:#fff;width:auto;padding:9px 15px;font-size:.85rem;">Відмітити</button>
         </div>
       </div>
       <!-- Реакції + Підсумки + Перездачі -->
