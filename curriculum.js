@@ -8,7 +8,7 @@
 // XLSX comes from the CDN <script> tag already in <head> (global).
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, update, remove } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, auth, getActiveClass, currentUserData, showToast, localDateString, escHtml, teacherAccessMatrix, withTeachingRole, syncStaffCard, isBreakItem, isTeacherRole, isMasterTeacher, escJs, logAction, subjKey, planKeyWith, emailKey } from './common.js';
+import { db, auth, getActiveClass, currentUserData, showToast, localDateString, escHtml, teacherAccessMatrix, withTeachingRole, syncStaffCard, isBreakItem, isTeacherRole, isMasterTeacher, escJs, logAction, subjKey, planKeyWith, emailKey, expandAltSubjects, splitAltName } from './common.js';
 
 let parsedCurriculum=null;        // після парсингу xlsx
 const MAX_TOPICS=250;             // стеля на предмет: захист від зіпсованого файлу
@@ -741,6 +741,17 @@ function renderAllPlans(){
     // правопис, а це найчастіша причина розходження.
     const keyHtml = (subjKey(name) === pk) ? '' : ` <span class="pl-key">${escHtml(pk)}</span>`;
 
+    // ЧОМУ САМЕ ЦЕЙ ПЛАН НІЧИЙ — здогадуватися не має сенсу, найчастіші
+    // дві причини розрізняються за самою назвою.
+    const pair = splitAltName(name);
+    const why = pair
+      ? `Це план ПАРИ ЧЕРГУВАННЯ «${escHtml(pair[0])}» і «${escHtml(pair[1])}». `
+        + 'У журналі кожен предмет пари шукає власний план, тому цей не відкривається в жодному з двох. '
+        + 'Якщо файл насправді для одного предмета — перезалийте його, обравши цей предмет у списку вище '
+        + '(тепер там обидві назви окремо). Прив’язка покаже цей самий план обраному предмету — разом із темами другого.'
+      : 'На цей план не дивиться жоден урок розкладу, тож у журналі його тем не видно.'
+        + (free.length ? '' : ' У всіх предметів розкладу вже є власний план — перевірте, чи це не стара копія.');
+
     let fix = '';
     if(orphan){
       // ЧОМУ СПОЧАТКУ ПРЕДМЕТИ БЕЗ ПЛАНУ. Зв’язати загубленця з предметом,
@@ -754,8 +765,7 @@ function renderAllPlans(){
              <button type="button" onclick="bindLostPlan(${i})">Прив’язати</button>`
           : '<span class="pl-note">У розкладі цього класу немає жодного предмета — спершу опублікуйте розклад.</span>'}
         <button type="button" class="pl-drop" onclick="dropLostPlan(${i})">Видалити</button>
-        <div class="pl-note">На цей план не дивиться жоден урок розкладу, тож у журналі його тем не видно.
-          ${free.length ? '' : 'У всіх предметів розкладу вже є власний план — перевірте, чи це не стара копія.'}</div>
+        <div class="pl-note">${why}</div>
       </div>`;
     }
     return `<div class="pl-row">
@@ -1209,9 +1219,25 @@ export function subjectsFromSchedule(lessons){
         // Перерви й обіди — не предмети. Ознака одна на весь застосунок:
         // isBreakItem у common.js.
         if(isBreakItem(item)) return;
-        const raw = item.subject && item.subject.ua ? item.subject.ua : item.subject;
-        const name = typeof raw === 'string' ? raw.trim() : '';
-        if(name) out.add(name);
+        // ПАРУ ЧЕРГУВАННЯ РОЗГОРТАЄМО В ДВА ПРЕДМЕТИ.
+        //
+        // «Музичне мистецтво / Фізичне виховання» — це не предмет, а два
+        // предмети в одному слоті. Раніше сюди потрапляла комбінована
+        // назва, і саме вона опинялася в списку «Предмет, до якого
+        // належить план». Учитель обирав її — бо іншого в списку не було —
+        // і план лягав у вузол із ключем «Музичне мистецтво _ Фізичне
+        // виховання».
+        //
+        // А журнал шукає теми за предметом УРОКУ, тобто за однією з двох
+        // назв (див. updateSubjectList у common.js — там той самий
+        // expandAltSubjects). Ключі не збігалися ніколи, і теми не
+        // підвантажувалися взагалі: план є, у картці він позначений як
+        // збережений, а на уроці порожньо.
+        //
+        // Той самий розворот уже робить каталог предметів класу, тож
+        // призначення вчителів і матриця доступу теж живуть за двома
+        // окремими назвами — і тільки цей список випадав із правила.
+        expandAltSubjects(item).forEach(n => { const t = String(n).trim(); if(t) out.add(t); });
       });
     });
   });
