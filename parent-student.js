@@ -21,7 +21,7 @@ export function stickerEntries(data){
 }
 export function renderStickerHistory(data){
   const rows=stickerEntries(data);if(!rows.length)return '';
-  return `<div style="font-size:.76rem;color:#66551b;"><b>Останні наліпки</b>${rows.map(x=>`<div style="padding:7px 0;border-bottom:1px solid #f3e4aa;"><span style="color:#8a7528;">${escHtml(x.date.split('-').reverse().join('.'))}</span> · <b>${escHtml(x.subject)}</b>${x.reason?`<br><span>${escHtml(x.reason)}</span>`:''}</div>`).join('')}</div>`;
+  return `<div style="font-size:.76rem;color:var(--warn);"><b>Останні наліпки</b>${rows.map(x=>`<div style="padding:7px 0;border-bottom:1px solid var(--warn-line);"><span style="color:var(--warn);">${escHtml(x.date.split('-').reverse().join('.'))}</span> · <b>${escHtml(x.subject)}</b>${x.reason?`<br><span>${escHtml(x.reason)}</span>`:''}</div>`).join('')}</div>`;
 }
 
 const SELF_REPORT_SLOT='all';
@@ -673,19 +673,19 @@ window.showParentCalDayDetails=async function(role,ds){
     dd.innerHTML=`<p class="empty-msg" style="color:var(--red);">Не вдалося завантажити подробиці: ${escHtml(e.message||e.code||'відмова')}</p>`;
     return;
   }
-  let h=`<h4 style="margin-top:0;color:#8e44ad;border-bottom:1px dashed #ce93d8;padding-bottom:9px;">${ds.split('-').reverse().join('.')}</h4>`;
+  let h=`<h4 style="margin-top:0;color:var(--brand-deep);border-bottom:1px dashed var(--brand-deep);padding-bottom:9px;">${ds.split('-').reverse().join('.')}</h4>`;
   let hasAny=false;
   if(examsSnap.exists()){
     hasAny=true;
-    h+=`<p style="margin:8px 0;"><b style="color:#6a1b9a;">📝 Контрольні:</b> ${Object.keys(examsSnap.val()).join(', ')}</p>`;
+    h+=`<p style="margin:8px 0;"><b style="color:var(--brand-deep);">📝 Контрольні:</b> ${Object.keys(examsSnap.val()).join(', ')}</p>`;
   }
   if(holidaysSnap.exists()){
     const hs=Object.values(holidaysSnap.val()).filter(hd=>hd.date===ds&&(!hd.calendarType||hd.calendarType===myCalendarType)&&classMatches(hd.classes));
-    if(hs.length>0){hasAny=true;h+=`<p style="margin:8px 0;"><b style="color:#2e7d32;">🎉 Свято:</b> ${hs.map(hd=>hd.title).join(', ')}</p>`;}
+    if(hs.length>0){hasAny=true;h+=`<p style="margin:8px 0;"><b style="color:var(--ok);">🎉 Свято:</b> ${hs.map(hd=>hd.title).join(', ')}</p>`;}
   }
   if(breaksSnap.exists()){
     const bs=Object.values(breaksSnap.val()).filter(b=>b.startDate<=ds&&b.endDate>=ds&&classMatches(b.classes));
-    if(bs.length>0){hasAny=true;bs.forEach(b=>{h+=`<p style="margin:8px 0;"><b style="color:#01579b;">🏖️ Канікули:</b> ${b.title} (${b.startDate.split('-').reverse().join('.')} — ${b.endDate.split('-').reverse().join('.')})</p>`;});}
+    if(bs.length>0){hasAny=true;bs.forEach(b=>{h+=`<p style="margin:8px 0;"><b style="color:var(--brand-deep);">🏖️ Канікули:</b> ${b.title} (${b.startDate.split('-').reverse().join('.')} — ${b.endDate.split('-').reverse().join('.')})</p>`;});}
   }
   if(!hasAny)h+='<p class="empty-msg">Подій немає.</p>';
   dd.innerHTML=h;
@@ -710,7 +710,7 @@ window.loadParentBellSchedule=async function(role='parent'){
   const d=snap.val();
   const rows=Object.keys(d).sort((a,b)=>(parseInt(a)||0)-(parseInt(b)||0)).map(k=>d[k]);
   let h='<table style="width:100%;border-collapse:collapse;font-size:.85rem;">';
-  rows.forEach(s=>{h+=`<tr><td style="padding:5px 8px;border-bottom:1px solid #eee;font-weight:700;color:#3949ab;">${s.number}</td><td style="padding:5px 8px;border-bottom:1px solid #eee;">${s.start} — ${s.end}</td></tr>`;});
+  rows.forEach(s=>{h+=`<tr><td style="padding:5px 8px;border-bottom:1px solid var(--line-soft);font-weight:700;color:var(--brand-deep);">${s.number}</td><td style="padding:5px 8px;border-bottom:1px solid var(--line-soft);">${s.start} — ${s.end}</td></tr>`;});
   h+='</table>';
   container.innerHTML=h;
 };
@@ -800,7 +800,7 @@ async function renderDashboardBehavior(prefix,cls,date){
     for(const day of getWeekDates(date)){
       if(!data[day]||mineOf(data[day])===undefined)continue;
       const value=mineOf(data[day]);
-      html+=`<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px dashed #c5cae9;font-size:.85rem;"><span style="color:#888;flex:1;">${escHtml(day.split('-').slice(1).reverse().join('.'))}</span><span class="g-cell ${gradeClass6(value)}" style="padding:3px 8px;">${escHtml(displayGrade(String(value),cls))}</span></div>`;
+      html+=`<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px dashed var(--line);font-size:.85rem;"><span style="color:var(--ink-3);flex:1;">${escHtml(day.split('-').slice(1).reverse().join('.'))}</span><span class="g-cell ${gradeClass6(value)}" style="padding:3px 8px;">${escHtml(displayGrade(String(value),cls))}</span></div>`;
     }
     box.innerHTML=html||'<p class="empty-msg" style="font-size:.82rem;">Оцінок поведінки немає.</p>';
   }catch(e){
@@ -1288,14 +1288,14 @@ async function caRenderLocal(){
     box.innerHTML = `
       <label for="ca-nick" style="margin-top:0;">Нікнейм</label>
       <input type="text" id="ca-nick" placeholder="напр. olya2015" autocapitalize="none" spellcheck="false">
-      <p style="font-size:.75rem;color:#90a4ae;margin:3px 0 0 0;">Латинські літери, цифри, крапка або дефіс. Це і буде логін.</p>
-      <label for="ca-mail">Пошта дитини <span style="font-weight:400;color:#90a4ae;">— за бажанням</span></label>
+      <p style="font-size:.75rem;color:var(--ink-3);margin:3px 0 0 0;">Латинські літери, цифри, крапка або дефіс. Це і буде логін.</p>
+      <label for="ca-mail">Пошта дитини <span style="font-weight:400;color:var(--ink-3);">— за бажанням</span></label>
       <input type="email" id="ca-mail" value="${escHtml(known)}"
              placeholder="можна залишити порожнім" autocapitalize="none" spellcheck="false">
-      ${known ? `<p style="font-size:.75rem;color:#00838f;margin:3px 0 0 0;">Цю адресу школа вже записала дитині. Входу за нею ще немає — залиште її, щоб не заводити другу.</p>` : ''}
+      ${known ? `<p style="font-size:.75rem;color:var(--brand-ink);margin:3px 0 0 0;">Цю адресу школа вже записала дитині. Входу за нею ще немає — залиште її, щоб не заводити другу.</p>` : ''}
       <label for="ca-pass">Пароль</label>
       <input type="text" id="ca-pass" placeholder="мінімум 6 символів" autocapitalize="none">
-      <p style="font-size:.75rem;color:#90a4ae;margin:3px 0 0 0;">Пароль видно навмисне — ви маєте продиктувати його дитині.</p>
+      <p style="font-size:.75rem;color:var(--ink-3);margin:3px 0 0 0;">Пароль видно навмисне — ви маєте продиктувати його дитині.</p>
       <button onclick="caCreate()" id="ca-create"
               style="background:var(--teal);color:#fff;padding:11px;margin-top:13px;width:100%;">Створити доступ</button>
       <div id="ca-msg" style="display:none;font-size:.82rem;margin-top:9px;"></div>`;
@@ -1304,19 +1304,19 @@ async function caRenderLocal(){
 
   const off = !!acc.disabled;
   box.innerHTML = `
-    <div class="data-card" style="border-left-color:${off ? '#b0bec5' : 'var(--green)'};margin-top:0;">
-      <div style="font-size:.8rem;color:#78909c;">Логін дитини</div>
+    <div class="data-card" style="border-left-color:${off ? 'var(--line)' : 'var(--ok)'};margin-top:0;">
+      <div style="font-size:.8rem;color:var(--ink-3);">Логін дитини</div>
       <div style="font-weight:700;font-size:.98rem;word-break:break-all;">${escHtml(acc.nick || acc.login)}</div>
-      ${acc.email ? `<div style="font-size:.78rem;color:#78909c;margin-top:3px;">Вхід за поштою — пароль можна відновити листом</div>` : ''}
+      ${acc.email ? `<div style="font-size:.78rem;color:var(--ink-3);margin-top:3px;">Вхід за поштою — пароль можна відновити листом</div>` : ''}
       <div style="font-size:.78rem;color:${off ? 'var(--red)' : 'var(--green)'};font-weight:700;margin-top:5px;">
         ${off ? 'Доступ вимкнено' : 'Доступ активний'}</div>
     </div>
     <label for="ca-newpass" style="margin-top:13px;">Новий пароль</label>
     <input type="text" id="ca-newpass" placeholder="мінімум 6 символів" autocapitalize="none">
     <button onclick="caPassword()" id="ca-pwd"
-            style="background:#00838f;color:#fff;padding:11px;margin-top:9px;width:100%;">Змінити пароль</button>
+            style="background:var(--brand-ink);color:#fff;padding:11px;margin-top:9px;width:100%;">Змінити пароль</button>
     <button onclick="caDisable(${off ? 'false' : 'true'})" id="ca-toggle"
-            style="background:${off ? 'var(--green)' : '#eceff1'};color:${off ? '#fff' : '#546e7a'};padding:10px;margin-top:7px;width:100%;">
+            style="background:${off ? 'var(--ok)' : 'var(--line-soft)'};color:${off ? '#fff' : 'var(--ink-2)'};padding:10px;margin-top:7px;width:100%;">
       ${off ? 'Увімкнути доступ' : 'Вимкнути доступ'}</button>
     <div id="ca-msg" style="display:none;font-size:.82rem;margin-top:9px;"></div>`;
 };
