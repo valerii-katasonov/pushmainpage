@@ -1,4 +1,4 @@
- // ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
 // mastery.js — освоєння тем за тренажерами.
 //
 // НАВІЩО. Ігри вже пишуть результат кожної дитини, але побачити його
@@ -144,7 +144,7 @@ function renderRows(box, data, subject, classNum){
       + `«${escHtml(subject)}» ще немає.</p>`;
     return;
   }
-  const head = `<p style="font-size:.8rem;color:#555;margin:0 0 10px 0;">`
+  const head = `<p style="font-size:.8rem;color:var(--ink-2);margin:0 0 10px 0;">`
     + `У класі <b>${data.rosterSize}</b> ${data.rosterSize === 1 ? 'учень' : 'учнів'} · `
     + `тренажери охоплюють <b>${data.coveredTopics}</b> ${data.coveredTopics === 1 ? 'тему' : 'тем'} `
     + `із ${data.planTotal} у плані</p>`;
@@ -159,22 +159,22 @@ function renderRows(box, data, subject, classNum){
       ? `<b>${r.played}</b> з ${r.rosterSize} грали · середній кращий <b>${pctLabel(r.avgPct)}</b>`
         + ` · впоралися (≥${Math.round(MASTERED_AT*100)}%) <b>${r.mastered}</b>`
         + (r.lastAt ? ` · востаннє ${dateLabel(r.lastAt)}` : '')
-      : `<span style="color:#888;">ще ніхто з класу не заходив</span>`;
+      : `<span style="color:var(--ink-3);">ще ніхто з класу не заходив</span>`;
     const width = r.played ? Math.round((r.played / Math.max(1, r.rosterSize)) * 100) : 0;
-    return `<div style="background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:11px;margin-bottom:8px;">
+    return `<div style="background:#fff;border:1px solid var(--line);border-radius:10px;padding:11px;margin-bottom:8px;">
       <div style="font-weight:700;font-size:.9rem;">${r.icon} ${escHtml(r.title)}</div>
-      <div style="font-size:.74rem;color:#777;margin:2px 0 6px 0;">${topics}</div>
-      <div style="font-size:.8rem;color:#333;">${body}</div>
-      <div style="height:6px;background:#eee;border-radius:4px;margin-top:7px;overflow:hidden;">
-        <div style="height:100%;width:${width}%;background:var(--teal,#26a69a);"></div>
+      <div style="font-size:.74rem;color:var(--ink-2);margin:2px 0 6px 0;">${topics}</div>
+      <div style="font-size:.8rem;color:var(--ink);">${body}</div>
+      <div style="height:6px;background:var(--line-soft);border-radius:4px;margin-top:7px;overflow:hidden;">
+        <div style="height:100%;width:${width}%;background:var(--teal,var(--brand));"></div>
       </div>
     </div>`;
   }).join('');
 
   const gaps = data.gaps.length
-    ? `<details style="margin-top:10px;"><summary style="cursor:pointer;font-size:.8rem;color:#7f8c8d;font-weight:600;">
+    ? `<details style="margin-top:10px;"><summary style="cursor:pointer;font-size:.8rem;color:var(--ink-3);font-weight:600;">
          Теми без тренажера: ${data.gaps.length}</summary>
-       <p style="font-size:.76rem;color:#666;margin:7px 0 0 0;">`
+       <p style="font-size:.76rem;color:var(--ink-2);margin:7px 0 0 0;">`
       + data.gaps.slice(0,25).map(t => `${t.lessonNum}. ${escHtml(t.title)}`).join('<br>')
       + (data.gaps.length > 25 ? `<br>…ще ${data.gaps.length - 25}` : '')
       + `</p></details>`
