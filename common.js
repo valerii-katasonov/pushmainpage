@@ -2646,7 +2646,7 @@ async function initUserSession(){
 // Читаємо завжди лише потрібний місяць і лише останні N записів.
 export const AUDIT_LABELS={
   grade_set:'📊 Оцінку виставлено', grade_del:'📊 Оцінку видалено',
-  attendance:'🚨 Відмітка відсутності', comment:'💬 Коментар учню',
+  attendance:'🚨 Відмітка відсутності', attendance_clear:'✅ Відмітку за день знято', comment:'💬 Коментар учню',
   homework:'📚 Домашнє завдання', behavior:'🤝 Оцінка поведінки',
   student_add:'👨‍🎓 Учня додано', student_rename:'✏️ Учня перейменовано',
   student_del:'🗑 Учня прибрано', student_transfer:'↔️ Учня переведено',
@@ -3570,6 +3570,55 @@ export async function renderBirthdays(containerId,cls,selfName){
   }
 }
 window.renderBirthdays=renderBirthdays;
+
+// ══════════════════════════════════════════════════════════════════
+//  ЗНЯТИ ВІДМІТКУ «ВІДСУТНІЙ ВЕСЬ ДЕНЬ»
+// ══════════════════════════════════════════════════════════════════
+//
+// Родина може скасувати лише СВОЄ повідомлення і лише того самого дня —
+// вчорашній пропуск це вже факт відвідуваності. Але помилки трапляються й
+// пізніше: батько відмітив не ту дитину, дитина все-таки прийшла, учитель
+// поставив відсутність не тому. Тоді потрібен хтось із правом виправити
+// заднім числом, і це класний керівник або директор.
+//
+// Знімаємо ТІЛЬКИ слот 'all'. Відмітки за окремими уроками лишаються за
+// тим, хто веде урок: класний керівник не має мовчки стирати те, що
+// поставив предметник на своєму занятті.
+export function canClearDayAbsence(role){
+  return ['class_teacher','director','administrator'].includes(role) || isMasterTeacher(role);
+}
+export async function clearDayAbsence(cls, sid, date, afterwards){
+  if(!canClearDayAbsence(currentUserData?.role))
+    return alert('Знімати відмітку за день може класний керівник або директор.');
+  const who = stuName(cls, sid) || sid;
+  // ХАРЧУВАННЯ НЕ ПОВЕРТАЄТЬСЯ САМЕ СОБОЮ.
+  //
+  // Зняли відмітку — у кабінеті обід знову є, бо все рахується від плану.
+  // Але кухня свій підрахунок на цей день уже зробила, і порції немає.
+  // Сказати про це треба ДО натискання, а не після: інакше людина
+  // вирішить, що все владнала, і дитина прийде в школу без обіду.
+  let rec = null;
+  try{
+    const snap = await get(child(ref(db), `attendance/${cls}/${date}/${sid}/all`));
+    rec = snap.exists() ? snap.val() : null;
+  }catch(e){ /* не читається — попередимо обережніше, без часу відмітки */ }
+  const note = (window.absenceClearedMealNote && window.absenceClearedMealNote(date, rec && rec.ts)) || '';
+  if(!confirm(`Зняти відмітку «відсутній весь день» — ${who}, ${String(date).split('-').reverse().join('.')}?`
+      + (note ? `\n\n${note}` : '')))
+    return;
+  try{
+    await remove(ref(db, `attendance/${cls}/${date}/${sid}/all`));
+  }catch(e){
+    return alert('Не вдалося зняти відмітку: ' + e.message);
+  }
+  logAction('attendance_clear', { cls, target: who, date, value: 'весь день' });
+  if(note) alert('Відмітку знято.\n\n' + note);
+  else showToast('✓ Відмітку знято — харчування на цей день повернуто');
+  if(typeof afterwards === 'function') afterwards();
+}
+window.clearDayAbsence = clearDayAbsence;
+window.canClearDayAbsence = canClearDayAbsence;
+
 // ══════════════════════════════════════════════════════════════════
 //  ТАБЕЛЬ УЧНЯ (PDF)
 // ══════════════════════════════════════════════════════════════════
@@ -4589,7 +4638,7 @@ window.adminMarkAbsent=async function(){
   if(!cls||!st)return alert('Оберіть клас та учня!');
   const date=document.getElementById('global-date').value;
   const status=reason==='запізнення'?'late':'absent';
-  await set(ref(db,`attendance/${cls}/${date}/${st}/all`),{status,reason,markedBy:'administrator'});
+  await set(ref(db,`attendance/${cls}/${date}/${st}/all`),{status,reason,markedBy:'administrator',ts:Date.now()});
   showToast(`✅ ${stuName(cls, st)}: ${status==='late'?'запізнення':'відсутність'} (${reason})`);
   loadAdminDashboard();
 };
