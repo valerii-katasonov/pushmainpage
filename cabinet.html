@@ -1292,11 +1292,11 @@
        наліплені на екран. Тому вони зникають самі, не покладаючись на
        те, що їх хтось прикриє. */
     @keyframes bsDuckL{
-      from{opacity:1;transform:translateX(-116%) translateY(-104%) rotate(-5deg);}
+      from{opacity:1;transform:translateX(-114%) translateY(-104%) rotate(-5deg);}
       55%{opacity:1;}
       to{opacity:0;transform:translateX(-50%) translateY(0) rotate(0deg);}}
     @keyframes bsDuckR{
-      from{opacity:1;transform:translateX(16%) translateY(-104%) rotate(5deg);}
+      from{opacity:1;transform:translateX(14%) translateY(-104%) rotate(5deg);}
       55%{opacity:1;}
       to{opacity:0;transform:translateX(-50%) translateY(0) rotate(0deg);}}
     @keyframes bsLogoOut{from{opacity:1;transform:scale(1);}to{opacity:0;transform:scale(1.14);}}
@@ -1325,14 +1325,15 @@
        й стискаються разом. Плюс немає ризику, що п'ятий кадр приїде
        пізніше за шостий і махання смикнеться.
 
-       У КОЖНОГО КАДРУ ПРОЗОРІ ПОЛЯ ПО 24 px З БОКІВ — і це не про
-       композицію. Ширина кадру на екрані майже ніколи не виходить цілим
-       числом пристроєвих пікселів, тож із краю визирала смужка сусіднього
-       кадру: шматок лапи збоку від персонажа. Поля дають браузеру куди
-       промахнутися — на місці смужки тепер порожньо. Тому й aspect-ratio
-       нижче рахується з повної ширини кадру (240), а не з фігури. */
+       У КОЖНОГО КАДРУ ПРОЗОРІ ПОЛЯ З БОКІВ, і це не про композицію.
+       У вихідному аркуші персонажі подекуди заходять у сусідню клітинку
+       й навіть торкаються одне одного — рівний поділ на вісім різав
+       сусідову лапу просто в кадр, і вона визирала збоку від персонажа.
+       Тому спрайт зібраний не по сітці, а по проміжках між фігурами, і
+       кожен кадр має порожні поля. aspect-ratio нижче рахується з повної
+       ширини кадру (248), а не з фігури. */
     .bs-pk{position:absolute;z-index:1;bottom:6%;left:50%;
-      height:68%;aspect-ratio:240/312;
+      height:68%;aspect-ratio:248/312;
       background-repeat:no-repeat;background-size:800% 100%;background-position:0 0;
       filter:drop-shadow(0 8px 18px rgba(0,0,0,.45));
       opacity:0;transform:translateX(-50%);}
@@ -1344,8 +1345,8 @@
                 bsWave .72s steps(8,jump-none) 1.07s infinite;}
     /* Синій махає лівою лапою, рожева — правою: кожен у свій бік від
        логотипа. Тому дзеркалити нічого не треба — картинки вже такі. */
-    @keyframes bsUpL{to{opacity:1;transform:translateX(-116%) translateY(-104%) rotate(-5deg);}}
-    @keyframes bsUpR{to{opacity:1;transform:translateX(16%) translateY(-104%) rotate(5deg);}}
+    @keyframes bsUpL{to{opacity:1;transform:translateX(-114%) translateY(-104%) rotate(-5deg);}}
+    @keyframes bsUpR{to{opacity:1;transform:translateX(14%) translateY(-104%) rotate(5deg);}}
     /* ЧОМУ jump-none, А НЕ ЗВИЧАЙНИЙ steps(8).
        Кадр k стоїть на позиції k/7 (крайній лівий — 0%, крайній правий —
        100%), а steps(8) ділить відрізок на восьмі частини й дає k/8.
@@ -1357,8 +1358,8 @@
        а вихід — звичайне затухання без ховання й наближення. */
     @media (prefers-reduced-motion: reduce){
       .bs-pk{animation:none!important;opacity:1;background-position-x:50%;}
-      .bs-pk-l{transform:translateX(-116%) translateY(-104%);}
-      .bs-pk-r{transform:translateX(16%) translateY(-104%);}
+      .bs-pk-l{transform:translateX(-114%) translateY(-104%);}
+      .bs-pk-r{transform:translateX(14%) translateY(-104%);}
       #boot-splash.bs-off{animation:bsBackdropOut .3s linear both;}
       #boot-splash.bs-off .bs-logo,#boot-splash.bs-off .bs-pk-l,
       #boot-splash.bs-off .bs-pk-r{animation:none!important;}
@@ -1376,7 +1377,7 @@
     .pk-bubble b{display:block;font-size:.92rem;font-weight:800;color:var(--brand-deep);line-height:1.2;}
     .pk-bubble span{display:block;font-size:.76rem;color:var(--ink-2);margin-top:2px;}
     /* Та сама стрічка з восьми кадрів, що й на заставці (див. .bs-pk). */
-    .pk-art{position:relative;height:152px;aspect-ratio:240/312;transform:translateY(105%);
+    .pk-art{position:relative;height:152px;aspect-ratio:248/312;transform:translateY(105%);
       background-repeat:no-repeat;background-size:800% 100%;background-position:0 0;
       filter:drop-shadow(0 6px 14px rgba(0,0,0,.22));}
     /* До завантаження кадрів нічого не рухається: клас pk-go вмикає сцену
