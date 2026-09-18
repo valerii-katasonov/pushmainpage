@@ -14,14 +14,29 @@ import { renderNewsFeed } from './news.js';
 // common.js's logoutUser — plain export/import.
 export let parentLessonInterval=null;
 export function stickerEntries(data){
-  return Object.entries(data||{}).map(([key,value])=>{
+  const rows=Object.entries(data||{}).map(([key,value])=>{
     const modern=value&&typeof value==='object';
-    return {date:modern&&value.date?String(value.date):String(key).slice(0,10),subject:modern&&value.subject?String(value.subject):String(key).split('_').slice(1).join('_'),reason:modern?String(value.reason||''):''};
-  }).filter(x=>x.subject).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5);
+    return {date:modern&&value.date?String(value.date):String(key).slice(0,10),subject:modern&&value.subject?String(value.subject):String(key).split('_').slice(1).join('_'),reason:modern?String(value.reason||''):'',batch:modern&&value.batch?String(value.batch):'',count:1};
+  }).filter(x=>x.subject);
+  // Учитель видає наліпки пачкою — «за тиждень назбиралося чотири». У базі
+  // це чотири окремі записи (так їх рахує і стрічка до призу, і «Пушики»),
+  // але в історії чотири однакові рядки виглядали б як помилка й витіснили
+  // б усе інше: показуємо їх одним рядком із ×4.
+  //
+  // Групуємо ЛИШЕ за явною міткою пачки. Збігом дати й предмета звʼязувати
+  // не можна: дві наліпки, видані в різні моменти за різне, — це справді
+  // дві події, і дитина памʼятає обидві.
+  const merged=[],byBatch={};
+  for(const r of rows){
+    if(r.batch&&byBatch[r.batch]){byBatch[r.batch].count++;continue;}
+    if(r.batch)byBatch[r.batch]=r;
+    merged.push(r);
+  }
+  return merged.sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5);
 }
 export function renderStickerHistory(data){
   const rows=stickerEntries(data);if(!rows.length)return '';
-  return `<div style="font-size:.76rem;color:var(--warn);"><b>Останні наліпки</b>${rows.map(x=>`<div style="padding:7px 0;border-bottom:1px solid var(--warn-line);"><span style="color:var(--warn);">${escHtml(x.date.split('-').reverse().join('.'))}</span> · <b>${escHtml(x.subject)}</b>${x.reason?`<br><span>${escHtml(x.reason)}</span>`:''}</div>`).join('')}</div>`;
+  return `<div style="font-size:.76rem;color:var(--warn);"><b>Останні наліпки</b>${rows.map(x=>`<div style="padding:7px 0;border-bottom:1px solid var(--warn-line);"><span style="color:var(--warn);">${escHtml(x.date.split('-').reverse().join('.'))}</span> · <b>${escHtml(x.subject)}</b>${x.count>1?` <b>×${x.count}</b>`:''}${x.reason?`<br><span>${escHtml(x.reason)}</span>`:''}</div>`).join('')}</div>`;
 }
 
 const SELF_REPORT_SLOT='all';
@@ -571,7 +586,7 @@ window.renderParentCalendar=async function(role='parent'){
       get(ref(db,`academic_year/${ACTIVE_YEAR}/breaks`))
     ]);
   }catch(e){
-    grid.innerHTML=`<p class="empty-msg" style="color:var(--red);">Не вдалося завантажити календар: ${escHtml(e.message||e.code||'відмова')}</p>`;
+    grid.innerHTML=`<p class="empty-msg" style="color:var(--danger);">Не вдалося завантажити календар: ${escHtml(e.message||e.code||'відмова')}</p>`;
     return;
   }
   const examsData=examsSnap.exists()?examsSnap.val():{};
@@ -670,7 +685,7 @@ window.showParentCalDayDetails=async function(role,ds){
       get(ref(db,`academic_year/${ACTIVE_YEAR}/breaks`))
     ]);
   }catch(e){
-    dd.innerHTML=`<p class="empty-msg" style="color:var(--red);">Не вдалося завантажити подробиці: ${escHtml(e.message||e.code||'відмова')}</p>`;
+    dd.innerHTML=`<p class="empty-msg" style="color:var(--danger);">Не вдалося завантажити подробиці: ${escHtml(e.message||e.code||'відмова')}</p>`;
     return;
   }
   let h=`<h4 style="margin-top:0;color:var(--brand-deep);border-bottom:1px dashed var(--brand-deep);padding-bottom:9px;">${ds.split('-').reverse().join('.')}</h4>`;
@@ -703,7 +718,7 @@ window.loadParentBellSchedule=async function(role='parent'){
   try{
     snap=await get(ref(db,`bell_schedules/${cls}`));
   }catch(e){
-    container.innerHTML=`<p class="empty-msg" style="color:var(--red);">Не вдалося завантажити розклад дзвінків: ${escHtml(e.message||e.code||'відмова')}</p>`;
+    container.innerHTML=`<p class="empty-msg" style="color:var(--danger);">Не вдалося завантажити розклад дзвінків: ${escHtml(e.message||e.code||'відмова')}</p>`;
     return;
   }
   if(!snap.exists()){container.innerHTML='<p class="empty-msg">Розклад дзвінків ще не задано.</p>';return;}
@@ -1200,7 +1215,7 @@ export async function initChildAccess(){
   }catch(e){
     // Остання лінія оборони: що б не сталося, людина бачить причину,
     // а не нескінченне «Завантаження...».
-    box.innerHTML = `<p class="empty-msg" style="color:var(--red);">Збій розділу: ${escHtml(e && e.message || String(e))}</p>`;
+    box.innerHTML = `<p class="empty-msg" style="color:var(--danger);">Збій розділу: ${escHtml(e && e.message || String(e))}</p>`;
     caKidsLoading = false;
   }
 }
@@ -1215,7 +1230,7 @@ async function caLoadChildren(sel, box){
   }catch(e){
     caKids = null;
     sel.innerHTML = '<option value="">—</option>';
-    box.innerHTML = `<p class="empty-msg" style="color:var(--red);">Не вдалося отримати список дітей: ${escHtml(e.message)}</p>`;
+    box.innerHTML = `<p class="empty-msg" style="color:var(--danger);">Не вдалося отримати список дітей: ${escHtml(e.message)}</p>`;
     return;
   }finally{
     caKidsLoading = false;
@@ -1279,7 +1294,7 @@ async function caRenderLocal(){
     acc = d.access;
     known = d.known || '';
   }catch(e){
-    box.innerHTML = `<p class="empty-msg" style="color:var(--red);">Не вдалося перевірити: ${escHtml(e.message)}</p>`;
+    box.innerHTML = `<p class="empty-msg" style="color:var(--danger);">Не вдалося перевірити: ${escHtml(e.message)}</p>`;
     return;
   }
 
@@ -1297,7 +1312,7 @@ async function caRenderLocal(){
       <input type="text" id="ca-pass" placeholder="мінімум 6 символів" autocapitalize="none">
       <p style="font-size:.75rem;color:var(--ink-3);margin:3px 0 0 0;">Пароль видно навмисне — ви маєте продиктувати його дитині.</p>
       <button onclick="caCreate()" id="ca-create"
-              style="background:var(--teal);color:#fff;padding:11px;margin-top:13px;width:100%;">Створити доступ</button>
+              style="background:var(--brand-ink);color:#fff;padding:11px;margin-top:13px;width:100%;">Створити доступ</button>
       <div id="ca-msg" style="display:none;font-size:.82rem;margin-top:9px;"></div>`;
     return;
   }
@@ -1308,7 +1323,7 @@ async function caRenderLocal(){
       <div style="font-size:.8rem;color:var(--ink-3);">Логін дитини</div>
       <div style="font-weight:700;font-size:.98rem;word-break:break-all;">${escHtml(acc.nick || acc.login)}</div>
       ${acc.email ? `<div style="font-size:.78rem;color:var(--ink-3);margin-top:3px;">Вхід за поштою — пароль можна відновити листом</div>` : ''}
-      <div style="font-size:.78rem;color:${off ? 'var(--red)' : 'var(--green)'};font-weight:700;margin-top:5px;">
+      <div style="font-size:.78rem;color:${off ? 'var(--danger)' : 'var(--ok)'};font-weight:700;margin-top:5px;">
         ${off ? 'Доступ вимкнено' : 'Доступ активний'}</div>
     </div>
     <label for="ca-newpass" style="margin-top:13px;">Новий пароль</label>
@@ -1325,7 +1340,7 @@ function caMsg(text, bad){
   const m = document.getElementById('ca-msg');
   if(!m) return;
   m.style.display = 'block';
-  m.style.color = bad ? 'var(--red)' : 'var(--green)';
+  m.style.color = bad ? 'var(--danger)' : 'var(--ok)';
   m.innerText = text;
 }
 function caBusy(id, on, label){
@@ -1562,7 +1577,7 @@ async function renderYearCalendar(role){
       get(ref(db, `exams/${cls}`))
     ]);
   }catch(e){
-    box.innerHTML = `<p class="empty-msg" style="color:var(--red);">Не вдалося завантажити рік: ${escHtml(e.message||'відмова')}</p>`;
+    box.innerHTML = `<p class="empty-msg" style="color:var(--danger);">Не вдалося завантажити рік: ${escHtml(e.message||'відмова')}</p>`;
     return;
   }
 
