@@ -475,7 +475,10 @@
     :root{
       --logo-teal:#22b8cf; --logo-cyan:#4dd0e1; --logo-mint:#a7f3d0;
       --logo-yellow:#ffd54f; --logo-pink:#f48fb1; --logo-bird:#4a90d9;
-      --auth-bg:#041b22; --auth-fg:#f2fbfc; --auth-sub:#9fc4cb;
+      --auth-bg:#041b22;
+      /* Тло заставки запуску — колір самого ролика; те саме число стоїть
+         у manifest-cabinet.json, щоб системна заставка й наша збігалися. */
+      --splash-bg:#063443; --auth-fg:#f2fbfc; --auth-sub:#9fc4cb;
     }
     #auth-bg{display:none;}
     body.auth-mode{background:var(--auth-bg);align-items:center;}
@@ -1251,118 +1254,62 @@
       @page{size:A4 landscape;margin:12mm;}
     }
     /* ── ЗАСТАВКА ЗАПУСКУ ──
-       Повторює системну заставку (manifest: background_color #041b22 +
-       кругла іконка), щоб перехід від неї був непомітним. Прибирає себе
-       сама — див. hideBootSplash() у common.js. */
-    /* --auth-bg — той самий колір, що background_color у
-       manifest-cabinet.json. Він уже був у палітрі як тло екранів входу,
-       тож окремого токена не заводимо; головне, щоб ці два числа не
-       розʼїхалися — за цим стежить tests-pushyk-hello.mjs. */
-    #boot-splash{position:fixed;inset:0;z-index:9999;background:var(--auth-bg);
+       Коли застосунок відкривають з іконки, система малює свою заставку:
+       колір фону й іконку з manifest-cabinet.json. Та заставка НЕ НАША —
+       її малює операційна система ще до того, як існує сторінка, і
+       анімувати її неможливо в принципі.
+
+       Зате одразу після неї йде пауза, поки Firebase перевіряє сеанс, —
+       і раніше на цьому місці був порожній темний екран. Тут іде ролик
+       із Пушиками. Колір тла узятий із самого ролика (#063443) і
+       продубльований у маніфесті, щоб перехід від системної заставки до
+       нашої не читався як стрибок кольору.
+
+       ЧОМУ contain, А НЕ cover. У ролика однотонне тло того самого
+       кольору, що й сторінка, тож поля по краях невидимі — зате нічого
+       не обрізається на жодному співвідношенні екрана. З cover на
+       планшеті персонажам відрізало б лапи. */
+    #boot-splash{position:fixed;inset:0;z-index:9999;background:var(--splash-bg);
       display:flex;align-items:center;justify-content:center;}
+    /* Постер під відео — перший його кадр. Він і закриває ті частки
+       секунди, поки ролик ще не почався, і лишається на екрані, якщо
+       автозапуск заборонено (режим енергозбереження на iPhone). Тому це
+       саме ПЕРШИЙ кадр: із нього ролик і продовжиться, без стрибка. */
+    #boot-splash::before{content:"";position:absolute;inset:0;
+      background:center/contain no-repeat url(pushyk-splash-wide.jpg);}
+    @media (orientation:portrait){
+      #boot-splash::before{background-image:url(pushyk-splash-phone.jpg);}
+    }
+    #bs-video{position:relative;width:100%;height:100%;object-fit:contain;
+      background:transparent;pointer-events:none;}
 
     /* ── ВИХІД ЗАСТАВКИ ──
        Раніше все зникало однією плівкою — і саме це читалося як обрив.
-       Коли шар із логотипом і персонажами гасне цілком і одночасно, око
-       бачить не завершення, а вимикач.
-       Тому вихід поставлений у три такти, що перекриваються:
-         1) Пушики ховаються назад за логотип — рівно тим шляхом, яким
-            вийшли. Сцена ніби закінчує думку, а не уривається;
-         2) логотип трохи наближається і тане — наче камера проходить
-            крізь нього;
-         3) і лише потім гасне темне тло, відкриваючи кабінет.
-       Кабінет при цьому вже намальований під заставкою й підіймається
-       назустріч (див. body.boot-in .container) — це не перехід між двома
-       картинками, а зняття шару.
-       Криві теж різні й це навмисно: усе, що ЙДЕ, прискорюється
-       (ease-in), усе, що ПРИХОДИТЬ, — гальмує (ease-out). Однакова
-       крива на обох боках і дає те відчуття дешевого затухання. */
-    #boot-splash.bs-off{animation:bsBackdropOut .5s ease-in .5s both;}
-    #boot-splash.bs-off .bs-pk-l{animation:bsDuckL .42s cubic-bezier(.5,0,.75,0) both;}
-    #boot-splash.bs-off .bs-pk-r{animation:bsDuckR .42s cubic-bezier(.5,0,.75,0) .06s both;}
-    #boot-splash.bs-off .bs-logo{animation:bsLogoOut .5s cubic-bezier(.45,0,.75,.2) .34s both;}
-    /* Махання на виході зупиняємо: смикання лапи під час зникнення
-       перетягує увагу саме тоді, коли вона має піти на кабінет. */
-    #boot-splash.bs-off .bs-pk{background-position-x:0%;}
-    /* Ховаються тим самим шляхом, яким вийшли: назад під логотип — і
-       дотаюють на останній третині.
-       ЧОМУ НЕ ПРОСТО «ЗАЇХАЛИ ЗА ЛОГОТИП». Персонажі лежать ПІД ним, і
-       ховає їх сам логотип. Але логотип за мить теж починає танути — і
-       тоді вони проступають крізь нього вже поверх кабінету, ніби
-       наліплені на екран. Тому вони зникають самі, не покладаючись на
-       те, що їх хтось прикриє. */
-    @keyframes bsDuckL{
-      from{opacity:1;transform:translateX(-114%) translateY(-104%) rotate(-5deg);}
-      55%{opacity:1;}
-      to{opacity:0;transform:translateX(-50%) translateY(0) rotate(0deg);}}
-    @keyframes bsDuckR{
-      from{opacity:1;transform:translateX(14%) translateY(-104%) rotate(5deg);}
-      55%{opacity:1;}
-      to{opacity:0;transform:translateX(-50%) translateY(0) rotate(0deg);}}
-    @keyframes bsLogoOut{from{opacity:1;transform:scale(1);}to{opacity:0;transform:scale(1.14);}}
+       Коли шар гасне цілком і одночасно, око бачить не завершення, а
+       вимикач. Тому вихід у два такти, що перекриваються: спершу кадр
+       трохи наближається і тане, наче камера проходить крізь нього, і
+       вже потім гасне тло, відкриваючи кабінет. Кабінет при цьому вже
+       намальований під заставкою й підіймається назустріч — це не
+       перехід між двома картинками, а зняття шару.
+       Криві різні навмисно: усе, що ЙДЕ, прискорюється (ease-in), усе,
+       що ПРИХОДИТЬ, — гальмує (ease-out). Однакова крива на обох боках
+       і дає те відчуття дешевого затухання. */
+    #boot-splash.bs-off{animation:bsBackdropOut .5s ease-in .34s both;}
+    #boot-splash.bs-off #bs-video,
+    #boot-splash.bs-off::before{animation:bsFrameOut .52s cubic-bezier(.45,0,.75,.2) both;}
+    @keyframes bsFrameOut{from{opacity:1;transform:scale(1);}to{opacity:0;transform:scale(1.1);}}
     @keyframes bsBackdropOut{to{opacity:0;}}
     /* Кабінет не зʼявляється готовим — він приходить. Півсекунди й
        десять пікселів підйому: свідомо цього не помічаєш, а різниця між
        «клацнуло» і «відкрилося» саме тут. */
-    body.boot-in .container{animation:bsAppIn .55s cubic-bezier(.2,.75,.3,1) .46s both;}
+    body.boot-in .container{animation:bsAppIn .55s cubic-bezier(.2,.75,.3,1) .3s both;}
     @keyframes bsAppIn{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:none;}}
-    .bs-stage{position:relative;width:min(62vw,300px);aspect-ratio:1;}
-    .bs-logo{position:relative;z-index:2;width:100%;height:100%;border-radius:50%;
-      display:block;object-fit:cover;
-      box-shadow:0 18px 50px rgba(34,184,207,.35),0 0 70px rgba(34,184,207,.22);}
-    /* Пушики стоять ЗА логотипом (z-index:1) і виринають з-під його
-       ВЕРХНЬОГО краю. Спершу я вивів їх убік, але на телефоні логотип
-       займає майже всю ширину, і збоку лишалося по кілька пікселів —
-       персонажів просто не було видно. Згори місця скільки завгодно.
-
-       Початкове положення — низько за логотипом, тобто сховані повністю.
-       Виринає приблизно 45% зросту: голова, кашкет і лапа.
-
-       КАДРИ ЛЕЖАТЬ ОДНИМ СПРАЙТОМ — стрічкою з восьми кадрів в одному
-       файлі, а рухає їх background-position. Вісім окремих PNG на
-       персонажа означали б вісім запитів на найпершому екрані застосунку
-       й помітно більшу вагу: у спільному файлі кадри ділять одну палітру
-       й стискаються разом. Плюс немає ризику, що п'ятий кадр приїде
-       пізніше за шостий і махання смикнеться.
-
-       У КОЖНОГО КАДРУ ПРОЗОРІ ПОЛЯ З БОКІВ, і це не про композицію.
-       У вихідному аркуші персонажі подекуди заходять у сусідню клітинку
-       й навіть торкаються одне одного — рівний поділ на вісім різав
-       сусідову лапу просто в кадр, і вона визирала збоку від персонажа.
-       Тому спрайт зібраний не по сітці, а по проміжках між фігурами, і
-       кожен кадр має порожні поля. aspect-ratio нижче рахується з повної
-       ширини кадру (248), а не з фігури. */
-    .bs-pk{position:absolute;z-index:1;bottom:6%;left:50%;
-      height:68%;aspect-ratio:248/312;
-      background-repeat:no-repeat;background-size:800% 100%;background-position:0 0;
-      filter:drop-shadow(0 8px 18px rgba(0,0,0,.45));
-      opacity:0;transform:translateX(-50%);}
-    .bs-pk-l{background-image:url(pushyk-wave.png);
-      animation:bsUpL .62s cubic-bezier(.2,.85,.3,1.18) .15s both,
-                bsWave .72s steps(8,jump-none) .92s infinite;}
-    .bs-pk-r{background-image:url(pushyk-kre-wave.png);
-      animation:bsUpR .62s cubic-bezier(.2,.85,.3,1.18) .3s both,
-                bsWave .72s steps(8,jump-none) 1.07s infinite;}
-    /* Синій махає лівою лапою, рожева — правою: кожен у свій бік від
-       логотипа. Тому дзеркалити нічого не треба — картинки вже такі. */
-    @keyframes bsUpL{to{opacity:1;transform:translateX(-114%) translateY(-104%) rotate(-5deg);}}
-    @keyframes bsUpR{to{opacity:1;transform:translateX(14%) translateY(-104%) rotate(5deg);}}
-    /* ЧОМУ jump-none, А НЕ ЗВИЧАЙНИЙ steps(8).
-       Кадр k стоїть на позиції k/7 (крайній лівий — 0%, крайній правий —
-       100%), а steps(8) ділить відрізок на восьмі частини й дає k/8.
-       Різниця мала, але кожен кадр виїжджав би на одну восьму вбік, і
-       замість махання вийшов би зсув картинки. jump-none бере рівно
-       вісім значень разом із кінцевим — тобто по кадру. */
-    @keyframes bsWave{from{background-position-x:0%;}to{background-position-x:100%;}}
-    /* Системне «зменшити рух»: логотип лишається, Пушики просто стоять,
-       а вихід — звичайне затухання без ховання й наближення. */
+    /* Системне «зменшити рух»: ролик не програється (це робить
+       pushyk-hello.js), на екрані лишається постер, вихід — просте
+       затухання. */
     @media (prefers-reduced-motion: reduce){
-      .bs-pk{animation:none!important;opacity:1;background-position-x:50%;}
-      .bs-pk-l{transform:translateX(-114%) translateY(-104%);}
-      .bs-pk-r{transform:translateX(14%) translateY(-104%);}
       #boot-splash.bs-off{animation:bsBackdropOut .3s linear both;}
-      #boot-splash.bs-off .bs-logo,#boot-splash.bs-off .bs-pk-l,
-      #boot-splash.bs-off .bs-pk-r{animation:none!important;}
+      #boot-splash.bs-off #bs-video,#boot-splash.bs-off::before{animation:none!important;}
       body.boot-in .container{animation:none!important;}
     }
     /* ── ПУШИК ВІТАЄТЬСЯ ──
@@ -2595,12 +2542,37 @@
      він лише один раз. Якщо ще не завантажилися — порожній alt не
      показує нічого, і заставка виглядає як звичайна. -->
 <div id="boot-splash" aria-hidden="true">
-  <div class="bs-stage">
-    <div class="bs-pk bs-pk-l"></div>
-    <div class="bs-pk bs-pk-r"></div>
-    <img class="bs-logo" src="logo.png" alt="Push School Warsaw">
-  </div>
+  <video id="bs-video" muted playsinline autoplay preload="auto" disablepictureinpicture>
+    <source src="pushyk-splash-phone.mp4" media="(orientation: portrait)" type="video/mp4">
+    <source src="pushyk-splash-wide.mp4" type="video/mp4">
+  </video>
 </div>
+<script>
+  /* Дві речі, які треба зробити ДО того, як ролик почнеться, — тому
+     вбудованим скриптом, а не в модулі: модулі вантажаться пізніше.
+
+     1. Системне «зменшити рух» — не порада: для частини людей рухома
+        картинка це нудота й головний біль. Тоді ролик не програється
+        взагалі, а на екрані лишається його перший кадр (постер у CSS).
+
+     2. Який саме файл грати. Вертикальний ролик на широкому екрані (і
+        навпаки) ліг би вузькою смужкою посередині. У розмітці стоять
+        <source> з media — це працює й без скриптів, — але покладатися
+        лише на них не варто: вибір робиться один раз при завантаженні,
+        а телефон могли повернути. Тут ставимо явно. */
+  (function(){
+    try{
+      var v = document.getElementById('bs-video');
+      if(!v) return;
+      if(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches){
+        v.removeAttribute('autoplay'); v.pause(); v.hidden = true; return;
+      }
+      var want = (innerHeight >= innerWidth) ? 'pushyk-splash-phone.mp4'
+                                             : 'pushyk-splash-wide.mp4';
+      if((v.currentSrc || '').indexOf(want) === -1){ v.src = want; v.load(); }
+    }catch(e){}
+  })();
+</script>
 <!-- Фон екранів входу: світлові плями в кольорах логотипа замість
      фонового відео — нуль ваги, нічого не вантажиться ззовні.
      Видно лише коли <body class="auth-mode">, тобто до входу. -->
