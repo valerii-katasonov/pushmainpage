@@ -5,7 +5,7 @@
   "start_url": "./cabinet.html",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#041b22",
+  "background_color": "#063443",
   "theme_color": "#22b8cf",
   "lang": "uk",
   "icons": [
