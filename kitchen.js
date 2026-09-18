@@ -1029,8 +1029,11 @@ window.loadClassOrders = async function(){
         Це для тих, хто звернувся вже після дедлайну; дію буде записано в журнал.</p>
       <div class="k-ord-actions">
         <button onclick="printClassOrders()" class="k-ord-print">🖨️ Аркуш на друк</button>
+        <button onclick="printClassOrders('pdf')" class="k-ord-pdf">📕 Зберегти PDF</button>
         <button onclick="exportClassOrders()" class="k-ord-csv">📄 CSV</button>
-      </div>`;
+      </div>
+      <p class="k-ord-hint">PDF зберігається через те саме вікно друку: у полі «Принтер» оберіть «Зберегти як PDF».
+        Файл вийде такий самий, як на папері, і називатиметься за днем і класом.</p>`;
   }catch(e){
     box.innerHTML = `<p style="color:red;font-size:.8rem;">Помилка: ${escHtml(e.message)}</p>`;
   }
@@ -1433,7 +1436,17 @@ export function pickTimeLabel(row, which, orderDate){
            exact: !!own, none:false, sameDay };
 }
 
-window.printClassOrders = function(){
+// mode === 'pdf' — та сама дія, але з підказкою.
+//
+// ЧОМУ НЕ ОКРЕМИЙ ГЕНЕРАТОР PDF. Зробити PDF у браузері можна двома
+// шляхами. Бібліотека на кшталт html2pdf малює сторінку в картинку: текст
+// перестає бути текстом (не шукається, не копіюється), кирилиця летить
+// разом зі шрифтом, три сторінки таблиці важать мегабайти, а розриви
+// сторінок лягають посеред рядків. Друк самого браузера дає справжній
+// векторний PDF із тим самим Nunito, розривами, які ми описали в CSS, і
+// вагою в сотню кілобайтів. Тож кнопка одна й та сама — різниця лише в
+// тому, що людині кажуть, що саме обрати у вікні.
+window.printClassOrders = function(mode){
   const o = window.__classOrders;
   const holder = document.getElementById('print-area');
   if(!o || !holder) return;
@@ -1528,9 +1541,24 @@ window.printClassOrders = function(){
       <span>Push School Warsaw · надруковано ${escHtml(new Date().toLocaleString('uk-UA',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}))}</span>
     </div>
   </div>`;
-  document.body.classList.add('printing');
-  window.print();
-  setTimeout(()=>{document.body.classList.remove('printing');holder.innerHTML='';},600);
+  // НАЗВА ДОКУМЕНТА СТАЄ ІМЕНЕМ ФАЙЛУ. Саме її браузер підставляє в
+  // «Зберегти як PDF». Без цього на диску зʼявляється «Push School» або
+  // «cabinet.html», і за тиждень уже не зрозуміло, чий це день і клас.
+  const prevTitle = document.title;
+  document.title = `Замовлення харчування ${human(date)} — ${allMode?'усі класи':cls.replace('class_','')+' клас'}`;
+  const go = ()=>{
+    document.body.classList.add('printing');
+    window.print();
+    setTimeout(()=>{
+      document.body.classList.remove('printing');
+      holder.innerHTML='';
+      document.title = prevTitle;
+    },600);
+  };
+  // Друк блокує сторінку, тож підказці треба дати мить намалюватися —
+  // інакше людина побачить її вже після того, як закриє вікно друку.
+  if(mode === 'pdf'){ showToast('У вікні друку оберіть «Зберегти як PDF»'); setTimeout(go, 400); }
+  else go();
 };
 
 window.exportClassOrders = function(){
