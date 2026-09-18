@@ -1218,7 +1218,9 @@
     /* Кнопки під списком замовлень */
     .k-ord-actions{display:flex;gap:9px;margin-top:11px;}
     .k-ord-print{flex:2;background:var(--brand-deep);color:#fff;margin:0;}
+    .k-ord-pdf{flex:1;background:var(--surface);color:var(--brand-ink);border:1px solid var(--brand-line);margin:0;}
     .k-ord-csv{flex:1;background:var(--surface);color:var(--brand-ink);border:1px solid var(--brand-line);margin:0;}
+    @media(max-width:520px){ .k-ord-actions{flex-wrap:wrap;} .k-ord-print{flex:1 0 100%;} }
     @media print{
       body.printing>*{display:none!important;}
       body.printing #print-area{display:block!important;}
