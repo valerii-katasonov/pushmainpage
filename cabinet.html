@@ -1259,9 +1259,54 @@
        тож окремого токена не заводимо; головне, щоб ці два числа не
        розʼїхалися — за цим стежить tests-pushyk-hello.mjs. */
     #boot-splash{position:fixed;inset:0;z-index:9999;background:var(--auth-bg);
-      display:flex;align-items:center;justify-content:center;
-      transition:opacity .45s ease,visibility .45s;}
-    #boot-splash.bs-off{opacity:0;visibility:hidden;pointer-events:none;}
+      display:flex;align-items:center;justify-content:center;}
+
+    /* ── ВИХІД ЗАСТАВКИ ──
+       Раніше все зникало однією плівкою — і саме це читалося як обрив.
+       Коли шар із логотипом і персонажами гасне цілком і одночасно, око
+       бачить не завершення, а вимикач.
+       Тому вихід поставлений у три такти, що перекриваються:
+         1) Пушики ховаються назад за логотип — рівно тим шляхом, яким
+            вийшли. Сцена ніби закінчує думку, а не уривається;
+         2) логотип трохи наближається і тане — наче камера проходить
+            крізь нього;
+         3) і лише потім гасне темне тло, відкриваючи кабінет.
+       Кабінет при цьому вже намальований під заставкою й підіймається
+       назустріч (див. body.boot-in .container) — це не перехід між двома
+       картинками, а зняття шару.
+       Криві теж різні й це навмисно: усе, що ЙДЕ, прискорюється
+       (ease-in), усе, що ПРИХОДИТЬ, — гальмує (ease-out). Однакова
+       крива на обох боках і дає те відчуття дешевого затухання. */
+    #boot-splash.bs-off{animation:bsBackdropOut .5s ease-in .5s both;}
+    #boot-splash.bs-off .bs-pk-l{animation:bsDuckL .42s cubic-bezier(.5,0,.75,0) both;}
+    #boot-splash.bs-off .bs-pk-r{animation:bsDuckR .42s cubic-bezier(.5,0,.75,0) .06s both;}
+    #boot-splash.bs-off .bs-logo{animation:bsLogoOut .5s cubic-bezier(.45,0,.75,.2) .34s both;}
+    /* Махання на виході зупиняємо: смикання лапи під час зникнення
+       перетягує увагу саме тоді, коли вона має піти на кабінет. */
+    #boot-splash.bs-off .bs-f1{animation:none;opacity:1;}
+    #boot-splash.bs-off .bs-f2{animation:none;opacity:0;}
+    /* Ховаються тим самим шляхом, яким вийшли: назад під логотип — і
+       дотаюють на останній третині.
+       ЧОМУ НЕ ПРОСТО «ЗАЇХАЛИ ЗА ЛОГОТИП». Персонажі лежать ПІД ним, і
+       ховає їх сам логотип. Але логотип за мить теж починає танути — і
+       тоді вони проступають крізь нього вже поверх кабінету, ніби
+       наліплені на екран. Тому вони зникають самі, не покладаючись на
+       те, що їх хтось прикриє. */
+    @keyframes bsDuckL{
+      from{opacity:1;transform:translateX(-110%) translateY(-100%) scaleX(-1) rotate(-5deg);}
+      55%{opacity:1;}
+      to{opacity:0;transform:translateX(-50%) translateY(0) scaleX(-1) rotate(0deg);}}
+    @keyframes bsDuckR{
+      from{opacity:1;transform:translateX(10%) translateY(-100%) rotate(5deg);}
+      55%{opacity:1;}
+      to{opacity:0;transform:translateX(-50%) translateY(0) rotate(0deg);}}
+    @keyframes bsLogoOut{from{opacity:1;transform:scale(1);}to{opacity:0;transform:scale(1.14);}}
+    @keyframes bsBackdropOut{to{opacity:0;}}
+    /* Кабінет не зʼявляється готовим — він приходить. Півсекунди й
+       десять пікселів підйому: свідомо цього не помічаєш, а різниця між
+       «клацнуло» і «відкрилося» саме тут. */
+    body.boot-in .container{animation:bsAppIn .55s cubic-bezier(.2,.75,.3,1) .46s both;}
+    @keyframes bsAppIn{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:none;}}
     .bs-stage{position:relative;width:min(62vw,300px);aspect-ratio:1;}
     .bs-logo{position:relative;z-index:2;width:100%;height:100%;border-radius:50%;
       display:block;object-fit:cover;
@@ -1289,13 +1334,18 @@
     .bs-f2{animation:bsWaveB .46s steps(1,end) .75s infinite both;}
     @keyframes bsWaveA{0%,49.9%{opacity:1;}50%,100%{opacity:0;}}
     @keyframes bsWaveB{0%,49.9%{opacity:0;}50%,100%{opacity:1;}}
-    /* Системне «зменшити рух»: логотип лишається, Пушики просто стоять. */
+    /* Системне «зменшити рух»: логотип лишається, Пушики просто стоять,
+       а вихід — звичайне затухання без ховання й наближення. */
     @media (prefers-reduced-motion: reduce){
       .bs-pk,.bs-f{animation:none!important;}
       .bs-pk{opacity:1;}
       .bs-pk-l{transform:translateX(-110%) translateY(-100%) scaleX(-1);}
       .bs-pk-r{transform:translateX(10%) translateY(-100%);}
       .bs-f2{display:none;}
+      #boot-splash.bs-off{animation:bsBackdropOut .3s linear both;}
+      #boot-splash.bs-off .bs-logo,#boot-splash.bs-off .bs-pk-l,
+      #boot-splash.bs-off .bs-pk-r{animation:none!important;}
+      body.boot-in .container{animation:none!important;}
     }
     /* ── ПУШИК ВІТАЄТЬСЯ ──
        Виїжджає з-за нижнього краю, махає кадрами й ховається. Нічого не
