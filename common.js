@@ -2275,9 +2275,9 @@ window.subjectsForClassWeek = subjectsForClassWeek;
 //
 // На практиці межа майже не спрацьовує: відкриття кабінету — це кілька
 // читань бази поспіль, і вони довші.
-const BOOT_WAVE_MS = 460;        // період одного помаху (bsWaveA/B у CSS)
+const BOOT_WAVE_MS = 720;        // повний помах — вісім кадрів (bsWave у CSS)
 const BOOT_ENTER_MS = 920;       // коли персонажі вже нагорі
-const BOOT_SPLASH_MIN_MS = BOOT_ENTER_MS + BOOT_WAVE_MS * 3;   // 2300
+const BOOT_SPLASH_MIN_MS = BOOT_ENTER_MS + BOOT_WAVE_MS * 2;   // 2360
 const BOOT_EXIT_MS = 1100;       // три такти виходу з перекриттям (див. CSS)
 const bootSplashAt = Date.now();
 let bootSplashDone = false, bootAppReady = false, bootTimer = null;
