@@ -474,7 +474,7 @@ export async function loadWeekMenu(){
       </summary>
       <div class="k-day-body">
         ${MENU_FIELDS.map(f=>`
-          <label for="km-${date}-${f.k}" ${f.danger?'style="color:var(--red);"':(f.snack?'style="color:var(--brand-deep);"':(f.meal?'style="color:var(--warn);"':(f.choice?'style="color:var(--brand-deep);"':'')))}>${escHtml(f.label)}</label>
+          <label for="km-${date}-${f.k}" ${f.danger?'style="color:var(--danger);"':(f.snack?'style="color:var(--brand-deep);"':(f.meal?'style="color:var(--warn);"':(f.choice?'style="color:var(--brand-deep);"':'')))}>${escHtml(f.label)}</label>
           <input type="text" id="km-${date}-${f.k}" value="${escHtml(m[f.k]||'')}" placeholder="${escHtml(f.ph)}">`).join('')}
         <p class="k-day-ts">${m.ts?`Оновлено ${new Date(m.ts).toLocaleString('uk-UA')}`:'Ще не публікувалося'}</p>
         ${snaps[i].exists() ? `<button type="button" class="k-day-clear" onclick="clearMenuDay('${escJs(date)}')">🗑 Прибрати меню цього дня</button>` : ''}
@@ -486,7 +486,7 @@ export async function loadWeekMenu(){
     // напис-заглушка, і людина не знала б, зламалося чи просто повільно.
     console.error("kitchen.js → k-menu-week", err);
     const _b=document.getElementById("k-menu-week");
-    if(_b)_b.innerHTML='<p class="empty-msg" style="color:var(--red);">Не вдалося завантажити: '+((err&&err.message)||'невідома помилка')+'</p>';
+    if(_b)_b.innerHTML='<p class="empty-msg" style="color:var(--danger);">Не вдалося завантажити: '+((err&&err.message)||'невідома помилка')+'</p>';
   }
 }
 
@@ -727,7 +727,7 @@ export async function loadWeekCounts(){
              ${today.hasChoice?`<span class="k-meal-split">А <strong>${today.pa}</strong><i>/</i> Б <strong>${today.pb}</strong></span>`:''}
              <div class="k-total-snack">${today.brk} сніданків${today.hasBrkChoice?` (А ${today.bpa} / Б ${today.bpb})`:''}${!today.hasBrkMenu&&today.brk?' (меню ще немає)':''} · ${today.snack} підвечірків</div>`}
       </div>
-      <div class="k-sub">відсутні: ${today.absent} · не харчуються: ${today.off} · відмови: ${today.skips.length}${today.extras.length ? ` · <b style="color:var(--green);">разові обіди: ${today.extras.length}</b>` : ''}${today.unset ? ` · <b style="color:var(--orange);">батьки не відповіли: ${today.unset}</b>` : ''}</div>
+      <div class="k-sub">відсутні: ${today.absent} · не харчуються: ${today.off} · відмови: ${today.skips.length}${today.extras.length ? ` · <b style="color:var(--ok);">разові обіди: ${today.extras.length}</b>` : ''}${today.unset ? ` · <b style="color:var(--warn);">батьки не відповіли: ${today.unset}</b>` : ''}</div>
       ${renderMealOrphanList(today.orphans||[],resolutionSnap.val()||{},!resolutionSnap.readError)}
 
       <!-- Сніданок у тижневій таблиці нарівні з обідом: його теж треба
@@ -824,7 +824,7 @@ export async function loadMealPlans(){
     // напис-заглушка, і людина не знала б, зламалося чи просто повільно.
     console.error("kitchen.js → k-plan-list", err);
     const _b=document.getElementById("k-plan-list");
-    if(_b)_b.innerHTML='<p class="empty-msg" style="color:var(--red);">Не вдалося завантажити: '+((err&&err.message)||'невідома помилка')+'</p>';
+    if(_b)_b.innerHTML='<p class="empty-msg" style="color:var(--danger);">Не вдалося завантажити: '+((err&&err.message)||'невідома помилка')+'</p>';
   }
 }
 window.loadMealPlans = loadMealPlans;
@@ -854,35 +854,51 @@ window.loadOrdersForDay = function(){
   window.loadStaffOrders();
 };
 
-window.loadClassOrders = async function(){
-  const cls  = document.getElementById('k-order-class')?.value;
-  const date = document.getElementById('k-order-date')?.value;
-  const box  = document.getElementById('k-orders');
-  if(!box) return;
-  if(!cls || !date){ box.innerHTML = '<p class="empty-msg">Оберіть клас і дату.</p>'; return; }
-  box.innerHTML = '<p class="empty-msg">Завантаження...</p>';
-  try{
-    const [stSnap, plSnap, daySnap, attSnap, menuSnap, resolutionSnap] = await Promise.all([
-      get(child(ref(db),`students_list/${cls}`)),
-      get(child(ref(db),`meal_plan/${cls}`)),
-      get(child(ref(db),`meal_day/${date}/${cls}`)),
-      get(child(ref(db),`attendance/${cls}/${date}`)),
-      get(child(ref(db),`menu/${date}`)),
-      get(child(ref(db),`meal_orphan_resolutions/${cls}`)).catch(e=>({val:()=>({}),readError:e.message}))
-    ]);
-    const menuDay = menuSnap.exists()?menuSnap.val():{};
-    const choice = choicePair(menuDay);
-    const hasChoice = !!choice;
-    const hasBrkMenu = !!String(menuDay.breakfast||'').trim();
-    const brkChoice = breakfastChoicePair(menuDay);
-    const hasBrkChoice = !!brkChoice;
-    if(!stSnap.exists()){ box.innerHTML = '<p class="empty-msg">У класі немає учнів.</p>'; return; }
-    const plans = plSnap.exists()?plSnap.val():{};
-    const overrides = daySnap.exists()?daySnap.val():{};
-    const absent = absentSet(attSnap.exists()?attSnap.val():null);
-    const wd = weekdayIdx(date);
+// ── Замовлення по класу ──
+// Кухня годує школу, а не клас: щоб зібрати денну потребу, кухарю
+// доводилося відкривати одинадцять екранів підряд і складати цифри на
+// папірці. Тому є режим «Усі класи» — один суцільний список на всю школу,
+// впорядкований за класом, а всередині класу за прізвищем.
+export const ALL_CLASSES = '__all';
+export function classNum(cls){
+  const n = parseInt(String(cls||'').replace('class_',''), 10);
+  return Number.isFinite(n) ? n : 999;
+}
+// Порядок рядків задано тут, а не в шаблоні друку: екран, аркуш і CSV
+// мають збігатися рядок у рядок, інакше кухня звіряє два різні списки.
+export function sortOrderRows(rows){
+  return (rows||[]).slice().sort((a,b)=>
+    classNum(a.cls) - classNum(b.cls) ||
+    String(a.name||'').localeCompare(String(b.name||''),'uk'));
+}
+// Підсумок — те, що кухня переписує в накладну. Рахується один раз і
+// однаково для екрана, аркуша й CSV.
+export function orderTotals(rows){
+  const n = f => (rows||[]).filter(f).length;
+  return { total:(rows||[]).length,
+           brk:n(r=>r.breakfast), lunch:n(r=>r.lunch), snack:n(r=>r.snack),
+           bpa:n(r=>r.breakfastPick==='a'), bpb:n(r=>r.breakfastPick==='b'),
+           pa:n(r=>r.pick==='a'),  pb:n(r=>r.pick==='b'),
+           noReply:n(r=>r.noReply), absent:n(r=>r.absent) };
+}
+// Розбивка на блоки класів для суцільної таблиці. Групуємо ВЖЕ
+// відсортоване, тож клас не може розпастися на два шматки списку.
+export function groupByClass(rows){
+  const out = [];
+  sortOrderRows(rows).forEach(r=>{
+    let g = out[out.length-1];
+    if(!g || g.cls !== r.cls){ g = { cls:r.cls, rows:[] }; out.push(g); }
+    g.rows.push(r);
+  });
+  return out.map(g=>({ cls:g.cls, rows:g.rows, totals:orderTotals(g.rows) }));
+}
 
-    const rows = Object.entries(stSnap.val()).sort((a,b)=>String(a[1]).localeCompare(String(b[1]),'uk')).map(([sid,name])=>{
+// Один рядок = одна дитина. Винесено з loadClassOrders, бо той самий
+// розрахунок потрібен і для одного класу, і для всіх одразу.
+export function buildOrderRows(cls, students, plans, overrides, absent, wd, menuDay, hasChoice, hasBrkChoice){
+  return Object.entries(students||{})
+    .sort((a,b)=>String(a[1]).localeCompare(String(b[1]),'uk'))
+    .map(([sid,name])=>{
       const plan = byKeyOrName(plans, sid, name) || {};
       const ov = mealDayFresher(overrides?.[sid],overrides?.[name]);
       const e = effectiveMeals(plan, ov, !!(absent[sid] || absent[name]), wd);
@@ -899,21 +915,101 @@ window.loadClassOrders = async function(){
       // цього не вирішував. Кухня має бачити його першим, тому окремо й
       // помітно.
       const noReply = !e.absent && !lunchChosen(plan);
-      return { sid, name, ...e, pick, breakfastPick, note, noReply };
+      // ЯВНИЙ ВИБІР І ВИБІР ЗА ЗАМОВЧУВАННЯМ — РІЗНІ РЕЧІ.
+      // pickedSecond віддає 'a' і тоді, коли ніхто нічого не натискав: А діє
+      // сама собою. Для кухні різниця важлива — саме вона відповідає на
+      // питання «коли батько відмітив варіант». Якщо не відмічав, часу
+      // немає, і вигадувати його не можна.
+      return { cls, sid, name, ...e, pick, breakfastPick, note, noReply,
+               pickExplicit: !!(ov && (ov.pick === 'a' || ov.pick === 'b')),
+               brkPickExplicit: !!(ov && (ov.breakfastPick === 'a' || ov.breakfastPick === 'b')),
+               pickTs: ov && ov.pickTs, breakfastPickTs: ov && ov.breakfastPickTs,
+               ts: ov && ov.ts, by: ov && ov.by, manual: !!(ov && ov.manual) };
     });
-    const lunch = rows.filter(r=>r.lunch).length;
-    const snack = rows.filter(r=>r.snack).length;
-    const brk   = rows.filter(r=>r.breakfast).length;
-    const showBrk=hasBrkMenu||brk>0;
-    const pa    = rows.filter(r=>r.pick==='a').length;
-    const pb    = rows.filter(r=>r.pick==='b').length;
-    const bpa   = rows.filter(r=>r.breakfastPick==='a').length;
-    const bpb   = rows.filter(r=>r.breakfastPick==='b').length;
-    window.__classOrders = { cls, date, rows };
+}
+
+window.loadClassOrders = async function(){
+  const cls  = document.getElementById('k-order-class')?.value;
+  const date = document.getElementById('k-order-date')?.value;
+  const box  = document.getElementById('k-orders');
+  if(!box) return;
+  if(!cls || !date){ box.innerHTML = '<p class="empty-msg">Оберіть клас і дату.</p>'; return; }
+  const allMode = cls === ALL_CLASSES;
+  box.innerHTML = '<p class="empty-msg">Завантаження...</p>';
+  try{
+    // Для одного класу читаємо рівно його вузли. Читати всю школу заради
+    // двадцяти дітей — зайвий трафік на кожне перемикання дати.
+    const [stSnap, plSnap, daySnap, attRaw, menuSnap, resolutionSnap] = await Promise.all([
+      get(child(ref(db), allMode ? 'students_list' : `students_list/${cls}`)),
+      get(child(ref(db), allMode ? 'meal_plan'     : `meal_plan/${cls}`)),
+      get(child(ref(db), allMode ? `meal_day/${date}` : `meal_day/${date}/${cls}`)),
+      allMode ? getSchoolRange('attendance', date, date, true)
+              : get(child(ref(db),`attendance/${cls}/${date}`)),
+      get(child(ref(db),`menu/${date}`)),
+      get(child(ref(db), allMode ? 'meal_orphan_resolutions' : `meal_orphan_resolutions/${cls}`))
+        .catch(e=>({val:()=>({}),readError:e.message}))
+    ]);
+    const menuDay = menuSnap.exists()?menuSnap.val():{};
+    const choice = choicePair(menuDay);
+    const hasChoice = !!choice;
+    const hasBrkMenu = !!String(menuDay.breakfast||'').trim();
+    const brkChoice = breakfastChoicePair(menuDay);
+    const hasBrkChoice = !!brkChoice;
+    if(!stSnap.exists()){ box.innerHTML = `<p class="empty-msg">${allMode?'У школі немає учнів.':'У класі немає учнів.'}</p>`; return; }
+    const wd = weekdayIdx(date);
+
+    // Далі все однакове для обох режимів: набір класів різний, логіка —
+    // ні. Один клас — це просто список із одного елемента.
+    const clsList = allMode
+      ? Array.from({length:11},(_,i)=>`class_${i+1}`).filter(c=>stSnap.val()[c])
+      : [cls];
+    const studentsOf = c => allMode ? (stSnap.val()[c]||{}) : stSnap.val();
+    const plansOf    = c => allMode ? ((plSnap.exists()?plSnap.val():{})[c]||{}) : (plSnap.exists()?plSnap.val():{});
+    const dayOf      = c => allMode ? ((daySnap.exists()?daySnap.val():{})[c]||{}) : (daySnap.exists()?daySnap.val():{});
+    const attOf      = c => allMode ? ((attRaw[c]||{})[date]||null) : (attRaw.exists()?attRaw.val():null);
+    const resOf      = c => allMode ? ((resolutionSnap.val()||{})[c]||{}) : (resolutionSnap.val()||{});
+
+    let rows = [];
+    const orphans = [];
+    clsList.forEach(c=>{
+      const students = studentsOf(c), plans = plansOf(c), overrides = dayOf(c);
+      rows = rows.concat(buildOrderRows(c, students, plans, overrides,
+        absentSet(attOf(c)), wd, menuDay, hasChoice, hasBrkChoice));
+      orphans.push(...orphanKeys(overrides, plans, students)
+        .map(o=>({...o, cls:c, kind:o.what==='постійні налаштування'?'plan':'day'})));
+    });
+    rows = sortOrderRows(rows);
+    const groups = groupByClass(rows);
+    const t = orderTotals(rows);
+    const showBrk = hasBrkMenu || t.brk > 0;
+    const resolutions = {}; clsList.forEach(c=>{ resolutions[c] = resOf(c); });
+    window.__classOrders = { cls, date, rows, menu: menuDay, all: allMode };
+
+    // Колонок стало на одну більше, ніж було, тож ширину рядка-роздільника
+    // рахуємо, а не пишемо числом: інакше при зміні меню роздільник
+    // обривається посеред таблиці.
+    const cols = 2 + (showBrk?1:0) + (hasBrkChoice?1:0) + 1 + (hasChoice?1:0) + 1 + (allMode?1:0);
+    const clsCell = r => allMode ? `<td data-l="Клас" class="k-ord-cl">${escHtml(String(classNum(r.cls)))}</td>` : '';
+    const rowHtml = r => `<tr class="${r.absent?'k-ord-abs':''}">
+          ${clsCell(r)}
+          <td data-l="Учень">${escHtml(r.name)}</td>
+          ${showBrk?`<td data-l="Сніданок">${mealCell(r.cls,r.sid,date,'breakfast',r.breakfast)}</td>`:''}
+          ${hasBrkChoice?`<td data-l="Сніданок А/Б">${breakfastPickCell(r.cls,r.sid,date,r.breakfastPick)}</td>`:''}
+          <td data-l="Обід">${mealCell(r.cls,r.sid,date,'lunch',r.lunch)}</td>
+          ${hasChoice?`<td data-l="Варіант">${pickCell(r.cls,r.sid,date,r.pick)}</td>`:''}
+          <td data-l="Підвечірок">${mealCell(r.cls,r.sid,date,'snack',r.snack)}</td>
+          <td class="k-ord-note" data-l="Примітка">${r.noReply
+            ? `<b class="k-noreply">Нема відповіді від батьків</b>${r.note?` · ${escHtml(r.note)}`:''}`
+            : escHtml(r.note)}</td></tr>`;
+    const groupHead = g => `<tr class="k-ord-clsrow"><td colspan="${cols}">
+          <b>${escHtml(String(classNum(g.cls)))} клас</b>
+          ${showBrk?`· ${g.totals.brk} сніданків${hasBrkChoice?` (А ${g.totals.bpa} / Б ${g.totals.bpb})`:''} `:''}
+          · ${g.totals.lunch} обідів${hasChoice?` (А ${g.totals.pa} / Б ${g.totals.pb})`:''}
+          · ${g.totals.snack} підвечірків</td></tr>`;
 
     box.innerHTML = `
-      <div class="k-ord-sum">${showBrk?`<b>${brk}</b> сніданків${!hasBrkMenu?' (меню ще немає)':''}${hasBrkChoice?` <span class="k-ord-ab">А ${bpa} / Б ${bpb}</span>`:''} · `:''}<b>${lunch}</b> обідів${hasChoice?` <span class="k-ord-ab">А ${pa} / Б ${pb}</span>`:''} · <b>${snack}</b> підвечірків
-        <span>${escHtml(cls.replace('class_',''))} клас, ${escHtml(human(date))}</span></div>
+      <div class="k-ord-sum">${showBrk?`<b>${t.brk}</b> сніданків${!hasBrkMenu?' (меню ще немає)':''}${hasBrkChoice?` <span class="k-ord-ab">А ${t.bpa} / Б ${t.bpb}</span>`:''} · `:''}<b>${t.lunch}</b> обідів${hasChoice?` <span class="k-ord-ab">А ${t.pa} / Б ${t.pb}</span>`:''} · <b>${t.snack}</b> підвечірків
+        <span>${allMode?`усі класи (${clsList.length})`:`${escHtml(cls.replace('class_',''))} клас`}, ${escHtml(human(date))}</span></div>
       ${hasBrkChoice?`<div class="k-ord-menu">Сніданок: А — ${escHtml(brkChoice.a)} · Б — ${escHtml(brkChoice.b)}</div>`:''}
       ${hasChoice?`<div class="k-ord-menu">Вибір на ${escHtml(choice.label)}: А — ${escHtml(choice.a)} · Б — ${escHtml(choice.b)}. Якщо варіант не змінювали, діє А.</div>`:''}
       <!-- data-l на кожній клітинці — це підпис колонки. Коли шрифт великий,
@@ -922,27 +1018,24 @@ window.loadClassOrders = async function(){
            підвечірок. У звичайному вигляді атрибут просто не використовується. -->
       <div class="k-scroll">
       <table class="k-table k-ord"><thead><tr>
-        <th>Учень</th>${showBrk?'<th>Снід.</th>':''}${hasBrkChoice?'<th>Снід. А/Б</th>':''}<th>Обід</th>${hasChoice?'<th>Обід А/Б</th>':''}<th>Підвеч.</th><th>Примітка</th></tr></thead><tbody>
-        ${rows.map(r=>`<tr class="${r.absent?'k-ord-abs':''}">
-          <td data-l="Учень">${escHtml(r.name)}</td>
-          ${showBrk?`<td data-l="Сніданок">${mealCell(cls,r.sid,date,'breakfast',r.breakfast)}</td>`:''}
-          ${hasBrkChoice?`<td data-l="Сніданок А/Б">${breakfastPickCell(cls,r.sid,date,r.breakfastPick)}</td>`:''}
-          <td data-l="Обід">${mealCell(cls,r.sid,date,'lunch',r.lunch)}</td>
-          ${hasChoice?`<td data-l="Варіант">${pickCell(cls,r.sid,date,r.pick)}</td>`:''}
-          <td data-l="Підвечірок">${mealCell(cls,r.sid,date,'snack',r.snack)}</td>
-          <td class="k-ord-note" data-l="Примітка">${r.noReply
-            ? `<b class="k-noreply">Нема відповіді від батьків</b>${r.note?` · ${escHtml(r.note)}`:''}`
-            : escHtml(r.note)}</td></tr>`).join('')}
+        ${allMode?'<th>Клас</th>':''}<th>Учень</th>${showBrk?'<th>Снід.</th>':''}${hasBrkChoice?'<th>Снід. А/Б</th>':''}<th>Обід</th>${hasChoice?'<th>Обід А/Б</th>':''}<th>Підвеч.</th><th>Примітка</th></tr></thead><tbody>
+        ${allMode
+          ? groups.map(g=>groupHead(g) + g.rows.map(rowHtml).join('')).join('')
+          : rows.map(rowHtml).join('')}
       </tbody></table>
       </div>
-      ${renderMealOrphanList(orphanKeys(overrides,plans,stSnap.val()).map(o=>({...o,cls,kind:o.what==='постійні налаштування'?'plan':'day'})),{[cls]:resolutionSnap.val()||{}},!resolutionSnap.readError)}
+      ${renderMealOrphanList(orphans, resolutions, !resolutionSnap.readError)}
       <p class="k-ord-hint">Натисніть ✓ або —, щоб додати чи зняти порцію вручну; кожна колонка А/Б перемикає свій варіант.
         Це для тих, хто звернувся вже після дедлайну; дію буде записано в журнал.</p>
-      <button onclick="exportClassOrders()" style="background:var(--brand-soft);color:var(--brand-ink);border:1px solid var(--brand-line);margin-top:11px;">📄 Вивантажити CSV</button>`;
+      <div class="k-ord-actions">
+        <button onclick="printClassOrders()" class="k-ord-print">🖨️ Аркуш на друк</button>
+        <button onclick="exportClassOrders()" class="k-ord-csv">📄 CSV</button>
+      </div>`;
   }catch(e){
     box.innerHTML = `<p style="color:red;font-size:.8rem;">Помилка: ${escHtml(e.message)}</p>`;
   }
 };
+
 // ══════════════════════════════════════════════════════════════════
 //  ЗАМОВЛЕННЯ ПЕРСОНАЛУ
 // ══════════════════════════════════════════════════════════════════
@@ -1232,6 +1325,7 @@ window.kitchenSetPick = async function(cls, sid, date, value){
     const path = `meal_day/${date}/${cls}/${sid}`;
     const cur = {...(await readMealCopies(`meal_day/${date}/${cls}`,sid,name)||{})};
     cur.pick = v;
+    cur.pickTs = Date.now();   // хто саме поставив — видно з cur.by нижче
     cur.by = currentUserData?.email || '';
     cur.ts = Date.now();
     cur.manual = true;
@@ -1280,17 +1374,188 @@ function mealCell(cls, sid, date, field, on){
     onclick="kitchenSetMeal('${escJs(cls)}','${escJs(sid)}','${escJs(date)}','${field}',${on?0:1})">${mark}</button>`;
 }
 
+// ══════════════════════════════════════════════════════════════════
+//  АРКУШ ЗАМОВЛЕНЬ НА ДРУК
+// ══════════════════════════════════════════════════════════════════
+//
+// CSV годиться для обліку, але кухня з ним не працює: за ним не стати до
+// плити. Потрібен аркуш, який видно з відстані витягнутої руки й на якому
+// одразу написано, ЩО саме означають А і Б цього дня.
+//
+// ЧОМУ АЛЬБОМНА ОРІЄНТАЦІЯ Й ОДНА СТОРІНКА. Колонок вісім, а клас — до
+// тридцяти дітей. У книжковій орієнтації таблиця або лізе на другий
+// аркуш, або стискається до нечитабельного. Другий аркуш на кухні
+// губиться, і половина класу лишається без порцій.
+//
+// ЧОМУ ДАТА ВЕЛИКИМИ ЛІТЕРАМИ В ШАПЦІ. Аркуші друкують щодня і кладуть
+// поруч. Без дати вчорашній від сьогоднішнього не відрізнити, а різниця
+// між ними — це чиїсь обіди.
+const WD_UA = ['неділя','понеділок','вівторок','середа','четвер','пʼятниця','субота'];
+const MON_UA = ['січня','лютого','березня','квітня','травня','червня',
+                'липня','серпня','вересня','жовтня','листопада','грудня'];
+export function longDate(iso){
+  const [y,m,d] = String(iso||'').split('-').map(Number);
+  if(!y||!m||!d) return String(iso||'');
+  const dt = new Date(y, m-1, d, 12);
+  return `${WD_UA[dt.getDay()]}, ${d} ${MON_UA[m-1]} ${y}`;
+}
+
+// Коли обрано варіант. Береться позначка самого вибору; у записів,
+// зроблених до того, як вона зʼявилася, лишається тільки час останньої
+// зміни — його й показуємо, але окремим виглядом, щоб кухня не читала
+// його як точний.
+//
+// ЧОМУ НЕ САМА ЛИШЕ ГОДИНА. Замовлення на день можна зробити заздалегідь:
+// батько відкриває меню на тиждень і розставляє варіанти в неділю. Тоді
+// «07:12» на аркуші за середу — це неправда, у якій ніхто не зізнається:
+// виглядає як ранок того самого дня. Тому день додаємо щоразу, коли вибір
+// зроблено НЕ в день замовлення, — і в минуле, і в майбутнє (кухня теж
+// править записи заднім числом).
+export function pickTimeLabel(row, which, orderDate){
+  // НЕМАЄ ПОРЦІЇ — НЕМАЄ Й ВИБОРУ. Дитина, яка сьогодні не обідає
+  // (відмова, «не харчується», батьки не відповіли), не може мати
+  // «обрано о 06:50». Позначка вибору лишається в записі назавжди, тож
+  // без цієї перевірки в порожньому рядку світився час, і кухня читала
+  // його як чинне замовлення.
+  const val = which === 'breakfast' ? row.breakfastPick : row.pick;
+  if(!val) return { text:'—', exact:false, none:true, sameDay:true };
+  const explicit = which === 'breakfast' ? row.brkPickExplicit : row.pickExplicit;
+  if(!explicit) return { text:'—', exact:false, none:true, sameDay:true };
+  const own = which === 'breakfast' ? row.breakfastPickTs : row.pickTs;
+  const t = own || row.ts;
+  if(!t) return { text:'—', exact:false, none:true, sameDay:true };
+  const d = new Date(t);
+  const p2 = n => String(n).padStart(2,'0');
+  const iso = `${d.getFullYear()}-${p2(d.getMonth()+1)}-${p2(d.getDate())}`;
+  const hm = `${p2(d.getHours())}:${p2(d.getMinutes())}`;
+  const sameDay = !orderDate || iso === orderDate;
+  return { text: sameDay ? hm : `${p2(d.getDate())}.${p2(d.getMonth()+1)} ${hm}`,
+           exact: !!own, none:false, sameDay };
+}
+
+window.printClassOrders = function(){
+  const o = window.__classOrders;
+  const holder = document.getElementById('print-area');
+  if(!o || !holder) return;
+  const { cls, date, rows, menu } = o;
+  const allMode = !!o.all;
+  const choice = choicePair(menu||{});
+  const brkChoice = breakfastChoicePair(menu||{});
+  const showBrk = !!String((menu||{}).breakfast||'').trim() || rows.some(r=>r.breakfast);
+  const t = orderTotals(rows);
+  const groups = groupByClass(rows);
+
+  // Щільність рядків підбираємо під клас: 30 дітей і 12 дітей не мають
+  // друкуватися однаково дрібно. У режимі «всі класи» аркуш усе одно
+  // багатосторінковий, тож тиснути шрифт до нечитаного немає сенсу —
+  // беремо середню щільність.
+  const dens = allMode ? 'ko-s' : rows.length > 26 ? 'ko-xs' : rows.length > 18 ? 'ko-s' : '';
+
+  const cellMark = on => on ? '<span class="ko-y">✓</span>' : '<span class="ko-n">—</span>';
+  // Кольоровий значок = батьки справді натиснули. Блідий «А» = ніхто не
+  // обирав, працює правило «якщо не змінювали — діє А». Кухні це видно
+  // з одного погляду, і питання «а він точно обрав?» відпадає.
+  // «Б» за замовчуванням не буває: правило замовчування — завжди А. Тож
+  // навіть якщо позначка явності десь загубилася, Б лишається кольоровим.
+  const ab = (v, explicit) => !v ? '<span class="ko-n">—</span>'
+    : `<span class="ko-ab ko-${v}${(explicit||v==='b')?'':' ko-def'}">${v.toUpperCase()}</span>`;
+  const tm = (r, which, has) => {
+    if(!has) return '';
+    const t2 = pickTimeLabel(r, which, date);
+    // Вибір з іншого дня позначаємо й кольором: у стовпчику однакових годин
+    // самої лише дати легко не помітити.
+    return `<td class="ko-t${t2.exact?'':' ko-approx'}${t2.sameDay?'':' ko-other'}">${t2.none?'—':escHtml(t2.text)}</td>`;
+  };
+  const cols = 2 + (allMode?1:0) + (showBrk?1:0) + (brkChoice?2:0) + 1 + (choice?2:0) + 1 + 1;
+  // Нумерація в суцільному списку починається заново в кожному класі:
+  // кухня рахує порції класами, і «учень №137» їй ні про що не говорить.
+  const line = (r,i)=>`<tr class="${r.absent?'ko-abs':''}${r.noReply?' ko-nore':''}">
+        <td class="ko-num">${i+1}</td>
+        ${allMode?`<td class="ko-cl">${escHtml(String(classNum(r.cls)))}</td>`:''}
+        <td class="ko-name">${escHtml(r.name)}</td>
+        ${showBrk?`<td>${cellMark(r.breakfast)}</td>`:''}
+        ${brkChoice?`<td>${ab(r.breakfastPick,r.brkPickExplicit)}</td>${tm(r,'breakfast',true)}`:''}
+        <td>${cellMark(r.lunch)}</td>
+        ${choice?`<td>${ab(r.pick,r.pickExplicit)}</td>${tm(r,'lunch',true)}`:''}
+        <td>${cellMark(r.snack)}</td>
+        <td class="ko-note">${r.noReply?'<b>нема відповіді</b>':''}${r.noReply&&r.note?' · ':''}${escHtml(r.note||'')}</td>
+      </tr>`;
+  // Роздільник класу несе власний підсумок: без нього, щоб дізнатися,
+  // скільки порцій нести в 4-й, довелося б рахувати галочки очима.
+  const sep = g=>`<tr class="ko-clsrow"><td colspan="${cols}">
+        <b>${escHtml(String(classNum(g.cls)))} клас</b> · ${g.totals.total} учнів
+        ${showBrk?` · ${g.totals.brk} сніданків${brkChoice?` (А ${g.totals.bpa} / Б ${g.totals.bpb})`:''}`:''}
+        · ${g.totals.lunch} обідів${choice?` (А ${g.totals.pa} / Б ${g.totals.pb})`:''}
+        · ${g.totals.snack} підвечірків
+        ${g.totals.noReply?` · <span class="ko-cw">${g.totals.noReply} без відповіді</span>`:''}</td></tr>`;
+
+  holder.innerHTML = `<div class="ps-sheet ko-sheet ${dens}${allMode?' ko-all':''}">
+    <div class="ko-head">
+      <div class="ko-brand"><span class="ko-logo">PUSH<small>school</small></span></div>
+      <div class="ko-mid">
+        <div class="ko-title">Замовлення харчування</div>
+        <div class="ko-cls">${allMode?`усі класи · ${groups.length} ${groups.length===1?'клас':'класів'} · ${t.total} учнів`:`${escHtml(cls.replace('class_',''))} клас`}</div>
+      </div>
+      <div class="ko-date"><b>${escHtml(longDate(date))}</b><span>${escHtml(human(date))}</span></div>
+    </div>
+
+    <div class="ko-sum">
+      ${showBrk?`<span><b>${t.brk}</b> сніданків${brkChoice?` · А ${t.bpa} / Б ${t.bpb}`:''}</span>`:''}
+      <span><b>${t.lunch}</b> обідів${choice?` · А ${t.pa} / Б ${t.pb}`:''}</span>
+      <span><b>${t.snack}</b> підвечірків</span>
+      ${t.noReply?`<span class="ko-warn"><b>${t.noReply}</b> без відповіді</span>`:''}
+      ${t.absent?`<span class="ko-warn"><b>${t.absent}</b> відсутніх</span>`:''}
+    </div>
+
+    ${(brkChoice||choice)?`<div class="ko-menu">
+      ${brkChoice?`<div><b>Сніданок</b> А — ${escHtml(brkChoice.a)} · Б — ${escHtml(brkChoice.b)}</div>`:''}
+      ${choice?`<div><b>Вибір на ${escHtml(choice.label)}</b> А — ${escHtml(choice.a)} · Б — ${escHtml(choice.b)}</div>`:''}
+    </div>`:''}
+
+    <table class="ko-table"><thead><tr>
+      <th class="ko-num">№</th>${allMode?'<th class="ko-cl">Клас</th>':''}<th class="ko-name">Учень</th>
+      ${showBrk?'<th>Сніданок</th>':''}${brkChoice?'<th>А/Б</th><th>Коли обрано</th>':''}
+      <th>Обід</th>${choice?'<th>А/Б</th><th>Коли обрано</th>':''}
+      <th>Підвечірок</th><th class="ko-note">Примітка</th>
+    </tr></thead><tbody>
+      ${allMode
+        ? groups.map(g=>sep(g) + g.rows.map(line).join('')).join('')
+        : rows.map(line).join('')}
+    </tbody></table>
+
+    <div class="ko-foot">
+      <span>Блідий <span class="ko-ab ko-a ko-def">А</span> — варіант не обирали, діє за замовчуванням. Курсивний час — остання зміна запису, а не сам вибір. Із датою — обрано в інший день.</span>
+      <span>Push School Warsaw · надруковано ${escHtml(new Date().toLocaleString('uk-UA',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}))}</span>
+    </div>
+  </div>`;
+  document.body.classList.add('printing');
+  window.print();
+  setTimeout(()=>{document.body.classList.remove('printing');holder.innerHTML='';},600);
+};
+
 window.exportClassOrders = function(){
   const o = window.__classOrders;
   if(!o) return;
-  const csv = ['Учень;Сніданок;Варіант сніданку;Обід;Варіант обіду;Підвечірок;Примітка',
+  const allMode = !!o.all;
+  const rows = sortOrderRows(o.rows);
+  // Дата — першим рядком, а не лише в назві файлу: назву при пересиланні
+  // часто втрачають, а таблиця без дня нічого не варта.
+  const csv = [`Замовлення харчування;${allMode?'усі класи':`${o.cls.replace('class_','')} клас`};${longDate(o.date)}`, '',
+    // Клас окремою колонкою — щоб у таблиці можна було відсортувати й
+    // порахувати зведення, не розрізаючи файл руками.
+    `${allMode?'Клас;':''}Учень;Сніданок;Варіант сніданку;Коли обрано;Обід;Варіант обіду;Коли обрано;Підвечірок;Примітка`,
     // У вивантаженні той самий стан, що й на екрані: інакше кухня друкує
     // список, у якому «нема відповіді» виглядає порожнім рядком
-    ...o.rows.map(r=>`${r.name};${r.breakfast?'так':'ні'};${r.breakfastPick?r.breakfastPick.toUpperCase():'—'};${r.lunch?'так':'ні'};${r.pick?r.pick.toUpperCase():'—'};${r.snack?'так':'ні'};${r.noReply?('НЕМА ВІДПОВІДІ ВІД БАТЬКІВ'+(r.note?' · '+r.note:'')):r.note}`)].join('\n');
-  const blob = new Blob(['\ufeff'+csv], {type:'text/csv;charset=utf-8'});
+    ...rows.map(r=>{
+      const bt=pickTimeLabel(r,'breakfast',o.date), lt=pickTimeLabel(r,'lunch',o.date);
+      return `${allMode?classNum(r.cls)+';':''}${r.name};${r.breakfast?'так':'ні'};${r.breakfastPick?r.breakfastPick.toUpperCase():'—'};${bt.text}${bt.exact?'':'*'};${r.lunch?'так':'ні'};${r.pick?r.pick.toUpperCase():'—'};${lt.text}${lt.exact?'':'*'};${r.snack?'так':'ні'};${r.noReply?('НЕМА ВІДПОВІДІ ВІД БАТЬКІВ'+(r.note?' · '+r.note:'')):r.note}`;
+    }),
+    '', '* — час останньої зміни запису, а не самого вибору варіанта',
+    'Якщо вказано дату — варіант обрано не в день замовлення'].join('\n');
+  const blob = new Blob(['﻿'+csv], {type:'text/csv;charset=utf-8'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `zamovlennya_${o.cls}_${o.date}.csv`;
+  a.download = `zamovlennya_${allMode?'usi-klasy':o.cls}_${o.date}.csv`;
   a.click();
   URL.revokeObjectURL(a.href);
 };
@@ -1962,8 +2227,14 @@ window.setMealDay = async function(date, field, value){
   }
   const path = `meal_day/${date}/${cls}/${sid}`;
   // pick і breakfastPick зберігають літери незалежних варіантів, решта — 0/1
-  if(field === 'pick') cur.pick = (value === 'b') ? 'b' : 'a';
-  else if(field === 'breakfastPick') cur.breakfastPick = (value === 'b') ? 'b' : 'a';
+  //
+  // ЧОМУ В А/Б СВОЯ ПОЗНАЧКА ЧАСУ. Кухня друкує аркуш замовлень і питає:
+  // «коли батько обрав саме цей варіант». Спільний ts на це не відповідає —
+  // він оновлюється від будь-якої дії із записом. Батько обрав Б о 07:10, а
+  // о 08:40 скасував підвечірок — і ts став 08:40, хоча варіант не чіпали.
+  // Тому в вибору варіанта власний час, а ts лишається «останньою зміною».
+  if(field === 'pick'){ cur.pick = (value === 'b') ? 'b' : 'a'; cur.pickTs = Date.now(); }
+  else if(field === 'breakfastPick'){ cur.breakfastPick = (value === 'b') ? 'b' : 'a'; cur.breakfastPickTs = Date.now(); }
   else {
     const patch = dayFieldPatch(plan, field, value, wd);
     if(patch === null) delete cur[field];
@@ -2436,7 +2707,7 @@ window.reloadMyMealStats = async function(){
   try{
     rows = await computeMyMealStats(from, to, cls, sid, true);
   }catch(e){
-    body.innerHTML = `<p class="empty-msg" style="color:var(--red);">Не вдалося порахувати: ${escHtml(e.message||'відмова')}</p>`;
+    body.innerHTML = `<p class="empty-msg" style="color:var(--danger);">Не вдалося порахувати: ${escHtml(e.message||'відмова')}</p>`;
     return;
   }
   const r = rows[0] || { lunch:0, snack:0, brk:0, absent:0, days:0 };
@@ -2568,7 +2839,7 @@ export async function loadTakeawayItems(){
       </div>`;
     }).join('') : '<p class="empty-msg">Позицій ще немає.</p>';
   }catch(e){
-    box.innerHTML = `<p class="empty-msg" style="color:var(--red);">Не вдалося завантажити: ${escHtml(e.message)}</p>`;
+    box.innerHTML = `<p class="empty-msg" style="color:var(--danger);">Не вдалося завантажити: ${escHtml(e.message)}</p>`;
   }
 }
 window.loadTakeawayItems = loadTakeawayItems;
@@ -2753,7 +3024,7 @@ window.loadTakeawayOrders = async function(){
              <td class="k-ta-cell">${editRow(r)}</td></tr>`).join('')}
          </tbody></table></div>`) + addForm;
   }catch(e){
-    box.innerHTML = `<p class="empty-msg" style="color:var(--red);">Не вдалося завантажити: ${escHtml(e.message)}</p>`;
+    box.innerHTML = `<p class="empty-msg" style="color:var(--danger);">Не вдалося завантажити: ${escHtml(e.message)}</p>`;
   }
 };
 
