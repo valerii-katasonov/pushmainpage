@@ -229,6 +229,79 @@ export function mealsAfterAbsenceCleared(date, markedTs, now = new Date(), today
   }
   return { back, gone };
 }
+// ══════════════════════════════════════════════════════════════════
+//  ЧИ ЗНІМАЄ ВІДСУТНІСТЬ ПОРЦІЮ З РАХУНКУ
+// ══════════════════════════════════════════════════════════════════
+//
+// Відсутність сама по собі порції не скасовує — скасовує ВЧАСНЕ
+// попередження. Кухня рахує продукти зранку: до дедлайну (обід і
+// підвечірок — MEAL_CUTOFF_HOUR/SNACK_CUTOFF_HOUR, сніданок —
+// BREAKFAST_CUTOFF_HOUR) дитину ще можна зняти з переліку; після нього
+// порція вже приготована, і день рахується.
+//
+// Портал давно каже це батькам в іншому місці: коли помилкову відмітку
+// знімають, mealsAfterAbsenceCleared перевіряє рівно ті самі години й
+// попереджає, що обід уже не замовлено. А підрахунок жив за іншим
+// правилом — будь-яка відсутність стирала день, навіть та, яку вчитель
+// проставив через тиждень. Через це «Моя статистика» показувала батькам
+// одні числа, кухня готувала на інші, і сходилося воно випадково.
+//
+// СТАРІ ДНІ НЕ ЧІПАЄМО. Правило не можна вмикати заднім числом: люди вже
+// бачили свої числа, частина днів запечатана в журналі, і несподіваний
+// перерахунок за минуле — це не виправлення, а новий рахунок. Тому до
+// ABSENCE_RULE_FROM усе рахується як раніше: будь-яка відсутність знімає
+// день, коли б про неї не повідомили.
+export const ABSENCE_RULE_FROM = '2026-09-21';
+
+// Дедлайн — це година ШКОЛИ, а не пристрою. Батько може відкрити портал
+// із іншого поясу, а нічний журнал рахується на сервері в UTC: без явної
+// зони «до 9:00» означало б різне в трьох місцях, і різниця в дві години
+// — це і є той самий обід.
+const SCHOOL_TZ = 'Europe/Warsaw';
+export function schoolMoment(ts){
+  const d = new Date(Number(ts) || 0);
+  const p2 = n => String(n).padStart(2,'0');
+  try{
+    const parts = new Intl.DateTimeFormat('en-CA', { timeZone:SCHOOL_TZ,
+      year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', hour12:false }).formatToParts(d);
+    const g = k => (parts.find(x=>x.type===k)||{}).value;
+    const hour = Number(g('hour'));
+    return { day:`${g('year')}-${g('month')}-${g('day')}`, hour: hour === 24 ? 0 : hour };
+  }catch(e){
+    // Немає повної бази часових поясів — краще місцевий час, ніж нічого.
+    return { day:`${d.getFullYear()}-${p2(d.getMonth()+1)}-${p2(d.getDate())}`, hour:d.getHours() };
+  }
+}
+
+// Час, коли про відсутність повідомили: найраніша позначка того дня.
+// Саме найраніша, а не остання: якщо вранці написали «не буде», а по обіді
+// вчитель продублював відмітку, попередили все-таки вранці.
+export function absenceAt(slots){
+  let ts = null, found = false;
+  for(const r of Object.values(slots || {})){
+    if(!r || r.status !== 'absent') continue;
+    found = true;
+    const t = Number(r.ts) || 0;
+    if(t && (ts === null || t < ts)) ts = t;
+  }
+  return found ? { ts: ts || 0 } : null;
+}
+
+export function absenceRemovesMeal(meal, date, markedTs){
+  if(!date || date < ABSENCE_RULE_FROM) return true;      // старі дні — як було
+  const hour = meal === 'breakfast' ? BREAKFAST_CUTOFF_HOUR
+             : meal === 'snack'     ? SNACK_CUTOFF_HOUR
+             : MEAL_CUTOFF_HOUR;
+  const ts = Number(markedTs) || 0;
+  // Запис без часу (є такі, старі) — не знаємо, коли попередили.
+  // Тлумачимо на користь родини: знімаємо, як і раніше.
+  if(!ts) return true;
+  const at = schoolMoment(ts);
+  if(at.day < date) return true;        // попередили заздалегідь
+  if(at.day > date) return false;       // проставили заднім числом
+  return at.hour < hour;                // того самого дня — встигли чи ні
+}
+
 // Один текст на всі три місця, де відмітку знімають.
 export function absenceClearedMealNote(date, markedTs, now = new Date(), today = localDateString){
   const { gone } = mealsAfterAbsenceCleared(date, markedTs, now, today);
@@ -421,14 +494,17 @@ function nameList(kind, title, rows, note, open){
   </details>`;
 }
 
-// Відсутність будь-де в межах дня знімає дитину з харчування
+// Відсутність будь-де в межах дня знімає дитину з харчування.
+// Значення — не просто «так», а {ts}: коли про відсутність повідомили.
+// Від цього залежить, чи встигла кухня зняти порцію (див.
+// absenceRemovesMeal). Обʼєкт завжди істинний, тож усі старі перевірки
+// виду !!absentSet[sid] працюють як раніше.
 function absentSet(attClassDay){
   const out = {};
   if(!attClassDay) return out;
   for(const sid in attClassDay){
-    const slots = attClassDay[sid];
-    if(!slots || typeof slots!=='object') continue;
-    if(Object.values(slots).some(r=>r && r.status==='absent')) out[sid]=true;
+    const rec = absenceAt(attClassDay[sid]);
+    if(rec) out[sid] = rec;
   }
   return out;
 }
@@ -1772,7 +1848,7 @@ export async function computeMealStats(from, to, onlyCls, onlyName, withCost=fal
       const name = students[cls][key];
       if(onlyName && name !== onlyName && key !== onlyName) continue;
       const plan = byKeyOrName(plans[cls],key,name);
-      let lunch=0, snack=0, brk=0, absent=0;
+      let lunch=0, snack=0, brk=0, absent=0, lateAbsent=0;
       const cost={lunch:0,brk:0,snack:0,takeaway:0,adjustments:0,total:0};
       const flags=[];
       dateList.forEach(date=>{
@@ -1807,11 +1883,21 @@ export async function computeMealStats(from, to, onlyCls, onlyName, withCost=fal
         }
         if(noSchool[date])return;
         const absentToday=absentSet(att[cls] && att[cls][date]);
-        const isAbsent = !!(absentToday[key] || absentToday[name]);
+        const abs = absentToday[key] || absentToday[name] || null;
         const ov = mealDayFresher(days[date]?.[cls]?.[key],days[date]?.[cls]?.[name]);
-        const e = effectiveMeals(plan, ov, isAbsent, weekdayIdx(date));
-        if(e.absent){ absent++; return; }
-        const served=servedMeals(e,menus[date]);
+        // Рахуємо від плану, а відсутність застосовуємо по кожній страві
+        // окремо: у сніданку власний, ранній дедлайн, і буває, що про
+        // дитину повідомили після нього, але до обіднього.
+        const e = effectiveMeals(plan, ov, false, weekdayIdx(date));
+        const planned=servedMeals(e,menus[date]);
+        const keep = m => !abs || !absenceRemovesMeal(m, date, abs.ts);
+        const served={ lunch: planned.lunch && keep('lunch'),
+                       snack: planned.snack && keep('snack'),
+                       breakfast: planned.breakfast && keep('breakfast') };
+        if(abs){
+          absent++;
+          if(served.lunch||served.snack||served.breakfast) lateAbsent++;
+        }
         if(served.lunch) lunch++;
         if(served.snack) snack++;
         if(served.breakfast) brk++;
@@ -1830,7 +1916,7 @@ export async function computeMealStats(from, to, onlyCls, onlyName, withCost=fal
         }
       }
       if(lunch || snack || brk || (withCost && (cost.takeaway || cost.adjustments || flags.length)))
-        out.push({ cls:i, name, lunch, snack, brk, absent, days:serviceDays, cost, flags });
+        out.push({ cls:i, name, lunch, snack, brk, absent, lateAbsent, days:serviceDays, cost, flags });
     }
   }
   return out;
@@ -2638,16 +2724,20 @@ export async function computeMyMealStats(from, to, cls, sid, withCost=false){
     }
   }
 
-  let lunch = 0, snack = 0, brk = 0, absent = 0, skipped = 0;
+  let lunch = 0, snack = 0, brk = 0, absent = 0, lateAbsent = 0, skipped = 0;
   const cost={lunch:0,brk:0,snack:0,total:0};
   dates.forEach(date => {
     const fixed=withCost&&ledger?.[date];
     if(fixed&&Number.isFinite(Number(fixed.total))){
       if(fixed.closed)skipped++;
-      if(fixed.absent)absent++;
-      lunch+=Number(fixed.counts?.lunch)||0;
-      brk+=Number(fixed.counts?.breakfast)||0;
-      snack+=Number(fixed.counts?.snack)||0;
+      const fl=Number(fixed.counts?.lunch)||0, fb=Number(fixed.counts?.breakfast)||0, fs=Number(fixed.counts?.snack)||0;
+      // Запечатаний день перераховувати не можна — журнал і є рахунок.
+      // Але якщо в ньому стоїть і відсутність, і порції, це той самий
+      // випадок «попередили запізно», і батько має бачити чому.
+      if(fixed.absent){ absent++; if(fl||fb||fs) lateAbsent++; }
+      lunch+=fl;
+      brk+=fb;
+      snack+=fs;
       cost.lunch=Math.round((cost.lunch+Number(fixed.lunch||0))*100)/100;
       cost.brk=Math.round((cost.brk+Number(fixed.breakfast||0))*100)/100;
       cost.snack=Math.round((cost.snack+Number(fixed.snack||0))*100)/100;
@@ -2658,11 +2748,24 @@ export async function computeMyMealStats(from, to, cls, sid, withCost=false){
     if(noSchool[date] || (withOverrides && !menuHasFood(menuByDate[date]))){ skipped++; return; }
     const att = (attRange && attRange[date] &&
       (attRange[date][sid] || attRange[date][name])) || null;
-    const isAbsent = !!(att && Object.values(att).some(r => r && r.status === 'absent'));
-    if(isAbsent){ absent++; return; }
+    const abs = absenceAt(att);
     const ov = ovByDate[date] || null;
     const e = effectiveMeals(plan, ov, false, weekdayIdx(date));
-    const served=withOverrides ? servedMeals(e,menuByDate[date]) : e;
+    const planned = withOverrides ? servedMeals(e,menuByDate[date]) : e;
+    // Відсутність застосовуємо по кожній страві окремо: у сніданку власний,
+    // ранній дедлайн, і буває, що повідомили після нього, але до обіднього.
+    const keep = m => !abs || !absenceRemovesMeal(m, date, abs.ts);
+    const served = { lunch: planned.lunch && keep('lunch'),
+                     snack: planned.snack && keep('snack'),
+                     breakfast: planned.breakfast && keep('breakfast') };
+    if(abs){
+      absent++;
+      // День, у який дитини не було, а харчування однаково пораховано:
+      // попередили вже після дедлайну, кухня встигла приготувати. Саме
+      // через ці дні числа батька й кухні не сходяться, тож рахуємо їх
+      // окремо і показуємо прямо у вікні.
+      if(served.lunch || served.snack || served.breakfast) lateAbsent++;
+    }
     if(served.lunch) lunch++;
     if(served.snack) snack++;
     if(served.breakfast) brk++;
@@ -2672,7 +2775,8 @@ export async function computeMyMealStats(from, to, cls, sid, withCost=false){
       for(const k of Object.keys(cost)) cost[k]=Math.round((cost[k]+daily[k])*100)/100;
     }
   });
-  return [{ lunch, snack, brk, absent, days: dates.length - skipped, skipped, withOverrides, cost }];
+  return [{ lunch, snack, brk, absent, lateAbsent,
+            days: dates.length - skipped, skipped, withOverrides, cost }];
 }
 
 window.openMyMealStats = async function(){
@@ -2759,10 +2863,15 @@ window.reloadMyMealStats = async function(){
       <div class="pms-cell"><b>${r.brk||0}</b><span>зі сніданком</span></div>
       <div class="pms-cell"><b>${r.absent||0}</b><span>днів відсутності</span></div>
     </div>
+    ${r.lateAbsent ? `<p class="pms-late">З них <b>${r.lateAbsent}</b> ${
+      r.lateAbsent===1?'день':'дн.'} пораховано: про відсутність повідомили вже після того,
+      як кухня порахувала продукти, і порцію приготували.</p>` : ''}
     ${moneyBlock}
     <p class="ms-note">Період: ${escHtml(human(from))} — ${escHtml(human(to))}. Рахуються лише робочі дні,
     коли кухня працювала.${r.skipped ? ` Не враховано днів (канікули, свята або меню не публікувалося): ${r.skipped}.` : ''}
-    Дні, коли дитина була відсутня, до харчування не зараховуються.
+    Відсутність знімає харчування, якщо про неї повідомили до дедлайну: обід і підвечірок —
+    до ${MEAL_CUTOFF_HOUR}:00, сніданок — до ${BREAKFAST_CUTOFF_HOUR}:00. Пізніше кухня вже
+    порахувала продукти й приготувала порцію, тож день зараховується.
     ${r.withOverrides === false
       ? '<br>Для такого довгого періоду разові відмови на окремі дні не враховано — '
         + 'оберіть до трьох місяців, щоб побачити точні числа.'
