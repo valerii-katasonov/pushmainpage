@@ -263,13 +263,16 @@ export function schoolMoment(ts){
   const p2 = n => String(n).padStart(2,'0');
   try{
     const parts = new Intl.DateTimeFormat('en-CA', { timeZone:SCHOOL_TZ,
-      year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', hour12:false }).formatToParts(d);
+      year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', hour12:false }).formatToParts(d);
     const g = k => (parts.find(x=>x.type===k)||{}).value;
-    const hour = Number(g('hour'));
-    return { day:`${g('year')}-${g('month')}-${g('day')}`, hour: hour === 24 ? 0 : hour };
+    const hour = (Number(g('hour')) === 24 ? 0 : Number(g('hour')));
+    const minute = Number(g('minute')) || 0;
+    return { day:`${g('year')}-${g('month')}-${g('day')}`, hour, minute, hm:`${p2(hour)}:${p2(minute)}` };
   }catch(e){
     // Немає повної бази часових поясів — краще місцевий час, ніж нічого.
-    return { day:`${d.getFullYear()}-${p2(d.getMonth()+1)}-${p2(d.getDate())}`, hour:d.getHours() };
+    return { day:`${d.getFullYear()}-${p2(d.getMonth()+1)}-${p2(d.getDate())}`,
+             hour:d.getHours(), minute:d.getMinutes(),
+             hm:`${p2(d.getHours())}:${p2(d.getMinutes())}` };
   }
 }
 
@@ -2726,15 +2729,40 @@ export async function computeMyMealStats(from, to, cls, sid, withCost=false){
 
   let lunch = 0, snack = 0, brk = 0, absent = 0, lateAbsent = 0, skipped = 0;
   const cost={lunch:0,brk:0,snack:0,total:0};
+  // Розклад по днях. Це не налагоджувальний слід, а відповідь на питання,
+  // яке ставлять щоразу: «дитини не було, чому рахують». Підсумок його не
+  // дає — з чотирьох цифр неможливо зрозуміти, який саме день ліг не так.
+  const byDay = [];
   dates.forEach(date => {
+    // ВІДСУТНІСТЬ ЧИТАЄМО ПЕРШОЮ, ДО ВСІХ «ЦЕЙ ДЕНЬ НЕ РАХУЄМО».
+    //
+    // Раніше перевірка стояла після відсіву днів без меню, і будь-який
+    // день, на який кухня не опублікувала меню, вилітав разом із
+    // відміткою про відсутність. Для батька це виглядало найгірше з
+    // можливого: дитини не було, попередили зранку, а у вікні «днів
+    // відсутності: 0». Кухня меню не публікує — дитина ніби ходила.
+    const att = (attRange && attRange[date] &&
+      (attRange[date][sid] || attRange[date][name])) || null;
+    const abs = absenceAt(att);
+    const row = { date, lunch:0, brk:0, snack:0,
+                  absent: !!abs, absentAt: (abs && abs.ts) || 0, note:'' };
+    byDay.push(row);
+
     const fixed=withCost&&ledger?.[date];
     if(fixed&&Number.isFinite(Number(fixed.total))){
       if(fixed.closed)skipped++;
       const fl=Number(fixed.counts?.lunch)||0, fb=Number(fixed.counts?.breakfast)||0, fs=Number(fixed.counts?.snack)||0;
+      row.sealed = true;
+      row.lunch = fl; row.brk = fb; row.snack = fs;
+      row.note = fixed.closed ? 'кухня не працювала' : 'день закрито';
       // Запечатаний день перераховувати не можна — журнал і є рахунок.
-      // Але якщо в ньому стоїть і відсутність, і порції, це той самий
-      // випадок «попередили запізно», і батько має бачити чому.
-      if(fixed.absent){ absent++; if(fl||fb||fs) lateAbsent++; }
+      // Але відсутність могли проставити вже ПІСЛЯ закриття, і тоді в
+      // журналі її немає, а в журналі відвідуваності — є. Для лічильника
+      // «днів відсутності» це той самий пропуск, тож беремо обидва
+      // джерела; на гроші це не впливає, їх журнал уже порахував.
+      const wasAbsent = !!fixed.absent || !!abs;
+      row.absent = wasAbsent;
+      if(wasAbsent){ absent++; if(fl||fb||fs) lateAbsent++; }
       lunch+=fl;
       brk+=fb;
       snack+=fs;
@@ -2744,11 +2772,17 @@ export async function computeMyMealStats(from, to, cls, sid, withCost=false){
       cost.total=Math.round((cost.lunch+cost.brk+cost.snack)*100)/100;
       return;
     }
-    // Канікули, свято або день без меню — кухня не готувала, рахувати нічого
-    if(noSchool[date] || (withOverrides && !menuHasFood(menuByDate[date]))){ skipped++; return; }
-    const att = (attRange && attRange[date] &&
-      (attRange[date][sid] || attRange[date][name])) || null;
-    const abs = absenceAt(att);
+    // Канікули та свята: школи немає, відсутності теж — нема від чого бути
+    // відсутнім.
+    if(noSchool[date]){ row.note='канікули або свято'; row.absent=false; skipped++; return; }
+    // Меню не опубліковано — кухня не готувала, харчування рахувати нічого.
+    // Але дитини того дня могло не бути, і це окремий факт.
+    if(withOverrides && !menuHasFood(menuByDate[date])){
+      row.note='меню не публікувалося';
+      skipped++;
+      if(abs) absent++;
+      return;
+    }
     const ov = ovByDate[date] || null;
     const e = effectiveMeals(plan, ov, false, weekdayIdx(date));
     const planned = withOverrides ? servedMeals(e,menuByDate[date]) : e;
@@ -2758,13 +2792,14 @@ export async function computeMyMealStats(from, to, cls, sid, withCost=false){
     const served = { lunch: planned.lunch && keep('lunch'),
                      snack: planned.snack && keep('snack'),
                      breakfast: planned.breakfast && keep('breakfast') };
+    row.lunch = +served.lunch; row.brk = +served.breakfast; row.snack = +served.snack;
     if(abs){
       absent++;
       // День, у який дитини не було, а харчування однаково пораховано:
       // попередили вже після дедлайну, кухня встигла приготувати. Саме
       // через ці дні числа батька й кухні не сходяться, тож рахуємо їх
       // окремо і показуємо прямо у вікні.
-      if(served.lunch || served.snack || served.breakfast) lateAbsent++;
+      if(served.lunch || served.snack || served.breakfast){ lateAbsent++; row.late = true; }
     }
     if(served.lunch) lunch++;
     if(served.snack) snack++;
@@ -2775,7 +2810,7 @@ export async function computeMyMealStats(from, to, cls, sid, withCost=false){
       for(const k of Object.keys(cost)) cost[k]=Math.round((cost[k]+daily[k])*100)/100;
     }
   });
-  return [{ lunch, snack, brk, absent, lateAbsent,
+  return [{ lunch, snack, brk, absent, lateAbsent, byDay,
             days: dates.length - skipped, skipped, withOverrides, cost }];
 }
 
@@ -2806,6 +2841,45 @@ window.myMealPeriod = function(kind){
   }
   window.reloadMyMealStats();
 };
+
+// ── РОЗКЛАД ПО ДНЯХ ──
+//
+// Підсумок із чотирьох цифр не дає відповіді на єдине питання, яке
+// справді ставлять: «дитини не було цього дня — чому це не видно».
+// Причин, чому день не потрапив у підрахунок, кілька (канікули, меню не
+// опубліковано, день уже закрито журналом), і жодна з них із цифри не
+// читається. Тому — список днів із тим, що портал про кожен знає.
+export function mealDaysTable(byDay){
+  const WD_SHORT = ['нд','пн','вт','ср','чт','пт','сб'];
+  const dayLabel = iso => {
+    const [y,m,d] = String(iso).split('-').map(Number);
+    return `${String(d).padStart(2,'0')}.${String(m).padStart(2,'0')} <i>${WD_SHORT[new Date(y,m-1,d,12).getDay()]}</i>`;
+  };
+  const mark = n => n ? '<b class="pms-y">✓</b>' : '<span class="pms-n">—</span>';
+  const dayState = d => {
+    if(d.absent){
+      const at = d.absentAt ? schoolMoment(d.absentAt) : null;
+      const when = at ? (at.day === d.date ? `о ${at.hm}` : `${at.day.slice(8,10)}.${at.day.slice(5,7)} о ${at.hm}`) : 'час невідомий';
+      return `<span class="pms-abs">не було</span> · повідомлено ${escHtml(when)}${
+        d.late ? ' · <span class="pms-warn">після дедлайну, порцію приготували</span>' : ''}${
+        d.note ? ` · ${escHtml(d.note)}` : ''}`;
+    }
+    return d.note ? escHtml(d.note) : '';
+  };
+  const dayRows = byDay || [];
+  return dayRows.length ? `
+    <details class="pms-days">
+      <summary>Показати по днях (${dayRows.length})</summary>
+      <table class="pms-tab"><thead><tr>
+        <th>День</th><th>Сн.</th><th>Об.</th><th>Пв.</th><th>Стан</th>
+      </tr></thead><tbody>
+        ${dayRows.map(d=>`<tr class="${d.absent?'pms-r-abs':''}${d.note&&!d.absent?' pms-r-skip':''}">
+          <td class="pms-d">${dayLabel(d.date)}</td>
+          <td>${mark(d.brk)}</td><td>${mark(d.lunch)}</td><td>${mark(d.snack)}</td>
+          <td class="pms-s">${dayState(d)}</td></tr>`).join('')}
+      </tbody></table>
+    </details>` : '';
+}
 
 window.reloadMyMealStats = async function(){
   const body = document.getElementById('meal-stats-body');
@@ -2856,6 +2930,8 @@ window.reloadMyMealStats = async function(){
         cost.snack?` · підвечірки ${taMoney(cost.snack)}`:''}</span>
       <small>Сума за харчування за період за цінами відповідних днів, без урахування поповнень.</small>
     </div>` : '';
+  const daysBlock = mealDaysTable(r.byDay);
+
   body.innerHTML = `
     <div class="pms-grid">
       <div class="pms-cell"><b>${r.lunch}</b><span>днів з обідом</span></div>
@@ -2875,7 +2951,8 @@ window.reloadMyMealStats = async function(){
     ${r.withOverrides === false
       ? '<br>Для такого довгого періоду разові відмови на окремі дні не враховано — '
         + 'оберіть до трьох місяців, щоб побачити точні числа.'
-      : ''}</p>`;
+      : ''}</p>
+    ${daysBlock}`;
 };
 
 // ═══════════ ПОЗИЦІЇ НА ВИНОС ═══════════
