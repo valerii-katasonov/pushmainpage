@@ -2264,31 +2264,60 @@ window.subjectsForClassWeek = subjectsForClassWeek;
 // форма входу. Не раніше — інакше між заставкою і кабінетом мигне
 // порожній фон.
 //
-// НИЖНЯ МЕЖА ЧАСУ. Якщо сеанс знайдеться за двісті мілісекунд, Пушики
-// не встигнуть навіть визирнути, і заставка перетвориться на спалах.
-// Тому тримаємо її щонайменше 1,2 секунди від першого кадру. На
-// практиці межа майже ніколи не спрацьовує: відкриття кабінету — це
-// кілька читань бази поспіль, і вони довші.
-const BOOT_SPLASH_MIN_MS = 1200;
+// НИЖНЯ МЕЖА ЧАСУ, І ЧОМУ ВОНА САМЕ ТАКА. Якщо сеанс знайдеться за
+// двісті мілісекунд, Пушики не встигнуть навіть визирнути. Але межа не
+// просто «щоб довше»: вона підібрана під ритм самої сцени. Вихід
+// персонажів закінчується на 0,92 с, махання йде циклами по 0,46 с —
+// і 2,13 с це рівно три повні помахи. Якщо обірвати посеред циклу,
+// лапа застигне піднятою, і кадр виглядатиме як зависання, а не як
+// завершення. Тому будь-яка зміна тривалості махання має рахуватися
+// звідси, а не вписуватися на око.
+//
+// На практиці межа майже не спрацьовує: відкриття кабінету — це кілька
+// читань бази поспіль, і вони довші.
+const BOOT_WAVE_MS = 460;        // період одного помаху (bsWaveA/B у CSS)
+const BOOT_ENTER_MS = 920;       // коли персонажі вже нагорі
+const BOOT_SPLASH_MIN_MS = BOOT_ENTER_MS + BOOT_WAVE_MS * 3;   // 2300
+const BOOT_EXIT_MS = 1100;       // три такти виходу з перекриттям (див. CSS)
 const bootSplashAt = Date.now();
-let bootSplashDone = false;
-export function hideBootSplash(){
+let bootSplashDone = false, bootAppReady = false, bootTimer = null;
+
+function bootSplashGo(){
   if(bootSplashDone) return;
   bootSplashDone = true;
+  if(bootTimer) clearTimeout(bootTimer);
   const el = document.getElementById('boot-splash');
   if(!el) return;
-  const wait = Math.max(0, BOOT_SPLASH_MIN_MS - (Date.now() - bootSplashAt));
-  setTimeout(() => {
-    el.classList.add('bs-off');
-    // Прибираємо з розмітки, а не лишаємо прозорою плівкою поверх
-    // кабінету: невидимий блок на весь екран перехоплював би дотики.
-    setTimeout(() => { if(el.parentNode) el.remove(); }, 600);
-  }, wait);
+  // Кабінет підіймається назустріч, поки тло ще гасне. Саме це
+  // перетворює перехід зі зміни двох картинок на зняття шару.
+  document.body.classList.add('boot-in');
+  el.classList.add('bs-off');
+  el.style.pointerEvents = 'none';
+  // Прибираємо з розмітки, а не лишаємо прозорою плівкою поверх
+  // кабінету: невидимий блок на весь екран перехоплював би дотики.
+  setTimeout(() => { if(el.parentNode) el.remove(); }, BOOT_EXIT_MS);
+}
+
+export function hideBootSplash(){
+  if(bootSplashDone || bootAppReady) return;
+  bootAppReady = true;
+  const el = document.getElementById('boot-splash');
+  if(!el) return bootSplashGo();
+  // «Зменшити рух» — там і сцени як такої немає, тримати нема чого.
+  const reduced = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  const min = reduced ? 400 : BOOT_SPLASH_MIN_MS;
+  const wait = Math.max(0, min - (Date.now() - bootSplashAt));
+  bootTimer = setTimeout(bootSplashGo, wait);
+  // ДОТИК ПРОПУСКАЄ ОЧІКУВАННЯ. Хто відкриває портал десять разів на
+  // день, не має щоразу досиджувати сцену до кінця. Але тільки після
+  // того, як кабінет готовий: інакше під заставкою порожньо, і «пропуск»
+  // показав би темний екран замість застосунку.
+  el.addEventListener('click', bootSplashGo, { once:true });
 }
 window.hideBootSplash = hideBootSplash;
 // Запобіжник: якщо щось пішло геть не так і жодна гілка входу не
 // відпрацювала, заставка не має лишитися назавжди.
-setTimeout(hideBootSplash, 8000);
+setTimeout(bootSplashGo, 8000);
 
 let authAnswered = false;
 setTimeout(() => {
