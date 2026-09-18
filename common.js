@@ -2264,23 +2264,19 @@ window.subjectsForClassWeek = subjectsForClassWeek;
 // форма входу. Не раніше — інакше між заставкою і кабінетом мигне
 // порожній фон.
 //
-// НИЖНЯ МЕЖА ЧАСУ, І ЧОМУ ВОНА САМЕ ТАКА. Якщо сеанс знайдеться за
-// двісті мілісекунд, Пушики не встигнуть навіть визирнути. Але межа не
-// просто «щоб довше»: вона підібрана під ритм самої сцени. Вихід
-// персонажів закінчується на 0,92 с, махання йде циклами по 0,46 с —
-// і 2,13 с це рівно три повні помахи. Якщо обірвати посеред циклу,
-// лапа застигне піднятою, і кадр виглядатиме як зависання, а не як
-// завершення. Тому будь-яка зміна тривалості махання має рахуватися
-// звідси, а не вписуватися на око.
+// НИЖНЯ МЕЖА ЧАСУ. Якщо сеанс знайдеться за двісті мілісекунд, ролик не
+// встигне навіть початися, і заставка перетвориться на спалах. Тому
+// чекаємо, поки ролик дограє, але не довше BOOT_SPLASH_MAX_MS: відео
+// може не завантажитися, автозапуск може бути заборонений, і жодна
+// подія тоді не прийде взагалі.
 //
 // На практиці межа майже не спрацьовує: відкриття кабінету — це кілька
-// читань бази поспіль, і вони довші.
-const BOOT_WAVE_MS = 720;        // повний помах — вісім кадрів (bsWave у CSS)
-const BOOT_ENTER_MS = 920;       // коли персонажі вже нагорі
-const BOOT_SPLASH_MIN_MS = BOOT_ENTER_MS + BOOT_WAVE_MS * 2;   // 2360
-const BOOT_EXIT_MS = 1100;       // три такти виходу з перекриттям (див. CSS)
+// читань бази поспіль, і вони довші за три секунди рідко, але бувають.
+const BOOT_SPLASH_MIN_MS = 1100;   // менше — ролик не встигає прочитатися
+const BOOT_SPLASH_MAX_MS = 3700;   // трохи більше за сам ролик (3,33 с)
+const BOOT_EXIT_MS = 950;          // два такти виходу з перекриттям (див. CSS)
 const bootSplashAt = Date.now();
-let bootSplashDone = false, bootAppReady = false, bootTimer = null;
+let bootSplashDone = false, bootAppReady = false, bootVideoDone = false, bootTimer = null;
 
 function bootSplashGo(){
   if(bootSplashDone) return;
@@ -2294,25 +2290,44 @@ function bootSplashGo(){
   el.classList.add('bs-off');
   el.style.pointerEvents = 'none';
   // Прибираємо з розмітки, а не лишаємо прозорою плівкою поверх
-  // кабінету: невидимий блок на весь екран перехоплював би дотики.
+  // кабінету: невидимий блок на весь екран перехоплював би дотики, а
+  // відео за ним так і крутилося б у фоні.
   setTimeout(() => { if(el.parentNode) el.remove(); }, BOOT_EXIT_MS);
 }
 
+// Чекаємо на двох: кабінет має бути готовий, а ролик — дограти. Хто
+// прийде другим, той і запускає вихід.
+function bootMaybeGo(){
+  if(!bootAppReady) return;
+  const waited = Date.now() - bootSplashAt;
+  if(bootVideoDone && waited >= BOOT_SPLASH_MIN_MS) return bootSplashGo();
+  const left = (bootVideoDone ? BOOT_SPLASH_MIN_MS : BOOT_SPLASH_MAX_MS) - waited;
+  if(left <= 0) return bootSplashGo();
+  if(bootTimer) clearTimeout(bootTimer);
+  bootTimer = setTimeout(bootSplashGo, left);
+}
+
 export function hideBootSplash(){
-  if(bootSplashDone || bootAppReady) return;
+  if(bootSplashDone) return;
   bootAppReady = true;
   const el = document.getElementById('boot-splash');
   if(!el) return bootSplashGo();
-  // «Зменшити рух» — там і сцени як такої немає, тримати нема чого.
-  const reduced = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
-  const min = reduced ? 400 : BOOT_SPLASH_MIN_MS;
-  const wait = Math.max(0, min - (Date.now() - bootSplashAt));
-  bootTimer = setTimeout(bootSplashGo, wait);
+  const vid = document.getElementById('bs-video');
+  // Сховане відео — це режим «зменшити рух»: чекати на його кінець
+  // немає сенсу, воно й не починалося.
+  if(vid && !vid.hidden && !bootVideoDone){
+    vid.addEventListener('ended', () => { bootVideoDone = true; bootMaybeGo(); }, { once:true });
+    // Помилка завантаження — не привід тримати екран: далі все одно
+    // лишиться постер, а людина чекатиме на порожньому місці.
+    vid.addEventListener('error', () => { bootVideoDone = true; bootMaybeGo(); }, { once:true });
+    if(vid.ended) bootVideoDone = true;
+  } else bootVideoDone = true;
   // ДОТИК ПРОПУСКАЄ ОЧІКУВАННЯ. Хто відкриває портал десять разів на
-  // день, не має щоразу досиджувати сцену до кінця. Але тільки після
-  // того, як кабінет готовий: інакше під заставкою порожньо, і «пропуск»
-  // показав би темний екран замість застосунку.
+  // день, не має щоразу досиджувати ролик. Але тільки після того, як
+  // кабінет готовий: інакше під заставкою порожньо, і «пропуск» показав
+  // би темний екран замість застосунку.
   el.addEventListener('click', bootSplashGo, { once:true });
+  bootMaybeGo();
 }
 window.hideBootSplash = hideBootSplash;
 // Запобіжник: якщо щось пішло геть не так і жодна гілка входу не
