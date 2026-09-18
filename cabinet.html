@@ -1250,6 +1250,108 @@
       body.printing{background:#fff!important;padding:0;}
       @page{size:A4 landscape;margin:12mm;}
     }
+    /* ── ЗАСТАВКА ЗАПУСКУ ──
+       Повторює системну заставку (manifest: background_color #041b22 +
+       кругла іконка), щоб перехід від неї був непомітним. Прибирає себе
+       сама — див. hideBootSplash() у common.js. */
+    /* --auth-bg — той самий колір, що background_color у
+       manifest-cabinet.json. Він уже був у палітрі як тло екранів входу,
+       тож окремого токена не заводимо; головне, щоб ці два числа не
+       розʼїхалися — за цим стежить tests-pushyk-hello.mjs. */
+    #boot-splash{position:fixed;inset:0;z-index:9999;background:var(--auth-bg);
+      display:flex;align-items:center;justify-content:center;
+      transition:opacity .45s ease,visibility .45s;}
+    #boot-splash.bs-off{opacity:0;visibility:hidden;pointer-events:none;}
+    .bs-stage{position:relative;width:min(62vw,300px);aspect-ratio:1;}
+    .bs-logo{position:relative;z-index:2;width:100%;height:100%;border-radius:50%;
+      display:block;object-fit:cover;
+      box-shadow:0 18px 50px rgba(34,184,207,.35),0 0 70px rgba(34,184,207,.22);}
+    /* Пушики стоять ЗА логотипом (z-index:1) і виринають з-під його
+       ВЕРХНЬОГО краю. Спершу я вивів їх убік, але на телефоні логотип
+       займає майже всю ширину, і збоку лишалося по кілька пікселів —
+       персонажів просто не було видно. Згори місця скільки завгодно.
+
+       Початкове положення — низько за логотипом, тобто сховані повністю.
+       Виринає приблизно 40% зросту: голова, кашкет і лапа. */
+    .bs-pk{position:absolute;z-index:1;bottom:8%;left:50%;height:58%;width:58%;
+      opacity:0;transform:translateX(-50%);}
+    .bs-pk-l{animation:bsUpL .62s cubic-bezier(.2,.85,.3,1.18) .15s both;}
+    .bs-pk-r{animation:bsUpR .62s cubic-bezier(.2,.85,.3,1.18) .3s both;}
+    /* Синій махає правою лапою. Ліворуч вона показувала б у логотип —
+       тож віддзеркалюємо, і лапа дивиться назовні. */
+    @keyframes bsUpL{to{opacity:1;transform:translateX(-110%) translateY(-100%) scaleX(-1) rotate(-5deg);}}
+    @keyframes bsUpR{to{opacity:1;transform:translateX(10%) translateY(-100%) rotate(5deg);}}
+    .bs-f{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;
+      object-position:bottom center;filter:drop-shadow(0 8px 18px rgba(0,0,0,.45));}
+    /* Махання — перемикання двох кадрів. Різкі межі в keyframes дають
+       покадрову зміну: лапа рухається, а не «перетікає». */
+    .bs-f1{animation:bsWaveA .46s steps(1,end) .75s infinite both;}
+    .bs-f2{animation:bsWaveB .46s steps(1,end) .75s infinite both;}
+    @keyframes bsWaveA{0%,49.9%{opacity:1;}50%,100%{opacity:0;}}
+    @keyframes bsWaveB{0%,49.9%{opacity:0;}50%,100%{opacity:1;}}
+    /* Системне «зменшити рух»: логотип лишається, Пушики просто стоять. */
+    @media (prefers-reduced-motion: reduce){
+      .bs-pk,.bs-f{animation:none!important;}
+      .bs-pk{opacity:1;}
+      .bs-pk-l{transform:translateX(-110%) translateY(-100%) scaleX(-1);}
+      .bs-pk-r{transform:translateX(10%) translateY(-100%);}
+      .bs-f2{display:none;}
+    }
+    /* ── ПУШИК ВІТАЄТЬСЯ ──
+       Виїжджає з-за нижнього краю, махає кадрами й ховається. Нічого не
+       перекриває: висота обмежена, поверх — лише фон сторінки, не модалки
+       (у них z-index вищий). Розмітку й строки ставить pushyk-hello.js. */
+    .pk-hello{position:fixed;right:10px;bottom:0;z-index:60;display:flex;align-items:flex-end;
+      gap:8px;pointer-events:auto;cursor:pointer;user-select:none;}
+    .pk-bubble{background:#fff;border:1px solid var(--brand-line);border-radius:14px 14px 4px 14px;
+      padding:9px 13px;box-shadow:0 8px 24px rgba(0,0,0,.14);margin-bottom:26px;
+      opacity:0;transform:translateY(6px) scale(.96);}
+    .pk-bubble b{display:block;font-size:.92rem;font-weight:800;color:var(--brand-deep);line-height:1.2;}
+    .pk-bubble span{display:block;font-size:.76rem;color:var(--ink-2);margin-top:2px;}
+    .pk-art{position:relative;width:142px;height:152px;transform:translateY(105%);}
+    /* object-fit:contain, а не width:100% — кадри двох персонажів мають
+       трохи різні пропорції, і розтягнута по рамці лапа одразу впадає в око. */
+    .pk-f{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;
+      object-position:bottom center;opacity:0;
+      filter:drop-shadow(0 6px 14px rgba(0,0,0,.22));}
+    /* До завантаження кадрів нічого не рухається: клас pk-go вмикає сцену
+       лише тоді, коли картинки справді приїхали. */
+    .pk-hello.pk-go .pk-art{animation:pkIn .62s cubic-bezier(.18,.9,.32,1.25) both,
+                                      pkOut .5s ease-in 4.6s both;}
+    .pk-hello.pk-go .pk-bubble{animation:pkBubble .4s cubic-bezier(.2,.8,.3,1) .5s both,
+                                          pkOut .4s ease-in 4.5s both;}
+    /* Махання — зміна трьох кадрів по колу. Різкі межі в keyframes дають
+       покадрову зміну без розмиття: лапа не «перетікає», а рухається. */
+    .pk-hello.pk-go .pk-f1{animation:pkA .54s linear .6s 6 both;}
+    .pk-hello.pk-go .pk-f2{animation:pkB .54s linear .6s 6 both;}
+    .pk-hello.pk-go .pk-f3{animation:pkC .54s linear .6s 6 both;}
+    /* Кадр лише один — міняти нічого. Тоді персонаж похитується: рух є,
+       брехні немає. */
+    .pk-hello.pk-solo.pk-go .pk-f1{animation:pkSolo .9s ease-in-out .6s 4 both;}
+    .pk-hello.pk-solo.pk-go .pk-f2,.pk-hello.pk-solo.pk-go .pk-f3{display:none;}
+    @keyframes pkIn{from{transform:translateY(105%);}to{transform:translateY(0);}}
+    @keyframes pkOut{to{opacity:0;transform:translateY(60%);}}
+    @keyframes pkBubble{to{opacity:1;transform:none;}}
+    @keyframes pkA{0%,32.9%{opacity:1;}33%,100%{opacity:0;}}
+    @keyframes pkB{0%,32.9%{opacity:0;}33%,65.9%{opacity:1;}66%,100%{opacity:0;}}
+    @keyframes pkC{0%,65.9%{opacity:0;}66%,100%{opacity:1;}}
+    @keyframes pkSolo{0%,100%{opacity:1;transform:rotate(0);}
+      25%{opacity:1;transform:rotate(-5deg);}75%{opacity:1;transform:rotate(5deg);}}
+    @media (max-width:420px){
+      .pk-art{width:112px;height:122px;}
+      .pk-bubble{padding:7px 10px;margin-bottom:20px;}
+      .pk-bubble b{font-size:.84rem;}
+    }
+    /* Системне «зменшити рух» модуль перевіряє сам і взагалі не показує
+       привітання. Правило нижче — на випадок, якщо його все ж покажуть
+       примусово (window.showPushykGreeting({force:true})). */
+    @media (prefers-reduced-motion: reduce){
+      .pk-hello.pk-go .pk-art,.pk-hello.pk-go .pk-bubble,
+      .pk-hello.pk-go .pk-f1,.pk-hello.pk-go .pk-f2,.pk-hello.pk-go .pk-f3{animation:none;}
+      .pk-hello.pk-go .pk-art{transform:none;}
+      .pk-hello.pk-go .pk-bubble{opacity:1;transform:none;}
+      .pk-hello.pk-go .pk-f1{opacity:1;}
+    }
     /* ── Згоди: директор ── */
     .cs-card{background:#fff;border:1px solid var(--ok-line);border-radius:10px;padding:10px;margin-bottom:8px;}
     .cs-card.overdue{border-color:var(--danger-line);background:var(--surface-2);}
@@ -2420,6 +2522,40 @@
      зворотне перемикання — але воно збігається з появою кабінету й
      читається як «завантажилося», а не як миготіння. -->
 <body class="auth-mode">
+<!-- ══════════════════════════════════════════════════════════════
+     ЗАСТАВКА ЗАПУСКУ
+     ══════════════════════════════════════════════════════════════
+     Коли застосунок відкривають з іконки, система сама малює свою
+     заставку: колір фону й іконку з manifest-cabinet.json. Та заставка
+     НЕ НАША — її малює операційна система ще до того, як існує
+     сторінка, і анімувати її неможливо в принципі: ні JS, ні CSS,
+     ні відео туди не потрапляють.
+
+     Зате одразу після неї йде пауза, поки Firebase перевіряє сеанс, —
+     і раніше на цьому місці був просто порожній темний екран. Ця
+     заставка повторює системну один-в-один (той самий фон #041b22, той
+     самий круглий логотип посередині), тож перехід непомітний, — а вже
+     на ній Пушики визирають з-за логотипа й махають.
+
+     Розмітка статична, а не з модуля: вона має намалюватися в першому ж
+     кадрі. Поки модулі вантажаться, людина вже бачить логотип.
+
+     Картинки кадрів кешуються після першого запуску, тож «дорогий»
+     він лише один раз. Якщо ще не завантажилися — порожній alt не
+     показує нічого, і заставка виглядає як звичайна. -->
+<div id="boot-splash" aria-hidden="true">
+  <div class="bs-stage">
+    <div class="bs-pk bs-pk-l">
+      <img class="bs-f bs-f1" src="pushyk-1.png" alt="">
+      <img class="bs-f bs-f2" src="pushyk-3.png" alt="">
+    </div>
+    <div class="bs-pk bs-pk-r">
+      <img class="bs-f bs-f1" src="pushyk-kre-1.png" alt="">
+      <img class="bs-f bs-f2" src="pushyk-kre-3.png" alt="">
+    </div>
+    <img class="bs-logo" src="logo.png" alt="Push School Warsaw">
+  </div>
+</div>
 <!-- Фон екранів входу: світлові плями в кольорах логотипа замість
      фонового відео — нуль ваги, нічого не вантажиться ззовні.
      Видно лише коли <body class="auth-mode">, тобто до входу. -->
@@ -4918,6 +5054,7 @@ document.addEventListener('DOMContentLoaded', function(){
 <script type="module" src="students-import.js"></script>
 <script type="module" src="schedule-import.js"></script>
 <script type="module" src="consent.js"></script>
+<script type="module" src="pushyk-hello.js"></script>
 <script type="module" src="activities.js"></script>
 <script type="module" src="homework.js"></script>
 <!-- Сам каталог ігор і двигун. Код КОНКРЕТНОЇ гри сюди не входить: він
