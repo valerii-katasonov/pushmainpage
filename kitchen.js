@@ -571,6 +571,49 @@ export async function loadWeekMenu(){
 
 // Зберігаємо весь тиждень одним рухом, але сповіщаємо лише про ті дні,
 // що справді змінилися — інакше батьки отримали б 5 пушів на порожньому місці.
+// ── ЧИ МОЖНА МІНЯТИ ПАРУ А/Б ──
+//
+// Літера А/Б означає конкретну страву. Якщо родини вже відповіли,
+// перестановка чи заміна пари тихо змінила б зміст їхньої відповіді:
+// людина обрала «Б — гречка», а після правки Б це вже омлет.
+//
+// АЛЕ «ЗМІНИТИ ПАРУ» І «ВІДНОВИТИ ЗНИКЛЕ МЕНЮ» — РІЗНІ РЕЧІ.
+//
+// Коли меню дня видалили заднім числом, пари немає взагалі, а відповіді
+// родин лишилися. Спроба вписати страви назад виглядала для цієї
+// перевірки як «зміна пари» — і заборона намертво блокувала єдиний
+// спосіб виправити помилку кухні. Виходило замкнене коло: день випав з
+// обліку, бо меню немає, а меню не вписати, бо є вибори.
+//
+// Тому: якщо пари НЕ БУЛО — це відновлення, і ми не забороняємо, а
+// попереджаємо. Порядок страв має збігатися з тим, що був, інакше літери
+// в уже наданих відповідях поміняють зміст; перевірити це може лише
+// людина, бо в базі старої пари вже немає.
+export function abPairGate(before, after, chosen){
+  const rows = chosen || [];
+  const picked = key => rows.some(v => v && (v[key] === 'a' || v[key] === 'b'));
+  const cases = [
+    ['обіду',    choicePair(before),          choicePair(after),          'pick'],
+    ['сніданку', breakfastChoicePair(before), breakfastChoicePair(after), 'breakfastPick']
+  ];
+  const blocks = [], confirms = [];
+  for(const [label, was, now, key] of cases){
+    if(JSON.stringify(was) === JSON.stringify(now)) continue;   // пара не змінилася
+    if(!picked(key)) continue;                                  // ніхто ще не обирав
+    if(was) blocks.push(label);                                 // пара була — і її міняють
+    else confirms.push(label);                                  // пари не було — це відновлення
+  }
+  if(blocks.length) return { block:
+    `вже є вибори А/Б ${blocks.join(' і ')}. Страви цієї пари не можна міняти місцями `
+    + 'або видаляти: спочатку узгодьте зміну з родинами.' };
+  if(confirms.length) return { confirm:
+    `на цей день уже є вибори А/Б ${confirms.join(' і ')}, зроблені за меню, якого в базі вже немає.\n\n`
+    + 'Впишіть страви в тому самому порядку, у якому вони були того дня: літери А і Б '
+    + 'у відповідях родин лишилися, і якщо переставити страви місцями, кожна відповідь '
+    + 'означатиме протилежне.\n\nПорядок правильний?' };
+  return { ok:true };
+}
+
 window.saveWeekMenu = async function(){
   const monday = currentMonday(), dates = weekDates(monday);
   for(const date of dates){
@@ -629,15 +672,13 @@ window.saveWeekMenu = async function(){
   });
   if(blockedPast.length) return alert(menuDeletable(blockedPast[0]).msg);
   if(!Object.keys(updates).length) return showToast('Змін немає');
-  // Літера А/Б означає конкретну страву. Якщо родини вже відповіли,
-  // перестановка чи заміна пари тихо змінила б зміст їхньої відповіді.
+  // Пари А/Б: що можна міняти, а що ні — див. abPairGate.
   for(let i=0;i<dates.length;i++){
     const date=dates[i],path=`menu/${date}`;
     if(!Object.prototype.hasOwnProperty.call(updates,path))continue;
     const before=snaps[i].exists()?snaps[i].val():null,after=updates[path];
-    const lunchChanged=JSON.stringify(choicePair(before))!==JSON.stringify(choicePair(after));
-    const breakfastChanged=JSON.stringify(breakfastChoicePair(before))!==JSON.stringify(breakfastChoicePair(after));
-    if(!lunchChanged&&!breakfastChanged)continue;
+    if(JSON.stringify(choicePair(before))===JSON.stringify(choicePair(after))
+      &&JSON.stringify(breakfastChoicePair(before))===JSON.stringify(breakfastChoicePair(after)))continue;
     let daySnap,staffSnap;
     try{[daySnap,staffSnap]=await Promise.all([
       get(child(ref(db),`meal_day/${date}`)),
@@ -645,9 +686,9 @@ window.saveWeekMenu = async function(){
     ]);}catch(e){return alert(`Не вдалося перевірити вибори на ${human(date)}: ${e.message}`);}
     const day=daySnap.exists()?daySnap.val():{},staff=staffSnap.exists()?staffSnap.val():{};
     const chosen=Object.values(day).flatMap(cls=>Object.values(cls||{})).concat(Object.values(staff));
-    if((lunchChanged&&chosen.some(v=>v?.pick==='a'||v?.pick==='b'))
-      ||(breakfastChanged&&chosen.some(v=>v?.breakfastPick==='a'||v?.breakfastPick==='b')))
-      return alert(`На ${human(date)} вже є вибори А/Б. Страви цієї пари не можна міняти місцями або видаляти: спочатку узгодьте зміну з родинами.`);
+    const gate=abPairGate(before,after,chosen);
+    if(gate.block) return alert(`На ${human(date)} ${gate.block}`);
+    if(gate.confirm && !confirm(`${human(date)}: ${gate.confirm}`)) return;
   }
   try{
     await update(ref(db), updates);
