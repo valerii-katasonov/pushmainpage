@@ -3877,7 +3877,15 @@
           <label style="flex:1;min-width:140px;font-size:.74rem;color:var(--warn);font-weight:600;">Предмет
             <select id="t-sticker-subject" style="margin-top:3px;" onchange="toggleStickerOther()"></select>
           </label>
-          <button onclick="giveStickerToStudent()" style="flex:none;margin-top:0;background:var(--warn-line);color:var(--ink);padding:11px 16px;border-radius:10px;border:none;cursor:pointer;font-weight:800;font-size:.88rem;">🌟 Дати</button>
+          <!-- Скільки наліпок. Порожнє поле = одна: щоденна дія не має
+               вимагати зайвого набору, а «назбиралося чотири» пишеться
+               одним символом замість чотирьох натискань «Дати». -->
+          <label style="flex:none;width:74px;font-size:.74rem;color:var(--warn);font-weight:600;">Скільки
+            <input id="t-sticker-count" type="number" min="1" max="20" step="1" inputmode="numeric"
+              placeholder="1" title="Скільки наліпок видати за раз (до 20)"
+              style="margin-top:3px;border-color:var(--warn-line);text-align:center;font-weight:800;">
+          </label>
+          <button id="btn-give-sticker" onclick="giveStickerToStudent()" style="flex:none;margin-top:0;background:var(--warn-line);color:var(--ink);padding:11px 16px;border-radius:10px;border:none;cursor:pointer;font-weight:800;font-size:.88rem;">🌟 Дати</button>
         </div>
         <label id="t-sticker-other-wrap" style="display:none;margin-top:9px;font-size:.74rem;color:var(--warn);font-weight:600;">За що наліпка?
           <input type="text" id="t-sticker-other" maxlength="160" placeholder="Наприклад, допоміг однокласнику" style="margin-top:3px;border-color:var(--warn-line);">
