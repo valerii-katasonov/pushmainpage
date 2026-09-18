@@ -28,16 +28,21 @@
 // рамка гірша за відсутність привітання.
 import { currentUserData, auth, localDateString, escHtml } from './common.js';
 
-// Кадри махання. Один кадр — теж працює: тоді замість зміни кадрів
-// персонаж похитується (див. клас pk-solo).
+// Кадри махання.
 //
 // ПЕРСОНАЖІВ ДВОЄ, І ВОНИ ЧЕРГУЮТЬСЯ ПО ДНЯХ. Той самий Пушик щоранку
 // швидко стає меблями; різні — привід зазирнути. Вибір прив'язаний до
 // дня й акаунта, а не випадковий: інакше два відкриття порталу за ранок
 // дали б двох різних, і вийшло б не «сьогодні Креа», а миготіння.
+//
+// Кадри беремо ТІ САМІ, що й заставка запуску: одну стрічку з восьми
+// кадрів на персонажа. Тут була власна реалізація махання на трьох
+// окремих PNG — і саме такі пари й розходяться: на заставці рух уже
+// плавний, а в кутку лишався б старий смик, плюс шість зайвих файлів
+// у репозиторії, які ніщо не вантажить.
 export const PUSHYK_CAST = [
-  { id:'mandrivnyk', frames:['pushyk-1.png','pushyk-2.png','pushyk-3.png'] },
-  { id:'krea',       frames:['pushyk-kre-1.png','pushyk-kre-2.png','pushyk-kre-3.png'] }
+  { id:'mandrivnyk', sprite:'pushyk-wave.png' },
+  { id:'krea',       sprite:'pushyk-kre-wave.png' }
 ];
 export function castFor(seed){
   const s = String(seed || '');
@@ -126,23 +131,16 @@ window.showPushykGreeting = function(opts){
   box.setAttribute('aria-hidden', 'true');
   box.innerHTML = `
     <div class="pk-bubble"><b>${escHtml(head)}</b><span>${escHtml(line)}</span></div>
-    <div class="pk-art">${cast.frames.map((src,i)=>
-      `<img class="pk-f pk-f${i+1}" src="${escHtml(src)}" alt="">`).join('')}</div>`;
+    <div class="pk-art" style="background-image:url(${escHtml(cast.sprite)})"></div>`;
 
-  const imgs = Array.from(box.querySelectorAll('.pk-f'));
-  let loaded = 0, answered = 0;
-  const decide = () => {
-    // Немає жодного кадру — файли ще не викладені. Тихо прибираємо:
-    // порожня рамка в кутку виглядала б як поломка.
-    if(!loaded){ box.remove(); return; }
-    // Один кадр замість трьох — махати нічим, тож персонаж похитується.
-    if(loaded < 2) box.classList.add('pk-solo');
-    box.classList.add('pk-go');
-  };
-  imgs.forEach(img=>{
-    img.addEventListener('load', ()=>{ loaded++; if(++answered === imgs.length) decide(); });
-    img.addEventListener('error', ()=>{ img.remove(); if(++answered === imgs.length) decide(); });
-  });
+  // Стрічку кадрів чекаємо окремою картинкою: фонове зображення саме про
+  // себе нічого не каже, а показати порожню рамку в кутку — гірше, ніж
+  // не показати нічого. Файл або вже в кеші (його щойно бачила
+  // заставка), або приїде за мить.
+  const probe = new Image();
+  probe.addEventListener('load', ()=>{ box.classList.add('pk-go'); });
+  probe.addEventListener('error', ()=>{ box.remove(); });
+  probe.src = cast.sprite;
 
   // Клік прибирає одразу: якщо дитині не до Пушика, вона не має його
   // пересиджувати.
