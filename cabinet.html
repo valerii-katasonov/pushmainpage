@@ -1283,8 +1283,7 @@
     #boot-splash.bs-off .bs-logo{animation:bsLogoOut .5s cubic-bezier(.45,0,.75,.2) .34s both;}
     /* Махання на виході зупиняємо: смикання лапи під час зникнення
        перетягує увагу саме тоді, коли вона має піти на кабінет. */
-    #boot-splash.bs-off .bs-f1{animation:none;opacity:1;}
-    #boot-splash.bs-off .bs-f2{animation:none;opacity:0;}
+    #boot-splash.bs-off .bs-pk{background-position-x:0%;}
     /* Ховаються тим самим шляхом, яким вийшли: назад під логотип — і
        дотаюють на останній третині.
        ЧОМУ НЕ ПРОСТО «ЗАЇХАЛИ ЗА ЛОГОТИП». Персонажі лежать ПІД ним, і
@@ -1293,11 +1292,11 @@
        наліплені на екран. Тому вони зникають самі, не покладаючись на
        те, що їх хтось прикриє. */
     @keyframes bsDuckL{
-      from{opacity:1;transform:translateX(-110%) translateY(-100%) scaleX(-1) rotate(-5deg);}
+      from{opacity:1;transform:translateX(-116%) translateY(-104%) rotate(-5deg);}
       55%{opacity:1;}
-      to{opacity:0;transform:translateX(-50%) translateY(0) scaleX(-1) rotate(0deg);}}
+      to{opacity:0;transform:translateX(-50%) translateY(0) rotate(0deg);}}
     @keyframes bsDuckR{
-      from{opacity:1;transform:translateX(10%) translateY(-100%) rotate(5deg);}
+      from{opacity:1;transform:translateX(16%) translateY(-104%) rotate(5deg);}
       55%{opacity:1;}
       to{opacity:0;transform:translateX(-50%) translateY(0) rotate(0deg);}}
     @keyframes bsLogoOut{from{opacity:1;transform:scale(1);}to{opacity:0;transform:scale(1.14);}}
@@ -1317,31 +1316,49 @@
        персонажів просто не було видно. Згори місця скільки завгодно.
 
        Початкове положення — низько за логотипом, тобто сховані повністю.
-       Виринає приблизно 40% зросту: голова, кашкет і лапа. */
-    .bs-pk{position:absolute;z-index:1;bottom:8%;left:50%;height:58%;width:58%;
+       Виринає приблизно 45% зросту: голова, кашкет і лапа.
+
+       КАДРИ ЛЕЖАТЬ ОДНИМ СПРАЙТОМ — стрічкою з восьми кадрів в одному
+       файлі, а рухає їх background-position. Вісім окремих PNG на
+       персонажа означали б вісім запитів на найпершому екрані застосунку
+       й помітно більшу вагу: у спільному файлі кадри ділять одну палітру
+       й стискаються разом. Плюс немає ризику, що п'ятий кадр приїде
+       пізніше за шостий і махання смикнеться.
+
+       У КОЖНОГО КАДРУ ПРОЗОРІ ПОЛЯ ПО 24 px З БОКІВ — і це не про
+       композицію. Ширина кадру на екрані майже ніколи не виходить цілим
+       числом пристроєвих пікселів, тож із краю визирала смужка сусіднього
+       кадру: шматок лапи збоку від персонажа. Поля дають браузеру куди
+       промахнутися — на місці смужки тепер порожньо. Тому й aspect-ratio
+       нижче рахується з повної ширини кадру (240), а не з фігури. */
+    .bs-pk{position:absolute;z-index:1;bottom:6%;left:50%;
+      height:68%;aspect-ratio:240/312;
+      background-repeat:no-repeat;background-size:800% 100%;background-position:0 0;
+      filter:drop-shadow(0 8px 18px rgba(0,0,0,.45));
       opacity:0;transform:translateX(-50%);}
-    .bs-pk-l{animation:bsUpL .62s cubic-bezier(.2,.85,.3,1.18) .15s both;}
-    .bs-pk-r{animation:bsUpR .62s cubic-bezier(.2,.85,.3,1.18) .3s both;}
-    /* Синій махає правою лапою. Ліворуч вона показувала б у логотип —
-       тож віддзеркалюємо, і лапа дивиться назовні. */
-    @keyframes bsUpL{to{opacity:1;transform:translateX(-110%) translateY(-100%) scaleX(-1) rotate(-5deg);}}
-    @keyframes bsUpR{to{opacity:1;transform:translateX(10%) translateY(-100%) rotate(5deg);}}
-    .bs-f{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;
-      object-position:bottom center;filter:drop-shadow(0 8px 18px rgba(0,0,0,.45));}
-    /* Махання — перемикання двох кадрів. Різкі межі в keyframes дають
-       покадрову зміну: лапа рухається, а не «перетікає». */
-    .bs-f1{animation:bsWaveA .46s steps(1,end) .75s infinite both;}
-    .bs-f2{animation:bsWaveB .46s steps(1,end) .75s infinite both;}
-    @keyframes bsWaveA{0%,49.9%{opacity:1;}50%,100%{opacity:0;}}
-    @keyframes bsWaveB{0%,49.9%{opacity:0;}50%,100%{opacity:1;}}
+    .bs-pk-l{background-image:url(pushyk-wave.png);
+      animation:bsUpL .62s cubic-bezier(.2,.85,.3,1.18) .15s both,
+                bsWave .72s steps(8,jump-none) .92s infinite;}
+    .bs-pk-r{background-image:url(pushyk-kre-wave.png);
+      animation:bsUpR .62s cubic-bezier(.2,.85,.3,1.18) .3s both,
+                bsWave .72s steps(8,jump-none) 1.07s infinite;}
+    /* Синій махає лівою лапою, рожева — правою: кожен у свій бік від
+       логотипа. Тому дзеркалити нічого не треба — картинки вже такі. */
+    @keyframes bsUpL{to{opacity:1;transform:translateX(-116%) translateY(-104%) rotate(-5deg);}}
+    @keyframes bsUpR{to{opacity:1;transform:translateX(16%) translateY(-104%) rotate(5deg);}}
+    /* ЧОМУ jump-none, А НЕ ЗВИЧАЙНИЙ steps(8).
+       Кадр k стоїть на позиції k/7 (крайній лівий — 0%, крайній правий —
+       100%), а steps(8) ділить відрізок на восьмі частини й дає k/8.
+       Різниця мала, але кожен кадр виїжджав би на одну восьму вбік, і
+       замість махання вийшов би зсув картинки. jump-none бере рівно
+       вісім значень разом із кінцевим — тобто по кадру. */
+    @keyframes bsWave{from{background-position-x:0%;}to{background-position-x:100%;}}
     /* Системне «зменшити рух»: логотип лишається, Пушики просто стоять,
        а вихід — звичайне затухання без ховання й наближення. */
     @media (prefers-reduced-motion: reduce){
-      .bs-pk,.bs-f{animation:none!important;}
-      .bs-pk{opacity:1;}
-      .bs-pk-l{transform:translateX(-110%) translateY(-100%) scaleX(-1);}
-      .bs-pk-r{transform:translateX(10%) translateY(-100%);}
-      .bs-f2{display:none;}
+      .bs-pk{animation:none!important;opacity:1;background-position-x:50%;}
+      .bs-pk-l{transform:translateX(-116%) translateY(-104%);}
+      .bs-pk-r{transform:translateX(16%) translateY(-104%);}
       #boot-splash.bs-off{animation:bsBackdropOut .3s linear both;}
       #boot-splash.bs-off .bs-logo,#boot-splash.bs-off .bs-pk-l,
       #boot-splash.bs-off .bs-pk-r{animation:none!important;}
@@ -1358,35 +1375,20 @@
       opacity:0;transform:translateY(6px) scale(.96);}
     .pk-bubble b{display:block;font-size:.92rem;font-weight:800;color:var(--brand-deep);line-height:1.2;}
     .pk-bubble span{display:block;font-size:.76rem;color:var(--ink-2);margin-top:2px;}
-    .pk-art{position:relative;width:142px;height:152px;transform:translateY(105%);}
-    /* object-fit:contain, а не width:100% — кадри двох персонажів мають
-       трохи різні пропорції, і розтягнута по рамці лапа одразу впадає в око. */
-    .pk-f{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;
-      object-position:bottom center;opacity:0;
+    /* Та сама стрічка з восьми кадрів, що й на заставці (див. .bs-pk). */
+    .pk-art{position:relative;height:152px;aspect-ratio:240/312;transform:translateY(105%);
+      background-repeat:no-repeat;background-size:800% 100%;background-position:0 0;
       filter:drop-shadow(0 6px 14px rgba(0,0,0,.22));}
     /* До завантаження кадрів нічого не рухається: клас pk-go вмикає сцену
        лише тоді, коли картинки справді приїхали. */
     .pk-hello.pk-go .pk-art{animation:pkIn .62s cubic-bezier(.18,.9,.32,1.25) both,
+                                      bsWave .72s steps(8,jump-none) .62s 5,
                                       pkOut .5s ease-in 4.6s both;}
     .pk-hello.pk-go .pk-bubble{animation:pkBubble .4s cubic-bezier(.2,.8,.3,1) .5s both,
                                           pkOut .4s ease-in 4.5s both;}
-    /* Махання — зміна трьох кадрів по колу. Різкі межі в keyframes дають
-       покадрову зміну без розмиття: лапа не «перетікає», а рухається. */
-    .pk-hello.pk-go .pk-f1{animation:pkA .54s linear .6s 6 both;}
-    .pk-hello.pk-go .pk-f2{animation:pkB .54s linear .6s 6 both;}
-    .pk-hello.pk-go .pk-f3{animation:pkC .54s linear .6s 6 both;}
-    /* Кадр лише один — міняти нічого. Тоді персонаж похитується: рух є,
-       брехні немає. */
-    .pk-hello.pk-solo.pk-go .pk-f1{animation:pkSolo .9s ease-in-out .6s 4 both;}
-    .pk-hello.pk-solo.pk-go .pk-f2,.pk-hello.pk-solo.pk-go .pk-f3{display:none;}
     @keyframes pkIn{from{transform:translateY(105%);}to{transform:translateY(0);}}
     @keyframes pkOut{to{opacity:0;transform:translateY(60%);}}
     @keyframes pkBubble{to{opacity:1;transform:none;}}
-    @keyframes pkA{0%,32.9%{opacity:1;}33%,100%{opacity:0;}}
-    @keyframes pkB{0%,32.9%{opacity:0;}33%,65.9%{opacity:1;}66%,100%{opacity:0;}}
-    @keyframes pkC{0%,65.9%{opacity:0;}66%,100%{opacity:1;}}
-    @keyframes pkSolo{0%,100%{opacity:1;transform:rotate(0);}
-      25%{opacity:1;transform:rotate(-5deg);}75%{opacity:1;transform:rotate(5deg);}}
     @media (max-width:420px){
       .pk-art{width:112px;height:122px;}
       .pk-bubble{padding:7px 10px;margin-bottom:20px;}
@@ -1396,11 +1398,9 @@
        привітання. Правило нижче — на випадок, якщо його все ж покажуть
        примусово (window.showPushykGreeting({force:true})). */
     @media (prefers-reduced-motion: reduce){
-      .pk-hello.pk-go .pk-art,.pk-hello.pk-go .pk-bubble,
-      .pk-hello.pk-go .pk-f1,.pk-hello.pk-go .pk-f2,.pk-hello.pk-go .pk-f3{animation:none;}
-      .pk-hello.pk-go .pk-art{transform:none;}
+      .pk-hello.pk-go .pk-art,.pk-hello.pk-go .pk-bubble{animation:none;}
+      .pk-hello.pk-go .pk-art{transform:none;background-position-x:50%;}
       .pk-hello.pk-go .pk-bubble{opacity:1;transform:none;}
-      .pk-hello.pk-go .pk-f1{opacity:1;}
     }
     /* ── Згоди: директор ── */
     .cs-card{background:#fff;border:1px solid var(--ok-line);border-radius:10px;padding:10px;margin-bottom:8px;}
@@ -2595,14 +2595,8 @@
      показує нічого, і заставка виглядає як звичайна. -->
 <div id="boot-splash" aria-hidden="true">
   <div class="bs-stage">
-    <div class="bs-pk bs-pk-l">
-      <img class="bs-f bs-f1" src="pushyk-1.png" alt="">
-      <img class="bs-f bs-f2" src="pushyk-3.png" alt="">
-    </div>
-    <div class="bs-pk bs-pk-r">
-      <img class="bs-f bs-f1" src="pushyk-kre-1.png" alt="">
-      <img class="bs-f bs-f2" src="pushyk-kre-3.png" alt="">
-    </div>
+    <div class="bs-pk bs-pk-l"></div>
+    <div class="bs-pk bs-pk-r"></div>
     <img class="bs-logo" src="logo.png" alt="Push School Warsaw">
   </div>
 </div>
