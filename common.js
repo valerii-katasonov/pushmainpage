@@ -2258,6 +2258,38 @@ window.subjectsForClassWeek = subjectsForClassWeek;
 // Тому через дві з половиною секунди показуємо форму входу самі. Якщо
 // сеанс усе ж знайдеться пізніше, onAuthStateChanged сховає її разом з
 // рештою панелей — зайвого кроку це не створює.
+// ── ЗАСТАВКА ЗАПУСКУ ──
+//
+// Прибираємо її тоді, коли на екрані вже є що показати: кабінет або
+// форма входу. Не раніше — інакше між заставкою і кабінетом мигне
+// порожній фон.
+//
+// НИЖНЯ МЕЖА ЧАСУ. Якщо сеанс знайдеться за двісті мілісекунд, Пушики
+// не встигнуть навіть визирнути, і заставка перетвориться на спалах.
+// Тому тримаємо її щонайменше 1,2 секунди від першого кадру. На
+// практиці межа майже ніколи не спрацьовує: відкриття кабінету — це
+// кілька читань бази поспіль, і вони довші.
+const BOOT_SPLASH_MIN_MS = 1200;
+const bootSplashAt = Date.now();
+let bootSplashDone = false;
+export function hideBootSplash(){
+  if(bootSplashDone) return;
+  bootSplashDone = true;
+  const el = document.getElementById('boot-splash');
+  if(!el) return;
+  const wait = Math.max(0, BOOT_SPLASH_MIN_MS - (Date.now() - bootSplashAt));
+  setTimeout(() => {
+    el.classList.add('bs-off');
+    // Прибираємо з розмітки, а не лишаємо прозорою плівкою поверх
+    // кабінету: невидимий блок на весь екран перехоплював би дотики.
+    setTimeout(() => { if(el.parentNode) el.remove(); }, 600);
+  }, wait);
+}
+window.hideBootSplash = hideBootSplash;
+// Запобіжник: якщо щось пішло геть не так і жодна гілка входу не
+// відпрацювала, заставка не має лишитися назавжди.
+setTimeout(hideBootSplash, 8000);
+
 let authAnswered = false;
 setTimeout(() => {
   if(authAnswered) return;
@@ -2266,6 +2298,7 @@ setTimeout(() => {
     scr.style.display = 'block';
     renderVendorCredit();
   }
+  hideBootSplash();
 }, 2500);
 
 onAuthStateChanged(auth,async user=>{
@@ -2397,6 +2430,7 @@ onAuthStateChanged(auth,async user=>{
     }
   }else{
     document.getElementById('login-screen').style.display='block';
+    hideBootSplash();
     // Підпис малюємо разом з екраном входу, а не при завантаженні
     // сторінки: до перевірки сеансу екран прихований, і рядок під ним
     // ніхто б не побачив.
@@ -2410,6 +2444,7 @@ onAuthStateChanged(auth,async user=>{
     const scr = document.getElementById('login-screen');
     if(scr) scr.style.display = 'block';
     document.body.classList.add('auth-mode');
+    hideBootSplash();
     renderVendorCredit();
     setMsg('login-error', /permission[_ ]denied/i.test(e && e.message || '')
       ? 'Портал не отримав доступу до бази. Зверніться до адміністрації школи.'
@@ -2628,6 +2663,7 @@ async function initUserSession(){
   // switchRole(), інакше попередній кабінет залишиться на екрані поверх нового.
   document.querySelectorAll('.panel').forEach(p=>p.style.display='none');
   document.getElementById('calendar-block').style.display='block';updateProfileBar();
+  hideBootSplash();
   const r=currentUserData.role;
   if(r==='director'){document.getElementById('director-screen').style.display='block';callWhenReady('initDirTabs');callWhenReady('openFromNotification', 600, ['director-screen']);document.getElementById('teacher-class-selector-box').style.display='none';loadTeachersListForDirector();loadDirectorTeacherSkillsList();handleDateChange();loadDrafts();callWhenReady('loadBellCoverage');
     // Календарне планування. Раніше цю перевірку викликав лише
@@ -2733,6 +2769,10 @@ async function initUserSession(){
         + 'з рештою файлів.</p>';
     });
   }
+  // Пушик вітається — після того, як кабінет уже на екрані. Модуль сам
+  // вирішує, кому й чи показувати, і мовчки не робить нічого, якщо
+  // картинок персонажа на сайті ще немає.
+  callWhenReady('showPushykGreeting', 900, [], ()=>{});
 }
 // ══════════════════════════════════════════════════════════════════
 //  ЖУРНАЛ ДІЙ (аудит)
