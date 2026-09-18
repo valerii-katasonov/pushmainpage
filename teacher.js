@@ -962,7 +962,7 @@ async function loadTextbooksForTeacher(refresh=true){
     let html='';
     if(snap.exists())for(const [key,tb] of Object.entries(snap.val()||{})){
       if(!tb||typeof tb!=='object')continue;
-      html+=`<div class="textbook-item">📘 <a href="${escHtml(safeUrl(tb.url))}" target="_blank" rel="noopener noreferrer">${escHtml(tb.title||tb.url)}</a><button onclick="removeTextbook('${escJs(cls)}','${escJs(subj)}','${escJs(key)}')" style="background:none;border:none;color:var(--red);cursor:pointer;padding:0;width:auto;margin:0;font-size:1rem;">✖</button></div>`;
+      html+=`<div class="textbook-item">📘 <a href="${escHtml(safeUrl(tb.url))}" target="_blank" rel="noopener noreferrer">${escHtml(tb.title||tb.url)}</a><button onclick="removeTextbook('${escJs(cls)}','${escJs(subj)}','${escJs(key)}')" style="background:none;border:none;color:var(--danger);cursor:pointer;padding:0;width:auto;margin:0;font-size:1rem;">✖</button></div>`;
     }
     container.innerHTML=html||'<p class="empty-msg">Підручників ще не додано.</p>';
   }catch(e){if(gen===textbookGeneration)container.innerHTML=`<p class="empty-msg">Не вдалося завантажити підручники: ${escHtml(e.message)}</p>`;}
@@ -1089,7 +1089,7 @@ window.openRetakeRequestsModal=async function(){
     for(let date in data[subj]){
       for(let student in data[subj][date]){
         const req=data[subj][date][student];
-        const statusColor=req.status==='approved'?'var(--green)':req.status==='rejected'?'var(--red)':'var(--orange)';
+        const statusColor=req.status==='approved'?'var(--ok)':req.status==='rejected'?'var(--danger)':'var(--warn)';
         const statusLabel=req.status==='approved'?'✅ Схвалено':req.status==='rejected'?'❌ Відхилено':'⏳ Очікує';
         html+=`<div style="background:var(--surface-2);border:1px solid var(--line-soft);border-radius:9px;padding:11px;margin-bottom:9px;">
           <div style="display:flex;justify-content:space-between;align-items:center;">
@@ -1098,8 +1098,8 @@ window.openRetakeRequestsModal=async function(){
           </div>
           <div style="font-size:.8rem;color:var(--ink-3);margin-top:5px;">Поточна оцінка: <b>${req.grade||'—'}</b></div>
           ${req.status==='pending'?`<div style="display:flex;gap:7px;margin-top:8px;">
-            <button onclick="processRetake('${cls}','${escJs(subj)}','${date}','${escJs(student)}','approved')" style="flex:1;background:var(--green);color:#fff;padding:7px;border-radius:8px;border:none;cursor:pointer;font-weight:700;font-size:.82rem;margin:0;">✅ Дозволити</button>
-            <button onclick="processRetake('${cls}','${escJs(subj)}','${date}','${escJs(student)}','rejected')" style="flex:1;background:var(--red);color:#fff;padding:7px;border-radius:8px;border:none;cursor:pointer;font-weight:700;font-size:.82rem;margin:0;">❌ Відхилити</button>
+            <button onclick="processRetake('${cls}','${escJs(subj)}','${date}','${escJs(student)}','approved')" style="flex:1;background:var(--ok);color:#fff;padding:7px;border-radius:8px;border:none;cursor:pointer;font-weight:700;font-size:.82rem;margin:0;">✅ Дозволити</button>
+            <button onclick="processRetake('${cls}','${escJs(subj)}','${date}','${escJs(student)}','rejected')" style="flex:1;background:var(--danger);color:#fff;padding:7px;border-radius:8px;border:none;cursor:pointer;font-weight:700;font-size:.82rem;margin:0;">❌ Відхилити</button>
           </div>`:''}
         </div>`;
       }
@@ -1535,7 +1535,7 @@ export async function listenTeacherAttendance(){
             const bc = r.status==='late'?'badge-late':'badge-absent';
             const lb = r.status==='late'?'Запізнення':'Відсутність';
             const mi = r.markedBy==='teacher'?'👨‍🏫':(r.markedBy==='student'?'🎒':'👪');
-            h += `<li style="margin-bottom:7px;border-bottom:1px dashed var(--line-soft);padding-bottom:4px;"><span style="font-size:.72rem;background:var(--teal);color:#fff;padding:2px 5px;border-radius:4px;margin-right:4px;">${i} Кл</span> <b>${escHtml(stuName(`class_${i}`, st))}</b> <span class="badge ${bc}">${lb}</span> <span style="font-size:.72rem;color:var(--ink-3);">${escHtml(formatAttendanceSlotLabel(sk))} ${mi}</span></li>`;
+            h += `<li style="margin-bottom:7px;border-bottom:1px dashed var(--line-soft);padding-bottom:4px;"><span style="font-size:.72rem;background:var(--brand-ink);color:#fff;padding:2px 5px;border-radius:4px;margin-right:4px;">${i} Кл</span> <b>${escHtml(stuName(`class_${i}`, st))}</b> <span class="badge ${bc}">${lb}</span> <span style="font-size:.72rem;color:var(--ink-3);">${escHtml(formatAttendanceSlotLabel(sk))} ${mi}</span></li>`;
           }
         }
       }
@@ -1547,7 +1547,7 @@ export async function listenTeacherAttendance(){
         allDay[c] = snap.exists() ? snap.val() : null;
         renderAll();
       }, err=>{
-        list.innerHTML = `<li class="empty-msg" style="color:var(--red);">Не вдалося прочитати відвідуваність: ${escHtml(err.message||'')}</li>`;
+        list.innerHTML = `<li class="empty-msg" style="color:var(--danger);">Не вдалося прочитати відвідуваність: ${escHtml(err.message||'')}</li>`;
       }));
     }
     teacherAttendanceListener = () => unsubs.forEach(u=>u());
@@ -1572,7 +1572,7 @@ export async function listenTeacherAttendance(){
           <div class="att-item-head"><b>${escHtml(stuName(cls, st))}</b> <span class="badge ${bc}">${lb}</span></div>
           <div class="att-item-sub">${escHtml(formatAttendanceSlotLabel(sk))} ${markerIcon}${r.reason?` · ${escHtml(r.reason)}`:''}</div>
           ${attendanceAuthor(r)?`<div class="att-item-who">поставив: ${escHtml(attendanceAuthor(r))}</div>`:''}
-        </div>${undo}</li>`;}}list.innerHTML=h||'<li class="empty-msg">Усі на місці.</li>';}else list.innerHTML='<li class="empty-msg">Усі на місці.</li>';}, err=>{list.innerHTML=`<li class="empty-msg" style="color:var(--red);">Не вдалося прочитати відвідуваність: ${escHtml(err.message||'')}</li>`;});
+        </div>${undo}</li>`;}}list.innerHTML=h||'<li class="empty-msg">Усі на місці.</li>';}else list.innerHTML='<li class="empty-msg">Усі на місці.</li>';}, err=>{list.innerHTML=`<li class="empty-msg" style="color:var(--danger);">Не вдалося прочитати відвідуваність: ${escHtml(err.message||'')}</li>`;});
   }
 }
 window.listenTeacherAttendance=listenTeacherAttendance;
@@ -1605,22 +1605,88 @@ window.toggleStickerOther=function(){
   if(wrap)wrap.style.display=other?'block':'none';
   if(!other){const input=document.getElementById('t-sticker-other');if(input)input.value='';}
 };
-export function stickerRecord(subject,reason,date,by='',now=Date.now()){
+export function stickerRecord(subject,reason,date,by='',now=Date.now(),batch=''){
   const subj=String(subject||'').trim(),text=String(reason||'').trim();
   if(!subj)throw Error('Оберіть предмет або «Інше»');
   if(subj==='Інше'&&!text)throw Error('Напишіть, за що видається наліпка');
   if(text.length>160)throw Error('Причина наліпки задовга');
-  return {subject:subj,reason:subj==='Інше'?text:'',date,by,ts:now};
+  const rec={subject:subj,reason:subj==='Інше'?text:'',date,by,ts:now};
+  // Мітка пачки потрібна лише там, де наліпок справді кілька: за нею
+  // родина бачить «×4» одним рядком, а не чотири однакові.
+  if(batch)rec.batch=String(batch);
+  return rec;
 }
-window.giveStickerToStudent=async function(){const st=document.getElementById('t-sticker-student').value;
+
+// ── НАЛІПКИ ПАЧКОЮ ──
+//
+// Учитель майже ніколи не видає наліпку в момент, коли її заслужили: під
+// час уроку не до телефона. Записує потім — «за тиждень назбиралося
+// чотири». Клацати «Дати» чотири рази означає чотири окремі дії й шанс
+// збитися з ліку, тому кількість вводиться числом.
+//
+// ЧОМУ ЗАПИСІВ УСЕ ОДНО N, А НЕ ОДИН ІЗ ЧИСЛОМ. Наліпки скрізь
+// рахуються як кількість записів: стрічка до призу в кабінеті батьків,
+// профіль у «Пушиках», звіти. Один запис із полем count довелося б
+// навчитися читати в кожному з цих місць, і будь-яке пропущене показало б
+// дитині «1 наліпка» замість пʼяти — рівно там, де вона рахує їх уголос.
+export const STICKER_BATCH_MAX = 20;
+export function stickerCount(raw){
+  const text=String(raw==null?'':raw).trim();
+  if(!text)return 1;                       // порожнє поле — звична одна наліпка
+  if(!/^\d+$/.test(text))throw Error('Кількість наліпок — ціле число');
+  const n=Number(text);
+  if(n<1)throw Error('Наліпок має бути щонайменше одна');
+  // Верхня межа — не бюрократія: на телефоні легко набрати «55» замість
+  // «5», а пачка йде в стрічку до призу одразу вся й скасовується по
+  // одній. Двадцять покриває будь-який реальний тиждень.
+  if(n>STICKER_BATCH_MAX)throw Error(`За раз можна видати не більше ${STICKER_BATCH_MAX} наліпок`);
+  return n;
+}
+export function stickerWord(n){
+  const t=n%10, h=n%100;
+  if(t===1&&h!==11)return 'наліпка';
+  if(t>=2&&t<=4&&(h<12||h>14))return 'наліпки';
+  return 'наліпок';
+}
+let stickerSaving=false;
+window.giveStickerToStudent=async function(){
+  if(stickerSaving)return;
+  const st=document.getElementById('t-sticker-student').value;
   // Наліпка живе на вкладці «Клас» і не має залежати від предмета, обраного
   // на вкладці «Урок»: це різні екрани, і людина не бачить того селектора.
   const subj=actionSubject('t-sticker-subject');
   const reason=document.getElementById('t-sticker-other')?.value||'';
   const date=document.getElementById('global-date').value;const cls=getActiveClass();
   if(!st){showToast('⚠️ Оберіть учня');return;}
-  try{const record=stickerRecord(subj,reason,date,auth.currentUser?.uid||'');await push(ref(db,`stickers/${cls}/${st}`),record);document.getElementById('t-sticker-other').value='';showToast(`🌟 Наліпка: ${stuName(cls,st)}!`);}
+  const countEl=document.getElementById('t-sticker-count');
+  const btn=document.getElementById('btn-give-sticker');
+  let n,record;
+  try{
+    n=stickerCount(countEl?countEl.value:'');
+    const now=Date.now();
+    record=stickerRecord(subj,reason,date,auth.currentUser?.uid||'',now,
+      n>1?`${now.toString(36)}${Math.random().toString(36).slice(2,7)}`:'');
+  }catch(e){showToast('⚠️ '+e.message);return;}
+  // Питаємо лише про справді велику пачку: одна-дві наліпки — щоденна
+  // дія, і підтвердження щоразу перетворилося б на рефлекс «ОК».
+  if(n>=5&&!confirm(`Видати одразу ${n} ${stickerWord(n)} — ${stuName(cls,st)}?`))return;
+  stickerSaving=true;if(btn){btn.disabled=true;btn.textContent='⏳';}
+  try{
+    // Пачка йде ОДНИМ записом у базу, хоч наліпок і кілька: якщо звʼязок
+    // урветься посеред циклу з push(), дитина отримає половину пачки, і
+    // ніхто про це не дізнається — учитель бачив би «готово».
+    const updates={};
+    for(let i=0;i<n;i++){
+      const key=push(child(ref(db),`stickers/${cls}/${st}`)).key;
+      updates[`stickers/${cls}/${st}/${key}`]=record;
+    }
+    await update(ref(db),updates);
+    const other=document.getElementById('t-sticker-other');if(other)other.value='';
+    if(countEl)countEl.value='';
+    showToast(n>1?`🌟 ${n} ${stickerWord(n)}: ${stuName(cls,st)}!`:`🌟 Наліпка: ${stuName(cls,st)}!`);
+  }
   catch(e){showToast('⚠️ '+e.message);}
+  finally{stickerSaving=false;if(btn){btn.disabled=false;btn.textContent='🌟 Дати';}}
 };
 let commentSaving=false;
 window.saveComment=async function(){
@@ -1651,7 +1717,7 @@ window.saveComment=async function(){
 window.openExamsCalendar=function(){document.getElementById('exams-modal').style.display='flex';document.getElementById('exam-class-label').innerText=document.getElementById('t-class-selector').options[document.getElementById('t-class-selector').selectedIndex].text;document.getElementById('exams-day-details').style.display='none';const mi=document.getElementById('exam-month-select');const dp=document.getElementById('global-date').value.split('-');mi.value=`${dp[0]}-${dp[1]}`;renderExamsCalendar();};
 window.closeExamsModal=function(){document.getElementById('exams-modal').style.display='none';};
 window.renderExamsCalendar=function(){const cls=getActiveClass();const ym=document.getElementById('exam-month-select').value;if(!ym)return;const[y,m]=ym.split('-');get(child(ref(db),`exams/${cls}/${y}-${m}`)).then(snap=>{const d=snap.exists()?snap.val():{};let h='<div class="cal-grid">';['Пн','Вт','Ср','Чт','Пт','Сб','Нд'].forEach(d2=>h+=`<div class="cal-header">${d2}</div>`);const dim=new Date(y,parseInt(m),0).getDate();let fd=new Date(y,parseInt(m)-1,1).getDay();if(fd===0)fd=7;for(let i=1;i<fd;i++)h+=`<div></div>`;for(let i=1;i<=dim;i++){const cd=`${y}-${m}-${String(i).padStart(2,'0')}`;const cnt=d[cd]?Object.keys(d[cd]).length:0;const cc=cnt===1?'has-1':cnt>=2?'has-2':'';h+=`<div class="cal-day ${cc}" onclick="manageDayExams('${cd}')">${i}<br><small style="font-size:.68rem;">${cnt>0?cnt+' к.р.':''}</small></div>`;}h+='</div>';document.getElementById('exams-cal-container').innerHTML=h;});};
-window.manageDayExams=function(ds){const cls=getActiveClass();const dd=document.getElementById('exams-day-details');dd.style.display='block';get(child(ref(db),`exams/${cls}/${ds.substring(0,7)}/${ds}`)).then(snap=>{let ex=snap.exists()?snap.val():{};let lh='';for(let s in ex){const me=ex[s]===auth.currentUser.uid;const db2=me?`<button onclick="deleteExam('${ds}','${escJs(s)}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-weight:700;padding:0 4px;width:auto;margin:0;font-size:1.1rem;">✖</button>`:'';lh+=`<li style="margin-bottom:7px;display:flex;justify-content:space-between;align-items:center;background:#fff;padding:7px 11px;border-radius:8px;border:1px solid var(--line-soft);"><span><b>${s}</b></span>${db2}</li>`;}let h=`<h4 style="margin-top:0;color:var(--warn);border-bottom:1px dashed var(--orange);padding-bottom:9px;">Контрольні: ${ds.split('-').reverse().join('.')}</h4>`;h+=`<ul style="padding-left:0;list-style:none;margin-bottom:13px;">${lh||'<li class="empty-msg">Жодної</li>'}</ul>`;const[yy,mm,dd2]=ds.split('-');const dn=dayKeys[new Date(yy,mm-1,dd2).getDay()];let ds2=new Set();window.getTodayLessonsFlattened(dn).forEach(item=>{const sn=window.getValidSubjectName(item);if(sn)ds2.add(sn);});let fe=currentUserData.role==='teacher'?[...ds2].filter(s=>window.isSubjectAllowed(cls,s)).sort():[...ds2].sort();let so=fe.map(s=>`<option value="${s}">${s}</option>`).join('');if(!so){so='<option disabled>Немає предметів</option>';}h+=`<div style="display:flex;gap:9px;"><select id="exam-add-subj" style="flex:1;margin:0;">${so}</select><button style="background:var(--green);color:#fff;width:auto;padding:9px 13px;margin:0;" onclick="addExam('${ds}')">Додати</button></div>`;dd.innerHTML=h;});};
+window.manageDayExams=function(ds){const cls=getActiveClass();const dd=document.getElementById('exams-day-details');dd.style.display='block';get(child(ref(db),`exams/${cls}/${ds.substring(0,7)}/${ds}`)).then(snap=>{let ex=snap.exists()?snap.val():{};let lh='';for(let s in ex){const me=ex[s]===auth.currentUser.uid;const db2=me?`<button onclick="deleteExam('${ds}','${escJs(s)}')" style="background:none;border:none;color:var(--danger);cursor:pointer;font-weight:700;padding:0 4px;width:auto;margin:0;font-size:1.1rem;">✖</button>`:'';lh+=`<li style="margin-bottom:7px;display:flex;justify-content:space-between;align-items:center;background:#fff;padding:7px 11px;border-radius:8px;border:1px solid var(--line-soft);"><span><b>${s}</b></span>${db2}</li>`;}let h=`<h4 style="margin-top:0;color:var(--warn);border-bottom:1px dashed var(--warn);padding-bottom:9px;">Контрольні: ${ds.split('-').reverse().join('.')}</h4>`;h+=`<ul style="padding-left:0;list-style:none;margin-bottom:13px;">${lh||'<li class="empty-msg">Жодної</li>'}</ul>`;const[yy,mm,dd2]=ds.split('-');const dn=dayKeys[new Date(yy,mm-1,dd2).getDay()];let ds2=new Set();window.getTodayLessonsFlattened(dn).forEach(item=>{const sn=window.getValidSubjectName(item);if(sn)ds2.add(sn);});let fe=currentUserData.role==='teacher'?[...ds2].filter(s=>window.isSubjectAllowed(cls,s)).sort():[...ds2].sort();let so=fe.map(s=>`<option value="${s}">${s}</option>`).join('');if(!so){so='<option disabled>Немає предметів</option>';}h+=`<div style="display:flex;gap:9px;"><select id="exam-add-subj" style="flex:1;margin:0;">${so}</select><button style="background:var(--ok);color:#fff;width:auto;padding:9px 13px;margin:0;" onclick="addExam('${ds}')">Додати</button></div>`;dd.innerHTML=h;});};
 window.addExam=function(ds){const s=document.getElementById('exam-add-subj').value;if(!s)return;const cls=getActiveClass();const ym=ds.substring(0,7);get(child(ref(db),`exams/${cls}/${ym}/${ds}`)).then(snap=>{let cnt=snap.exists()?Object.keys(snap.val()).length:0;if(cnt>=2)return alert('❌ Ліміт: більше 2 контрольних не можна!');set(ref(db,`exams/${cls}/${ym}/${ds}/${s}`),auth.currentUser.uid).then(()=>{renderExamsCalendar();manageDayExams(ds);});});};
 window.deleteExam=function(ds,s){const cls=getActiveClass();remove(ref(db,`exams/${cls}/${ds.substring(0,7)}/${ds}/${s}`)).then(()=>{renderExamsCalendar();manageDayExams(ds);});};
 // ══════════ REACTIONS & WRAPPED (teacher side) ══════════
@@ -1662,7 +1728,7 @@ window.showReactionsDetails=async function(){
   if(!window.myDetailedReactions?.length){list.innerHTML='<p class="empty-msg" style="text-align:center;">Немає реакцій.</p>';return;}
   const cls=getActiveClass();
   try{await getStudentDir(cls,true);}
-  catch(e){list.innerHTML='<p class="empty-msg" style="color:var(--red);">Не вдалося завантажити імена учнів.</p>';return;}
+  catch(e){list.innerHTML='<p class="empty-msg" style="color:var(--danger);">Не вдалося завантажити імена учнів.</p>';return;}
   let h='<ul style="list-style:none;padding:0;margin:0;">';
   window.myDetailedReactions.forEach(r=>{
     const [y,m,d]=r.date.split('-');
@@ -1671,7 +1737,7 @@ window.showReactionsDetails=async function(){
       ?'Учня немає у списку класу':resolved;
     h+=`<li style="background:var(--surface-2);border:1px solid var(--line-soft);border-radius:8px;padding:11px;margin-bottom:9px;">
       <div style="display:flex;justify-content:space-between;border-bottom:1px dashed var(--line);padding-bottom:4px;margin-bottom:7px;">
-        <span style="font-weight:700;color:var(--teal);">${escHtml(name)}</span><span style="font-size:1.3rem;">${escHtml(r.emoji)}</span>
+        <span style="font-weight:700;color:var(--brand-ink);">${escHtml(name)}</span><span style="font-size:1.3rem;">${escHtml(r.emoji)}</span>
       </div>
       <div style="font-size:.78rem;color:var(--ink-3);margin-bottom:4px;">📅 ${d}.${m}.${y} | 📚 ${escHtml(r.subject)}</div>
       <div style="font-size:.88rem;color:var(--ink);background:var(--surface-2);padding:7px;border-radius:6px;font-style:italic;">"${escHtml(r.comment)}"</div>
@@ -1710,7 +1776,7 @@ window.openStickerStatsModal=async function(){
     const medal=i===0?'🥇 ':i===1?'🥈 ':i===2?'🥉 ':'';
     h+=`<li style="background:var(--surface-2);border:1px solid var(--line-soft);border-radius:8px;padding:11px;margin-bottom:9px;">
       <div style="display:flex;justify-content:space-between;align-items:center;">
-        <span style="font-weight:700;color:var(--teal);">${medal}${escHtml(s.name)}</span>
+        <span style="font-weight:700;color:var(--brand-ink);">${medal}${escHtml(s.name)}</span>
         <span style="font-size:1.05rem;font-weight:800;color:var(--warn);">🌟 ${s.count}</span>
       </div>
       <div style="background:var(--line-soft);border-radius:6px;height:8px;margin-top:7px;overflow:hidden;">
@@ -1726,7 +1792,7 @@ window.openStickerStatsModal=async function(){
     // напис-заглушка, і людина не знала б, зламалося чи просто повільно.
     console.error("teacher.js → sticker-stats-list", err);
     const _b=document.getElementById("sticker-stats-list");
-    if(_b)_b.innerHTML='<p class="empty-msg" style="color:var(--red);">Не вдалося завантажити: '+((err&&err.message)||'невідома помилка')+'</p>';
+    if(_b)_b.innerHTML='<p class="empty-msg" style="color:var(--danger);">Не вдалося завантажити: '+((err&&err.message)||'невідома помилка')+'</p>';
   }
 };
 
@@ -1903,7 +1969,7 @@ export async function renderTeacherHwDay(){
         Тема уроку — на вкладці «Урок».</p>`;
   }catch(e){
     console.error('ДЗ на день:',e);
-    box.innerHTML=`<p class="empty-msg" style="color:var(--red);">Не вдалося завантажити: ${escHtml(e.message||'')}</p>`;
+    box.innerHTML=`<p class="empty-msg" style="color:var(--danger);">Не вдалося завантажити: ${escHtml(e.message||'')}</p>`;
   }
 }
 window.renderTeacherHwDay=renderTeacherHwDay;
