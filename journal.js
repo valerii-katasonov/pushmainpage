@@ -6,7 +6,8 @@
 import { ref, set, get, child, update } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { loadGradeWork, prepareGradeWork, setGradeWorkBusy, hasGradeWorkChanges } from './grade-work.js';
 import { ACTIVE_YEAR } from './director.js';
-import { db, getActiveClass, currentUserData, displayGrade, gradeClass6, calculateStudentWeightedAvg, validDailyGrade, getClassNum, LEVEL_MAX_CLASS, GRADE_WEIGHTS, dayKeys, dayNamesUA, showToast, normalizeTimeRange, localDateString, summarizeAttendanceSlots, attendanceForLesson, gradeTypesCache, escJs, escHtml, notifyEvent, logAction, getUserRoles, getUsersSnap, stuName, gradeWritePaths, journalGradeKey, journalBaseDate, journalSlot, expandAltSubjects, altOptions, splitAltName, altPairKey, mondayOf, isBreakItem, insertSlot, removeSlot, makeBreak, withBreaks, slotBounds, hhmmFromMins, emailKey } from './common.js';
+import { topicNames } from './parent-student.js';
+import { db, getActiveClass, currentUserData, displayGrade, gradeClass6, calculateStudentWeightedAvg, validDailyGrade, getClassNum, LEVEL_MAX_CLASS, GRADE_WEIGHTS, dayKeys, dayNamesUA, showToast, normalizeTimeRange, localDateString, summarizeAttendanceSlots, attendanceForLesson, gradeTypesCache, escJs, escHtml, notifyEvent, logAction, getUserRoles, getUsersSnap, stuName, gradeWritePaths, journalGradeKey, journalBaseDate, journalSlot, expandAltSubjects, altOptions, splitAltName, altPairKey, mondayOf, isBreakItem, insertSlot, removeSlot, makeBreak, withBreaks, slotBounds, hhmmFromMins, emailKey, subjKey, planKeyWith, getDateRange, openTabByKey } from './common.js';
 
 // globalTeacherAccess is reassigned only in this file (openVisualMatrixModal)
 // and read from common.js (window.getDefaultTeacher) — plain export/import.
@@ -538,6 +539,93 @@ export function buildJournalColumns(months,gradesData,attData,manualCounts,sched
   });
   return columns;
 }
+// ══════════════════════════════════════════════════════════════════
+//  ТЕМА Й ДОМАШНЄ ЗАВДАННЯ В ШАПЦІ ЖУРНАЛУ
+// ══════════════════════════════════════════════════════════════════
+//
+// ЩО ЦЕ РОЗВ'ЯЗУЄ. Учитель бачить у журналі оцінки, але не бачить, чи
+// вписані тема уроку й домашнє завдання. Щоб це перевірити, доводилося
+// виходити з журналу, перемикати дату, дивитися вкладку «Урок» — і так
+// на кожен день. Тепер під числом стоять дві позначки: сіра — порожньо,
+// зелена — заповнено. Натиснув — прочитав, не виходячи з журналу.
+//
+// ОДНА ПАРА ПОЗНАЧОК НА ДЕНЬ, А НЕ НА СТОВПЕЦЬ. Тема й завдання лежать
+// у базі під датою і предметом (lesson_topics/{клас}/{предмет}/{дата},
+// homeworks/{клас}/{дата}/{предмет}) — окремого запису на другий урок
+// того самого предмета в той самий день немає. Тож дублювати позначки в
+// кожному стовпці дня означало б показувати ту саму річ двічі й натякати,
+// що їх можна заповнити окремо.
+//
+// Тексти тримаємо тут, а не перечитуємо базу на кожне натискання: журнал
+// і так уже прочитав їх, щоб пофарбувати позначки.
+let journalDayNotes = {};
+
+// Що показати за день. Винесено окремо, бо форм запису тут три — і всі
+// три лежать у базі живими (див. topicNames), а домашнє завдання буває і
+// рядком, і об'єктом.
+export function journalDayNote(topicsForSubject, plan, homeworkByDate, subject, ds){
+  const topic = topicNames((topicsForSubject || {})[ds], plan);
+  const rec = ((homeworkByDate || {})[ds] || {})[subject];
+  let hw = '';
+  if(typeof rec === 'string') hw = rec.trim();
+  else if(rec && typeof rec === 'object') hw = String(rec.text || '').trim();
+  return { topic, hw };
+}
+
+// Позначки в шапці дня. Порожнє — сіре й непомітне, заповнене — зелене:
+// учитель шукає очима саме прогалини, тож помітним має бути те, чого
+// бракує, а не те, що вже зроблено. Тому сіре не бліде до невидимості.
+export function journalFlagsHtml(note, ds){
+  const flag = (kind, label, filled, hint) =>
+    `<button type="button" class="jt-flag jt-flag-${kind}${filled ? ' on' : ''}"
+       onclick="event.stopPropagation();showJournalNote(event,'${ds}')"
+       data-tip="${hint}">${label}</button>`;
+  return `<div class="jt-flags">${
+    flag('t', 'Т', !!note.topic, note.topic ? 'Тема вписана — натисніть, щоб прочитати' : 'Тему уроку не вписано')
+  }${
+    flag('h', 'ДЗ', !!note.hw, note.hw ? 'Завдання є — натисніть, щоб прочитати' : 'Домашнє завдання не задано')
+  }</div>`;
+}
+
+window.showJournalNote = function(ev, ds){
+  const pop = document.getElementById('jt-note-pop');
+  if(!pop) return;
+  const note = journalDayNotes[ds] || { topic:'', hw:'' };
+  const empty = '<i class="jt-note-empty">не заповнено</i>';
+  pop.innerHTML = `
+    <div class="jt-note-head">${escHtml(String(ds).split('-').reverse().join('.'))}</div>
+    <div class="jt-note-row"><b>Тема</b>${note.topic ? escHtml(note.topic) : empty}</div>
+    <div class="jt-note-row"><b>Домашнє завдання</b>${note.hw ? escHtml(note.hw) : empty}</div>
+    <button type="button" class="jt-note-go" onclick="jumpToJournalDay('${ds}')">
+      Відкрити цей день ↗</button>`;
+  pop.style.display = 'block';
+  // Спершу показуємо, потім міряємо: у прихованого блоку розміри нульові,
+  // і вікно щоразу тулилося б у лівий верхній кут.
+  const r = pop.getBoundingClientRect();
+  const x = Math.min(Math.max(8, (ev.clientX || 0) - r.width / 2), innerWidth - r.width - 8);
+  const y = (ev.clientY || 0) + 14 + r.height > innerHeight
+    ? (ev.clientY || 0) - r.height - 12 : (ev.clientY || 0) + 14;
+  pop.style.left = Math.round(x) + 'px';
+  pop.style.top = Math.round(Math.max(8, y)) + 'px';
+  // Закриваємо наступним натисканням будь-де. once:true і setTimeout —
+  // щоб поточний клік, який щойно відкрив вікно, його ж і не закрив.
+  setTimeout(() => {
+    document.addEventListener('click', () => { pop.style.display = 'none'; }, { once:true });
+  }, 0);
+};
+
+// «Відкрити цей день» — те, заради чого вчителі й просили позначки:
+// побачив прогалину — пішов і заповнив. Закриваємо журнал, ставимо дату
+// й відкриваємо вкладку «Урок», де тема й завдання і редагуються.
+window.jumpToJournalDay = function(ds){
+  const pop = document.getElementById('jt-note-pop');
+  if(pop) pop.style.display = 'none';
+  if(window.closeJournalModal) window.closeJournalModal();
+  const dateEl = document.getElementById('global-date');
+  if(dateEl && ds){ dateEl.value = ds; if(window.handleDateChange) window.handleDateChange(); }
+  openTabByKey('teacher-screen', 'lesson');
+};
+
 window.renderJournalTable=async function(){
   const request=++journalRenderSeq;
   const cls=document.getElementById('j-class-select').value;
@@ -551,13 +639,17 @@ window.renderJournalTable=async function(){
   table.innerHTML='<tr><td style="padding:20px;color:var(--ink-3);">⏳ Завантаження...</td></tr>';
   const clsNum=getClassNum(cls);
   try{
-    const [studSnap,attSnap,retakeSnap,scheduleSnap,altSnap,scaleSnap,...perMonth]=await Promise.all([
+    const [studSnap,attSnap,retakeSnap,scheduleSnap,altSnap,scaleSnap,topicsSnap,hwSnap,plansSnap,aliasesSnap,...perMonth]=await Promise.all([
       get(child(ref(db),`students_list/${cls}`)),
       get(child(ref(db),`attendance/${cls}`)),
       get(child(ref(db),`retake_requests/${cls}/${subj}`)),
       get(child(ref(db),`schedules/${cls}/lessons`)),
       get(child(ref(db),`schedule_alt/${cls}`)).catch(()=>null),
       get(child(ref(db),`grade_scales/${cls}/${subj}`)),
+      get(child(ref(db),`lesson_topics/${cls}/${subjKey(subj)}`)).catch(()=>null),
+      get(child(ref(db),`homeworks/${cls}`)).catch(()=>null),
+      get(child(ref(db),`curriculum_plans/${cls}`)).catch(()=>null),
+      get(child(ref(db),`curriculum_aliases/${cls}`)).catch(()=>null),
       ...months.flatMap(ym=>[
         get(child(ref(db),`grades/${cls}/${ym}/${subj}`)),
         get(child(ref(db),`grade_types/${cls}/${ym}/${subj}`)),
@@ -598,6 +690,19 @@ window.renderJournalTable=async function(){
       scheduleSnap.exists()?scheduleSnap.val():{},subj,localDateString,`${ACTIVE_YEAR.split('-')[0]}-09-01`,
       altSnap?.exists()?altSnap.val():{});
     journalVisibleColumns=dateCols;
+
+    const topicsForSubject = topicsSnap && topicsSnap.exists() ? topicsSnap.val() : {};
+    const homeworkByDate = hwSnap && hwSnap.exists() ? hwSnap.val() : {};
+    const plans = plansSnap && plansSnap.exists() ? plansSnap.val() : {};
+    const aliases = aliasesSnap && aliasesSnap.exists() ? aliasesSnap.val() : {};
+    const pKey = planKeyWith(aliases, subjKey(subj));
+    const planForSubject = plans[pKey] || null;
+
+    journalDayNotes = {};
+    const uniqueDates = [...new Set(dateCols.map(c => c.ds))];
+    uniqueDates.forEach(ds => {
+      journalDayNotes[ds] = journalDayNote(topicsForSubject, planForSubject, homeworkByDate, subj, ds);
+    });
     const canEdit=journalIsTeacher&&journalMode==='edit';
     const dayN=['Нд','Пн','Вт','Ср','Чт','Пт','Сб'];
     // Phase 9: without an explicit month label, a multi-month range just shows
@@ -629,7 +734,8 @@ window.renderJournalTable=async function(){
     // top-to-bottom, not just from the label row.
     let dayRow='<tr class="jt-day-row">';
     let bandPtr=0,bandRemaining=monthBands.length?monthBands[0].count:0;
-    dateCols.forEach(({ds,key,slot,scheduled,manual,day,dow,ym})=>{
+    dateCols.forEach((col)=>{
+      const {ds,key,slot,scheduled,manual,day,dow,ym} = col;
       const isToday=ds===localDateString;
       if(bandRemaining===0){bandPtr++;bandRemaining=monthBands[bandPtr].count;}
       const bandColor=bandColorOf(monthBands[bandPtr].bandIdx);bandRemaining--;
@@ -659,7 +765,11 @@ window.renderJournalTable=async function(){
       const remove=canEdit&&last&&manual===slot&&slot>scheduled
         ?`<button type="button" class="j-remove-column" onclick="removeJournalColumn('${ds}')" aria-label="Видалити додатковий стовпець" data-tip="Видалити порожній додатковий стовпець">−</button>`:'';
       const actions=add||remove?`<div class="j-column-actions">${remove}${add}</div>`:'';
-      dayRow+=`<th class="${isToday?'today-col':''}" style="background:${bandColor};" title="${ds} · ${label}">${day}<br><span style="font-size:.78em;font-weight:400;">${dayN[dow]} · ${label}</span>${typeCell}${actions}</th>`;
+
+      const isFirstOfDate = (col === dateCols.find(c => c.ds === ds));
+      const flagsHtml = isFirstOfDate ? journalFlagsHtml(journalDayNotes[ds], ds) : '';
+
+      dayRow+=`<th class="${isToday?'today-col':''}" style="background:${bandColor};" title="${ds} · ${label}">${day}<br><span style="font-size:.78em;font-weight:400;">${dayN[dow]} · ${label}</span>${flagsHtml}${typeCell}${actions}</th>`;
     });
     dayRow+='</tr>';
     let thead='<thead>'+monthRow+dayRow+'</thead>';
@@ -735,7 +845,7 @@ window.renderJournalTable=async function(){
         .map(x=>`${x.c}×${x.w}`)
         .join(', ');
       wAvgDiv.style.display='block';
-      wAvgDiv.innerHTML=`<b style="color:var(--purple);">📊 Середньозважений бал класу з ${subj}${periodLabel}:</b><br>
+      wAvgDiv.innerHTML=`<b style="color:var(--brand-deep);">📊 Середньозважений бал класу з ${subj}${periodLabel}:</b><br>
         <span style="font-size:1.6rem;font-weight:800;color:var(--brand-deep);">${ca}</span>
         ${weightHint?`<span style="font-size:.8rem;color:var(--ink-3);margin-left:8px;">(зважений: ${weightHint})</span>`:''}`;
     } else wAvgDiv.style.display='none';
@@ -955,7 +1065,7 @@ window.openVisualMatrixModal=async function(mode){
   if(daySel) daySel.value='Monday';
   const info=document.getElementById('matrix-load-info');
   const say=(t,bad)=>{ if(info){ info.style.display=t?'block':'none'; info.textContent=t||'';
-                                 info.style.color=bad?'var(--red)':'var(--ink-3)'; } };
+                                 info.style.color=bad?'var(--danger)':'var(--ink-3)'; } };
   say('Завантаження...');
   try{
   let dbPath=mode==='live'?'schedules':`schedule_drafts/${mode}`;
