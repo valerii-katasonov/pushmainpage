@@ -76,16 +76,13 @@ const DOW = ['Понеділок','Вівторок','Середа','Четве�
 const DOW_SHORT = ['Пн','Вт','Ср','Чт','Пт'];
 
 export const MENU_FIELDS = [
-  // «Друга страва» за каноном означає все друге разом із гарніром, тож
-  // тримати поруч «другу страву» й «гарнір» — називати частину тим самим
-  // словом, що й ціле. Звідси й плутанина, куди подіти котлету.
+  // Збережено оригінальні ключі в базі даних: 'side' та 'side2' відповідають за Основна страва варіанти А та Б.
+  // Це запобігає втраті вибору батьків (поле 'pick' у базі посилається на А чи Б у межах цієї пари).
+  // Стару пару 'second'/'second2' прибрано, щоб розвантажити меню.
   { k:'first',     label:'Перша страва',  ph:'суп, напр. Борщ український' },
-  { k:'second',    label:'Основна страва', ph:'мʼясо або риба, напр. Котлета з індички' },
-  { k:'second2',   label:'Основна страва — варіант Б', ph:'необовʼязково; заповніть для вибору основної страви', choice:true },
-  { k:'side',      label:'Гарнір — варіант А', ph:'напр. Каша гречана' },
-  { k:'side2',     label:'Гарнір — варіант Б', ph:'необовʼязково; заповніть, щоб дати вибір', choice:true },
+  { k:'side',      label:'Основна страва — варіант А', ph:'мʼясо/риба + гарнір, напр. Котлета з індички + рис' },
+  { k:'side2',     label:'Основна страва — варіант Б', ph:'необовʼязково; заповніть, щоб дати вибір', choice:true },
   { k:'drink',     label:'Напій',         ph:'напр. Компот із сухофруктів' },
-  { k:'dessert',   label:'Десерт',        ph:'необовʼязково' },
   { k:'breakfast',  label:'🌅 Сніданок — варіант А', ph:'окрема позиція; порожньо — сніданків цього дня немає', meal:true },
   { k:'breakfast2', label:'🌅 Сніданок — варіант Б', ph:'необов’язково; заповніть, щоб дати вибір', meal:true, choice:true },
   { k:'snack',     label:'🥪 Підвечірок', ph:'окрема позиція, напр. Сирник + какао', snack:true },
@@ -459,7 +456,7 @@ export function choicePair(menuDay){
   if(!menuDay) return null;
   const side = String(menuDay.side || '').trim();
   const side2 = String(menuDay.side2 || '').trim();
-  if(side && side2) return { field:'side', a:side, b:side2, label:'гарнір' };
+  if(side && side2) return { field:'side', a:side, b:side2, label:'основну страву' };
   const sec = String(menuDay.second || '').trim();
   const sec2 = String(menuDay.second2 || '').trim();
   if(sec && sec2) return { field:'second', a:sec, b:sec2, label:'основну страву' };
@@ -617,13 +614,9 @@ export function abPairGate(before, after, chosen){
 window.saveWeekMenu = async function(){
   const monday = currentMonday(), dates = weekDates(monday);
   for(const date of dates){
-    if(document.getElementById(`km-${date}-side2`)?.value.trim()
-      &&document.getElementById(`km-${date}-second2`)?.value.trim())
-      return alert(`На ${human(date)} можна дати вибір або основної страви, або гарніру — не обох одночасно.`);
     for(const [first,second,label] of [
       ['breakfast','breakfast2','сніданку'],
-      ['side','side2','гарніру'],
-      ['second','second2','основної страви']
+      ['side','side2','основної страви']
     ]){
       const a = document.getElementById(`km-${date}-${first}`)?.value.trim() || '';
       const b = document.getElementById(`km-${date}-${second}`)?.value.trim() || '';
