@@ -766,8 +766,7 @@ window.renderJournalTable=async function(){
         ?`<button type="button" class="j-remove-column" onclick="removeJournalColumn('${ds}')" aria-label="Видалити додатковий стовпець" data-tip="Видалити порожній додатковий стовпець">−</button>`:'';
       const actions=add||remove?`<div class="j-column-actions">${remove}${add}</div>`:'';
 
-      const isFirstOfDate = (col === dateCols.find(c => c.ds === ds));
-      const flagsHtml = isFirstOfDate ? journalFlagsHtml(journalDayNotes[ds], ds) : '';
+      const flagsHtml = journalFlagsHtml(journalDayNotes[ds], ds);
 
       dayRow+=`<th class="${isToday?'today-col':''}" style="background:${bandColor};" title="${ds} · ${label}">${day}<br><span style="font-size:.78em;font-weight:400;">${dayN[dow]} · ${label}</span>${flagsHtml}${typeCell}${actions}</th>`;
     });
