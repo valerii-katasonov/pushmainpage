@@ -313,6 +313,92 @@
     .btn-confirm{background:var(--brand-deep);color:#fff;}
     .btn-delete{background:var(--surface);color:var(--danger);border:2px solid var(--danger-line);}
     .btn-cancel{background:var(--line-soft);color:var(--ink);}
+    /* ── JOURNAL FLAGS FOR TOPIC/HOMEWORK ── */
+    .jt-flags {
+      display: flex;
+      justify-content: center;
+      gap: 3px;
+      margin-top: 3px;
+    }
+    .jt-flag {
+      display: inline-block;
+      width: auto;
+      margin: 0;
+      padding: 1px 4px;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      font-size: .65em;
+      font-weight: 700;
+      line-height: 1.2;
+      background: var(--surface-3); /* gray default */
+      color: var(--ink-3);
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+    .jt-flag.on {
+      background: var(--ok-soft);
+      color: var(--ok);
+      border-color: var(--ok-line);
+    }
+    /* ── JOURNAL NOTE POPUP ── */
+    .jt-note-popup {
+      position: fixed;
+      z-index: 10000;
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.22);
+      padding: 14px;
+      display: none;
+      min-width: 240px;
+      max-width: min(400px, calc(100vw - 20px));
+      border: 2px solid var(--brand-ink);
+      animation: popIn 0.15s ease-out;
+    }
+    .jt-note-head {
+      font-size: .85rem;
+      font-weight: 800;
+      color: var(--brand-ink);
+      margin-bottom: 9px;
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 5px;
+      text-align: center;
+    }
+    .jt-note-row {
+      font-size: .8rem;
+      line-height: 1.35;
+      margin-bottom: 8px;
+      color: var(--ink);
+      text-align: left;
+    }
+    .jt-note-row b {
+      display: block;
+      font-size: .72rem;
+      color: var(--ink-3);
+      text-transform: uppercase;
+      margin-bottom: 2px;
+    }
+    .jt-note-empty {
+      color: var(--ink-3);
+      font-style: italic;
+    }
+    .jt-note-go {
+      display: block;
+      width: 100%;
+      margin-top: 10px;
+      padding: 7px 10px;
+      border: 1px solid var(--brand-line);
+      border-radius: 8px;
+      background: var(--brand-soft);
+      color: var(--brand-deep);
+      font-size: .78rem;
+      font-weight: 700;
+      cursor: pointer;
+      text-align: center;
+      transition: background 0.15s;
+    }
+    .jt-note-go:hover {
+      background: var(--brand-line);
+    }
     /* ── MODE TOGGLE ── */
     .mode-toggle{display:flex;gap:4px;background:var(--surface-2);border-radius:10px;padding:4px;margin-bottom:10px;}
     .mode-toggle button{flex:1;padding:7px;margin:0;border-radius:7px;background:transparent;color:var(--ink-2);font-size:.82rem;border:none;transition:.2s;cursor:pointer;}
@@ -2611,6 +2697,8 @@
     <button class="btn-cancel" onclick="closeGradeEditor()">Скас.</button>
   </div>
 </div>
+<!-- JOURNAL NOTE POPUP -->
+<div id="jt-note-pop" class="jt-note-popup" style="display:none; position:fixed; z-index:10000;"></div>
 <div class="container">
   <!-- LOGIN -->
   <!-- ═══ ЕКРАН 1: ЗВИЧАЙНИЙ ВХІД ═══
