@@ -2080,7 +2080,9 @@ window.pmShowDay = function(d){ pmDate = d; pmPicked = true; renderParentMenu();
 
 // Другий аргумент — КЛЮЧ учня (постійний ідентифікатор), а не імʼя
 export async function renderParentMenu(cls, studentKey, date){
-  const box = document.getElementById('p-menu');
+  const isStudent = currentUserData?.role === 'student';
+  const boxId = isStudent ? 's-menu' : 'p-menu';
+  const box = document.getElementById(boxId);
   if(!box) return;
   cls = cls || currentUserData?.class;
   studentKey = studentKey || await mealKey(cls);
@@ -2210,6 +2212,12 @@ export async function renderParentMenu(cls, studentKey, date){
     const eff  = effectiveMeals(plan, ov, isAbsent, weekdayIdx(cur));
     const gate = mealsEditable(cur);
     const sGate = snackEditable(cur);
+    if (isStudent) {
+      gate.ok = false;
+      gate.msg = 'Перегляд замовлення';
+      sGate.ok = false;
+      sGate.msg = 'Перегляд замовлення';
+    }
     const notEating = plan.lunch === false;
     const noAnswer  = !lunchChosen(plan);   // батько ще не відповів про обіди
 
@@ -2219,6 +2227,10 @@ export async function renderParentMenu(cls, studentKey, date){
 
     const pick = pickedSecond(m, ov);
     const bGate = breakfastEditable(cur);
+    if (isStudent) {
+      bGate.ok = false;
+      bGate.msg = 'Перегляд замовлення';
+    }
     const hasBrk = !!(m && String(m.breakfast||'').trim());
     const brkPair = breakfastChoicePair(m);
     const brkPick = pickedBreakfast(m, ov);
@@ -2285,11 +2297,11 @@ export async function renderParentMenu(cls, studentKey, date){
       : (bGate.ok
           ? `<button class="pm-btn brk" onclick="setMealDay('${escJs(cur)}','breakfast',${eff.breakfast?0:1})">${eff.breakfast?'Без сніданку':'+ Сніданок'}</button>`
           : `<span class="pm-locked small">🔒 ${escHtml(bGate.msg)}</span>`);
-    const actions = lunchBtns + snackBtn + brkBtn;
+    const actions = isStudent ? '' : (lunchBtns + snackBtn + brkBtn);
 
     // ПИТАННЯ ПРО ОБІДИ. Поки батько не відповів, кухня цю дитину не
     // рахує — тож питання має бути помітним, а не рядком у налаштуваннях.
-    const askLunch = !noAnswer ? '' : `
+    const askLunch = (isStudent || !noAnswer) ? '' : `
       <div class="pm-ask">
         <b>Ваша дитина обідає в школі?</b>
         <span>Поки ви не відповіли, обіди на неї не замовляються.</span>
@@ -2341,7 +2353,7 @@ export async function renderParentMenu(cls, studentKey, date){
       <div id="pm-msg" class="pm-msg" style="display:none;"></div>
 
       <div class="pm-links">
-        <a href="#" onclick="event.preventDefault();openMealSettings();">⚙️ Налаштування харчування</a>
+        ${isStudent ? '' : `<a href="#" onclick="event.preventDefault();openMealSettings();">⚙️ Налаштування харчування</a>`}
         <a href="#" onclick="event.preventDefault();openMyMealStats();">📊 Моя статистика</a>
       </div>
       <!-- Позначка версії. Айфон уміє тримати стару сторінку днями, і
@@ -3346,7 +3358,9 @@ window.kitchenAddTakeaway = async function(){
 
 // ── Кабінет батьків: замовлення на обраний день ──
 export async function renderTakeaway(date){
-  const box = document.getElementById('p-takeaway');
+  const isStudent = currentUserData?.role === 'student';
+  const boxId = isStudent ? 's-takeaway' : 'p-takeaway';
+  const box = document.getElementById(boxId);
   if(!box) return;
   const cls = currentUserData?.class;
   const sid = await mealKey(currentUserData?.class);
@@ -3371,7 +3385,7 @@ export async function renderTakeaway(date){
       ...Object.keys(mine).filter(id=>Number(mine[id])>0)])];
     if(!ids.length){ box.innerHTML = ''; return; }     // кухня нічого не продає — розділу немає
 
-    const gate = takeawayEditable(day);
+    const gate = isStudent ? { ok: false, msg: 'Редагування доступне тільки для батьків' } : takeawayEditable(day);
     let sum = 0;
     ids.forEach(id=>{sum+=(Number(mine[id])||0)*takeawayPriceAt(id,day,items,priceHistory);});
 
@@ -3504,4 +3518,8 @@ window.clearMenuDay = async function(date){
   }catch(e){
     alert('Не вдалося прибрати: ' + e.message);
   }
+};
+
+window.openStudentMealsTab = function(){
+  renderParentMenu();
 };
