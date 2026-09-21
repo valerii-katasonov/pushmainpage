@@ -4470,6 +4470,7 @@
       <button class="dtab" data-t="games" onclick="switchTab('student-screen','games',this);openGamesTab()">🎮 Ігри</button>
       <button class="dtab" data-t="news" onclick="switchTab('student-screen','news',this)">Новини<span class="chat-dot"></span></button>
       <button class="dtab" data-t="study" onclick="switchTab('student-screen','study',this)">Навчання</button>
+      <button class="dtab" data-t="meals" onclick="switchTab('student-screen','meals',this);openStudentMealsTab()">🍽️ Їжа</button>
     </div>
     <div id="s-push-invite" style="display:none;"></div>
 
@@ -4604,6 +4605,12 @@
         <section class="screen-section" data-dtab="day">
       <h3>📲 Застосунок на телефоні</h3>
       <div class="install-box"></div>
+    </section>
+
+    <section class="screen-section" data-dtab="meals">
+      <h3>🍽️ Харчування</h3>
+      <div id="s-menu" class="pm-box"><p class="empty-msg">Завантаження...</p></div>
+      <div id="s-takeaway" class="ta-box"></div>
     </section>
 
 <button class="btn-logout" onclick="logoutUser()">Вийти</button>
