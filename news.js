@@ -26,6 +26,7 @@ import { db, auth, currentUserData, showToast, escHtml, escJs, logAction,
 
 const FEED_LIMIT = 30;
 const SEEN_KEY = 'push_school_news_seen';
+const human = ds => ds ? ds.split('-').reverse().join('.') : '';
 
 // ── Хто що може публікувати ──
 export function canPostSchoolWide(){
