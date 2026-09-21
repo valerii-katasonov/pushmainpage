@@ -4477,6 +4477,22 @@
       <div id="s-fresh-news" class="fn-box" style="display:none;"></div>
       <!-- Дні народження. Найперше на вкладці, як і в інших кабінетах. -->
       <div id="s-birthdays" class="bd-box" style="display:none;"></div>
+
+      <h3>🕒 Запізнення та відсутність</h3>
+      <!-- PHASE 2: Алерт про невизнану відмітку вчителя -->
+      <div id="s-teacher-att-alert" style="display:none;background:var(--warn-soft);border:1px solid var(--warn-line);color:var(--warn);padding:11px 14px;border-radius:12px;margin-bottom:12px;font-size:.85rem;"></div>
+      <!-- Відсутність -->
+      <div class="data-card att-quick" style="border-left-color:var(--danger);background:var(--surface-2);margin-top:0;margin-bottom:18px;">
+        <h4 style="margin-top:0;color:var(--danger);font-size:1rem;margin-bottom:6px;">🕒 Я запізнююсь / буду відсутній</h4>
+        <p class="att-hint" style="font-size:0.78rem;color:var(--ink-3);margin-top:0;margin-bottom:12px;">Запізнюєшся чи захворів? Повідом учителя — він побачить це одразу.</p>
+        <div class="att-row" style="display:flex;flex-direction:column;gap:9px;">
+          <select id="s-att-type" onchange="updateAttOptionsStudent()" style="border-color:var(--danger);width:100%;"><option value="late">Запізнююсь</option><option value="absent">Буду відсутній</option></select>
+          <select id="s-att-reason" style="border-color:var(--danger);width:100%;"><option value="на 5 хвилин">на 5 хвилин</option><option value="на 10 хвилин">на 10 хвилин</option><option value="на 15 хвилин">на 15 хвилин</option><option value="на 20 хвилин">на 20 хвилин</option><option value="на 25 хвилин">на 25 хвилин</option><option value="на 30 хвилин">на 30 хвилин</option><option value="до 2-го уроку">до 2-го уроку</option><option value="до 3-го уроку">до 3-го уроку</option></select>
+        </div>
+        <button onclick="submitAttendance('student')" style="background:var(--brand-deep);padding:11px;color:#fff;margin-top:13px;width:100%;border:none;border-radius:8px;font-weight:700;cursor:pointer;">Відправити</button>
+        <p id="s-att-status" style="font-size:.83rem;color:var(--ok);font-weight:700;margin-top:9px;display:none;">✅ Повідомлення надіслано!</p>
+      </div>
+
       <h3>🗓️ Розклад</h3>
       <!-- ДИНАМІЧНИЙ РОЗКЛАД -->
       <div class="schedule-box" style="margin-top:0;">
@@ -4574,30 +4590,6 @@
       <div class="data-card" style="border-left-color:var(--brand-deep);background:var(--brand-soft);">
         <h4 style="margin-top:0;color:var(--brand-deep);">🤝 Поведінка (цей тиждень):</h4>
         <div id="s-behavior-list"><p class="empty-msg">Завантаження...</p></div>
-      </div>
-    </section>
-
-    <section class="screen-section half">
-      <h3>🕒 Відвідуваність</h3>
-      <!-- PHASE 2: Алерт про невизнану відмітку вчителя -->
-      <div id="s-teacher-att-alert" style="display:none;background:var(--warn-soft);border:1px solid var(--warn-line);color:var(--warn);padding:11px 14px;border-radius:12px;margin-bottom:12px;font-size:.85rem;"></div>
-      <!-- Відсутність -->
-      <div class="data-card" style="border-left-color:var(--danger);background:var(--surface-2);margin-top:0;">
-        <h4 style="margin-top:0;color:var(--danger);">🕒 Я запізнююсь / буду відсутній</h4>
-        <div style="display:flex;flex-direction:column;gap:9px;margin-top:9px;">
-          <select id="s-att-type" onchange="updateAttOptionsStudent()" style="border-color:var(--danger);"><option value="late">Запізнююсь</option><option value="absent">Буду відсутній</option></select>
-          <select id="s-att-reason" style="border-color:var(--danger);"><option value="на 5 хвилин">на 5 хвилин</option><option value="на 10 хвилин">на 10 хвилин</option><option value="на 15 хвилин">на 15 хвилин</option><option value="на 20 хвилин">на 20 хвилин</option><option value="на 25 хвилин">на 25 хвилин</option><option value="на 30 хвилин">на 30 хвилин</option><option value="до 2-го уроку">до 2-го уроку</option><option value="до 3-го уроку">до 3-го уроку</option></select>
-        </div>
-        <button onclick="submitAttendance('student')" style="background:var(--brand-deep);padding:11px;color:#fff;margin-top:13px;">Відправити</button>
-        <p id="s-att-status" style="font-size:.83rem;color:var(--ok);font-weight:700;margin-top:9px;display:none;">✅ Повідомлення надіслано!</p>
-      </div>
-    </section>
-
-    <section class="screen-section half">
-      <h3>💬 Комунікація</h3>
-      <!-- Чат -->
-      <div class="data-card" style="border-left-color:var(--brand-deep);background:var(--surface-2);text-align:center;margin-top:0;">
-        <button onclick="openChatModal('student')" data-chatbtn="1" style="background:var(--brand-deep);color:#fff;padding:12px;border-radius:12px;font-weight:700;width:100%;">💬 Написати вчителю / директору</button>
       </div>
     </section>
 
