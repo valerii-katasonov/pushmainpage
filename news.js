@@ -19,7 +19,7 @@
 // ЧОМУ PUSH ЛИШЕ ЗА ГАЛОЧКОЮ: якщо дзвеніти на кожне оголошення, батьки
 // вимкнуть сповіщення взагалі — і пропустять те, що справді терміново.
 // ═══════════════════════════════════════════════════════════════
-import { ref, set, get, child, push, remove, query, orderByKey, limitToLast }
+import { ref, set, get, child, push, remove, update, query, orderByKey, limitToLast }
   from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { db, auth, currentUserData, showToast, escHtml, escJs, logAction,
          notifyEvent, isTeacherRole, getActiveClass } from './common.js';
@@ -93,7 +93,8 @@ export async function renderNewsFeed(containerId){
     box.innerHTML = list.map(a => {
       const isNew  = (a.ts||0) > seen;
       const mine   = a.author === (auth.currentUser?.uid || '');
-      const canDel = mine || canPostSchoolWide();
+      const isClassTeacher = (role === 'teacher' && a.class && window.__isClassTeacherOf === a.class);
+      const canDel = mine || canPostSchoolWide() || isClassTeacher;
       const badge  = a.scope === 'school'
         ? '<span class="nw-tag school">Вся школа</span>'
         : `<span class="nw-tag cls">${escHtml(String(a.class||'').replace('class_',''))} клас</span>`;
