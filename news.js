@@ -57,8 +57,12 @@ export async function loadNews(){
   const snap = await get(query(ref(db,'announcements'), orderByKey(), limitToLast(FEED_LIMIT)));
   if(!snap.exists()) return [];
   const v = snap.val();
+  const now = Date.now();
+  const role = currentUserData?.role;
+  const isPoster = role === 'director' || role === 'administrator' || role === 'teacher';
   return Object.keys(v).map(id => ({ id, ...v[id] }))
     .filter(a => a && a.text)
+    .filter(a => isPoster || !a.expTs || now < a.expTs)
     .sort((a,b) => (b.ts||0) - (a.ts||0));
 }
 
@@ -93,24 +97,34 @@ export async function renderNewsFeed(containerId){
       const badge  = a.scope === 'school'
         ? '<span class="nw-tag school">Вся школа</span>'
         : `<span class="nw-tag cls">${escHtml(String(a.class||'').replace('class_',''))} клас</span>`;
+      const isExpired = a.expTs && Date.now() > a.expTs;
+      const expiredTag = isExpired ? '<span class="nw-tag" style="background:var(--danger-soft);color:var(--danger);font-weight:bold;">Термін минув</span>' : '';
+      const expDateTxt = a.expTs
+        ? `<span class="nw-time" style="margin-left:8px;color:var(--ink-3);" title="Дата закінчення публікації">⏰ до ${escHtml(human(new Date(a.expTs).toISOString().slice(0,10)))} ${new Date(a.expTs).toTimeString().slice(0,5)}</span>`
+        : '';
       return `<article class="nw-item${a.important?' imp':''}${isNew?' new':''}">
         <div class="nw-head">
           ${badge}
           ${a.important ? '<span class="nw-tag imp">Важливе</span>' : ''}
           ${isNew ? '<span class="nw-dot" data-tip="Нове"></span>' : ''}
+          ${expiredTag}
           <span class="nw-time">${escHtml(timeAgo(a.ts||0))}</span>
+          ${expDateTxt}
         </div>
         ${a.title ? `<h4 class="nw-title">${escHtml(a.title)}</h4>` : ''}
         <div class="nw-text">${escHtml(a.text).replace(/\n/g,'<br>')}</div>
         <div class="nw-foot">
           <span class="nw-author">${escHtml(a.authorName || 'Школа')}</span>
-          ${canDel ? `<button class="nw-del" onclick="deleteNews('${escJs(a.id)}')">Видалити</button>` : ''}
+          <div style="display:flex;gap:8px;">
+            ${canDel ? `<button class="nw-del" style="background:var(--brand-soft);color:var(--brand-ink);border:1px solid var(--brand-line);padding:2px 8px;border-radius:4px;font-size:0.72rem;cursor:pointer;" onclick="setNewsExpiry('${escJs(a.id)}', ${a.expTs || 'null'})">⏰ Термін</button>` : ''}
+            ${canDel ? `<button class="nw-del" onclick="deleteNews('${escJs(a.id)}')">Видалити</button>` : ''}
+          </div>
         </div>
       </article>`;
     }).join('');
     markSeen();
   }catch(e){
-    box.innerHTML = `<p class="empty-msg" style="color:var(--red);">Не вдалося завантажити: ${escHtml(e.message)}</p>`;
+    box.innerHTML = `<p class="empty-msg" style="color:var(--danger);">Не вдалося завантажити: ${escHtml(e.message)}</p>`;
   }
 }
 window.renderNewsFeed = renderNewsFeed;
@@ -135,6 +149,7 @@ export const FRESH_DAYS = 7;
 export function isFresh(a, now){
   const ts = (a && a.ts) || 0;
   if(!ts) return false;                       // без дати — не вгадуємо
+  if(a.expTs && now >= a.expTs) return false;  // термін закінчився — не свіже
   return (now - ts) < FRESH_DAYS * 24 * 60 * 60 * 1000;
 }
 
@@ -230,6 +245,8 @@ window.openNewsComposer = function(){
   window.nwScopeChanged();
   document.getElementById('nw-title').value = '';
   document.getElementById('nw-text').value  = '';
+  const expField = document.getElementById('nw-exp');
+  if(expField) expField.value = '';
   document.getElementById('nw-important').checked = false;
   modal.style.display = 'flex';
 };
@@ -251,6 +268,8 @@ window.publishNews = async function(){
     cls = schoolWide ? document.getElementById('nw-class').value : getActiveClass();
     if(!cls) return alert('Оберіть клас.');
   }
+  const expVal = document.getElementById('nw-exp')?.value;
+  const expTs = expVal ? new Date(expVal).getTime() : null;
   const important = document.getElementById('nw-important').checked;
   const btn = document.getElementById('nw-publish');
   btn.disabled = true; btn.textContent = '⏳ Публікую...';
@@ -263,6 +282,7 @@ window.publishNews = async function(){
       role: currentUserData?.role || '',
       ts: Date.now()
     };
+    if(expTs) rec.expTs = expTs;
     await push(ref(db,'announcements'), rec);
     logAction('announcement', { value: `${scope === 'school' ? 'вся школа' : cls} · ${title || text.slice(0,40)}` });
 
@@ -319,5 +339,48 @@ window.newsDraftAI = async function(){
     alert('Не вдалося скласти: ' + e.message);
   }finally{
     btn.disabled = false; btn.textContent = '✨ Скласти чернетку';
+  }
+};
+
+window.setNewsExpiry = function(id, expTs){
+  document.getElementById('nwe-id').value = id;
+  const input = document.getElementById('nwe-exp');
+  if(expTs){
+    const dt = new Date(expTs);
+    const p2 = n => String(n).padStart(2, '0');
+    input.value = `${dt.getFullYear()}-${p2(dt.getMonth()+1)}-${p2(dt.getDate())}T${p2(dt.getHours())}:${p2(dt.getMinutes())}`;
+  } else {
+    input.value = '';
+  }
+  document.getElementById('news-expiry-modal').style.display = 'flex';
+};
+
+window.saveNewsExpiry = async function(){
+  const id = document.getElementById('nwe-id').value;
+  const val = document.getElementById('nwe-exp').value;
+  if(!id) return;
+  const expTs = val ? new Date(val).getTime() : null;
+  try{
+    await update(ref(db, `announcements/${id}`), { expTs: expTs || null });
+    showToast('✅ Термін оновлено');
+    document.getElementById('news-expiry-modal').style.display = 'none';
+    renderNewsFeed('d-news-feed');
+    renderNewsFeed('t-news-feed');
+  }catch(e){
+    alert('Помилка: ' + e.message);
+  }
+};
+
+window.clearNewsExpiry = async function(){
+  const id = document.getElementById('nwe-id').value;
+  if(!id) return;
+  try{
+    await update(ref(db, `announcements/${id}`), { expTs: null });
+    showToast('✅ Термін прибрано');
+    document.getElementById('news-expiry-modal').style.display = 'none';
+    renderNewsFeed('d-news-feed');
+    renderNewsFeed('t-news-feed');
+  }catch(e){
+    alert('Помилка: ' + e.message);
   }
 };
