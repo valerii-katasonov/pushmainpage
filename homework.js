@@ -35,6 +35,28 @@ function dayTitle(ds){
 }
 const human = ds => ds ? ds.split('-').reverse().join('.') : '';
 
+// Отримати наступний навчальний день (з урахуванням вихідних і свят/канікул)
+function getNextSchoolDay(todayStr, skipSet) {
+  const [y, m, d] = todayStr.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  const p2 = n => String(n).padStart(2, '0');
+  const skip = skipSet instanceof Set ? skipSet : new Set(skipSet || []);
+  
+  for (let i = 1; i <= 10; i++) {
+    dt.setDate(dt.getDate() + 1);
+    const ds = `${dt.getFullYear()}-${p2(dt.getMonth() + 1)}-${p2(dt.getDate())}`;
+    if (skip.has(ds)) continue;
+    const dayNum = dt.getDay();
+    if (dayNum === 0 || dayNum === 6) continue; // Пропускаємо Сб та Нд
+    return ds;
+  }
+  
+  // Резервний варіант (просто календарне завтра)
+  const fallbackDt = new Date(y, m - 1, d);
+  fallbackDt.setDate(fallbackDt.getDate() + 1);
+  return `${fallbackDt.getFullYear()}-${p2(fallbackDt.getMonth() + 1)}-${p2(fallbackDt.getDate())}`;
+}
+
 // Невчальні дні: свята й канікули з чинного навчального року. Потрібні,
 // щоб «зробити до» не показувало дату, коли школа не працює.
 async function loadSkipDates(){
@@ -115,11 +137,13 @@ export async function renderHwWeekView(boxId, weekStart){
     skip   = sk;
   }catch(e){
     console.error('[Push School] ДЗ за тиждень:', e);
-    box.innerHTML = `<p class="empty-msg" style="color:var(--red);">Не вдалося завантажити: ${escHtml(e.message||'')}</p>`;
+    box.innerHTML = `<p class="empty-msg" style="color:var(--danger);">Не вдалося завантажити: ${escHtml(e.message||'')}</p>`;
     return;
   }
 
   const today = localDateString;
+  const nextSchoolDay = getNextSchoolDay(today, skip);
+  const tomorrowItems = [];
   const total = days.reduce((n,d)=>n+Object.keys(byDate[d]||{}).length, 0);
   const hasSchedule = !!(window.schedule && Object.keys(window.schedule).length);
 
@@ -194,7 +218,17 @@ export async function renderHwWeekView(boxId, weekStart){
       const li = renderHwItem(subj, rec, booksForSubject(books, subj));
       const extra = topicTxt + dueTxt + helpTxt;
       const cut = li.lastIndexOf('</li>');
-      return cut < 0 ? li + extra : li.slice(0,cut) + extra + li.slice(cut);
+      const htmlItem = cut < 0 ? li + extra : li.slice(0,cut) + extra + li.slice(cut);
+
+      if (due === nextSchoolDay) {
+        // Запобігаємо конфлікту ID для AI-помічника
+        const tomorrowHtmlItem = htmlItem
+          .replace(new RegExp(hid + '-btn', 'g'), hid + '-tomorrow-btn')
+          .replace(new RegExp(hid + '-out', 'g'), hid + '-tomorrow-out')
+          .replace(new RegExp("'" + hid + "'", 'g'), "'" + hid + "-tomorrow'");
+        tomorrowItems.push(tomorrowHtmlItem);
+      }
+      return htmlItem;
     }).join('');
     return `<div class="hw-day${ds===today?' today':''}">
         <div class="hw-day-head">${escHtml(dayTitle(ds))}${ds===today?' <span>сьогодні</span>':''}</div>
@@ -202,7 +236,18 @@ export async function renderHwWeekView(boxId, weekStart){
       </div>`;
   }).join('');
 
-  box.innerHTML = nav + (dayBlocks ||
+  let tomorrowBox = '';
+  if (hwWeek === mondayOf(today) && tomorrowItems.length > 0) {
+    tomorrowBox = `
+      <div class="data-card hw-tomorrow-box" style="margin-bottom: 24px; border-left: 4px solid var(--brand-ink); background: var(--brand-soft); padding: 16px; border-radius: var(--card-radius); box-shadow: var(--card-shadow);">
+        <h4 style="margin-top: 0; margin-bottom: 12px; color: var(--brand-ink); display: flex; align-items: center; gap: 8px; font-size: 1.05rem; font-weight: 800;">
+          🎯 ДЗ на завтра (${dayTitle(nextSchoolDay)})
+        </h4>
+        <ul class="list-dash hw-day-list">${tomorrowItems.join('')}</ul>
+      </div>`;
+  }
+
+  box.innerHTML = nav + tomorrowBox + (dayBlocks ||
     `<p class="empty-msg">На цей тиждень завдань поки немає.</p>`);
 }
 window.renderHwWeekView = renderHwWeekView;
