@@ -263,10 +263,10 @@ export async function renderHwWeekView(boxId, weekStart){
       const cut = li.lastIndexOf('</li>');
       return cut < 0 ? li + extra : li.slice(0,cut) + extra + li.slice(cut);
     }).join('');
-    return `<div class="hw-day${ds===today?' today':''}">
-        <div class="hw-day-head">${escHtml(dayTitle(ds))}${ds===today?' <span>сьогодні</span>':''}</div>
-        <ul class="list-dash hw-day-list">${items}</ul>
-      </div>`;
+    return `<details class="hw-day${ds===today?' today':''}">
+        <summary class="hw-day-head" style="cursor:pointer; outline:none;">${escHtml(dayTitle(ds))}${ds===today?' <span>сьогодні</span>':''}</summary>
+        <ul class="list-dash hw-day-list" style="margin-top:10px;">${items}</ul>
+      </details>`;
   }).join('');
 
   let tomorrowBox = '';
