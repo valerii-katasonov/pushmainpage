@@ -151,13 +151,17 @@ export const FRESH_DAYS = 7;
 export function isFresh(a, now){
   const ts = (a && a.ts) || 0;
   if(!ts) return false;                       // без дати — не вгадуємо
-  if(a.expTs && now >= a.expTs) return false;  // термін закінчився — не свіже
+  if(a.expTs) return now < a.expTs;           // якщо є термін — показуємо до його закінчення
   return (now - ts) < FRESH_DAYS * 24 * 60 * 60 * 1000;
 }
 
 // Скільки днів лишилося висіти. Показуємо це автору й директору: інакше
 // незрозуміло, чому оголошення зникло з головної, хоча його не чіпали.
 export function daysLeft(a, now){
+  if(a.expTs){
+    const left = a.expTs - now;
+    return left <= 0 ? 0 : Math.ceil(left / (24*60*60*1000));
+  }
   const ts = (a && a.ts) || 0;
   if(!ts) return 0;
   const left = FRESH_DAYS * 24*60*60*1000 - (now - ts);
