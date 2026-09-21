@@ -109,13 +109,21 @@ export async function renderHwWeekView(boxId, weekStart){
     }
   }
 
+  let queryStart = days[0];
+  try {
+    const [y, m, d] = days[0].split('-').map(Number);
+    const prevDt = new Date(y, m - 1, d);
+    prevDt.setDate(prevDt.getDate() - 7);
+    queryStart = `${prevDt.getFullYear()}-${String(prevDt.getMonth() + 1).padStart(2, '0')}-${String(prevDt.getDate()).padStart(2, '0')}`;
+  } catch(e) {}
+
   box.innerHTML = '<p class="empty-msg">Завантаження...</p>';
   let byDate = {}, books = {}, topics = {}, plans = {}, aliases = {}, skip = new Set();
   try{
     // Один запит на весь тиждень замість п'яти по днях.
     const [hwSnap, tbSnap, topSnap, planSnap, alSnap, sk] = await Promise.all([
       get(query(child(ref(db),`homeworks/${cls}`), orderByKey(),
-                startAt(days[0]), endAt(days[4]+''))),
+                startAt(queryStart), endAt(days[4]+''))),
       get(child(ref(db),`textbooks/${cls}`)).catch(()=>null),
       // Теми уроків лежать інакше: спершу предмет, потім дата. Тижневим
       // діапазоном їх не візьмеш, тож читаємо вузол класу цілком — одним
@@ -158,6 +166,41 @@ export async function renderHwWeekView(boxId, weekStart){
     </div>
     ${hwWeek!==mondayOf(today)
       ? `<button type="button" class="hw-today" onclick="hwShiftWeek(0)">Повернутися до поточного тижня</button>` : ''}`;
+
+  // Окремий скан по ВСІХ завантажених днях (включаючи минулий тиждень) для збору "ДЗ на завтра"
+  if (hasSchedule) {
+    Object.keys(byDate).forEach(ds => {
+      const subjects = byDate[ds] || {};
+      const names = Object.keys(subjects);
+      names.sort((a,b)=>a.localeCompare(b,'uk')).forEach((subj, idx) => {
+        const due = nextLessonDate(window.schedule, subj, ds, skip);
+        if (due === nextSchoolDay) {
+          const rec = subjects[subj];
+          const sk2 = subjKey(subj);
+          const pk2 = planKeyWith(aliases, subj);
+          const topic = topicNames((topics[sk2]||{})[ds], plans[pk2]);
+          const topicTxt = topic
+            ? `<div class="hw-topic"><b>Тема уроку:</b> ${escHtml(topic)}</div>` : '';
+          const dueTxt = `<span class="hw-due">зробити до ${escHtml(human(due))}${due===today?' — сьогодні!':''}</span>`;
+          
+          const hid = 'hwai-' + ds.replace(/-/g,'') + '-' + idx + '-tomorrow';
+          const helpTxt = `
+            <div class="hw-help">
+              <button type="button" class="hw-help-btn" id="${hid}-btn"
+                onclick="hwHelp('${escJs(subj)}','${escJs(topic)}','${escJs(String((rec&&rec.text)||''))}','${hid}')">
+                💡 Як допомогти</button>
+              <div class="hw-help-out" id="${hid}-out" style="display:none;"></div>
+            </div>`;
+            
+          const li = renderHwItem(subj, rec, booksForSubject(books, subj));
+          const extra = topicTxt + dueTxt + helpTxt;
+          const cut = li.lastIndexOf('</li>');
+          const htmlItem = cut < 0 ? li + extra : li.slice(0,cut) + extra + li.slice(cut);
+          tomorrowItems.push(htmlItem);
+        }
+      });
+    });
+  }
 
   const dayBlocks = days.map(ds=>{
     const subjects = byDate[ds] || {};
@@ -218,17 +261,7 @@ export async function renderHwWeekView(boxId, weekStart){
       const li = renderHwItem(subj, rec, booksForSubject(books, subj));
       const extra = topicTxt + dueTxt + helpTxt;
       const cut = li.lastIndexOf('</li>');
-      const htmlItem = cut < 0 ? li + extra : li.slice(0,cut) + extra + li.slice(cut);
-
-      if (due === nextSchoolDay) {
-        // Запобігаємо конфлікту ID для AI-помічника
-        const tomorrowHtmlItem = htmlItem
-          .replace(new RegExp(hid + '-btn', 'g'), hid + '-tomorrow-btn')
-          .replace(new RegExp(hid + '-out', 'g'), hid + '-tomorrow-out')
-          .replace(new RegExp("'" + hid + "'", 'g'), "'" + hid + "-tomorrow'");
-        tomorrowItems.push(tomorrowHtmlItem);
-      }
-      return htmlItem;
+      return cut < 0 ? li + extra : li.slice(0,cut) + extra + li.slice(cut);
     }).join('');
     return `<div class="hw-day${ds===today?' today':''}">
         <div class="hw-day-head">${escHtml(dayTitle(ds))}${ds===today?' <span>сьогодні</span>':''}</div>
