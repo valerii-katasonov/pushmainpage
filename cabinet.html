@@ -4233,6 +4233,7 @@
            елементи він не чіпає, тож ховати можна спокійно.
            Заразом зникає й порожній відступ від секції без вмісту. -->
       <div id="p-fresh-news" class="fn-box" style="display:none;"></div>
+      <div id="p-birthdays" class="bd-box" style="display:none;"></div>
       <h3>🕒 Запізнення та відсутність</h3>
       <div id="p-teacher-att-alert" style="display:none;background:var(--warn-soft);border:1px solid var(--warn-line);color:var(--warn);padding:11px 14px;border-radius:12px;margin-bottom:12px;font-size:.85rem;"></div>
       <div class="data-card att-quick" style="border-left-color:var(--danger);background:var(--surface-2);margin-top:0;">
@@ -4270,9 +4271,6 @@
       </div>
     </section>
     <section class="screen-section" data-dtab="day">
-      <!-- Дні народження. Після блоку запізнень: той стоїть першим навмисно,
-           вранці ним користуються найчастіше. -->
-      <div id="p-birthdays" class="bd-box" style="display:none;"></div>
       <h3>🗓️ Розклад</h3>
       <div class="schedule-box" style="margin-top:0;">
         <div class="schedule-day-label" id="p-schedule-day-label">📅 Розклад на сьогодні</div>
@@ -4476,6 +4474,7 @@
 
 
     <section class="screen-section" data-dtab="day">
+      <div id="s-fresh-news" class="fn-box" style="display:none;"></div>
       <!-- Дні народження. Найперше на вкладці, як і в інших кабінетах. -->
       <div id="s-birthdays" class="bd-box" style="display:none;"></div>
       <h3>🗓️ Розклад</h3>
@@ -5112,7 +5111,9 @@
     <input type="text" id="nw-title" placeholder="напр. Батьківські збори">
     <label for="nw-text">Текст</label>
     <textarea id="nw-text" rows="5" placeholder="Напишіть коротко суть — або натисніть «Скласти чернетку», і AI розгорне її у текст."></textarea>
-    <button id="nw-ai" onclick="newsDraftAI()" style="background:var(--brand-soft);color:var(--brand-deep);border:1px solid var(--brand-deep);">✨ Скласти чернетку</button>
+    <button id="nw-ai" onclick="newsDraftAI()" style="background:var(--brand-soft);color:var(--brand-deep);border:1px solid var(--brand-deep);margin-bottom:12px;">✨ Скласти чернетку</button>
+    <label for="nw-exp" style="margin-top:12px;">Опубліковано до <span style="color:var(--ink-3);font-weight:400;">(необовʼязково)</span></label>
+    <input type="datetime-local" id="nw-exp" style="margin-bottom:12px;width:100%;">
     <label class="nw-imp-row">
       <input type="checkbox" id="nw-important">
       <span><b>Важливе</b> — надіслати сповіщення<br>
@@ -5120,6 +5121,21 @@
     </label>
     <button id="nw-publish" onclick="publishNews()" style="background:var(--brand-ink);color:#fff;">📢 Опублікувати</button>
     <button onclick="document.getElementById('news-modal').style.display='none'" style="background:var(--line-soft);color:var(--ink);">Скасувати</button>
+  </div>
+</div>
+
+<!-- ЗМІНА ТЕРМІНУ ОГОЛОШЕННЯ -->
+<div id="news-expiry-modal" class="modal-overlay" style="display:none;z-index:1020;">
+  <div class="modal-content" style="max-width:320px;">
+    <h3 style="color:var(--brand-ink);margin-top:0;">⏰ Термін публікації</h3>
+    <input type="hidden" id="nwe-id">
+    <label for="nwe-exp">Показувати оголошення до:</label>
+    <input type="datetime-local" id="nwe-exp" style="margin-bottom:12px;width:100%;">
+    <div style="display:flex;gap:8px;">
+      <button onclick="saveNewsExpiry()" style="flex:1;background:var(--brand-ink);color:#fff;">Зберегти</button>
+      <button onclick="clearNewsExpiry()" style="flex:1;background:var(--danger);color:#fff;border:none;border-radius:6px;cursor:pointer;">Прибрати термін</button>
+    </div>
+    <button onclick="document.getElementById('news-expiry-modal').style.display='none'" style="background:var(--line-soft);color:var(--ink);width:100%;margin-top:8px;">Скасувати</button>
   </div>
 </div>
 
