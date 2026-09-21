@@ -1719,11 +1719,13 @@ window.loadMealStats = async function(){
   if(!from || !to || from > to) return alert('Оберіть коректний період.');
   box.innerHTML = '<p class="empty-msg">Рахуємо...</p>';
   try{
-    const [rows, itSnap] = await Promise.all([
+    const [rows, itSnap, histSnap] = await Promise.all([
       computeMealStats(from, to, null, null, true),
-      get(child(ref(db), 'takeaway_items'))
+      get(child(ref(db), 'takeaway_items')),
+      get(child(ref(db), 'takeaway_price_history'))
     ]);
     const items = itSnap.exists() ? itSnap.val() : {};
+    const priceHistory = histSnap.exists() ? histSnap.val() : {};
     if(!rows.length){ box.innerHTML = '<p class="empty-msg">За цей період даних немає.</p>'; return; }
     const tot = rows.reduce((a,r)=>({lunch:a.lunch+r.lunch, snack:a.snack+r.snack, brk:a.brk+(r.brk||0)}),{lunch:0,snack:0,brk:0});
     const byClass = {};
@@ -1759,26 +1761,35 @@ window.loadMealStats = async function(){
 
     let taHistoryBlock = '';
     if (allTakeaways.length > 0) {
+      let grandTotalTaCost = 0;
+      const taRowsHtml = allTakeaways.map(ta => {
+        let orderCost = 0;
+        const list = Object.entries(ta.items).map(([id, qty]) => {
+          const title = (items[id] || {}).title || id;
+          const price = takeawayPriceAt(id, ta.date, items, priceHistory);
+          const itemCost = price * qty;
+          orderCost += itemCost;
+          return `${escHtml(title)}${qty > 1 ? ` ×${qty}` : ''} (${price} zł)`;
+        }).join(', ');
+        grandTotalTaCost += orderCost;
+        return `<tr>
+          <td>${escHtml(human(ta.date))}</td>
+          <td>${escHtml(ta.name)}</td>
+          <td>${ta.cls}</td>
+          <td>${list}</td>
+          <td style="text-align:right;font-weight:bold;white-space:nowrap;">${orderCost} zł</td>
+        </tr>`;
+      }).join('');
+
       taHistoryBlock = `
-        <div class="k-skip-title">📑 Історія замовлень на винос</div>
+        <div class="k-skip-title">📑 Історія замовлень на винос (разом за період: ${grandTotalTaCost} zł)</div>
         <div class="k-scroll">
           <table class="k-table">
             <thead>
-              <tr><th>Дата</th><th>Учень</th><th>Кл.</th><th>Замовлення</th></tr>
+              <tr><th>Дата</th><th>Учень</th><th>Кл.</th><th>Замовлення</th><th style="text-align:right;">Сума</th></tr>
             </thead>
             <tbody>
-              ${allTakeaways.map(ta => {
-                const list = Object.entries(ta.items).map(([id, qty]) => {
-                  const title = (items[id] || {}).title || id;
-                  return `${escHtml(title)}${qty > 1 ? ` ×${qty}` : ''}`;
-                }).join(', ');
-                return `<tr>
-                  <td>${escHtml(human(ta.date))}</td>
-                  <td>${escHtml(ta.name)}</td>
-                  <td>${ta.cls}</td>
-                  <td>${list}</td>
-                </tr>`;
-              }).join('')}
+              ${taRowsHtml}
             </tbody>
           </table>
         </div>`;
@@ -3057,26 +3068,40 @@ window.reloadMyMealStats = async function(){
   let taBlock = '';
   if (r.taHistory && r.taHistory.length > 0) {
     try {
-      const itSnap = await get(child(ref(db), 'takeaway_items'));
+      const [itSnap, histSnap] = await Promise.all([
+        get(child(ref(db), 'takeaway_items')),
+        get(child(ref(db), 'takeaway_price_history'))
+      ]);
       const taItemsMap = itSnap.exists() ? itSnap.val() : {};
+      const taPriceHistory = histSnap.exists() ? histSnap.val() : {};
+      
+      let totalTaCost = 0;
+      const rowsHtml = r.taHistory.map(ta => {
+        let dayCost = 0;
+        const list = Object.entries(ta.items).map(([id, qty]) => {
+          const title = (taItemsMap[id] || {}).title || id;
+          const price = takeawayPriceAt(id, ta.date, taItemsMap, taPriceHistory);
+          const itemCost = price * qty;
+          dayCost += itemCost;
+          return `${escHtml(title)}${qty > 1 ? ` ×${qty}` : ''} (${price} zł)`;
+        }).join(', ');
+        totalTaCost += dayCost;
+        return `<tr>
+          <td class="pms-d">${human(ta.date)}</td>
+          <td class="pms-s">${list}</td>
+          <td style="text-align:right;font-weight:bold;white-space:nowrap;">${dayCost} zł</td>
+        </tr>`;
+      }).join('');
+
       taBlock = `
         <details class="pms-days" style="margin-top:12px;">
-          <summary>🥡 Замовлення на винос (${r.taHistory.length})</summary>
+          <summary>🥡 Замовлення на винос (${r.taHistory.length} дн., разом: ${totalTaCost} zł)</summary>
           <table class="pms-tab">
             <thead>
-              <tr><th>День</th><th>Замовлення</th></tr>
+              <tr><th>День</th><th>Замовлення</th><th style="text-align:right;">Сума</th></tr>
             </thead>
             <tbody>
-              ${r.taHistory.map(ta => {
-                const list = Object.entries(ta.items).map(([id, qty]) => {
-                  const title = (taItemsMap[id] || {}).title || id;
-                  return `${escHtml(title)}${qty > 1 ? ` ×${qty}` : ''}`;
-                }).join(', ');
-                return `<tr>
-                  <td class="pms-d">${human(ta.date)}</td>
-                  <td class="pms-s">${list}</td>
-                </tr>`;
-              }).join('')}
+              ${rowsHtml}
             </tbody>
           </table>
         </details>`;
