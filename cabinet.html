@@ -1845,7 +1845,7 @@
        Через це ряди сходилися впритул і кнопки виглядали накладеними.
        Сітка сама тримає однакову відстань і по горизонталі, і по
        вертикалі, а мінімальна ширина не дає підпису переноситися. */
-    .qa-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:9px;margin-bottom:9px;}
+    .qa-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:9px;margin-bottom:9px;}
     .qa-grid:last-of-type{margin-bottom:0;}
     .qa-btn{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
     .qa-ungraded{background:linear-gradient(135deg,var(--warn-line),var(--warn));color:#fff;}
@@ -3749,18 +3749,15 @@
         <div id="t-activities"><p class="empty-msg">Завантаження...</p></div>
       </div>
       <h3>🚀 Швидкі дії</h3>
-      <div id="t-exams-journal-btns" class="qa-grid">
+      <div class="qa-grid">
         <button onclick="openExamsCalendar()" class="qa-btn qa-exams">📅 Контрольні</button>
         <button onclick="openJournalModal('teacher')" class="qa-btn qa-journal">📖 Журнал</button>
         <button onclick="showUngraded()" class="qa-btn qa-ungraded">🔍 Без оцінок</button>
-      </div>
-      <div id="t-quick-btns" class="qa-grid">
         <button onclick="openQuickJournal()" class="qa-btn qa-quick">⚡ Швидкий журнал</button>
         <button onclick="openClassBroadcast()" class="qa-btn qa-broadcast">✉️ Повідомлення класу</button>
         <button onclick="printClassSchedule()" class="qa-btn qa-print">🖨️ Друк розкладу</button>
-      </div>
-      <div id="t-matrix-btn-wrapper" class="qa-grid" style="display:none;">
-        <button onclick="openVisualMatrixModal('live')" class="qa-btn qa-matrix">🗓️ Матриця розкладу</button>
+        <button onclick="openStickerStatsModal()" class="qa-btn" style="background:linear-gradient(135deg,var(--warn-line),var(--warn-line));color:#fff;">🌟 Статистика наліпок</button>
+        <button id="t-matrix-btn-wrapper" onclick="openVisualMatrixModal('live')" class="qa-btn qa-matrix" style="display:none;">🗓️ Матриця розкладу</button>
       </div>
     </section>
 
@@ -3803,10 +3800,6 @@
           <h4 style="margin:0;color:var(--warn);font-size:.82rem;">🔄 Перездачі</h4>
           <p id="t-retake-counter" style="font-size:1.6rem;font-weight:800;color:var(--warn);margin:4px 0;">0</p>
         </div>
-      </div>
-      <!-- PHASE 7: Статистика наліпок -->
-      <div style="display:flex;gap:9px;margin:14px 0 0 0;">
-        <button onclick="openStickerStatsModal()" style="flex:1;min-width:130px;background:linear-gradient(135deg,var(--warn-line),var(--warn-line));color:#fff;">🌟 Статистика наліпок</button>
       </div>
       <div style="display:flex;gap:9px;margin:14px 0 0 0;" id="t-chat-row">
         <div id="t-chat-btn" style="flex:1;background:var(--brand-soft);padding:14px;border-radius:12px;text-align:center;cursor:pointer;" onclick="openChatModal('teacher')" data-chatbtn="1">
