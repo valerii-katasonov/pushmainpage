@@ -1700,6 +1700,14 @@ function linkifyBooks(escapedText,books){
   return escapedText;
 }
 
+function linkifyUrls(text) {
+  if (!text) return '';
+  const urlRegex = /(https?:\/\/[^\s<]+)/g;
+  return text.replace(urlRegex, url => {
+    return `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color:var(--brand-deep);text-decoration:underline;">${url}</a>`;
+  });
+}
+
 export function renderHwItem(subject,data,books){
   let text=typeof data==='string'?data:data.text;
   let att='';
@@ -1754,7 +1762,9 @@ export function renderHwItem(subject,data,books){
   const pages=(typeof data==='object'&&data.pages)?String(data.pages).trim():'';
   // Текст порожній — сторінки стають текстом.
   if(!text&&pages) text=pages;
-  const body=hasBookChip?escHtml(text):linkifyBooks(escHtml(text),books);
+  const escaped = escHtml(text);
+  const linkified = linkifyUrls(escaped);
+  const body = hasBookChip ? linkified : linkifyBooks(linkified, books);
 
   // СТОРІНКИ ПОКАЗУЄМО ЗАВЖДИ, а не лише коли поле ДЗ порожнє.
   //
