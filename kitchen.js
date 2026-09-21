@@ -1719,7 +1719,11 @@ window.loadMealStats = async function(){
   if(!from || !to || from > to) return alert('Оберіть коректний період.');
   box.innerHTML = '<p class="empty-msg">Рахуємо...</p>';
   try{
-    const rows = await computeMealStats(from, to, null, null, true);
+    const [rows, itSnap] = await Promise.all([
+      computeMealStats(from, to, null, null, true),
+      get(child(ref(db), 'takeaway_items'))
+    ]);
+    const items = itSnap.exists() ? itSnap.val() : {};
     if(!rows.length){ box.innerHTML = '<p class="empty-msg">За цей період даних немає.</p>'; return; }
     const tot = rows.reduce((a,r)=>({lunch:a.lunch+r.lunch, snack:a.snack+r.snack, brk:a.brk+(r.brk||0)}),{lunch:0,snack:0,brk:0});
     const byClass = {};
@@ -1739,6 +1743,47 @@ window.loadMealStats = async function(){
     },{lunch:0,brk:0,snack:0,takeaway:0,adjustments:0,total:0});
     const money$ = hasPrices(prices) || sumAll.total !== 0;
     const warnings=rows.flatMap(r=>r.flags||[]);
+    // Збір замовлень на винос по всій школі за період
+    const allTakeaways = [];
+    rows.forEach(r => {
+      (r.takeaways || []).forEach(ta => {
+        allTakeaways.push({
+          date: ta.date,
+          cls: r.cls,
+          name: r.name,
+          items: ta.items
+        });
+      });
+    });
+    allTakeaways.sort((a,b)=> b.date.localeCompare(a.date) || (a.cls - b.cls) || a.name.localeCompare(b.name,'uk'));
+
+    let taHistoryBlock = '';
+    if (allTakeaways.length > 0) {
+      taHistoryBlock = `
+        <div class="k-skip-title">📑 Історія замовлень на винос</div>
+        <div class="k-scroll">
+          <table class="k-table">
+            <thead>
+              <tr><th>Дата</th><th>Учень</th><th>Кл.</th><th>Замовлення</th></tr>
+            </thead>
+            <tbody>
+              ${allTakeaways.map(ta => {
+                const list = Object.entries(ta.items).map(([id, qty]) => {
+                  const title = (items[id] || {}).title || id;
+                  return `${escHtml(title)}${qty > 1 ? ` ×${qty}` : ''}`;
+                }).join(', ');
+                return `<tr>
+                  <td>${escHtml(human(ta.date))}</td>
+                  <td>${escHtml(ta.name)}</td>
+                  <td>${ta.cls}</td>
+                  <td>${list}</td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>`;
+    }
+
     box.innerHTML = `
       <div class="k-total"><b>${tot.lunch}</b><span>людино-днів з обідом</span>
         <div class="k-total-snack">${tot.brk?`${tot.brk} зі сніданком · `:''}+ ${tot.snack} з підвечірком</div></div>
@@ -1760,6 +1805,7 @@ window.loadMealStats = async function(){
               .map(r=>`<tr><td>${escHtml(r.name)}</td><td>${r.cls}</td><td>${r.brk||''}</td><td><b>${r.lunch}</b></td><td>${r.snack||''}</td>${
                 money$?`<td>${taMoney(r.cost.total)} zł</td>`:''}</tr>`).join('')}
       </tbody></table></div>
+      ${taHistoryBlock}
       <button onclick="exportMealStats()" style="background:var(--brand-soft);color:var(--brand-ink);border:1px solid var(--brand-line);margin-top:11px;">📄 Вивантажити CSV</button>`;
     window.__mealStats = { from, to, rows };
   }catch(e){
@@ -1897,6 +1943,7 @@ export async function computeMealStats(from, to, onlyCls, onlyName, withCost=fal
       let lunch=0, snack=0, brk=0, absent=0, lateAbsent=0;
       const cost={lunch:0,brk:0,snack:0,takeaway:0,adjustments:0,total:0};
       const flags=[];
+      const studentTakeaways = [];
       dateList.forEach(date=>{
         const fixed=withCost&&ledgerAll?.[cls]?.[key]?.[date];
         if(fixed&&Number.isFinite(Number(fixed.total))){
@@ -1921,8 +1968,12 @@ export async function computeMealStats(from, to, onlyCls, onlyName, withCost=fal
           return;
         }
         // Відсутність скасовує страви, але не замовлення на винос.
+        const order=byKeyOrName(takeawayDays[date]?.[cls],key,name)||{};
+        const active = Object.entries(order).filter(([id, q]) => (Number(q) || 0) > 0);
+        if (active.length > 0) {
+          studentTakeaways.push({ date, items: Object.fromEntries(active) });
+        }
         if(withCost){
-          const order=byKeyOrName(takeawayDays[date]?.[cls],key,name)||{};
           const ta=Object.entries(order).reduce((sum,[id,q])=>sum+(Number(q)||0)*takeawayPriceAt(id,date,takeawayItems,takeawayHistory),0);
           cost.takeaway=Math.round((cost.takeaway+ta)*100)/100;
           cost.total=Math.round((cost.total+ta)*100)/100;
@@ -1962,7 +2013,7 @@ export async function computeMealStats(from, to, onlyCls, onlyName, withCost=fal
         }
       }
       if(lunch || snack || brk || (withCost && (cost.takeaway || cost.adjustments || flags.length)))
-        out.push({ cls:i, name, lunch, snack, brk, absent, lateAbsent, days:serviceDays, cost, flags });
+        out.push({ cls:i, name, lunch, snack, brk, absent, lateAbsent, days:serviceDays, cost, flags, takeaways: studentTakeaways });
     }
   }
   return out;
@@ -2764,20 +2815,26 @@ export async function computeMyMealStats(from, to, cls, sid, withCost=false){
   // Дуже довгий звіт у вікні статистики поки показує тільки постійний план.
   const OVERRIDE_LIMIT = 70;
   const withOverrides = withCost || dates.length <= OVERRIDE_LIMIT;
-  const ovByDate = {}, menuByDate = {};
+  const ovByDate = {}, menuByDate = {}, taByDate = {};
   if(withOverrides){
     for(let i=0;i<dates.length;i+=30){
       const chunk=dates.slice(i,i+30);
-      const [ovs, altOvs, menus] = await Promise.all([
+      const [ovs, altOvs, menus, tas, altTas] = await Promise.all([
         Promise.all(chunk.map(date => get(child(ref(db), `meal_day/${date}/${cls}/${sid}`)))),
         name&&name!==sid?Promise.all(chunk.map(date=>get(child(ref(db), `meal_day/${date}/${cls}/${name}`)))):null,
-        Promise.all(chunk.map(date => get(child(ref(db), `menu/${date}`))))
+        Promise.all(chunk.map(date => get(child(ref(db), `menu/${date}`)))),
+        Promise.all(chunk.map(date => get(child(ref(db), `takeaway_orders/${date}/${cls}/${sid}`)))),
+        name&&name!==sid?Promise.all(chunk.map(date=>get(child(ref(db), `takeaway_orders/${date}/${cls}/${name}`)))):null
       ]);
       chunk.forEach((date,j)=>{
         const ov=mealDayFresher(ovs[j].exists()?ovs[j].val():null,
           altOvs&&altOvs[j].exists()?altOvs[j].val():null);
         if(ov) ovByDate[date]=ov;
         menuByDate[date]=menus[j].exists()?(menus[j].val()||{}):null;
+
+        const ta=mealDayFresher(tas[j].exists()?tas[j].val():null,
+          altTas&&altTas[j].exists()?altTas[j].val():null);
+        if(ta) taByDate[date]=ta;
       });
     }
   }
@@ -2865,8 +2922,18 @@ export async function computeMyMealStats(from, to, cls, sid, withCost=false){
       for(const k of Object.keys(cost)) cost[k]=Math.round((cost[k]+daily[k])*100)/100;
     }
   });
+  const taHistory = [];
+  Object.keys(taByDate).forEach(date => {
+    const items = taByDate[date] || {};
+    const active = Object.entries(items).filter(([id,q]) => Number(q)>0);
+    if(active.length > 0){
+      taHistory.push({ date, items: Object.fromEntries(active) });
+    }
+  });
+  taHistory.sort((a,b)=> b.date.localeCompare(a.date)); // newest first
+
   return [{ lunch, snack, brk, absent, lateAbsent, byDay,
-            days: dates.length - skipped, skipped, withOverrides, cost }];
+            days: dates.length - skipped, skipped, withOverrides, cost, taHistory }];
 }
 
 window.openMyMealStats = async function(){
@@ -2987,6 +3054,37 @@ window.reloadMyMealStats = async function(){
     </div>` : '';
   const daysBlock = mealDaysTable(r.byDay);
 
+  let taBlock = '';
+  if (r.taHistory && r.taHistory.length > 0) {
+    try {
+      const itSnap = await get(child(ref(db), 'takeaway_items'));
+      const taItemsMap = itSnap.exists() ? itSnap.val() : {};
+      taBlock = `
+        <details class="pms-days" style="margin-top:12px;">
+          <summary>🥡 Замовлення на винос (${r.taHistory.length})</summary>
+          <table class="pms-tab">
+            <thead>
+              <tr><th>День</th><th>Замовлення</th></tr>
+            </thead>
+            <tbody>
+              ${r.taHistory.map(ta => {
+                const list = Object.entries(ta.items).map(([id, qty]) => {
+                  const title = (taItemsMap[id] || {}).title || id;
+                  return `${escHtml(title)}${qty > 1 ? ` ×${qty}` : ''}`;
+                }).join(', ');
+                return `<tr>
+                  <td class="pms-d">${human(ta.date)}</td>
+                  <td class="pms-s">${list}</td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+        </details>`;
+    } catch(e) {
+      console.warn('Помилка завантаження історії takeaway:', e);
+    }
+  }
+
   body.innerHTML = `
     <div class="pms-grid">
       <div class="pms-cell"><b>${r.lunch}</b><span>днів з обідом</span></div>
@@ -3007,7 +3105,8 @@ window.reloadMyMealStats = async function(){
       ? '<br>Для такого довгого періоду разові відмови на окремі дні не враховано — '
         + 'оберіть до трьох місяців, щоб побачити точні числа.'
       : ''}</p>
-    ${daysBlock}`;
+    ${daysBlock}
+    ${taBlock}`;
 };
 
 // ═══════════ ПОЗИЦІЇ НА ВИНОС ═══════════
