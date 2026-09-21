@@ -4467,6 +4467,7 @@
       <button class="dtab" data-t="hw" onclick="switchTab('student-screen','hw',this);openHwTab()">📚 ДЗ</button>
       <button class="dtab" data-t="games" onclick="switchTab('student-screen','games',this);openGamesTab()">🎮 Ігри</button>
       <button class="dtab" data-t="news" onclick="switchTab('student-screen','news',this)">Новини<span class="chat-dot"></span></button>
+      <button class="dtab" data-t="grades" onclick="switchTab('student-screen','grades',this)">Оцінки</button>
       <button class="dtab" data-t="study" onclick="switchTab('student-screen','study',this)">Навчання</button>
       <button class="dtab" data-t="meals" onclick="switchTab('student-screen','meals',this);openStudentMealsTab()">🍽️ Їжа</button>
     </div>
@@ -4485,9 +4486,9 @@
       <div class="data-card att-quick" style="border-left-color:var(--danger);background:var(--surface-2);margin-top:0;margin-bottom:18px;">
         <h4 style="margin-top:0;color:var(--danger);font-size:1rem;margin-bottom:6px;">🕒 Я запізнююсь / буду відсутній</h4>
         <p class="att-hint" style="font-size:0.78rem;color:var(--ink-3);margin-top:0;margin-bottom:12px;">Запізнюєшся чи захворів? Повідом учителя — він побачить це одразу.</p>
-        <div class="att-row" style="display:flex;flex-direction:column;gap:9px;">
-          <select id="s-att-type" onchange="updateAttOptionsStudent()" style="border-color:var(--danger);width:100%;"><option value="late">Запізнююсь</option><option value="absent">Буду відсутній</option></select>
-          <select id="s-att-reason" style="border-color:var(--danger);width:100%;"><option value="на 5 хвилин">на 5 хвилин</option><option value="на 10 хвилин">на 10 хвилин</option><option value="на 15 хвилин">на 15 хвилин</option><option value="на 20 хвилин">на 20 хвилин</option><option value="на 25 хвилин">на 25 хвилин</option><option value="на 30 хвилин">на 30 хвилин</option><option value="до 2-го уроку">до 2-го уроку</option><option value="до 3-го уроку">до 3-го уроку</option></select>
+        <div class="att-row">
+          <select id="s-att-type" onchange="updateAttOptionsStudent()" style="border-color:var(--danger);"><option value="late">Запізнююсь</option><option value="absent">Буду відсутній</option></select>
+          <select id="s-att-reason" style="border-color:var(--danger);"><option value="на 5 хвилин">на 5 хвилин</option><option value="на 10 хвилин">на 10 хвилин</option><option value="на 15 хвилин">на 15 хвилин</option><option value="на 20 хвилин">на 20 хвилин</option><option value="на 25 хвилин">на 25 хвилин</option><option value="на 30 хвилин">на 30 хвилин</option><option value="до 2-го уроку">до 2-го уроку</option><option value="до 3-го уроку">до 3-го уроку</option></select>
         </div>
         <button onclick="submitAttendance('student')" style="background:var(--brand-deep);padding:11px;color:#fff;margin-top:13px;width:100%;border:none;border-radius:8px;font-weight:700;cursor:pointer;">Відправити</button>
         <p id="s-att-status" style="font-size:.83rem;color:var(--ok);font-weight:700;margin-top:9px;display:none;">✅ Повідомлення надіслано!</p>
@@ -4577,19 +4578,23 @@
           <div id="ai-student-out" class="ai-out" style="display:none;"></div>
         </div>
       </div>
+      <!-- Behavior -->
+      <div class="data-card" style="border-left-color:var(--brand-deep);background:var(--brand-soft);">
+        <h4 style="margin-top:0;color:var(--brand-deep);">🤝 Поведінка (цей тиждень):</h4>
+        <div id="s-behavior-list"><p class="empty-msg">Завантаження...</p></div>
+      </div>
+    </section>
+
+    <section class="screen-section" data-dtab="grades">
+      <h3>📊 Мої оцінки</h3>
       <!-- Оцінки за тиждень і за предметом — те саме, що в батьків -->
-      <div class="data-card" style="border-left-color:var(--danger);background:var(--danger-soft);">
+      <div class="data-card" style="border-left-color:var(--danger);background:var(--danger-soft);margin-top:0;">
         <h4 style="margin-top:0;color:var(--danger);">📝 Мої оцінки й коментарі за тиждень:</h4>
         <div id="s-grades-week"><p class="empty-msg">Завантаження...</p></div>
       </div>
       <div class="data-card" style="border-left-color:var(--brand-deep);background:var(--surface-2);">
         <h4 style="margin-top:0;color:var(--brand-deep);">📈 За предметом:</h4>
         <div id="s-grades-subject"><p class="empty-msg">Завантаження...</p></div>
-      </div>
-      <!-- Behavior -->
-      <div class="data-card" style="border-left-color:var(--brand-deep);background:var(--brand-soft);">
-        <h4 style="margin-top:0;color:var(--brand-deep);">🤝 Поведінка (цей тиждень):</h4>
-        <div id="s-behavior-list"><p class="empty-msg">Завантаження...</p></div>
       </div>
     </section>
 
