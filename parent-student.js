@@ -430,19 +430,8 @@ function renderDynamicSchedule(role='parent'){
       : '';
     lblEl.title = why;
     const hintId = `${prefix}-schedule-why`;
-    let hint = document.getElementById(hintId);
-    if(why){
-      if(!hint){
-        hint = document.createElement('div');
-        hint.id = hintId; hint.className = 'sched-why';
-        lblEl.insertAdjacentElement('afterend', hint);
-      }
-      // Дві різні причини, і батько має розуміти, з чим іти до школи:
-      // або урок узагалі не внесли в розклад класу, або йому не дісталося
-      // часу з розкладу дзвінків.
-      hint.textContent = why + '. Якщо урок зараз іде — школа не внесла його '
-        + 'в розклад класу або в розкладі дзвінків бракує рядка на цей номер уроку.';
-    }else if(hint) hint.remove();
+    const hint = document.getElementById(hintId);
+    if(hint) hint.remove();
   }
   const lessons=buildDynamicSchedule(window.schedule,targetDayName,!showTomorrow,
                                     dateWithOffset(showTomorrow?nextDay.offset+1:0))||[];
@@ -1099,6 +1088,7 @@ export function loadStudentDashboard(){
   renderHwList(cls,date,'s-daily-hw-list');
   loadTextbooksForParent('student');
   loadAiDayContext('s');
+  if(window.renderFreshNews) window.renderFreshNews('s-fresh-news');
   renderBirthdays('s-birthdays',cls,currentUserData.studentName);
   renderFinalGrades('s-final-grades',cls,currentUserData.studentName);
   if(window.renderGradesWeek) window.renderGradesWeek();
