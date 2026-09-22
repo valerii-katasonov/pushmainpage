@@ -1239,6 +1239,32 @@ window.getDefaultTeacher=function(clsId,subjName){
   return viaMatrix || fromCatalog;
 };
 
+window.subjectTeachersCache = window.subjectTeachersCache || {};
+export async function fetchSubjectTeachers(cls) {
+  if (!cls) return {};
+  if (window.subjectTeachersCache[cls]) return window.subjectTeachersCache[cls];
+  try {
+    const year = (typeof window !== 'undefined' && window.ACTIVE_YEAR) || (typeof ACADEMIC_YEAR_ID_LOCAL !== 'undefined' ? ACADEMIC_YEAR_ID_LOCAL : '2026-2027');
+    const snap = await get(child(ref(db), `subjects_catalog/${year}/${cls}`));
+    const data = snap.exists() ? snap.val() : {};
+    const map = {};
+    for (const key in data) {
+      const entry = data[key];
+      const name = typeof entry === 'object' ? entry.name : entry;
+      if (name && typeof entry === 'object' && entry.teacherName) {
+        map[subjKey(name)] = entry.teacherName;
+        map[String(name).trim()] = entry.teacherName;
+      }
+    }
+    window.subjectTeachersCache[cls] = map;
+    return map;
+  } catch (e) {
+    console.warn('fetchSubjectTeachers:', e.message);
+    return {};
+  }
+}
+window.fetchSubjectTeachers = fetchSubjectTeachers;
+
 // Учитель для уроку-чергування.
 //
 // ЧОМУ ОКРЕМО. У клітинці стоїть пара — «Музичне мистецтво / Фізичне
