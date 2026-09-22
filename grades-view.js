@@ -49,7 +49,7 @@ import { ref, get, child, query, orderByKey, startAt, endAt, onValue }
 import { db, currentUserData, getActiveClass, escHtml, escJs, mondayOf,
          localDateString, displayGrade, gradeClass6, levelNum, getGradeWeight,
          calculateStudentWeightedAvg, renderGradeFormulaInfo, dayNamesUA, dayKeys, journalBaseDate, journalSlot,
-         stuId, hasStudentDir, getStudentDir }
+         stuId, hasStudentDir, getStudentDir, fetchSubjectTeachers, subjKey }
   from './common.js';
 
 // Кабінети батьків і учня лежать у розмітці ОДНОЧАСНО, тож «взяти той
@@ -307,6 +307,15 @@ function reactionRow(date, subj, mine){
 // Вхідна точка: прив'язати підписки до поточної дитини й намалювати те,
 // що вже прийшло. Викликається дашбордом, перемиканням вкладки та
 // стрілками тижнів — усі три випадки тепер дешеві, бо мережі тут немає.
+let gvTeachers = {};
+function subscribeTeachers(cls){
+  fetchSubjectTeachers(cls).then(map => {
+    gvTeachers = map || {};
+    paintWeek();
+    paintSubject();
+  }).catch(()=>{});
+}
+
 export function renderGradesWeek(weekStart, attempt=0){
   const box = document.getElementById(boxWeek());
   if(!box) return;
@@ -330,6 +339,7 @@ export function renderGradesWeek(weekStart, attempt=0){
   subscribeScales(cls);
   subscribeMirror(cls,gvSid);
   subscribeWeek(cls,weekDays(gvWeek));
+  subscribeTeachers(cls);
   paintWeek();
 }
 
@@ -337,7 +347,7 @@ function paintWeek(){
   const box = document.getElementById(boxWeek());
   if(!box || !gvWeek || !gvCls) return;
   if(gvError){
-    box.innerHTML = `<p class="empty-msg" style="color:var(--red);">Не вдалося завантажити оцінки: ${escHtml(gvError)}</p>`;
+    box.innerHTML = `<p class="empty-msg" style="color:var(--danger);">Не вдалося завантажити оцінки: ${escHtml(gvError)}</p>`;
     return;
   }
   // Ще не все приїхало. Малювати половину не можна: батько побачить
@@ -371,7 +381,9 @@ function paintWeek(){
       const grades=items.filter(i => i.subj === s);
       const cm = mineOf(cmDay[s]) || '';
       const rx = mineOf(((gvReactions||{})[ds]||{})[s]) || null;
-      return `<li style="margin-bottom:9px;"><b>${escHtml(s)}</b><br>`
+      const tName = gvTeachers[subjKey(s)] || gvTeachers[s.trim()];
+      const tHtml = tName ? ` <span style="font-size:0.8rem;color:var(--brand-deep);font-weight:normal;">👩‍🏫 ${escHtml(tName)}</span>` : '';
+      return `<li style="margin-bottom:9px;"><b>${escHtml(s)}</b>${tHtml}<br>`
         + grades.map(g=>gradeChip(g.v,g.t,cls,gvScales?.[s]?.max)
           +retakeBtn(cls,s,g.date,g.v,gvScales?.[s]?.max)+renderWorkPhotos(g.workPhotos)).join(' ')
         + (cm ? `<div style="background:var(--surface-2);padding:5px 9px;border-radius:6px;font-style:italic;font-size:.88rem;margin-top:4px;">${escHtml(cm)}</div>`
@@ -428,7 +440,7 @@ function paintSubject(){
   const box = document.getElementById(boxSubj());
   if(!box || !gvCls) return;
   if(gvError){
-    box.innerHTML = `<p class="empty-msg" style="color:var(--red);">Не вдалося завантажити: ${escHtml(gvError)}</p>`;
+    box.innerHTML = `<p class="empty-msg" style="color:var(--danger);">Не вдалося завантажити: ${escHtml(gvError)}</p>`;
     return;
   }
   if(gvMirror===null){
@@ -441,9 +453,12 @@ function paintSubject(){
   gvSubject = gvSubject || subjects[0];
   if(!subjects.includes(gvSubject)) gvSubject = subjects[0];
 
+  const tName = gvTeachers[subjKey(gvSubject)] || gvTeachers[gvSubject.trim()];
+  const tHtml = tName ? `<div style="font-size:.82rem;color:var(--brand-deep);font-weight:600;margin:-3px 0 9px 0;">👩‍🏫 Вчитель: ${escHtml(tName)}</div>` : '';
+
   const sel = `<select onchange="renderGradesSubject(this.value)" style="width:100%;margin-bottom:9px;">`
     + subjects.map(s => `<option value="${escHtml(s)}"${s===gvSubject?' selected':''}>${escHtml(s)}</option>`).join('')
-    + `</select>`;
+    + `</select>` + tHtml;
 
   const { rows, avg, counted } = subjectStats(gvMirror, gvSubject);
   const scaleMax=scales?.[gvSubject]?.max||null;
