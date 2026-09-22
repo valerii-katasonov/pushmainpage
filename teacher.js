@@ -218,12 +218,63 @@ export function loadCurrentTopicAndHW(){
     if(val.images&&Array.isArray(val.images))currentHwImages=val.images;
     else if(val.image)currentHwImages=[val.image];
     renderMainHwAttachments();
+    loadLessonSubmissions(cls, date, subject);
   }).catch(e=>{
     if(gen!==hwLoadGeneration)return;
     renderMainHwAttachments('Не вдалося завантажити вкладення: '+e.message);
   });
 }
 window.loadCurrentTopicAndHW=loadCurrentTopicAndHW;
+
+async function loadLessonSubmissions(cls, date, subject){
+  const wrapper = document.getElementById('t-hw-submissions-wrapper');
+  const listEl = document.getElementById('t-hw-submissions-list');
+  if(!wrapper || !listEl) return;
+  wrapper.style.display = 'none';
+  listEl.innerHTML = '';
+  if(!cls || !date || !subject) return;
+
+  try {
+    const snap = await get(child(ref(db), `homework_submissions/${cls}/${date}/${subjKey(subject)}`));
+    if(!snap.exists()){
+      wrapper.style.display = 'none';
+      return;
+    }
+    const val = snap.val() || {};
+    const students = Object.values(val);
+    if(students.length === 0){
+      wrapper.style.display = 'none';
+      return;
+    }
+
+    students.sort((a,b) => (a.studentName||'').localeCompare(b.studentName||'', 'uk'));
+
+    listEl.innerHTML = students.map(s => {
+      const photos = (s.images || []).map(url => `
+        <a href="${escHtml(url)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;border:1px solid var(--line);border-radius:6px;overflow:hidden;width:60px;height:60px;background:#000;">
+          <img src="${escHtml(cldImage(url, 'c_fill,w_120,h_120'))}" style="width:100%;height:100%;object-fit:cover;" alt="Робота">
+        </a>
+      `).join('');
+      const timeStr = s.ts ? new Date(s.ts).toLocaleTimeString('uk-UA', {hour:'2-digit', minute:'2-digit'}) : '';
+      return `
+        <details class="hw-sub-student" style="margin-bottom:8px;background:var(--surface-1);border:1px solid var(--line-soft);border-radius:8px;padding:8px;">
+          <summary style="font-weight:700;cursor:pointer;display:flex;justify-content:space-between;align-items:center;">
+            <span>👤 ${escHtml(s.studentName || 'Учень')} (${(s.images||[]).length} фото)</span>
+            <small style="color:var(--ink-3);font-weight:normal;">⏰ ${timeStr}</small>
+          </summary>
+          <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">
+            ${photos || '<i style="color:var(--ink-3);">Немає фото</i>'}
+          </div>
+        </details>
+      `;
+    }).join('');
+
+    wrapper.style.display = 'block';
+  } catch(e) {
+    console.warn('loadLessonSubmissions:', e.message);
+  }
+}
+window.loadLessonSubmissions = loadLessonSubmissions;
 // Phase 6: up to 2 topics per lesson. lesson_topics/{cls}/{sk}/{date} is now
 // {topics:[{topicId|customText}, {topicId|customText}?]} (slot 2 optional).
 // hoursUsed inc/dec now compares prev vs new PER ARRAY POSITION (slot 1 vs
