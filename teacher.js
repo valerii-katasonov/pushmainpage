@@ -275,6 +275,79 @@ async function loadLessonSubmissions(cls, date, subject){
   }
 }
 window.loadLessonSubmissions = loadLessonSubmissions;
+
+async function loadDailyHomeworkSubmissions(cls, date){
+  const wrapper = document.getElementById('t-daily-submissions-wrapper');
+  const listEl = document.getElementById('t-daily-submissions-list');
+  if(!wrapper || !listEl) return;
+  wrapper.style.display = 'none';
+  listEl.innerHTML = '';
+  if(!cls || !date) return;
+
+  try {
+    const snap = await get(child(ref(db), `homework_submissions/${cls}/${date}`));
+    if(!snap.exists()){
+      wrapper.style.display = 'none';
+      return;
+    }
+    const val = snap.val() || {};
+    const subjs = Object.keys(val);
+    if(subjs.length === 0){
+      wrapper.style.display = 'none';
+      return;
+    }
+
+    let totalSubmissions = 0;
+    const itemsHtml = subjs.sort((a,b)=>a.localeCompare(b,'uk')).map(sk => {
+      const studentsMap = val[sk] || {};
+      const students = Object.values(studentsMap);
+      if(students.length === 0) return '';
+      totalSubmissions += students.length;
+      students.sort((a,b) => (a.studentName||'').localeCompare(b.studentName||'', 'uk'));
+
+      const studentsHtml = students.map(s => {
+        const photos = (s.images || []).map(url => `
+          <a href="${escHtml(url)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;border:1px solid var(--line);border-radius:6px;overflow:hidden;width:55px;height:55px;background:#000;">
+            <img src="${escHtml(cldImage(url, 'c_fill,w_110,h_110'))}" style="width:100%;height:100%;object-fit:cover;" alt="Робота">
+          </a>
+        `).join('');
+        const timeStr = s.ts ? new Date(s.ts).toLocaleTimeString('uk-UA', {hour:'2-digit', minute:'2-digit'}) : '';
+        return `
+          <details class="hw-sub-student" style="margin-bottom:6px;background:#fff;border:1px solid var(--line-soft);border-radius:6px;padding:6px;">
+            <summary style="font-weight:600;cursor:pointer;display:flex;justify-content:space-between;align-items:center;">
+              <span style="font-size:0.85rem;">👤 ${escHtml(s.studentName || 'Учень')} (${(s.images||[]).length} фото)</span>
+              <small style="color:var(--ink-3);font-weight:normal;">⏰ ${timeStr}</small>
+            </summary>
+            <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;">
+              ${photos || '<i style="color:var(--ink-3);font-size:0.8rem;">Немає фото</i>'}
+            </div>
+          </details>
+        `;
+      }).join('');
+
+      return `
+        <details class="hw-sub-subj" style="margin-bottom:8px;background:var(--surface-1);border:1px solid var(--line-soft);border-radius:8px;padding:8px;">
+          <summary style="font-weight:700;cursor:pointer;color:var(--brand-deep);font-size:0.9rem;">
+            📘 ${escHtml(sk)} (${students.length} ${students.length === 1 ? 'учень здав' : 'учнів здали'})
+          </summary>
+          <div style="margin-top:8px;">
+            ${studentsHtml}
+          </div>
+        </details>
+      `;
+    }).join('');
+
+    if(totalSubmissions > 0){
+      listEl.innerHTML = itemsHtml;
+      wrapper.style.display = 'block';
+    } else {
+      wrapper.style.display = 'none';
+    }
+  } catch(e) {
+    console.warn('loadDailyHomeworkSubmissions:', e.message);
+  }
+}
+window.loadDailyHomeworkSubmissions = loadDailyHomeworkSubmissions;
 // Phase 6: up to 2 topics per lesson. lesson_topics/{cls}/{sk}/{date} is now
 // {topics:[{topicId|customText}, {topicId|customText}?]} (slot 2 optional).
 // hoursUsed inc/dec now compares prev vs new PER ARRAY POSITION (slot 1 vs
@@ -1638,7 +1711,11 @@ export function loadTeacherDashboard(){
     if(rs.exists()&&as.exists()){const reactions=rs.val();const authors=as.val();const comments=cs.exists()?cs.val():{};for(let d in reactions)for(let s in reactions[d])if(authors[d]&&authors[d][s]===uid)for(let st in reactions[d][s]){cnt++;let emoji=reactions[d][s][st];let cm=(comments[d]&&comments[d][s]&&comments[d][s][st])?comments[d][s][st]:'Без коментаря';window.myDetailedReactions.push({date:d,subject:s,student:st,emoji,comment:cm});}window.myDetailedReactions.sort((a,b)=>new Date(b.date)-new Date(a.date));}
     document.getElementById('t-karma-counter').innerText=cnt;
   });
-  if(currentUserData.role!=='art_school_teacher'){const date=document.getElementById('global-date').value;renderHwList(cls,date,'t-daily-hw-list');}
+  if(currentUserData.role!=='art_school_teacher'){
+    const date=document.getElementById('global-date').value;
+    renderHwList(cls,date,'t-daily-hw-list');
+    loadDailyHomeworkSubmissions(cls,date);
+  }
   renderBirthdays('t-birthdays',cls,'');
   // Зведення по басейну й автобусу — справа класного керівника: він веде
   // клас. Предметникові воно ні до чого, та й правила бази його не пустять.
