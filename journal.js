@@ -7,7 +7,7 @@ import { ref, set, get, child, update } from "https://www.gstatic.com/firebasejs
 import { loadGradeWork, prepareGradeWork, setGradeWorkBusy, hasGradeWorkChanges } from './grade-work.js';
 import { ACTIVE_YEAR } from './director.js';
 import { topicNames } from './parent-student.js';
-import { db, getActiveClass, currentUserData, displayGrade, gradeClass6, calculateStudentWeightedAvg, validDailyGrade, getClassNum, LEVEL_MAX_CLASS, GRADE_WEIGHTS, dayKeys, dayNamesUA, showToast, normalizeTimeRange, localDateString, summarizeAttendanceSlots, attendanceForLesson, gradeTypesCache, escJs, escHtml, notifyEvent, logAction, getUserRoles, getUsersSnap, stuName, gradeWritePaths, journalGradeKey, journalBaseDate, journalSlot, expandAltSubjects, altOptions, splitAltName, altPairKey, mondayOf, isBreakItem, insertSlot, removeSlot, makeBreak, withBreaks, slotBounds, hhmmFromMins, emailKey, subjKey, planKeyWith, getDateRange, openTabByKey } from './common.js';
+import { db, getActiveClass, currentUserData, displayGrade, gradeClass6, calculateStudentWeightedAvg, validDailyGrade, getClassNum, LEVEL_MAX_CLASS, GRADE_WEIGHTS, dayKeys, dayNamesUA, showToast, normalizeTimeRange, localDateString, summarizeAttendanceSlots, attendanceForLesson, gradeTypesCache, escJs, escHtml, notifyEvent, logAction, getUserRoles, getUsersSnap, stuName, gradeWritePaths, journalGradeKey, journalBaseDate, journalSlot, expandAltSubjects, altOptions, splitAltName, altPairKey, mondayOf, isBreakItem, insertSlot, removeSlot, makeBreak, withBreaks, slotBounds, hhmmFromMins, emailKey, subjKey, planKeyWith, getDateRange, openTabByKey, fetchSubjectTeachers } from './common.js';
 
 // globalTeacherAccess is reassigned only in this file (openVisualMatrixModal)
 // and read from common.js (window.getDefaultTeacher) — plain export/import.
@@ -634,7 +634,17 @@ window.renderJournalTable=async function(){
   const table=document.getElementById('journal-table-el');
   const wAvgDiv=document.getElementById('j-weighted-avg');
   const rangeSummary=document.getElementById('j-range-summary');
+  const teacherEl=document.getElementById('j-teacher-name');
+  if(teacherEl) teacherEl.textContent='';
   if(!cls||!subj||months.length===0){table.innerHTML='';wAvgDiv.style.display='none';if(rangeSummary)rangeSummary.textContent='';return;}
+  if(teacherEl){
+    fetchSubjectTeachers(cls).then(map=>{
+      if(document.getElementById('j-subj-select')?.value===subj){
+        const tName=map[subjKey(subj)]||map[subj.trim()];
+        teacherEl.textContent=tName?`👩‍🏫 ${tName}`:'👩‍🏫 Не призначено';
+      }
+    });
+  }
   if(months.length>12){showToast('⚠️ Максимальний період перегляду — 12 місяців.');return;}
   table.innerHTML='<tr><td style="padding:20px;color:var(--ink-3);">⏳ Завантаження...</td></tr>';
   const clsNum=getClassNum(cls);
