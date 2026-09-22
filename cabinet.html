@@ -3949,6 +3949,11 @@
         <div id="existing-image-info" class="hw-saved-list" style="display:none;"></div>
         <button type="button" class="qa-btn qa-save" id="btn-save-hw"
                 onclick="saveHomework()" style="margin-top:11px;">💾 Зберегти ДЗ</button>
+        <!-- ЗДАНІ РОБОТИ УЧНІВ -->
+        <div id="t-hw-submissions-wrapper" style="display:none;margin-top:14px;background:var(--surface-2);border:1px solid var(--line);border-radius:12px;padding:12px;">
+          <h4 style="margin:0 0 8px 0;color:var(--brand-deep);font-size:0.95rem;">📥 Здані роботи учнів</h4>
+          <div id="t-hw-submissions-list"></div>
+        </div>
       </div>
       <!-- КНОПКИ -->
       <div class="qa-row" style="margin-top:13px;">
@@ -4905,6 +4910,7 @@
       <div style="flex:1;min-width:110px;">
         <label style="margin-top:0;font-size:var(--text-xs);">Предмет</label>
         <select id="j-subj-select" title="Предмет" style="margin-top:2px;" onchange="renderJournalTable()"></select>
+        <div id="j-teacher-name" style="font-size:var(--text-xs);color:var(--brand-deep);margin-top:2px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></div>
       </div>
       <div style="flex:2;min-width:210px;">
         <label style="margin-top:0;font-size:var(--text-xs);">Період</label>
@@ -5129,6 +5135,27 @@
   </div>
 </div>
 
+
+<!-- ЗДАЧА ДОМАШНЬОГО ЗАВДАННЯ (ФОТО) -->
+<div id="hw-submit-modal" class="modal-overlay" style="display:none;z-index:1020;">
+  <div class="modal-content" style="max-width:460px;text-align:left;">
+    <h3 style="color:var(--brand-ink);margin-top:0;">📷 Здати роботу до ДЗ</h3>
+    <p id="hws-info" style="font-size:0.85rem;color:var(--ink-2);margin-bottom:12px;"></p>
+    <input type="hidden" id="hws-cls">
+    <input type="hidden" id="hws-date">
+    <input type="hidden" id="hws-subj">
+
+    <label for="hws-files" style="font-size:0.85rem;font-weight:700;">Оберіть фото виконаної роботи:</label>
+    <input type="file" id="hws-files" accept="image/*" multiple style="margin-top:4px;margin-bottom:10px;width:100%;">
+    
+    <div id="hws-status" style="display:none;padding:8px;border-radius:6px;font-size:0.85rem;margin-bottom:10px;"></div>
+
+    <div style="display:flex;gap:8px;">
+      <button id="hws-btn" onclick="submitHomeworkPhotos()" style="flex:1;background:var(--brand-ink);color:#fff;">Надіслати вчителю</button>
+      <button onclick="document.getElementById('hw-submit-modal').style.display='none'" style="background:var(--line-soft);color:var(--ink);">Скасувати</button>
+    </div>
+  </div>
+</div>
 
 <!-- ВИБІР СПІВРОЗМОВНИКІВ -->
 <div id="chat-picker" class="modal-overlay" style="display:none;z-index:1020;">
