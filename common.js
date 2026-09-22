@@ -1811,16 +1811,62 @@ export function renderHwItem(subject,data,books){
 export async function renderHwList(cls,date,listId){
   const hl=document.getElementById(listId);
   if(!hl)return;
-  const [hwSnap,tbSnap]=await Promise.all([
+  const isTeacher = String(listId).startsWith('t-');
+  const [hwSnap,tbSnap,subSnap]=await Promise.all([
     get(child(ref(db),`homeworks/${cls}/${date}`)),
     // Підручники не критичні: без них просто не буде посилань.
-    get(child(ref(db),`textbooks/${cls}`)).catch(()=>null)
+    get(child(ref(db),`textbooks/${cls}`)).catch(()=>null),
+    isTeacher ? get(child(ref(db),`homework_submissions/${cls}/${date}`)).catch(()=>null) : null
   ]);
   hl.innerHTML='';
   if(!hwSnap.exists()){hl.innerHTML='<li class="empty-msg">ДЗ не задано.</li>';return;}
   const allBooks=(tbSnap&&tbSnap.exists())?tbSnap.val():{};
   const d=hwSnap.val();
-  for(const s in d)hl.innerHTML+=renderHwItem(s,d[s],booksForSubject(allBooks,s));
+  const subsData = (subSnap&&subSnap.exists()) ? (subSnap.val()||{}) : {};
+
+  for(const s in d){
+    let itemHtml = renderHwItem(s,d[s],booksForSubject(allBooks,s));
+    if(isTeacher){
+      const sk = subjKey(s);
+      const studentMap = subsData[sk] || subsData[s.trim()] || {};
+      const students = Object.values(studentMap);
+      if(students.length > 0){
+        students.sort((a,b) => (a.studentName||'').localeCompare(b.studentName||'', 'uk'));
+        const subsHtml = `
+          <div style="margin-top:6px;">
+            <details style="background:var(--surface-1);border:1px solid var(--line-soft);border-radius:8px;padding:6px 10px;">
+              <summary style="font-weight:700;font-size:0.82rem;color:var(--brand-deep);cursor:pointer;">
+                📥 Здані роботи (${students.length})
+              </summary>
+              <div style="margin-top:6px;">
+                ${students.map(st => {
+                  const photos = (st.images||[]).map(url => `
+                    <a href="${escHtml(url)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;border:1px solid var(--line);border-radius:6px;overflow:hidden;width:50px;height:50px;background:#000;">
+                      <img src="${escHtml(cldImage(url, 'c_fill,w_100,h_100'))}" style="width:100%;height:100%;object-fit:cover;" alt="Робота">
+                    </a>
+                  `).join('');
+                  const timeStr = st.ts ? new Date(st.ts).toLocaleTimeString('uk-UA', {hour:'2-digit', minute:'2-digit'}) : '';
+                  return `
+                    <details style="margin-bottom:4px;background:#fff;border:1px solid var(--line-soft);border-radius:6px;padding:6px;">
+                      <summary style="font-weight:600;font-size:0.8rem;cursor:pointer;display:flex;justify-content:space-between;align-items:center;">
+                        <span>👤 ${escHtml(st.studentName || 'Учень')} (${(st.images||[]).length} фото)</span>
+                        <small style="color:var(--ink-3);font-weight:normal;">⏰ ${timeStr}</small>
+                      </summary>
+                      <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;">
+                        ${photos || '<i style="color:var(--ink-3);font-size:0.75rem;">Немає фото</i>'}
+                      </div>
+                    </details>
+                  `;
+                }).join('')}
+              </div>
+            </details>
+          </div>`;
+        const cut = itemHtml.lastIndexOf('</li>');
+        itemHtml = cut < 0 ? itemHtml + subsHtml : itemHtml.slice(0, cut) + subsHtml + itemHtml.slice(cut);
+      }
+    }
+    hl.innerHTML += itemHtml;
+  }
 }
 // ══════════ ATTENDANCE (per-lesson schema) ══════════
 // Since attendance/{cls}/{date}/{student} is now {slotKey:{status,reason,markedBy}}
