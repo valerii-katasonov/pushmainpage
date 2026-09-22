@@ -15,10 +15,11 @@
 //
 // Тиждень читається ОДНИМ запитом діапазону, а не сімома по днях.
 // ═══════════════════════════════════════════════════════════════
-import { ref, get, child, query, orderByKey, startAt, endAt }
+import { ref, get, set, child, query, orderByKey, startAt, endAt }
   from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { db, currentUserData, getActiveClass, escHtml, escJs, mondayOf, localDateString,
-         renderHwItem, booksForSubject, nextLessonDate, dayNamesUA, dayKeys, subjKey, planKeyWith }
+         renderHwItem, booksForSubject, nextLessonDate, dayNamesUA, dayKeys, subjKey, planKeyWith, fetchSubjectTeachers,
+         CLOUDINARY_URL, UPLOAD_PRESET, showToast }
   from './common.js';
 import { topicNames } from './parent-student.js';
 import { ACTIVE_YEAR } from './director.js';
@@ -118,10 +119,10 @@ export async function renderHwWeekView(boxId, weekStart){
   } catch(e) {}
 
   box.innerHTML = '<p class="empty-msg">Завантаження...</p>';
-  let byDate = {}, books = {}, topics = {}, plans = {}, aliases = {}, skip = new Set();
+  let byDate = {}, books = {}, topics = {}, plans = {}, aliases = {}, skip = new Set(), teachersMap = {};
   try{
     // Один запит на весь тиждень замість п'яти по днях.
-    const [hwSnap, tbSnap, topSnap, planSnap, alSnap, sk] = await Promise.all([
+    const [hwSnap, tbSnap, topSnap, planSnap, alSnap, sk, tMap] = await Promise.all([
       get(query(child(ref(db),`homeworks/${cls}`), orderByKey(),
                 startAt(queryStart), endAt(days[4]+''))),
       get(child(ref(db),`textbooks/${cls}`)).catch(()=>null),
@@ -135,7 +136,8 @@ export async function renderHwWeekView(boxId, weekStart){
       // батьків того кеша немає й не буде: картку завантаження плану
       // там не відкривають ніколи.
       get(child(ref(db),`curriculum_aliases/${cls}`)).catch(()=>null),
-      loadSkipDates()
+      loadSkipDates(),
+      fetchSubjectTeachers(cls).catch(()=>({}))
     ]);
     byDate = hwSnap.exists() ? (hwSnap.val()||{}) : {};
     books  = (tbSnap&&tbSnap.exists()) ? tbSnap.val() : {};
@@ -143,6 +145,7 @@ export async function renderHwWeekView(boxId, weekStart){
     plans  = (planSnap&&planSnap.exists()) ? planSnap.val() : {};
     aliases= (alSnap&&alSnap.exists()) ? (alSnap.val()||{}) : {};
     skip   = sk;
+    teachersMap = tMap || {};
   }catch(e){
     console.error('[Push School] ДЗ за тиждень:', e);
     box.innerHTML = `<p class="empty-msg" style="color:var(--danger);">Не вдалося завантажити: ${escHtml(e.message||'')}</p>`;
@@ -182,6 +185,8 @@ export async function renderHwWeekView(boxId, weekStart){
           const topicTxt = topic
             ? `<div class="hw-topic"><b>Тема уроку:</b> ${escHtml(topic)}</div>` : '';
           const dueTxt = `<span class="hw-due">зробити до ${escHtml(human(due))}${due===today?' — сьогодні!':''}</span>`;
+          const tName = teachersMap[sk2] || teachersMap[subj.trim()];
+          const teacherTxt = tName ? `<div class="hw-teacher" style="font-size:0.8rem;color:var(--brand-deep);margin-top:2px;">👩‍🏫 <b>Вчитель:</b> ${escHtml(tName)}</div>` : '';
           
           const hid = 'hwai-' + ds.replace(/-/g,'') + '-' + idx + '-tomorrow';
           const helpTxt = `
@@ -191,9 +196,10 @@ export async function renderHwWeekView(boxId, weekStart){
                 💡 Як допомогти</button>
               <div class="hw-help-out" id="${hid}-out" style="display:none;"></div>
             </div>`;
+          const submitBtn = `<div style="margin-top:6px;"><button type="button" class="nw-del" style="background:var(--brand-soft);color:var(--brand-ink);border:1px solid var(--brand-line);padding:3px 8px;border-radius:6px;font-size:0.75rem;cursor:pointer;" onclick="openHwSubmitModal('${escJs(cls)}','${escJs(ds)}','${escJs(subj)}')">📷 Здати роботу</button></div>`;
             
           const li = renderHwItem(subj, rec, booksForSubject(books, subj));
-          const extra = topicTxt + dueTxt + helpTxt;
+          const extra = teacherTxt + topicTxt + dueTxt + helpTxt + submitBtn;
           const cut = li.lastIndexOf('</li>');
           const htmlItem = cut < 0 ? li + extra : li.slice(0,cut) + extra + li.slice(cut);
           tomorrowItems.push(htmlItem);
@@ -258,8 +264,12 @@ export async function renderHwWeekView(boxId, weekStart){
           <div class="hw-help-out" id="${hid}-out" style="display:none;"></div>
         </div>`;
 
+      const tName = teachersMap[sk2] || teachersMap[subj.trim()];
+      const teacherTxt = tName ? `<div class="hw-teacher" style="font-size:0.8rem;color:var(--brand-deep);margin-top:2px;">👩‍🏫 <b>Вчитель:</b> ${escHtml(tName)}</div>` : '';
+      const submitBtn = `<div style="margin-top:6px;"><button type="button" class="nw-del" style="background:var(--brand-soft);color:var(--brand-ink);border:1px solid var(--brand-line);padding:3px 8px;border-radius:6px;font-size:0.75rem;cursor:pointer;" onclick="openHwSubmitModal('${escJs(cls)}','${escJs(ds)}','${escJs(subj)}')">📷 Здати роботу</button></div>`;
+
       const li = renderHwItem(subj, rec, booksForSubject(books, subj));
-      const extra = topicTxt + dueTxt + helpTxt;
+      const extra = teacherTxt + topicTxt + dueTxt + helpTxt + submitBtn;
       const cut = li.lastIndexOf('</li>');
       return cut < 0 ? li + extra : li.slice(0,cut) + extra + li.slice(cut);
     }).join('');
@@ -394,5 +404,95 @@ window.hwHelp = async function(subject, topic, homework, id){
     out.textContent = 'Не вдалося отримати відповідь: ' + (e.message||'');
   }finally{
     btn.disabled = false; btn.textContent = label;
+  }
+};
+
+window.openHwSubmitModal = function(cls, date, subject){
+  const modal = document.getElementById('hw-submit-modal');
+  if(!modal) return;
+  document.getElementById('hws-cls').value = cls;
+  document.getElementById('hws-date').value = date;
+  document.getElementById('hws-subj').value = subject;
+  const infoEl = document.getElementById('hws-info');
+  if(infoEl) infoEl.textContent = `${subject} · ${date.split('-').reverse().join('.')}`;
+  const filesInput = document.getElementById('hws-files');
+  if(filesInput) filesInput.value = '';
+  const statusEl = document.getElementById('hws-status');
+  if(statusEl) statusEl.style.display = 'none';
+  const btn = document.getElementById('hws-btn');
+  if(btn){ btn.disabled = false; btn.textContent = 'Надіслати вчителю'; }
+  modal.style.display = 'flex';
+};
+
+window.submitHomeworkPhotos = async function(){
+  const cls = document.getElementById('hws-cls').value;
+  const date = document.getElementById('hws-date').value;
+  const subject = document.getElementById('hws-subj').value;
+  const filesInput = document.getElementById('hws-files');
+  const btn = document.getElementById('hws-btn');
+  const statusEl = document.getElementById('hws-status');
+
+  if(!filesInput || !filesInput.files || filesInput.files.length === 0){
+    alert('Будь ласка, оберіть хоча б одне фото.');
+    return;
+  }
+  if(filesInput.files.length > 5){
+    alert('Можна завантажити не більше 5 фото за раз.');
+    return;
+  }
+
+  const sid = currentUserData?.studentId || currentUserData?.studentName;
+  const sName = currentUserData?.studentName || 'Учень';
+  if(!sid){
+    alert('Не вдалося визначити учня.');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = '⏳ Завантаження...';
+  if(statusEl){
+    statusEl.style.display = 'block';
+    statusEl.style.background = 'var(--warn-soft)';
+    statusEl.style.color = 'var(--warn)';
+    statusEl.textContent = '⏳ Вивантаження фотографій...';
+  }
+
+  try {
+    const uploaded = await Promise.all(Array.from(filesInput.files).map(async file => {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('upload_preset', UPLOAD_PRESET);
+      const r = await fetch(CLOUDINARY_URL, { method:'POST', body:fd });
+      const d = await r.json();
+      if(!d.secure_url) throw new Error('Помилка завантаження файлу: ' + (d.error?.message || 'невідомо'));
+      return d.secure_url;
+    }));
+
+    const subRef = child(ref(db), `homework_submissions/${cls}/${date}/${subjKey(subject)}/${sid}`);
+    const prevSnap = await get(subRef);
+    let allImages = uploaded;
+    if(prevSnap.exists() && Array.isArray(prevSnap.val().images)){
+      allImages = [...prevSnap.val().images, ...uploaded];
+    }
+
+    await set(subRef, {
+      ts: Date.now(),
+      studentId: sid,
+      studentName: sName,
+      images: allImages
+    });
+
+    showToast('✅ Роботу надіслано вчителю!');
+    document.getElementById('hw-submit-modal').style.display = 'none';
+  } catch(e) {
+    if(statusEl){
+      statusEl.style.display = 'block';
+      statusEl.style.background = 'var(--danger-soft)';
+      statusEl.style.color = 'var(--danger)';
+      statusEl.textContent = 'Помилка: ' + e.message;
+    }
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Надіслати вчителю';
   }
 };
