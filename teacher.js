@@ -1886,7 +1886,7 @@ window.openStickerStatsModal=async function(){
   document.getElementById('sticker-stats-modal').style.display='flex';
   const list=document.getElementById('sticker-stats-list');
   list.innerHTML='<p class="empty-msg" style="text-align:center;">⏳ Завантаження...</p>';
-  const cls=getActiveClass();
+  const cls = (currentUserData && (currentUserData.class || (currentUserData.role === 'parent' && (currentUserData.children?.[0]?.class || currentUserData.kids?.[0]?.class)))) || getActiveClass();
   const [stuSnap,stSnap]=await Promise.all([
     get(child(ref(db),`students_list/${cls}`)),
     get(child(ref(db),`stickers/${cls}`))
@@ -1896,7 +1896,12 @@ window.openStickerStatsModal=async function(){
   if(students.length===0){list.innerHTML='<p class="empty-msg" style="text-align:center;">Учнів немає.</p>';return;}
   const goal=stickerGoal(cls);
   renderStickerGoalBox(cls, goal);
-  const stats=students.map(({sid,nm})=>({name:nm,count:stickersData[sid]?Object.keys(stickersData[sid]).length:0}));
+  const stats=students.map(({sid,nm})=>{
+    const fromSid = (stickersData[sid] && typeof stickersData[sid] === 'object') ? stickersData[sid] : {};
+    const fromNm = (stickersData[nm] && typeof stickersData[nm] === 'object') ? stickersData[nm] : {};
+    const combined = { ...fromNm, ...fromSid };
+    return { name: nm, count: Object.keys(combined).length };
+  });
   stats.sort((a,b)=>b.count-a.count);
   let h='<ul style="list-style:none;padding:0;margin:0;">';
   stats.forEach((s,i)=>{
