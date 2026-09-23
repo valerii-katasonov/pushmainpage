@@ -754,7 +754,43 @@ export function loadParentDashboard(){
   // Dynamic schedule
   if(window.schedule){renderDynamicSchedule();if(parentLessonInterval)clearInterval(parentLessonInterval);parentLessonInterval=setInterval(renderDynamicSchedule,30000);}
   // Stickers
-  get(child(ref(db),`stickers/${cls}/${currentUserData.studentId||currentUserData.studentName}`)).then(snap=>{const goal=stickerGoal(cls);const data=snap.exists()?snap.val():{};const cnt=Object.keys(data).length;const pct=Math.min((cnt/goal)*100,100);document.getElementById('p-ribbon-progress').style.width=pct+'%';const history=document.getElementById('p-sticker-history');if(history)history.innerHTML=renderStickerHistory(data);document.getElementById('p-ribbon-count').innerText=`${cnt} / ${goal} наліпок до призу`;const me=document.getElementById('p-ribbon-msg');if(me){if(cnt>=goal){me.innerText="🎉 Ура! Ти досяг мети!";confetti({particleCount:150,spread:80,origin:{y:0.5}});}else me.innerText='';}}).catch(()=>document.getElementById('p-ribbon-count').innerText="Помилка");
+  const sName = currentUserData?.studentName || '';
+  const sId = currentUserData?.studentId || '';
+  const resolvedSid = (typeof stuId === 'function' ? stuId(cls, sName) : '') || '';
+  const keysToTry = [...new Set([sId, resolvedSid, sName].filter(Boolean))];
+
+  Promise.all(keysToTry.map(k => get(child(ref(db), `stickers/${cls}/${k}`))))
+    .then(snaps => {
+      const goal = stickerGoal(cls);
+      const data = {};
+      snaps.forEach(snap => {
+        if (snap && snap.exists()) {
+          const val = snap.val();
+          if (val && typeof val === 'object') Object.assign(data, val);
+        }
+      });
+      const cnt = Object.keys(data).length;
+      const pct = Math.min((cnt / goal) * 100, 100);
+      const progEl = document.getElementById('p-ribbon-progress');
+      if (progEl) progEl.style.width = pct + '%';
+      const history = document.getElementById('p-sticker-history');
+      if (history) history.innerHTML = renderStickerHistory(data);
+      const countEl = document.getElementById('p-ribbon-count');
+      if (countEl) countEl.innerText = `${cnt} / ${goal} наліпок до призу`;
+      const me = document.getElementById('p-ribbon-msg');
+      if (me) {
+        if (cnt >= goal) {
+          me.innerText = "🎉 Ура! Ти досяг мети!";
+          if (typeof confetti === 'function') confetti({ particleCount: 150, spread: 80, origin: { y: 0.5 } });
+        } else {
+          me.innerText = '';
+        }
+      }
+    })
+    .catch(() => {
+      const countEl = document.getElementById('p-ribbon-count');
+      if (countEl) countEl.innerText = "Помилка";
+    });
   // Att status (self-report confirmation lives under the "all" slot)
   renderSelfAttStatus('parent');
   // Persistent alert if the teacher marked something the parent hasn't acknowledged
@@ -1081,7 +1117,30 @@ export function loadStudentDashboard(){
   if(!currentUserData)return;const date=document.getElementById('global-date').value;const cls=getActiveClass();
   fillAttReasons('s');
   if(window.schedule){renderDynamicSchedule('student');if(parentLessonInterval)clearInterval(parentLessonInterval);parentLessonInterval=setInterval(()=>renderDynamicSchedule('student'),30000);}
-  get(child(ref(db),`stickers/${cls}/${currentUserData.studentId||currentUserData.studentName}`)).then(snap=>{const goal=stickerGoal(cls);const data=snap.exists()?snap.val():{};const cnt=Object.keys(data).length;const pct=Math.min((cnt/goal)*100,100);document.getElementById('s-ribbon-progress').style.width=pct+'%';const history=document.getElementById('s-sticker-history');if(history)history.innerHTML=renderStickerHistory(data);document.getElementById('s-ribbon-count').innerText=`${cnt} / ${goal} наліпок до призу`;});
+  const sName = currentUserData?.studentName || '';
+  const sId = currentUserData?.studentId || '';
+  const resolvedSid = (typeof stuId === 'function' ? stuId(cls, sName) : '') || '';
+  const keysToTry = [...new Set([sId, resolvedSid, sName].filter(Boolean))];
+
+  Promise.all(keysToTry.map(k => get(child(ref(db), `stickers/${cls}/${k}`))))
+    .then(snaps => {
+      const goal = stickerGoal(cls);
+      const data = {};
+      snaps.forEach(snap => {
+        if (snap && snap.exists()) {
+          const val = snap.val();
+          if (val && typeof val === 'object') Object.assign(data, val);
+        }
+      });
+      const cnt = Object.keys(data).length;
+      const pct = Math.min((cnt / goal) * 100, 100);
+      const progEl = document.getElementById('s-ribbon-progress');
+      if (progEl) progEl.style.width = pct + '%';
+      const history = document.getElementById('s-sticker-history');
+      if (history) history.innerHTML = renderStickerHistory(data);
+      const countEl = document.getElementById('s-ribbon-count');
+      if (countEl) countEl.innerText = `${cnt} / ${goal} наліпок до призу`;
+    });
   renderSelfAttStatus('student');
   checkTeacherAttendanceAlert('student');
   renderParentCalendar('student');loadParentBellSchedule('student');
