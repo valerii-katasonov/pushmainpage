@@ -754,6 +754,66 @@ async function loadNoSchoolDays(dates, strict=false){
   return out;
 }
 
+let cutoffTimerRunning = false;
+export function startKitchenCutoffTimer(){
+  if(window.__kitchenCutoffTimer){
+    clearInterval(window.__kitchenCutoffTimer);
+    window.__kitchenCutoffTimer = null;
+  }
+
+  function tick(){
+    const timerEl = document.getElementById('k-counts-timer');
+    const warnEl = document.getElementById('k-counts-cutoff-warn');
+    if(!timerEl || !warnEl){
+      if(window.__kitchenCutoffTimer){
+        clearInterval(window.__kitchenCutoffTimer);
+        window.__kitchenCutoffTimer = null;
+      }
+      return;
+    }
+
+    const now = new Date();
+    const cutoff = new Date(now);
+    cutoff.setHours(MEAL_CUTOFF_HOUR, 0, 0, 0);
+    const diff = cutoff.getTime() - now.getTime();
+
+    if(diff > 0){
+      cutoffTimerRunning = true;
+      const hrs = Math.floor(diff / 3600000);
+      const mins = Math.floor((diff % 3600000) / 60000);
+      const secs = Math.floor((diff % 60000) / 1000);
+      const text = `${hrs > 0 ? hrs + ' год ' : ''}${String(mins).padStart(2,'0')} хв ${String(secs).padStart(2,'0')} сек`;
+      timerEl.textContent = text;
+    } else {
+      if(window.__kitchenCutoffTimer){
+        clearInterval(window.__kitchenCutoffTimer);
+        window.__kitchenCutoffTimer = null;
+      }
+      warnEl.style.background = '#ecfdf5';
+      warnEl.style.borderColor = '#10b981';
+      warnEl.style.color = '#065f46';
+      warnEl.innerHTML = `
+        <div style="display:flex;align-items:center;gap:8px;font-size:0.84rem;">
+          <span>✅</span> <span><b>Вибір батьків на сьогодні закріплено о 09:00</b> — кількість порцій зафіксована.</span>
+        </div>
+      `;
+      if(cutoffTimerRunning){
+        cutoffTimerRunning = false;
+        if(typeof loadWeekCounts === 'function') loadWeekCounts();
+      }
+    }
+  }
+
+  tick();
+  const now = new Date();
+  const cutoff = new Date(now);
+  cutoff.setHours(MEAL_CUTOFF_HOUR, 0, 0, 0);
+  if(cutoff.getTime() > now.getTime()){
+    window.__kitchenCutoffTimer = setInterval(tick, 1000);
+  }
+}
+window.startKitchenCutoffTimer = startKitchenCutoffTimer;
+
 export async function loadWeekCounts(){
   const box = document.getElementById('k-counts');
   if(!box) return;
@@ -840,7 +900,41 @@ export async function loadWeekCounts(){
     });
 
     const today = perDay.find(d=>d.date===localDateString) || perDay[0];
+
+    let cutoffWarningHtml = '';
+    const now = new Date();
+    const isToday = today.date === localDateString;
+    const isWorkday = now.getDay() >= 1 && now.getDay() <= 5;
+    if(isToday && isWorkday && !today.closed){
+      if(now.getHours() < MEAL_CUTOFF_HOUR){
+        cutoffWarningHtml = `
+          <div id="k-counts-cutoff-warn" style="background:#fee2e2;border:2px solid #ef4444;border-radius:10px;padding:12px 16px;margin-bottom:14px;color:#991b1b;">
+            <div style="display:flex;align-items:center;gap:12px;">
+              <span style="font-size:1.8rem;line-height:1;">⏳</span>
+              <div style="flex:1;">
+                <div style="font-weight:900;font-size:1.02rem;color:#b91c1c;margin-bottom:2px;">
+                  ⚠️ УВАГА: Кількість порцій ще змінюється!
+                </div>
+                <div style="font-size:0.86rem;line-height:1.45;color:#7f1d1d;">
+                  Батьки мають право змінювати вибір страв та відмічати відсутність <b>до 09:00</b>.<br>
+                  До остаточної фіксації замовлення залишилося: 
+                  <b id="k-counts-timer" style="font-size:1.05rem;font-weight:900;color:#dc2626;background:#fecaca;padding:2px 8px;border-radius:6px;display:inline-block;margin-top:4px;">--:--</b>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+      } else {
+        cutoffWarningHtml = `
+          <div style="background:#ecfdf5;border:1px solid #10b981;border-radius:8px;padding:8px 12px;margin-bottom:12px;color:#065f46;font-size:0.84rem;display:flex;align-items:center;gap:8px;">
+            <span>✅</span> <span><b>Вибір батьків на сьогодні закріплено о 09:00</b> — кількість порцій зафіксована.</span>
+          </div>
+        `;
+      }
+    }
+
     box.innerHTML = `
+      ${cutoffWarningHtml}
       <div class="k-total">
         ${today.closed
           ? `<b>—</b><span>${escHtml(human(today.date))}: ${escHtml(today.closed)}</span>
@@ -879,6 +973,9 @@ export async function loadWeekCounts(){
       ${nameList('extra', `Разові обіди на ${human(today.date)} — діти, які зазвичай не обідають (${today.extras.length})`,
           today.extras, '', true)}
       ${nameList('', `Відмови на ${human(today.date)} (${today.skips.length})`, today.skips, '', true)}`;
+    if(box.innerHTML.includes('id="k-counts-timer"')){
+      startKitchenCutoffTimer();
+    }
   }catch(e){
     box.innerHTML = `<p style="color:red;font-size:.8rem;">Помилка: ${escHtml(e.message)}</p>`;
   }
@@ -1714,13 +1811,14 @@ window.exportClassOrders = function(){
 window.loadMealStats = async function(){
   const from = document.getElementById('k-stat-from')?.value;
   const to   = document.getElementById('k-stat-to')?.value;
+  const selectedCls = document.getElementById('k-stat-class')?.value || null;
   const box  = document.getElementById('k-stats');
   if(!box) return;
   if(!from || !to || from > to) return alert('Оберіть коректний період.');
   box.innerHTML = '<p class="empty-msg">Рахуємо...</p>';
   try{
     const [rows, itSnap, histSnap] = await Promise.all([
-      computeMealStats(from, to, null, null, true),
+      computeMealStats(from, to, selectedCls, null, true),
       get(child(ref(db), 'takeaway_items')),
       get(child(ref(db), 'takeaway_price_history'))
     ]);
@@ -1804,21 +1902,24 @@ window.loadMealStats = async function(){
           sumAll.snack?` · підвечірки ${taMoney(sumAll.snack)}`:''}${
           sumAll.takeaway?` · на винос ${taMoney(sumAll.takeaway)}`:''}${
           sumAll.adjustments?` · корекції ${taMoney(sumAll.adjustments)}`:''}</div></div>` : ''}
-      <div class="k-sub">${escHtml(human(from))} — ${escHtml(human(to))}</div>
+      <div class="k-sub">${selectedCls ? `${escHtml(selectedCls.replace('class_',''))} клас · ` : ''}${escHtml(human(from))} — ${escHtml(human(to))}</div>
       ${warnings.length?`<div class="k-orphan"><b>⚠️ Після закриття дня виявлено ${warnings.length} змін відвідуваності або замовлень.</b><p>Зафіксована сума не змінюється автоматично. Перевірте особовий рахунок і внесіть корекцію списання, якщо потрібно.</p><ul>${warnings.map(w=>`<li>${escHtml(w)}</li>`).join('')}</ul></div>`:''}
       <div class="k-scroll"><table class="k-table"><thead><tr><th>Клас</th><th>Снід.</th><th>Обіди</th><th>Підвеч.</th>${money$?'<th>Сума</th>':''}</tr></thead><tbody>
         ${Object.keys(byClass).sort((a,b)=>a-b).map(c=>`<tr><td>${c}</td><td>${byClass[c].brk||''}</td><td><b>${byClass[c].lunch}</b></td><td>${byClass[c].snack||''}</td>${
           money$?`<td>${taMoney(byClass[c].cost)} zł</td>`:''}</tr>`).join('')}
       </tbody></table></div>
       <div class="k-skip-title">Поіменно</div>
-      <div class="k-scroll"><table class="k-table"><thead><tr><th>Учень</th><th>Кл.</th><th>Снід.</th><th>Обіди</th><th>Підвеч.</th>${money$?'<th>Сума</th>':''}</tr></thead><tbody>
+      <div class="k-scroll"><table class="k-table"><thead><tr><th>Учень</th><th>Кл.</th><th>Снід.</th><th>Обіди</th><th>Підвеч.</th><th>Відсутність</th>${money$?'<th>Сума</th>':''}</tr></thead><tbody>
         ${rows.sort((a,b)=>b.lunch-a.lunch || a.name.localeCompare(b.name,'uk'))
-              .map(r=>`<tr><td>${escHtml(r.name)}</td><td>${r.cls}</td><td>${r.brk||''}</td><td><b>${r.lunch}</b></td><td>${r.snack||''}</td>${
+              .map(r=>`<tr><td>${escHtml(r.name)}</td><td>${r.cls}</td><td>${r.brk||''}</td><td><b>${r.lunch}</b></td><td>${r.snack||''}</td><td>${r.absent ? `<b>${r.absent}</b> <small style="color:var(--ink-3);">(${(r.absentDates||[]).map(d=>human(d).slice(0,5)).join(', ')})</small>` : '—'}</td>${
                 money$?`<td>${taMoney(r.cost.total)} zł</td>`:''}</tr>`).join('')}
       </tbody></table></div>
       ${taHistoryBlock}
-      <button onclick="exportMealStats()" style="background:var(--brand-soft);color:var(--brand-ink);border:1px solid var(--brand-line);margin-top:11px;">📄 Вивантажити CSV</button>`;
-    window.__mealStats = { from, to, rows };
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:11px;">
+        <button onclick="exportMealStatsPdf()" style="background:linear-gradient(135deg,var(--danger),var(--danger));color:#fff;border:none;border-radius:8px;padding:9px 16px;font-weight:700;cursor:pointer;">📕 Зберегти PDF</button>
+        <button onclick="exportMealStats()" style="background:var(--brand-soft);color:var(--brand-ink);border:1px solid var(--brand-line);padding:9px 16px;border-radius:8px;font-weight:700;cursor:pointer;">📄 Вивантажити CSV</button>
+      </div>`;
+    window.__mealStats = { from, to, cls: selectedCls, rows };
   }catch(e){
     box.innerHTML = `<p style="color:red;font-size:.8rem;">Помилка: ${escHtml(e.message)}</p>`;
   }
@@ -1955,6 +2056,7 @@ export async function computeMealStats(from, to, onlyCls, onlyName, withCost=fal
       const cost={lunch:0,brk:0,snack:0,takeaway:0,adjustments:0,total:0};
       const flags=[];
       const studentTakeaways = [];
+      const absentDates = [];
       dateList.forEach(date=>{
         const fixed=withCost&&ledgerAll?.[cls]?.[key]?.[date];
         if(fixed&&Number.isFinite(Number(fixed.total))){
@@ -1970,7 +2072,10 @@ export async function computeMealStats(from, to, onlyCls, onlyName, withCost=fal
           lunch+=Number(fixed.counts?.lunch)||0;
           brk+=Number(fixed.counts?.breakfast)||0;
           snack+=Number(fixed.counts?.snack)||0;
-          if(fixed.absent)absent++;
+          if(fixed.absent){
+            absent++;
+            absentDates.push(date);
+          }
           cost.lunch=Math.round((cost.lunch+Number(fixed.lunch||0))*100)/100;
           cost.brk=Math.round((cost.brk+Number(fixed.breakfast||0))*100)/100;
           cost.snack=Math.round((cost.snack+Number(fixed.snack||0))*100)/100;
@@ -2004,6 +2109,7 @@ export async function computeMealStats(from, to, onlyCls, onlyName, withCost=fal
                        breakfast: planned.breakfast && keep('breakfast') };
         if(abs){
           absent++;
+          absentDates.push(date);
           if(served.lunch||served.snack||served.breakfast) lateAbsent++;
         }
         if(served.lunch) lunch++;
@@ -2023,8 +2129,8 @@ export async function computeMealStats(from, to, onlyCls, onlyName, withCost=fal
           cost.total=Math.round((cost.total+amount)*100)/100;
         }
       }
-      if(lunch || snack || brk || (withCost && (cost.takeaway || cost.adjustments || flags.length)))
-        out.push({ cls:i, name, lunch, snack, brk, absent, lateAbsent, days:serviceDays, cost, flags, takeaways: studentTakeaways });
+      if(lunch || snack || brk || absent || (withCost && (cost.takeaway || cost.adjustments || flags.length)))
+        out.push({ cls:i, name, lunch, snack, brk, absent, lateAbsent, absentDates: [...new Set(absentDates)].sort(), days:serviceDays, cost, flags, takeaways: studentTakeaways });
     }
   }
   return out;
@@ -2033,14 +2139,108 @@ export async function computeMealStats(from, to, onlyCls, onlyName, withCost=fal
 window.exportMealStats = function(){
   const s = window.__mealStats;
   if(!s) return;
-  const csv = ['Учень;Клас;Сніданки;Обіди;Підвечірки;Страви zł;На винос zł;Корекції zł;Разом zł',
-    ...s.rows.map(r=>`${r.name};${r.cls};${r.brk||0};${r.lunch};${r.snack};${taMoney(r.cost.lunch+r.cost.brk+r.cost.snack)};${taMoney(r.cost.takeaway)};${taMoney(r.cost.adjustments)};${taMoney(r.cost.total)}`)].join('\n');
+  const csv = ['Учень;Клас;Сніданки;Обіди;Підвечірки;Відсутність (днів);Дати відсутності;Страви zł;На винос zł;Корекції zł;Разом zł',
+    ...s.rows.map(r=>`${r.name};${r.cls};${r.brk||0};${r.lunch};${r.snack};${r.absent||0};${(r.absentDates||[]).map(d=>human(d)).join(', ')};${taMoney(r.cost.lunch+r.cost.brk+r.cost.snack)};${taMoney(r.cost.takeaway)};${taMoney(r.cost.adjustments)};${taMoney(r.cost.total)}`)].join('\n');
   const blob = new Blob(['﻿'+csv], {type:'text/csv;charset=utf-8'});   // BOM — щоб Excel не ламав кирилицю
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `harchuvannya_${s.from}_${s.to}.csv`;
+  const clsPrefix = s.cls ? `${s.cls}_` : '';
+  a.download = `harchuvannya_${clsPrefix}${s.from}_${s.to}.csv`;
   a.click();
   URL.revokeObjectURL(a.href);
+};
+
+window.exportMealStatsPdf = function(){
+  const s = window.__mealStats;
+  const holder = document.getElementById('print-area');
+  if(!s || !holder) return;
+  const { from, to, cls, rows } = s;
+  const clsTitle = cls ? `${cls.replace('class_','')} клас` : 'Усі класи';
+  const periodTitle = `${human(from)} — ${human(to)}`;
+
+  const sortedRows = [...rows].sort((a,b)=> (a.cls - b.cls) || b.lunch - a.lunch || a.name.localeCompare(b.name,'uk'));
+  const tot = rows.reduce((a,r)=>({lunch:a.lunch+r.lunch, snack:a.snack+r.snack, brk:a.brk+(r.brk||0), absent:a.absent+(r.absent||0)}),{lunch:0,snack:0,brk:0,absent:0});
+  const sumTotal = rows.reduce((acc,r)=>Math.round((acc + (r.cost?.total||0))*100)/100, 0);
+
+  const rowsHtml = sortedRows.map((r, idx) => {
+    const absText = r.absent 
+      ? `<b>${r.absent}</b> <span style="font-size:9.5px;color:#555;">(${(r.absentDates||[]).map(d=>human(d).slice(0,5)).join(', ')})</span>` 
+      : '—';
+    return `
+      <tr>
+        <td class="ko-num">${idx+1}</td>
+        <td class="ko-name">${escHtml(r.name)}</td>
+        <td>${r.cls}</td>
+        <td>${r.brk || '—'}</td>
+        <td><b>${r.lunch || '—'}</b></td>
+        <td>${r.snack || '—'}</td>
+        <td style="text-align:left;">${absText}</td>
+        <td style="text-align:right;font-weight:bold;">${taMoney(r.cost?.total||0)} zł</td>
+      </tr>
+    `;
+  }).join('');
+
+  holder.innerHTML = `
+    <div class="ko-wrap">
+      <div class="ko-sheet">
+        <div class="ko-head">
+          <div class="ko-title">
+            <span class="ko-badge">СТАТИСТИКА ХАРЧУВАННЯ</span>
+            <h2>${escHtml(clsTitle)}</h2>
+          </div>
+          <div class="ko-date">
+            <b>${escHtml(periodTitle)}</b>
+            <span>Звіт кухні</span>
+          </div>
+        </div>
+
+        <div class="ko-sum">
+          <span>Обіди: <b>${tot.lunch}</b></span>
+          ${tot.brk ? `<span>Сніданки: <b>${tot.brk}</b></span>` : ''}
+          ${tot.snack ? `<span>Підвечірки: <b>${tot.snack}</b></span>` : ''}
+          ${tot.absent ? `<span>Пропуски: <b>${tot.absent}</b> дн.</span>` : ''}
+          ${sumTotal ? `<span class="ko-warn">Разом: <b>${taMoney(sumTotal)} zł</b></span>` : ''}
+        </div>
+
+        <table class="ko-table">
+          <thead>
+            <tr>
+              <th class="ko-num">#</th>
+              <th class="ko-name">Учень</th>
+              <th>Кл.</th>
+              <th>Снід.</th>
+              <th>Обіди</th>
+              <th>Підвеч.</th>
+              <th style="text-align:left;">Відсутність (дати)</th>
+              <th style="text-align:right;">Сума</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml}
+          </tbody>
+        </table>
+
+        <div class="ko-foot">
+          <span>Дати відсутності враховано за журналом відвідуваності.</span>
+          <span>Push School Warsaw · надруковано ${escHtml(new Date().toLocaleString('uk-UA',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}))}</span>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const prevTitle = document.title;
+  document.title = `Статистика харчування ${clsTitle} (${from}_${to})`;
+  const go = ()=>{
+    document.body.classList.add('printing');
+    window.print();
+    setTimeout(()=>{
+      document.body.classList.remove('printing');
+      holder.innerHTML='';
+      document.title = prevTitle;
+    },600);
+  };
+  showToast('У вікні друку оберіть «Зберегти як PDF»');
+  setTimeout(go, 400);
 };
 
 // Перевірка налаштувань: показує, на якому саме кроці рветься ланцюжок,
