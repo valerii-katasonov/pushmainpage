@@ -1809,6 +1809,9 @@ window.giveStickerToStudent=async function(){
     const now=Date.now();
     record=stickerRecord(subj,reason,date,auth.currentUser?.uid||'',now,
       n>1?`${now.toString(36)}${Math.random().toString(36).slice(2,7)}`:'');
+    // UID лишається для сумісності; ім'я потрібне в історії вчителя.
+    record.byName=([currentUserData?.firstName,currentUserData?.lastName].filter(Boolean).join(' ').trim()
+      || auth.currentUser?.displayName || currentUserData?.email || auth.currentUser?.email || 'Учитель').slice(0,120);
   }catch(e){showToast('⚠️ '+e.message);return;}
   // Питаємо лише про справді велику пачку: одна-дві наліпки — щоденна
   // дія, і підтвердження щоразу перетворилося б на рефлекс «ОК».
@@ -1891,11 +1894,49 @@ window.showReactionsDetails=async function(){
 window.closeReactionsModal=function(){document.getElementById('reactions-modal').style.display='none';};
 window.showWeeklyWrapped=function(){confetti({particleCount:200,spread:90,origin:{y:0.6},zIndex:2000});document.getElementById('wrapped-modal').style.display='flex';document.body.style.overflow='hidden';const uid=auth.currentUser.uid;const cls=getActiveClass();Promise.all([get(child(ref(db),`homeworks/${cls}`)),get(child(ref(db),`comments/${cls}`)),get(child(ref(db),`stickers/${cls}`)),get(child(ref(db),`authors/${cls}`))]).then(([hs,cs,ss,as])=>{const a=as.exists()?as.val():{};let hw=0;if(hs.exists()){const d=hs.val();for(let dt in d)for(let s in d[dt])if(a[dt]&&a[dt][s]===uid)hw++;}document.getElementById('w-hw').innerText=hw;let com=0;if(cs.exists()){const d=cs.val();for(let dt in d)for(let s in d[dt])if(a[dt]&&a[dt][s]===uid)com+=Object.keys(d[dt][s]).length;}document.getElementById('w-com').innerText=com;let st=0;if(ss.exists()){const d=ss.val();for(let student in d)for(let k in d[student]){const rec=d[student][k];if(rec&&typeof rec==='object'){if(rec.by===uid)st++;continue;}const[dt,s]=k.split('_');if(a[dt]&&a[dt][s]===uid)st++;}}document.getElementById('w-st').innerText=st;});};
 window.closeModal=function(){document.getElementById('wrapped-modal').style.display='none';document.body.style.overflow='';};
-// ══════════ PHASE 7: STICKER STATS ══════════
-// Reuses #reactions-modal's markup/structure (new modal id: sticker-stats-modal,
-// new list id: sticker-stats-list). One get() on the whole stickers/{cls} subtree
-// instead of per-student calls — Object.keys(stickersData[student]||{}).length is
-// the same "count all keys" the prompt asks for, just batched.
+// ══════════ ІСТОРІЯ НАЛІПОК У СТАТИСТИЦІ ══════════
+// Старі записи можуть бути рядком без автора. Їх не доповнюємо здогадками.
+export function stickerStatsEntries(data, issuerNames={}, selfUid='', selfName=''){
+  const entries=Object.entries(data||{}).map(([key,value])=>{
+    const modern=value&&typeof value==='object';
+    const rec=modern?value:{};
+    const by=String(rec.by||'');
+    const date=String(rec.date||key.slice(0,10));
+    const ts=Number(rec.ts)||0;
+    return {
+      key,date,ts,subject:String(rec.subject||key.split('_').slice(1).join('_')||'Не зазначено'),
+      reason:String(rec.reason||''),batch:String(rec.batch||''),
+      issuer:String(rec.byName||issuerNames[by]||(by&&by===selfUid?selfName:'')||'Не зазначено в старому записі'),
+      count:1
+    };
+  });
+  entries.sort((a,b)=>(b.ts-a.ts)||b.date.localeCompare(a.date)||b.key.localeCompare(a.key));
+  const grouped=[],batches=new Map();
+  for(const entry of entries){
+    if(entry.batch&&batches.has(entry.batch)){batches.get(entry.batch).count++;continue;}
+    grouped.push(entry);
+    if(entry.batch)batches.set(entry.batch,entry);
+  }
+  return grouped;
+}
+function stickerStatsDate(date){
+  return /^\d{4}-\d{2}-\d{2}$/.test(date)?date.split('-').reverse().join('.'):'Дата не збережена';
+}
+function stickerStatsTime(ts){
+  if(!Number.isFinite(ts)||ts<=0)return '';
+  const d=new Date(ts);
+  if(Number.isNaN(d.getTime()))return '';
+  return new Intl.DateTimeFormat('uk-UA',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}).format(d);
+}
+function renderStickerStatsHistory(data,issuerNames,selfUid,selfName){
+  const entries=stickerStatsEntries(data,issuerNames,selfUid,selfName);
+  if(!entries.length)return '<p class="sg-empty">Наліпок поки немає.</p>';
+  return `<ol class="sg-history">${entries.map(entry=>`<li>
+    <div class="sg-history-date">За дату: ${escHtml(stickerStatsDate(entry.date))}${entry.count>1?` · ×${entry.count}`:''}</div>
+    <div><b>${escHtml(entry.subject)}</b>${entry.reason?` · ${escHtml(entry.reason)}`:''}</div>
+    <div class="sg-history-meta">Видав: ${escHtml(entry.issuer)} · Видано: ${escHtml(stickerStatsTime(entry.ts)||'час не збережено')}</div>
+  </li>`).join('')}</ol>`;
+}
 window.openStickerStatsModal=async function(){
   try{
   document.getElementById('sticker-stats-modal').style.display='flex';
@@ -1911,36 +1952,41 @@ window.openStickerStatsModal=async function(){
   if(students.length===0){list.innerHTML='<p class="empty-msg" style="text-align:center;">Учнів немає.</p>';return;}
   const goal=stickerGoal(cls);
   renderStickerGoalBox(cls, goal);
+  const activeRole=currentUserData?.role;
+  const canSeeHistory=['teacher','class_teacher','master_class_teacher','art_school_teacher','music_teacher','director','administrator'].includes(activeRole);
+  const issuerNames={};
+  if(activeRole==='director'||activeRole==='administrator'){
+    try{
+      const users=await getUsersSnap();
+      if(users.exists())for(const [uid,user] of Object.entries(users.val()))
+        issuerNames[uid]=[user.firstName,user.lastName].filter(Boolean).join(' ').trim()||user.email||'';
+    }catch(e){/* Учителю глобальний список користувачів не доступний. */}
+  }
+  const selfName=[currentUserData?.firstName,currentUserData?.lastName].filter(Boolean).join(' ').trim()
+    ||currentUserData?.email||'Учитель';
   const stats=students.map(({sid,nm})=>{
     const fromSid = (stickersData[sid] && typeof stickersData[sid] === 'object') ? stickersData[sid] : {};
     const fromNm = (stickersData[nm] && typeof stickersData[nm] === 'object') ? stickersData[nm] : {};
     const combined = { ...fromNm, ...fromSid };
-    return { name: nm, count: Object.keys(combined).length };
+    return { name: nm, count: Object.keys(combined).length, records:combined };
   });
-  stats.sort((a,b)=>b.count-a.count);
-  let h='<ul style="list-style:none;padding:0;margin:0;">';
+  stats.sort((a,b)=>b.count-a.count||a.name.localeCompare(b.name,'uk'));
+  let h='<ul class="sg-stats-list">';
   stats.forEach((s,i)=>{
     const pct=Math.min((s.count/goal)*100,100);
     const medal=i===0?'🥇 ':i===1?'🥈 ':i===2?'🥉 ':'';
-    h+=`<li style="background:var(--surface-2);border:1px solid var(--line-soft);border-radius:8px;padding:11px;margin-bottom:9px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <span style="font-weight:700;color:var(--brand-ink);">${medal}${escHtml(s.name)}</span>
-        <span style="font-size:1.05rem;font-weight:800;color:var(--warn);">🌟 ${s.count}</span>
-      </div>
-      <div style="background:var(--line-soft);border-radius:6px;height:8px;margin-top:7px;overflow:hidden;">
-        <div style="background:linear-gradient(90deg,var(--warn-line),var(--warn-line));height:100%;width:${pct}%;"></div>
-      </div>
-      <div style="font-size:.75rem;color:var(--ink-3);margin-top:3px;text-align:right;">${s.count}/${goal} до призу</div>
+    const header=`<span class="sg-student-name">${medal}${escHtml(s.name)}</span><span class="sg-count">🌟 ${s.count}</span>`;
+    h+=`<li class="sg-student">${canSeeHistory?`<details class="sg-student-details"><summary aria-label="Історія наліпок: ${escHtml(s.name)}">${header}</summary>${renderStickerStatsHistory(s.records,issuerNames,auth.currentUser?.uid||'',selfName)}</details>`:`<div class="sg-student-heading">${header}</div>`}
+      <div class="sg-progress"><div style="width:${pct}%;"></div></div>
+      <div class="sg-target">${s.count}/${goal} до призу</div>
     </li>`;
   });
   h+='</ul>';
   list.innerHTML=h;
   }catch(err){
-    // Читання не вдалося. Без цього блоку на екрані назавжди лишався б
-    // напис-заглушка, і людина не знала б, зламалося чи просто повільно.
-    console.error("teacher.js → sticker-stats-list", err);
-    const _b=document.getElementById("sticker-stats-list");
-    if(_b)_b.innerHTML='<p class="empty-msg" style="color:var(--danger);">Не вдалося завантажити: '+((err&&err.message)||'невідома помилка')+'</p>';
+    console.error('teacher.js → sticker-stats-list', err);
+    const box=document.getElementById('sticker-stats-list');
+    if(box)box.innerHTML='<p class="empty-msg" style="color:var(--danger);">Не вдалося завантажити: '+escHtml((err&&err.message)||'невідома помилка')+'</p>';
   }
 };
 

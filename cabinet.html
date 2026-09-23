@@ -1868,6 +1868,24 @@
     .sg-row input{flex:1;margin:0;font-size:.9rem;}
     .sg-row button{width:auto;margin:0;padding:9px 15px;background:var(--warn);color:#fff;font-size:.82rem;}
     .sg-note{font-size:.75rem;color:var(--ink-2);margin-top:6px;line-height:1.4;}
+    .sg-stats-list{list-style:none;padding:0;margin:0;}
+    .sg-student{background:var(--surface-2);border:1px solid var(--line-soft);border-radius:8px;padding:11px;margin-bottom:9px;}
+    .sg-student-details summary,.sg-student-heading{display:flex;justify-content:space-between;align-items:center;gap:10px;}
+    .sg-student-details summary{cursor:pointer;list-style:none;border-radius:6px;}
+    .sg-student-details summary::-webkit-details-marker{display:none;}
+    .sg-student-details summary::before{content:'▸';color:var(--ink-3);font-size:.8rem;}
+    .sg-student-details[open] summary::before{content:'▾';}
+    .sg-student-details summary:focus-visible{outline:2px solid var(--brand);outline-offset:4px;}
+    .sg-student-name{font-weight:700;color:var(--brand-ink);flex:1;}
+    .sg-count{font-size:1.05rem;font-weight:800;color:var(--warn);white-space:nowrap;}
+    .sg-progress{background:var(--line-soft);border-radius:6px;height:8px;margin-top:8px;overflow:hidden;}
+    .sg-progress>div{background:var(--warn-line);height:100%;}
+    .sg-target{font-size:.75rem;color:var(--ink-3);margin-top:3px;text-align:right;}
+    .sg-history{list-style:none;margin:11px 0 2px;padding:0;border-top:1px solid var(--line-soft);max-height:260px;overflow-y:auto;}
+    .sg-history li{padding:9px 0;border-bottom:1px solid var(--line-soft);font-size:.79rem;line-height:1.45;overflow-wrap:anywhere;}
+    .sg-history-date{font-weight:700;color:var(--brand-ink);}
+    .sg-history-meta{color:var(--ink-2);font-size:.75rem;margin-top:3px;}
+    .sg-empty{font-size:.78rem;color:var(--ink-3);margin:10px 0 2px;}
     /* Уроки, що чергуються */
     .alt-badge{display:inline-block;background:var(--brand-soft);color:var(--brand-deep);border-radius:6px;padding:1px 6px;font-size:.75rem;font-weight:700;vertical-align:middle;margin-left:5px;}
     .alt-badge.pending{background:var(--warn-soft);color:var(--warn);}
