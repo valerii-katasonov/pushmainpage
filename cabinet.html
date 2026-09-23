@@ -3050,9 +3050,26 @@
       <h3>📊 Статистика за період</h3>
       <div class="data-card" style="border-left-color:var(--brand);margin-top:0;">
         <p style="font-size:.76rem;color:var(--ink-3);margin:0 0 7px 0;">Людино-дні: скільки днів кожна дитина обідала і скільки брала підвечірок. Дні відсутності не рахуються.</p>
-        <div style="display:flex;gap:8px;">
-          <div style="flex:1;min-width:0;"><label for="k-stat-from" style="font-size:.74rem;">Від</label><input type="date" id="k-stat-from"></div>
-          <div style="flex:1;min-width:0;"><label for="k-stat-to" style="font-size:.74rem;">До</label><input type="date" id="k-stat-to"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+          <div style="flex:1;min-width:140px;">
+            <label for="k-stat-class" style="font-size:.74rem;">Клас</label>
+            <select id="k-stat-class">
+              <option value="">Усі класи</option>
+              <option value="class_1">1 клас</option>
+              <option value="class_2">2 клас</option>
+              <option value="class_3">3 клас</option>
+              <option value="class_4">4 клас</option>
+              <option value="class_5">5 клас</option>
+              <option value="class_6">6 клас</option>
+              <option value="class_7">7 клас</option>
+              <option value="class_8">8 клас</option>
+              <option value="class_9">9 клас</option>
+              <option value="class_10">10 клас</option>
+              <option value="class_11">11 клас</option>
+            </select>
+          </div>
+          <div style="flex:1;min-width:120px;"><label for="k-stat-from" style="font-size:.74rem;">Від</label><input type="date" id="k-stat-from"></div>
+          <div style="flex:1;min-width:120px;"><label for="k-stat-to" style="font-size:.74rem;">До</label><input type="date" id="k-stat-to"></div>
         </div>
         <button onclick="loadMealStats()" style="background:var(--brand);color:#fff;">Порахувати</button>
         <div id="k-stats"></div>
