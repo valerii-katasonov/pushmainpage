@@ -1907,13 +1907,13 @@ export function stickerStatsEntries(data, issuerNames={}, selfUid='', selfName='
       key,date,ts,subject:String(rec.subject||key.split('_').slice(1).join('_')||'Не зазначено'),
       reason:String(rec.reason||''),batch:String(rec.batch||''),
       issuer:String(rec.byName||issuerNames[by]||(by&&by===selfUid?selfName:'')||'Не зазначено в старому записі'),
-      count:1
+      count:1,keys:[key]
     };
   });
   entries.sort((a,b)=>(b.ts-a.ts)||b.date.localeCompare(a.date)||b.key.localeCompare(a.key));
   const grouped=[],batches=new Map();
   for(const entry of entries){
-    if(entry.batch&&batches.has(entry.batch)){batches.get(entry.batch).count++;continue;}
+    if(entry.batch&&batches.has(entry.batch)){const group=batches.get(entry.batch);group.count++;group.keys.push(entry.key);continue;}
     grouped.push(entry);
     if(entry.batch)batches.set(entry.batch,entry);
   }
@@ -1928,16 +1928,19 @@ function stickerStatsTime(ts){
   if(Number.isNaN(d.getTime()))return '';
   return new Intl.DateTimeFormat('uk-UA',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}).format(d);
 }
-function renderStickerStatsHistory(data,issuerNames,selfUid,selfName){
+let stickerStatsCache=null;
+function renderStickerStatsHistory(data,issuerNames,selfUid,selfName,sid,canManage){
   const entries=stickerStatsEntries(data,issuerNames,selfUid,selfName);
   if(!entries.length)return '<p class="sg-empty">Наліпок поки немає.</p>';
   return `<ol class="sg-history">${entries.map(entry=>`<li>
     <div class="sg-history-date">За дату: ${escHtml(stickerStatsDate(entry.date))}${entry.count>1?` · ×${entry.count}`:''}</div>
     <div><b>${escHtml(entry.subject)}</b>${entry.reason?` · ${escHtml(entry.reason)}`:''}</div>
     <div class="sg-history-meta">Видав: ${escHtml(entry.issuer)} · Видано: ${escHtml(stickerStatsTime(entry.ts)||'час не збережено')}</div>
+    ${canManage?`<div class="sg-remove-actions"><button type="button" data-sticker-action="start" data-sid="${escHtml(sid)}" data-key="${escHtml(entry.key)}" data-scope="one">Прибрати 1</button>${entry.count>1?`<button type="button" data-sticker-action="start" data-sid="${escHtml(sid)}" data-key="${escHtml(entry.key)}" data-scope="all">Прибрати всю видачу (×${entry.count})</button>`:''}</div>
+    <div class="sg-remove-panel" hidden><label>Причина<select><option value="mistake">Помилково видано</option><option value="behavior">За поведінку</option></select></label><label>Пояснення<input type="text" maxlength="160" placeholder="Обов'язково для поведінки"></label><div class="sg-remove-actions"><button type="button" data-sticker-action="confirm">Підтвердити</button><button type="button" data-sticker-action="cancel">Скасувати</button></div></div>`:''}
   </li>`).join('')}</ol>`;
 }
-window.openStickerStatsModal=async function(){
+window.openStickerStatsModal=async function(reopenSid=''){
   try{
   document.getElementById('sticker-stats-modal').style.display='flex';
   const list=document.getElementById('sticker-stats-list');
@@ -1953,7 +1956,8 @@ window.openStickerStatsModal=async function(){
   const goal=stickerGoal(cls);
   renderStickerGoalBox(cls, goal);
   const activeRole=currentUserData?.role;
-  const canSeeHistory=['teacher','class_teacher','master_class_teacher','art_school_teacher','music_teacher','director','administrator'].includes(activeRole);
+  const canManageHistory=['teacher','class_teacher','master_class_teacher','art_school_teacher','music_teacher','director','administrator'].includes(activeRole);
+  const canSeeHistory=canManageHistory||activeRole==='parent';
   const issuerNames={};
   if(activeRole==='director'||activeRole==='administrator'){
     try{
@@ -1968,26 +1972,109 @@ window.openStickerStatsModal=async function(){
     const fromSid = (stickersData[sid] && typeof stickersData[sid] === 'object') ? stickersData[sid] : {};
     const fromNm = (stickersData[nm] && typeof stickersData[nm] === 'object') ? stickersData[nm] : {};
     const combined = { ...fromNm, ...fromSid };
-    return { name: nm, count: Object.keys(combined).length, records:combined };
+    const origins={};
+    Object.keys(fromNm).forEach(key=>origins[key]=nm);
+    Object.keys(fromSid).forEach(key=>origins[key]=sid);
+    return { sid,name: nm, count: Object.keys(combined).length, records:combined,origins };
   });
   stats.sort((a,b)=>b.count-a.count||a.name.localeCompare(b.name,'uk'));
+  stickerStatsCache={cls,students:Object.fromEntries(stats.map(s=>[s.sid,s]))};
   let h='<ul class="sg-stats-list">';
   stats.forEach((s,i)=>{
     const pct=Math.min((s.count/goal)*100,100);
     const medal=i===0?'🥇 ':i===1?'🥈 ':i===2?'🥉 ':'';
     const header=`<span class="sg-student-name">${medal}${escHtml(s.name)}</span><span class="sg-count">🌟 ${s.count}</span>`;
-    h+=`<li class="sg-student">${canSeeHistory?`<details class="sg-student-details"><summary aria-label="Історія наліпок: ${escHtml(s.name)}">${header}</summary>${renderStickerStatsHistory(s.records,issuerNames,auth.currentUser?.uid||'',selfName)}</details>`:`<div class="sg-student-heading">${header}</div>`}
+    h+=`<li class="sg-student">${canSeeHistory?`<details class="sg-student-details" data-student-sid="${escHtml(s.sid)}"><summary aria-label="Історія наліпок: ${escHtml(s.name)}">${header}</summary>${renderStickerStatsHistory(s.records,issuerNames,auth.currentUser?.uid||'',selfName,s.sid,canManageHistory)}</details>`:`<div class="sg-student-heading">${header}</div>`}
       <div class="sg-progress"><div style="width:${pct}%;"></div></div>
       <div class="sg-target">${s.count}/${goal} до призу</div>
     </li>`;
   });
   h+='</ul>';
   list.innerHTML=h;
+  list.onclick=stickerStatsListClick;
+  list.onchange=event=>{if(event.target.matches('.sg-remove-panel select')){const panel=event.target.closest('.sg-remove-panel');panel.querySelector('input').required=event.target.value==='behavior';}};
+  if(reopenSid)for(const details of list.querySelectorAll('.sg-student-details'))if(details.dataset.studentSid===reopenSid){details.open=true;break;}
   }catch(err){
     console.error('teacher.js → sticker-stats-list', err);
     const box=document.getElementById('sticker-stats-list');
     if(box)box.innerHTML='<p class="empty-msg" style="color:var(--danger);">Не вдалося завантажити: '+escHtml((err&&err.message)||'невідома помилка')+'</p>';
   }
+};
+
+function stickerStatsListClick(event){
+  const button=event.target.closest('button[data-sticker-action]');
+  const list=document.getElementById('sticker-stats-list');
+  if(!button||!list.contains(button))return;
+  event.preventDefault();
+  const panel=button.closest('.sg-history li')?.querySelector('.sg-remove-panel');
+  if(!panel)return;
+  const action=button.dataset.stickerAction;
+  if(action==='cancel'){panel.hidden=true;return;}
+  if(action==='start'){
+    panel.hidden=false;
+    panel.dataset.sid=button.dataset.sid;
+    panel.dataset.key=button.dataset.key;
+    panel.dataset.scope=button.dataset.scope;
+    panel.querySelector('select').value='mistake';
+    const input=panel.querySelector('input');input.value='';input.required=false;
+    panel.querySelector('select').focus();
+    return;
+  }
+  if(action!=='confirm')return;
+  const reason=panel.querySelector('select').value;
+  const note=panel.querySelector('input').value.trim();
+  if(reason==='behavior'&&!note){showToast('⚠️ Напишіть, за яку поведінку забираєте наліпку.');panel.querySelector('input').focus();return;}
+  window.removeStickerFromStats(panel.dataset.sid,panel.dataset.key,panel.dataset.scope,reason,note,button);
+}
+let stickerRemoveSaving=false;
+window.removeStickerFromStats=async function(sid,key,scope,reason,note,button){
+  const role=currentUserData?.role;
+  if(!['teacher','class_teacher','master_class_teacher','art_school_teacher','music_teacher','director','administrator'].includes(role))return;
+  if(stickerRemoveSaving)return;
+  const cache=stickerStatsCache,student=cache?.students?.[sid];
+  if(!student||!['one','all'].includes(scope)||!['mistake','behavior'].includes(reason))return;
+  if(reason==='behavior'&&!String(note||'').trim())return showToast('⚠️ Напишіть, за яку поведінку забираєте наліпку.');
+  const entry=stickerStatsEntries(student.records).find(item=>item.keys.includes(key));
+  if(!entry)return;
+  const keys=scope==='all'?entry.keys:[entry.keys[0]];
+  const sourceKeys=[...new Set(keys.map(k=>student.origins[k]))];
+  if(sourceKeys.some(k=>!k))return;
+  stickerRemoveSaving=true;
+  if(button)button.disabled=true;
+  try{
+    // Читаємо поточні записи: поки вікно було відкритим, інший учитель
+    // міг уже прибрати наліпку. Такий запис повторно не журналюємо.
+    const current=Object.fromEntries(await Promise.all(sourceKeys.map(async sourceKey=>{
+      const snap=await get(child(ref(db),`stickers/${cache.cls}/${sourceKey}`));
+      return [sourceKey,snap.exists()?snap.val():{}];
+    })));
+    const removed=[];
+    for(const recordKey of keys){
+      const sourceKey=student.origins[recordKey];
+      const value=current[sourceKey]?.[recordKey];
+      if(value===undefined)continue;
+      if(JSON.stringify(value)!==JSON.stringify(student.records[recordKey]))throw Error('Список наліпок змінився. Відкрийте його ще раз.');
+      removed.push({sourceKey,key:recordKey,value});
+    }
+    if(!removed.length){showToast('ℹ️ Наліпку вже прибрано.');await window.openStickerStatsModal(sid);return;}
+    const now=Date.now();
+    const actor=[currentUserData?.firstName,currentUserData?.lastName].filter(Boolean).join(' ').trim()||currentUserData?.email||'Учитель';
+    const auditKey=push(ref(db,`audit_log/${localDateString.slice(0,7)}`)).key;
+    const patch={};
+    removed.forEach(item=>{patch[`stickers/${cache.cls}/${item.sourceKey}/${item.key}`]=null;});
+    patch[`audit_log/${localDateString.slice(0,7)}/${auditKey}`]={
+      ts:now,uid:auth.currentUser?.uid||'',actor,role,action:'sticker_remove',
+      cls:cache.cls,studentId:sid,studentName:student.name,target:student.name,
+      subject:entry.subject,date:entry.date,reason,
+      note:String(note||'').trim().slice(0,160),count:removed.length,
+      value:`${reason==='mistake'?'Помилкова видача':'За поведінку'} · ${removed.length} ${stickerWord(removed.length)}${note?` · ${String(note).trim().slice(0,160)}`:''}`,
+      removed:removed.map(item=>({key:item.key,studentKey:item.sourceKey,record:item.value}))
+    };
+    await update(ref(db),patch);
+    showToast(reason==='mistake'?`✅ Помилкову видачу скасовано: ${removed.length}`:`✅ Забрано ${removed.length} ${stickerWord(removed.length)}`);
+    await window.openStickerStatsModal(sid);
+  }catch(e){showToast('⚠️ Не вдалося прибрати наліпку: '+e.message);}
+  finally{stickerRemoveSaving=false;if(button)button.disabled=false;}
 };
 
 // ── МЕТА НАЛІПОК ──────────────────────────────────────────────
