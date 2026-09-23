@@ -4373,6 +4373,11 @@
         <div class="progress-bar-container"><div id="p-ribbon-progress" class="progress-bar"></div></div>
         <p id="p-ribbon-count" style="font-size:1.1rem;font-weight:700;color:var(--warn);margin:13px 0 4px 0;">Завантаження...</p>
         <p id="p-ribbon-msg" style="color:var(--ok);font-weight:800;margin:0;font-size:.95rem;"></p>
+        <div style="margin-top:10px;">
+          <button type="button" onclick="openStickerStatsModal()" style="background:linear-gradient(135deg,var(--warn),var(--warn));color:#fff;border:none;border-radius:8px;padding:8px 16px;font-weight:700;font-size:0.85rem;cursor:pointer;display:inline-flex;align-items:center;gap:6px;box-shadow:0 2px 6px rgba(243,156,18,0.25);">
+            🌟 Статистика наліпок
+          </button>
+        </div>
         <div id="p-sticker-history" style="margin-top:12px;text-align:left;"></div>
       </div>
     </section>
@@ -4574,6 +4579,11 @@
         <h4 style="margin-top:0;color:var(--warn);font-size:1rem;">🌟 Мої наліпки</h4>
         <div class="progress-bar-container"><div id="s-ribbon-progress" class="progress-bar"></div></div>
         <p id="s-ribbon-count" style="font-size:1.1rem;font-weight:700;color:var(--warn);margin:13px 0 4px 0;">Завантаження...</p>
+        <div style="margin-top:10px;">
+          <button type="button" onclick="openStickerStatsModal()" style="background:linear-gradient(135deg,var(--warn),var(--warn));color:#fff;border:none;border-radius:8px;padding:8px 16px;font-weight:700;font-size:0.85rem;cursor:pointer;display:inline-flex;align-items:center;gap:6px;box-shadow:0 2px 6px rgba(243,156,18,0.25);">
+            🌟 Статистика наліпок
+          </button>
+        </div>
         <div id="s-sticker-history" style="margin-top:12px;text-align:left;"></div>
       </div>
       <!-- Підручники -->
@@ -5263,13 +5273,3 @@ document.addEventListener('DOMContentLoaded', function(){
     <p class="sp-note">Фото зменшується до 128×128 і зберігається в базі школи.
       Жодні сторонні сервіси не використовуються.</p>
   </div>
-</div>
-
-<div id="consent-gate" class="cg-back" style="display:none;">
-    <div class="cg-win">
-      <div class="cg-head">Дані вашої дитини</div>
-      <div id="cg-body" class="cg-scroll"></div>
-    </div>
-  </div>
-</body>
-</html>
