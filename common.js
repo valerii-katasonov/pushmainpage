@@ -728,6 +728,8 @@ export function getUserChildren(u){
 // other module imports it read-only (they may still mutate its
 // properties, e.g. saveProfile() below, which is fine with live bindings).
 export let currentUserData=null;
+export function setCurrentUserData(u){ currentUserData = u; window.currentUserData = u; }
+window.setCurrentUserData = setCurrentUserData;
 
 // ══════════════════════════════════════════════════════════════════
 //  ВІДКЛАДЕНИЙ ВИКЛИК ФУНКЦІЇ З ІНШОГО МОДУЛЯ
