@@ -703,6 +703,7 @@
     .dtab-bar::-webkit-scrollbar{display:none;}
     .dtab{flex:0 0 auto;width:auto;min-height:var(--touch-target);margin:0;padding:10px 15px;font-size:.875rem;font-weight:600;white-space:nowrap;background:#fff;color:var(--ink-2);border:1px solid var(--brand-line);border-radius:20px;cursor:pointer;transition:background .12s,border-color .12s,color .12s;}
     .dtab:hover{border-color:var(--ink-3);color:var(--ink);}
+    .dtab-icon{display:inline-block;margin-right:6px;line-height:1;vertical-align:-.08em;}
     .dtab.on{background:var(--brand-ink);border-color:var(--brand-ink);color:#fff;}
     .dtab-badge{display:none;margin-left:6px;background:var(--brand-deep);color:#fff;font-size:.75rem;padding:1px 6px;border-radius:10px;font-weight:700;}
     .dtab-badge.show{display:inline-block;}
@@ -715,6 +716,9 @@
       .dtab{flex:1 1 0;min-width:0;text-align:center;padding:10px 8px;font-size:.84rem;border-radius:10px;overflow:hidden;text-overflow:ellipsis;background:transparent;border-color:transparent;}
       .dtab:hover{background:rgba(255,255,255,.7);border-color:transparent;}
       .dtab.on{background:#fff;border-color:transparent;color:var(--brand-ink);box-shadow:0 1px 3px rgba(0,0,0,.08);}
+      /* Дев’ять директорських вкладок мають зберігати повні назви. */
+      #dtab-bar{overflow-x:auto;justify-content:flex-start;scrollbar-width:thin;}
+      #dtab-bar .dtab{flex:0 0 auto;}
     }
     .chat-dot{display:none;margin-left:7px;min-width:19px;height:19px;padding:0 6px;border-radius:10px;background:var(--brand-deep);color:#fff;font-size:.75rem;font-weight:800;line-height:19px;text-align:center;vertical-align:middle;box-shadow:0 0 0 2px rgba(255,255,255,.6);}
     .chat-dot.show{display:inline-block;animation:dotPop .25s ease;}
@@ -1885,6 +1889,15 @@
     .sg-history li{padding:9px 0;border-bottom:1px solid var(--line-soft);font-size:.79rem;line-height:1.45;overflow-wrap:anywhere;}
     .sg-history-date{font-weight:700;color:var(--brand-ink);}
     .sg-history-meta{color:var(--ink-2);font-size:.75rem;margin-top:3px;}
+    .sg-remove-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
+    .sg-remove-actions button{width:auto;margin:0;padding:6px 9px;border:1px solid var(--line);background:var(--surface);color:var(--ink-2);border-radius:7px;font-size:.75rem;cursor:pointer;}
+    .sg-remove-actions button:hover,.sg-remove-actions button:focus-visible{border-color:var(--danger);color:var(--danger);}
+    .sg-remove-actions button:disabled{opacity:.55;cursor:wait;}
+    .sg-remove-panel{display:grid;gap:8px;margin-top:9px;padding:10px;border:1px solid var(--warn-line);border-radius:8px;background:var(--warn-soft);}
+    .sg-remove-panel[hidden]{display:none;}
+    .sg-remove-panel label{display:grid;gap:4px;font-size:.75rem;font-weight:700;color:var(--ink-2);}
+    .sg-remove-panel select,.sg-remove-panel input{width:100%;margin:0;font-size:.8rem;}
+    .sg-remove-panel .sg-remove-actions button:first-child{background:var(--danger);border-color:var(--danger);color:#fff;}
     .sg-empty{font-size:.78rem;color:var(--ink-3);margin:10px 0 2px;}
     /* Уроки, що чергуються */
     .alt-badge{display:inline-block;background:var(--brand-soft);color:var(--brand-deep);border-radius:6px;padding:1px 6px;font-size:.75rem;font-weight:700;vertical-align:middle;margin-left:5px;}
@@ -3108,15 +3121,15 @@
     <h2 style="color:var(--ink);">👔 Кабінет Директора</h2>
 
     <div class="dtab-bar" id="dtab-bar">
-      <button class="dtab on" data-t="ogl"    onclick="switchDirTab('ogl',this)">Огляд</button>
-      <button class="dtab"    data-t="news"   onclick="switchDirTab('news',this)">Новини<span class="dtab-badge" id="dtab-news-badge"></span></button>
-      <button class="dtab"    data-t="uchni"  onclick="switchDirTab('uchni',this)">Учні та батьки</button>
-      <button class="dtab"    data-t="staff"  onclick="switchDirTab('staff',this)">Персонал</button>
-      <button class="dtab"    data-t="rozklad" onclick="switchDirTab('rozklad',this)">Розклад</button>
-      <button class="dtab" data-t="workload" onclick="switchDirTab('workload',this)">Навантаження</button>
-      <button class="dtab"    data-t="stat"   onclick="switchDirTab('stat',this)">Аналітика</button>
-      <button class="dtab"    data-t="meals"  onclick="switchDirTab('meals',this)">🍽 Їжа</button>
-      <button class="dtab"    data-t="nalash" onclick="switchDirTab('nalash',this)">Налаштування</button>
+      <button class="dtab on" data-t="ogl"    onclick="switchDirTab('ogl',this)"><span class="dtab-icon" aria-hidden="true">🏠</span>Огляд</button>
+      <button class="dtab"    data-t="news"   onclick="switchDirTab('news',this)"><span class="dtab-icon" aria-hidden="true">📰</span>Новини<span class="dtab-badge" id="dtab-news-badge"></span></button>
+      <button class="dtab"    data-t="uchni"  onclick="switchDirTab('uchni',this)"><span class="dtab-icon" aria-hidden="true">👨‍👩‍👧‍👦</span>Учні та батьки</button>
+      <button class="dtab"    data-t="staff"  onclick="switchDirTab('staff',this)"><span class="dtab-icon" aria-hidden="true">👩‍🏫</span>Персонал</button>
+      <button class="dtab"    data-t="rozklad" onclick="switchDirTab('rozklad',this)"><span class="dtab-icon" aria-hidden="true">🗓️</span>Розклад</button>
+      <button class="dtab" data-t="workload" onclick="switchDirTab('workload',this)"><span class="dtab-icon" aria-hidden="true">⚖️</span>Навантаження</button>
+      <button class="dtab"    data-t="stat"   onclick="switchDirTab('stat',this)"><span class="dtab-icon" aria-hidden="true">📈</span>Аналітика</button>
+      <button class="dtab"    data-t="meals"  onclick="switchDirTab('meals',this)"><span class="dtab-icon" aria-hidden="true">🍽️</span>Їжа</button>
+      <button class="dtab"    data-t="nalash" onclick="switchDirTab('nalash',this)"><span class="dtab-icon" aria-hidden="true">⚙️</span>Налаштування</button>
     </div>
 
     <section class="screen-section" data-dtab="workload">
@@ -3768,12 +3781,12 @@
   <div id="teacher-screen" class="panel">
     <h2 id="teacher-dashboard-title">👨‍🏫 Журнал</h2>
     <div class="dtab-bar" id="teacher-screen-tabs">
-      <button class="dtab on" data-t="day" onclick="switchTab('teacher-screen','day',this)">Сьогодні</button>
-      <button class="dtab" data-t="lesson" onclick="switchTab('teacher-screen','lesson',this)">Урок</button>
-      <button class="dtab" data-t="hwday" onclick="switchTab('teacher-screen','hwday',this);renderTeacherHwDay()">📚 ДЗ на день</button>
-      <button class="dtab" data-t="class" onclick="switchTab('teacher-screen','class',this)">Клас</button>
-      <button class="dtab" data-t="meals" onclick="switchTab('teacher-screen','meals',this);renderStaffMeals()">🍽 Їжа</button>
-      <button class="dtab" data-t="news" onclick="switchTab('teacher-screen','news',this)">Новини<span class="chat-dot"></span></button>
+      <button class="dtab on" data-t="day" onclick="switchTab('teacher-screen','day',this)"><span class="dtab-icon" aria-hidden="true">☀️</span>Сьогодні</button>
+      <button class="dtab" data-t="lesson" onclick="switchTab('teacher-screen','lesson',this)"><span class="dtab-icon" aria-hidden="true">📝</span>Урок</button>
+      <button class="dtab" data-t="hwday" onclick="switchTab('teacher-screen','hwday',this);renderTeacherHwDay()"><span class="dtab-icon" aria-hidden="true">📚</span>ДЗ на день</button>
+      <button class="dtab" data-t="class" onclick="switchTab('teacher-screen','class',this)"><span class="dtab-icon" aria-hidden="true">👥</span>Клас</button>
+      <button class="dtab" data-t="meals" onclick="switchTab('teacher-screen','meals',this);renderStaffMeals()"><span class="dtab-icon" aria-hidden="true">🍽️</span>Їжа</button>
+      <button class="dtab" data-t="news" onclick="switchTab('teacher-screen','news',this)"><span class="dtab-icon" aria-hidden="true">📰</span>Новини<span class="chat-dot"></span></button>
     </div>
     <div id="t-push-invite" style="display:none;"></div>
 
@@ -4246,13 +4259,13 @@
        ══════════════════════════════ -->
   <div id="parent-screen" class="panel">
     <div class="dtab-bar" id="parent-screen-tabs">
-      <button class="dtab on" data-t="day" onclick="switchTab('parent-screen','day',this)">Сьогодні</button>
-      <button class="dtab" data-t="hw" onclick="switchTab('parent-screen','hw',this);openHwTab()">📚 ДЗ</button>
-      <button class="dtab" data-t="meals" onclick="switchTab('parent-screen','meals',this)">🍽️ Їжа</button>
-      <button class="dtab" data-t="games" onclick="switchTab('parent-screen','games',this);openGamesTab()">🎮 Ігри</button>
-      <button class="dtab" data-t="grades" onclick="switchTab('parent-screen','grades',this)">Оцінки</button>
-      <button class="dtab" data-t="school" onclick="switchTab('parent-screen','school',this)">Школа</button>
-      <button class="dtab" data-t="profile" onclick="switchTab('parent-screen','profile',this)">Профіль</button>
+      <button class="dtab on" data-t="day" onclick="switchTab('parent-screen','day',this)"><span class="dtab-icon" aria-hidden="true">☀️</span>Сьогодні</button>
+      <button class="dtab" data-t="hw" onclick="switchTab('parent-screen','hw',this);openHwTab()"><span class="dtab-icon" aria-hidden="true">📚</span>ДЗ</button>
+      <button class="dtab" data-t="meals" onclick="switchTab('parent-screen','meals',this)"><span class="dtab-icon" aria-hidden="true">🍽️</span>Їжа</button>
+      <button class="dtab" data-t="games" onclick="switchTab('parent-screen','games',this);openGamesTab()"><span class="dtab-icon" aria-hidden="true">🎮</span>Ігри</button>
+      <button class="dtab" data-t="grades" onclick="switchTab('parent-screen','grades',this)"><span class="dtab-icon" aria-hidden="true">📊</span>Оцінки</button>
+      <button class="dtab" data-t="school" onclick="switchTab('parent-screen','school',this)"><span class="dtab-icon" aria-hidden="true">🏫</span>Школа</button>
+      <button class="dtab" data-t="profile" onclick="switchTab('parent-screen','profile',this)"><span class="dtab-icon" aria-hidden="true">👤</span>Профіль</button>
     </div>
     <!-- Повідомлення поза вкладками: до листування має бути доступ звідусіль,
          але як один рядок, а не як розділ, що дублюється на кожній вкладці. -->
@@ -4512,13 +4525,13 @@
        ══════════════════════════════ -->
   <div id="student-screen" class="panel">
     <div class="dtab-bar" id="student-screen-tabs">
-      <button class="dtab on" data-t="day" onclick="switchTab('student-screen','day',this)">Сьогодні</button>
-      <button class="dtab" data-t="hw" onclick="switchTab('student-screen','hw',this);openHwTab()">📚 ДЗ</button>
-      <button class="dtab" data-t="games" onclick="switchTab('student-screen','games',this);openGamesTab()">🎮 Ігри</button>
-      <button class="dtab" data-t="news" onclick="switchTab('student-screen','news',this)">Новини<span class="chat-dot"></span></button>
-      <button class="dtab" data-t="grades" onclick="switchTab('student-screen','grades',this)">Оцінки</button>
-      <button class="dtab" data-t="study" onclick="switchTab('student-screen','study',this)">Навчання</button>
-      <button class="dtab" data-t="meals" onclick="switchTab('student-screen','meals',this);openStudentMealsTab()">🍽️ Їжа</button>
+      <button class="dtab on" data-t="day" onclick="switchTab('student-screen','day',this)"><span class="dtab-icon" aria-hidden="true">☀️</span>Сьогодні</button>
+      <button class="dtab" data-t="hw" onclick="switchTab('student-screen','hw',this);openHwTab()"><span class="dtab-icon" aria-hidden="true">📚</span>ДЗ</button>
+      <button class="dtab" data-t="games" onclick="switchTab('student-screen','games',this);openGamesTab()"><span class="dtab-icon" aria-hidden="true">🎮</span>Ігри</button>
+      <button class="dtab" data-t="news" onclick="switchTab('student-screen','news',this)"><span class="dtab-icon" aria-hidden="true">📰</span>Новини<span class="chat-dot"></span></button>
+      <button class="dtab" data-t="grades" onclick="switchTab('student-screen','grades',this)"><span class="dtab-icon" aria-hidden="true">📊</span>Оцінки</button>
+      <button class="dtab" data-t="study" onclick="switchTab('student-screen','study',this)"><span class="dtab-icon" aria-hidden="true">🎓</span>Навчання</button>
+      <button class="dtab" data-t="meals" onclick="switchTab('student-screen','meals',this);openStudentMealsTab()"><span class="dtab-icon" aria-hidden="true">🍽️</span>Їжа</button>
     </div>
     <div id="s-push-invite" style="display:none;"></div>
 
