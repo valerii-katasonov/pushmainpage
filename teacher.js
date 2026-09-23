@@ -1943,6 +1943,7 @@ window.renderStickerGoalBox = function(cls, goal){
   const note = document.getElementById('sticker-goal-note');
   if(!box || !inp) return;
   const may = canSetStickerGoal(cls);
+  box.style.display = may ? 'block' : 'none';
   inp.value = goal;
   inp.disabled = !may;
   const btn = box.querySelector('button');
