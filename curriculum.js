@@ -416,7 +416,7 @@ function renderCurriculumPreview(data){
 
     html+=`<div class="topic-preview">
       <div class="topic-preview-subj">📚 ${escHtml(s.meta.subject)}
-        <span style="font-size:.72rem;color:var(--ink-3);font-weight:400;">
+        <span style="font-size:.75rem;color:var(--ink-3);font-weight:400;">
           ${s.topics.length} тем · ${hours} год</span></div>`;
 
     if(simple){
@@ -467,7 +467,7 @@ function renderCurriculumPreview(data){
       html+=`<div class="topic-preview-row">
         <span class="num">${escHtml(label)}</span>
         <span><b>${escHtml(t.title)}</b><br>
-          <span style="color:var(--ink-3);font-size:.7rem;">${t.plannedHours} год${
+          <span style="color:var(--ink-3);font-size:.75rem;">${t.plannedHours} год${
             t.plannedDate?` · ${escHtml(t.plannedDate)}`:''}</span></span></div>`;
     });
     html+=`</div>`;
@@ -880,13 +880,24 @@ window.toggleTopicDropdown=function(slot){
   const list=document.getElementById(`t-topic-list-${slot}`);
   if(!list)return;
   const isOpen=list.style.display==='block';
-  document.querySelectorAll('.topic-dropdown-list').forEach(l=>l.style.display='none');
+  document.querySelectorAll('.topic-dropdown-list').forEach(l=>{l.style.display='none';const trigger=l.id?document.getElementById(l.id.replace('list','trigger')):null;if(trigger?.setAttribute)trigger.setAttribute('aria-expanded','false');});
   list.style.display=isOpen?'none':'block';
+  const trigger=document.getElementById(`t-topic-trigger-${slot}`);if(trigger?.setAttribute)trigger.setAttribute('aria-expanded',String(!isOpen));
+  if(!isOpen)list.querySelector?.('[role="button"]')?.focus?.();
 };
 document.addEventListener('click',function(e){
   // «Замінити» розташована під списком: її клік не є кліком зовні.
   // Інакше спливання того самого кліку одразу закривало відкритий список.
-  if(!e.target.closest('.topic-dropdown, .topic-actions'))document.querySelectorAll('.topic-dropdown-list').forEach(l=>l.style.display='none');
+  if(!e.target.closest('.topic-dropdown, .topic-actions'))document.querySelectorAll('.topic-dropdown-list').forEach(l=>{l.style.display='none';const trigger=l.id?document.getElementById(l.id.replace('list','trigger')):null;if(trigger?.setAttribute)trigger.setAttribute('aria-expanded','false');});
+});
+document.addEventListener('keydown',function(e){
+  if(e.key!=='Escape')return;
+  const list=e.target.closest?.('.topic-dropdown-list');
+  if(!list||list.style.display==='none')return;
+  list.style.display='none';
+  const trigger=document.getElementById(list.id.replace('list','trigger'));
+  if(trigger){trigger.setAttribute('aria-expanded','false');trigger.focus();}
+  e.preventDefault();
 });
 // ПОВТОРНЕ ВИКОРИСТАННЯ ТЕМИ ДОЗВОЛЕНЕ.
 //
@@ -942,6 +953,7 @@ window.selectTopicOption=function(slot,value,reused){
   const display=document.getElementById(`t-topic-display-${slot}`);if(display)display.style.display='none';
   valueInput.value=value;
   document.getElementById(`t-topic-list-${slot}`).style.display='none';
+  if(trigger)trigger.setAttribute('aria-expanded','false');
   if(value==='__custom__'){
     if(trigger)trigger.innerText='✏️ Власна тема (ввести вручну)';
     if(customInput){customInput.style.display='block';customInput.focus();}
@@ -949,6 +961,7 @@ window.selectTopicOption=function(slot,value,reused){
     const t=availableTopicsCache[value];
     if(trigger&&t)trigger.innerText=`№ ${t.lessonNum}. ${t.title} (${t.hoursUsed||0}/${t.plannedHours} год.)`;
     if(customInput){customInput.style.display='none';customInput.value='';}
+    if(trigger)trigger.focus();
   }
 };
 window.showSecondTopicSlot=function(){
@@ -971,7 +984,7 @@ window.hideSecondTopicSlot=function(){
 function renderTopicOptionsList(slot,topicsObj){
   const list=document.getElementById(`t-topic-list-${slot}`);
   if(!list)return;
-  let html=`<div class="topic-opt topic-opt-custom" onclick="selectTopicOption(${slot},'__custom__')">✏️ Власна тема (ввести вручну)</div>`;
+  let html=`<div class="topic-opt topic-opt-custom" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" onclick="selectTopicOption(${slot},'__custom__')">✏️ Власна тема (ввести вручну)</div>`;
   const sorted=Object.entries(topicsObj).sort((a,b)=>(a[1].lessonNum||0)-(b[1].lessonNum||0));
   sorted.forEach(([id,t])=>{
     const hu=t.hoursUsed||0;
@@ -989,7 +1002,7 @@ function renderTopicOptionsList(slot,topicsObj){
       :(isCovered
         ?`✅ № ${escHtml(t.lessonNum)}. ${escHtml(t.title)} — пройдено (${hu}/${escHtml(planned)} год.)`
         :`№ ${escHtml(t.lessonNum)}. ${escHtml(t.title)} (${hu}/${escHtml(planned)} год.${tag}, залишилось ${planned-hu})`);
-    html+=`<div class="topic-opt ${colorClass}" onclick="selectTopicOption(${slot},'${id}',${isCovered})">${label}</div>`;
+    html+=`<div class="topic-opt ${colorClass}" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" onclick="selectTopicOption(${slot},'${id}',${isCovered})">${label}</div>`;
   });
   list.innerHTML=html;
 }
@@ -1201,7 +1214,7 @@ window.loadClassTeacherInfo=async function(){
   const snap=await get(ref(db,`class_teachers/${cls}`));
   if(snap.exists()){
     const d=snap.val();
-    info.innerHTML=`🎓 Поточний кл. керівник: <b>${d.teacherName}</b> <span style="color:var(--ink-3);">(${d.teacherEmail})</span><br><span style="font-size:.72rem;color:var(--ink-3);">з ${d.assignedAt}</span>`;
+    info.innerHTML=`🎓 Поточний кл. керівник: <b>${d.teacherName}</b> <span style="color:var(--ink-3);">(${d.teacherEmail})</span><br><span style="font-size:.75rem;color:var(--ink-3);">з ${d.assignedAt}</span>`;
     info.style.display='block';
   } else {
     info.innerHTML=`<i style="color:var(--ink-3);">Кл. керівник ще не призначений.</i>`;
@@ -1724,8 +1737,8 @@ export async function renderPlanEditor(){
           <input type="text" class="pe-title" value="${escHtml(t.title||'')}" placeholder="Назва теми">
           <input type="number" class="pe-hours" value="${escHtml(ph)}" min="1" title="Годин за планом">
           <span class="pe-used" title="Витрачено — рахується від уроків, вручну не змінюється">${hu} вик.</span>
-          <button type="button" class="pe-save" onclick="savePlanTopic('${escJs(id)}')">💾</button>
-          <button type="button" class="pe-del" onclick="deletePlanTopic('${escJs(id)}','${escJs(t.title||'')}',${hu})">✕</button>
+          <button type="button" class="pe-save" aria-label="Зберегти тему" onclick="savePlanTopic('${escJs(id)}')">💾</button>
+          <button type="button" class="pe-del" aria-label="Видалити тему" onclick="deletePlanTopic('${escJs(id)}','${escJs(t.title||'')}',${hu})">✕</button>
         </div>`;
       }).join('') + `</div>` : '<p class="empty-msg">У цього предмета ще немає плану. Завантажте файл вище.</p>'}
       <div class="pe-bar" id="pe-bar" hidden>

@@ -46,7 +46,7 @@
 import { renderWorkPhotos } from './grade-work.js';
 import { ref, get, child, query, orderByKey, startAt, endAt, onValue }
   from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, currentUserData, getActiveClass, escHtml, escJs, mondayOf,
+import { db, currentUserData, getActiveClass, getClassNum, LEVEL_MAX_CLASS, escHtml, escJs, mondayOf,
          localDateString, displayGrade, gradeClass6, levelNum, getGradeWeight,
          calculateStudentWeightedAvg, renderGradeFormulaInfo, dayNamesUA, dayKeys, journalBaseDate, journalSlot,
          stuId, hasStudentDir, getStudentDir, fetchSubjectTeachers, subjKey }
@@ -144,8 +144,9 @@ function subscribeWeek(cls,days){
 function subscribeScales(cls){
   if(subKeyScales===cls && offScales) return;
   offScales=drop(offScales); subKeyScales=cls; gvScales=null;
+  const junior=getClassNum(cls)<=LEVEL_MAX_CLASS;
   offScales=onValue(ref(db,`grade_scales/${cls}`),
-    snap=>{ gvScales=snap.exists()?(snap.val()||{}):{}; paintWeek(); paintSubject(); },
+    snap=>{ gvScales=junior?{}:(snap.exists()?(snap.val()||{}):{}); paintWeek(); paintSubject(); },
     ()=>{ gvScales={}; paintWeek(); paintSubject(); });
 }
 
@@ -233,16 +234,20 @@ export function subjectsWithGrades(mirror){
 // Середнє рахує calculateStudentWeightedAvg із common.js — та сама
 // функція, якою користується вчитель. Їй потрібні дві мапи «ключ →
 // значення», тож складаємо їх із дат.
-export function subjectStats(mirror, subj){
+export function subjectStats(mirror, subj, cls){
   const rows = flatGrades(mirror).filter(g => g.subj === subj)
                  .sort((a,b) => a.date.localeCompare(b.date));
   const vals = {}, types = {};
-  rows.forEach(r => { vals[r.date] = r.v; types[r.date] = r.t || 'П'; });
+  const junior=cls&&getClassNum(cls)<=LEVEL_MAX_CLASS;
+  rows.forEach(r => {
+    if(junior&&Number(r.v)>6)return;
+    vals[r.date] = r.v; types[r.date] = r.t || 'П';
+  });
   const avg = calculateStudentWeightedAvg(vals, types);
   // Скільки оцінок реально лягло в розрахунок: літера без числового
   // відповідника (щось нестандартне) у середнє не потрапляє, і мовчати
   // про це не можна — інакше «3 оцінки, середній 5.0» виглядає як помилка.
-  const counted = rows.filter(r => levelNum(r.v) !== null).length;
+  const counted = rows.filter(r => levelNum(r.v) !== null&&(!junior||!(Number(r.v)>6))).length;
   return { rows, avg, counted };
 }
 
@@ -288,6 +293,7 @@ function gradeChip(v, t, cls, numericScale){
 // цифра. Для літер (1–4 класи) перездача не пропонується: у рівнях її
 // сенс інший, і вчителі про неї не просили.
 function retakeBtn(cls, subj, date, v, numericScale){
+  if(getClassNum(cls)<=LEVEL_MAX_CLASS)return '';
   if(numericScale&&numericScale!==6)return '';
   const n = parseInt(v, 10);
   if(isNaN(n) || n > 3) return '';
@@ -361,10 +367,10 @@ function paintWeek(){
   const total = days.reduce((n,d) => n + (byDay[d] ? byDay[d].length : 0), 0);
 
   const nav = `<div class="hw-nav">
-      <button type="button" onclick="gvShiftWeek(-1)">←</button>
+      <button type="button" aria-label="Попередній тиждень" onclick="gvShiftWeek(-1)">←</button>
       <div class="hw-nav-mid"><b>${escHtml(human(days[0]))} – ${escHtml(human(days[4]))}</b>
         <span>${total ? `оцінок: ${total}` : 'оцінок немає'}</span></div>
-      <button type="button" onclick="gvShiftWeek(1)">→</button>
+      <button type="button" aria-label="Наступний тиждень" onclick="gvShiftWeek(1)">→</button>
     </div>
     ${gvWeek !== mondayOf(localDateString)
       ? `<button type="button" class="hw-today" onclick="gvShiftWeek(0)">Повернутися до поточного тижня</button>` : ''}`;
@@ -460,7 +466,7 @@ function paintSubject(){
     + subjects.map(s => `<option value="${escHtml(s)}"${s===gvSubject?' selected':''}>${escHtml(s)}</option>`).join('')
     + `</select>` + tHtml;
 
-  const { rows, avg, counted } = subjectStats(gvMirror, gvSubject);
+  const { rows, avg, counted } = subjectStats(gvMirror, gvSubject, cls);
   const scaleMax=scales?.[gvSubject]?.max||null;
   const avgTxt = avg === null ? '—' : avg.toFixed(2);
   // Підпис під числом обовʼязковий. Батьки читають будь-яке середнє як
@@ -469,8 +475,8 @@ function paintSubject(){
   const head = `<div style="background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:11px;text-align:center;">
       <div style="font-size:1.9rem;font-weight:800;color:var(--purple,var(--brand-deep));line-height:1.1;">${escHtml(avgTxt)}</div>
       <div style="font-size:.78rem;color:var(--ink-2);margin-top:3px;">середній бал з предмета «${escHtml(gvSubject)}»
-        · оцінок: ${counted} · шкала: 1–${scaleMax||6}</div>
-      <div style="font-size:.72rem;color:var(--ink-3);margin-top:5px;">Це не підсумкова оцінка й не прогноз:
+        · оцінок у розрахунку: ${counted} · ${getClassNum(cls)<=LEVEL_MAX_CLASS?'рівні П/С/Д/В':`шкала: 1–${scaleMax||6}`}${rows.length>counted?` · ${rows.length-counted} без числового відповідника або історичних балів понад 6 не враховано`:''}</div>
+      <div style="font-size:.75rem;color:var(--ink-3);margin-top:5px;">Це не підсумкова оцінка й не прогноз:
         підсумкову виставляє вчитель.</div>
     </div>`;
 
@@ -479,7 +485,7 @@ function paintSubject(){
         `<li style="display:flex;align-items:center;gap:9px;padding:5px 0;flex-wrap:wrap;">
            <span style="color:var(--ink-3);font-size:.82rem;min-width:52px;">${escHtml(human(r.day))}${r.slot>1?` · ${r.slot}`:''}</span>
            ${gradeChip(r.v, r.t, cls, scaleMax)}${renderWorkPhotos(r.workPhotos)}
-           <span style="font-size:.74rem;color:var(--ink-3);">${r.t ? `вага ×${escHtml(String(getGradeWeight(r.t)))}` : ''}</span>
+           <span style="font-size:.75rem;color:var(--ink-3);">${r.t ? `вага ×${escHtml(String(getGradeWeight(r.t)))}` : ''}</span>
          </li>`).join('') + `</ul>`
     : '<p class="empty-msg">З цього предмета оцінок ще немає.</p>';
 

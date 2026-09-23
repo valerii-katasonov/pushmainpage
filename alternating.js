@@ -180,7 +180,7 @@ window.openAltCard = async function(){
     altState.isCT = role === 'master_class_teacher'
       || (ctSnap.exists() && ctSnap.val().teacherEmail === (currentUserData && currentUserData.email));
   }catch(e){
-    box.innerHTML = `<p class="empty-msg" style="color:var(--red);">Не вдалося прочитати розклад: ${escHtml(e.message)}</p>`;
+    box.innerHTML = `<p class="empty-msg" style="color:var(--danger);">Не вдалося прочитати розклад: ${escHtml(e.message)}</p>`;
     return;
   }
 
@@ -358,7 +358,7 @@ window.openClassHourCard = async function(){
     chState.may = DIR_ROLES.includes(role) || isCT;
     if(chState.hour && chState.hour.day) chState.day = chState.hour.day;
   }catch(e){
-    box.innerHTML = `<p class="empty-msg" style="color:var(--red);">Не вдалося прочитати: ${escHtml(e.message)}</p>`;
+    box.innerHTML = `<p class="empty-msg" style="color:var(--danger);">Не вдалося прочитати: ${escHtml(e.message)}</p>`;
     return;
   }
   renderClassHourCard();
@@ -395,7 +395,7 @@ function renderClassHourCard(){
         ? `<select id="ch-time">${times}</select>
            <button type="button" class="ch-save" onclick="saveClassHour()">Поставити</button>`
         : `<span class="ch-full">цього дня вільних уроків немає</span>`}
-      ${H && H.time ? '<button type="button" class="ch-clear" onclick="clearClassHour()" data-tip="Прибрати">×</button>' : ''}
+      ${H && H.time ? '<button type="button" class="ch-clear" onclick="clearClassHour()" aria-label="Прибрати класну годину" data-tip="Прибрати">×</button>' : ''}
     </div>`
     + (Object.keys(chState.bells || {}).length ? ''
        : '<p class="empty-msg" style="color:var(--warn);">У цього класу не заповнено розклад дзвінків — директор задає його в кабінеті директора. Без дзвінків немає з чого обирати час.</p>');

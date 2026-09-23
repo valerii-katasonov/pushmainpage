@@ -112,7 +112,7 @@ function renderLevelButtons(cls, current){
   const input = document.getElementById('gep-value');
   const hint = document.getElementById('gep-type-hint');
   if(!box) return;
-  const junior = getClassNum(cls) <= LEVEL_MAX_CLASS && !journalNumericScale;
+  const junior = getClassNum(cls) <= LEVEL_MAX_CLASS;
   box.style.display = junior ? 'flex' : 'none';
   if(input) input.style.display = junior ? 'none' : 'block';
   if(hint) hint.style.display = junior ? 'block' : 'none';
@@ -129,7 +129,7 @@ window.selectGradeLevel = function(v){
     .forEach(b => b.classList.toggle('active', b.dataset.lv === v));
 };
 function gradeModifiersAllowed(cls){
-  return journalScaleMax===6&&(journalNumericScale||getClassNum(cls)>LEVEL_MAX_CLASS);
+  return journalScaleMax===6&&getClassNum(cls)>LEVEL_MAX_CLASS;
 }
 function syncGradeModifierButtons(){
   const value=document.getElementById('gep-value')?.value.trim().replace('−','-')||'';
@@ -179,8 +179,10 @@ window.confirmGrade=async function(){
   // Рівень зберігаємо великою літерою: інакше в базі опиняться і «в», і «В»,
   // і будь-яке порівняння почне брехати
   const up=val.toUpperCase();
-  if(!journalNumericScale&&getClassNum(gepCls)<=LEVEL_MAX_CLASS&&['П','С','Д','В'].includes(up)) val=up;
-  else if(!validDailyGrade(val,journalScaleMax)||(/[+\-]$/.test(val)&&!gradeModifiersAllowed(gepCls))){
+  if(getClassNum(gepCls)<=LEVEL_MAX_CLASS){
+    if(!LEVELS.some(level=>level.v===up))return showToast('⚠️ Оберіть рівень: П, С, Д або В.');
+    val=up;
+  }else if(!validDailyGrade(val,journalScaleMax)||(/[+\-]$/.test(val)&&!gradeModifiersAllowed(gepCls))){
     showToast(gradeModifiersAllowed(gepCls)
       ? '⚠️ Оцінка: від 1 до 6; можна додати + або −.'
       : `⚠️ Оцінка має бути цілим числом від 1 до ${journalScaleMax}!`);return;
@@ -296,10 +298,12 @@ window.renderSemesterTable=async function(){
       ])
     ]);
     if(request!==semesterRenderSeq)return;
-    const numericScale=!!scaleSnap?.exists();
+    const junior=getClassNum(cls)<=LEVEL_MAX_CLASS;
+    const numericScale=!junior&&!!scaleSnap?.exists();
     const configuredMax=numericScale?Number(scaleSnap.val().max||scaleSnap.val()):6;
     const scaleMax=Number.isInteger(configuredMax)&&configuredMax>=2&&configuredMax<=2000?configuredMax:6;
     box.dataset.scaleMax=String(scaleMax);
+    box.dataset.junior=junior?'1':'0';
     const students=stSnap.exists()
       ?Object.entries(stSnap.val()).map(([sid,nm])=>({sid,nm:String(nm)}))
         .sort((a,b)=>a.nm.localeCompare(b.nm,'uk')):[];
@@ -322,18 +326,31 @@ window.renderSemesterTable=async function(){
     }
     let rows='';let filled=0;
     students.forEach(st=>{
-      const avg=calculateStudentWeightedAvg(per[st.sid].g,per[st.sid].t);
+      const eligible=junior?Object.fromEntries(Object.entries(per[st.sid].g).filter(([,value])=>!(Number(value)>6))):per[st.sid].g;
+      const avg=calculateStudentWeightedAvg(eligible,per[st.sid].t);
       const cnt=Object.keys(per[st.sid].g).length;
-      const auto=avg!==null?String(Math.min(scaleMax,Math.max(1,Math.round(avg)))):'';
+      // Старі бали понад 6 не переводимо у рівень навмання: для них
+      // учитель обирає підсумкову літеру самостійно.
+      const auto=avg!==null&&(!junior||avg<=6)?String(Math.min(scaleMax,Math.max(1,Math.round(avg)))):'';
+      const suggested=auto?displayGrade(auto,cls,numericScale):'';
       const cur=saved[st.sid]?String(saved[st.sid].value):'';
+      const choice=cur?(junior?displayGrade(cur,cls,false):cur):suggested;
+      const legacy=junior&&cur&&!LEVELS.some(level=>level.v===choice);
+      const gradeInput=junior
+        ? `<select class="sem-in" id="sem-${escHtml(st.sid)}" data-auto="${escHtml(suggested)}" data-original="${escHtml(cur)}" data-initial="${escHtml(choice)}" data-sid="${escHtml(st.sid)}" data-name="${escHtml(st.nm)}">
+             <option value="">—</option>
+             ${legacy?`<option value="${escHtml(cur)}" selected>${escHtml(cur)} (збережено раніше)</option>`:''}
+             ${LEVELS.map(level=>`<option value="${level.v}" ${choice===level.v?'selected':''}>${level.v} — ${level.label}</option>`).join('')}
+           </select>`
+        : `<input type="text" class="sem-in" id="sem-${escHtml(st.sid)}" value="${escHtml(choice)}"
+             data-auto="${escHtml(auto)}" data-sid="${escHtml(st.sid)}" data-name="${escHtml(st.nm)}" maxlength="${String(scaleMax).length}">`;
       if(cur)filled++;
       const changed=saved[st.sid]&&saved[st.sid].auto&&String(saved[st.sid].auto)!==String(saved[st.sid].value);
       rows+=`<tr>
         <td class="sem-name">${escHtml(st.nm)}</td>
         <td class="sem-avg">${avg!==null?avg.toFixed(2):'—'}<br><span class="sem-cnt">${cnt} оц.</span></td>
-        <td class="sem-auto">${auto?escHtml(displayGrade(auto,cls,numericScale)):'—'}</td>
-        <td><input type="text" class="sem-in" id="sem-${escHtml(st.sid)}" value="${escHtml(cur||auto)}"
-             data-auto="${escHtml(auto)}" data-sid="${escHtml(st.sid)}" data-name="${escHtml(st.nm)}" maxlength="${String(scaleMax).length}"></td>
+        <td class="sem-auto">${suggested?escHtml(suggested):'—'}</td>
+        <td>${gradeInput}</td>
         <td class="sem-flag">${changed?'<span data-tip="Відрізняється від запропонованої">✎</span>':''}</td>
       </tr>`;
     });
@@ -348,17 +365,25 @@ window.saveSemesterGrades=async function(){
   const subj=document.getElementById('j-subj-select').value;
   const semId=document.getElementById('sem-period').value;
   if(!semId)return;
-  const scaleMax=Number(document.getElementById('sem-body').dataset.scaleMax||6);
+  const semBody=document.getElementById('sem-body');
+  const scaleMax=Number(semBody.dataset.scaleMax||6);
+  const junior=getClassNum(cls)<=LEVEL_MAX_CLASS;
   const inputs=Array.from(document.querySelectorAll('.sem-in'));
   if(!inputs.length)return showToast('⚠️ Дочекайтеся завантаження оцінок');
-  const bad=inputs.find(i=>i.value.trim()&&(!/^[1-9]\d*$/.test(i.value.trim())||Number(i.value)>scaleMax));
-  if(bad)return alert(`Оцінка «${bad.value}» некоректна. Допустимі значення — від 1 до ${scaleMax}.`);
+  const bad=inputs.find(i=>{
+    const value=i.value.trim();
+    if(!value)return false;
+    if(junior)return !LEVELS.some(level=>level.v===value)&&!(i.dataset.original===value&&i.dataset.initial===value);
+    return !/^[1-9]\d*$/.test(value)||Number(value)>scaleMax;
+  });
+  if(bad)return alert(junior?'Оберіть підсумковий рівень: П, С, Д або В.':`Оцінка «${bad.value}» некоректна. Допустимі значення — від 1 до ${scaleMax}.`);
   const btn=document.getElementById('btn-sem-save');
   btn.disabled=true;btn.textContent='⏳ Збереження...';
   try{
     const patch={};let n=0,manual=0;
     inputs.forEach(i=>{
-      const v=i.value.trim(), sid=i.dataset.sid, auto=i.dataset.auto||'';
+      let v=i.value.trim();const sid=i.dataset.sid, auto=i.dataset.auto||'';
+      if(junior&&i.dataset.original&&v===i.dataset.initial)v=i.dataset.original;
       if(!v){patch[sid]=null;return;}
       patch[sid]={value:v,auto,by:currentUserData?.email||'',ts:Date.now()};
       n++;if(auto&&auto!==v)manual++;
@@ -403,7 +428,7 @@ window.openJournalModal=function(role){
   const firstYM=`${ACTIVE_YEAR.split('-')[0]}-09`;
   document.getElementById('j-month-from').value=firstYM<=curYM?firstYM:curYM;
   document.getElementById('j-month-to').value=curYM;
-  document.getElementById('j-scale-controls').style.display=journalIsTeacher?'flex':'none';
+  document.getElementById('j-scale-controls').style.display=journalIsTeacher&&getClassNum(getActiveClass())>LEVEL_MAX_CLASS?'flex':'none';
   const cs=document.getElementById('j-class-select');const cf=document.getElementById('j-class-field');const mw=document.getElementById('j-mode-toggle-wrap');
   mw.style.display=journalIsTeacher?'flex':'none';
   document.getElementById('j-edit-hint').style.display=journalIsTeacher&&journalMode==='edit'?'block':'none';
@@ -630,6 +655,7 @@ window.renderJournalTable=async function(){
   const request=++journalRenderSeq;
   const cls=document.getElementById('j-class-select').value;
   const subj=document.getElementById('j-subj-select').value;
+  document.getElementById('j-scale-controls').style.display=journalIsTeacher&&getClassNum(cls)>LEVEL_MAX_CLASS?'flex':'none';
   const months=getJournalMonths();
   const table=document.getElementById('journal-table-el');
   const wAvgDiv=document.getElementById('j-weighted-avg');
@@ -668,7 +694,7 @@ window.renderJournalTable=async function(){
       ])
     ]);
     if(request!==journalRenderSeq)return;
-    journalNumericScale=scaleSnap.exists();
+    journalNumericScale=getClassNum(cls)>LEVEL_MAX_CLASS&&scaleSnap.exists();
     journalScaleMax=journalNumericScale?Number(scaleSnap.val().max||scaleSnap.val()):6;
     if(!Number.isInteger(journalScaleMax)||journalScaleMax<2||journalScaleMax>2000)journalScaleMax=6;
     const scaleInput=document.getElementById('j-scale-max');
@@ -783,7 +809,7 @@ window.renderJournalTable=async function(){
     dayRow+='</tr>';
     let thead='<thead>'+monthRow+dayRow+'</thead>';
     // Body
-    let tbody='<tbody>';let classWeightedAvg=0;let classCount=0;
+    let tbody='<tbody>';let classWeightedAvg=0;let classCount=0;let legacyExcluded=0;
     students.forEach((st)=>{
       let stGrades={};let stTypes={};
       dateCols.forEach(({key})=>{
@@ -791,7 +817,10 @@ window.renderJournalTable=async function(){
         const tp=typesData[key]?.[st.sid]||'П';
         if(v){stGrades[key]=v;stTypes[key]=tp;}
       });
-      const avg=calculateStudentWeightedAvg(stGrades,stTypes);
+      const eligible=getClassNum(cls)<=LEVEL_MAX_CLASS
+        ?Object.fromEntries(Object.entries(stGrades).filter(([,value])=>{if(Number(value)>6){legacyExcluded++;return false;}return true;}))
+        :stGrades;
+      const avg=calculateStudentWeightedAvg(eligible,stTypes);
       if(avg!==null){classWeightedAvg+=avg;classCount++;}
       const avgStr=avg!==null?avg.toFixed(2):'-';
       let rowHtml=`<tr><td class="sn" title="${escHtml(st.nm)}">${escHtml(st.nm)}</td>`;
@@ -812,9 +841,10 @@ window.renderJournalTable=async function(){
         // the onclick's string literal early and kill the handler.
         if(gradeVal){
           const gc=journalNumericScale?'g-scale':gradeClass6(gradeVal);
-          cell+=`<span class="g-cell ${gc}" onclick="handleGradeClick(event,'${cls}','${escJs(subj)}','${key}','${escJs(st.sid)}','${ym}','${escJs(String(gradeVal))}','${escJs(String(gradeType))}','${escJs(String(presetType))}')"><span class="g-val">${escHtml(String(dispVal))}</span>${gradeType?`<span class="g-type">${escHtml(String(gradeType))}</span>`:''}</span>`;
+          const gradeAction=canEdit?` role="button" tabindex="0" aria-label="Оцінка ${escHtml(st.nm)} ${ds}: ${escHtml(String(dispVal))}" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" onclick="handleGradeClick(event,'${cls}','${escJs(subj)}','${key}','${escJs(st.sid)}','${ym}','${escJs(String(gradeVal))}','${escJs(String(gradeType))}','${escJs(String(presetType))}')"`:'';
+          cell+=`<span class="g-cell ${gc}"${gradeAction}><span class="g-val">${escHtml(String(dispVal))}</span>${gradeType?`<span class="g-type">${escHtml(String(gradeType))}</span>`:''}</span>`;
         } else if(canEdit){
-          cell+=`<span class="g-cell g-empty" onclick="handleGradeClick(event,'${cls}','${escJs(subj)}','${key}','${escJs(st.sid)}','${ym}','','','${escJs(String(presetType))}')">＋</span>`;
+          cell+=`<span class="g-cell g-empty" role="button" tabindex="0" aria-label="Додати оцінку ${escHtml(st.nm)} ${ds}" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" onclick="handleGradeClick(event,'${cls}','${escJs(subj)}','${key}','${escJs(st.sid)}','${ym}','','','${escJs(String(presetType))}')">＋</span>`;
         }
         if(attInfo){const ac=attInfo.status==='absent'?'att-absent':'att-late';const al=attInfo.status==='absent'?'н':'з';cell+=`<span class="${ac}" data-tip="${attInfo.reason}">${al}</span>`;}
         rowHtml+=`<td class="${isToday?'today-col':''}">${cell}</td>`;
@@ -837,7 +867,7 @@ window.renderJournalTable=async function(){
       const periodStr=months.length>1?`${fmtYM(months[0])} – ${fmtYM(months[months.length-1])}`:fmtYM(months[0]);
       const studentsWord=pluralUA(students.length,['учень','учні','учнів']);
       const lessonsWord=pluralUA(dateCols.length,['урок','уроки','уроків']);
-      rangeSummary.textContent=`👥 ${students.length} ${studentsWord} · 🗓️ ${dateCols.length} ${lessonsWord} / стовпці · ${periodStr} · шкала 1–${journalScaleMax}`;
+      rangeSummary.textContent=`👥 ${students.length} ${studentsWord} · 🗓️ ${dateCols.length} ${lessonsWord} / стовпці · ${periodStr} · ${getClassNum(cls)<=LEVEL_MAX_CLASS?'рівні П/С/Д/В':`шкала 1–${journalScaleMax}`}${legacyExcluded?` · ${legacyExcluded} історичних балів понад 6 не враховано в середньому`:''}`;
     }
     // Weighted avg summary
     if(classCount>0){
@@ -920,6 +950,7 @@ window.saveJournalScale=async function(){
   const subj=document.getElementById('j-subj-select').value;
   const max=Number(document.getElementById('j-scale-max').value);
   if(!cls||!subj)return showToast('⚠️ Оберіть предмет');
+  if(getClassNum(cls)<=LEVEL_MAX_CLASS)return showToast('⚠️ У 1–4 класах оцінки ставлять рівнями: П, С, Д, В.');
   if(!Number.isInteger(max)||max<2||max>2000)return showToast('⚠️ Максимальний бал має бути від 2 до 2000');
   try{
     await set(ref(db,`grade_scales/${cls}/${subj}`),{max});
@@ -1434,7 +1465,7 @@ function noTeacherCell(){
     : '<div class="cell-teacher" style="color:var(--warn);" data-tip="Учителя визначає матриця доступу, а вона зараз недоступна. Це не означає, що вчителя не призначено.">?</div>';
 }
 
-function rsmcc(lesson,dTName,isOvr,clsId,row,si){const sn=typeof lesson.subject==='string'?lesson.subject:(lesson.subject.ua||'');const ts=lesson.time||'';const isB=isBreakItem(lesson);const isX=lesson.type==='extra';const sl=JSON.stringify(lesson).replace(/'/g,"&apos;").replace(/"/g,"&quot;");const oc=`event.stopPropagation();openCellEditor('${clsId}',${row},${si},${sl})`;const wc=hasWC(row,clsId,si);if(isB)return`<div class="matrix-cell cell-break" onclick="${oc}"><div class="cell-subj">${escHtml(sn)}</div><div class="cell-time">${escHtml(ts)}</div></div>`;if(isX){let xi='';if(lesson.extraData){if(lesson.extraData.format==='individual')xi=`<div class="cell-student-linked">👤${escHtml(lesson.extraData.student||'')}</div>`;else xi=`<div class="cell-student-linked" style="background:var(--surface-2);color:var(--brand-ink);">👥Група</div>`;}const th=dTName?`<div class="cell-teacher">👨‍🏫${escHtml(dTName)}${isOvr?' <span data-tip="Веде не той, хто закріплений за предметом — заміна">🔄</span>':''}</div>`:noTeacherCell();return`<div class="matrix-cell cell-club ${wc}" onclick="${oc}"><div class="cell-subj">🎸${escHtml(sn)}</div>${th}${xi}<div class="cell-time">🕘${escHtml(ts)}</div></div>`;}const th=dTName?`<div class="cell-teacher">👨‍🏫${escHtml(dTName)}${isOvr?' <span data-tip="Веде не той, хто закріплений за предметом — заміна">🔄</span>':''}</div>`:noTeacherCell();return`<div class="matrix-cell cell-lesson ${wc}" onclick="${oc}"><div class="cell-subj">${escHtml(sn)}</div>${th}<div class="cell-time">🕘${escHtml(ts)}</div></div>`;}
+function rsmcc(lesson,dTName,isOvr,clsId,row,si){const sn=typeof lesson.subject==='string'?lesson.subject:(lesson.subject.ua||'');const ts=lesson.time||'';const isB=isBreakItem(lesson);const isX=lesson.type==='extra';const sl=JSON.stringify(lesson).replace(/'/g,"&apos;").replace(/"/g,"&quot;");const oc=`event.stopPropagation();openCellEditor('${clsId}',${row},${si},${sl})`;const wc=hasWC(row,clsId,si);if(isB)return`<div class="matrix-cell cell-break" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" onclick="${oc}"><div class="cell-subj">${escHtml(sn)}</div><div class="cell-time">${escHtml(ts)}</div></div>`;if(isX){let xi='';if(lesson.extraData){if(lesson.extraData.format==='individual')xi=`<div class="cell-student-linked">👤${escHtml(lesson.extraData.student||'')}</div>`;else xi=`<div class="cell-student-linked" style="background:var(--surface-2);color:var(--brand-ink);">👥Група</div>`;}const th=dTName?`<div class="cell-teacher">👨‍🏫${escHtml(dTName)}${isOvr?' <span data-tip="Веде не той, хто закріплений за предметом — заміна">🔄</span>':''}</div>`:noTeacherCell();return`<div class="matrix-cell cell-club ${wc}" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" onclick="${oc}"><div class="cell-subj">🎸${escHtml(sn)}</div>${th}${xi}<div class="cell-time">🕘${escHtml(ts)}</div></div>`;}const th=dTName?`<div class="cell-teacher">👨‍🏫${escHtml(dTName)}${isOvr?' <span data-tip="Веде не той, хто закріплений за предметом — заміна">🔄</span>':''}</div>`:noTeacherCell();return`<div class="matrix-cell cell-lesson ${wc}" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" onclick="${oc}"><div class="cell-subj">${escHtml(sn)}</div>${th}<div class="cell-time">🕘${escHtml(ts)}</div></div>`;}
 // Класні години цього дня — рядком під сіткою.
 //
 // ЧОМУ РЯДКОМ, А НЕ КЛІТИНКОЮ В СІТЦІ. Сітка редагована: натискання на
@@ -1464,7 +1495,7 @@ window.renderMatrixGrid=function(){const day=document.getElementById('matrix-day
         else if(te){const known=teacherTeaches(te,clsId,sn);isOvr=(known===false);}
         // Матриці доступу може не бути — тоді підставити ім'я нема звідки.
         // Але воно могло зберегтися в самому уроці, коли розклад складали.
-        if(!dn&&lesson.teacherName)dn=lesson.teacherName;}h+=rsmcc(lesson,dn,isOvr,clsId,row,si);});h+=`<div class="add-parallel-btn" onclick="event.stopPropagation();openCellEditor('${clsId}',${row},null,null)">+Паралельний</div>`;h+=`</div>`;}else h=`<div class="matrix-cell cell-empty" onclick="openCellEditor('${clsId}',${row},null,null)">+ Додати</div>`;td.innerHTML=h;tr.appendChild(td);}tb.appendChild(tr);}};
+        if(!dn&&lesson.teacherName)dn=lesson.teacherName;}h+=rsmcc(lesson,dn,isOvr,clsId,row,si);});h+=`<div class="add-parallel-btn" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" onclick="event.stopPropagation();openCellEditor('${clsId}',${row},null,null)">+Паралельний</div>`;h+=`</div>`;}else h=`<div class="matrix-cell cell-empty" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" onclick="openCellEditor('${clsId}',${row},null,null)">+ Додати</div>`;td.innerHTML=h;tr.appendChild(td);}tb.appendChild(tr);}};
 // Тип клітинки міняє не лише підписи, а й ЩО саме пропонується у списку:
 // предмети класу для уроку, назви перерв для перерви. Раніше сюди просто
 // вписувався рядок — тепер це список, тож його треба перебудувати.
@@ -1681,13 +1712,16 @@ function presetCellSelect(sel, val){
     sel.insertAdjacentHTML('afterbegin', `<option value="${escHtml(v)}">${escHtml(v)}</option>`);
   sel.value=v;
 }
+let cellEditorReturnFocus=null;
 window.openCellEditor=async function(clsId,rowIdx,subIdx,lessonObj){
+  cellEditorReturnFocus=document.activeElement;
   // Підказки з назв, які вже вживає цей клас: щоб «English» і «english»
   // не стали двома різними предметами з двома різними журналами
   // Список предметів беремо з каталогу класу на поточний навчальний рік
   const isArt=currentUserData?.role==='art_school_teacher';
   if(isArt&&lessonObj){const sn=typeof lessonObj.subject==='string'?lessonObj.subject:(lessonObj.subject.ua||'');const t=lessonObj.type||(sn.toLowerCase().includes('перерва')?'break':'lesson');if(t!=='extra'||lessonObj.teacherEmail!==currentUserData.email){alert("⛔ Тільки власні заняття.");return;}}
   document.getElementById('edit-cell-modal').style.display='flex';document.getElementById('cell-live-warnings').style.display='none';
+  document.getElementById('cell-type-select').focus();
   const day=document.getElementById('matrix-day-select').value;document.getElementById('edit-cell-subtitle').innerText=`${clsId.replace('class_','')} Клас | ${dayNamesUA[day]} | Слот ${rowIdx+1}`;
   document.getElementById('cell-edit-class').value=clsId;document.getElementById('cell-edit-row').value=rowIdx;document.getElementById('cell-edit-subindex').value=subIdx!==null?subIdx:'';
   const is=document.getElementById('extra-ind-student');const gc=document.getElementById('extra-group-classes');const gs=document.getElementById('extra-group-students');
@@ -1780,7 +1814,28 @@ window.autoBreaksForDay = async function(){
   showToast(`✅ Додано перерв: ${added}`);
 };
 
-window.closeEditCellModal=function(){document.getElementById('edit-cell-modal').style.display='none';};
+window.closeEditCellModal=function(){
+  const modal=document.getElementById('edit-cell-modal');
+  modal.style.display='none';
+  const previous=cellEditorReturnFocus;cellEditorReturnFocus=null;
+  setTimeout(()=>{
+    if(modal.style.display!=='none')return;
+    if(previous?.isConnected && previous!==document.body)previous.focus();
+    else document.getElementById('matrix-day-select')?.focus();
+  },0);
+};
+document.getElementById('edit-cell-modal').addEventListener('keydown',e=>{
+  if(e.key==='Escape'){
+    e.preventDefault();e.stopPropagation();window.closeEditCellModal();return;
+  }
+  if(e.key!=='Tab')return;
+  const modal=document.getElementById('edit-cell-modal');
+  const items=[...modal.querySelectorAll('button,input:not([type="hidden"]),select,textarea,[tabindex]:not([tabindex="-1"])')]
+    .filter(el=>!el.disabled&&el.getClientRects().length);
+  if(!items.length)return;
+  if(e.shiftKey&&document.activeElement===items[0]){e.preventDefault();items[items.length-1].focus();}
+  else if(!e.shiftKey&&document.activeElement===items[items.length-1]){e.preventDefault();items[0].focus();}
+});
 window.saveMatrixCell=async function(){
   const clsId=document.getElementById('cell-edit-class').value;const ri=parseInt(document.getElementById('cell-edit-row').value);const sis=document.getElementById('cell-edit-subindex').value;const day=document.getElementById('matrix-day-select').value;
   const type=document.getElementById('cell-type-select').value;const subj=document.getElementById('cell-subj-ua').value.trim();const time=normalizeTimeRange(document.getElementById('cell-time').value);   /* «13:55-14:40» і «13:55 - 14:40» — той самий урок. Різнобій у базі колись зламав кабінет 5 класу: кінець уроку не розбирався, і день «закінчувався» за останньою перервою. */const num=type==='break'?'':document.getElementById('cell-number').value.trim();

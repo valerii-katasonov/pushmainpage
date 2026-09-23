@@ -163,7 +163,7 @@ function renderRows(box, data, subject, classNum){
     const width = r.played ? Math.round((r.played / Math.max(1, r.rosterSize)) * 100) : 0;
     return `<div style="background:#fff;border:1px solid var(--line);border-radius:10px;padding:11px;margin-bottom:8px;">
       <div style="font-weight:700;font-size:.9rem;">${r.icon} ${escHtml(r.title)}</div>
-      <div style="font-size:.74rem;color:var(--ink-2);margin:2px 0 6px 0;">${topics}</div>
+      <div style="font-size:.75rem;color:var(--ink-2);margin:2px 0 6px 0;">${topics}</div>
       <div style="font-size:.8rem;color:var(--ink);">${body}</div>
       <div style="height:6px;background:var(--line-soft);border-radius:4px;margin-top:7px;overflow:hidden;">
         <div style="height:100%;width:${width}%;background:var(--teal,var(--brand));"></div>
@@ -219,7 +219,7 @@ window.renderMastery = async function(boxId){
     renderRows(box, data, subject, classNum);
   }catch(e){
     // Мовчазний спінер — головна повторювана вада порталу. Кажемо прямо.
-    box.innerHTML = `<p class="empty-msg" style="color:var(--red);">Не вдалося порахувати: `
+    box.innerHTML = `<p class="empty-msg" style="color:var(--danger);">Не вдалося порахувати: `
       + `${escHtml(e.message || 'немає доступу')}</p>`;
   }
 };

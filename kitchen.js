@@ -789,9 +789,9 @@ export function startKitchenCutoffTimer(){
         clearInterval(window.__kitchenCutoffTimer);
         window.__kitchenCutoffTimer = null;
       }
-      warnEl.style.background = '#ecfdf5';
-      warnEl.style.borderColor = '#10b981';
-      warnEl.style.color = '#065f46';
+      warnEl.style.background = 'var(--ok-soft)';
+      warnEl.style.borderColor = 'var(--ok)';
+      warnEl.style.color = 'var(--ok)';
       warnEl.innerHTML = `
         <div style="display:flex;align-items:center;gap:8px;font-size:0.84rem;">
           <span>✅</span> <span><b>Вибір батьків на сьогодні закріплено о 09:00</b> — кількість порцій зафіксована.</span>
@@ -908,17 +908,17 @@ export async function loadWeekCounts(){
     if(isToday && isWorkday && !today.closed){
       if(now.getHours() < MEAL_CUTOFF_HOUR){
         cutoffWarningHtml = `
-          <div id="k-counts-cutoff-warn" style="background:#fee2e2;border:2px solid #ef4444;border-radius:10px;padding:12px 16px;margin-bottom:14px;color:#991b1b;">
+          <div id="k-counts-cutoff-warn" style="background:var(--danger-soft);border:2px solid var(--danger);border-radius:10px;padding:12px 16px;margin-bottom:14px;color:var(--danger);">
             <div style="display:flex;align-items:center;gap:12px;">
               <span style="font-size:1.8rem;line-height:1;">⏳</span>
               <div style="flex:1;">
-                <div style="font-weight:900;font-size:1.02rem;color:#b91c1c;margin-bottom:2px;">
+                <div style="font-weight:900;font-size:1.02rem;color:var(--danger);margin-bottom:2px;">
                   ⚠️ УВАГА: Кількість порцій ще змінюється!
                 </div>
-                <div style="font-size:0.86rem;line-height:1.45;color:#7f1d1d;">
+                <div style="font-size:0.86rem;line-height:1.45;color:var(--danger);">
                   Батьки мають право змінювати вибір страв та відмічати відсутність <b>до 09:00</b>.<br>
                   До остаточної фіксації замовлення залишилося: 
-                  <b id="k-counts-timer" style="font-size:1.05rem;font-weight:900;color:#dc2626;background:#fecaca;padding:2px 8px;border-radius:6px;display:inline-block;margin-top:4px;">--:--</b>
+                  <b id="k-counts-timer" style="font-size:1.05rem;font-weight:900;color:var(--danger);background:var(--danger-line);padding:2px 8px;border-radius:6px;display:inline-block;margin-top:4px;">--:--</b>
                 </div>
               </div>
             </div>
@@ -926,7 +926,7 @@ export async function loadWeekCounts(){
         `;
       } else {
         cutoffWarningHtml = `
-          <div style="background:#ecfdf5;border:1px solid #10b981;border-radius:8px;padding:8px 12px;margin-bottom:12px;color:#065f46;font-size:0.84rem;display:flex;align-items:center;gap:8px;">
+          <div style="background:var(--ok-soft);border:1px solid var(--ok);border-radius:8px;padding:8px 12px;margin-bottom:12px;color:var(--ok);font-size:0.84rem;display:flex;align-items:center;gap:8px;">
             <span>✅</span> <span><b>Вибір батьків на сьогодні закріплено о 09:00</b> — кількість порцій зафіксована.</span>
           </div>
         `;
@@ -1523,7 +1523,7 @@ function pickCell(cls, sid, date, pick){
                : '<span class="k-no">—</span>';
   return ['a','b'].map(v => `<button type="button" class="k-ab-btn${v===cur?' on '+v:''}"
     onclick="kitchenSetPick('${escJs(cls)}','${escJs(sid)}','${escJs(date)}','${v}')"
-    data-tip="Обрати варіант ${v.toUpperCase()}">${v.toUpperCase()}</button>`).join('');
+    aria-label="Обрати варіант ${v.toUpperCase()}" data-tip="Обрати варіант ${v.toUpperCase()}">${v.toUpperCase()}</button>`).join('');
 }
 
 function breakfastPickCell(cls, sid, date, pick){
@@ -1533,7 +1533,7 @@ function breakfastPickCell(cls, sid, date, pick){
                : '<span class="k-no">—</span>';
   return ['a','b'].map(v => `<button type="button" class="k-ab-btn${v===cur?' on '+v:''}"
     onclick="kitchenSetBreakfastPick('${escJs(cls)}','${escJs(sid)}','${escJs(date)}','${v}')"
-    data-tip="Обрати варіант сніданку ${v.toUpperCase()}">${v.toUpperCase()}</button>`).join('');
+    aria-label="Обрати варіант сніданку ${v.toUpperCase()}" data-tip="Обрати варіант сніданку ${v.toUpperCase()}">${v.toUpperCase()}</button>`).join('');
 }
 
 window.kitchenSetPick = async function(cls, sid, date, value){
@@ -2164,7 +2164,7 @@ window.exportMealStatsPdf = function(){
 
   const rowsHtml = sortedRows.map((r, idx) => {
     const absText = r.absent 
-      ? `<b>${r.absent}</b> <span style="font-size:9.5px;color:#555;">(${(r.absentDates||[]).map(d=>human(d).slice(0,5)).join(', ')})</span>` 
+      ? `<b>${r.absent}</b> <span style="font-size:.75rem;color:var(--ink-2);">(${(r.absentDates||[]).map(d=>human(d).slice(0,5)).join(', ')})</span>` 
       : '—';
     return `
       <tr>
@@ -3416,7 +3416,7 @@ export async function loadTakeawayItems(){
           ${it.note?`<span class="ta-item-note">${escHtml(it.note)}</span>`:''}
         </div>
         <span class="ta-price">${taMoney(it.price)} zł</span>
-        <button class="ta-mini" onclick="editTakeawayItem('${escJs(id)}')">✏️</button>
+        <button class="ta-mini" aria-label="Редагувати позицію" onclick="editTakeawayItem('${escJs(id)}')">✏️</button>
         <button class="ta-mini" onclick="toggleTakeawayItem('${escJs(id)}',${it.active===false})">
           ${it.active===false?'Увімкнути':'Вимкнути'}</button>
         ${it.active===false?'':`<button class="ta-mini del" onclick="removeTakeawayItem('${escJs(id)}')">Архів</button>`}
@@ -3579,9 +3579,9 @@ window.loadTakeawayOrders = async function(){
         const q = Number(r.picks[id])||0;
         const title = escHtml((items[id]||{}).title || id);
         return `<span class="k-ta-pick">${title}
-          <button onclick="kitchenSetTakeaway('${escJs(r.clsId)}','${escJs(r.sid)}','${escJs(id)}',${q-1})">−</button>
+          <button aria-label="Зменшити кількість" onclick="kitchenSetTakeaway('${escJs(r.clsId)}','${escJs(r.sid)}','${escJs(id)}',${q-1})">−</button>
           <b>${q}</b>
-          <button onclick="kitchenSetTakeaway('${escJs(r.clsId)}','${escJs(r.sid)}','${escJs(id)}',${q+1})" ${q>=TA_MAX_QTY?'disabled':''}>+</button>
+          <button aria-label="Збільшити кількість" onclick="kitchenSetTakeaway('${escJs(r.clsId)}','${escJs(r.sid)}','${escJs(id)}',${q+1})" ${q>=TA_MAX_QTY?'disabled':''}>+</button>
         </span>`;
       }).join(' ');
 
@@ -3728,9 +3728,9 @@ export async function renderTakeaway(date){
           </div>
           <span class="ta-price">${taMoney(takeawayPriceAt(id,day,items,priceHistory))} zł</span>
           ${gate.ok ? `<div class="ta-qty">
-            <button onclick="setTakeaway('${escJs(day)}','${escJs(id)}',${q-1})" ${q?'':'disabled'}>−</button>
+            <button aria-label="Зменшити кількість" onclick="setTakeaway('${escJs(day)}','${escJs(id)}',${q-1})" ${q?'':'disabled'}>−</button>
             <span>${q}</span>
-            <button onclick="setTakeaway('${escJs(day)}','${escJs(id)}',${q+1})" ${!active||q>=TA_MAX_QTY?'disabled':''}>+</button>
+            <button aria-label="Збільшити кількість" onclick="setTakeaway('${escJs(day)}','${escJs(id)}',${q+1})" ${!active||q>=TA_MAX_QTY?'disabled':''}>+</button>
           </div>` : `<span class="ta-qty-locked">${q||0}</span>`}
         </div>`;
       }).join('')}

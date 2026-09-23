@@ -5,7 +5,7 @@
 // lives in teacher.js).
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, remove } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, getActiveClass, currentUserData, STICKER_GOAL, stickerGoal, getWeekDates, displayGrade, gradeClass6, showToast, renderHwItem, renderHwList, dayKeys, dayNamesUA, isBreakItem, parseTimeRange, fmtTimeRange, localDateString, formatAttendanceSlotLabel, renderGradeFormulaInfo, escJs, escHtml, safeUrl, renderBirthdays, stuName, stuId, auth, normalizeChildren, gradesFromMirror, mondayOf, altChoiceFor, resolveAlt, classHourItem, insertAtTime, minsOf, subjKey, planKeyWith, notifyEvent, getStudentDir, resolveStudentKey } from './common.js';
+import { db, getActiveClass, currentUserData, getClassNum, LEVEL_MAX_CLASS, STICKER_GOAL, stickerGoal, getWeekDates, displayGrade, gradeClass6, showToast, renderHwItem, renderHwList, dayKeys, dayNamesUA, isBreakItem, parseTimeRange, fmtTimeRange, localDateString, formatAttendanceSlotLabel, renderGradeFormulaInfo, escJs, escHtml, safeUrl, renderBirthdays, stuName, stuId, auth, normalizeChildren, gradesFromMirror, mondayOf, altChoiceFor, resolveAlt, classHourItem, insertAtTime, minsOf, subjKey, planKeyWith, notifyEvent, getStudentDir, resolveStudentKey } from './common.js';
 import { ACTIVE_YEAR } from './director.js';
 import { renderParentMenu } from './kitchen.js';
 import { renderNewsFeed } from './news.js';
@@ -614,7 +614,8 @@ window.renderParentCalendar=async function(role='parent'){
     else if(hasExam)cc='has-exam-p';
     else if(hasHoliday)cc='has-holiday-p';
     else if(hasBreak)cc='has-break-p';
-    const clickable=typesCount>0?` onclick="showParentCalDayDetails('${role}','${ds}')"`:'';
+    const dayEvents=[hasExam&&'контрольна',hasHoliday&&'свято',hasBreak&&'канікули'].filter(Boolean).join(', ');
+    const clickable=typesCount>0?` role="button" tabindex="0" aria-label="Події ${i}.${m}.${y}: ${dayEvents}" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" onclick="showParentCalDayDetails('${role}','${ds}')"`:'';
     h+=`<div class="cal-day ${cc}"${clickable}>${i}</div>`;
   }
   h+='</div>';
@@ -882,7 +883,7 @@ export async function renderFinalGrades(containerId,cls,studentName){
     ]);
     if(!gradesSnap.exists()){box.style.display='none';return;}
     const sems=semSnap.exists()?semSnap.val():{};
-    const scales=scaleSnap?.exists()?scaleSnap.val():{};
+    const scales=getClassNum(cls)<=LEVEL_MAX_CLASS?{}:(scaleSnap?.exists()?scaleSnap.val():{});
     const sid=resolveStudentKey(dir,currentUserData?.studentId,studentName).key;
     const all=gradesSnap.val();
     let html='';

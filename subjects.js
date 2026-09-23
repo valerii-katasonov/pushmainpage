@@ -634,7 +634,7 @@ window.renderSubjectsCatalog = async function(){
     const sch = await get(child(ref(db), `schedules/${cls}/lessons`));
     inSchedule = sch.exists() ? subjectsInLessons(sch.val()) : [];
   }catch(e){
-    box.innerHTML = `<p class="empty-msg" style="color:var(--red);">${escHtml(e.message)}</p>`;
+    box.innerHTML = `<p class="empty-msg" style="color:var(--danger);">${escHtml(e.message)}</p>`;
     return;
   }
   catState.node = node;
@@ -656,7 +656,7 @@ window.renderSubjectsCatalog = async function(){
             <div class="sc-name">${escHtml(e.name)}
               ${dup.length ? `<i>⚠️ схоже на ${escHtml(dup.join(', '))}</i>` : ''}</div>
             ${teacherSelect(e)}
-            <button type="button" onclick="removeSubjectFromCatalog('${escJs(e.key)}')" data-tip="Прибрати зі списку">×</button>
+            <button type="button" onclick="removeSubjectFromCatalog('${escJs(e.key)}')" aria-label="Прибрати предмет зі списку" data-tip="Прибрати зі списку">×</button>
           </div>`;
         }).join('')}</div>`
       : '<p class="empty-msg">Для цього класу й року предметів ще немає.</p>'}

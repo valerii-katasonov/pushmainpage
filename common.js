@@ -971,9 +971,9 @@ setInterval(refreshToday, 60000);
 document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) refreshToday(); });
 
 // ══════════ GRADE SYSTEM ══════════
-// 6-бальна шкала. Маскування для 1-5 класу
+// 6-бальна шкала. Рівні для 1–4 класів, предметні шкали з 5-го.
 export function getClassNum(clsId){return parseInt((clsId||'class_1').replace('class_',''));}
-// Рівні для 1–5 класів. Літера — це і є оцінка, а не «маска цифри»:
+// Рівні для 1–4 класів. Літера — це і є оцінка, а не «маска цифри»:
 // саме так учитель її й ставить.
 export const LEVEL_LETTERS = ['П','С','Д','В'];
 // До якого класу включно оцінюють рівнями. Пʼятий уже ні — так у школі.
@@ -1014,7 +1014,7 @@ export function displayGrade(val,clsId,numericScale){
   const cn=getClassNum(clsId||getActiveClass());
   // РІВНІ — ЛИШЕ 1–4 КЛАСИ. У пʼятому вже звичайні оцінки; тут довго стояло
   // «<=5», і цифри пʼятого класу показувалися літерами.
-  if(cn<=LEVEL_MAX_CLASS&&!numericScale){
+  if(cn<=LEVEL_MAX_CLASS){
     // цифру показуємо тією ж літерою, що й рівень
     if(isNaN(n)) return String(val);
     // Значення понад стару шкалу 1–6 може належати новій предметній
@@ -1124,7 +1124,7 @@ export function renderGradeFormulaInfo(){
   const items=codes.map(code=>{
     const w=getGradeWeight(code);
     const label=(gradeTypesCache[code]&&gradeTypesCache[code].label)||code;
-    return `<span style="display:inline-block;background:#fff;border:1px solid var(--line);border-radius:6px;padding:2px 7px;margin:2px 3px 2px 0;font-size:.72rem;"><b>${code}</b> ${label} ×${w}</span>`;
+    return `<span style="display:inline-block;background:#fff;border:1px solid var(--line);border-radius:6px;padding:2px 7px;margin:2px 3px 2px 0;font-size:.75rem;"><b>${code}</b> ${label} ×${w}</span>`;
   }).join('');
   return `<li style="list-style:none;background:var(--brand-soft);border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-bottom:9px;font-size:.78rem;color:var(--ink-2);">
     <b style="color:var(--brand-deep);">ℹ️ Як рахується середній бал:</b> Σ(оцінка × коефіцієнт) / Σ(коефіцієнт)
@@ -1836,7 +1836,7 @@ export async function renderHwList(cls,date,listId){
         students.sort((a,b) => (a.studentName||'').localeCompare(b.studentName||'', 'uk'));
         const subsHtml = `
           <div style="margin-top:6px;">
-            <details style="background:var(--surface-1);border:1px solid var(--line-soft);border-radius:8px;padding:6px 10px;">
+            <details style="background:var(--surface);border:1px solid var(--line-soft);border-radius:8px;padding:6px 10px;">
               <summary style="font-weight:700;font-size:0.82rem;color:var(--brand-deep);cursor:pointer;">
                 📥 Здані роботи (${students.length})
               </summary>
@@ -2146,8 +2146,15 @@ window.saveProfile=async function(){
 };
 // My skills in profile
 window.addMySkill=function(){const v=document.getElementById('t-skill-add-input').value.trim();if(!v)return;if(!mySkillsTemp.includes(v))mySkillsTemp.push(v);document.getElementById('t-skill-add-input').value='';renderMySkillsTags();};
-function renderMySkillsTags(){const c=document.getElementById('t-my-skills-tags');c.innerHTML='';mySkillsTemp.forEach((s,i)=>c.innerHTML+=`<span class="skill-tag remove" onclick="removeMySkill(${i})">✖ ${escHtml(s)}</span>`);if(mySkillsTemp.length===0)c.innerHTML='<p class="empty-msg" style="font-size:.8rem;">Скілів немає.</p>';}
-window.removeMySkill=function(i){mySkillsTemp.splice(i,1);renderMySkillsTags();};
+function renderMySkillsTags(){const c=document.getElementById('t-my-skills-tags');c.innerHTML='';mySkillsTemp.forEach((s,i)=>c.innerHTML+=`<span class="skill-tag remove" role="button" tabindex="0" aria-label="Видалити навичку ${escHtml(s)}" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" onclick="removeMySkill(${i})">✖ ${escHtml(s)}</span>`);if(mySkillsTemp.length===0)c.innerHTML='<p class="empty-msg" style="font-size:.8rem;">Скілів немає.</p>';}
+window.removeMySkill=function(i){
+  const restore=document.activeElement?.matches?.('#t-my-skills-tags .skill-tag.remove');
+  mySkillsTemp.splice(i,1);renderMySkillsTags();
+  if(restore){
+    const tags=document.querySelectorAll('#t-my-skills-tags .skill-tag.remove');
+    (tags[Math.min(i,tags.length-1)]||document.getElementById('t-skill-add-input'))?.focus();
+  }
+};
 // ══════════ DATE / CLASS CHANGE ══════════
 window.handleDateChange=function(){
   if(!currentUserData)return;
@@ -3488,7 +3495,7 @@ export async function renderParentsBlock(containerId,cls){
     let html=orphans.length
       ? `<div class="bell-missing">⚠️ Без прив'язаних батьків: ${escHtml(orphans.join(', '))}</div>`
       : `<div class="po-ok">✓ У всіх учнів є прив'язані контакти</div>`;
-    if(loginInfoDenied) html += '<p class="empty-msg" style="text-align:left;font-size:.72rem;">'
+    if(loginInfoDenied) html += '<p class="empty-msg" style="text-align:left;font-size:.75rem;">'
       + 'Позначка «вже заходив у портал» доступна лише директору — тут вона не показується.</p>';
     // Ключі учнів потрібні, щоб можна було перейменувати/прибрати учня
     // прямо звідси — окремий «список учнів» більше не потрібен.
@@ -3516,11 +3523,11 @@ export async function renderParentsBlock(containerId,cls){
             // питання безпеки. Самі медичні деталі — лише в картці, під правами.
             ? `<span class="po-allergy" data-tip="${escHtml(cards[sk].allergies)}">⚠️ Алергія</span>`:''}
           <span class="po-child-acts">
-            <button class="po-edit" data-tip="Картка учня" onclick="openStudentCard('${escJs(cls)}','${escJs(sk)}','${escJs(st)}')">📋</button>
-            <button class="po-edit" data-tip="Табель (PDF)" onclick="downloadReportCard('${escJs(cls)}','${escJs(st)}')">📄</button>
-            <button class="po-edit" data-tip="Змінити ПІБ учня" onclick="editStudentName('${escJs(cls)}','${escJs(sk)}','${escJs(st)}')">✏️</button>
-            <button class="po-edit" data-tip="Вхід учня (email)" onclick="openStudentLogin('${escJs(cls)}','${escJs(st)}','${escJs(loginByStudent[st]||'')}')">🔑</button>
-            <button class="po-edit po-del" data-tip="Прибрати зі списку" onclick="removeStudent('${escJs(cls)}','${escJs(sk)}','${escJs(st)}')">🗑</button>
+            <button class="po-edit" aria-label="Картка учня" data-tip="Картка учня" onclick="openStudentCard('${escJs(cls)}','${escJs(sk)}','${escJs(st)}')">📋</button>
+            <button class="po-edit" aria-label="Табель PDF" data-tip="Табель (PDF)" onclick="downloadReportCard('${escJs(cls)}','${escJs(st)}')">📄</button>
+            <button class="po-edit" aria-label="Змінити ПІБ учня" data-tip="Змінити ПІБ учня" onclick="editStudentName('${escJs(cls)}','${escJs(sk)}','${escJs(st)}')">✏️</button>
+            <button class="po-edit" aria-label="Вхід учня електронною поштою" data-tip="Вхід учня (email)" onclick="openStudentLogin('${escJs(cls)}','${escJs(st)}','${escJs(loginByStudent[st]||'')}')">🔑</button>
+            <button class="po-edit po-del" aria-label="Прибрати учня зі списку" data-tip="Прибрати зі списку" onclick="removeStudent('${escJs(cls)}','${escJs(sk)}','${escJs(st)}')">🗑</button>
           </span>
         </div>
         <div class="po-parents">`;
@@ -3533,7 +3540,7 @@ export async function renderParentsBlock(containerId,cls){
             <span class="po-role">${escHtml(PARENT_ROLE_LABELS[p.role]||p.role)}</span>
             <b class="po-name">${escHtml(nm)}</b>
             ${!loggedIn.has(p.email.toLowerCase())?'<span class="po-new">ще не входив</span>':''}
-            <button class="po-edit" onclick="openParentEditor('${escJs(p.safeEmail)}')" data-tip="Редагувати контакти">✏️</button>
+            <button class="po-edit" aria-label="Редагувати контакти" onclick="openParentEditor('${escJs(p.safeEmail)}')" data-tip="Редагувати контакти">✏️</button>
           </div>
           <div class="po-contacts">
             <span class="po-email">${escHtml(p.email)}</span>
@@ -4273,7 +4280,7 @@ function renderParentKids(safeEmail,kids){
     h+=`<div class="pe-kid">
       <span class="pe-kid-name">${escHtml(k.studentName)} <span style="color:var(--ink-3);">(${escHtml(String(k.class||'').replace('class_',''))} кл.)</span></span>
       <select onchange="setParentChildRole('${escJs(safeEmail)}',${i},this.value)">${opts(k.role||'guardian')}</select>
-      <button class="pe-unlink" onclick="unlinkParentChild('${escJs(safeEmail)}',${i},'${escJs(k.studentName)}')" data-tip="Відв'язати">✖</button>
+      <button class="pe-unlink" aria-label="Відв’язати дитину ${escHtml(k.studentName)}" onclick="unlinkParentChild('${escJs(safeEmail)}',${i},'${escJs(k.studentName)}')" data-tip="Відв'язати">✖</button>
     </div>`;
   });
   return h+'</div>';
@@ -4902,7 +4909,7 @@ window.logoutUser=async function(){
   signOut(auth);
 };
 // ══════════ ADMIN DASHBOARD ══════════
-window.loadAdminDashboard=async function(){try{const date=document.getElementById('global-date').value;document.getElementById('a-att-header').innerText=`🚨 Відсутні (${date.split('-').reverse().slice(0,2).join('.')})`;const wd=getWeekDates(date);let wl=0,wa=0,hw=0,com=0;const _lo=wd[0]<date?wd[0]:date, _hi=wd[wd.length-1]>date?wd[wd.length-1]:date;const[_ad,_hd,_cd]=await Promise.all([getSchoolRange('attendance',_lo,_hi),getSchoolRange('homeworks',_lo,_hi),getSchoolRange('comments',_lo,_hi)]);const s={exists:()=>true,val:()=>_ad},hwS={exists:()=>true,val:()=>_hd},comS={exists:()=>true,val:()=>_cd};let h='';if(s.exists()){const d=s.val();for(let i=1;i<=11;i++){const c=`class_${i}`;if(d[c]&&d[c][date])for(let st in d[c][date]){const slots=d[c][date][st];for(let sk in slots){const r=slots[sk];if(r?.status){const bc=r.status==='late'?'badge-late':'badge-absent';const markerIcon=r.markedBy==='teacher'?'👨‍🏫':(r.markedBy==='student'?'🎒':(r.markedBy==='administrator'?'🛡️':'👪'));h+=`<li style="margin-bottom:9px;border-bottom:1px solid var(--line-soft);padding-bottom:4px;"><span style="font-size:.72rem;background:var(--brand-ink);color:#fff;padding:2px 5px;border-radius:4px;margin-right:4px;">${i} Кл</span> <b>${escHtml(stuName(c, st))}</b> <span class="badge ${bc}">${r.status==='late'?'Запізнення':'Відсутність'}</span> <span style="font-size:.72rem;color:var(--ink-3);">${escHtml(formatAttendanceSlotLabel(sk))} ${markerIcon}</span></li>`;}}}
+window.loadAdminDashboard=async function(){try{const date=document.getElementById('global-date').value;document.getElementById('a-att-header').innerText=`🚨 Відсутні (${date.split('-').reverse().slice(0,2).join('.')})`;const wd=getWeekDates(date);let wl=0,wa=0,hw=0,com=0;const _lo=wd[0]<date?wd[0]:date, _hi=wd[wd.length-1]>date?wd[wd.length-1]:date;const[_ad,_hd,_cd]=await Promise.all([getSchoolRange('attendance',_lo,_hi),getSchoolRange('homeworks',_lo,_hi),getSchoolRange('comments',_lo,_hi)]);const s={exists:()=>true,val:()=>_ad},hwS={exists:()=>true,val:()=>_hd},comS={exists:()=>true,val:()=>_cd};let h='';if(s.exists()){const d=s.val();for(let i=1;i<=11;i++){const c=`class_${i}`;if(d[c]&&d[c][date])for(let st in d[c][date]){const slots=d[c][date][st];for(let sk in slots){const r=slots[sk];if(r?.status){const bc=r.status==='late'?'badge-late':'badge-absent';const markerIcon=r.markedBy==='teacher'?'👨‍🏫':(r.markedBy==='student'?'🎒':(r.markedBy==='administrator'?'🛡️':'👪'));h+=`<li style="margin-bottom:9px;border-bottom:1px solid var(--line-soft);padding-bottom:4px;"><span style="font-size:.75rem;background:var(--brand-ink);color:#fff;padding:2px 5px;border-radius:4px;margin-right:4px;">${i} Кл</span> <b>${escHtml(stuName(c, st))}</b> <span class="badge ${bc}">${r.status==='late'?'Запізнення':'Відсутність'}</span> <span style="font-size:.75rem;color:var(--ink-3);">${escHtml(formatAttendanceSlotLabel(sk))} ${markerIcon}</span></li>`;}}}
     // Week counters (same aggregation the director dashboard does)
     if(d[c])wd.forEach(w=>{if(d[c][w]&&typeof d[c][w]==='object')Object.values(d[c][w]).forEach(slots=>{if(slots&&typeof slots==='object')Object.values(slots).forEach(r=>{if(r?.status==='late')wl++;else if(r?.status==='absent')wa++;});});});
   }}

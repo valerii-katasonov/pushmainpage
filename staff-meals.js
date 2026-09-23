@@ -138,7 +138,7 @@ export async function renderStaffMeals(){
                ${gate.ok?`onclick="smPick('${escJs(day)}','b')"`:'disabled'}>Б · ${escHtml(choice.b)}</button>
            </div>`
         : (m.second ? `<div class="stm-dish"><span>Друге</span><b>${escHtml(m.second)}</b></div>` : ''),
-      m.side   ? `<div class="stm-dish"><span>Гарнір</span><b>${escHtml(m.side)}</b></div>` : '',
+      m.side   ? `<div class="stm-dish"><span>Основна страва</span><b>${escHtml(m.side)}</b></div>` : '',
       m.drink  ? `<div class="stm-dish"><span>Напій</span><b>${escHtml(m.drink)}</b></div>` : ''
     ].join('') : '';
 
@@ -164,9 +164,9 @@ export async function renderStaffMeals(){
           ${it.note?`<span class="ta-item-note">${escHtml(it.note)}</span>`:''}</div>
         <span class="ta-price">${money(takeawayPriceAt(id,day,items,takeawayHistory))} zł${it.active===false?' · вимкнено':''}</span>
         ${taGate.ok ? `<div class="ta-qty">
-          <button onclick="smTakeaway('${escJs(taGateDay)}','${escJs(id)}',${q-1})" ${q?'':'disabled'}>−</button>
+          <button aria-label="Зменшити кількість" onclick="smTakeaway('${escJs(taGateDay)}','${escJs(id)}',${q-1})" ${q?'':'disabled'}>−</button>
           <span>${q}</span>
-          <button onclick="smTakeaway('${escJs(taGateDay)}','${escJs(id)}',${q+1})" ${q>=9||it.active===false||!items[id]?'disabled':''}>+</button>
+          <button aria-label="Збільшити кількість" onclick="smTakeaway('${escJs(taGateDay)}','${escJs(id)}',${q+1})" ${q>=9||it.active===false||!items[id]?'disabled':''}>+</button>
         </div>` : `<span class="ta-qty-locked">${q||0}</span>`}
       </div>`;
     }).join('');
@@ -181,10 +181,10 @@ export async function renderStaffMeals(){
 
     box.innerHTML = `
       <div class="stm-nav">
-        <button type="button" onclick="smShiftDay(-1)">←</button>
+        <button type="button" aria-label="Попередній день" onclick="smShiftDay(-1)">←</button>
         <div class="stm-day"><b>${escHtml(dowOf(day))}, ${escHtml(human(day))}</b>
           ${day===localDateString?'<span>сьогодні</span>':''}</div>
-        <button type="button" onclick="smShiftDay(1)">→</button>
+        <button type="button" aria-label="Наступний день" onclick="smShiftDay(1)">→</button>
       </div>
       ${m ? (dish || '<div class="pm-none">Меню на цей день порожнє</div>')
           : '<div class="pm-none">Меню на цей день ще не опубліковане</div>'}

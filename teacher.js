@@ -7,7 +7,7 @@
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, push, remove, update, onValue } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { renderNewsFeed } from './news.js';
-import { db, auth, attendanceAuthor, canClearDayAbsence, clearDayAbsence, CLOUDINARY_URL, UPLOAD_PRESET, HW_FILE_EXT, HW_FILE_MAX_MB, fileExt, isImageUrl, isAudioUrl, cldImage, safeHttpUrl, getActiveClass, currentUserData, showToast, displayGrade, validDailyGrade, getClassNum, LEVEL_MAX_CLASS, renderHwItem, renderHwList, dayKeys, formatAttendanceSlotLabel, STICKER_GOAL, stickerGoal, escJs, escHtml, safeUrl, normalizeChildren, notifyEvent, logAction, renderBirthdays, teacherAccessMatrix, getUsersSnap, getStudentDir, stuName, gradeWritePaths, journalBaseDate, journalSlot, localDateString, isMasterTeacher, gradeTypesCache, subjKey, emailKey, subjectsForClassWeek } from './common.js';
+import { db, auth, attendanceAuthor, canClearDayAbsence, clearDayAbsence, CLOUDINARY_URL, UPLOAD_PRESET, HW_FILE_EXT, HW_FILE_MAX_MB, fileExt, isImageUrl, isAudioUrl, cldImage, safeHttpUrl, getActiveClass, currentUserData, showToast, displayGrade, validDailyGrade, getClassNum, LEVEL_MAX_CLASS, LEVEL_LETTERS, renderHwItem, renderHwList, dayKeys, formatAttendanceSlotLabel, STICKER_GOAL, stickerGoal, escJs, escHtml, safeUrl, normalizeChildren, notifyEvent, logAction, renderBirthdays, teacherAccessMatrix, getUsersSnap, getStudentDir, stuName, gradeWritePaths, journalBaseDate, journalSlot, localDateString, isMasterTeacher, gradeTypesCache, subjKey, emailKey, subjectsForClassWeek } from './common.js';
 import { populateTopicSelector, availableTopicsCache, planKey, loadAliases } from './curriculum.js';
 
 let currentHwImages=[];
@@ -257,7 +257,7 @@ async function loadLessonSubmissions(cls, date, subject){
       `).join('');
       const timeStr = s.ts ? new Date(s.ts).toLocaleTimeString('uk-UA', {hour:'2-digit', minute:'2-digit'}) : '';
       return `
-        <details class="hw-sub-student" style="margin-bottom:8px;background:var(--surface-1);border:1px solid var(--line-soft);border-radius:8px;padding:8px;">
+        <details class="hw-sub-student" style="margin-bottom:8px;background:var(--surface);border:1px solid var(--line-soft);border-radius:8px;padding:8px;">
           <summary style="font-weight:700;cursor:pointer;display:flex;justify-content:space-between;align-items:center;">
             <span>👤 ${escHtml(s.studentName || 'Учень')} (${(s.images||[]).length} фото)</span>
             <small style="color:var(--ink-3);font-weight:normal;">⏰ ${timeStr}</small>
@@ -326,7 +326,7 @@ async function loadDailyHomeworkSubmissions(cls, date){
       }).join('');
 
       return `
-        <details class="hw-sub-subj" style="margin-bottom:8px;background:var(--surface-1);border:1px solid var(--line-soft);border-radius:8px;padding:8px;">
+        <details class="hw-sub-subj" style="margin-bottom:8px;background:var(--surface);border:1px solid var(--line-soft);border-radius:8px;padding:8px;">
           <summary style="font-weight:700;cursor:pointer;color:var(--brand-deep);font-size:0.9rem;">
             📘 ${escHtml(sk)} (${students.length} ${students.length === 1 ? 'учень здав' : 'учнів здали'})
           </summary>
@@ -464,10 +464,13 @@ window.openQuickJournal=async function(){
       get(child(ref(db),`student_cards/${cls}`)),
       get(child(ref(db),`grade_scales/${cls}/${subj}`))
     ]);
-    const scaleMax=scaleSnap.exists()?Number(scaleSnap.val().max||scaleSnap.val()):6;
+    const junior=getClassNum(cls)<=LEVEL_MAX_CLASS;
+    const numericScale=!junior&&scaleSnap.exists();
+    const scaleMax=numericScale?Number(scaleSnap.val().max||scaleSnap.val()):6;
     box.dataset.scale=Number.isInteger(scaleMax)?scaleMax:6;
-    box.dataset.numericScale=scaleSnap.exists()?'1':'';
-    box.dataset.modifiers=box.dataset.scale==='6'&&(box.dataset.numericScale==='1'||getClassNum(cls)>LEVEL_MAX_CLASS)?'1':'0';
+    box.dataset.numericScale=numericScale?'1':'';
+    box.dataset.junior=junior?'1':'0';
+    box.dataset.modifiers=box.dataset.scale==='6'&&!junior?'1':'0';
     // [{sid, nm}] — дані ключуються ідентифікатором, людині показуємо імʼя
     const students=stSnap.exists()
       ?Object.entries(stSnap.val()).map(([sid,nm])=>({sid,nm:String(nm)}))
@@ -503,17 +506,27 @@ window.openQuickJournal=async function(){
       const elsewhere=Object.entries(slots)
         .filter(([sk,r])=>r?.status&&sk!==slotKey&&sk!=='all')
         .map(([sk])=>formatAttendanceSlotLabel(sk));
+      const current=String(g[s.sid]||'');
+      const selected=junior?displayGrade(current,cls,false):current;
+      const legacy=junior&&current&&!LEVEL_LETTERS.includes(selected);
+      const gradeControl=junior
+        ? `<select class="qj-g" aria-label="Рівень ${escHtml(s.nm)}" data-orig="${escHtml(selected)}">
+             <option value="">—</option>
+             ${legacy?`<option value="${escHtml(current)}" selected>${escHtml(current)}</option>`:''}
+             ${LEVEL_LETTERS.map(level=>`<option value="${level}" ${selected===level?'selected':''}>${level}</option>`).join('')}
+           </select>`
+        : `<input type="text" class="qj-g" maxlength="${String(box.dataset.scale).length+(box.dataset.modifiers==='1'?1:0)}" value="${escHtml(current)}"
+             data-orig="${escHtml(current)}" placeholder="${box.dataset.modifiers==='1'?'1–6 ±':`1–${box.dataset.scale}`}">`;
       return `<div class="qj-row" data-sid="${escHtml(s.sid)}" data-name="${escHtml(s.nm)}">
         <div class="qj-n">${i+1}</div>
         <div class="qj-name">${escHtml(s.nm)}${allerg[s.sid]?` <span class="po-allergy" data-tip="${escHtml(allerg[s.sid])}">⚠️</span>`:''}${
           elsewhere.length?`<span class="qj-elsewhere" data-tip="Відмічено на іншому уроці">· ${escHtml(elsewhere.join(', '))}</span>`:''}</div>
         <div class="qj-att">
-          <button type="button" class="qj-b ok${status===''?' on':''}"   onclick="qjSet(this,'')">✓</button>
-          <button type="button" class="qj-b lt${status==='late'?' on':''}" onclick="qjSet(this,'late')">З</button>
-          <button type="button" class="qj-b ab${status==='absent'?' on':''}" onclick="qjSet(this,'absent')">Н</button>
+          <button type="button" class="qj-b ok${status===''?' on':''}" aria-label="Присутній: ${escHtml(s.nm)}" onclick="qjSet(this,'')">✓</button>
+          <button type="button" class="qj-b lt${status==='late'?' on':''}" aria-label="Запізнився: ${escHtml(s.nm)}" onclick="qjSet(this,'late')">З</button>
+          <button type="button" class="qj-b ab${status==='absent'?' on':''}" aria-label="Відсутній: ${escHtml(s.nm)}" onclick="qjSet(this,'absent')">Н</button>
         </div>
-        <input type="text" class="qj-g" maxlength="${String(box.dataset.scale).length+(box.dataset.modifiers==='1'?1:0)}" value="${escHtml(g[s.sid]||'')}"
-               data-orig="${escHtml(g[s.sid]||'')}" placeholder="${box.dataset.modifiers==='1'?'1–6 ±':`1–${box.dataset.scale}`}">
+        ${gradeControl}
       </div>`;
     }).join('');
     // Тип оцінки — один на весь урок, як зазвичай і буває
@@ -541,15 +554,17 @@ window.saveQuickJournal=async function(){
   const gtype=document.getElementById('qj-type').value;
   const slotKey=document.getElementById('qj-body').dataset.slot||'all';
   const rows=Array.from(document.querySelectorAll('.qj-row'));
-  const max=Number(document.getElementById('qj-body').dataset.scale||6);
-  const modifiers=document.getElementById('qj-body').dataset.modifiers==='1';
+  const qjBody=document.getElementById('qj-body');
+  const max=Number(qjBody.dataset.scale||6);
+  const junior=getClassNum(cls)<=LEVEL_MAX_CLASS;
+  const modifiers=qjBody.dataset.modifiers==='1';
   const bad=rows.find(r=>{
     const input=r.querySelector('.qj-g');
     const v=input.value.trim().replace('−','-');
     const original=String(input.dataset.orig||'').trim().replace('−','-');
-    return v!==original&&v&&(!validDailyGrade(v,max)||(/[+\-]$/.test(v)&&!modifiers));
+    return v!==original&&v&&(junior?!LEVEL_LETTERS.includes(v.toUpperCase()):!validDailyGrade(v,max)||(/[+\-]$/.test(v)&&!modifiers));
   });
-  if(bad)return alert(modifiers?'Оцінки мають бути від 1 до 6; можна додати + або −.':`Оцінки мають бути від 1 до ${max}.`);
+  if(bad)return alert(junior?'Оберіть рівень: П, С, Д або В.':modifiers?'Оцінки мають бути від 1 до 6; можна додати + або −.':`Оцінки мають бути від 1 до ${max}.`);
   // У швидкому журналі та сама пастка: дата береться з поля вгорі сторінки.
   if(rows.some(r=>r.dataset.status!==undefined)&&!confirmAttendanceDate(date))return;
   const btn=document.getElementById('btn-qj-save');
@@ -1086,7 +1101,7 @@ async function loadTextbooksForTeacher(refresh=true){
     let html='';
     if(snap.exists())for(const [key,tb] of Object.entries(snap.val()||{})){
       if(!tb||typeof tb!=='object')continue;
-      html+=`<div class="textbook-item">📘 <a href="${escHtml(safeUrl(tb.url))}" target="_blank" rel="noopener noreferrer">${escHtml(tb.title||tb.url)}</a><button onclick="removeTextbook('${escJs(cls)}','${escJs(subj)}','${escJs(key)}')" style="background:none;border:none;color:var(--danger);cursor:pointer;padding:0;width:auto;margin:0;font-size:1rem;">✖</button></div>`;
+      html+=`<div class="textbook-item">📘 <a href="${escHtml(safeUrl(tb.url))}" target="_blank" rel="noopener noreferrer">${escHtml(tb.title||tb.url)}</a><button aria-label="Видалити підручник ${escHtml(tb.title||tb.url)}" onclick="removeTextbook('${escJs(cls)}','${escJs(subj)}','${escJs(key)}')" style="background:none;border:none;color:var(--danger);cursor:pointer;padding:0;width:auto;margin:0;font-size:1rem;">✖</button></div>`;
     }
     container.innerHTML=html||'<p class="empty-msg">Підручників ще не додано.</p>';
   }catch(e){if(gen===textbookGeneration)container.innerHTML=`<p class="empty-msg">Не вдалося завантажити підручники: ${escHtml(e.message)}</p>`;}
@@ -1659,7 +1674,7 @@ export async function listenTeacherAttendance(){
             const bc = r.status==='late'?'badge-late':'badge-absent';
             const lb = r.status==='late'?'Запізнення':'Відсутність';
             const mi = r.markedBy==='teacher'?'👨‍🏫':(r.markedBy==='student'?'🎒':'👪');
-            h += `<li style="margin-bottom:7px;border-bottom:1px dashed var(--line-soft);padding-bottom:4px;"><span style="font-size:.72rem;background:var(--brand-ink);color:#fff;padding:2px 5px;border-radius:4px;margin-right:4px;">${i} Кл</span> <b>${escHtml(stuName(`class_${i}`, st))}</b> <span class="badge ${bc}">${lb}</span> <span style="font-size:.72rem;color:var(--ink-3);">${escHtml(formatAttendanceSlotLabel(sk))} ${mi}</span></li>`;
+            h += `<li style="margin-bottom:7px;border-bottom:1px dashed var(--line-soft);padding-bottom:4px;"><span style="font-size:.75rem;background:var(--brand-ink);color:#fff;padding:2px 5px;border-radius:4px;margin-right:4px;">${i} Кл</span> <b>${escHtml(stuName(`class_${i}`, st))}</b> <span class="badge ${bc}">${lb}</span> <span style="font-size:.75rem;color:var(--ink-3);">${escHtml(formatAttendanceSlotLabel(sk))} ${mi}</span></li>`;
           }
         }
       }
@@ -1844,8 +1859,8 @@ window.saveComment=async function(){
 // ══════════ EXAMS ══════════
 window.openExamsCalendar=function(){document.getElementById('exams-modal').style.display='flex';document.getElementById('exam-class-label').innerText=document.getElementById('t-class-selector').options[document.getElementById('t-class-selector').selectedIndex].text;document.getElementById('exams-day-details').style.display='none';const mi=document.getElementById('exam-month-select');const dp=document.getElementById('global-date').value.split('-');mi.value=`${dp[0]}-${dp[1]}`;renderExamsCalendar();};
 window.closeExamsModal=function(){document.getElementById('exams-modal').style.display='none';};
-window.renderExamsCalendar=function(){const cls=getActiveClass();const ym=document.getElementById('exam-month-select').value;if(!ym)return;const[y,m]=ym.split('-');get(child(ref(db),`exams/${cls}/${y}-${m}`)).then(snap=>{const d=snap.exists()?snap.val():{};let h='<div class="cal-grid">';['Пн','Вт','Ср','Чт','Пт','Сб','Нд'].forEach(d2=>h+=`<div class="cal-header">${d2}</div>`);const dim=new Date(y,parseInt(m),0).getDate();let fd=new Date(y,parseInt(m)-1,1).getDay();if(fd===0)fd=7;for(let i=1;i<fd;i++)h+=`<div></div>`;for(let i=1;i<=dim;i++){const cd=`${y}-${m}-${String(i).padStart(2,'0')}`;const cnt=d[cd]?Object.keys(d[cd]).length:0;const cc=cnt===1?'has-1':cnt>=2?'has-2':'';h+=`<div class="cal-day ${cc}" onclick="manageDayExams('${cd}')">${i}<br><small style="font-size:.68rem;">${cnt>0?cnt+' к.р.':''}</small></div>`;}h+='</div>';document.getElementById('exams-cal-container').innerHTML=h;});};
-window.manageDayExams=function(ds){const cls=getActiveClass();const dd=document.getElementById('exams-day-details');dd.style.display='block';get(child(ref(db),`exams/${cls}/${ds.substring(0,7)}/${ds}`)).then(snap=>{let ex=snap.exists()?snap.val():{};let lh='';for(let s in ex){const me=ex[s]===auth.currentUser.uid;const db2=me?`<button onclick="deleteExam('${ds}','${escJs(s)}')" style="background:none;border:none;color:var(--danger);cursor:pointer;font-weight:700;padding:0 4px;width:auto;margin:0;font-size:1.1rem;">✖</button>`:'';lh+=`<li style="margin-bottom:7px;display:flex;justify-content:space-between;align-items:center;background:#fff;padding:7px 11px;border-radius:8px;border:1px solid var(--line-soft);"><span><b>${s}</b></span>${db2}</li>`;}let h=`<h4 style="margin-top:0;color:var(--warn);border-bottom:1px dashed var(--warn);padding-bottom:9px;">Контрольні: ${ds.split('-').reverse().join('.')}</h4>`;h+=`<ul style="padding-left:0;list-style:none;margin-bottom:13px;">${lh||'<li class="empty-msg">Жодної</li>'}</ul>`;const[yy,mm,dd2]=ds.split('-');const dn=dayKeys[new Date(yy,mm-1,dd2).getDay()];let ds2=new Set();window.getTodayLessonsFlattened(dn).forEach(item=>{const sn=window.getValidSubjectName(item);if(sn)ds2.add(sn);});let fe=currentUserData.role==='teacher'?[...ds2].filter(s=>window.isSubjectAllowed(cls,s)).sort():[...ds2].sort();let so=fe.map(s=>`<option value="${s}">${s}</option>`).join('');if(!so){so='<option disabled>Немає предметів</option>';}h+=`<div style="display:flex;gap:9px;"><select id="exam-add-subj" style="flex:1;margin:0;">${so}</select><button style="background:var(--ok);color:#fff;width:auto;padding:9px 13px;margin:0;" onclick="addExam('${ds}')">Додати</button></div>`;dd.innerHTML=h;});};
+window.renderExamsCalendar=function(){const cls=getActiveClass();const ym=document.getElementById('exam-month-select').value;if(!ym)return;const[y,m]=ym.split('-');get(child(ref(db),`exams/${cls}/${y}-${m}`)).then(snap=>{const d=snap.exists()?snap.val():{};let h='<div class="cal-grid">';['Пн','Вт','Ср','Чт','Пт','Сб','Нд'].forEach(d2=>h+=`<div class="cal-header">${d2}</div>`);const dim=new Date(y,parseInt(m),0).getDate();let fd=new Date(y,parseInt(m)-1,1).getDay();if(fd===0)fd=7;for(let i=1;i<fd;i++)h+=`<div></div>`;for(let i=1;i<=dim;i++){const cd=`${y}-${m}-${String(i).padStart(2,'0')}`;const cnt=d[cd]?Object.keys(d[cd]).length:0;const cc=cnt===1?'has-1':cnt>=2?'has-2':'';h+=`<div class="cal-day ${cc}" role="button" tabindex="0" aria-label="Контрольні ${i}.${m}.${y}: ${cnt}" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" onclick="manageDayExams('${cd}')">${i}<br><small style="font-size:.75rem;">${cnt>0?cnt+' к.р.':''}</small></div>`;}h+='</div>';document.getElementById('exams-cal-container').innerHTML=h;});};
+window.manageDayExams=function(ds){const cls=getActiveClass();const dd=document.getElementById('exams-day-details');dd.style.display='block';get(child(ref(db),`exams/${cls}/${ds.substring(0,7)}/${ds}`)).then(snap=>{let ex=snap.exists()?snap.val():{};let lh='';for(let s in ex){const me=ex[s]===auth.currentUser.uid;const db2=me?`<button aria-label="Видалити контрольну з ${escHtml(s)}" onclick="deleteExam('${ds}','${escJs(s)}')" style="background:none;border:none;color:var(--danger);cursor:pointer;font-weight:700;padding:0 4px;width:auto;margin:0;font-size:1.1rem;">✖</button>`:'';lh+=`<li style="margin-bottom:7px;display:flex;justify-content:space-between;align-items:center;background:#fff;padding:7px 11px;border-radius:8px;border:1px solid var(--line-soft);"><span><b>${escHtml(s)}</b></span>${db2}</li>`;}let h=`<h4 style="margin-top:0;color:var(--warn);border-bottom:1px dashed var(--warn);padding-bottom:9px;">Контрольні: ${ds.split('-').reverse().join('.')}</h4>`;h+=`<ul style="padding-left:0;list-style:none;margin-bottom:13px;">${lh||'<li class="empty-msg">Жодної</li>'}</ul>`;const[yy,mm,dd2]=ds.split('-');const dn=dayKeys[new Date(yy,mm-1,dd2).getDay()];let ds2=new Set();window.getTodayLessonsFlattened(dn).forEach(item=>{const sn=window.getValidSubjectName(item);if(sn)ds2.add(sn);});let fe=currentUserData.role==='teacher'?[...ds2].filter(s=>window.isSubjectAllowed(cls,s)).sort():[...ds2].sort();let so=fe.map(s=>`<option value="${escHtml(s)}">${escHtml(s)}</option>`).join('');if(!so){so='<option disabled>Немає предметів</option>';}h+=`<div style="display:flex;gap:9px;"><select id="exam-add-subj" style="flex:1;margin:0;">${so}</select><button style="background:var(--ok);color:#fff;width:auto;padding:9px 13px;margin:0;" onclick="addExam('${ds}')">Додати</button></div>`;dd.innerHTML=h;});};
 window.addExam=function(ds){const s=document.getElementById('exam-add-subj').value;if(!s)return;const cls=getActiveClass();const ym=ds.substring(0,7);get(child(ref(db),`exams/${cls}/${ym}/${ds}`)).then(snap=>{let cnt=snap.exists()?Object.keys(snap.val()).length:0;if(cnt>=2)return alert('❌ Ліміт: більше 2 контрольних не можна!');set(ref(db,`exams/${cls}/${ym}/${ds}/${s}`),auth.currentUser.uid).then(()=>{renderExamsCalendar();manageDayExams(ds);});});};
 window.deleteExam=function(ds,s){const cls=getActiveClass();remove(ref(db,`exams/${cls}/${ds.substring(0,7)}/${ds}/${s}`)).then(()=>{renderExamsCalendar();manageDayExams(ds);});};
 // ══════════ REACTIONS & WRAPPED (teacher side) ══════════
@@ -1915,7 +1930,7 @@ window.openStickerStatsModal=async function(){
       <div style="background:var(--line-soft);border-radius:6px;height:8px;margin-top:7px;overflow:hidden;">
         <div style="background:linear-gradient(90deg,var(--warn-line),var(--warn-line));height:100%;width:${pct}%;"></div>
       </div>
-      <div style="font-size:.72rem;color:var(--ink-3);margin-top:3px;text-align:right;">${s.count}/${goal} до призу</div>
+      <div style="font-size:.75rem;color:var(--ink-3);margin-top:3px;text-align:right;">${s.count}/${goal} до призу</div>
     </li>`;
   });
   h+='</ul>';

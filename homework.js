@@ -160,12 +160,12 @@ export async function renderHwWeekView(boxId, weekStart){
 
   const nav = `
     <div class="hw-nav">
-      <button type="button" onclick="hwShiftWeek(-1)">←</button>
+      <button type="button" aria-label="Попередній тиждень" onclick="hwShiftWeek(-1)">←</button>
       <div class="hw-nav-mid">
         <b>${escHtml(human(days[0]))} – ${escHtml(human(days[4]))}</b>
         <span>${total ? `завдань: ${total}` : 'завдань немає'}</span>
       </div>
-      <button type="button" onclick="hwShiftWeek(1)">→</button>
+      <button type="button" aria-label="Наступний тиждень" onclick="hwShiftWeek(1)">→</button>
     </div>
     ${hwWeek!==mondayOf(today)
       ? `<button type="button" class="hw-today" onclick="hwShiftWeek(0)">Повернутися до поточного тижня</button>` : ''}`;
