@@ -754,21 +754,40 @@ export function loadParentDashboard(){
   // Dynamic schedule
   if(window.schedule){renderDynamicSchedule();if(parentLessonInterval)clearInterval(parentLessonInterval);parentLessonInterval=setInterval(renderDynamicSchedule,30000);}
   // Stickers
-  const sName = currentUserData?.studentName || '';
-  const sId = currentUserData?.studentId || '';
-  const resolvedSid = (typeof stuId === 'function' ? stuId(cls, sName) : '') || '';
-  const keysToTry = [...new Set([sId, resolvedSid, sName].filter(Boolean))];
+  (async () => {
+    try {
+      const sName = currentUserData?.studentName || '';
+      let sId = currentUserData?.studentId || '';
+      let resolvedSid = '';
+      try {
+        const dir = await getStudentDir(cls);
+        resolvedSid = resolveStudentKey(dir, sId, sName).key || '';
+      } catch(e) {}
+      if (!sId && resolvedSid) sId = resolvedSid;
+      const keysToTry = [...new Set([sId, resolvedSid, sName].filter(Boolean))];
 
-  Promise.all(keysToTry.map(k => get(child(ref(db), `stickers/${cls}/${k}`))))
-    .then(snaps => {
+      const [classStickersSnap, ...directSnaps] = await Promise.all([
+        get(child(ref(db), `stickers/${cls}`)).catch(() => null),
+        ...keysToTry.map(k => get(child(ref(db), `stickers/${cls}/${k}`)).catch(() => null))
+      ]);
+
       const goal = stickerGoal(cls);
       const data = {};
-      snaps.forEach(snap => {
+      directSnaps.forEach(snap => {
         if (snap && snap.exists()) {
           const val = snap.val();
           if (val && typeof val === 'object') Object.assign(data, val);
         }
       });
+      if (classStickersSnap && classStickersSnap.exists()) {
+        const classData = classStickersSnap.val() || {};
+        keysToTry.forEach(k => {
+          if (classData[k] && typeof classData[k] === 'object') {
+            Object.assign(data, classData[k]);
+          }
+        });
+      }
+
       const cnt = Object.keys(data).length;
       const pct = Math.min((cnt / goal) * 100, 100);
       const progEl = document.getElementById('p-ribbon-progress');
@@ -786,11 +805,12 @@ export function loadParentDashboard(){
           me.innerText = '';
         }
       }
-    })
-    .catch(() => {
+    } catch(e) {
+      console.warn('loadParentStickers:', e.message);
       const countEl = document.getElementById('p-ribbon-count');
       if (countEl) countEl.innerText = "Помилка";
-    });
+    }
+  })();
   // Att status (self-report confirmation lives under the "all" slot)
   renderSelfAttStatus('parent');
   // Persistent alert if the teacher marked something the parent hasn't acknowledged
@@ -1117,21 +1137,40 @@ export function loadStudentDashboard(){
   if(!currentUserData)return;const date=document.getElementById('global-date').value;const cls=getActiveClass();
   fillAttReasons('s');
   if(window.schedule){renderDynamicSchedule('student');if(parentLessonInterval)clearInterval(parentLessonInterval);parentLessonInterval=setInterval(()=>renderDynamicSchedule('student'),30000);}
-  const sName = currentUserData?.studentName || '';
-  const sId = currentUserData?.studentId || '';
-  const resolvedSid = (typeof stuId === 'function' ? stuId(cls, sName) : '') || '';
-  const keysToTry = [...new Set([sId, resolvedSid, sName].filter(Boolean))];
+  (async () => {
+    try {
+      const sName = currentUserData?.studentName || '';
+      let sId = currentUserData?.studentId || '';
+      let resolvedSid = '';
+      try {
+        const dir = await getStudentDir(cls);
+        resolvedSid = resolveStudentKey(dir, sId, sName).key || '';
+      } catch(e) {}
+      if (!sId && resolvedSid) sId = resolvedSid;
+      const keysToTry = [...new Set([sId, resolvedSid, sName].filter(Boolean))];
 
-  Promise.all(keysToTry.map(k => get(child(ref(db), `stickers/${cls}/${k}`))))
-    .then(snaps => {
+      const [classStickersSnap, ...directSnaps] = await Promise.all([
+        get(child(ref(db), `stickers/${cls}`)).catch(() => null),
+        ...keysToTry.map(k => get(child(ref(db), `stickers/${cls}/${k}`)).catch(() => null))
+      ]);
+
       const goal = stickerGoal(cls);
       const data = {};
-      snaps.forEach(snap => {
+      directSnaps.forEach(snap => {
         if (snap && snap.exists()) {
           const val = snap.val();
           if (val && typeof val === 'object') Object.assign(data, val);
         }
       });
+      if (classStickersSnap && classStickersSnap.exists()) {
+        const classData = classStickersSnap.val() || {};
+        keysToTry.forEach(k => {
+          if (classData[k] && typeof classData[k] === 'object') {
+            Object.assign(data, classData[k]);
+          }
+        });
+      }
+
       const cnt = Object.keys(data).length;
       const pct = Math.min((cnt / goal) * 100, 100);
       const progEl = document.getElementById('s-ribbon-progress');
@@ -1140,7 +1179,10 @@ export function loadStudentDashboard(){
       if (history) history.innerHTML = renderStickerHistory(data);
       const countEl = document.getElementById('s-ribbon-count');
       if (countEl) countEl.innerText = `${cnt} / ${goal} наліпок до призу`;
-    });
+    } catch(e) {
+      console.warn('loadStudentStickers:', e.message);
+    }
+  })();
   renderSelfAttStatus('student');
   checkTeacherAttendanceAlert('student');
   renderParentCalendar('student');loadParentBellSchedule('student');
