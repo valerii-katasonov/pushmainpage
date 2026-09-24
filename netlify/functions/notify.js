@@ -176,6 +176,10 @@ async function findClassTargets(token, cls) {
 // Тому порівнюємо в один бік: обидві сторони зводимо до ключа. Клієнт
 // може слати і ключ, і справжню адресу — результат той самий.
 const emailKey = (e) => String(e || '').trim().toLowerCase().replace(/\./g, '_');
+// Сьогодні за Варшавою (сервер Netlify живе в UTC)
+function warsawToday(){
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Warsaw', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+}
 async function findByEmails(token, emails) {
   const all = await readDb(token, 'push_tokens');
   if (!all || typeof all !== 'object') return [];
@@ -289,7 +293,19 @@ const EVENTS = {
   grade:      (p) => ({ title: '📊 Нова оцінка', body: `${p.subject || 'Предмет'}: ${p.value || ''}`.trim(), tag: 'grade' }),
   absence:    (p) => ({ title: '🚨 Відсутність на уроці', body: `Учитель відмітив відсутність${p.subject ? ' — ' + p.subject : ''}`, tag: 'absence' }),
   late:       (p) => ({ title: '⏰ Запізнення на урок', body: `Учитель відмітив запізнення${p.subject ? ' — ' + p.subject : ''}`, tag: 'late' }),
-  attendance_report: (p) => ({ title: p.value === 'late' ? '⏰ Учень запізнюється' : '🚨 Учень буде відсутній', body: `Родина повідомила про ${p.value === 'late' ? 'запізнення' : 'відсутність'}. Подробиці — у відвідуваності класу.`, tag: 'attendance-report' }),
+  // СПЕРШУ — ХТО, ПОТІМ — ЩО. Учитель на уроці бачить сповіщення краєм ока:
+  // «Учень запізнюється» змушувало відкривати портал, щоб дізнатися, хто
+  // саме. Тепер у заголовку дитина і клас, у тексті — що сталося.
+  // Причину відсутності («через хворобу») не пишемо: сповіщення видно на
+  // екрані блокування. Хвилини запізнення — пишемо, вони нічого не
+  // розкривають і саме їх учитель хоче знати.
+  // tag — окремий на кожну дитину: раніше тег був спільний, і друге
+  // сповіщення тихо заміняло перше.
+  attendance_report: (p) => ({
+    title: [p.student, p.clsLabel].filter(Boolean).join(', ') || 'Учень',
+    body: (p.value === 'late' ? `⏰ Запізнюється${p.reason ? ' ' + p.reason : ''}` : '🚨 Не буде на уроках')
+          + (p.day ? ` · ${p.day}` : ''),
+    tag: 'attendance-report-' + (p.tagKey || 'x') }),
   comment:    (p) => ({ title: '💬 Коментар учителя', body: p.subject ? `Новий коментар: ${p.subject}` : 'Новий коментар у щоденнику', tag: 'comment' }),
   homework:   (p) => ({ title: '📚 Нове завдання', body: `${p.subject || 'Предмет'}: задано домашнє завдання`, tag: 'hw' }),
   chat:       (p) => ({ title: '💬 Нове повідомлення',
@@ -339,11 +355,24 @@ exports.handler = async (event) => {
   if (body.type === 'chat' && !(Array.isArray(body.to) && body.to.length))
     return fail(400, 'Не вказано, кому надсилати', origin);
 
+  // Для повідомлення про відсутність/запізнення: дата й хвилини — лише
+  // у відомому вигляді. Функція приймає запити без входу, тож вільний
+  // текст сюди не пускаємо.
+  const reportDate = /^\d{4}-\d{2}-\d{2}$/.test(String(body.date || '')) ? String(body.date) : '';
+  const lateReason = String(body.reason || '');
   const msg = build({
     subject: String(body.subject || '').slice(0, 80),
     // 120, а не 20: ліміт ставився під оцінку («12»), але сюди приходить
     // і текст на кшталт «нове повідомлення» — його різало на півслові.
-    value: String(body.value || '').slice(0, 120)
+    value: String(body.value || '').slice(0, 120),
+    student: studentName,
+    clsLabel: /^class_\d{1,2}$/.test(cls) ? cls.replace('class_', '') + ' клас' : '',
+    reason: /^(на \d{1,2} хвилин|до \d{1,2}-го уроку)$/.test(lateReason) ? lateReason : '',
+    // Сьогоднішню дату не пишемо — «· 24.09» у день самого уроку лише
+    // заважає; інший день (зазвичай завтра) показуємо.
+    day: reportDate && reportDate !== warsawToday()
+      ? reportDate.slice(8, 10) + '.' + reportDate.slice(5, 7) : '',
+    tagKey: crypto.createHash('sha1').update(cls + '|' + studentName).digest('hex').slice(0, 12)
   });
 
   try {
@@ -384,7 +413,7 @@ exports.handler = async (event) => {
       grade:    'grades',
       absence:  'day',
       late:     'day',
-      attendance_report: 'day',
+      attendance_report: 'att',   // «Сьогодні» і одразу до блоку відвідуваності
       // МЕНЮ Й ДЗ МАЮТЬ ВЛАСНІ ВКЛАДКИ. Обидва вели на «Сьогодні» — так
       // було, коли окремих вкладок не існувало. Тепер батько зі сповіщення
       // «оновлено меню» потрапляв на розклад і шукав меню сам.
@@ -397,7 +426,12 @@ exports.handler = async (event) => {
     // дозволених джерел: у тому списку тепер є і старий домен, і
     // localhost, і порядок у ньому — не місце вирішувати, куди вести
     // людину зі сповіщення.
-    const url = `${CABINET_URL}?open=${tab}`;
+    // Для відвідуваності в адресі ще клас і дата: учитель може дивитися
+    // інший свій клас або інший день, а відмітка стоїть саме тут.
+    const extra = body.type === 'attendance_report'
+      ? (/^class_\d{1,2}$/.test(cls) ? `&cls=${cls}` : '') + (reportDate ? `&date=${reportDate}` : '')
+      : '';
+    const url = `${CABINET_URL}?open=${tab}${extra}`;
     const results = await Promise.allSettled(targets.map(t =>
       fetch(`https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`, {
         method: 'POST',
