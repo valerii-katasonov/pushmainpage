@@ -7,7 +7,7 @@
 // header for why.)
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, push, remove, update, query, limitToLast, orderByKey, endBefore } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { auth, db, attendanceAuthor, canClearDayAbsence, clearDayAbsence, showToast, getClassNum, LEVEL_MAX_CLASS, displayGrade, gradeClass6, teacherAccessMatrix, getWeekDates, formatAttendanceSlotLabel, gradeTypesCache, loadGradeTypesCache, calculateStudentWeightedAvg, escJs, escHtml, localDateString, normalizeRoles, getUserRoles, mergeAccountRoles, parentAccountPatch, ROLE_LABELS, currentUserData, dayNamesUA, sendPasswordReset, normalizeChildren, renderParentsBlock, logAction, AUDIT_LABELS, getParentProfile, parentFullName, getSchoolRange, getAllUsers, invalidateUsersCache, getUsersSnap, stuName, invalidateStudentDir, subjectsLabel, syncStaffCard, shrinkImage, dayKeys, invalidateParentLinks, emailKey } from './common.js';
+import { auth, db, countAttendanceDays, attendanceAuthor, canClearDayAbsence, clearDayAbsence, showToast, getClassNum, LEVEL_MAX_CLASS, displayGrade, gradeClass6, teacherAccessMatrix, getWeekDates, formatAttendanceSlotLabel, gradeTypesCache, loadGradeTypesCache, calculateStudentWeightedAvg, escJs, escHtml, localDateString, normalizeRoles, getUserRoles, mergeAccountRoles, parentAccountPatch, ROLE_LABELS, currentUserData, dayNamesUA, sendPasswordReset, normalizeChildren, renderParentsBlock, logAction, AUDIT_LABELS, getParentProfile, parentFullName, getSchoolRange, getAllUsers, invalidateUsersCache, getUsersSnap, stuName, invalidateStudentDir, subjectsLabel, syncStaffCard, shrinkImage, dayKeys, invalidateParentLinks, emailKey } from './common.js';
 
 let directorSkillsTemp=[];
 
@@ -801,7 +801,7 @@ export async function loadDirectorDashboard(){
   // сталося в кабінеті батьків — і з тієї ж причини.
   try{ if(window.renderActivitySummary) window.renderActivitySummary('d-activities','school'); }
   catch(e){ console.error('Басейн/автобус (директор):', e); }
-  try{const date=document.getElementById('global-date').value;const dp=date.split('-');document.getElementById('d-att-header').innerText=`🚨 Відсутні (${dp[2]}.${dp[1]}, вся школа)`;const wd=getWeekDates(date);let hw=0,com=0,wl=0,wa=0,attHtml='';const _lo=wd[0]<date?wd[0]:date, _hi=wd[wd.length-1]>date?wd[wd.length-1]:date;const[hd,cd,ad]=await Promise.all([getSchoolRange('homeworks',_lo,_hi),getSchoolRange('comments',_lo,_hi),getSchoolRange('attendance',_lo,_hi)]);for(let i=1;i<=11;i++){const c=`class_${i}`;if(hd[c]&&hd[c][date])hw+=Object.keys(hd[c][date]).length;if(cd[c]&&cd[c][date]){for(let s in cd[c][date])if(typeof cd[c][date][s]==='object')com+=Object.keys(cd[c][date][s]).length;}if(ad[c]&&ad[c][date])for(let st in ad[c][date]){const slots=ad[c][date][st];for(let sk in slots){const r=slots[sk];if(r?.status){const bc=r.status==='late'?'badge-late':'badge-absent';const lb=r.status==='late'?'Запізнення':'Відсутність';const markerIcon=r.markedBy==='teacher'?'👨‍🏫':(r.markedBy==='student'?'🎒':'👪');const undo=(sk==='all'&&canClearDayAbsence(currentUserData&&currentUserData.role))?` <button type="button" class="att-undo" onclick="clearDayAbsence('${escJs(c)}','${escJs(st)}','${escJs(date)}',loadDirectorDashboard)">Зняти</button>`:'';attHtml+=`<li class="att-item"><div class="att-item-main"><div class="att-item-head"><span class="att-cls">${i} Кл</span> <b>${escHtml(stuName(c, st))}</b> <span class="badge ${bc}">${lb}</span></div><div class="att-item-sub">${escHtml(formatAttendanceSlotLabel(sk))} ${markerIcon}${r.reason?` · ${escHtml(r.reason)}`:''}</div>${attendanceAuthor(r)?`<div class="att-item-who">поставив: ${escHtml(attendanceAuthor(r))}</div>`:''}</div>${undo}</li>`;}}}if(ad[c])wd.forEach(w=>{if(ad[c][w]&&typeof ad[c][w]==='object')Object.values(ad[c][w]).forEach(slots=>{if(slots&&typeof slots==='object')Object.values(slots).forEach(r=>{if(r?.status==='late')wl++;else if(r?.status==='absent')wa++;});});});}// Підпис «сьогодні» був неправдою: лічильники рахують ОБРАНУ дату в
+  try{const date=document.getElementById('global-date').value;const dp=date.split('-');document.getElementById('d-att-header').innerText=`🚨 Відсутні (${dp[2]}.${dp[1]}, вся школа)`;const wd=getWeekDates(date);let hw=0,com=0,wl=0,wa=0,attHtml='';const _lo=wd[0]<date?wd[0]:date, _hi=wd[wd.length-1]>date?wd[wd.length-1]:date;const[hd,cd,ad]=await Promise.all([getSchoolRange('homeworks',_lo,_hi),getSchoolRange('comments',_lo,_hi),getSchoolRange('attendance',_lo,_hi)]);for(let i=1;i<=11;i++){const c=`class_${i}`;if(hd[c]&&hd[c][date])hw+=Object.keys(hd[c][date]).length;if(cd[c]&&cd[c][date]){for(let s in cd[c][date])if(typeof cd[c][date][s]==='object')com+=Object.keys(cd[c][date][s]).length;}if(ad[c]&&ad[c][date])for(let st in ad[c][date]){const slots=ad[c][date][st];for(let sk in slots){const r=slots[sk];if(r?.status){const bc=r.status==='late'?'badge-late':'badge-absent';const lb=r.status==='late'?'Запізнення':'Відсутність';const markerIcon=r.markedBy==='teacher'?'👨‍🏫':(r.markedBy==='student'?'🎒':'👪');const undo=(sk==='all'&&canClearDayAbsence(currentUserData&&currentUserData.role))?` <button type="button" class="att-undo" onclick="clearDayAbsence('${escJs(c)}','${escJs(st)}','${escJs(date)}',loadDirectorDashboard)">Зняти</button>`:'';attHtml+=`<li class="att-item"><div class="att-item-main"><div class="att-item-head"><span class="att-cls">${i} Кл</span> <b>${escHtml(stuName(c, st))}</b> <span class="badge ${bc}">${lb}</span></div><div class="att-item-sub">${escHtml(formatAttendanceSlotLabel(sk))} ${markerIcon}${r.reason?` · ${escHtml(r.reason)}`:''}</div>${attendanceAuthor(r)?`<div class="att-item-who">поставив: ${escHtml(attendanceAuthor(r))}</div>`:''}</div>${undo}</li>`;}}}/* Учень × день, а не кожен урок — див. countAttendanceDays у common.js */if(ad[c]){const k=countAttendanceDays({[c]:ad[c]},wd);wl+=k.late;wa+=k.absent;}}// Підпис «сьогодні» був неправдою: лічильники рахують ОБРАНУ дату в
 // шапці кабінету, а не поточний день. Через це старе ДЗ виглядало як
 // сьогоднішнє. Тепер дата написана прямо на картці.
 const dLabel=date.split('-').reverse().slice(0,2).join('.');
@@ -2571,39 +2571,48 @@ window.toggleWeekBreakdown = async function(){
     const UA = ['Пн','Вт','Ср','Чт','Пт','Сб','Нд'];
     let h = `<p class="hwb-date">Тиждень ${escHtml(wd[0].split('-').reverse().join('.'))}`
           + ` – ${escHtml(wd[wd.length-1].split('-').reverse().join('.'))}</p>`;
-    let late = 0, absent = 0, days = 0;
+    let days = 0;
+    // Підсумок — тією ж функцією, що й число на картці: учень × день.
+    // Раніше тут складалися всі відмітки по уроках, і деталі показували
+    // «відсутностей 2» там, де був один учень на двох уроках.
+    const { late, absent } = countAttendanceDays(ad, wd);
 
     wd.forEach((ds, di) => {
-      const rows = [];
+      // Один рядок на учня за день; уроки — переліком усередині.
+      const people = [];
       Object.keys(ad).sort((a,b)=>getClassNum(a)-getClassNum(b)).forEach(c => {
         const byStudent = (ad[c] && ad[c][ds]) || {};
         Object.keys(byStudent).forEach(st => {
           const slots = byStudent[st] || {};
-          Object.keys(slots).forEach(sk => {
-            const r = slots[sk];
-            if(!r || !r.status) return;
-            if(r.status === 'late') late++; else if(r.status === 'absent') absent++;
-            rows.push({ c, st, sk, r });
-          });
+          const marks = Object.keys(slots)
+            .map(sk => ({ sk, r: slots[sk] }))
+            .filter(m => m.r && (m.r.status === 'late' || m.r.status === 'absent'));
+          if(marks.length) people.push({ c, st, marks });
         });
       });
-      if(!rows.length) return;
+      if(!people.length) return;
       days++;
       h += `<div class="hwb-cls"><b>${UA[di]}, ${escHtml(ds.split('-').reverse().slice(0,2).join('.'))}</b>`
-         + ` <span>${rows.length}</span></div>`;
-      rows.forEach(({c, st, sk, r}) => {
-        const badge = r.status === 'late' ? 'badge-late' : 'badge-absent';
-        const label = r.status === 'late' ? 'Запізнення' : 'Відсутність';
+         + ` <span>${people.length}</span></div>`;
+      people.forEach(({c, st, marks}) => {
+        const badges = ['absent', 'late']
+          .filter(s => marks.some(m => m.r.status === s))
+          .map(s => `<span class="badge ${s === 'late' ? 'badge-late' : 'badge-absent'}">${s === 'late' ? 'Запізнення' : 'Відсутність'}</span>`)
+          .join(' ');
+        const detail = marks.map(({sk, r}) =>
+          escHtml(formatAttendanceSlotLabel(sk))
+          + (r.status === 'late' && marks.some(m => m.r.status === 'absent') ? ' (запізнення)' : '')
+          + (r.reason ? ' · ' + escHtml(r.reason) : '')).join('; ');
         h += `<div class="hwb-row">
           <div class="hwb-subj">${escHtml(c.replace('class_',''))} кл · ${escHtml(stuName(c, st))}
-            <span class="badge ${badge}">${label}</span></div>
-          <div class="hwb-text">${escHtml(formatAttendanceSlotLabel(sk))}${r.reason?' · '+escHtml(r.reason):''}</div>
+            ${badges}</div>
+          <div class="hwb-text">${detail}</div>
         </div>`;
       });
     });
 
     box.innerHTML = days
-      ? h + `<p class="hwb-total">За тиждень: запізнень ${late}, відсутностей ${absent}</p>`
+      ? h + `<p class="hwb-total">За тиждень (учень × день): запізнень ${late}, відсутностей ${absent}</p>`
       : '<p class="empty-msg">Цього тижня відміток немає.</p>';
   }catch(e){
     box.innerHTML = `<p class="empty-msg" style="color:var(--danger);">Не вдалося прочитати: ${escHtml(e.message||'відмова')}</p>`;

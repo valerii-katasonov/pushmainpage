@@ -1654,6 +1654,37 @@ export function withBreaks(day, minMinutes = 5){
 }
 
 // Pure helper shared by director stats/dashboard and parent/student weekly behavior view
+// ── Тижнева статистика відвідуваності: рахуємо «учнедні», а не уроки ──
+//
+// attendance/{клас}/{дата}/{учень}/{урок} — відмітка ставиться на КОЖЕН
+// урок. Раніше тиждень у кабінетах директора й адміністрації складав усі
+// відмітки поспіль: учень, відсутній на двох уроках, давав «2 відсутніх»,
+// хоча це одна людина одного дня. Місячна статистика (renderAttendanceStats
+// у director.js) з самого початку рахує інакше — день учня один раз, — тож
+// і тиждень тепер рахує так само, і числа між ними сходяться.
+//
+// Запізнення й відсутність того самого дня рахуються кожне окремо: учень,
+// що запізнився на перший урок і пропустив останній, дає по одиниці в обидва.
+export function countAttendanceDays(att, dates){
+  let late=0, absent=0;
+  for(const c in (att||{})){
+    const byDate=att[c];
+    if(!byDate||typeof byDate!=='object')continue;
+    for(const d of dates){
+      const day=byDate[d];
+      if(!day||typeof day!=='object')continue;
+      for(const st in day){
+        const slots=day[st];
+        if(!slots||typeof slots!=='object')continue;
+        let a=false,l=false;
+        for(const k in slots){const s=slots[k]&&slots[k].status;if(s==='absent')a=true;else if(s==='late')l=true;}
+        if(a)absent++;
+        if(l)late++;
+      }
+    }
+  }
+  return {late, absent};
+}
 export function getWeekDates(ds){if(!ds)return[];let[y,m,d]=ds.split('-');let dt=new Date(y,m-1,d);let day=dt.getDay()||7;dt.setDate(dt.getDate()-day+1);let dates=[];for(let i=0;i<7;i++){const yy=dt.getFullYear(),mm=String(dt.getMonth()+1).padStart(2,'0'),dd=String(dt.getDate()).padStart(2,'0');dates.push(`${yy}-${mm}-${dd}`);dt.setDate(dt.getDate()+1);}return dates;}
 // ── «ЗАДАНО … — ЗРОБИТИ ДО …» ───────────────────────────────────
 //
@@ -4923,7 +4954,8 @@ window.logoutUser=async function(){
 // ══════════ ADMIN DASHBOARD ══════════
 window.loadAdminDashboard=async function(){try{const date=document.getElementById('global-date').value;document.getElementById('a-att-header').innerText=`🚨 Відсутні (${date.split('-').reverse().slice(0,2).join('.')})`;const wd=getWeekDates(date);let wl=0,wa=0,hw=0,com=0;const _lo=wd[0]<date?wd[0]:date, _hi=wd[wd.length-1]>date?wd[wd.length-1]:date;const[_ad,_hd,_cd]=await Promise.all([getSchoolRange('attendance',_lo,_hi),getSchoolRange('homeworks',_lo,_hi),getSchoolRange('comments',_lo,_hi)]);const s={exists:()=>true,val:()=>_ad},hwS={exists:()=>true,val:()=>_hd},comS={exists:()=>true,val:()=>_cd};let h='';if(s.exists()){const d=s.val();for(let i=1;i<=11;i++){const c=`class_${i}`;if(d[c]&&d[c][date])for(let st in d[c][date]){const slots=d[c][date][st];for(let sk in slots){const r=slots[sk];if(r?.status){const bc=r.status==='late'?'badge-late':'badge-absent';const markerIcon=r.markedBy==='teacher'?'👨‍🏫':(r.markedBy==='student'?'🎒':(r.markedBy==='administrator'?'🛡️':'👪'));h+=`<li style="margin-bottom:9px;border-bottom:1px solid var(--line-soft);padding-bottom:4px;"><span style="font-size:.75rem;background:var(--brand-ink);color:#fff;padding:2px 5px;border-radius:4px;margin-right:4px;">${i} Кл</span> <b>${escHtml(stuName(c, st))}</b> <span class="badge ${bc}">${r.status==='late'?'Запізнення':'Відсутність'}</span> <span style="font-size:.75rem;color:var(--ink-3);">${escHtml(formatAttendanceSlotLabel(sk))} ${markerIcon}</span></li>`;}}}
     // Week counters (same aggregation the director dashboard does)
-    if(d[c])wd.forEach(w=>{if(d[c][w]&&typeof d[c][w]==='object')Object.values(d[c][w]).forEach(slots=>{if(slots&&typeof slots==='object')Object.values(slots).forEach(r=>{if(r?.status==='late')wl++;else if(r?.status==='absent')wa++;});});});
+    // Учень × день, а не кожен урок (див. countAttendanceDays)
+    if(d[c]){const k=countAttendanceDays({[c]:d[c]},wd);wl+=k.late;wa+=k.absent;}
   }}
   const hd=hwS.exists()?hwS.val():{};const cd=comS.exists()?comS.val():{};
   for(let i=1;i<=11;i++){const c=`class_${i}`;if(hd[c]&&hd[c][date])hw+=Object.keys(hd[c][date]).length;if(cd[c]&&cd[c][date])for(let st in cd[c][date])if(typeof cd[c][date][st]==='object')com+=Object.keys(cd[c][date][st]).length;}
