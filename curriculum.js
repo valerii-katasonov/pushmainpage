@@ -965,6 +965,55 @@ window.selectTopicOption=function(slot,value,reused){
     if(trigger)trigger.focus();
   }
 };
+// ── СПАРЕНІ УРОКИ: ТЕМА НА КОЖЕН УРОК ─────────────────────────────
+//
+// Тема лежить у lesson_topics/{клас}/{предмет}/{дата} — одна на предмет і
+// день. Для двох уроків того самого предмета в один день (найчастіше —
+// спарених) учитель має задати тему КОЖНОМУ урокові: це дві години плану,
+// і на них можуть бути різні теми.
+//
+// Тому для такого дня обидва слоти показуються одразу й підписуються
+// номерами уроків за розкладом, а кожен запис теми несе поле lesson —
+// номер уроку. Та сама тема на обох уроках дозволена й списує дві години.
+// Для одиночного уроку все як раніше: одна тема і кнопка «друга тема».
+//
+// Більше двох уроків одного предмета в день у школі не буває (питали), тож
+// слотів лишається два.
+let topicLessons=[];   // ['3','4'] — номери уроків, якщо їх два; інакше []
+export function isDoubleLesson(){ return topicLessons.length===2; }
+export function doubleLessonNumbers(){ return topicLessons.slice(); }
+function lessonNumbersForSubject(subj){
+  try{
+    if(!subj||typeof window.myLessonsForDay!=='function')return [];
+    const k=subjKey(subj);
+    const nums=[...new Set(window.myLessonsForDay(getActiveClass())
+      .filter(l=>subjKey(l.subject)===k).map(l=>String(l.number)))];
+    return nums.length===2?nums:[];
+  }catch(e){ return []; }
+}
+function applyLessonMode(){
+  const dbl=isDoubleLesson();
+  const l1=document.getElementById('t-topic-label-1'), l2=document.getElementById('t-topic-label-2');
+  if(l1)l1.textContent=dbl?`📌 Тема уроку ${topicLessons[0]}:`:'📌 Тема уроку:';
+  if(l2)l2.textContent=dbl?`📌 Тема уроку ${topicLessons[1]}:`:'📌 Друга тема цього уроку:';
+  const same=document.getElementById('btn-topic-same');
+  if(same){
+    same.style.display=dbl?'inline-block':'none';
+    same.textContent=dbl?`↧ Та сама тема, що й на уроці ${topicLessons[0]}`:'';
+  }
+}
+// «Та сама тема»: копіюємо вибір першого уроку в другий — разом із
+// власною назвою, якщо вчитель її правив.
+window.copyTopicToSecondLesson=function(){
+  const v=document.getElementById('t-topic-value-1')?.value||'__custom__';
+  const t1=document.getElementById('t-topic-1');
+  window.showSecondTopicSlot();
+  window.selectTopicOption(2,v);
+  const t2=document.getElementById('t-topic-2');
+  if(v==='__custom__'){ if(t2)t2.value=(t1?.value||'').trim(); }
+  else if(t1?.dataset.editing==='true'){ window.editLessonTopic(2); if(t2)t2.value=t1.value; }
+  topicDirty();
+};
 window.showSecondTopicSlot=function(){
   const wrap=document.getElementById('t-topic-slot-2-wrap');const btn=document.getElementById('btn-add-second-topic');
   if(wrap)wrap.style.display='block';if(btn)btn.style.display='none';
@@ -976,9 +1025,12 @@ window.showSecondTopicSlot=function(){
 };
 window.hideSecondTopicSlot=function(){
   const wrap=document.getElementById('t-topic-slot-2-wrap');const btn=document.getElementById('btn-add-second-topic');
-  if(wrap)wrap.style.display='none';if(btn)btn.style.display='block';
+  // У спарений день другий слот — це окремий урок, його не ховаємо, лише
+  // очищаємо: «✖ Прибрати з уроку» прибирає тему, а не сам урок.
+  const dbl=isDoubleLesson();
+  if(wrap)wrap.style.display=dbl?'block':'none';if(btn)btn.style.display=dbl?'none':'block';
   const v=document.getElementById('t-topic-value-2');if(v)v.value='__custom__';
-  const ci=document.getElementById('t-topic-2');if(ci)ci.value='';
+  const ci=document.getElementById('t-topic-2');if(ci){ci.value='';ci.style.display=dbl?'block':'none';}
   const tr=document.getElementById('t-topic-trigger-2');if(tr)tr.innerText='✏️ Власна тема';
   const d=document.getElementById('t-topic-display-2');if(d)d.style.display='none';
 };
@@ -1020,6 +1072,7 @@ export async function populateTopicSelector(){
     // __custom__, а саме поле введення сховане, і вчитель не може ввести
     // тему вручну (саме цей випадок ловився, коли в класу немає розкладу).
     [1,2].forEach(slot=>applyTopicToSlot(slot,null));
+    topicLessons=[];applyLessonMode();window.hideSecondTopicSlot();
     return;
   }
   // Спільний план: урок може називатися «Matematyka», а теми лежати під
@@ -1106,8 +1159,18 @@ async function loadSavedTopicForLesson(){
     else if(Array.isArray(v.topics))topicsArr=v.topics.slice(0,2);
     else if(v.topicId||v.customText)topicsArr=[v];
   }
-  applyTopicToSlot(1,topicsArr[0]||null);
-  if(topicsArr[1]){window.showSecondTopicSlot();applyTopicToSlot(2,topicsArr[1]);}
+  topicLessons=lessonNumbersForSubject(subj);
+  applyLessonMode();
+  // Спарений день: розкладаємо записи по уроках за полем lesson. Записи без
+  // нього (збережені до появи цієї можливості) — по черзі.
+  let slots=[topicsArr[0]||null, topicsArr[1]||null];
+  if(isDoubleLesson()&&topicsArr.some(t=>t&&t.lesson)){
+    const byLesson=topicLessons.map(n=>topicsArr.find(t=>t&&String(t.lesson)===n)||null);
+    const rest=topicsArr.filter(t=>t&&!topicLessons.includes(String(t.lesson)));
+    slots=byLesson.map(t=>t||rest.shift()||null);
+  }
+  applyTopicToSlot(1,slots[0]);
+  if(slots[1]||isDoubleLesson()){window.showSecondTopicSlot();applyTopicToSlot(2,slots[1]);}
   else window.hideSecondTopicSlot();
   renderSavedTopicLine(topicsArr, date);
   const dirty=document.getElementById('t-topic-dirty');if(dirty)dirty.style.display='none';
@@ -1126,9 +1189,9 @@ export function renderSavedTopicLine(topicsArr, date){
   const d = String(date||'').split('-').reverse().join('.');
   const names = (topicsArr||[]).map(e => {
     if(!e) return '';
-    if(e.customText) return e.customText;
     const t = availableTopicsCache[e.topicId];
-    return t ? `№ ${t.lessonNum}. ${t.title}` : '(тема видалена з плану)';
+    const n = e.customText ? e.customText : (t ? `№ ${t.lessonNum}. ${t.title}` : '(тема видалена з плану)');
+    return e.lesson ? `урок ${e.lesson}: ${n}` : n;
   }).filter(Boolean);
   if(!names.length){
     box.className = 'topic-saved none';

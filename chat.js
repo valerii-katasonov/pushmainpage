@@ -183,7 +183,8 @@ export async function contactDirectory(){
                         .filter(Boolean).join(', ');
         const prof = p.profile;
         put(se, (prof && [prof.lastName,prof.firstName].filter(Boolean).join(' ')) || '',
-            who ? 'Батьки · ' + who : 'Батьки', 'parent');
+            who ? 'Батьки · ' + who : 'Батьки', 'parent',
+            { classes: [...new Set(list.map(k => k && k.class).filter(Boolean))] });
       }
     }catch(e){ console.warn('directory/admin', e.message); }
   } else if(isTeacherRole(role)){
@@ -198,7 +199,10 @@ export async function contactDirectory(){
       rosters.forEach(([c, rst]) => {
         for(const se in rst){
           const p = rst[se] || {};
-          put(se, p.name, 'Батьки · ' + [p.children, clsLabel(c)].filter(Boolean).join(', '), 'parent');
+          // Класи накопичуємо: батьки двох дітей є в списках обох класів
+          const prevCls = (map.get(se) && map.get(se).classes) || [];
+          put(se, p.name, 'Батьки · ' + [p.children, clsLabel(c)].filter(Boolean).join(', '), 'parent',
+              { classes: [...new Set([...prevCls, c])] });
         }
       });
     }catch(e){ console.warn('directory/teacher', e.message); }
@@ -208,6 +212,16 @@ export async function contactDirectory(){
   return map;
 }
 
+// Група для фільтра у виборі співрозмовників
+const TEACH_ROLES = ['teacher','class_teacher','art_school_teacher','music_teacher','master_class_teacher'];
+const GROUP_LABEL = { parents:'Батьки', teachers:'Вчителі', admin:'Адміністрація', staff:'Інший персонал' };
+function contactGroup(c){
+  if(c.kind === 'parent') return 'parents';
+  if(c.role === 'director' || c.role === 'administrator' || c.role === 'secretary') return 'admin';
+  if(TEACH_ROLES.includes(c.role) || (c.classes || []).length) return 'teachers';
+  return 'staff';
+}
+
 // Кого САМЕ цей користувач має право писати першим
 export async function chatCandidates(){
   const role = currentUserData?.role || '';
@@ -215,7 +229,8 @@ export async function chatCandidates(){
   const dir = await contactDirectory();
   const mine = myKey();
   const asItem = c => ({ key:c.key, email:unsafe(c.key), name:c.name, kind:c.kind,
-                         photo:c.photo || '',
+                         photo:c.photo || '', group:contactGroup(c),
+                         classes:(c.classes || []).slice(),
                          tag:c.sub || (c.kind==='parent'?'Батьки':'Персонал') });
   const isAdminRec = c => c.role === 'director' || c.role === 'administrator';
 
@@ -264,7 +279,11 @@ window.openChatModal = async function(){
       const c = s.val(), id = ids[i];
       const msgs = c.messages ? Object.values(c.messages) : [];
       const last = msgs.length ? msgs[msgs.length-1] : null;
-      const unread = msgs.filter(m=>m.from !== myKey() && !m.read).length;
+      // Непрочитані — чужі повідомлення, новіші за мою позначку readBy.
+      // !m.read лишається для старих повідомлень, прочитаних до появи
+      // readBy: у них стоїть read:true, і рахувати їх заново не можна.
+      const seenAt = Number((c.readBy || {})[myKey()]) || 0;
+      const unread = msgs.filter(m=>m.from !== myKey() && !m.system && !m.read && (m.time||0) > seenAt).length;
       rows.push({ id, title: chatTitle(c, dir), sub: chatSubtitle(c, dir),
                   photo: chatPhoto(c, dir),
                   members:Object.keys(c.members||{}).length,
@@ -272,14 +291,14 @@ window.openChatModal = async function(){
     });
     rows.sort((a,b)=>b.time-a.time);
     box.innerHTML = rows.map(r=>`
-      <div class="ch-row" onclick="selectChatThread('${escJs(r.id)}')">
+      <div class="ch-row" role="button" tabindex="0" onclick="selectChatThread('${escJs(r.id)}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
         ${avatarHtml(r.title, r.photo, 'ch-av')}
         <div class="ch-mid">
           <div class="ch-top"><span class="ch-name">${escHtml(r.title)}</span>
             ${r.time ? `<span class="ch-time">${chatTime(r.time)}</span>` : ''}</div>
           ${r.sub ? `<div class="ch-sub">${escHtml(r.sub)}</div>` : ''}
-          <div class="ch-prev">${r.members>2?`<b>${r.members} учасники · </b>`:''}${
-            r.last ? escHtml(String(r.last.fromName||'').split(' ')[0]) + ': ' + escHtml(r.last.text) : 'Повідомлень ще немає'}</div>
+          <div class="ch-prev">${
+            r.last ? lastPreview(r) : 'Повідомлень ще немає'}</div>
         </div>
         ${r.unread ? `<span class="ch-badge">${r.unread}</span>` : ''}
       </div>`).join('') || '<div class="ch-empty">💬<span>Тут зʼявляться ваші переписки</span></div>';
@@ -290,6 +309,15 @@ window.openChatModal = async function(){
   });
 };
 
+// Рядок-прев'ю в списку, як у Telegram: «Ви: …» для свого, імʼя автора —
+// лише в групі; у розмові вдвох просто текст.
+function lastPreview(r){
+  const m = r.last;
+  if(m.system) return `<i>${escHtml(m.text)}</i>`;
+  const who = m.from === myKey() ? 'Ви'
+    : (r.members > 2 ? String(m.fromName || '').split(' ')[0] : '');
+  return (who ? `<b>${escHtml(who)}:</b> ` : '') + escHtml(m.text);
+}
 function chatTitle(c, dir){
   if(c.title) return c.title;
   const others = Object.keys(c.members||{}).filter(k=>k!==myKey());
@@ -314,7 +342,11 @@ function chatSubtitle(c, dir){
 }
 
 // ── ОДНА ПЕРЕПИСКА ──
+let threadGen = 0;
 window.selectChatThread = async function(chatId){
+  // Швидко натиснули одну розмову, потім іншу: відповіді бази можуть
+  // прийти в іншому порядку, і учасники першої розмови лягли б у другу.
+  const gen = ++threadGen;
   currentChatId = chatId;
   markChatSeen(chatId);
   setTimeout(()=>{ if(window.watchUnread) window.watchUnread(); }, 0);
@@ -325,13 +357,21 @@ window.selectChatThread = async function(chatId){
     const snap = await get(child(ref(db), `chats/${chatId}`));
     c = snap.exists() ? snap.val() : {};
   }catch(e){
+    if(gen !== threadGen) return;
     document.getElementById('inbox-messages-list').innerHTML =
       `<div class="ch-empty">⚠️<span>Немає доступу до цієї розмови</span></div>`;
     return;
   }
+  if(gen !== threadGen) return;
   currentMembers = Object.keys(c.members || {});
+  currentChat = c;
   const dir = await contactDirectory().catch(()=>new Map());
+  if(gen !== threadGen) return;
   document.getElementById('chat-detail-title').innerText = chatTitle(c, dir);
+  const hav = document.getElementById('chat-detail-av');
+  if(hav) hav.innerHTML = avatarHtml(chatTitle(c, dir), chatPhoto(c, dir), 'chat-head-av');
+  const rn = document.getElementById('chat-rename');
+  if(rn) rn.style.display = canRenameChat(c) ? 'inline-flex' : 'none';
   const sub = document.getElementById('chat-detail-sub');
   if(sub){
     // Для групи — скільки учасників, для розмови двох — посада або клас
@@ -341,52 +381,470 @@ window.selectChatThread = async function(chatId){
     sub.textContent = t;
     sub.style.display = t ? 'block' : 'none';
   }
+  reactDir = dir;
   loadChatMessages(chatId);
 };
 
+// ── ПОВІДОМЛЕННЯ І ПОЗНАЧКИ ПРОЧИТАННЯ ──
+//
+// chats/{id}/readBy/{пошта} = час останнього прочитаного повідомлення.
+//
+// Раніше «прочитано» було прапорцем read в кожному повідомленні. Для
+// розмови вдвох це працює, а в групі перший, хто відкрив, ставив read
+// за всіх. Тепер у кожного учасника своя позначка: ✓ — надіслано,
+// ✓✓ — прочитали всі; у групі під моїм повідомленням видно, скільки
+// учасників уже прочитали, а натискання показує, хто саме.
+// Запис один на відкриття, а не по одному на кожне повідомлення.
+let msgState = { msgs: [], readBy: {} }, readByListener = null, currentChat = null;
+function readersOf(m){
+  const others = currentMembers.filter(k => k !== myKey());
+  return others.filter(k => (Number(msgState.readBy[k]) || 0) >= (m.time || 0)
+                            // старі повідомлення розмови вдвох: прочитано за прапорцем
+                            || (others.length === 1 && m.read === true));
+}
+function renderMessages(){
+  const list = document.getElementById('inbox-messages-list');
+  if(!list) return;
+  const me = myKey();
+  const msgs = msgState.msgs;
+  if(!msgs.length){
+    list.innerHTML = '<div class="ch-empty">✉️<span>Повідомлень ще немає — напишіть перше</span></div>';
+    return;
+  }
+  const others = currentMembers.filter(k => k !== me);
+  let prevFrom = null, prevDay = null, html = '';
+  msgs.forEach((m,i)=>{
+    const day = new Date(m.time).toDateString();
+    if(day !== prevDay){
+      html += `<div class="ms-day"><span>${escHtml(chatDayLabel(m.time))}</span></div>`;
+      prevDay = day; prevFrom = null;
+    }
+    if(m.system){
+      html += `<div class="ms-sys"><span>${escHtml(m.text)}</span></div>`;
+      prevFrom = null;
+      return;
+    }
+    const isMe = m.from === me;
+    const grouped = m.from === prevFrom;
+    const next = msgs[i+1];
+    const last = !next || next.system || next.from !== m.from || new Date(next.time).toDateString() !== day;
+    let tick = '';
+    // Як у Telegram: позначка й час — у кожному моєму повідомленні
+    if(isMe && others.length){
+      const rd = readersOf(m);
+      const all = rd.length === others.length;
+      const label = all ? 'Прочитано' : (rd.length ? `Прочитали ${rd.length} з ${others.length}` : 'Надіслано, ще не прочитано');
+      const extra = (others.length > 1 && rd.length && !all) ? ` ${rd.length}/${others.length}` : '';
+      tick = `<button type="button" class="ms-tick${all ? ' read' : ''}" title="${escHtml(label)}" aria-label="${escHtml(label)}"`
+           + (others.length > 1 ? ` onclick="showChatReaders('${escJs(m.id)}')"` : '')
+           + `>${all || rd.length ? '✓✓' : '✓'}${extra}</button>`;
+    }
+    // Імʼя автора — лише в групі (у розмові вдвох і так ясно, хто пише),
+    // кольором, закріпленим за людиною, як у Telegram.
+    const showName = !grouped && !isMe && others.length > 1;
+    const big = isEmojiOnly(m.text);
+    const time = new Date(m.time).toLocaleTimeString('uk-UA',{hour:'2-digit',minute:'2-digit'});
+    html += `<div class="ms ${isMe?'me':'they'}${grouped?' grp':''}${last?' last':''}${big?' big':''}" data-mid="${escHtml(m.id)}">
+      ${showName ? `<div class="ms-from" style="color:${senderColor(m.from)}">${escHtml(m.fromName||'')}</div>` : ''}
+      <div class="ms-text">${escHtml(m.text)}<span class="ms-meta"><span class="ms-t">${time}</span>${tick}</span></div>
+      ${reactionsHtml(m)}
+      <button type="button" class="ms-react-btn" data-react-open="${escHtml(m.id)}" aria-label="Реакція" title="Реакція">☺</button>
+    </div>`;
+    prevFrom = m.from;
+  });
+  // Прокручуємо донизу лише коли прийшло нове повідомлення або людина й
+  // так була внизу. Інакше реакція на старе повідомлення (вона теж міняє
+  // вузол messages) кидала б сторінку в кінець розмови.
+  const nearBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 80;
+  const grew = msgs.length !== lastRenderedCount || currentChatId !== lastRenderedChat;
+  const keep = list.scrollTop;
+  list.innerHTML = html;
+  list.scrollTop = (grew || nearBottom) ? list.scrollHeight : keep;
+  lastRenderedCount = msgs.length; lastRenderedChat = currentChatId;
+}
+let lastRenderedCount = -1, lastRenderedChat = null;
+
+// ── РЕАКЦІЇ, ЯК У TELEGRAM ─────────────────────────────────────────
+//
+// chats/{id}/messages/{msg}/reactions/{пошта} = '👍'
+// Одна реакція від людини на повідомлення: інша замінює попередню, та сама
+// знімає. Правила бази дозволяють кожному писати лише СВОЮ реакцію.
+//
+// Як поставити: подвійний клік / подвійний дотик — 👍; права кнопка миші,
+// довге натискання або кнопка ☺ біля повідомлення — панель реакцій.
+// Натискання на наявну реакцію під повідомленням — поставити/зняти таку ж.
+//
+// Набір — лише доброзичливі, без 👎 і без «поганих» емодзі.
+export const REACTIONS = ['👍','❤️','😂','😮','😢','🙏','👏','🎉','🤔','👌'];
+const QUICK_REACTION = '👍';
+function reactionsHtml(m){
+  if(m.system) return '';
+  const r = m.reactions || {};
+  const by = {};
+  for(const [who, e] of Object.entries(r)) if(REACTIONS.includes(e)) (by[e] ||= []).push(who);
+  const list = REACTIONS.filter(e => by[e]);
+  if(!list.length) return '';
+  const me = myKey();
+  return `<div class="ms-reacts">${list.map(e => {
+    const mine = by[e].includes(me);
+    return `<button type="button" class="ms-react${mine ? ' mine' : ''}" data-react-msg="${escHtml(m.id)}"
+      data-react-emoji="${escHtml(e)}" title="${escHtml(reactorNames(by[e]))}"
+      aria-label="${escHtml(e + ' ' + by[e].length + (mine ? ', ваша реакція' : ''))}">${e}<span>${by[e].length}</span></button>`;
+  }).join('')}</div>`;
+}
+let reactDir = new Map();
+// Як мене підписати для інших учасників. ПОШТУ НЕ ПІДСТАВЛЯЄМО: у групі
+// класу її побачили б інші батьки. Без імені в профілі — «Батьки <дитина>»
+// або просто «Учасник».
+function myDisplayName(){
+  const u = currentUserData || {};
+  const nm = [u.firstName, u.lastName].filter(Boolean).join(' ').trim();
+  if(nm) return nm;
+  if(u.role === 'parent' && u.studentName) return `Батьки: ${u.studentName}`;
+  if(u.role === 'student' && u.studentName) return u.studentName;
+  return 'Учасник';
+}
+function hasOwnName(){ const u = currentUserData || {}; return !!(u.firstName || u.lastName); }
+// Імʼя учасника для підказок (хто прочитав, хто поставив реакцію).
+//
+// ПОШТУ НЕ ПОКАЗУЄМО НІКОЛИ. Батькам довідник дає лише персонал, тож для
+// інших батьків у групі класу запасним варіантом було unsafe(ключ) — тобто
+// їхня пошта. Тепер: довідник → імʼя з підпису їхніх повідомлень → «Учасник».
+function memberName(k, dir){
+  if(k === myKey()) return 'Ви';
+  const d = dir && dir.get(k);
+  if(d && d.name && d.name !== unsafe(k)) return d.name;
+  const m = [...msgState.msgs].reverse().find(x => x.from === k && x.fromName);
+  if(m) return String(m.fromName).replace(/\s*\([^)]*\)\s*$/, '').trim() || 'Учасник';
+  return 'Учасник';
+}
+function reactorNames(keys){
+  return keys.map(k => memberName(k, reactDir)).join(', ');
+}
+async function setReaction(msgId, emoji){
+  if(!currentChatId || !msgId || !REACTIONS.includes(emoji)) return;
+  const m = msgState.msgs.find(x => x.id === msgId);
+  if(!m || m.system) return;
+  const me = myKey();
+  const cur = (m.reactions || {})[me];
+  const next = cur === emoji ? null : emoji;       // та сама — знімаємо
+  // Одразу на екрані, не чекаючи бази
+  m.reactions = { ...(m.reactions || {}) };
+  if(next) m.reactions[me] = next; else delete m.reactions[me];
+  renderMessages();
+  try{
+    await update(ref(db, `chats/${currentChatId}/messages/${msgId}/reactions`), { [me]: next });
+  }catch(e){
+    showToast('Не вдалося поставити реакцію');
+  }
+}
+window.setChatReaction = setReaction;
+
+// Панель вибору реакції над повідомленням
+let reactBarOpenedAt = 0;
+async function copyMessage(msgId){
+  const m = msgState.msgs.find(x => x.id === msgId);
+  if(!m) return;
+  const text = String(m.text || '');
+  try{ await navigator.clipboard.writeText(text); showToast('Скопійовано'); return; }catch(e){}
+  try{
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
+    showToast('Скопійовано');
+  }catch(e){ showToast('Не вдалося скопіювати'); }
+}
+function closeReactBar(){
+  const bar = document.querySelector('.react-bar');
+  if(bar) bar.remove();
+}
+function openReactBar(msgId, anchor){
+  closeReactBar();
+  const m = msgState.msgs.find(x => x.id === msgId);
+  if(!m || m.system || !anchor) return;
+  const pane = document.getElementById('chat-detail-view');
+  if(!pane) return;
+  const mine = (m.reactions || {})[myKey()];
+  const bar = document.createElement('div');
+  bar.className = 'react-bar';
+  bar.setAttribute('role', 'menu');
+  // «Копіювати» — бо довге натискання тепер відкриває цю панель, а не
+  // системне меню телефона: без кнопки текст повідомлення не скопіювати.
+  bar.innerHTML = REACTIONS.map(e =>
+    `<button type="button" role="menuitem" class="react-opt${e === mine ? ' on' : ''}" data-react-pick="${escHtml(e)}"
+             data-react-msg="${escHtml(msgId)}" aria-label="${escHtml(e)}">${e}</button>`).join('')
+    + `<button type="button" role="menuitem" class="react-copy" data-react-copy="${escHtml(msgId)}"
+               aria-label="Копіювати текст" title="Копіювати текст">⧉</button>`;
+  reactBarOpenedAt = Date.now();
+  pane.appendChild(bar);
+  // Над повідомленням; якщо зверху тісно — під ним
+  const pr = pane.getBoundingClientRect(), ar = anchor.getBoundingClientRect();
+  const bw = bar.offsetWidth || 300, bh = bar.offsetHeight || 44;
+  let top = ar.top - pr.top - bh - 6;
+  if(top < 56) top = ar.bottom - pr.top + 6;
+  const isMe = anchor.classList.contains('me');
+  let left = isMe ? (ar.right - pr.left - bw) : (ar.left - pr.left);
+  left = Math.max(6, Math.min(left, pr.width - bw - 6));
+  bar.style.top = top + 'px';
+  bar.style.left = left + 'px';
+  bar.querySelector('.react-opt')?.focus?.();
+}
+window.openChatReactBar = openReactBar;
+
+// Делегування: розмітка повідомлень перебудовується, тож слухачі — на списку
+(function bindReactions(){
+  let pressTimer = null, pressMoved = false, lastTap = { id: null, t: 0 }, touchReactAt = 0;
+  const msgOf = el => el && el.closest ? el.closest('#inbox-messages-list .ms[data-mid]') : null;
+  document.addEventListener('click', e => {
+    const t = e.target;
+    if(!t || !t.closest) return;
+    const pick = t.closest('[data-react-pick]');
+    if(pick){ setReaction(pick.dataset.reactMsg, pick.dataset.reactPick); closeReactBar(); return; }
+    const copy = t.closest('[data-react-copy]');
+    if(copy){ copyMessage(copy.dataset.reactCopy); closeReactBar(); return; }
+    // Після довгого натискання частина браузерів ще й «клацає» по
+    // повідомленню — панель не має закриватися від цього ж дотику.
+    if(Date.now() - reactBarOpenedAt < 700 && msgOf(t)) return;
+    const chipBtn = t.closest('#inbox-messages-list [data-react-emoji]');
+    if(chipBtn){ setReaction(chipBtn.dataset.reactMsg, chipBtn.dataset.reactEmoji); return; }
+    const open = t.closest('#inbox-messages-list [data-react-open]');
+    if(open){ openReactBar(open.dataset.reactOpen, msgOf(open)); e.stopPropagation(); return; }
+    if(!t.closest('.react-bar')) closeReactBar();
+  });
+  document.addEventListener('dblclick', e => {
+    const ms = msgOf(e.target);
+    if(!ms || (e.target.closest && e.target.closest('button'))) return;
+    // Деякі телефони після подвійного дотику ще й шлють dblclick — без цієї
+    // перевірки 👍 ставилася б і одразу знімалася.
+    if(Date.now() - touchReactAt < 800) return;
+    e.preventDefault();
+    try{ window.getSelection()?.removeAllRanges(); }catch(err){}
+    setReaction(ms.dataset.mid, QUICK_REACTION);
+  });
+  document.addEventListener('contextmenu', e => {
+    const ms = msgOf(e.target);
+    if(!ms) return;
+    e.preventDefault();
+    openReactBar(ms.dataset.mid, ms);
+  });
+  // Телефон: довге натискання — панель, подвійний дотик — 👍
+  document.addEventListener('touchstart', e => {
+    const ms = msgOf(e.target);
+    if(!ms || (e.target.closest && e.target.closest('button'))) return;
+    pressMoved = false;
+    clearTimeout(pressTimer);
+    pressTimer = setTimeout(() => { if(!pressMoved) openReactBar(ms.dataset.mid, ms); }, 450);
+    const now = Date.now();
+    if(lastTap.id === ms.dataset.mid && now - lastTap.t < 300){
+      clearTimeout(pressTimer);
+      touchReactAt = now;
+      setReaction(ms.dataset.mid, QUICK_REACTION);
+      lastTap = { id: null, t: 0 };
+    } else lastTap = { id: ms.dataset.mid, t: now };
+  }, { passive: true });
+  document.addEventListener('touchmove', () => { pressMoved = true; clearTimeout(pressTimer); }, { passive: true });
+  document.addEventListener('touchend', () => clearTimeout(pressTimer), { passive: true });
+  document.addEventListener('keydown', e => { if(e.key === 'Escape') closeReactBar(); });
+  document.addEventListener('scroll', e => {
+    if(e.target && e.target.id === 'inbox-messages-list') closeReactBar();
+  }, true);
+})();
+// Хто прочитав (для групи): імена тих, хто прочитав, і тих, хто ще ні.
+window.showChatReaders = async function(msgId){
+  const m = msgState.msgs.find(x => x.id === msgId);
+  if(!m) return;
+  const dir = await contactDirectory().catch(()=>new Map());
+  const nm = k => memberName(k, dir);
+  const rd = readersOf(m);
+  const not = currentMembers.filter(k => k !== myKey() && !rd.includes(k));
+  alert((rd.length ? 'Прочитали:\n' + rd.map(nm).join('\n') : 'Ще ніхто не прочитав.')
+      + (not.length ? '\n\nЩе не прочитали:\n' + not.map(nm).join('\n') : ''));
+};
+// ПРОЧИТАНО — ЛИШЕ КОЛИ РОЗМОВУ СПРАВДІ ВИДНО. Інакше повідомлення, що
+// прийшло, поки вкладка згорнута чи вікно чату закрите поверх сторінки,
+// одразу ставало «✓✓» у відправника, хоча ніхто його не бачив.
+function threadVisible(chatId){
+  if(currentChatId !== chatId) return false;
+  if(typeof document !== 'undefined' && document.visibilityState === 'hidden') return false;
+  const modal = document.getElementById('inbox-modal');
+  const pane = document.getElementById('chat-detail-view');
+  return !!(modal && modal.style.display !== 'none' && pane && pane.style.display !== 'none');
+}
+document.addEventListener('visibilitychange', () => {
+  if(currentChatId && threadVisible(currentChatId)) markThreadRead(currentChatId);
+});
+function markThreadRead(chatId){
+  if(!threadVisible(chatId)) return;
+  const me = myKey();
+  const latest = msgState.msgs.filter(m => m.from !== me).reduce((t, m) => Math.max(t, m.time || 0), 0);
+  if(latest && latest > (Number(msgState.readBy[me]) || 0)){
+    msgState.readBy[me] = latest;
+    update(ref(db, `chats/${chatId}/readBy`), { [me]: latest }).catch(()=>{});
+  }
+}
 function loadChatMessages(chatId){
   const list = document.getElementById('inbox-messages-list');
   if(msgListener) msgListener();
-  const me = myKey();
+  if(readByListener) readByListener();
+  msgState = { msgs: [], readBy: {} };
+  readByListener = onValue(ref(db, `chats/${chatId}/readBy`), snap => {
+    msgState.readBy = snap.exists() ? (snap.val() || {}) : {};
+    renderMessages();
+  }, () => {});
   msgListener = onValue(ref(db, `chats/${chatId}/messages`), snap => {
-    if(!snap.exists()){
-      list.innerHTML = '<div class="ch-empty">✉️<span>Повідомлень ще немає — напишіть перше</span></div>';
-      return;
-    }
-    const msgs = Object.keys(snap.val()).map(k=>({id:k, ...snap.val()[k]})).sort((a,b)=>a.time-b.time);
-    let prevFrom = null, prevDay = null, html = '';
-    msgs.forEach((m,i)=>{
-      const isMe = m.from === me;
-      const day = new Date(m.time).toDateString();
-      if(day !== prevDay){
-        html += `<div class="ms-day"><span>${escHtml(chatDayLabel(m.time))}</span></div>`;
-        prevDay = day; prevFrom = null;
-      }
-      const grouped = m.from === prevFrom;
-      const next = msgs[i+1];
-      const last = !next || next.from !== m.from || new Date(next.time).toDateString() !== day;
-      html += `<div class="ms ${isMe?'me':'they'}${grouped?' grp':''}${last?' last':''}">
-        ${(!grouped && !isMe) ? `<div class="ms-from">${escHtml(m.fromName||'')}</div>` : ''}
-        <div class="ms-text">${escHtml(m.text)}</div>
-        ${last ? `<div class="ms-time">${new Date(m.time).toLocaleTimeString('uk-UA',{hour:'2-digit',minute:'2-digit'})}</div>` : ''}
-      </div>`;
-      prevFrom = m.from;
-      if(!isMe && !m.read) update(ref(db, `chats/${chatId}/messages/${m.id}`), {read:true}).catch(()=>{});
-    });
-    list.innerHTML = html;
-    list.scrollTop = list.scrollHeight;
+    const v = snap.exists() ? (snap.val() || {}) : {};
+    msgState.msgs = Object.keys(v).map(k=>({id:k, ...v[k]})).sort((a,b)=>a.time-b.time);
+    renderMessages();
+    // Позначку ставимо, лише коли вікно розмови справді на екрані
+    markThreadRead(chatId);
   }, err => {
     list.innerHTML = `<div class="ch-empty">⚠️<span>Не вдалося відкрити переписку: ${escHtml(err.message||'немає доступу')}</span></div>`;
   });
 }
 
+// ── ЕМОДЗІ ──────────────────────────────────────────────────────────
+//
+// Панель як у Telegram, але набір добраний під школу: обличчя, жести,
+// серця, навчання, свята, природа, їжа, спорт. Немає зброї, алкоголю,
+// цигарок, ліків, черепів, лайливих і двозначних символів.
+//
+// Ті самі «погані» емодзі можна набрати з клавіатури телефона — їх
+// прибирає stripBadEmoji перед надсиланням. Це перевірка в браузері, а
+// не в правилах бази: мова правил не вміє розбирати емодзі.
+export const EMOJI_SETS = [
+  ['😊', 'Смайлики', '😀 😃 😄 😁 😆 😅 😂 🤣 😊 😇 🙂 🙃 😉 😌 😍 🥰 🤗 🤩 🥳 😎 🤓 🧐 🤔 🤨 😐 😶 🙄 😬 😮 😯 😲 😳 🥺 😢 😭 😥 😓 😔 😕 🙁 ☹️ 😣 😖 😫 😩 🥱 😴 😪 🤧 🤒 😷 🤕 😟 😬 🫡 🤭 🤫 😺 😸 😻'],
+  ['👍', 'Жести', '👍 👎 👌 ✌️ 🤞 🤝 👏 🙌 👐 🙏 👋 🤚 ✋ 🖐️ 👆 👇 👈 👉 ☝️ ✊ 👊 💪 🫶 ✍️ 👀 🧠'],
+  ['❤️', 'Серця', '❤️ 🧡 💛 💚 💙 💜 🤍 🤎 💖 💗 💓 💞 💕 💝 ❣️ 💯 ✨ ⭐ 🌟 💫 ✅ ☑️ ❗ ❓ ‼️ ⁉️ 🔔 📌 📍'],
+  ['📚', 'Школа', '📚 📖 📘 📗 📕 📙 📓 📔 📒 📝 ✏️ 🖊️ 🖍️ 📏 📐 ✂️ 📎 🎒 🏫 🧮 🔬 🔭 🧪 🌍 🗺️ 💻 🖥️ 📱 ⏰ 🕐 📅 📆 🗓️ 🎓 🏅 🥇 🥈 🥉 🏆 🎨 🎭 🎵 🎶 🎹 🎸 🎻 🥁 🎤'],
+  ['🎉', 'Свята', '🎉 🎊 🎈 🎂 🍰 🧁 🎁 🎀 🎄 🎃 🪅 🕯️ 🌸 💐 🌷 🌹 🌻 🌼'],
+  ['🌞', 'Природа', '🌞 🌝 🌈 ☀️ 🌤️ ⛅ 🌥️ 🌦️ 🌧️ ⛈️ 🌩️ ❄️ ☃️ ⛄ 🌬️ 💧 🌊 🍀 🌱 🌿 🍃 🍂 🍁 🌳 🌲 🌵 🐶 🐱 🐭 🐹 🐰 🦊 🐻 🐼 🐨 🐯 🦁 🐮 🐷 🐸 🐵 🐔 🐧 🐦 🐤 🦋 🐞 🐢 🐬 🐳 🦄'],
+  ['🍎', 'Їжа', '🍎 🍐 🍊 🍋 🍌 🍉 🍇 🍓 🫐 🍒 🥝 🍅 🥕 🌽 🥒 🥦 🥔 🍞 🥐 🥨 🧀 🥚 🥞 🧇 🍕 🍝 🍜 🍲 🥗 🥪 🌮 🍿 🍪 🍩 🍫 🍬 🍭 🍦 🥛 🧃 🍵 ☕'],
+  ['⚽', 'Спорт', '⚽ 🏀 🏈 ⚾ 🎾 🏐 🏓 🏸 🥅 ⛸️ 🎿 🛷 🏊 🚴 🤸 🧘 🏃 🚶 🎯 🧩 🪁 🚌 🚗 🚲 🛴 ✈️ 🚀 🏠 🏡']
+].map(([icon, name, list]) => ({ icon, name, list: [...new Set(list.split(' ').filter(Boolean))] }));
+
+// Недоречне в шкільному листуванні. Разом із відтінками шкіри й варіаціями.
+const BAD_EMOJI = ['🖕','🍆','🍑','💦','👅','💋','🔫','🔪','🗡','⚔','💣','🧨','🩸','💀','☠','👿','😈','🤬','💩','🚬','🍺','🍻','🍷','🍸','🍹','🥃','🥂','🍾','🍶','💊','💉','⚰','🪦','🎰','🤮','👙','🩲','🔞','💸','🤑','😘','😗','😚','😙','🥵','🤤','😏','🫦'];
+const BAD_RE = new RegExp('(?:' + BAD_EMOJI.map(e => e.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')[\u{1F3FB}-\u{1F3FF}\uFE0F\u200D]*', 'gu');
+// Прибираємо емодзі разом з ОДНИМ пробілом перед ним — щоб не лишалося
+// «ок  ок». Решту тексту не чіпаємо: раніше тут стискалися всі подвійні
+// пробіли, і повідомлення з двома пробілами підряд (скопійована таблиця,
+// відступ) не надсилалося з підказкою про «недоступні емодзі».
+const BAD_RE_SP = new RegExp('[ \\t]?' + BAD_RE.source, 'gu');
+export function stripBadEmoji(text){
+  return String(text || '').replace(BAD_RE_SP, '');
+}
+export function hasBadEmoji(text){
+  return new RegExp(BAD_RE.source, 'u').test(String(text || ''));
+}
+// Повідомлення лише з 1–3 емодзі показуємо великими, без «бульбашки»
+const EMOJI_ONLY_RE = /^(?:\p{Extended_Pictographic}(?:\uFE0F|\u200D\p{Extended_Pictographic}|[\u{1F3FB}-\u{1F3FF}])*\s*){1,3}$/u;
+export function isEmojiOnly(text){ return EMOJI_ONLY_RE.test(String(text || '').trim()); }
+
+// Колір імені автора в групі — сталий для людини, як у Telegram
+// Самі кольори — токени --tg-name-1…7 у cabinet.html (там і перевірка контрасту)
+const SENDER_COLORS = [1,2,3,4,5,6,7].map(i => `var(--tg-name-${i})`);
+function senderColor(key){
+  let h = 0; const s = String(key || '');
+  for(let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return SENDER_COLORS[h % SENDER_COLORS.length];
+}
+
+const RECENT_KEY = 'push_school_emoji_recent';
+function recentEmoji(){ try{ return JSON.parse(localStorage.getItem(RECENT_KEY) || '[]').filter(e => typeof e === 'string' && e && stripBadEmoji(e) === e).slice(0, 24); }catch(e){ return []; } }
+function rememberEmoji(e){
+  try{ const r = [e, ...recentEmoji().filter(x => x !== e)].slice(0, 24); localStorage.setItem(RECENT_KEY, JSON.stringify(r)); }catch(err){}
+}
+let emojiTab = 0;
+function renderEmojiPanel(){
+  const box = document.getElementById('chat-emoji-panel');
+  if(!box) return;
+  const recent = recentEmoji();
+  const tabs = (recent.length ? [{ icon:'🕘', name:'Нещодавні', list: recent }] : []).concat(EMOJI_SETS);
+  if(emojiTab >= tabs.length) emojiTab = 0;
+  box.innerHTML = `<div class="em-tabs" role="tablist">${tabs.map((t, i) =>
+      `<button type="button" role="tab" class="em-tab${i === emojiTab ? ' on' : ''}" title="${escHtml(t.name)}"
+               aria-label="${escHtml(t.name)}" aria-selected="${i === emojiTab}" onclick="setEmojiTab(${i})">${t.icon}</button>`).join('')}</div>
+    <div class="em-name">${escHtml(tabs[emojiTab].name)}</div>
+    <div class="em-grid">${tabs[emojiTab].list.map(e =>
+      `<button type="button" class="em-btn" onclick="insertEmoji('${escJs(e)}')" aria-label="${escHtml(e)}">${e}</button>`).join('')}</div>`;
+}
+window.setEmojiTab = function(i){ emojiTab = i; renderEmojiPanel(); };
+window.toggleEmojiPanel = function(){
+  const box = document.getElementById('chat-emoji-panel');
+  if(!box) return;
+  const open = box.style.display === 'none' || !box.style.display;
+  if(open){ renderEmojiPanel(); box.style.display = 'block'; }
+  else box.style.display = 'none';
+  document.getElementById('chat-emoji-btn')?.classList.toggle('on', open);
+};
+function closeEmojiPanel(){
+  const box = document.getElementById('chat-emoji-panel');
+  if(box) box.style.display = 'none';
+  document.getElementById('chat-emoji-btn')?.classList.remove('on');
+}
+window.insertEmoji = function(e){
+  const ta = document.getElementById('msg-text-input');
+  if(!ta) return;
+  const a = ta.selectionStart ?? ta.value.length, b = ta.selectionEnd ?? ta.value.length;
+  ta.value = ta.value.slice(0, a) + e + ta.value.slice(b);
+  const pos = a + e.length;
+  try{ ta.setSelectionRange(pos, pos); }catch(err){}
+  ta.dispatchEvent(new Event('input'));
+  rememberEmoji(e);
+  // На телефоні не піднімаємо клавіатуру після кожного емодзі — вона
+  // закрила б панель. На компʼютері повертаємо курсор у поле.
+  if(!window.matchMedia || !window.matchMedia('(pointer: coarse)').matches) ta.focus();
+};
+document.addEventListener('click', e => {
+  const box = document.getElementById('chat-emoji-panel');
+  if(!box || box.style.display === 'none') return;
+  if(e.target.closest && (e.target.closest('#chat-emoji-panel') || e.target.closest('#chat-emoji-btn'))) return;
+  closeEmojiPanel();
+});
+
+// ── НАЗВА ГРУПИ ──
+// Перейменувати групу може співробітник або той, хто її створив. Батькам
+// у чужій групі змінювати назву не даємо: група вчителя з батьками класу
+// не повинна раптом стати «Батьківський чат 3-Б».
+function isFamilyRole(){ const r = currentUserData?.role; return r === 'parent' || r === 'student'; }
+function canRenameChat(c){
+  if(!c || Object.keys(c.members || {}).length <= 2) return false;
+  return !isFamilyRole() || c.createdBy === myKey();
+}
+const GROUP_NAME_MAX = 60;
+window.renameCurrentChat = async function(){
+  if(!currentChatId || !canRenameChat(currentChat)) return;
+  const now = currentChat.title || '';
+  const raw = prompt('Назва групи:', now);
+  if(raw === null) return;
+  const title = stripBadEmoji(raw).replace(/\s+/g, ' ').trim().slice(0, GROUP_NAME_MAX);
+  if(!title || title === now) return;
+  const nm = myDisplayName();
+  try{
+    await update(ref(db, `chats/${currentChatId}`), { title, titleBy: myKey(), titleAt: Date.now() });
+    // Службовий рядок у самій розмові — щоб усі бачили, хто і як перейменував
+    await push(ref(db, `chats/${currentChatId}/messages`), {
+      from: myKey(), system: true, time: Date.now(), read: false,
+      text: `${nm} змінює назву групи на «${title}»`
+    });
+    currentChat.title = title;
+    document.getElementById('chat-detail-title').innerText = title;
+    logAction('chat', { value: `назва групи: ${title}` });
+  }catch(e){
+    alert('Не вдалося перейменувати: ' + (e.message || 'немає прав'));
+  }
+};
+
 window.backToChatList = function(){
+  closeEmojiPanel();
+  closeReactBar();
   if(msgListener) msgListener();
   const d = document.getElementById('chat-detail-view');
   const l = document.getElementById('chat-list-view');
   if(d) d.style.display = 'none';
   if(l) l.style.display = 'flex';
-  currentChatId = null; currentMembers = [];
+  if(readByListener){ try{ readByListener(); }catch(e){} readByListener = null; }
+  currentChatId = null; currentMembers = []; currentChat = null;
 };
 window.closeInboxModal = function(){
   document.getElementById('inbox-modal').style.display = 'none';
@@ -399,6 +857,7 @@ window.closeInboxModal = function(){
 export function stopChatListeners(){
   listGen++;                       // скасовуємо виклик, що зараз у польоті
   if(msgListener){ try{ msgListener(); }catch(e){} msgListener = null; }
+  if(readByListener){ try{ readByListener(); }catch(e){} readByListener = null; }
   if(listListener){ try{ listListener(); }catch(e){} listListener = null; }
 }
 window.stopChatListeners = stopChatListeners;
@@ -408,16 +867,25 @@ window.sendInboxMessage = async function(){
   const input = document.getElementById('msg-text-input');
   const text = input.value.trim();
   if(!text) return;
+  // Недоречні для шкільного чату емодзі з клавіатури телефона: прибираємо
+  // з поля й просимо перевірити текст, а не надсилаємо «мовчки обрізаним».
+  if(hasBadEmoji(text)){
+    input.value = stripBadEmoji(text);
+    input.dispatchEvent(new Event('input'));
+    showToast('Деякі емодзі в шкільному чаті недоступні — ми їх прибрали. Перевірте текст і надішліть ще раз.');
+    return;
+  }
+  closeEmojiPanel();
   const role = currentUserData?.role;
   const label = role==='director' ? '(Директор)' : role==='administrator' ? '(Секретар)'
               : isTeacherRole(role) ? '(Вчитель)' : role==='parent' ? '(Батьки)'
               : role==='student' ? '(Учень)' : '';
-  const nm = [currentUserData?.firstName, currentUserData?.lastName].filter(Boolean).join(' ')
-             || currentUserData?.studentName || currentUserData?.email || '';
+  const nm = myDisplayName();
   try{
     const ts = Date.now();
     await push(ref(db, `chats/${currentChatId}/messages`), {
-      from: myKey(), fromName: `${nm} ${label}`.trim(), text, time: ts, read: false
+      // Роль у дужках — лише до справжнього імені: «Батьки: Анна (Батьки)» зайве
+      from: myKey(), fromName: (hasOwnName() ? `${nm} ${label}` : nm).trim(), text, time: ts, read: false
     });
     // Короткий зліпок останнього повідомлення: за ним рахується значок
     // непрочитаних, не читаючи всю переписку.
@@ -436,9 +904,12 @@ window.sendInboxMessage = async function(){
     // підкреслення було з самого початку (ivan_petrov@…), виходила чужа
     // адреса — сповіщення тихо не доходило нікому. Сервер зводить до
     // ключа обидві сторони, тож ключ йому підходить.
+    // Сервер бере не більше 30 адрес за раз (notify.js), а група класу з
+    // батьками буває більшою — шлемо пачками, інакше частина не дізналась би.
     const others = currentMembers.filter(k => k !== myKey());
-    if(others.length) notifyEvent('chat', { to: others, subject: nm || 'Школа',
-                                            value: 'нове повідомлення' });
+    for(let i = 0; i < others.length; i += 30)
+      notifyEvent('chat', { to: others.slice(i, i + 30), subject: nm || 'Школа',
+                            value: 'нове повідомлення' });
   }catch(e){
     alert(/permission|denied/i.test(e.message||'')
       ? 'Ви не учасник цієї переписки.' : 'Не вдалося надіслати: ' + e.message);
@@ -459,22 +930,104 @@ window.openChatPicker = async function(mode){
     : 'Оберіть одного або кількох.';
   modal.style.display = 'flex';
   box.innerHTML = '<p class="empty-msg">Завантаження...</p>';
+  const gn = document.getElementById('cp-group-name');
+  if(gn){ gn.value = ''; gn.style.display = 'none'; }
+  const filters = document.getElementById('cp-filters');
+  if(filters) filters.innerHTML = '';
   try{
     const list = (await chatCandidates()).filter(c => !currentMembers.includes(c.key));
     if(!list.length){ box.innerHTML = '<p class="empty-msg">Немає доступних співрозмовників.</p>'; return; }
     list.sort((a,b)=>a.name.localeCompare(b.name,'uk'));
     box.innerHTML = list.map(c=>`
-      <label class="cp-row">
+      <label class="cp-row" data-group="${escHtml(c.group)}" data-classes="${escHtml((c.classes||[]).join(' '))}"
+             data-search="${escHtml((c.name + ' ' + (c.tag||'')).toLowerCase())}">
         <input type="checkbox" value="${escHtml(c.key)}" data-name="${escHtml(c.name)}">
         ${avatarHtml(c.name, c.photo, 'cp-av')}
         <span class="cp-mid"><b>${escHtml(c.name)}</b><small>${escHtml(c.tag||'')}</small></span>
       </label>`).join('');
+    renderPickerFilters(list);
   }catch(e){
-    box.innerHTML = `<p class="empty-msg" style="color:var(--red);">${escHtml(e.message)}</p>`;
+    box.innerHTML = `<p class="empty-msg" style="color:var(--danger);">${escHtml(e.message)}</p>`;
   }
 };
 window.closeChatPicker = function(){ document.getElementById('chat-picker').style.display='none'; };
 
+// ── ФІЛЬТРИ У ВИБОРІ СПІВРОЗМОВНИКІВ ──
+// Пошук за імʼям, групи (батьки / вчителі / адміністрація) і клас.
+// Рядки не перебудовуються, а лише ховаються — тому позначки не губляться,
+// коли перемикаєш фільтр, і можна зібрати групу з кількох класів.
+let pickerFilter = { group: '', cls: '', q: '' };
+function renderPickerFilters(list){
+  const box = document.getElementById('cp-filters');
+  if(!box) return;
+  pickerFilter = { group: '', cls: '', q: '' };
+  const groups = ['parents','teachers','admin','staff'].filter(g => list.some(c => c.group === g));
+  const classes = [...new Set(list.flatMap(c => c.classes || []))]
+    .sort((a,b) => (parseInt(a.replace(/\D/g,''),10)||0) - (parseInt(b.replace(/\D/g,''),10)||0));
+  const chip = (g, label) => `<button type="button" class="cp-chip${g === '' ? ' on' : ''}" data-g="${escHtml(g)}"
+      onclick="setPickerGroup('${escJs(g)}')">${escHtml(label)}</button>`;
+  box.innerHTML = `
+    <input type="search" id="cp-search" placeholder="🔍 Пошук за імʼям" oninput="setPickerSearch(this.value)">
+    ${groups.length > 1 ? `<div class="cp-chips">${chip('', 'Усі')}${groups.map(g => chip(g, GROUP_LABEL[g])).join('')}</div>` : ''}
+    <div class="cp-tools">
+      ${classes.length > 1 ? `<select id="cp-class" onchange="setPickerClass(this.value)">
+        <option value="">Усі класи</option>
+        ${classes.map(c => `<option value="${escHtml(c)}">${escHtml(clsLabel(c))}</option>`).join('')}
+      </select>` : ''}
+      <button type="button" class="cp-all" onclick="pickAllShown(true)">✓ Обрати всіх показаних</button>
+      <button type="button" class="cp-all" onclick="pickAllShown(false)">Зняти</button>
+    </div>
+    <div id="cp-count" class="cp-count"></div>`;
+  applyPickerFilter();
+}
+function applyPickerFilter(){
+  const q = pickerFilter.q.trim().toLowerCase();
+  let shown = 0;
+  document.querySelectorAll('#cp-list .cp-row').forEach(row => {
+    const ok = (!pickerFilter.group || row.dataset.group === pickerFilter.group)
+      && (!pickerFilter.cls || String(row.dataset.classes || '').split(' ').includes(pickerFilter.cls))
+      && (!q || String(row.dataset.search || '').includes(q));
+    row.style.display = ok ? '' : 'none';
+    if(ok) shown++;
+  });
+  updatePickerCount(shown);
+}
+function updatePickerCount(shown){
+  const el = document.getElementById('cp-count');
+  const picked = document.querySelectorAll('#cp-list input:checked').length;
+  if(el) el.textContent = `Показано: ${shown ?? document.querySelectorAll('#cp-list .cp-row:not([style*="none"])').length}`
+                        + (picked ? ` · обрано: ${picked}` : '');
+  // Назва групи потрібна, коли співрозмовників більше одного
+  const gn = document.getElementById('cp-group-name');
+  const mode = document.getElementById('chat-picker')?.dataset.mode;
+  const total = picked + (mode === 'add' ? Math.max(0, currentMembers.length - 1) : 0);
+  if(gn) gn.style.display = total > 1 ? 'block' : 'none';
+}
+window.setPickerGroup = function(g){
+  pickerFilter.group = g;
+  document.querySelectorAll('#cp-filters .cp-chip').forEach(b => b.classList.toggle('on', b.dataset.g === g));
+  applyPickerFilter();
+};
+window.setPickerClass = function(c){ pickerFilter.cls = c; applyPickerFilter(); };
+window.setPickerSearch = function(q){ pickerFilter.q = String(q || ''); applyPickerFilter(); };
+window.pickAllShown = function(on){
+  document.querySelectorAll('#cp-list .cp-row').forEach(row => {
+    if(row.style.display === 'none') return;
+    const cb = row.querySelector('input'); if(cb) cb.checked = on;
+  });
+  updatePickerCount();
+};
+document.addEventListener('change', e => { if(e.target && e.target.closest && e.target.closest('#cp-list')) updatePickerCount(); });
+
+// Назва групи за замовчуванням — імена ВСІХ учасників. Раніше при
+// «додати до розмови» в назву потрапляли лише я й нові люди, а ті, хто
+// вже був у розмові, з назви зникали.
+function autoGroupTitle(base, me, myName, picked){
+  const dir = reactDir;
+  const already = base.filter(k => k !== me && !picked.some(p => p.key === k))
+                      .map(k => memberName(k, dir)).filter(n => n && n !== 'Учасник');
+  return [myName, ...already, ...picked.map(p => p.name)].filter(Boolean).join(', ').slice(0, 200);
+}
 window.createChatFromPicker = async function(){
   const modal = document.getElementById('chat-picker');
   const picked = Array.from(document.querySelectorAll('#cp-list input:checked'))
@@ -513,8 +1066,7 @@ window.createChatFromPicker = async function(){
     ? [...members].sort().join('___')
     : (push(ref(db,'chats')).key);
 
-  const myName = [currentUserData?.firstName, currentUserData?.lastName].filter(Boolean).join(' ')
-                 || currentUserData?.email || '';
+  const myName = myDisplayName();
   try{
     // Чи є вже така розмова — питаємо у ВЛАСНОГО покажчика, а не в самого
     // чату. Читати chats/{id} можна лише учаснику, тож перевірка існування
@@ -524,10 +1076,12 @@ window.createChatFromPicker = async function(){
       const mem = {}; members.forEach(k=>mem[k]=true);
       // update, а не set: якщо розмова вже існує (наприклад покажчик
       // загубився), set стер би всі повідомлення.
+      const custom = stripBadEmoji(document.getElementById('cp-group-name')?.value || '')
+        .replace(/\s+/g, ' ').trim().slice(0, GROUP_NAME_MAX);
       await update(ref(db, `chats/${id}`), {
         members: mem, staff: staffKey,
         title: members.length > 2
-          ? [myName, ...picked.map(p=>p.name)].join(', ')
+          ? (custom || autoGroupTitle(base, me, myName, picked))
           : null,
         createdBy: me, createdAt: Date.now()
       });

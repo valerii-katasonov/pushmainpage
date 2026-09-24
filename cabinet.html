@@ -182,6 +182,9 @@
     .modal-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100dvh;background:rgba(0,0,0,.8);z-index:1000;justify-content:center;align-items:center;overflow-y:auto;padding:16px 0;backdrop-filter:blur(5px);padding:10px;overscroll-behavior:contain;}
     .modal-content{background:#fff;padding:var(--space-5);border-radius:18px;text-align:center;max-width:460px;width:100%;box-shadow:0 15px 30px rgba(0,0,0,.3);animation:popIn .3s ease-out;max-height:92dvh;overflow-y:auto;}
     @keyframes popIn{0%{transform:scale(.8);opacity:0}100%{transform:scale(1);opacity:1}}
+    /* Блок, до якого привело сповіщення (відвідуваність): коротко світиться */
+    .flash-target{animation:flashTarget 2.4s ease-out;}
+    @keyframes flashTarget{0%,35%{box-shadow:0 0 0 4px var(--warn);}100%{box-shadow:0 0 0 4px transparent;}}
     /* ── GRADE CELLS — 6-БАЛЬНА ── */
     .g-cell{display:inline-flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;border-radius:7px;padding:3px 5px;cursor:pointer;transition:.15s;min-width:32px;}
     .g-cell:hover{transform:scale(1.12);box-shadow:0 2px 8px rgba(0,0,0,.18);}
@@ -863,6 +866,149 @@
     .ms.grp.last.me{border-radius:14px 4px 4px 14px;}
     .ms-from{font-size:.75rem;font-weight:700;color:var(--brand-deep);margin-bottom:3px;}
     .ms-time{font-size:.75rem;color:var(--ink-3);text-align:right;margin-top:var(--space-1);}
+    /* Позначка прочитання: ✓ надіслано, ✓✓ прочитали (у групі — скільки з кількох) */
+    .ms-tick{background:none;border:none;padding:0 0 0 6px;margin:0;font:inherit;font-size:.75rem;color:inherit;opacity:.75;cursor:default;width:auto;min-height:0;}
+    .ms-tick[onclick]{cursor:pointer;text-decoration:underline dotted;}
+    .ms-tick.read{opacity:1;font-weight:700;}
+    .ms.me .ms-time{color:rgba(255,255,255,.85);}
+    /* Службовий рядок у розмові (перейменування групи) */
+    .ms-sys{text-align:center;margin:8px 0;}
+    .ms-sys span{background:rgba(0,0,0,.05);color:var(--ink-2);font-size:.75rem;padding:3px 11px;border-radius:20px;display:inline-block;}
+    /* Фільтри у виборі співрозмовників */
+    .cp-filters input[type=search]{margin:0 0 8px;}
+    .cp-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;}
+    .cp-chip{width:auto;margin:0;padding:6px 12px;border-radius:20px;background:var(--surface-2);color:var(--ink-2);border:1px solid var(--line-soft);font-size:.8rem;}
+    .cp-chip.on{background:var(--brand-ink);color:#fff;border-color:var(--brand-ink);}
+    .cp-tools{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:6px;}
+    .cp-tools select{width:auto;margin:0;padding:6px 8px;font-size:.8rem;}
+    .cp-all{width:auto;margin:0;padding:6px 10px;font-size:.78rem;background:var(--line-soft);color:var(--ink);}
+    .cp-count{font-size:.75rem;color:var(--ink-3);margin-bottom:6px;}
+    :root{
+      /* Чат у стилі Telegram (світла тема). Відтінки підкручені під AA:
+         дрібний текст часу й позначок читається на своїх тлах ≥4.5:1. */
+      --tg-bg:#c8d8b0; --tg-bg-1:#dbe7c4; --tg-bg-2:#c6d9b2; --tg-bg-3:#b4ceaa;
+      --tg-out:#effedd; --tg-out-meta:#3a7a2f;
+      --tg-muted:#707579; --tg-hover:#f4f4f5; --tg-line:#e9ebee;
+      --tg-accent:#1f74b8; --tg-accent-soft:#e8f1fc; --tg-pill:#587a4a; --tg-react-out:#d9f2c6;
+      --tg-name-1:#c03d44; --tg-name-2:#a8521a; --tg-name-3:#6c55c0; --tg-name-4:#2a7a25;
+      --tg-name-5:#1a7477; --tg-name-6:#2a6ca6; --tg-name-7:#b43f7a;
+    }
+    /* ══════════ ЧАТ У СТИЛІ TELEGRAM ══════════
+       Окремий блок і лише всередині #inbox-modal: решту порталу не чіпає.
+       Кольори — світла тема Telegram: зелено-оливкове тло з візерунком,
+       вхідні білі, власні світло-зелені, синій акцент. */
+    #inbox-modal .chat-win{border-radius:14px;}
+    #inbox-modal .chat-bar{padding:8px 10px;gap:8px;box-shadow:0 1px 2px rgba(16,35,47,.08);border-bottom:none;position:relative;z-index:1;}
+    #inbox-modal .chat-bar-title{font-size:1rem;font-weight:600;color:#000;}
+    #inbox-modal .chat-bar-sub{color:var(--tg-muted);font-size:.8rem;}
+    #inbox-modal .chat-icon{color:var(--tg-muted);}
+    #inbox-modal .chat-icon:hover,#inbox-modal .chat-back:hover,#inbox-modal .chat-x:hover{background:var(--tg-hover);color:var(--tg-accent);}
+    #inbox-modal .chat-head-av{width:40px;height:40px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:600;font-size:.9rem;position:relative;overflow:hidden;}
+    #inbox-modal .chat-head-av img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
+    /* список розмов */
+    #inbox-modal .ch-row{border-bottom:none;padding:8px 12px;gap:12px;border-radius:10px;margin:0 6px;}
+    #inbox-modal .chat-scroll.list{padding:6px 0;}
+    #inbox-modal .ch-row:hover{background:var(--tg-hover);}
+    #inbox-modal .ch-av{width:54px;height:54px;font-size:1.05rem;font-weight:600;}
+    #inbox-modal .ch-name{font-size:.97rem;color:#000;}
+    #inbox-modal .ch-time{color:var(--tg-muted);font-size:.78rem;}
+    #inbox-modal .ch-sub{color:var(--tg-muted);}
+    #inbox-modal .ch-prev{color:var(--tg-muted);font-size:.9rem;margin-top:3px;}
+    #inbox-modal .ch-prev b{color:#000;font-weight:500;}
+    #inbox-modal .ch-badge{background:var(--tg-accent);min-width:22px;height:22px;border-radius:11px;font-size:.8rem;font-weight:600;}
+    /* тло розмови */
+    #inbox-modal .chat-scroll.msgs{
+      background-color:var(--tg-bg);
+      background-image:
+        radial-gradient(circle at 20% 30%,rgba(255,255,255,.35) 0 2px,transparent 3px),
+        radial-gradient(circle at 70% 80%,rgba(255,255,255,.25) 0 1.5px,transparent 2.5px),
+        radial-gradient(circle at 50% 50%,rgba(60,90,40,.07) 0 3px,transparent 4px),
+        linear-gradient(160deg,var(--tg-bg-1) 0%,var(--tg-bg-2) 45%,var(--tg-bg-3) 100%);
+      background-size:46px 46px,32px 32px,70px 70px,100% 100%;
+      background-attachment:local;padding:6px 10px 10px;}
+    /* бульбашки */
+    #inbox-modal .ms{max-width:80%;padding:6px 9px 6px 10px;font-size:.95rem;line-height:1.35;color:#000;border:none;
+      box-shadow:0 1px 2px rgba(16,35,47,.15);margin-bottom:3px;border-radius:14px;}
+    #inbox-modal .ms.they{background:#fff;border-radius:14px;}
+    #inbox-modal .ms.me{background:var(--tg-out);color:#000;border-radius:14px;}
+    #inbox-modal .ms.last{margin-bottom:8px;}
+    #inbox-modal .ms.last.they{border-bottom-left-radius:4px;}
+    #inbox-modal .ms.last.me{border-bottom-right-radius:4px;}
+    #inbox-modal .ms.grp.they,#inbox-modal .ms.grp.me{border-radius:14px;}
+    #inbox-modal .ms.grp.last.they{border-bottom-left-radius:4px;}
+    #inbox-modal .ms.grp.last.me{border-bottom-right-radius:4px;}
+    #inbox-modal .ms-from{font-size:.82rem;font-weight:600;margin-bottom:1px;}
+    #inbox-modal .ms-text{white-space:pre-wrap;}
+    /* час і позначки всередині бульбашки, праворуч унизу */
+    #inbox-modal .ms-meta{float:right;display:inline-flex;align-items:center;gap:3px;margin:6px 0 -4px 10px;font-size:.72rem;line-height:1;color:var(--tg-muted);user-select:none;}
+    #inbox-modal .ms.me .ms-meta{color:var(--tg-out-meta);}
+    #inbox-modal .ms-tick{padding:0;color:var(--tg-out-meta);opacity:1;font-size:.78rem;letter-spacing:-.25em;margin-right:.25em;}
+    #inbox-modal .ms-tick[onclick]{text-decoration:none;letter-spacing:normal;}
+    #inbox-modal .ms-tick.read{font-weight:700;}
+    /* лише емодзі — великі, без бульбашки */
+    #inbox-modal .ms.big{background:transparent;box-shadow:none;padding:0 2px;}
+    #inbox-modal .ms.big .ms-text{font-size:2.4rem;line-height:1.15;}
+    #inbox-modal .ms.big .ms-meta{background:rgba(0,0,0,.25);color:#fff;padding:3px 6px;border-radius:10px;font-size:.7rem;}
+    #inbox-modal .ms.big .ms-tick{color:#fff;}
+    /* дата й службові рядки — напівпрозорі «пігулки» */
+    /* .ms-day зайнятий ще й сіткою днів у харчуванні (flex:1, тло, відступи) —
+       той блок стоїть нижче у файлі й перебивав роздільник дат у чаті:
+       «Вчора» розтягувалося на пів вікна. Скидаємо все явно. */
+    #inbox-modal .ms-day{flex:none;margin:10px 0 8px;padding:0;background:none;border-radius:0;cursor:default;font-size:inherit;text-align:center;}
+    #inbox-modal .ms-day span{display:inline-block;}
+    #inbox-modal .ms-day span,#inbox-modal .ms-sys span{background:var(--tg-pill);color:#fff;font-weight:500;font-size:.8rem;padding:3px 10px;border-radius:12px;}
+    #inbox-modal .ch-empty{color:var(--tg-muted);}
+    /* поле введення */
+    #inbox-modal .chat-compose{align-items:flex-end;gap:6px;padding:8px 10px;border-top:none;box-shadow:0 -1px 2px rgba(16,35,47,.06);}
+    #inbox-modal .chat-compose textarea{border:none;background:var(--tg-hover);border-radius:20px;padding:10px 14px;font-size:.95rem;}
+    #inbox-modal .chat-compose textarea:focus{background:#fff;box-shadow:0 0 0 2px var(--tg-accent);}
+    #inbox-modal .chat-send{background:var(--tg-accent);}
+    #inbox-modal .chat-emoji-btn{width:var(--touch-target);height:var(--touch-target);flex:none;margin:0;padding:0;border:none;background:transparent;font-size:1.35rem;line-height:1;cursor:pointer;border-radius:50%;filter:grayscale(1);opacity:.65;}
+    #inbox-modal .chat-emoji-btn:hover,#inbox-modal .chat-emoji-btn.on{filter:none;opacity:1;background:var(--tg-hover);}
+    /* панель емодзі */
+    #inbox-modal .chat-emoji-panel{flex-shrink:0;background:#fff;border-top:1px solid var(--tg-line);max-height:260px;display:flex;flex-direction:column;}
+    #inbox-modal .chat-emoji-panel[style*="block"]{display:flex !important;}
+    #inbox-modal .em-tabs{display:flex;gap:2px;padding:6px 8px 0;overflow-x:auto;flex-shrink:0;}
+    #inbox-modal .em-tab{width:38px;height:34px;flex:none;margin:0;padding:0;border:none;background:transparent;font-size:1.2rem;border-radius:8px;cursor:pointer;opacity:.55;}
+    #inbox-modal .em-tab.on{opacity:1;background:var(--tg-accent-soft);}
+    #inbox-modal .em-name{font-size:.75rem;color:var(--tg-muted);font-weight:600;padding:6px 12px 2px;flex-shrink:0;}
+    #inbox-modal .em-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(40px,1fr));padding:2px 8px 10px;overflow-y:auto;}
+    #inbox-modal .em-btn{height:40px;margin:0;padding:0;border:none;background:transparent;font-size:1.55rem;line-height:1;border-radius:8px;cursor:pointer;}
+    #inbox-modal .em-btn:hover{background:var(--tg-hover);}
+    /* реакції під повідомленням */
+    #inbox-modal .chat-pane{position:relative;}
+    #inbox-modal .ms-reacts{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px;clear:both;}
+    #inbox-modal .ms-react{width:auto;min-height:0;margin:0;padding:2px 8px 2px 6px;border:none;border-radius:14px;
+      background:var(--tg-accent-soft);color:var(--tg-accent);font-size:.95rem;line-height:1.3;display:inline-flex;gap:4px;align-items:center;cursor:pointer;}
+    #inbox-modal .ms-react span{font-size:.78rem;font-weight:600;}
+    #inbox-modal .ms-react.mine{background:var(--tg-accent);color:#fff;}
+    #inbox-modal .ms.me .ms-react{background:var(--tg-react-out);color:var(--tg-out-meta);}
+    #inbox-modal .ms.me .ms-react.mine{background:var(--tg-out-meta);color:#fff;}
+    #inbox-modal .ms.big .ms-react{box-shadow:0 1px 2px rgba(16,35,47,.15);}
+    /* кнопка ☺ збоку від повідомлення — лише там, де є наведення мишею */
+    #inbox-modal .ms-react-btn{position:absolute;top:50%;transform:translateY(-50%);width:28px;height:28px;min-height:0;margin:0;padding:0;
+      border:none;border-radius:50%;background:#fff;color:var(--tg-muted);font-size:1rem;line-height:1;cursor:pointer;
+      box-shadow:0 1px 3px rgba(16,35,47,.2);opacity:0;pointer-events:none;transition:opacity .12s;}
+    #inbox-modal .ms.they .ms-react-btn{right:-36px;}
+    #inbox-modal .ms.me .ms-react-btn{left:-36px;}
+    @media (hover:hover){
+      #inbox-modal .ms:hover .ms-react-btn,#inbox-modal .ms-react-btn:focus{opacity:1;pointer-events:auto;}
+    }
+    #inbox-modal .ms{-webkit-touch-callout:none;}
+    /* панель вибору реакції */
+    #inbox-modal .react-bar{position:absolute;z-index:6;display:flex;gap:2px;padding:4px 6px;background:#fff;border-radius:24px;
+      box-shadow:0 6px 20px rgba(16,35,47,.22);max-width:calc(100% - 12px);overflow-x:auto;animation:reactIn .12s ease-out;}
+    @keyframes reactIn{from{opacity:0;transform:scale(.9);}to{opacity:1;transform:none;}}
+    #inbox-modal .react-opt{width:38px;height:38px;flex:none;min-height:0;margin:0;padding:0;border:none;background:transparent;
+      font-size:1.45rem;line-height:1;border-radius:50%;cursor:pointer;transition:transform .12s;}
+    #inbox-modal .react-opt:hover,#inbox-modal .react-opt:focus{transform:scale(1.2);background:var(--tg-hover);}
+    #inbox-modal .react-opt.on{background:var(--tg-accent-soft);}
+    #inbox-modal .react-copy{width:38px;height:38px;flex:none;min-height:0;margin:0 0 0 4px;padding:0;border:none;border-left:1px solid var(--tg-line);border-radius:0 50% 50% 0;background:transparent;color:var(--tg-muted);font-size:1.2rem;cursor:pointer;}
+    #inbox-modal .react-copy:hover{background:var(--tg-hover);color:var(--tg-accent);}
+    @media (max-width:600px){ #inbox-modal .chat-win{border-radius:0;} #inbox-modal .ms{max-width:86%;}
+      /* десять реакцій уміщаються в рядок на вузькому телефоні */
+      /* 10 реакцій + «копіювати» мають уміститися в 360 px (≈ найвужчий поширений телефон) */
+      #inbox-modal .react-opt,#inbox-modal .react-copy{width:30px;height:32px;font-size:1.2rem;} #inbox-modal .react-bar{gap:1px;padding:4px;} }
     /* ── Новинна стрічка ── */
     .nw-feed{display:flex;flex-direction:column;gap:10px;}
     .nw-item{background:#fff;border:1px solid var(--line-soft);border-radius:12px;padding:12px 14px;}
@@ -3890,7 +4036,10 @@
            чи вона взагалі записалася, було ніяк. -->
       <div id="t-topic-saved" class="topic-saved" style="display:none;"></div>
       <div class="topic-card" id="t-topic-card" style="margin-top:13px;">
-        <label>📌 Тема уроку 1:</label>
+        <!-- Підписи міняє curriculum.js (applyLessonMode): для спареного уроку
+             це «Тема уроку 3» / «Тема уроку 4», для звичайного — «Тема уроку»
+             і «Друга тема цього уроку». -->
+        <label id="t-topic-label-1">📌 Тема уроку:</label>
         <div class="topic-select-wrap">
           <div class="topic-dropdown" id="t-topic-dropdown-1">
             <div role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" class="topic-dropdown-trigger" aria-expanded="false" aria-controls="t-topic-list-1" onclick="toggleTopicDropdown(1)" id="t-topic-trigger-1">✏️ Власна тема</div>
@@ -3920,7 +4069,8 @@
         </div>
         <button type="button" id="btn-add-second-topic" onclick="showSecondTopicSlot()" style="margin-top:8px;background:var(--line-soft);color:var(--ink);">+ Додати другу тему</button>
         <div id="t-topic-slot-2-wrap" style="display:none;margin-top:8px;">
-          <label>📌 Тема уроку 2:</label>
+          <label id="t-topic-label-2">📌 Друга тема цього уроку:</label>
+          <button type="button" id="btn-topic-same" onclick="copyTopicToSecondLesson()" style="display:none;margin:0 0 6px;background:var(--line-soft);color:var(--ink);font-size:.8rem;padding:5px 9px;">↧ Та сама тема, що й на першому уроці</button>
           <div class="topic-dropdown" id="t-topic-dropdown-2">
             <div role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" class="topic-dropdown-trigger" aria-expanded="false" aria-controls="t-topic-list-2" onclick="toggleTopicDropdown(2)" id="t-topic-trigger-2">✏️ Власна тема</div>
             <div class="topic-dropdown-list" id="t-topic-list-2" style="display:none;"></div>
@@ -5062,16 +5212,21 @@
     <div id="chat-detail-view" class="chat-pane" style="display:none;">
       <header class="chat-bar">
         <button class="chat-back" onclick="backToChatList()" aria-label="Назад">&#8249;</button>
+        <span id="chat-detail-av"></span>
         <span class="chat-bar-titles">
           <span class="chat-bar-title" id="chat-detail-title">Чат</span>
           <small class="chat-bar-sub" id="chat-detail-sub" style="display:none;"></small>
         </span>
+        <button class="chat-icon" id="chat-rename" onclick="renameCurrentChat()" aria-label="Перейменувати групу" title="Перейменувати групу" style="display:none;"><svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" style="display:block;margin:auto;"><path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm17.71-10.21a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg></button>
         <button class="chat-icon" onclick="openChatPicker('add')" aria-label="Додати до розмови" title="Додати до розмови">&#43;&#128100;</button>
         <button class="chat-x" onclick="closeInboxModal()" aria-label="Закрити">&times;</button>
       </header>
       <div id="inbox-messages-list" class="chat-scroll msgs"></div>
       <div id="chat-readonly" class="chat-readonly" style="display:none;">Ви переглядаєте чужу переписку. Писати в неї не можна.</div>
+      <!-- Панель емодзі (набір і вкладки будує chat.js) -->
+      <div id="chat-emoji-panel" class="chat-emoji-panel" style="display:none;"></div>
       <div class="chat-compose" id="chat-compose">
+        <button type="button" id="chat-emoji-btn" class="chat-emoji-btn" onclick="toggleEmojiPanel()" aria-label="Емодзі" title="Емодзі">😊</button>
         <textarea id="msg-text-input" rows="1" placeholder="Повідомлення..."></textarea>
         <button class="chat-send" onclick="sendInboxMessage()" aria-label="Надіслати">&#10148;</button>
       </div>
@@ -5231,7 +5386,11 @@
   <div class="modal-content" style="text-align:left;">
     <h3 id="cp-title" style="color:var(--brand-ink);margin-top:0;">Нова переписка</h3>
     <p id="cp-note" style="font-size:.78rem;color:var(--ink-3);margin:0 0 10px 0;"></p>
+    <!-- Пошук, групи, клас і «обрати всіх» — будує chat.js (renderPickerFilters) -->
+    <div id="cp-filters" class="cp-filters"></div>
     <div id="cp-list" class="cp-list"><p class="empty-msg">Завантаження...</p></div>
+    <!-- Зʼявляється, коли обрано більше одного співрозмовника -->
+    <input type="text" id="cp-group-name" maxlength="60" placeholder="Назва групи (необовʼязково), напр. «Батьки 3 класу»" style="display:none;margin:0 0 10px;">
     <button onclick="createChatFromPicker()" style="background:var(--brand-ink);color:#fff;">Почати розмову</button>
     <button onclick="closeChatPicker()" style="background:var(--line-soft);color:var(--ink);">Скасувати</button>
   </div>

@@ -53,8 +53,20 @@ self.addEventListener('notificationclick', (e) => {
         // Вкладка вже відкрита. Раніше ми просто переводили на неї фокус —
         // і людина бачила той екран, на якому пішла, а не те, про що
         // прийшло сповіщення. Тепер ще й ведемо за адресою з підказкою.
-        if ('navigate' in c && target) return c.navigate(target).then(w => (w || c).focus());
-        return c.focus();
+        //
+        // navigate ПЕРЕЗАВАНТАЖУЄ сторінку за новою адресою — так учитель,
+        // у якого портал був згорнутий з ранку, бачить свіжі дані, а не
+        // зліпок кількагодинної давнини. Але не всюди navigate є або
+        // спрацьовує (iOS, вкладка, якою цей worker не керує): тоді раніше
+        // не відбувалося НІЧОГО — ні переходу, ні навіть фокусу. Тепер у
+        // такому разі просимо саму сторінку перейти (message → location).
+        const viaMessage = () => {
+          try{ c.postMessage({ type: 'push-open', url: target }); }catch(err){}
+          return c.focus();
+        };
+        if ('navigate' in c && target)
+          return c.navigate(target).then(w => w ? w.focus() : viaMessage()).catch(viaMessage);
+        return viaMessage();
       }
       if (clients.openWindow) return clients.openWindow(target);
     })

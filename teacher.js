@@ -8,7 +8,7 @@
 import { ref, set, get, child, push, remove, update, onValue } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { renderNewsFeed } from './news.js';
 import { db, auth, attendanceAuthor, canClearDayAbsence, clearDayAbsence, CLOUDINARY_URL, UPLOAD_PRESET, HW_FILE_EXT, HW_FILE_MAX_MB, fileExt, isImageUrl, isAudioUrl, cldImage, safeHttpUrl, getActiveClass, currentUserData, showToast, displayGrade, validDailyGrade, getClassNum, LEVEL_MAX_CLASS, LEVEL_LETTERS, renderHwItem, renderHwList, dayKeys, formatAttendanceSlotLabel, STICKER_GOAL, stickerGoal, escJs, escHtml, safeUrl, normalizeChildren, notifyEvent, logAction, renderBirthdays, teacherAccessMatrix, getUsersSnap, getStudentDir, stuName, gradeWritePaths, journalBaseDate, journalSlot, localDateString, isMasterTeacher, gradeTypesCache, subjKey, emailKey, subjectsForClassWeek } from './common.js';
-import { populateTopicSelector, availableTopicsCache, planKey, loadAliases } from './curriculum.js';
+import { populateTopicSelector, availableTopicsCache, planKey, loadAliases, isDoubleLesson, doubleLessonNumbers } from './curriculum.js';
 
 let currentHwImages=[];
 let hwLoadGeneration=0;
@@ -356,19 +356,26 @@ window.loadDailyHomeworkSubmissions = loadDailyHomeworkSubmissions;
 // Викликає нашу серверну функцію (netlify/functions/ai-assist.js), а не
 // Gemini напряму: ключ до AI не має потрапляти в браузер.
 // У запит іде ЛИШЕ предмет, тема і номер класу — жодних даних про учнів.
-function readCurrentTopicText(){
+function readTopicSlotText(n){
   // Тема береться так само, як у saveLessonTopic: спершу обрана з плану,
   // інакше — введена вручну.
-  const idEl=document.getElementById('t-topic-value-1');
+  const idEl=document.getElementById(`t-topic-value-${n}`);
   const selectedId=idEl?idEl.value:'__custom__';
-  const edited=document.getElementById('t-topic-1');
+  const edited=document.getElementById(`t-topic-${n}`);
   if(edited?.dataset.editing==='true')return edited.value.trim();
   if(selectedId&&selectedId!=='__custom__'){
     const t=availableTopicsCache[selectedId];
     if(t&&t.title)return t.title;
   }
-  const custom=document.getElementById('t-topic-1');
-  return custom?custom.value.trim():'';
+  return edited?edited.value.trim():'';
+}
+function readCurrentTopicText(){
+  // Спарений урок: ДЗ одне на обидва уроки, тож ШІ має знати обидві теми
+  // (однакові — одну). Для звичайного уроку — лише перша, як і було.
+  const t1=readTopicSlotText(1);
+  if(!isDoubleLesson())return t1;
+  const t2=readTopicSlotText(2);
+  return [...new Set([t1,t2].filter(Boolean))].join('; ');
 }
 // Спільний виклик серверної AI-функції. Усі AI-можливості ходять в один
 // endpoint із різним task — див. netlify/functions/ai-assist.js
@@ -922,12 +929,16 @@ window.saveLessonTopic=function(){
       else if(v.topicId||v.customText)prevTopics=[v];
     }
 
-    // 3. Новий масив тем; ліміт годин перевіряємо для КОЖНОЇ нової окремо
+    // 3. Новий масив тем; ліміт годин перевіряємо для КОЖНОЇ нової окремо.
+    // У спарений день слот = урок: запис несе номер уроку (lesson), щоб
+    // тему другого уроку не прийняли за першу, коли перший лишився порожнім.
+    const dbl=isDoubleLesson(), lessonNums=dbl?doubleLessonNumbers():[];
+    const tag=(i,entry)=>dbl?{...entry,lesson:lessonNums[i]}:entry;
     let newTopics=[];
     const updates={};
     for(let i=0;i<slotInputs.length;i++){
       const {selectedId,customText,editing,changePlan}=slotInputs[i];
-      if(selectedId==='__custom__'){ if(customText)newTopics.push({customText}); continue; }
+      if(selectedId==='__custom__'){ if(customText)newTopics.push(tag(i,{customText})); continue; }
       // ЛІМІТ ГОДИН БІЛЬШЕ НЕ ЗАБОРОНЯЄ, А ПОПЕРЕДЖАЄ.
       //
       // Раніше тут стояла відмова: години теми вичерпані — зберегти не
@@ -948,9 +959,11 @@ window.saveLessonTopic=function(){
       if(!availableTopicsCache[selectedId])throw new Error('Обрану тему видалено з плану. Оберіть іншу тему.');
       if(editing&&!customText)throw new Error('Назва теми не може бути порожньою');
       if(editing&&changePlan)updates[`curriculum_plans/${cls}/${pk}/topics/${selectedId}/title`]=customText;
-      newTopics.push(editing&&!changePlan?{topicId:selectedId,customText}:{topicId:selectedId});
+      newTopics.push(tag(i,editing&&!changePlan?{topicId:selectedId,customText}:{topicId:selectedId}));
     }
-    if(newTopics.length===2&&newTopics[0].topicId&&newTopics[0].topicId===newTopics[1].topicId){
+    // Дві однакові теми в ОДНОМУ уроці — помилка. На двох різних уроках
+    // (спарений день) — звичайна річ: тема просто займає дві години.
+    if(!dbl&&newTopics.length===2&&newTopics[0].topicId&&newTopics[0].topicId===newTopics[1].topicId){
       showToast('⚠️ Тема 1 і Тема 2 не можуть збігатися!');
       return false;
     }
@@ -1343,6 +1356,10 @@ export function myLessonsForDay(cls){
   });
   return out;
 }
+// curriculum.js рахує за цим, скільки уроків предмета в день (спарені
+// уроки → тема на кожен урок). Імпортувати звідти не може: curriculum.js
+// сам імпортується сюди, і коло імпортів зламало б завантаження.
+window.myLessonsForDay=myLessonsForDay;
 
 // Набір ключів уроків цього вчителя. null — обмежувати не треба.
 function myAttendanceSlots(cls){

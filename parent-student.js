@@ -256,12 +256,19 @@ export function topicNames(rec, planForSubject){
   else if(Array.isArray(rec.topics)) list = rec.topics;
   else if(rec.topicId || rec.customText) list = [rec];
   const topics = (planForSubject && planForSubject.topics) || {};
-  return list.map(e => {
-    if(!e) return '';
-    if(e.customText) return String(e.customText).trim();
-    const t = topics[e.topicId];
-    return t ? String(t.title || '').trim() : '';
-  }).filter(Boolean).join(' · ');
+  const named = list.map(e => {
+    if(!e) return null;
+    const text = e.customText ? String(e.customText).trim()
+      : (topics[e.topicId] ? String(topics[e.topicId].title || '').trim() : '');
+    return text ? { text, lesson: e.lesson ? String(e.lesson) : '' } : null;
+  }).filter(Boolean);
+  // Спарений урок (записи з номером уроку): одна тема на обох — показуємо
+  // раз із позначкою, різні — з номерами уроків.
+  if(named.some(n => n.lesson)){
+    if(named.length === 2 && named[0].text === named[1].text) return `${named[0].text} (2 уроки)`;
+    return named.map(n => n.lesson ? `урок ${n.lesson}: ${n.text}` : n.text).join(' · ');
+  }
+  return named.map(n => n.text).join(' · ');
 }
 let dayTopics = {};
 export async function loadDayTopics(cls, date){
@@ -1108,7 +1115,10 @@ window.submitAttendance=async function(role='parent'){
   const el=document.getElementById(`${prefix}-att-status`);
   await renderSelfAttStatus(role);
   checkTeacherAttendanceAlert(role);
-  const result=await notifyEvent('attendance_report',{class:cls,studentName:profile.studentName,value:type});
+  // Дата й хвилини запізнення — щоб учитель зі сповіщення одразу бачив
+  // день і відкрив портал саме на ньому
+  const result=await notifyEvent('attendance_report',{class:cls,studentName:profile.studentName,value:type,
+    date, reason: type==='late' ? reason : ''});
   // ЩО ТУТ ВАЖЛИВО СКАЗАТИ БАТЬКОВІ, А ЩО НІ.
   //
   // Відмітка вже в базі, і вчитель побачить її в кабінеті незалежно від

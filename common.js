@@ -2727,7 +2727,9 @@ export function tabFromUrl(search){
   // конфліктують: «day» і в батьків, і у вчителя — це «Сьогодні», «news»
   // і там, і там — новини. Якщо такої вкладки в цьому кабінеті немає,
   // openFromNotification просто нічого не зробить.
-  return ['day','hw','meals','games','grades','school','profile','chat',
+  // att — «Сьогодні» і прокрутка до відвідуваності (сповіщення вчителю
+  // про відсутність чи запізнення учня)
+  return ['att','day','hw','meals','games','grades','school','profile','chat',
           'lesson','class','news',
           'ogl','uchni','study','rozklad','staff','stat','nalash'].includes(v) ? v : null;
 }
@@ -2757,8 +2759,34 @@ export function screenIdForRole(role){
 window.screenIdForRole = screenIdForRole;
 
 const TAB_OPEN_HOOKS = { hw:'openHwTab', games:'openGamesTab' };
+// Прокрутити до блоку відвідуваності й коротко підсвітити його. Чекаємо,
+// поки список дочитається: інакше блок поїде вниз, коли зʼявляться рядки.
+function scrollToAttendance(screenId, attempt = 0){
+  const id = { 'teacher-screen':'t-att-header', 'director-screen':'d-att-header', 'admin-screen':'a-att-header' }[screenId]
+          || 't-att-header';
+  const head = document.getElementById(id);
+  const card = head && head.closest ? (head.closest('.data-card') || head) : head;
+  const list = document.getElementById({ 't-att-header':'t-attendance-list', 'd-att-header':'d-unified-att-list',
+                                         'a-att-header':'a-unified-att-list' }[id]);
+  const loading = list && /Завантаження/.test(list.textContent || '');
+  if((!card || loading) && attempt < 15) return setTimeout(() => scrollToAttendance(screenId, attempt + 1), 200);
+  if(!card) return;
+  try{ card.scrollIntoView({ behavior:'smooth', block:'start' }); }catch(e){ card.scrollIntoView(); }
+  card.classList.add('flash-target');
+  setTimeout(() => card.classList.remove('flash-target'), 2400);
+}
+window.scrollToAttendance = scrollToAttendance;
+
 export function openTabByKey(screenId, want){
   if(!want) return false;
+  if(want === 'att'){
+    // Вкладка «Сьогодні» є не в усіх кабінетах під цим імʼям; у директора й
+    // адміністрації блок відвідуваності на головній — тоді лише прокрутка.
+    const dir = screenId === 'director-screen' || screenId === 'admin-screen';
+    if(!dir && !openTabByKey(screenId, 'day')) return false;
+    scrollToAttendance(screenId);
+    return true;
+  }
   if(want === 'chat'){
     if(window.openChatModal){ window.openChatModal(); return true; }
     return false;
@@ -2779,9 +2807,52 @@ export function openTabByKey(screenId, want){
 }
 window.openTabByKey = openTabByKey;
 
+// Клас і дата зі сповіщення про відвідуваність (&cls=class_3&date=…).
+// Ставимо їх ДО переходу на вкладку: відмітка може бути в іншому класі
+// вчителя або на завтра, а список показує вибраний клас і день.
+function applyNotificationContext(search){
+  const q = new URLSearchParams(String(search || '').replace(/^\?/, ''));
+  const date = q.get('date'), cls = q.get('cls');
+  let changed = false;
+  const cs = document.getElementById('t-class-selector');
+  if(cls && /^class_\d{1,2}$/.test(cls) && cs && cs.value !== cls
+     && Array.from(cs.options || []).some(o => o.value === cls)){
+    cs.value = cls;
+    try{ localStorage.setItem('push_school_class', cls); }catch(e){}
+    changed = 'class';
+  }
+  const gd = document.getElementById('global-date');
+  if(date && /^\d{4}-\d{2}-\d{2}$/.test(date) && gd && gd.value !== date){
+    gd.value = date;
+    changed = changed || 'date';
+  }
+  if(changed === 'class' && window.handleClassChange) window.handleClassChange();
+  else if(changed && window.handleDateChange) window.handleDateChange();
+}
+window.applyNotificationContext = applyNotificationContext;
+
+// Сервіс-воркер просить перейти за адресою сповіщення, коли сам цього
+// зробити не може (див. firebase-messaging-sw.js). Перехід = перезавантаження
+// з потрібною вкладкою, тож дані на екрані свіжі.
+try{
+  navigator.serviceWorker && navigator.serviceWorker.addEventListener('message', e => {
+    const d = e && e.data;
+    if(!d || d.type !== 'push-open' || !d.url) return;
+    // Беремо лише шлях і параметри й лишаємося на СВОЄМУ домені: іконка
+    // на телефоні може ще жити на старій адресі, а сповіщення веде на
+    // push.school. Повідомлення приходить лише від нашого ж worker'а.
+    try{
+      const u = new URL(d.url, location.href);
+      if(!/^\/cabinet(\.html)?$/.test(u.pathname)) return;
+      location.assign(u.pathname + u.search);
+    }catch(err){}
+  });
+}catch(e){}
+
 window.openFromNotification = function(screenId, attempt = 0){
   const want = tabFromUrl(location.search);
   if(!want) return;
+  if(attempt === 0) applyNotificationContext(location.search);
   // Кнопки вкладок можуть ще не існувати: кабінет малюється не миттєво.
   // Кілька коротких спроб краще за мовчазну відмову — саме через неї
   // перехід «іноді працює, іноді ні».
@@ -3438,10 +3509,11 @@ window.addEventListener('unhandledrejection', (ev) => {
     onMessage(getMessaging(app),(payload)=>{
       const d=payload.data||{};
       // Та сама підказка, що й у самому сповіщенні: ?open=grades у d.url.
-      const want=tabFromUrl(String(d.url||'').split('?')[1]||'');
+      const qs=String(d.url||'').split('?')[1]||'';
+      const want=tabFromUrl(qs);
       const screen=screenIdForRole(currentUserData&&currentUserData.role);
       showToast(`${d.title||'Сповіщення'}: ${d.body||''}`,
-        (want&&screen)?()=>openTabByKey(screen,want):null);
+        (want&&screen)?()=>{ applyNotificationContext(qs); openTabByKey(screen,want); }:null);
     });
   }catch(e){/* messaging недоступний — не критично */}
 })();
