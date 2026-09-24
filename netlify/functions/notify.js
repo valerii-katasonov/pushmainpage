@@ -448,6 +448,7 @@ exports.handler = async (event) => {
       ? (/^class_\d{1,2}$/.test(cls) ? `&cls=${cls}` : '') + (reportDate ? `&date=${reportDate}` : '')
       : '';
     const url = `${CABINET_URL}?open=${tab}${extra}`;
+    const URGENT = new Set(['attendance_report', 'chat']);
     const results = await Promise.allSettled(targets.map(t =>
       fetch(`https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`, {
         method: 'POST',
@@ -456,7 +457,11 @@ exports.handler = async (event) => {
           message: {
             token: t,
             data: { title: msg.title, body: msg.body, tag: msg.tag, url },
-            webpush: { headers: { Urgency: 'normal' }, fcmOptions: { link: url } }
+            // Відсутність/запізнення і чат — термінові: з Urgency normal Android
+            // у режимі сну (телефон лежить із вимкненим екраном) відкладає
+            // доставку до пробудження, і вчитель бачить сповіщення з запізненням
+            // або не бачить зовсім. Решта (оцінки, меню) лишається normal.
+            webpush: { headers: { Urgency: URGENT.has(body.type) ? 'high' : 'normal' }, fcmOptions: { link: url } }
           }
         })
       })
