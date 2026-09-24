@@ -20,6 +20,7 @@
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, update, remove } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js"; import { db, currentUserData, showToast, escHtml, escJs, logAction, splitAltName, isDirectorRole, subjKey, emailKey } from './common.js';
 import { ACTIVE_YEAR, getAcademicYearId } from './director.js';
+import { grantAccess } from './access.js';
 
 // «Безпечний» ключ: так curriculum_plans і textbooks зберігають назву.
 // Крапки й дужки в ключах Firebase заборонені, тому їх колись замінили
@@ -594,14 +595,8 @@ window.addCatalogSubject = async function(cls, name, teacherEmail, teacherName){
 
 // Призначення вчителя = запис у матрицю доступу. Одне джерело правди.
 async function grantSubjectToTeacher(email, cls, subject){
-  const se = emailKey(email);
-  const snap = await get(child(ref(db), `teacher_access/${se}/${cls}`));
-  let list = snap.exists() ? snap.val() : [];
-  if(!Array.isArray(list)) list = Object.values(list);
-  list = list.filter(x => typeof x === 'string' && x.trim());
-  if(list.includes('Всі предмети') || list.includes(subject)) return;
-  list.push(subject);
-  await set(ref(db, `teacher_access/${se}/${cls}`), list);
+  // Через access.js — щоб у таблиці доступу було видно, що предмет дав каталог
+  await grantAccess(emailKey(email), cls, [subject], 'catalog');
 }
 
 // ── Картка ──────────────────────────────────────────────────────

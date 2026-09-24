@@ -3,6 +3,7 @@ import { ref, get, update } from "https://www.gstatic.com/firebasejs/10.8.1/fire
 import { db, currentUserData, isDirectorRole, isTeacherRole, getUserRoles, emailKey, subjKey, escHtml, escJs, showToast } from './common.js';
 import { ACTIVE_YEAR } from './director.js';
 import { catalogList, prevYearId } from './subjects.js';
+import { accessChangePaths } from './access.js';
 
 let cache={},generation=0,busy=false;
 const allowed=()=>isDirectorRole(currentUserData?.role);
@@ -125,7 +126,8 @@ export async function clubWritePaths(c,key,record){
     const accessPath=`teacher_access/${emailKey(record.teacherEmail)}/${c.cls}`;
     const snap=await get(ref(db,accessPath)),raw=snap.exists()?snap.val():[];
     const list=(Array.isArray(raw)?raw:Object.values(raw||{})).filter(s=>typeof s==='string'&&s.trim());
-    if(!list.includes('Всі предмети')&&!list.includes(record.name))writes[accessPath]=[...list,record.name];
+    if(!list.includes('Всі предмети')&&!list.includes(record.name))
+      Object.assign(writes,accessChangePaths(emailKey(record.teacherEmail),c.cls,list,[...list,record.name],'club'));
   }
   return writes;
 }

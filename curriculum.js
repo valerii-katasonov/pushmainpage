@@ -9,6 +9,7 @@
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, update, remove } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { db, auth, getActiveClass, currentUserData, showToast, localDateString, escHtml, teacherAccessMatrix, withTeachingRole, syncStaffCard, isBreakItem, isTeacherRole, isMasterTeacher, escJs, logAction, subjKey, planKeyWith, emailKey, expandAltSubjects, splitAltName } from './common.js';
+import { grantAccess } from './access.js';
 
 let parsedCurriculum=null;        // після парсингу xlsx
 const MAX_TOPICS=250;             // стеля на предмет: захист від зіпсованого файлу
@@ -1226,7 +1227,7 @@ window.assignClassTeacher=async function(){
   // have access to their own class, so grant it (only if they have nothing for
   // this class yet — never overwrite a narrower, deliberately-set subject list).
   const accSnap=await get(ref(db,`teacher_access/${teacherSE}/${cls}`));
-  if(!accSnap.exists())await set(ref(db,`teacher_access/${teacherSE}/${cls}`),["Всі предмети"]);
+  if(!accSnap.exists())await grantAccess(teacherSE,cls,["Всі предмети"],'homeroom');
   // Promote a plain teacher to class_teacher (both in pre_approved_roles, which
   // seeds first logins, and in any existing users/{uid} record, which is what an
   // already-registered account actually reads). Specialist roles

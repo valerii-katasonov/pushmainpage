@@ -8,6 +8,7 @@
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, push, remove, update, query, limitToLast, orderByKey, endBefore } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { auth, db, countAttendanceDays, attendanceAuthor, canClearDayAbsence, clearDayAbsence, showToast, getClassNum, LEVEL_MAX_CLASS, displayGrade, gradeClass6, teacherAccessMatrix, getWeekDates, formatAttendanceSlotLabel, gradeTypesCache, loadGradeTypesCache, calculateStudentWeightedAvg, escJs, escHtml, localDateString, normalizeRoles, getUserRoles, mergeAccountRoles, parentAccountPatch, ROLE_LABELS, currentUserData, dayNamesUA, sendPasswordReset, normalizeChildren, renderParentsBlock, logAction, AUDIT_LABELS, getParentProfile, parentFullName, getSchoolRange, getAllUsers, invalidateUsersCache, getUsersSnap, stuName, invalidateStudentDir, subjectsLabel, syncStaffCard, shrinkImage, dayKeys, invalidateParentLinks, emailKey } from './common.js';
+import { setAccess, revokeAllPaths, revokeAccess, accessList, accessBasis, judgeSubject, ACCESS_SRC } from './access.js';
 
 let directorSkillsTemp=[];
 
@@ -556,7 +557,9 @@ window.grantTeacherAccess=async function(){
     // Роль тут потрібна лише для того, щоб людина взагалі значилася в
     // списку персоналу. Якщо вона там уже є — не втручаємось.
     const cur=await get(child(ref(db),`pre_approved_roles/${se}`));
-    const writes=[set(ref(db,`teacher_access/${se}/${cls}`),subjs)];
+    // Через access.js: разом зі списком пишеться, звідки предмет (вручну),
+    // хто й коли його дав, і рядок у журналі доступу.
+    const writes=[setAccess(se,cls,subjs,'manual')];
     let roleNote='';
     if(!cur.exists()){
       writes.push(set(ref(db,`pre_approved_roles/${se}`),'teacher'));
@@ -565,6 +568,7 @@ window.grantTeacherAccess=async function(){
     await Promise.all(writes);
     // Оновлюємо картку в довіднику одразу — щоб предмет зʼявився в чаті
     // у батьків зараз, а не після того, як учитель наступного разу зайде.
+    ACC.data=null;   // таблиця «Хто має доступ» перечитає свіжі дані
     const synced = await syncStaffCard(se);
     alert(`✅ Доступ збережено: ${subjs.join(', ')} — ${cls.replace('class_','')} клас.`+roleNote
       + (synced ? '\n\nУ чаті в батьків предмет уже видно.'
@@ -727,7 +731,9 @@ window.removeStaffMember=async function(safeEmail){
     // 1. Прибираємо з дозволених ролей, доступів і скілів
     await Promise.all([
       remove(ref(db,`pre_approved_roles/${safeEmail}`)),
-      remove(ref(db,`teacher_access/${safeEmail}`)),
+      // Доступ — разом із журналом: у таблиці доступу видно, хто й коли
+      // забрав класи в людини, що звільнилась.
+      get(child(ref(db),`teacher_access/${safeEmail}`)).then(a=>update(ref(db),revokeAllPaths(safeEmail,a.exists()?a.val():{},'співробітника видалено'))),
       remove(ref(db,`teacher_skills/${safeEmail}`)),
       // З довідника теж: інакше звільнена людина лишалася б у списку
       // контактів чату, і їй можна було б написати.
@@ -2680,3 +2686,211 @@ export async function runAccessAudit(){
   }
 }
 window.runAccessAudit = runAccessAudit;
+
+// ══════════ ХТО МАЄ ДОСТУП ДО КЛАСІВ (прозорість доступу) ══════════
+//
+// Таблиця всього teacher_access: біля кожного предмета — звідки він
+// (вручну / кл. керівник / розклад / каталог / гурток), хто й коли дав,
+// і чи є на нього підстава за чинними даними школи (див. judgeSubject в
+// access.js). Забрати можна предмет, клас або все зайве одразу («Звірити»).
+const ACC = { data: null, busy: false };
+const accClsLabel = c => String(c).replace('class_', '') + ' клас';
+const accDate = ts => ts ? new Date(ts).toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '';
+const ACC_LEVEL = {
+  ok:   { bg: 'var(--surface-2)', line: 'var(--line)' },
+  weak: { bg: 'var(--surface-2)', line: 'var(--line)' },
+  bad:  { bg: 'var(--warn-soft)', line: 'var(--warn-line)' }
+};
+
+async function loadAccessData(){
+  // Підстави читаємо БЕЗ «тихого» null при помилці: якщо розклад не
+  // прочитався, кожен предмет виглядав би «без підстав», і звірка
+  // запропонувала б забрати в школи весь доступ.
+  const must = p => get(child(ref(db), p)).then(s => s.exists() ? s.val() : null);
+  const [acc, meta, schedules, heads, catalog, clubs, usersSnap] = await Promise.all([
+    must('teacher_access'), must('teacher_access_meta'), must('schedules'), must('class_teachers'),
+    must(`subjects_catalog/${ACTIVE_YEAR}`), must(`clubs_catalog/${ACTIVE_YEAR}`), getUsersSnap()
+  ]);
+  // Журнал — не критичний: без нього таблиця все одно правильна
+  const logSnap = await get(query(ref(db, 'access_log'), orderByKey(), limitToLast(60))).catch(() => null);
+  const names = {};
+  if(usersSnap && usersSnap.exists()) for(const u of Object.values(usersSnap.val())){
+    if(!u || !u.email) continue;
+    const n = `${u.firstName || ''} ${u.lastName || ''}`.trim();
+    names[emailKey(u.email)] = { name: n || u.email, email: u.email, disabled: !!u.disabled };
+  }
+  const log = logSnap && logSnap.exists() ? Object.values(logSnap.val()).filter(Boolean).sort((a, b) => (b.at || 0) - (a.at || 0)) : [];
+  ACC.data = { acc: acc || {}, meta: meta || {}, classes: accessBasis({ schedules, heads, catalog, clubs }, emailKey), names, log };
+}
+const accName = se => (ACC.data.names[se] && ACC.data.names[se].name) || String(se).replace(/_/g, '.');
+
+// Рядки таблиці: [{se, cls, head, subjects:[{s, meta, j}], bad, attention}]
+function accessRows(){
+  const { acc, meta, classes } = ACC.data, rows = [];
+  for(const [se, byCls] of Object.entries(acc)){
+    for(const [cls, raw] of Object.entries(byCls || {})){
+      const metaList = Object.values((meta[se] && meta[se][cls]) || {});
+      const subjects = accessList(raw).map(s => ({ s, meta: metaList.find(x => x && x.s === s) || null, j: judgeSubject(classes, se, cls, s) }));
+      if(!subjects.length) continue;
+      const head = !!(classes[cls] && classes[cls].heads.has(se));
+      rows.push({ se, cls, head, subjects,
+        bad: subjects.every(x => x.j.level === 'bad'),
+        attention: subjects.some(x => x.j.level === 'bad') });
+    }
+  }
+  return rows.sort((a, b) => accName(a.se).localeCompare(accName(b.se), 'uk') || getClassNum(a.cls) - getClassNum(b.cls));
+}
+function rowBasis(r){
+  if(r.head) return '🎓 кл. керівник';
+  if(r.bad) return '<span style="color:var(--danger);font-weight:600;">⚠️ немає підстав</span>';
+  if(r.attention) return '<span style="color:var(--warn);font-weight:600;">⚠️ частина предметів без підстав</span>';
+  if(r.subjects.some(x => x.s === 'Всі предмети')) return 'ℹ️ усі предмети, хоча не кл. керівник';
+  return r.subjects.some(x => x.j.level === 'ok') ? '✅ за розкладом / каталогом' : '🗓 предмети є в розкладі класу';
+}
+function judgeText(j){
+  if(!j.others || !j.others.length) return j.why;
+  return j.why + ': ' + j.others.map(accName).join(', ');
+}
+
+window.openAccessOverview = async function(force){
+  const box = document.getElementById('acc-ov-body');
+  if(!box) return;
+  if(ACC.data && !force) return window.renderAccessOverview();
+  box.innerHTML = '<p style="font-size:.85rem;">Завантаження...</p>';
+  try{ await loadAccessData(); }
+  catch(e){
+    ACC.data = null;
+    box.innerHTML = `<p style="color:var(--danger);font-size:.85rem;">Не вдалося прочитати дані школи: ${escHtml(e.message)}. Таблицю не показано, щоб не радити забрати зайве.</p>`;
+    return;
+  }
+  const tSel = document.getElementById('acc-ov-teacher'), cSel = document.getElementById('acc-ov-class');
+  const keepT = tSel.value, keepC = cSel.value;
+  const ses = Object.keys(ACC.data.acc).sort((a, b) => accName(a).localeCompare(accName(b), 'uk'));
+  tSel.innerHTML = '<option value="">Усі вчителі</option>' + ses.map(se => `<option value="${escHtml(se)}">${escHtml(accName(se))}</option>`).join('');
+  const clsSet = [...new Set(Object.values(ACC.data.acc).flatMap(c => Object.keys(c || {})))].sort((a, b) => getClassNum(a) - getClassNum(b));
+  cSel.innerHTML = '<option value="">Усі класи</option>' + clsSet.map(c => `<option value="${escHtml(c)}">${escHtml(accClsLabel(c))}</option>`).join('');
+  tSel.value = ses.includes(keepT) ? keepT : ''; cSel.value = clsSet.includes(keepC) ? keepC : '';
+  window.renderAccessOverview();
+};
+
+window.renderAccessOverview = function(){
+  const box = document.getElementById('acc-ov-body');
+  if(!box || !ACC.data) return;
+  const fT = document.getElementById('acc-ov-teacher').value, fC = document.getElementById('acc-ov-class').value;
+  const onlyBad = document.getElementById('acc-ov-stale').checked;
+  const all = accessRows();
+  const rows = all.filter(r => (!fT || r.se === fT) && (!fC || r.cls === fC) && (!onlyBad || r.attention));
+  const badN = all.filter(r => r.attention).length;
+  let h = `<p style="font-size:.8rem;color:var(--ink-2);margin:8px 0;">Записів доступу: ${all.length}. Потребують уваги: <b style="color:${badN ? 'var(--danger)' : 'var(--ok)'}">${badN}</b>.</p>`;
+  if(!rows.length) h += '<p style="font-size:.85rem;color:var(--ink-3);">Нічого не знайдено.</p>';
+  let lastSe = '';
+  for(const r of rows){
+    if(r.se !== lastSe){
+      lastSe = r.se;
+      const n = ACC.data.names[r.se];
+      h += `<div style="margin-top:12px;font-weight:700;color:var(--brand-ink);">${escHtml(accName(r.se))}`
+        + `<span style="font-weight:400;color:var(--ink-3);font-size:.75rem;"> ${escHtml(n ? n.email : '')}${n && n.disabled ? ' · вимкнений' : ''}${n ? '' : ' · немає акаунта'}</span></div>`;
+    }
+    const chips = r.subjects.map(x => {
+      const m = x.meta, src = m ? (ACCESS_SRC[m.src] || m.src) : ACCESS_SRC.unknown;
+      const who = m ? `${src}${m.by ? ', ' + m.by : ''}${m.at ? ', ' + accDate(m.at) : ''}` : 'видано до появи журналу';
+      const st = ACC_LEVEL[x.j.level];
+      return `<span title="${escHtml(who + ' · ' + judgeText(x.j))}" style="display:inline-flex;align-items:center;gap:4px;margin:2px 4px 2px 0;padding:2px 4px 2px 8px;border-radius:12px;font-size:.78rem;`
+        + `background:${st.bg};border:1px solid ${st.line};">`
+        + `${x.j.level === 'bad' ? '⚠️ ' : ''}${escHtml(x.s)} <span style="color:var(--ink-3);font-size:.7rem;">· ${escHtml(src)}</span>`
+        + (r.head ? '' : `<button type="button" aria-label="Забрати предмет" title="Забрати цей предмет" style="all:unset;cursor:pointer;padding:0 4px;color:var(--danger);font-weight:700;" onclick="accRevoke('${escJs(r.se)}','${escJs(r.cls)}','${escJs(x.s)}')">✕</button>`)
+        + `</span>`;
+    }).join('');
+    const why = r.subjects.filter(x => x.j.level === 'bad').map(x => `${escHtml(x.s)} — ${escHtml(judgeText(x.j))}`).join('<br>');
+    h += `<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);${r.bad ? 'background:var(--danger-soft);' : ''}">`
+      + `<b style="min-width:62px;">${escHtml(accClsLabel(r.cls))}</b>`
+      + `<div style="flex:1 1 260px;">${chips}${why ? `<div style="font-size:.72rem;color:var(--ink-2);margin-top:3px;">${why}</div>` : ''}</div>`
+      + `<div style="font-size:.75rem;color:var(--ink-2);flex:0 1 200px;">${rowBasis(r)}</div>`
+      + (r.head
+          ? `<span style="font-size:.72rem;color:var(--ink-3);" title="Щоб забрати клас, спершу призначте іншого класного керівника">🔒</span>`
+          : `<button type="button" style="width:auto;padding:5px 10px;font-size:.75rem;background:var(--danger);color:#fff;margin:0;" onclick="accRevoke('${escJs(r.se)}','${escJs(r.cls)}','')">Забрати клас</button>`)
+      + `</div>`;
+  }
+  h += renderAccessLog(fT, fC);
+  box.innerHTML = h;
+};
+
+function renderAccessLog(fT, fC){
+  const log = ACC.data.log.filter(l => (!fT || l.t === fT) && (!fC || l.cls === fC)).slice(0, 30);
+  let h = '<details style="margin-top:14px;"><summary style="cursor:pointer;font-weight:700;font-size:.85rem;">📜 Журнал змін доступу</summary>';
+  if(!log.length) h += '<p style="font-size:.8rem;color:var(--ink-3);">Записів ще немає — журнал ведеться з цього оновлення.</p>';
+  else h += '<div style="font-size:.78rem;line-height:1.5;margin-top:6px;">' + log.map(l =>
+    `<div style="padding:3px 0;border-bottom:1px dashed var(--line);">`
+    + `<span style="color:var(--ink-3);">${escHtml(new Date(l.at).toLocaleString('uk-UA', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }))}</span> `
+    + `${l.act === 'grant' ? '➕ видано' : '➖ забрано'} <b>${escHtml(accName(l.t))}</b>, ${escHtml(accClsLabel(l.cls))}: ${escHtml(accessList(l.subj).join(', '))}`
+    + ` <span style="color:var(--ink-3);">· ${escHtml(ACCESS_SRC[l.src] || l.src || '')}${l.by ? ' · ' + escHtml(l.by) : ''}${l.note ? ' · ' + escHtml(l.note) : ''}</span></div>`).join('') + '</div>';
+  return h + '</details>';
+}
+
+// Забрати один предмет (subject) або увесь клас (subject = '')
+window.accRevoke = async function(se, cls, subject){
+  if(ACC.busy || !ACC.data) return;
+  const c = ACC.data.classes[cls];
+  if(c && c.heads.has(se)) return alert('Це класний керівник цього класу. Спершу призначте іншого керівника в «🎓 Призначення класних керівників».');
+  const list = accessList(ACC.data.acc[se] && ACC.data.acc[se][cls]);
+  const kept = subject ? list.filter(s => s !== subject) : [];
+  const inUse = (subject ? [subject] : list).filter(s => judgeSubject(ACC.data.classes, se, cls, s).level !== 'bad');
+  const what = subject ? `предмет «${subject}»` : 'увесь доступ';
+  const warn = inUse.length
+    ? `\n\n⚠️ За даними школи ця людина веде тут: ${inUse.join(', ')}. Після відкликання вона не зможе вести журнал цих уроків.` : '';
+  const last = !kept.length && Object.keys(ACC.data.acc[se] || {}).length === 1
+    ? '\n\nЦе останній клас цієї людини: після входу вона побачить «Класи не призначено».' : '';
+  if(!confirm(`Забрати ${what} у ${accName(se)} — ${accClsLabel(cls)}?${warn}${last}\n\nСповіщення родин цього класу їй/йому більше не надходитимуть. Відкликання записується в журнал.`)) return;
+  ACC.busy = true;
+  try{
+    await revokeAccess(se, cls, subject ? [subject] : null);
+    await syncStaffCard(se).catch(() => false);
+    showToast('✅ Доступ забрано');
+    await window.openAccessOverview(true);
+  }catch(e){ alert('Не вдалося: ' + e.message + '\n\nЯкщо тут PERMISSION_DENIED — опублікуйте нові правила бази.'); }
+  finally{ ACC.busy = false; }
+};
+
+// Звірка: пропонуємо зняти лише те, на що точно немає підстав (bad).
+// Видане вручну — показуємо, але не позначаємо: це може бути свідомий виняток.
+window.accReconcile = function(){
+  if(!ACC.data || ACC.busy) return;
+  const items = [];
+  for(const r of accessRows()){
+    if(r.head) continue;
+    const bad = r.subjects.filter(x => x.j.level === 'bad');
+    if(!bad.length) continue;
+    items.push({ se: r.se, cls: r.cls, subj: bad.map(x => x.s), why: bad.map(x => judgeText(x.j)),
+                 whole: bad.length === r.subjects.length, manual: bad.every(x => x.meta && x.meta.src === 'manual') });
+  }
+  const box = document.getElementById('acc-ov-body');
+  if(!items.length){ showToast('✅ Зайвого доступу немає'); return; }
+  ACC.items = items;
+  box.innerHTML = `<p style="font-size:.83rem;color:var(--ink-2);margin:8px 0;">Предмети, яких немає в розкладі й каталогах класу або які там закріплені за іншими вчителями. `
+    + `Видане вручну не позначено — це може бути свідомий виняток. «Всі предмети» тут не пропонуються: це рішення директора.</p>`
+    + items.map((it, i) => `<label style="display:flex;gap:8px;align-items:flex-start;padding:6px 0;border-bottom:1px solid var(--line);font-size:.83rem;cursor:pointer;">`
+      + `<input type="checkbox" data-acc-i="${i}" ${it.manual ? '' : 'checked'} style="width:auto;margin-top:3px;">`
+      + `<span><b>${escHtml(accName(it.se))}</b> — ${escHtml(accClsLabel(it.cls))}: ${escHtml(it.subj.join(', '))}`
+      + `${it.whole ? ' <span style="color:var(--danger);">(увесь клас)</span>' : ''}${it.manual ? ' <span style="color:var(--ink-3);">· видано вручну</span>' : ''}`
+      + `<br><span style="font-size:.75rem;color:var(--ink-3);">${escHtml([...new Set(it.why)].join('; '))}</span></span></label>`).join('')
+    + `<div style="display:flex;gap:8px;margin-top:10px;"><button type="button" style="background:var(--danger);color:#fff;" onclick="accReconcileApply()">Забрати вибране</button>`
+    + `<button type="button" style="background:var(--surface-2);color:var(--ink);" onclick="renderAccessOverview()">Скасувати</button></div>`;
+};
+window.accReconcileApply = async function(){
+  if(ACC.busy || !ACC.items) return;
+  const picked = [...document.querySelectorAll('[data-acc-i]')].filter(c => c.checked).map(c => ACC.items[+c.dataset.accI]).filter(Boolean);
+  if(!picked.length) return alert('Нічого не вибрано.');
+  if(!confirm(`Забрати доступ у ${picked.length} записах? Кожне відкликання потрапить у журнал.`)) return;
+  ACC.busy = true;
+  let ok = 0, fail = 0;
+  const touched = new Set();
+  try{
+    for(const it of picked){
+      try{ await revokeAccess(it.se, it.cls, it.subj, 'звірка з розкладом'); ok++; touched.add(it.se); }
+      catch(e){ fail++; console.warn('Звірка доступу:', it, e.message); }
+    }
+    for(const se of touched) await syncStaffCard(se).catch(() => false);
+  } finally { ACC.busy = false; ACC.items = null; }
+  showToast(fail ? `⚠️ Забрано ${ok}, не вдалося ${fail}` : `✅ Забрано: ${ok}`);
+  await window.openAccessOverview(true);
+};

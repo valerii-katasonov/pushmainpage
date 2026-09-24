@@ -3571,6 +3571,22 @@
           <button style="background:var(--brand-ink);padding:11px;margin-top:13px;color:#fff;" onclick="grantTeacherAccess()">💾 Зберегти доступ</button>
         </div>
       </details>
+      <details data-dtab="staff" style="background:var(--surface);padding:14px;border-radius:12px;border:1px solid var(--brand);" ontoggle="if(this.open)openAccessOverview()">
+        <summary style="font-weight:700;cursor:pointer;color:var(--brand-ink);">👁 Хто має доступ до класів</summary>
+        <div style="margin-top:13px;">
+          <p style="font-size:.8rem;color:var(--ink-2);line-height:1.4;">Біля кожного предмета — звідки він: вручну, класний керівник, розклад, каталог чи гурток (наведіть, щоб побачити, хто й коли дав). Праворуч — чи є підстава за чинними даними школи. Доступ до класу означає й сповіщення від родин цього класу.</p>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+            <select id="acc-ov-teacher" onchange="renderAccessOverview()" style="flex:1 1 180px;margin:0;"><option value="">Усі вчителі</option></select>
+            <select id="acc-ov-class" onchange="renderAccessOverview()" style="flex:0 1 130px;margin:0;"><option value="">Усі класи</option></select>
+            <label style="display:flex;gap:6px;align-items:center;font-size:.8rem;margin:0;"><input type="checkbox" id="acc-ov-stale" onchange="renderAccessOverview()" style="width:auto;margin:0;"> лише ті, що потребують уваги</label>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:8px;">
+            <button type="button" style="background:var(--brand-ink);color:#fff;padding:9px;margin:0;" onclick="accReconcile()">🧹 Звірити з розкладом</button>
+            <button type="button" style="background:var(--surface-2);color:var(--ink);padding:9px;margin:0;border:1px solid var(--line);" onclick="openAccessOverview(true)">🔄 Оновити</button>
+          </div>
+          <div id="acc-ov-body"></div>
+        </div>
+      </details>
       <details data-dtab="staff" style="background:var(--warn-soft);padding:14px;border-radius:12px;border:1px solid var(--warn-line);">
         <summary style="font-weight:700;cursor:pointer;color:var(--warn);font-size:.95rem;">🎓 Призначення класних керівників</summary>
         <div style="margin-top:13px;">
