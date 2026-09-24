@@ -127,6 +127,22 @@ function effectiveChildren(t,parents,students){
   return tokenChildren(t);
 }
 
+// ── ТОКЕНИ ВСІХ ПРИСТРОЇВ ЛЮДИНИ ────────────────────────────────────
+//
+// push_tokens/{uid} колись тримав ОДИН токен. Учитель, що увімкнув
+// сповіщення на телефоні, заходив у портал зі шкільного компʼютера — і при
+// вході токен компʼютера затирав телефонний: на телефон більше нічого не
+// приходило. А вихід на будь-якому пристрої видаляв запис цілком.
+//
+// Тепер пристрої лежать у devices/{ключ} = {token}. Старі записи (одне
+// поле token) читаються як раніше, поки людина не зайде з новою версією.
+function tokensOf(t){
+  if(!t || typeof t !== 'object') return [];
+  const dev = (t.devices && typeof t.devices === 'object')
+    ? Object.values(t.devices).map(d => d && d.token).filter(Boolean) : [];
+  return dev.length ? dev : (t.token ? [t.token] : []);
+}
+
 async function findTargets(token, cls, studentName) {
   const [all,parents,students] = await Promise.all([
     readDb(token,'push_tokens'),readDb(token,'parent_links'),readDb(token,'student_links')
@@ -135,10 +151,10 @@ async function findTargets(token, cls, studentName) {
   const out = [];
   for (const uid in all) {
     const t = all[uid];
-    if (!t || !t.token) continue;
+    if (!tokensOf(t).length) continue;
     const kids=effectiveChildren(t,parents,students);
     if (!kids.some(k=>k.class===cls&&(k.studentName===studentName||k.studentId===studentName))) continue;
-    out.push(t.token);
+    out.push(...tokensOf(t));
   }
   return [...new Set(out)];
 }
@@ -153,9 +169,9 @@ async function findClassTargets(token, cls) {
   const out = [];
   for (const uid in all) {
     const t = all[uid];
-    if (!t || !t.token) continue;
+    if (!tokensOf(t).length) continue;
     if (!effectiveChildren(t,parents,students).some(k=>k.class===cls)) continue;
-    out.push(t.token);
+    out.push(...tokensOf(t));
   }
   return [...new Set(out)];
 }
@@ -187,8 +203,8 @@ async function findByEmails(token, emails) {
   const out = [];
   for (const uid in all) {
     const t = all[uid];
-    if (!t || !t.token || !t.email) continue;
-    if (want.has(emailKey(t.email))) out.push(t.token);
+    if (!t || !t.email || !tokensOf(t).length) continue;
+    if (want.has(emailKey(t.email))) out.push(...tokensOf(t));
   }
   return [...new Set(out)];
 }
@@ -215,11 +231,11 @@ async function findNewsTargets(token, cls) {
   const out = [];
   for (const uid in all) {
     const t = all[uid];
-    if (!t || !t.token) continue;
+    if (!tokensOf(t).length) continue;
     const kids=effectiveChildren(t,parents,students);
     if (!kids.length) continue;
     if (one&&!kids.some(k=>k.class===one)) continue;
-    out.push(t.token);
+    out.push(...tokensOf(t));
   }
   return [...new Set(out)];
 }
@@ -251,7 +267,7 @@ async function findMealTargets(token) {
   const out = [];
   for (const uid in all) {
     const t = all[uid];
-    if (!t || !t.token) continue;
+    if (!tokensOf(t).length) continue;
     const kids=effectiveChildren(t,parents,students);
     if (!kids.length) continue;
     // Для кількох дітей достатньо, щоб харчувалася хоча б одна. Один токен
@@ -262,7 +278,7 @@ async function findMealTargets(token) {
       return takesAnyMeal(plan);
     });
     if(!eats)continue;
-    out.push(t.token);
+    out.push(...tokensOf(t));
   }
   return [...new Set(out)];
 }
@@ -277,14 +293,14 @@ async function findTeacherTargets(token, cls) {
   const head = emailKey(heads?.[cls]?.teacherEmail);
   const roles = ['teacher', 'class_teacher', 'art_school_teacher', 'music_teacher', 'master_class_teacher'];
   return [...new Set(Object.values(all || {}).filter(t => {
-    if (!t?.token || !t.email) return false;
+    if (!tokensOf(t).length || !t.email) return false;
     const key = emailKey(t.email);
     const actual=(approved&&typeof approved==='object')?roleValues(approved[key]):tokenRoles(t);
     if(!roles.some(r=>actual.includes(r)))return false;
     const assigned = access?.[key]?.[cls];
     const subjects = Array.isArray(assigned) ? assigned : Object.values(assigned || {});
     return key === head || subjects.some(v => typeof v === 'string' && v.trim());
-  }).map(t => t.token))];
+  }).flatMap(tokensOf))];
 }
 
 // Тексти подій. Імена дітей у сповіщення не пишемо: воно з'являється на
@@ -382,7 +398,7 @@ exports.handler = async (event) => {
     if (body.probe) {
       const all = await readDb(token, 'push_tokens');
       const list = all && typeof all === 'object' ? Object.values(all) : [];
-      const eligible = list.filter(t => t && t.token && (t.role === 'parent' || t.role === 'student'));
+      const eligible = list.filter(t => tokensOf(t).length && (t.role === 'parent' || t.role === 'student'));
       return { statusCode: 200, headers: cors(origin), body: JSON.stringify({
         ok: true, project: sa.project_id, tokens: list.length, eligible: eligible.length
       }) };
@@ -483,7 +499,16 @@ exports.handler = async (event) => {
         try {
           const all = await readDb(token, 'push_tokens') || {};
           for (const uid in all) {
-            if (all[uid] && deadTokens.has(all[uid].token)) {
+            const rec = all[uid];
+            if (!rec) continue;
+            const devs = (rec.devices && typeof rec.devices === 'object') ? rec.devices : null;
+            if (devs && Object.keys(devs).length) {
+              // Прибираємо лише мертвий пристрій — решта пристроїв людини лишаються
+              for (const k of Object.keys(devs)) {
+                if (devs[k] && deadTokens.has(devs[k].token))
+                  await deleteDb(token, `push_tokens/${uid}/devices/${k}`).then(() => { cleaned++; }).catch(() => {});
+              }
+            } else if (deadTokens.has(rec.token)) {
               await deleteDb(token, `push_tokens/${uid}`).then(() => { cleaned++; }).catch(() => {});
             }
           }

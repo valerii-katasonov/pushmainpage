@@ -191,8 +191,12 @@ exports.handler = async () => {
       const targets = [];
       for (const uid in (tokens || {})) {
         const t = tokens[uid];
-        if (!t || !t.token || !t.email) continue;
-        if (String(t.email).toLowerCase() === want) targets.push(t.token);
+        if (!t || !t.email) continue;
+        // Усі пристрої вчителя (devices), а для старих записів — одне поле token
+        const toks = (t.devices && typeof t.devices === 'object')
+          ? Object.values(t.devices).map(d => d && d.token).filter(Boolean) : [];
+        if (!toks.length && t.token) toks.push(t.token);
+        if (String(t.email).toLowerCase() === want) targets.push(...toks);
       }
 
       // Імен дітей у сповіщенні немає навмисно: воно з'являється на екрані
