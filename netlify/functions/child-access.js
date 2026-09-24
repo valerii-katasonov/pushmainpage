@@ -287,10 +287,54 @@ exports.handler = async (event) => {
 
     const cls = child.class;
     const studentName = child.studentName || '';
-    // Ключ рядка в child_access. Для старих записів без постійного
-    // ідентифікатора беремо клас — так само, як робить кабінет.
-    const sid = child.studentId || studentId || ('cls_' + cls);
     if (!cls || !studentName) return fail(400, 'У картці дитини бракує класу або імені.', origin);
+    // Ключ рядка в child_access і ключ пошуку в student_links.
+    //
+    // БЕРЕМО ЛИШЕ З ДЖЕРЕЛ ШКОЛИ, НІКОЛИ З ЗАПИТУ. Раніше для старих
+    // карток без studentId сюди потрапляв body.studentId — і батько,
+    // підставивши ідентифікатор чужої дитини, знаходив її акаунт у
+    // student_links і міняв їй пароль. Тепер: studentId із parent_links,
+    // а якщо його немає — ключ у списку класу, під яким записане імʼя
+    // цієї дитини (список веде школа).
+    //
+    // strongId — ідентифікатор, якому можна вірити як ключу учня.
+    // legacySid — ключ, під яким цей розділ СТАРИЙ код записував доступ
+    // для карток без studentId («cls_<клас>»). Його треба й далі
+    // знаходити, інакше в таких дітей «зник» би вже створений вхід і
+    // батько завів би другий. Але він однаковий для всіх дітей класу,
+    // тому в student_links за ним шукаємо лише разом з імʼям і класом.
+    //
+    // linkId — те, що лежить у картці parent_links. У частини старих карток
+    // там НЕ ключ списку класу, а саме імʼя дитини (ревізія 24.09.2026:
+    // 68 таких). Тому справжній ключ шукаємо в списку класу, а linkId
+    // лишаємо як «псевдонім»: під ним старий код міг записати доступ.
+    const linkId = child.studentId || '';
+    let roster = null;
+    try { roster = await readDb(token, `students_list/${cls}`); } catch (e) { roster = null; }
+    let strongId = '';
+    if (linkId && roster && Object.prototype.hasOwnProperty.call(roster, linkId)) strongId = linkId;
+    else {
+      const hits = Object.keys(roster || {}).filter(k => roster[k] === studentName);
+      if (hits.length === 1) strongId = hits[0];
+      else if (linkId) strongId = linkId;   // як і раніше: інших джерел немає
+    }
+    const legacySid = linkId ? '' : ('cls_' + cls);
+    // Усі ключі, під якими ця дитина може значитися (усі — з джерел школи).
+    const ownIds = [...new Set([strongId, linkId].filter(Boolean))];
+    // Ключ для НОВИХ записів у child_access і student_links.
+    const sid = strongId || legacySid;
+    // Чи цей рядок student_links — саме наша дитина.
+    // Слабкий збіг (за імʼям і класом) — лише для рядків, де ідентифікатора
+    // немає або він старого зразка: «cls_<клас>» чи саме імʼя (так ключували
+    // учнів до переходу на постійні ідентифікатори). Рядок із ІНШИМ справжнім
+    // ідентифікатором — це тезка, не наша дитина.
+    const sameStudent = (L) =>
+      (!!L.studentId && ownIds.includes(L.studentId)) ||
+      ((!L.studentId || L.studentId === legacySid || L.studentId === studentName)
+        && L.studentName === studentName && L.class === cls);
+    // Ключ, під яким доступ цієї дитини вже лежить у child_access
+    // (currentAccess уточнює його, якщо знайде запис під старим ключем).
+    let accKey = sid;
 
     // ── СТАН ДОСТУПУ ──
     // Кабінет питає сервер, а не читає базу: у дитини міг бути акаунт ще
@@ -311,9 +355,7 @@ exports.handler = async (event) => {
       if (!links) return '';
       for (const key of Object.keys(links)) {
         const L = links[key] || {};
-        const same = (sid && L.studentId === sid) ||
-                     (L.studentName === studentName && L.class === cls);
-        if (!same) continue;
+        if (!sameStudent(L)) continue;
         const mail = String(L.email || key.replace(/_/g, '.')).toLowerCase();
         // Технічна адреса нікнейма — не пошта, показувати її як пошту не треба
         return mail.endsWith('@' + PUPIL_DOMAIN) ? '' : mail;
@@ -322,8 +364,14 @@ exports.handler = async (event) => {
     }
 
     async function currentAccess() {
-      const rec = await readDb(token, `child_access/${parentSe}/${sid}`);
-      if (rec && rec.login) return rec;
+      // Спершу — під поточним ключем, потім під старим «cls_<клас>»:
+      // так записував доступ код до того, як ключ почали брати зі списку класу.
+      for (const k of [...new Set([sid, ...ownIds, 'cls_' + cls])]) {
+        const rec = await readDb(token, `child_access/${parentSe}/${k}`);
+        // Запис під старим ключем може належати іншій дитині цього класу
+        // (у старому коді ключ був один на клас) — звіряємо імʼя.
+        if (rec && rec.login && (ownIds.includes(k) || rec.studentName === studentName)) { accKey = k; return rec; }
+      }
 
       // Підбираємо вже наявний акаунт: у дитини міг бути вхід, заведений
       // школою ще до появи цього розділу.
@@ -342,9 +390,7 @@ exports.handler = async (event) => {
       let hitKey = null, hitVal = null;
       for (const key of Object.keys(links)) {
         const L = links[key] || {};
-        const same = (sid && L.studentId === sid) ||
-                     (!L.studentId && L.studentName === studentName && L.class === cls);
-        if (same) { hitKey = key; hitVal = L; break; }
+        if (sameStudent(L)) { hitKey = key; hitVal = L; break; }
       }
       if (!hitKey) return null;
 
@@ -365,7 +411,7 @@ exports.handler = async (event) => {
         studentName, class: cls,
         disabled: !!user.disabled, adopted: true, ts: Date.now()
       };
-      try { await patchDb(token, `child_access/${parentSe}/${sid}`, adopted); }
+      try { await patchDb(token, `child_access/${parentSe}/${accKey}`, adopted); }
       catch (e) { /* не змогли запамʼятати — не привід ховати результат */ }
       return adopted;
     }
@@ -391,6 +437,35 @@ exports.handler = async (event) => {
       if (password.length < MIN_PASSWORD)
         return fail(400, `Пароль — щонайменше ${MIN_PASSWORD} символів.`, origin);
 
+      // ПОШТА ДИТИНИ — ЛИШЕ ТА, ЯКА НІКОМУ В ШКОЛІ НЕ НАЛЕЖИТЬ.
+      //
+      // Раніше сервер створював акаунт на будь-яку адресу з пароль��м від
+      // батька. Для адреси вчителя чи директора, яку школа вже внесла в
+      // pre_approved_roles, але людина ще не входила, це означало: батько
+      // знає пароль до акаунта, якому правила видадуть роль персоналу.
+      // Це був єдиний спосіб обійти вимкнену реєстрацію у Firebase.
+      //
+      // Тепер дозволено: або адресу, яку школа сама вписала саме цій
+      // дитині (knownEmail), або адресу, якої немає в жодному списку школи.
+      if (realEmail) {
+        if (!/^[^\s@\/#?$%\[\]]+@[^\s@\/#?$%\[\]]+\.[^\s@\/#?$%\[\]]+$/.test(realEmail) || realEmail.length > 254)
+          return fail(400, 'Пошта дитини виглядає некоректно.', origin);
+        if (realEmail.endsWith('@' + PUPIL_DOMAIN))
+          return fail(400, 'Цю адресу не можна вказати як пошту — залиште поле порожнім і задайте нікнейм.', origin);
+        let known = '';
+        try { known = await knownEmail(); } catch (e) { known = ''; }
+        if (realEmail !== known) {
+          const key = safeEmail(realEmail);
+          const [staffRec, parentRec, studentRec] = await Promise.all([
+            readDb(token, `pre_approved_roles/${key}`),
+            readDb(token, `parent_links/${key}`),
+            readDb(token, `student_links/${key}`)
+          ]);
+          if (staffRec != null || parentRec != null || studentRec != null)
+            return fail(409, 'Ця пошта вже належить комусь у школі. Вкажіть іншу або лише нікнейм.', origin);
+        }
+      }
+
       // Пошта, якщо вказана, головніша: за нею працює відновлення пароля.
       // Нікнейм лишається як зручний логін.
       const loginEmail = realEmail || (nick + '@' + PUPIL_DOMAIN);
@@ -398,6 +473,17 @@ exports.handler = async (event) => {
       const already = await currentAccess();
       if (already) return fail(409,
         `У дитини вже є вхід: ${already.nick || already.login}. Тут можна лише змінити пароль.`, origin);
+
+      // Старий ключ «cls_<клас>» один на весь клас. Якщо під ним уже лежить
+      // доступ ІНШОЇ дитини цього ж батька (currentAccess його не взяв через
+      // інше імʼя), новий запис затер би його. Такий випадок — лише через
+      // школу: дитині треба дати ідентифікатор.
+      if (sid === legacySid) {
+        const other = await readDb(token, `child_access/${parentSe}/${sid}`);
+        if (other && other.login) return fail(409,
+          'У картці дитини немає ідентифікатора, а в класі вже є доступ іншої вашої дитини. '
+          + 'Зверніться до класного керівника, щоб привʼязати дитину за ідентифікатором.', origin);
+      }
 
       const existing = await findUserByEmail(token, loginEmail);
       if (existing) return fail(409, 'Такий нікнейм або пошта вже зайняті — придумайте інші.', origin);
@@ -426,14 +512,14 @@ exports.handler = async (event) => {
       if (password.length < MIN_PASSWORD)
         return fail(400, `Пароль — щонайменше ${MIN_PASSWORD} символів.`, origin);
       await updateUser(token, user.localId, { password });
-      await patchDb(token, `child_access/${parentSe}/${sid}`, { pwdChangedAt: Date.now() });
+      await patchDb(token, `child_access/${parentSe}/${accKey}`, { pwdChangedAt: Date.now() });
       return ok({ login: acc.login }, origin);
     }
 
     if (action === 'disable' || action === 'enable') {
       const off = action === 'disable';
       await updateUser(token, user.localId, { disableUser: off });
-      await patchDb(token, `child_access/${parentSe}/${sid}`, { disabled: off, ts: Date.now() });
+      await patchDb(token, `child_access/${parentSe}/${accKey}`, { disabled: off, ts: Date.now() });
       return ok({ disabled: off }, origin);
     }
 
