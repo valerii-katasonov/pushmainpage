@@ -3520,7 +3520,11 @@ export function notifyEvent(type,payload){
   }).then(async r=>{
     let d={}; try{ d=await r.json(); }catch(e){}
     if(!r.ok) return {ok:false,error:d.error||`HTTP ${r.status}`};
-    const partial = typeof d.total==='number' && (d.sent||0)<d.total;
+    // Мертві підписки (старий телефон, почищений браузер) сервер прибирає
+    // сам і помилкою не вважає — firstError тоді порожній. Раніше будь-який
+    // такий пристрій робив відправку «невдалою», хоча живим пристроям
+    // сповіщення дійшло.
+    const partial = typeof d.total==='number' && (d.sent||0)<d.total && !!d.firstError;
     return {ok:!partial,sent:d.sent||0,total:d.total,note:d.note||'',error:partial?(d.firstError||'Частину сповіщень не доставлено'):''};
   }).catch(e=>({ok:false,error:e.message||'Немає звʼязку з сервером'}));
 }
@@ -3602,7 +3606,7 @@ window.addEventListener('unhandledrejection', (ev) => {
             const reg = swRegistration || await navigator.serviceWorker.ready;
             await reg.showNotification(d.title || 'Push School', {
               body: d.body || '', icon: 'icon-192.png', badge: 'icon-192.png',
-              tag: d.tag || 'push-school', data: { url: d.url || '/cabinet' }, lang: 'uk'
+              tag: d.tag || 'push-school', renotify: true, data: { url: d.url || '/cabinet' }, lang: 'uk'
             });
           })().catch(e => console.warn('Системне сповіщення не показано:', e.message));
         }
