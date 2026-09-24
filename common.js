@@ -3207,6 +3207,68 @@ export async function pushSupported(){
     return 'Notification' in window && 'serviceWorker' in navigator && await messagingSupported();
   }catch(e){return false;}
 }
+// ══════════ КІЛЬКА ПРИСТРОЇВ НА ОДИН АКАУНТ ══════════
+//
+// push_tokens/{uid} тримав ОДИН токен. Учитель увімкнув сповіщення на
+// телефоні, потім зайшов зі шкільного компʼютера — при вході (refreshPushReg)
+// токен компʼютера затирав телефонний, і на телефон більше нічого не
+// приходило. А вихід на будь-якому пристрої видаляв запис цілком, разом
+// із телефоном.
+//
+// Тепер кожен пристрій — окремий рядок devices/{ключ} = {token, at}.
+// Ключ пристрою памʼятаємо в localStorage, щоб при виході прибрати САМЕ
+// його, а при зміні токена (переустановка, чистка даних) — старий рядок.
+// Поле token нагорі лишається (останній пристрій) — для сумісності.
+const PUSH_DEV_KEY = 'push_school_push_device';
+const PUSH_OFF_KEY = 'push_school_push_off';      // на цьому пристрої вимкнули вручну
+export function pushDeviceKey(token){
+  let h = 5381;
+  for(let i = 0; i < token.length; i++) h = ((h * 33) ^ token.charCodeAt(i)) >>> 0;
+  return 'd' + h.toString(36) + token.length.toString(36);
+}
+const lsGet = k => { try{ return localStorage.getItem(k); }catch(e){ return null; } };
+const lsSet = (k, v) => { try{ v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); }catch(e){} };
+async function savePushDevice(uid, token, prev){
+  const k = pushDeviceKey(token), now = Date.now();
+  const upd = { token, ...pushIdentityFields(currentUserData), updatedAt: now,
+                [`devices/${k}`]: { token, at: now } };
+  const oldK = lsGet(PUSH_DEV_KEY);
+  if(oldK && oldK !== k) upd[`devices/${oldK}`] = null;      // токен цього пристрою змінився
+  // Перехід зі старого формату: той єдиний токен належав іншому пристрою
+  // (зазвичай телефону) — переносимо його в devices, а не губимо.
+  if(prev && prev.token && prev.token !== token && !(prev.devices && Object.keys(prev.devices).length)){
+    upd[`devices/${pushDeviceKey(prev.token)}`] = { token: prev.token, at: prev.updatedAt || now };
+  }
+  await update(ref(db, `push_tokens/${uid}`), upd);
+  lsSet(PUSH_DEV_KEY, k);
+}
+// Прибрати лише ЦЕЙ пристрій. Якщо інших не лишилось — увесь запис.
+export async function removePushDevice(uid){
+  if(!uid) return;
+  const snap = await get(child(ref(db), `push_tokens/${uid}`));
+  if(!snap.exists()){ lsSet(PUSH_DEV_KEY, null); return; }
+  const rec = snap.val() || {};
+  let k = lsGet(PUSH_DEV_KEY);
+  const devs = (rec.devices && typeof rec.devices === 'object') ? { ...rec.devices } : {};
+  // Старий формат або ключ загубився: визначаємо пристрій за його токеном
+  if(!k || !devs[k]){
+    try{
+      if(typeof Notification !== 'undefined' && Notification.permission === 'granted' && await pushSupported()){
+        const reg = swRegistration || await navigator.serviceWorker.ready;
+        const t = await getToken(getMessaging(app), { vapidKey: VAPID_KEY, serviceWorkerRegistration: reg });
+        if(t) k = pushDeviceKey(t);
+        if(t && !Object.keys(devs).length && rec.token === t){ await remove(ref(db, `push_tokens/${uid}`)); lsSet(PUSH_DEV_KEY, null); return; }
+      }
+    }catch(e){ /* без токена — лишаємо інші пристрої як є */ }
+  }
+  if(k && devs[k]){
+    delete devs[k];
+    const rest = Object.values(devs).filter(d => d && d.token);
+    if(!rest.length) await remove(ref(db, `push_tokens/${uid}`));
+    else await update(ref(db, `push_tokens/${uid}`), { [`devices/${k}`]: null, token: rest[rest.length - 1].token });
+  }
+  lsSet(PUSH_DEV_KEY, null);
+}
 // Стан для кнопки: 'unsupported' | 'denied' | 'on' | 'off'
 export async function pushState(){
   if(!await pushSupported())return 'unsupported';
@@ -3215,7 +3277,13 @@ export async function pushState(){
   const uid=auth.currentUser?.uid;
   if(!uid)return 'off';
   const snap=await get(child(ref(db),`push_tokens/${uid}`));
-  return snap.exists()?'on':'off';
+  if(!snap.exists())return 'off';
+  // «Увімкнено» — саме на ЦЬОМУ пристрої, а не десь у людини взагалі
+  const rec=snap.val()||{};
+  const devs=rec.devices&&typeof rec.devices==='object'?rec.devices:null;
+  if(!devs||!Object.keys(devs).length) return 'on';           // старий формат
+  const k=lsGet(PUSH_DEV_KEY);
+  return (k&&devs[k])?'on':'off';
 }
 // Один токен належить людині, а не відкритому зараз кабінету. Передаємо
 // серверу всі ролі й усіх дітей, щоб учителька-мама отримувала обидва
@@ -3244,12 +3312,11 @@ window.enablePush=async function(){
     const token=await getToken(messaging,{vapidKey:VAPID_KEY,serviceWorkerRegistration:reg});
     if(!token)return showToast('⚠️ Не вдалося отримати токен сповіщень');
     const uid=auth.currentUser.uid;
-    // Зберігаємо разом із роллю і дитиною — щоб сервер знав, кому що слати
-    await set(ref(db,`push_tokens/${uid}`),{
-      token,
-      ...pushIdentityFields(currentUserData),
-      updatedAt:Date.now()
-    });
+    // Зберігаємо разом із роллю і дитиною — щоб сервер знав, кому що слати.
+    // update, а не set: set стирав би інші пристрої людини.
+    const prevSnap=await get(child(ref(db),`push_tokens/${uid}`));
+    await savePushDevice(uid, token, prevSnap.exists()?prevSnap.val():null);
+    lsSet(PUSH_OFF_KEY, null);
     showToast('🔔 Сповіщення увімкнено');
     renderPushButton();
   }catch(e){
@@ -3259,7 +3326,9 @@ window.enablePush=async function(){
 };
 window.disablePush=async function(){
   const uid=auth.currentUser?.uid;
-  if(uid)await remove(ref(db,`push_tokens/${uid}`));
+  // Вимикаємо на ЦЬОМУ пристрої; телефон чи інший компʼютер лишаються
+  try{ await removePushDevice(uid); }catch(e){ console.warn('disablePush', e.message); }
+  lsSet(PUSH_OFF_KEY, '1');
   // Відкликати дозвіл браузера з коду не можна — лише перестаємо слати
   showToast('🔕 Сповіщення вимкнено');
   renderPushButton();
@@ -3290,6 +3359,8 @@ export async function refreshPushReg(){
     const uid = auth.currentUser?.uid;
     if(!uid) return;
     if(typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+    // На цьому пристрої людина сама вимкнула — не вмикаємо назад при вході
+    if(lsGet(PUSH_OFF_KEY)) return;
     const snap = await get(child(ref(db),`push_tokens/${uid}`));
     if(!snap.exists()) return;                 // підписки не було — не створюємо
     const prev = snap.val() || {};
@@ -3302,11 +3373,8 @@ export async function refreshPushReg(){
       }
     }catch(e){ console.warn('Токен сповіщень не перепитано:', e.message); }
     if(!token) return;                          // без токена запис безглуздий
-    await update(ref(db,`push_tokens/${uid}`),{
-      token,
-      ...pushIdentityFields(currentUserData),
-      updatedAt: Date.now()
-    });
+    // Цей пристрій додається до інших, а не заміняє їх
+    await savePushDevice(uid, token, prev);
   }catch(e){ console.warn('Підписку на сповіщення не освіжено:', e.message); }
 }
 window.refreshPushReg = refreshPushReg;
@@ -3514,6 +3582,31 @@ window.addEventListener('unhandledrejection', (ev) => {
       const screen=screenIdForRole(currentUserData&&currentUserData.role);
       showToast(`${d.title||'Сповіщення'}: ${d.body||''}`,
         (want&&screen)?()=>{ applyNotificationContext(qs); openTabByKey(screen,want); }:null);
+      // ПОРТАЛ ВІДКРИТИЙ, АЛЕ ЛЮДИНА НЕ НА НЬОМУ.
+      //
+      // Коли вкладка порталу вважається «видимою», Firebase віддає
+      // сповіщення сюди, а не service worker'у — і системного сповіщення
+      // немає зовсім, лише тост на 9 секунд усередині сторінки. А «видимою»
+      // вкладка буває й тоді, коли вікно браузера просто сховане за іншими
+      // програмами чи портал «згорнутий» не до кінця. Учитель у цей час
+      // працює в іншому вікні й нічого не бачить.
+      //
+      // Тому, якщо сторінка не у фокусі, показуємо ще й звичайне системне
+      // сповіщення — те саме, що показав би service worker. Натискання на
+      // нього обробляє firebase-messaging-sw.js (перехід до потрібного блоку).
+      try{
+        const away = document.visibilityState !== 'visible'
+          || (typeof document.hasFocus === 'function' && !document.hasFocus());
+        if(away && typeof Notification !== 'undefined' && Notification.permission === 'granted'){
+          (async()=>{
+            const reg = swRegistration || await navigator.serviceWorker.ready;
+            await reg.showNotification(d.title || 'Push School', {
+              body: d.body || '', icon: 'icon-192.png', badge: 'icon-192.png',
+              tag: d.tag || 'push-school', data: { url: d.url || '/cabinet' }, lang: 'uk'
+            });
+          })().catch(e => console.warn('Системне сповіщення не показано:', e.message));
+        }
+      }catch(e){ /* лишається тост */ }
     });
   }catch(e){/* messaging недоступний — не критично */}
 })();
@@ -5016,10 +5109,16 @@ window.logoutUser=async function(){
   // Видаляємо ДО signOut: після виходу правила бази вже не дадуть
   // торкнутися власного вузла. Помилку тут ковтаємо свідомо — вихід не
   // має зірватися через те, що не вдалося прибрати токен.
+  // Прибираємо лише ЦЕЙ пристрій: вихід зі шкільного компʼютера не має
+  // вимикати сповіщення на телефоні вчителя.
   try{
     const uid = auth.currentUser && auth.currentUser.uid;
-    if(uid) await remove(ref(db, `push_tokens/${uid}`));
+    if(uid) await removePushDevice(uid);
   }catch(e){ console.warn('Токен сповіщень не прибрано:', e.message); }
+  // І не повертаємо цей пристрій автоматично при наступному вході — так
+  // само, як було до появи кількох пристроїв: після виходу сповіщення на
+  // ньому вмикаються лише кнопкою.
+  try{ localStorage.setItem('push_school_push_off', '1'); }catch(e){}
 
   signOut(auth);
 };
