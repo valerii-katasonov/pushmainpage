@@ -1156,7 +1156,19 @@ export function showToast(msg, onTap){
 // contain apostrophes (Дем'яненко, Комп'ютерні науки, Мар'яна) — unescaped,
 // one of those breaks the inline handler's string literal and the whole
 // onclick dies with a SyntaxError. Backslashes escaped first, then quotes.
-export function escJs(s){return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');}
+//
+// ЧОМУ НЕ ЛИШЕ ЛАПКИ. Браузер спершу розкодовує HTML-сутності в атрибуті,
+// і тільки потім віддає текст рушію JS. Тож «&#39;» у значенні ставав
+// справжньою лапкою вже ПІСЛЯ нашого екранування — і закривав рядок:
+// ключ чату «x&#39;);…//» виконував чужий код у кабінеті співрозмовника.
+// Тому & < > " кодуємо JS-послідовностями \xNN (у них немає «&»), а
+// переноси рядка — \n: сирий перенос у рядковому літералі — SyntaxError,
+// через який мовчки не працювала кнопка «Як допомогти» під багаторядковим ДЗ.
+export function escJs(s){
+  return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'")
+    .replace(/"/g,'\\x22').replace(/&/g,'\\x26').replace(/</g,'\\x3C').replace(/>/g,'\\x3E')
+    .replace(/\r/g,'\\r').replace(/\n/g,'\\n').replace(/\u2028/g,'\\u2028').replace(/\u2029/g,'\\u2029');
+}
 // Escapes a value for interpolation into HTML BODY content (innerHTML template
 // strings). Complements — does not replace — escJs above: escJs protects a JS
 // string literal inside an onclick attribute, escHtml protects the HTML text
@@ -2921,7 +2933,7 @@ async function initUserSession(){
 export const AUDIT_LABELS={
   curriculum_bind:'🔗 План прив’язано до предмета',
   curriculum_drop:'🗑️ Календарний план видалено',
-  grade_set:'📊 Оцінку виставлено', grade_del:'📊 Оцінку видалено',
+  grade_set:'📊 Оцінку виставлено', grade_del:'📊 Оцінку видалено', sticker_remove:'🌟 Наліпку прибрано',
   attendance:'🚨 Відмітка відсутності', attendance_clear:'✅ Відмітку за день знято', comment:'💬 Коментар учню',
   homework:'📚 Домашнє завдання', behavior:'🤝 Оцінка поведінки',
   student_add:'👨‍🎓 Учня додано', student_rename:'✏️ Учня перейменовано',

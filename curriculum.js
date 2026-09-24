@@ -494,7 +494,8 @@ function renderCurriculumPreview(data){
 }
 
 // Просте екранування для підстановки в onclick/oninput
-function escJsSafe(v){ return String(v).replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
+// Те саме екранування, що й escJs у common.js: лише лапок замало (див. коментар там).
+function escJsSafe(v){ return escJs(v); }
 
 // Учитель виправляє предмет, який портал угадав із назви файлу
 window.fixPlanSubject=function(sheetName, value){
