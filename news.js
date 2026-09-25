@@ -26,7 +26,7 @@
 import { ref, set, get, child, push, remove, update, query, orderByKey, limitToLast }
   from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { db, auth, currentUserData, showToast, escHtml, escJs, logAction,
-         notifyEvent, isTeacherRole, getActiveClass } from './common.js';
+         notifyEvent, isTeacherRole, getActiveClass, teacherAccessMatrix } from './common.js';
 
 const FEED_LIMIT = 30;
 
@@ -74,6 +74,19 @@ export function canPostAtAll(){
   return canPostSchoolWide() || isTeacherRole(currentUserData?.role);
 }
 
+// Хто може нагадати про оголошення. Ширше, ніж «видалити»: автор, директор
+// і БУДЬ-ЯКИЙ учитель класу, якому воно адресоване — навіть якщо писав
+// директор чи інший учитель. Правила бази пускають такого вчителя і
+// позначку remindedAt записати. Раніше кнопка стояла на умові «видалити»,
+// і на старих оголошеннях від інших авторів її не було.
+function hasClassAccess(cls){ return !!(cls && teacherAccessMatrix && teacherAccessMatrix[cls]); }
+export function canRemind(a, role, uid){
+  if(!a) return false;
+  if(a.author && a.author === uid) return true;
+  if(canPostSchoolWide()) return true;
+  return isTeacherRole(role) && a.scope === 'class' && hasClassAccess(a.class);
+}
+
 const lastSeen = () => { try{ return Number(localStorage.getItem(SEEN_KEY)) || 0; }catch(e){ return 0; } };
 const markSeen = () => { try{ localStorage.setItem(SEEN_KEY, String(Date.now())); }catch(e){} };
 
@@ -97,7 +110,8 @@ export async function loadNews(){
   const v = snap.val();
   const now = Date.now();
   const role = currentUserData?.role;
-  const isPoster = role === 'director' || role === 'administrator' || role === 'teacher';
+  // isTeacherRole, а не лише 'teacher': класний керівник теж має бачити прострочені
+  const isPoster = role === 'director' || role === 'administrator' || isTeacherRole(role);
   return Object.keys(v).map(id => ({ id, ...v[id] }))
     .filter(a => a && a.text)
     .filter(a => isPoster || !a.expTs || now < a.expTs)
@@ -132,6 +146,7 @@ export async function renderNewsFeed(containerId){
       const isNew  = (a.ts||0) > seen;
       const mine   = a.author === (auth.currentUser?.uid || '');
       const isClassTeacher = (role === 'teacher' && a.class && window.__isClassTeacherOf === a.class);
+      const remindOk = canRemind(a, role, auth.currentUser?.uid || '');
       const canDel = mine || canPostSchoolWide() || isClassTeacher;
       const badge  = a.scope === 'school'
         ? '<span class="nw-tag school">Вся школа</span>'
@@ -157,8 +172,8 @@ export async function renderNewsFeed(containerId){
         <div class="nw-foot">
           <span class="nw-author">${escHtml(a.authorName || 'Школа')}</span>
           <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;align-items:center;margin-left:auto;">
-            ${canDel ? reminded : ''}
-            ${canDel && !isExpired ? `<button class="nw-del nw-remind" onclick="remindNews('${escJs(a.id)}')" title="Надіслати батькам сповіщення про це оголошення ще раз">🔔 Нагадати</button>` : ''}
+            ${remindOk ? reminded : ''}
+            ${remindOk && !isExpired ? `<button class="nw-del nw-remind" onclick="remindNews('${escJs(a.id)}')" title="Надіслати батькам сповіщення про це оголошення ще раз">🔔 Нагадати</button>` : ''}
             ${canDel ? `<button class="nw-del" style="background:var(--brand-soft);color:var(--brand-ink);border:1px solid var(--brand-line);padding:2px 8px;border-radius:4px;font-size:0.72rem;cursor:pointer;" onclick="setNewsExpiry('${escJs(a.id)}', ${a.expTs || 'null'})">⏰ Термін</button>` : ''}
             ${canDel ? `<button class="nw-del" onclick="deleteNews('${escJs(a.id)}')">Видалити</button>` : ''}
           </div>
