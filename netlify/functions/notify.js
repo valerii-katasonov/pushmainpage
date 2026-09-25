@@ -327,9 +327,13 @@ const EVENTS = {
   chat:       (p) => ({ title: '💬 Нове повідомлення',
                         body: `${p.subject || 'Школа'}: ${p.value || 'Відкрийте портал, щоб прочитати'}`,
                         tag: 'chat' }),
-  news:       (p) => ({ title: '📣 Оголошення школи',
+  // Сповіщення йде на КОЖНЕ оголошення. Важливе відрізняється заголовком,
+  // нагадування (кнопка «🔔 Нагадати» під оголошенням) — теж. tag свій на
+  // кожне оголошення: інакше друге тихо заміняло б перше в шторці.
+  news:       (p) => ({ title: p.remind ? '🔔 Нагадування про оголошення'
+                               : p.important ? '❗ Важливе оголошення' : '📣 Оголошення школи',
                         body: `${p.subject ? p.subject + ': ' : ''}${p.value || 'Нове оголошення в кабінеті'}`,
-                        tag: 'news' }),
+                        tag: 'news' + (p.ref ? '-' + p.ref : '') }),
   menu:       (p) => ({ title: p.value === 'upd' ? '🍽️ Меню змінено' : '🍽️ Меню опубліковано',
                         body: p.value === 'upd' ? `Кухня оновила меню${p.subject ? ' на ' + p.subject : ''}`
                                                 : `Меню${p.subject ? ' на ' + p.subject : ''} вже в кабінеті`,
@@ -378,6 +382,10 @@ exports.handler = async (event) => {
   const lateReason = String(body.reason || '');
   const msg = build({
     subject: String(body.subject || '').slice(0, 80),
+    // Лише прапорці й id у відомому вигляді: функція приймає запити без входу
+    important: body.important === true,
+    remind: body.remind === true,
+    ref: /^[-_A-Za-z0-9]{1,40}$/.test(String(body.ref || '')) ? String(body.ref) : '',
     // 120, а не 20: ліміт ставився під оцінку («12»), але сюди приходить
     // і текст на кшталт «нове повідомлення» — його різало на півслові.
     value: String(body.value || '').slice(0, 120),
