@@ -1012,13 +1012,31 @@
     /* ── Новинна стрічка ── */
     .nw-feed{display:flex;flex-direction:column;gap:10px;}
     .nw-item{background:#fff;border:1px solid var(--line-soft);border-radius:12px;padding:12px 14px;}
-    .nw-item.imp{border-color:var(--warn-line);background:var(--surface-2);}
+    /* Важливе — червоне, як і на головній (fn-item.imp) */
+    .nw-item.imp{border:1px solid var(--danger-line);border-left:5px solid var(--danger);background:var(--danger-soft);}
+    /* Кольори карток, які обирає автор. Червоного немає: він — «Важливе».
+       Важливе з кольором: тло лишається обраним, рамка — червона. */
+    .nw-c-blue{background:var(--brand-soft);border-color:var(--brand-line);--nw-strong:var(--brand-deep);}
+    .nw-c-green{background:var(--ok-soft);border-color:var(--ok-line);--nw-strong:var(--ok);}
+    .nw-c-yellow{background:var(--warn-soft);border-color:var(--warn-line);--nw-strong:var(--warn);}
+    .nw-c-pink{background:var(--accent-soft);border-color:var(--accent);--nw-strong:var(--accent-ink);}
+    .nw-c-gray{background:var(--surface-2);border-color:var(--line);--nw-strong:var(--ink-3);}
+    .nw-item[class*="nw-c-"]:not(.imp),.fn-item[class*="nw-c-"]:not(.imp){border-left:5px solid var(--nw-strong);}
+    .nw-item.imp[class*="nw-c-"],.fn-item.imp[class*="nw-c-"]{border-color:var(--danger-line);border-left-color:var(--danger);}
+    .nw-colors{display:flex;gap:8px;flex-wrap:wrap;margin:4px 0 8px;}
+    .nw-sw{width:34px;height:34px;min-height:34px;margin:0;padding:0;border-radius:50%;border:2px solid var(--line);cursor:pointer;}
+    .nw-sw:not([class*="nw-c-"]){background:#fff;}
+    .nw-sw[class*="nw-c-"]{border:4px solid var(--nw-strong);}
+    .nw-sw[aria-pressed="true"]{outline:3px solid var(--brand-ink);outline-offset:2px;}
+    .nw-sw[data-c=""]{background:linear-gradient(135deg,#fff 45%,var(--line) 45% 55%,#fff 55%);}
+    .nw-preview{margin:8px 0 0;pointer-events:none;}
+    .nw-del.nw-remind{color:var(--brand-ink);border-color:var(--brand-line);background:var(--brand-soft);}
     .nw-item.new{box-shadow:inset 3px 0 0 var(--brand-ink);}
     .nw-head{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px;}
     .nw-tag{font-size:.75rem;font-weight:700;padding:2px 8px;border-radius:20px;text-transform:uppercase;letter-spacing:.02em;}
     .nw-tag.school{background:var(--brand-soft);color:var(--brand-ink);}
     .nw-tag.cls{background:var(--brand-soft);color:var(--brand-deep);}
-    .nw-tag.imp{background:var(--warn-soft);color:var(--warn);}
+    .nw-tag.imp{background:var(--danger);color:#fff;}
     .nw-dot{width:7px;height:7px;border-radius:50%;background:var(--brand-ink);}
     .nw-time{margin-left:auto;font-size:.75rem;color:var(--ink-3);}
     .nw-title{margin:0 0 5px 0;font-size:.95rem;color:var(--ink);font-weight:700;}
@@ -5350,11 +5368,22 @@
     <button id="nw-ai" onclick="newsDraftAI()" style="background:var(--brand-soft);color:var(--brand-deep);border:1px solid var(--brand-deep);margin-bottom:12px;">✨ Скласти чернетку</button>
     <label for="nw-exp" style="margin-top:12px;">Опубліковано до <span style="color:var(--ink-3);font-weight:400;">(необовʼязково)</span></label>
     <input type="datetime-local" id="nw-exp" style="margin-bottom:12px;width:100%;">
+    <label style="margin-top:4px;">Колір оголошення</label>
+    <div id="nw-colors" class="nw-colors" data-color="" role="group" aria-label="Колір оголошення">
+      <button type="button" data-c="" class="nw-sw" onclick="pickNewsColor('')" title="Без кольору" aria-label="Без кольору"></button>
+      <button type="button" data-c="blue" class="nw-sw nw-c-blue" onclick="pickNewsColor('blue')" title="Блакитний" aria-label="Блакитний"></button>
+      <button type="button" data-c="green" class="nw-sw nw-c-green" onclick="pickNewsColor('green')" title="Зелений" aria-label="Зелений"></button>
+      <button type="button" data-c="yellow" class="nw-sw nw-c-yellow" onclick="pickNewsColor('yellow')" title="Жовтий" aria-label="Жовтий"></button>
+      <button type="button" data-c="pink" class="nw-sw nw-c-pink" onclick="pickNewsColor('pink')" title="Рожевий" aria-label="Рожевий"></button>
+      <button type="button" data-c="gray" class="nw-sw nw-c-gray" onclick="pickNewsColor('gray')" title="Сірий" aria-label="Сірий"></button>
+    </div>
     <label class="nw-imp-row">
-      <input type="checkbox" id="nw-important">
-      <span><b>Важливе</b> — надіслати сповіщення<br>
-        <small>Без галочки оголошення просто зʼявиться у стрічці. Не позначайте важливим усе підряд — інакше сповіщення вимкнуть.</small></span>
+      <input type="checkbox" id="nw-important" onchange="nwImportantChanged()">
+      <span><b>❗ Важливе</b> — виділити в стрічці<br>
+        <small>Оголошення буде підсвічене червоним і позначене «❗ Важливе», а сповіщення прийде із заголовком «Важливе оголошення».</small></span>
     </label>
+    <div id="nw-preview" class="nw-item nw-preview"><div class="nw-head"><span class="nw-tag school">Так виглядатиме</span></div><div class="nw-text">Картка оголошення у стрічці батьків.</div></div>
+    <p style="font-size:.78rem;color:var(--ink-3);margin:8px 0 10px;">🔔 Батьки отримають сповіщення про кожне оголошення. Нагадати ще раз можна кнопкою «🔔 Нагадати» під опублікованим оголошенням.</p>
     <button id="nw-publish" onclick="publishNews()" style="background:var(--brand-ink);color:#fff;">📢 Опублікувати</button>
     <button onclick="document.getElementById('news-modal').style.display='none'" style="background:var(--line-soft);color:var(--ink);">Скасувати</button>
   </div>

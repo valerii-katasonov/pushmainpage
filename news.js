@@ -6,9 +6,10 @@
 //     title, text,
 //     scope: 'school' | 'class',
 //     class: 'class_2' | null,     // лише для scope==='class'
-//     important: bool,             // true → надсилаємо push
+//     important: bool,             // true → червоне виділення і «❗ Важливе»
+//     color: '' | 'blue' | ...,    // колір картки (NEWS_COLORS), обирає автор
 //     author, authorName, role,
-//     ts
+//     ts, remindedAt?              // remindedAt — коли востаннє нагадали
 //   }
 //
 // ЧОМУ ОДИН ПЛОСКИЙ ВУЗОЛ, А НЕ РОЗБИВКА ПО КЛАСАХ: оголошень небагато
@@ -16,8 +17,11 @@
 // хронологічному потоці. Розбивка змусила б читати кілька гілок і зшивати
 // їх у браузері заради економії, якої тут немає.
 //
-// ЧОМУ PUSH ЛИШЕ ЗА ГАЛОЧКОЮ: якщо дзвеніти на кожне оголошення, батьки
-// вимкнуть сповіщення взагалі — і пропустять те, що справді терміново.
+// СПОВІЩЕННЯ — НА КОЖНЕ ОГОЛОШЕННЯ (рішення школи, 25.09.2026). Раніше
+// push ішов лише за галочкою «Важливе», і батьки пропускали звичайні
+// оголошення. Тепер галочка лише виділяє оголошення червоним у стрічці й
+// міняє заголовок сповіщення. Під кожним опублікованим оголошенням автор
+// (і директор) має кнопку «🔔 Нагадати» — надіслати сповіщення ще раз.
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, push, remove, update, query, orderByKey, limitToLast }
   from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
@@ -25,6 +29,39 @@ import { db, auth, currentUserData, showToast, escHtml, escJs, logAction,
          notifyEvent, isTeacherRole, getActiveClass } from './common.js';
 
 const FEED_LIMIT = 30;
+
+// Кольори карток — лише з палітри порталу (токени в cabinet.html).
+// Червоний навмисно не пропонуємо: він означає «Важливе».
+export const NEWS_COLORS = {
+  '':     { label: 'Без кольору', dot: '⚪' },
+  blue:   { label: 'Блакитний',   dot: '🔵' },
+  green:  { label: 'Зелений',     dot: '🟢' },
+  yellow: { label: 'Жовтий',      dot: '🟡' },
+  pink:   { label: 'Рожевий',     dot: '🩷' },
+  gray:   { label: 'Сірий',       dot: '🩶' }
+};
+export function newsColorClass(a){
+  const c = a && typeof a.color === 'string' ? a.color : '';
+  return c && Object.prototype.hasOwnProperty.call(NEWS_COLORS, c) ? ' nw-c-' + c : '';
+}
+const IMP_TAG = '<span class="nw-tag imp">❗ Важливе</span>';
+const scopeLabel = a => a.scope === 'school' ? 'Вся школа' : String(a.class || '').replace('class_', '') + ' клас';
+
+// Одне місце, звідки йде сповіщення про оголошення — і при публікації,
+// і з кнопки «Нагадати». Повертає відповідь notifyEvent.
+export function sendNewsPush(a, id, remind){
+  return notifyEvent('news', {
+    class: a.scope === 'school' ? 'ALL' : (a.class || 'ALL'), studentName: 'ALL',
+    subject: scopeLabel(a), value: a.title || String(a.text || '').slice(0, 60),
+    important: !!a.important, remind: !!remind, ref: id || ''
+  });
+}
+function pushToast(prefix, r){
+  if(r && r.ok && r.sent) return showToast(`${prefix}, сповіщень: ${r.sent}`);
+  if(r && r.ok) return showToast(`${prefix} (підписаних на сповіщення поки немає)`);
+  console.warn('Оголошення: push не надіслано:', r && r.error);
+  showToast(`${prefix}, але сповіщення не надіслано — спробуйте «🔔 Нагадати»`);
+}
 const SEEN_KEY = 'push_school_news_seen';
 const human = ds => ds ? ds.split('-').reverse().join('.') : '';
 
@@ -104,10 +141,12 @@ export async function renderNewsFeed(containerId){
       const expDateTxt = a.expTs
         ? `<span class="nw-time" style="margin-left:8px;color:var(--ink-3);" title="Дата закінчення публікації">⏰ до ${escHtml(human(new Date(a.expTs).toISOString().slice(0,10)))} ${new Date(a.expTs).toTimeString().slice(0,5)}</span>`
         : '';
-      return `<article class="nw-item${a.important?' imp':''}${isNew?' new':''}">
+      const reminded = a.remindedAt
+        ? `<span class="nw-time" style="margin-left:0;" title="Коли востаннє надіслано нагадування">🔔 ${escHtml(new Date(a.remindedAt).toLocaleString('uk-UA',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}))}</span>` : '';
+      return `<article class="nw-item${a.important?' imp':''}${newsColorClass(a)}${isNew?' new':''}">
         <div class="nw-head">
           ${badge}
-          ${a.important ? '<span class="nw-tag imp">Важливе</span>' : ''}
+          ${a.important ? IMP_TAG : ''}
           ${isNew ? '<span class="nw-dot" data-tip="Нове"></span>' : ''}
           ${expiredTag}
           <span class="nw-time">${escHtml(timeAgo(a.ts||0))}</span>
@@ -117,7 +156,9 @@ export async function renderNewsFeed(containerId){
         <div class="nw-text">${escHtml(a.text).replace(/\n/g,'<br>')}</div>
         <div class="nw-foot">
           <span class="nw-author">${escHtml(a.authorName || 'Школа')}</span>
-          <div style="display:flex;gap:8px;">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;align-items:center;margin-left:auto;">
+            ${canDel ? reminded : ''}
+            ${canDel && !isExpired ? `<button class="nw-del nw-remind" onclick="remindNews('${escJs(a.id)}')" title="Надіслати батькам сповіщення про це оголошення ще раз">🔔 Нагадати</button>` : ''}
             ${canDel ? `<button class="nw-del" style="background:var(--brand-soft);color:var(--brand-ink);border:1px solid var(--brand-line);padding:2px 8px;border-radius:4px;font-size:0.72rem;cursor:pointer;" onclick="setNewsExpiry('${escJs(a.id)}', ${a.expTs || 'null'})">⏰ Термін</button>` : ''}
             ${canDel ? `<button class="nw-del" onclick="deleteNews('${escJs(a.id)}')">Видалити</button>` : ''}
           </div>
@@ -188,10 +229,10 @@ export async function renderFreshNews(containerId){
       const badge = a.scope === 'school'
         ? '<span class="nw-tag school">Вся школа</span>'
         : `<span class="nw-tag cls">${escHtml(String(a.class||'').replace('class_',''))} клас</span>`;
-      return `<article class="fn-item${a.important?' imp':''}">
+      return `<article class="fn-item${a.important?' imp':''}${newsColorClass(a)}">
         <div class="nw-head">
           ${badge}
-          ${a.important ? '<span class="nw-tag imp">Важливе</span>' : ''}
+          ${a.important ? IMP_TAG : ''}
           <span class="nw-time">${escHtml(timeAgo(a.ts||0))}</span>
         </div>
         ${a.title ? `<h4 class="nw-title">${escHtml(a.title)}</h4>` : ''}
@@ -254,8 +295,20 @@ window.openNewsComposer = function(){
   const expField = document.getElementById('nw-exp');
   if(expField) expField.value = '';
   document.getElementById('nw-important').checked = false;
+  window.pickNewsColor('');
   modal.style.display = 'flex';
 };
+// Вибір кольору: кружечки в модалці, вибране — у data-атрибуті
+window.pickNewsColor = function(c){
+  const box = document.getElementById('nw-colors');
+  if(!box) return;
+  if(!Object.prototype.hasOwnProperty.call(NEWS_COLORS, c)) c = '';
+  box.dataset.color = c;
+  box.querySelectorAll('[data-c]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.c === c)));
+  const prev = document.getElementById('nw-preview');
+  if(prev) prev.className = 'nw-item nw-preview' + (document.getElementById('nw-important').checked ? ' imp' : '') + newsColorClass({ color: c });
+};
+window.nwImportantChanged = () => window.pickNewsColor(document.getElementById('nw-colors')?.dataset.color || '');
 window.nwScopeChanged = function(){
   const v = document.getElementById('nw-scope').value;
   const row = document.getElementById('nw-class-row');
@@ -277,6 +330,7 @@ window.publishNews = async function(){
   const expVal = document.getElementById('nw-exp')?.value;
   const expTs = expVal ? new Date(expVal).getTime() : null;
   const important = document.getElementById('nw-important').checked;
+  const color = document.getElementById('nw-colors')?.dataset.color || '';
   const btn = document.getElementById('nw-publish');
   btn.disabled = true; btn.textContent = '⏳ Публікую...';
   try{
@@ -289,20 +343,12 @@ window.publishNews = async function(){
       ts: Date.now()
     };
     if(expTs) rec.expTs = expTs;
-    await push(ref(db,'announcements'), rec);
+    if(color && NEWS_COLORS[color]) rec.color = color;
+    const newRef = await push(ref(db,'announcements'), rec);
     logAction('announcement', { value: `${scope === 'school' ? 'вся школа' : cls} · ${title || text.slice(0,40)}` });
 
-    if(important){
-      // Сповіщення шле серверна функція одним запитом на всіх підписників
-      const r = await notifyEvent('news', {
-        class: cls || 'ALL', studentName: 'ALL',
-        subject: scope === 'school' ? 'Вся школа' : String(cls).replace('class_','') + ' клас',
-        value: title || text.slice(0, 40)
-      });
-      showToast(r && r.ok ? `✅ Опубліковано, сповіщень: ${r.sent||0}` : '✅ Опубліковано (сповіщення не надіслані)');
-    } else {
-      showToast('✅ Опубліковано');
-    }
+    // Сповіщення — на кожне оголошення (див. шапку файлу)
+    pushToast('✅ Опубліковано', await sendNewsPush(rec, newRef.key, false));
     document.getElementById('news-modal').style.display = 'none';
     renderNewsFeed('d-news-feed');
     renderNewsFeed('t-news-feed');
@@ -322,6 +368,35 @@ window.deleteNews = async function(id){
     renderNewsFeed('d-news-feed');
     renderNewsFeed('t-news-feed');
   }catch(e){ alert('Помилка: ' + e.message); }
+};
+
+// ── НАГАДАТИ ──
+// Та сама розсилка, що й при публікації, із заголовком «Нагадування».
+// Час останнього нагадування зберігаємо в оголошенні: автор бачить, що вже
+// нагадував, і випадкове подвійне натискання не шле батькам два push.
+const REMIND_GAP = 10 * 60 * 1000;
+let remindBusy = false;
+window.remindNews = async function(id){
+  if(remindBusy) return;
+  remindBusy = true;
+  try{
+    const snap = await get(child(ref(db), `announcements/${id}`));
+    if(!snap.exists()) return alert('Оголошення вже видалено.');
+    const a = snap.val();
+    if(a.expTs && Date.now() > a.expTs) return alert('Термін цього оголошення минув — нагадувати про нього не варто.');
+    const who = a.scope === 'school' ? 'усім родинам школи' : `родинам ${scopeLabel(a)}у`;
+    const recent = a.remindedAt && Date.now() - a.remindedAt < REMIND_GAP
+      ? `\n\n⚠️ Нагадування вже надсилали о ${new Date(a.remindedAt).toLocaleTimeString('uk-UA',{hour:'2-digit',minute:'2-digit'})}. Надіслати ще раз?` : '';
+    if(!confirm(`Надіслати сповіщення про «${a.title || String(a.text||'').slice(0,40)}» ${who}?${recent}`)) return;
+    const r = await sendNewsPush(a, id, true);
+    // Позначка — не головне: якщо правила її не пустять, сповіщення вже пішло
+    await update(ref(db, `announcements/${id}`), { remindedAt: Date.now() }).catch(e => console.warn('remindedAt:', e.message));
+    pushToast('🔔 Нагадування', r);
+    renderNewsFeed('d-news-feed');
+    renderNewsFeed('t-news-feed');
+  }catch(e){
+    alert('Не вдалося нагадати: ' + e.message);
+  }finally{ remindBusy = false; }
 };
 
 // ── ЧЕРНЕТКА ВІД AI ──
