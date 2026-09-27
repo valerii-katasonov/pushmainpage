@@ -2161,6 +2161,7 @@ window.switchDirTab = function(tab, btn){
 
   try{ localStorage.setItem(DTAB_KEY, tab); }catch(e){}
   if(tab === 'workload') window.loadDirectorWorkload();
+  if(tab === 'control' && window.openTeacherControl && !document.querySelector('#ct-body .ct-sum')) window.openTeacherControl();
   if(tab === 'news' && window.renderNewsFeed) window.renderNewsFeed('d-news-feed');
   // Вкладка «Їжа»: меню з дня в день міняється, тож перечитуємо при
   // кожному відкритті, а не лише при вході в кабінет.

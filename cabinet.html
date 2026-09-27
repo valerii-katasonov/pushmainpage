@@ -2747,6 +2747,19 @@
 .rbk-day b{display:block;margin-bottom:4px;}
 .rbk-day small{color:var(--ink-3);}
 
+.ct-sum{font-size:.85rem;margin:8px 0;}
+.ct-block{margin:12px 0;}
+.ct-block h4{margin:0 0 6px;font-size:.9rem;}
+.ct-block ul{margin:4px 0;padding-left:18px;font-size:.8rem;line-height:1.45;}
+.ct-today{border:1px solid var(--danger-line);background:var(--danger-soft);border-radius:9px;padding:8px 10px;margin-bottom:8px;}
+.ct-remind{width:auto;margin:4px 0 0;padding:6px 11px;font-size:.78rem;background:var(--brand-soft);color:var(--brand-ink);border:1px solid var(--brand-line);border-radius:8px;}
+.ct-name{all:unset;cursor:pointer;color:var(--brand-ink);font-weight:700;text-decoration:underline dotted;}
+.ct-name:focus-visible{outline:2px solid var(--brand-ink);}
+.ct-pct.ok{color:var(--ok);} .ct-pct.warn{color:var(--warn);} .ct-pct.bad{color:var(--danger);}
+.ct-na{color:var(--ink-3);}
+.ct-detail td{background:var(--surface-2);font-size:.8rem;}
+.ct-table{min-width:460px;}
+
 /* Список подій місяця під календарем */
 .cal-list{list-style:none;padding:0;margin:14px 0 0 0;}
 .cal-list .ev{display:flex;gap:10px;align-items:baseline;padding:7px 0;border-top:1px solid var(--line-soft);}
@@ -3401,11 +3414,41 @@
       <button class="dtab"    data-t="uchni"  onclick="switchDirTab('uchni',this)"><span class="dtab-icon" aria-hidden="true">👨‍👩‍👧‍👦</span>Учні та батьки</button>
       <button class="dtab"    data-t="staff"  onclick="switchDirTab('staff',this)"><span class="dtab-icon" aria-hidden="true">👩‍🏫</span>Персонал</button>
       <button class="dtab"    data-t="rozklad" onclick="switchDirTab('rozklad',this)"><span class="dtab-icon" aria-hidden="true">🗓️</span>Розклад</button>
+      <button class="dtab" data-t="control" onclick="switchDirTab('control',this)"><span class="dtab-icon" aria-hidden="true">🔍</span>Контроль</button>
       <button class="dtab" data-t="workload" onclick="switchDirTab('workload',this)"><span class="dtab-icon" aria-hidden="true">⚖️</span>Навантаження</button>
       <button class="dtab"    data-t="stat"   onclick="switchDirTab('stat',this)"><span class="dtab-icon" aria-hidden="true">📈</span>Аналітика</button>
       <button class="dtab"    data-t="meals"  onclick="switchDirTab('meals',this)"><span class="dtab-icon" aria-hidden="true">🍽️</span>Їжа</button>
       <button class="dtab"    data-t="nalash" onclick="switchDirTab('nalash',this)"><span class="dtab-icon" aria-hidden="true">⚙️</span>Налаштування</button>
     </div>
+
+    <!-- Контроль журналу (teacher-control.js) -->
+    <section class="screen-section" data-dtab="control">
+      <h3>🔍 Контроль журналу</h3>
+      <p style="font-size:.83rem;color:var(--ink-2);">Чи відмічають учителі теми й задають ДЗ на уроках, що вже відбулися, чи давно не було оцінок і чи не перевантажені діти домашніми. Хто вів урок — з розкладу з урахуванням замін.</p>
+      <div class="ma-filters">
+        <select id="ct-period" aria-label="Період" onchange="openTeacherControl(this.value)" style="width:auto;">
+          <option value="today">Сьогодні</option><option value="week" selected>Цей тиждень</option><option value="month">Останні 4 тижні</option>
+        </select>
+        <button type="button" onclick="openTeacherControl()">🔄 Перевірити</button>
+      </div>
+      <div id="ct-body"><p class="empty-msg">Відкрийте вкладку для перевірки.</p></div>
+      <details class="ct-settings" style="margin-top:14px;">
+        <summary style="cursor:pointer;font-weight:700;">⚙️ Налаштування контролю</summary>
+        <label for="ct-nohw-subjects" style="margin-top:8px;">Предмети без ДЗ (через кому)</label>
+        <input type="text" id="ct-nohw-subjects" placeholder="Фізична культура, Музичне мистецтво">
+        <label for="ct-nohw-classes">Класи без ДЗ</label>
+        <select id="ct-nohw-classes" multiple size="4">
+          <option value="class_1">1 клас</option><option value="class_2">2 клас</option><option value="class_3">3 клас</option><option value="class_4">4 клас</option>
+          <option value="class_5">5 клас</option><option value="class_6">6 клас</option><option value="class_7">7 клас</option><option value="class_8">8 клас</option>
+          <option value="class_9">9 клас</option><option value="class_10">10 клас</option><option value="class_11">11 клас</option>
+        </select>
+        <div class="cm-row">
+          <label style="margin:0;">Без оцінок довше, днів <input type="number" id="ct-grade-gap" min="3" max="60" value="14"></label>
+          <label style="margin:0;">Перевантаження ДЗ від, предметів <input type="number" id="ct-max-hw" min="2" max="15" value="6"></label>
+        </div>
+        <button type="button" onclick="saveControlSettings()" style="background:var(--brand-ink);color:#fff;margin-top:8px;">💾 Зберегти</button>
+      </details>
+    </section>
 
     <section class="screen-section" data-dtab="workload">
       <h3>👩‍🏫 Навантаження вчителів</h3>
@@ -5592,6 +5635,7 @@ document.addEventListener('DOMContentLoaded', function(){
 <script type="module" src="news.js"></script>
 <script type="module" src="school-events.js"></script>
 <script type="module" src="role-blocks.js"></script>
+<script type="module" src="teacher-control.js"></script>
 <script type="module" src="chat.js"></script>
 <script type="module" src="breaks.js"></script>
 <script type="module" src="subjects.js"></script>
