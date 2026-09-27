@@ -542,7 +542,8 @@ export const ROLE_LABELS={
   teacher:'👨‍🏫 Вчитель', class_teacher:'🎓 Класний керівник',
   art_school_teacher:'🎨 Вчитель школи мистецтв', music_teacher:'🎵 Вчитель музики',
   master_class_teacher:'🔧 Майстер-класний керівник (налагодження)',
-  parent:'👪 Батьки', student:'🎒 Учень', kitchen:'🍽️ Кухня'
+  parent:'👪 Батьки', student:'🎒 Учень', kitchen:'🍽️ Кухня',
+  organizer:'🎭 Педагог-організатор'
 };
 // ═══════════════════════════════════════════════════════════════
 //  РОЛЬ ДЛЯ НАЛАГОДЖЕННЯ: master_class_teacher
@@ -2209,6 +2210,7 @@ window.handleDateChange=function(){
   if(isTeacherRole(currentUserData.role)){updateSubjectList();loadTeacherDashboard();loadCurrentTopicAndHW();listenTeacherAttendance();}
   else if(currentUserData.role==='director'){loadDirectorDashboard();document.getElementById('d-detail-hw-class')&&(document.getElementById('d-detail-hw-class').value='');}
   else if(currentUserData.role==='kitchen'){/* кухня працює тижнями — має власну навігацію */}
+  else if(currentUserData.role==='organizer'){/* педагог-організатор: без журналу й дашборда дня */}
   else if(currentUserData.role==='administrator'){loadAdminDashboard();}
   else if(currentUserData.role==='student'){loadStudentDashboard();}
   else{loadParentDashboard();}
@@ -2921,6 +2923,10 @@ async function initUserSession(){
     // запускалася жодного разу, і картка не переїжджала до його кабінету.
     checkCurriculumUploadAccess();}
   else if(r==='kitchen'){document.getElementById('kitchen-screen').style.display='block';document.getElementById('teacher-class-selector-box').style.display='none';const gd=document.getElementById('global-date'),gl=document.getElementById('global-date-label');if(gd)gd.style.display='none';if(gl)gl.style.display='none';callWhenReady('refreshKitchen');}
+  // Педагог-організатор — не вчитель: розклад, календар подій, оголошення.
+  // Гілка стоїть до isTeacherRole і до загального else, який відкрив би
+  // людині кабінет батьків.
+  else if(r==='organizer'){document.getElementById('organizer-screen').style.display='block';document.getElementById('teacher-class-selector-box').style.display='none';const gd=document.getElementById('global-date'),gl=document.getElementById('global-date-label');if(gd)gd.style.display='none';if(gl)gl.style.display='none';callWhenReady('initOrganizerScreen');callWhenReady('renderPushInvite', 600, ['o-push-invite']);}
   else if(r==='administrator'){document.getElementById('admin-screen').style.display='block';document.getElementById('teacher-class-selector-box').style.display='none';handleDateChange();}
   else if(isTeacherRole(r)){
     document.getElementById('teacher-screen').style.display='block';document.getElementById('teacher-class-selector-box').style.display='block';
@@ -3411,7 +3417,7 @@ export async function renderPushInvite(containerId){
     // після переїзду на новий домен дозвіл треба давати заново, і банер
     // зʼявляється в усіх одразу, у найневдаліший момент.
     const staff = isTeacherRole(currentUserData?.role)
-      || ['director','administrator','kitchen'].includes(currentUserData?.role);
+      || ['director','administrator','kitchen','organizer'].includes(currentUserData?.role);
     if(Date.now() - snoozed < (staff ? 24*3600*1000 : 7*24*3600*1000)) return;
     box.style.display = 'block';
     box.className = 'push-invite';

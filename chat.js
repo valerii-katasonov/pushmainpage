@@ -48,7 +48,7 @@ let listGen = 0;
 // нічого. Тепер є `staff_directory` і `class_parents` — рівно імʼя, роль
 // і клас, без контактів та медичних даних.
 const ROLE_LABEL = {
-  director:'Директор', administrator:'Адміністрація', kitchen:'Кухня',
+  director:'Директор', administrator:'Адміністрація', kitchen:'Кухня', organizer:'Педагог-організатор',
   teacher:'Вчитель', class_teacher:'Класний керівник',
   art_school_teacher:'Вчитель мистецтв', music_teacher:'Вчитель музики',
   psychologist:'Психолог', nurse:'Медсестра', secretary:'Секретар'

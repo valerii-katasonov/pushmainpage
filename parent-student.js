@@ -574,12 +574,15 @@ window.renderParentCalendar=async function(role='parent'){
   grid.innerHTML='<p class="empty-msg">⏳ Завантаження...</p>';
   // Без перехоплення відмова лишала б вічне «Завантаження...» — людина
   // дивилася б на спінер і не знала, зламалося щось чи просто повільно.
-  let examsSnap,holidaysSnap,breaksSnap;
+  let examsSnap,holidaysSnap,breaksSnap,eventsSnap;
   try{
-    [examsSnap,holidaysSnap,breaksSnap]=await Promise.all([
+    [examsSnap,holidaysSnap,breaksSnap,eventsSnap]=await Promise.all([
       get(ref(db,`exams/${cls}/${ym}`)),
       get(ref(db,`academic_year/${ACTIVE_YEAR}/holidays`)),
-      get(ref(db,`academic_year/${ACTIVE_YEAR}/breaks`))
+      get(ref(db,`academic_year/${ACTIVE_YEAR}/breaks`)),
+      // Культурно-виховні заходи (school-events.js). Окремий вузол: захід не
+      // скасовує уроків. Відмова в читанні не має валити весь календар.
+      get(ref(db,`academic_year/${ACTIVE_YEAR}/events`)).catch(()=>null)
     ]);
   }catch(e){
     grid.innerHTML=`<p class="empty-msg" style="color:var(--danger);">Не вдалося завантажити календар: ${escHtml(e.message||e.code||'відмова')}</p>`;
@@ -592,6 +595,10 @@ window.renderParentCalendar=async function(role='parent'){
   const classMatches=cs=>cs==='all'||(Array.isArray(cs)&&cs.includes(cls));
   const holidaysInMonth={};
   allHolidays.forEach(h=>{if(h.date&&h.date.startsWith(ym)&&(!h.calendarType||h.calendarType===myCalendarType)&&classMatches(h.classes))(holidaysInMonth[h.date]=holidaysInMonth[h.date]||[]).push(h);});
+  const eventsInMonth={};
+  (eventsSnap&&eventsSnap.exists()?Object.values(eventsSnap.val()):[]).forEach(e=>{
+    if(e&&e.date&&e.date.startsWith(ym)&&classMatches(e.classes))(eventsInMonth[e.date]=eventsInMonth[e.date]||[]).push(e);
+  });
   const breaksInMonth={};
   const monthStart=new Date(y,parseInt(m)-1,1);const monthEnd=new Date(y,parseInt(m),0);
   const breakSpans=[];   // цілі періоди — для списку під календарем
@@ -615,13 +622,15 @@ window.renderParentCalendar=async function(role='parent'){
     const hasExam=!!(examsData[ds]&&Object.keys(examsData[ds]).length>0);
     const hasHoliday=!!holidaysInMonth[ds];
     const hasBreak=!!breaksInMonth[ds];
-    const typesCount=[hasExam,hasHoliday,hasBreak].filter(Boolean).length;
+    const hasEvent=!!eventsInMonth[ds];
+    const typesCount=[hasExam,hasHoliday,hasBreak,hasEvent].filter(Boolean).length;
     let cc='';
     if(typesCount>1)cc='has-multiple-p';
     else if(hasExam)cc='has-exam-p';
     else if(hasHoliday)cc='has-holiday-p';
     else if(hasBreak)cc='has-break-p';
-    const dayEvents=[hasExam&&'контрольна',hasHoliday&&'свято',hasBreak&&'канікули'].filter(Boolean).join(', ');
+    else if(hasEvent)cc='has-event-p';
+    const dayEvents=[hasExam&&'контрольна',hasHoliday&&'свято',hasBreak&&'канікули',hasEvent&&'захід'].filter(Boolean).join(', ');
     const clickable=typesCount>0?` role="button" tabindex="0" aria-label="Події ${i}.${m}.${y}: ${dayEvents}" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" onclick="showParentCalDayDetails('${role}','${ds}')"`:'';
     h+=`<div class="cal-day ${cc}"${clickable}>${i}</div>`;
   }
@@ -634,6 +643,11 @@ window.renderParentCalendar=async function(role='parent'){
   Object.keys(holidaysInMonth).forEach(ds=>{
     holidaysInMonth[ds].forEach(x=>events.push({
       kind:'holiday', sort:ds, when:humanDay(ds), title:x.title||'Свято'
+    }));
+  });
+  Object.keys(eventsInMonth).forEach(ds=>{
+    eventsInMonth[ds].forEach(x=>events.push({
+      kind:'event', sort:ds+(x.time||''), when:humanDay(ds)+(x.time?' · '+x.time:''), title:'🎭 '+(x.title||'Захід')+(x.place?' — '+x.place:'')
     }));
   });
   breakSpans.forEach(b=>events.push({
@@ -674,12 +688,13 @@ window.showParentCalDayDetails=async function(role,ds){
   const cls=getActiveClass();const ym=ds.substring(0,7);
   const myCalendarType=currentUserData?.isArtSchool?'art_school':'general';
   const classMatches=cs=>cs==='all'||(Array.isArray(cs)&&cs.includes(cls));
-  let examsSnap,holidaysSnap,breaksSnap;
+  let examsSnap,holidaysSnap,breaksSnap,eventsSnap;
   try{
-    [examsSnap,holidaysSnap,breaksSnap]=await Promise.all([
+    [examsSnap,holidaysSnap,breaksSnap,eventsSnap]=await Promise.all([
       get(ref(db,`exams/${cls}/${ym}/${ds}`)),
       get(ref(db,`academic_year/${ACTIVE_YEAR}/holidays`)),
-      get(ref(db,`academic_year/${ACTIVE_YEAR}/breaks`))
+      get(ref(db,`academic_year/${ACTIVE_YEAR}/breaks`)),
+      get(ref(db,`academic_year/${ACTIVE_YEAR}/events`)).catch(()=>null)
     ]);
   }catch(e){
     dd.innerHTML=`<p class="empty-msg" style="color:var(--danger);">Не вдалося завантажити подробиці: ${escHtml(e.message||e.code||'відмова')}</p>`;
@@ -689,15 +704,19 @@ window.showParentCalDayDetails=async function(role,ds){
   let hasAny=false;
   if(examsSnap.exists()){
     hasAny=true;
-    h+=`<p style="margin:8px 0;"><b style="color:var(--brand-deep);">📝 Контрольні:</b> ${Object.keys(examsSnap.val()).join(', ')}</p>`;
+    h+=`<p style="margin:8px 0;"><b style="color:var(--brand-deep);">📝 Контрольні:</b> ${escHtml(Object.keys(examsSnap.val()).join(', '))}</p>`;
   }
   if(holidaysSnap.exists()){
     const hs=Object.values(holidaysSnap.val()).filter(hd=>hd.date===ds&&(!hd.calendarType||hd.calendarType===myCalendarType)&&classMatches(hd.classes));
-    if(hs.length>0){hasAny=true;h+=`<p style="margin:8px 0;"><b style="color:var(--ok);">🎉 Свято:</b> ${hs.map(hd=>hd.title).join(', ')}</p>`;}
+    if(hs.length>0){hasAny=true;h+=`<p style="margin:8px 0;"><b style="color:var(--ok);">🎉 Свято:</b> ${escHtml(hs.map(hd=>hd.title).join(', '))}</p>`;}
   }
   if(breaksSnap.exists()){
     const bs=Object.values(breaksSnap.val()).filter(b=>b.startDate<=ds&&b.endDate>=ds&&classMatches(b.classes));
-    if(bs.length>0){hasAny=true;bs.forEach(b=>{h+=`<p style="margin:8px 0;"><b style="color:var(--brand-deep);">🏖️ Канікули:</b> ${b.title} (${b.startDate.split('-').reverse().join('.')} — ${b.endDate.split('-').reverse().join('.')})</p>`;});}
+    if(bs.length>0){hasAny=true;bs.forEach(b=>{h+=`<p style="margin:8px 0;"><b style="color:var(--brand-deep);">🏖️ Канікули:</b> ${escHtml(b.title)} (${escHtml(b.startDate.split('-').reverse().join('.'))} — ${escHtml(b.endDate.split('-').reverse().join('.'))})</p>`;});}
+  }
+  if(eventsSnap&&eventsSnap.exists()){
+    const es=Object.values(eventsSnap.val()).filter(e=>e&&e.date===ds&&classMatches(e.classes)).sort((a,b)=>(a.time||'').localeCompare(b.time||''));
+    es.forEach(e=>{hasAny=true;h+=`<p style="margin:8px 0;"><b style="color:var(--accent-ink);">🎭 Захід:</b> ${escHtml(e.title||'')}${e.time?` · ${escHtml(e.time)}`:''}${e.place?` · 📍 ${escHtml(e.place)}`:''}${e.note?`<br><span style="font-size:.85em;color:var(--ink-2);">${escHtml(e.note)}</span>`:''}</p>`;});
   }
   if(!hasAny)h+='<p class="empty-msg">Подій немає.</p>';
   dd.innerHTML=h;
@@ -836,6 +855,7 @@ export function loadParentDashboard(){
   // Textbooks
   loadTextbooksForParent();
   renderBirthdays('p-birthdays',cls,currentUserData.studentName);
+  if(window.renderMonthEvents) window.renderMonthEvents('p-month-events',cls);
   renderFinalGrades('p-final-grades',cls,currentUserData.studentName);
   // Оцінки за тиждень і за предметом: одночасні виклики ділять один
   // запит, а при наступному відкритті вкладки перечитують зміни з бази.
@@ -1202,6 +1222,7 @@ export function loadStudentDashboard(){
   loadAiDayContext('s');
   if(window.renderFreshNews) window.renderFreshNews('s-fresh-news');
   renderBirthdays('s-birthdays',cls,currentUserData.studentName);
+  if(window.renderMonthEvents) window.renderMonthEvents('s-month-events',cls);
   renderFinalGrades('s-final-grades',cls,currentUserData.studentName);
   if(window.renderGradesWeek) window.renderGradesWeek();
   if(window.renderGradesSubject) window.renderGradesSubject();

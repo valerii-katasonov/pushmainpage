@@ -66,9 +66,14 @@ const SEEN_KEY = 'push_school_news_seen';
 const human = ds => ds ? ds.split('-').reverse().join('.') : '';
 
 // ── Хто що може публікувати ──
-export function canPostSchoolWide(){
+// Педагог-організатор пише школі й будь-якому класу, як директор. Але
+// видаляє лише своє (правила бази) — тому «адміністрація» окремо.
+export function isSchoolAdmin(){
   const r = currentUserData?.role;
   return r === 'director' || r === 'administrator';
+}
+export function canPostSchoolWide(){
+  return isSchoolAdmin() || currentUserData?.role === 'organizer';
 }
 export function canPostAtAll(){
   return canPostSchoolWide() || isTeacherRole(currentUserData?.role);
@@ -111,7 +116,7 @@ export async function loadNews(){
   const now = Date.now();
   const role = currentUserData?.role;
   // isTeacherRole, а не лише 'teacher': класний керівник теж має бачити прострочені
-  const isPoster = role === 'director' || role === 'administrator' || isTeacherRole(role);
+  const isPoster = role === 'director' || role === 'administrator' || role === 'organizer' || isTeacherRole(role);
   return Object.keys(v).map(id => ({ id, ...v[id] }))
     .filter(a => a && a.text)
     .filter(a => isPoster || !a.expTs || now < a.expTs)
@@ -122,7 +127,7 @@ export async function loadNews(){
 // Персоналу — усе: директор має бачити, що пишуть учителі.
 function visibleTo(a, role, cls){
   if(a.scope === 'school') return true;
-  if(role === 'director' || role === 'administrator') return true;
+  if(role === 'director' || role === 'administrator' || role === 'organizer') return true;
   return a.class === cls;
 }
 
@@ -147,7 +152,7 @@ export async function renderNewsFeed(containerId){
       const mine   = a.author === (auth.currentUser?.uid || '');
       const isClassTeacher = (role === 'teacher' && a.class && window.__isClassTeacherOf === a.class);
       const remindOk = canRemind(a, role, auth.currentUser?.uid || '');
-      const canDel = mine || canPostSchoolWide() || isClassTeacher;
+      const canDel = mine || isSchoolAdmin() || isClassTeacher;
       const badge  = a.scope === 'school'
         ? '<span class="nw-tag school">Вся школа</span>'
         : `<span class="nw-tag cls">${escHtml(String(a.class||'').replace('class_',''))} клас</span>`;
@@ -367,6 +372,7 @@ window.publishNews = async function(){
     document.getElementById('news-modal').style.display = 'none';
     renderNewsFeed('d-news-feed');
     renderNewsFeed('t-news-feed');
+    renderNewsFeed('o-news-feed');
   }catch(e){
     alert('Помилка: ' + e.message);
   }finally{
@@ -382,6 +388,7 @@ window.deleteNews = async function(id){
     showToast('🗑️ Видалено');
     renderNewsFeed('d-news-feed');
     renderNewsFeed('t-news-feed');
+    renderNewsFeed('o-news-feed');
   }catch(e){ alert('Помилка: ' + e.message); }
 };
 
@@ -409,6 +416,7 @@ window.remindNews = async function(id){
     pushToast('🔔 Нагадування', r);
     renderNewsFeed('d-news-feed');
     renderNewsFeed('t-news-feed');
+    renderNewsFeed('o-news-feed');
   }catch(e){
     alert('Не вдалося нагадати: ' + e.message);
   }finally{ remindBusy = false; }
@@ -462,6 +470,7 @@ window.saveNewsExpiry = async function(){
     document.getElementById('news-expiry-modal').style.display = 'none';
     renderNewsFeed('d-news-feed');
     renderNewsFeed('t-news-feed');
+    renderNewsFeed('o-news-feed');
   }catch(e){
     alert('Помилка: ' + e.message);
   }
@@ -476,6 +485,7 @@ window.clearNewsExpiry = async function(){
     document.getElementById('news-expiry-modal').style.display = 'none';
     renderNewsFeed('d-news-feed');
     renderNewsFeed('t-news-feed');
+    renderNewsFeed('o-news-feed');
   }catch(e){
     alert('Помилка: ' + e.message);
   }

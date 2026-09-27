@@ -1749,6 +1749,7 @@ export function loadTeacherDashboard(){
     loadDailyHomeworkSubmissions(cls,date);
   }
   renderBirthdays('t-birthdays',cls,'');
+  if(window.renderMonthEvents) window.renderMonthEvents('t-month-events',cls);
   // Зведення по басейну й автобусу — справа класного керівника: він веде
   // клас. Предметникові воно ні до чого, та й правила бази його не пустять.
   const actCard=document.getElementById('t-activities-card');
