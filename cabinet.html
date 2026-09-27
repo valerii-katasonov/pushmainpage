@@ -2733,6 +2733,20 @@
 .rb-count{font-size:.75rem;color:var(--ink-3);margin-right:auto;}
 .rb-tpl{font-size:.7rem;font-weight:700;color:var(--accent-ink);background:var(--accent-soft);border-radius:10px;padding:1px 7px;}
 
+.rb-group{margin:8px 0;}
+.rb-gtitle{font-size:.75rem;font-weight:800;color:var(--ink-2);margin-bottom:4px;}
+.rb-g-kids .rb-gtitle{color:var(--warn);}
+.rb-g-kids .rb-perm{border-color:var(--warn-line);background:var(--warn-soft);}
+/* Блоки прав із конструктора (role-blocks.js) */
+.rbk-body>select,.rbk-body>input{max-width:220px;}
+.rbk-sum{font-size:.85rem;margin:8px 0;}
+.rbk-narrow{min-width:0;max-width:320px;}
+.rbk-days{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;}
+.rbk-day{border:1px solid var(--line);border-radius:9px;padding:8px;font-size:.8rem;background:var(--surface);}
+.rbk-day.today{border-color:var(--brand-ink);background:var(--brand-soft);}
+.rbk-day b{display:block;margin-bottom:4px;}
+.rbk-day small{color:var(--ink-3);}
+
 /* Список подій місяця під календарем */
 .cal-list{list-style:none;padding:0;margin:14px 0 0 0;}
 .cal-list .ev{display:flex;gap:10px;align-items:baseline;padding:7px 0;border-top:1px solid var(--line-soft);}
@@ -3210,6 +3224,8 @@
         <div class="stm-box"><p class="empty-msg">Завантаження...</p></div>
       </div>
     </section>
+    <!-- Блоки інших прав із конструктора (role-blocks.js) -->
+    <div id="o-extra" style="display:contents;"></div>
   </div>
 
   <div id="kitchen-screen" class="panel">
@@ -5575,6 +5591,7 @@ document.addEventListener('DOMContentLoaded', function(){
 <script type="module" src="meal-balance.js?v=20260916-2"></script>
 <script type="module" src="news.js"></script>
 <script type="module" src="school-events.js"></script>
+<script type="module" src="role-blocks.js"></script>
 <script type="module" src="chat.js"></script>
 <script type="module" src="breaks.js"></script>
 <script type="module" src="subjects.js"></script>

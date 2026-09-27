@@ -317,4 +317,7 @@ window.initOrganizerScreen = function(){
   if(has('schedule')) renderScheduleViewer('o-schedule');
   if(window.renderNewsFeed) window.renderNewsFeed('o-news-feed');
   if(has('meals') && window.renderStaffMeals) window.renderStaffMeals();
+  // Решта прав — окремими блоками (role-blocks.js)
+  const extra = window.renderRoleBlocks ? window.renderRoleBlocks('o-extra', role) : [];
+  show('o-no-perms', !['calendar', 'news', 'schedule', 'meals'].some(has) && !extra.length);
 };

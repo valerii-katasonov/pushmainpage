@@ -104,7 +104,7 @@ function weekDates(monday){
   for(let i=0;i<5;i++){ out.push(iso(d)); d.setDate(d.getDate()+1); }
   return out;                               // лише робочі дні: Пн–Пт
 }
-function weekdayIdx(dateStr){ return new Date(dateStr+'T12:00:00').getDay(); } // 1..5
+export function weekdayIdx(dateStr){ return new Date(dateStr+'T12:00:00').getDay(); } // 1..5
 function nextWorkday(dateStr){
   const d = new Date(dateStr+'T12:00:00');
   do { d.setDate(d.getDate()+1); } while(d.getDay()===0 || d.getDay()===6);
@@ -499,7 +499,7 @@ function nameList(kind, title, rows, note, open){
 // Від цього залежить, чи встигла кухня зняти порцію (див.
 // absenceRemovesMeal). Обʼєкт завжди істинний, тож усі старі перевірки
 // виду !!absentSet[sid] працюють як раніше.
-function absentSet(attClassDay){
+export function absentSet(attClassDay){
   const out = {};
   if(!attClassDay) return out;
   for(const sid in attClassDay){

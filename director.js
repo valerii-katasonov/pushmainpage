@@ -8,7 +8,7 @@
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, push, remove, update, query, limitToLast, orderByKey, endBefore } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { auth, db, countAttendanceDays, attendanceAuthor, canClearDayAbsence, clearDayAbsence, showToast, getClassNum, LEVEL_MAX_CLASS, displayGrade, gradeClass6, teacherAccessMatrix, getWeekDates, formatAttendanceSlotLabel, gradeTypesCache, loadGradeTypesCache, calculateStudentWeightedAvg, escJs, escHtml, localDateString, normalizeRoles, getUserRoles, mergeAccountRoles, parentAccountPatch, ROLE_LABELS, currentUserData, dayNamesUA, sendPasswordReset, normalizeChildren, renderParentsBlock, logAction, AUDIT_LABELS, getParentProfile, parentFullName, getSchoolRange, getAllUsers, invalidateUsersCache, getUsersSnap, stuName, invalidateStudentDir, subjectsLabel, syncStaffCard, shrinkImage, dayKeys, invalidateParentLinks, emailKey } from './common.js';
-import { loadCustomRoles, customRoles, ROLE_PERMS, ORGANIZER_DEFAULT, roleDef } from './common.js';
+import { loadCustomRoles, customRoles, ROLE_PERMS, PERM_GROUPS, ORGANIZER_DEFAULT, roleDef } from './common.js';
 import { setAccess, revokeAllPaths, revokeAccess, accessList, accessBasis, judgeSubject, ACCESS_SRC } from './access.js';
 
 let directorSkillsTemp=[];
@@ -3002,10 +3002,16 @@ async function rbCounts(){
     for(const r of normalizeRoles(v)) cnt[r] = (cnt[r] || 0) + 1;
   return cnt;
 }
+// Права — трьома групами: основне, довідкове, дані дітей. Остання група
+// підсвічена, щоб її не відмічали «про всяк випадок».
 function rbPermsHtml(rp, perms){
-  return `<div class="rb-perms">${Object.entries(ROLE_PERMS).map(([k, p]) => `
-    <label class="rb-perm"><input type="checkbox" id="${rp}-p-${k}" ${perms && perms[k] ? 'checked' : ''}>
-      <span>${p.icon} ${escHtml(p.label)}<small>${escHtml(p.hint)}</small></span></label>`).join('')}</div>`;
+  return Object.entries(PERM_GROUPS).map(([g, title]) => {
+    const items = Object.entries(ROLE_PERMS).filter(([, p]) => (p.group || 'base') === g);
+    if(!items.length) return '';
+    return `<div class="rb-group rb-g-${g}"><div class="rb-gtitle">${escHtml(title)}</div><div class="rb-perms">${items.map(([k, p]) => `
+      <label class="rb-perm"><input type="checkbox" id="${rp}-p-${k}" ${perms && perms[k] ? 'checked' : ''}>
+        <span>${p.icon} ${escHtml(p.label)}<small>${escHtml(p.hint)}</small></span></label>`).join('')}</div></div>`;
+  }).join('');
 }
 window.openRoleBuilder = async function(){
   const box = document.getElementById('rb-body');
