@@ -2718,6 +2718,21 @@
 .os-table .os-num{text-align:center;font-weight:700;width:52px;}
 .os-table .os-break{color:var(--ink-3);font-style:italic;}
 
+.rb-card{border:1px solid var(--line);border-radius:10px;padding:11px;margin-bottom:10px;background:var(--surface);}
+.rb-card.rb-new{border-style:dashed;border-color:var(--accent);background:var(--accent-soft);}
+.rb-head{display:flex;gap:7px;align-items:center;flex-wrap:wrap;}
+.rb-head input{margin:0;}
+.rb-icon{flex:0 0 58px !important;text-align:center;font-size:1.1rem;}
+.rb-name{flex:1 1 160px;}
+.rb-perms{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:6px;margin:9px 0;}
+.rb-perm{display:flex;gap:7px;align-items:flex-start;font-weight:400;font-size:.82rem;margin:0;padding:7px;border:1px solid var(--line-soft);border-radius:8px;background:var(--surface-2);cursor:pointer;}
+.rb-perm input{width:auto;margin:2px 0 0;}
+.rb-perm small{display:block;color:var(--ink-3);font-size:.72rem;line-height:1.3;}
+.rb-foot{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+.rb-foot button{width:auto;margin:0;padding:7px 12px;font-size:.8rem;}
+.rb-count{font-size:.75rem;color:var(--ink-3);margin-right:auto;}
+.rb-tpl{font-size:.7rem;font-weight:700;color:var(--accent-ink);background:var(--accent-soft);border-radius:10px;padding:1px 7px;}
+
 /* Список подій місяця під календарем */
 .cal-list{list-style:none;padding:0;margin:14px 0 0 0;}
 .cal-list .ev{display:flex;gap:10px;align-items:baseline;padding:7px 0;border-top:1px solid var(--line-soft);}
@@ -3164,26 +3179,35 @@
        Не вчитель: журналу, оцінок і даних родин тут немає. Розклад усіх
        класів (перегляд), свята й культурно-виховні заходи, оголошення. -->
   <div id="organizer-screen" class="panel">
-    <h2 style="color:var(--ink);">🎭 Педагог-організатор</h2>
+    <h2 id="o-title" style="color:var(--ink);">🎭 Педагог-організатор</h2>
     <div id="o-push-invite" style="display:none;"></div>
+    <div id="o-no-perms" class="data-card" style="display:none;border-left-color:var(--warn);background:var(--warn-soft);">
+      <p style="margin:0;font-size:.88rem;color:var(--ink-2);">Для вашої ролі ще не відмічено жодного права. Зверніться до директора: права ролі задаються в «🧩 Конструктор ролей».</p>
+    </div>
     <section class="screen-section">
       <div id="o-month-events" class="ev-box" style="display:none;"></div>
-      <div class="data-card">
+      <div class="data-card" id="o-sec-calendar">
         <h3 style="margin-top:0;">🗓️ Свята й культурно-виховні заходи</h3>
         <div id="o-cal-manager"></div>
       </div>
     </section>
-    <section class="screen-section">
+    <section class="screen-section" id="o-sec-news">
       <div class="data-card">
         <h3 style="margin-top:0;">📣 Оголошення</h3>
         <button onclick="openNewsComposer()" style="background:var(--brand-ink);color:#fff;margin:0 0 10px 0;">➕ Нове оголошення</button>
         <div id="o-news-feed" class="nw-feed"></div>
       </div>
     </section>
-    <section class="screen-section">
+    <section class="screen-section" id="o-sec-schedule">
       <div class="data-card">
         <h3 style="margin-top:0;">📅 Розклад класу</h3>
         <div id="o-schedule"></div>
+      </div>
+    </section>
+    <section class="screen-section half" id="o-sec-meals">
+      <div class="data-card" style="border-left-color:var(--brand-ink);background:var(--brand-soft);margin-top:0;">
+        <h4 style="margin-top:0;color:var(--brand-ink);">🍽 Моє харчування</h4>
+        <div class="stm-box"><p class="empty-msg">Завантаження...</p></div>
       </div>
     </section>
   </div>
@@ -3543,6 +3567,12 @@
 
     <section class="screen-section half">
       <h3>👥 Персонал</h3>
+      <!-- Конструктор ролей (director.js): роль = набір прав галочками -->
+      <details data-dtab="staff" style="margin-bottom:12px;background:#fff;padding:14px;border-radius:12px;border:1px solid var(--accent);" ontoggle="if(this.open)openRoleBuilder()">
+        <summary style="font-weight:700;cursor:pointer;color:var(--accent-ink);">🧩 Конструктор ролей</summary>
+        <p class="cal-hint" style="margin-top:10px;">Роль для людини, яка не є вчителем (організатор, психолог, бібліотекар…). Відмітьте, що їй можна. Журнал, оцінки, відвідуваність і дані родин таким ролям недоступні. Видати роль людині — в «⚙️ Управління персоналом» нижче.</p>
+        <div id="rb-body"><p class="empty-msg">Завантаження...</p></div>
+      </details>
       <!-- Staff Management -->
       <details data-dtab="staff" style="margin-bottom:12px;background:#fff;padding:14px;border-radius:12px;border:1px solid var(--line);">
         <summary style="font-weight:700;cursor:pointer;color:var(--danger);">⚙️ Управління персоналом</summary>
@@ -3553,7 +3583,6 @@
             <option value="teacher">👨‍🏫 Вчитель</option><option value="art_school_teacher">🎨 Вчитель школи мистецтв</option>
             <option value="class_teacher">🎓 Класний керівник</option>
             <option value="director">👔 Директор</option><option value="administrator">🛡️ Секретар (Адміністратор)</option><option value="kitchen">🍽️ Кухня</option>
-            <option value="organizer">🎭 Педагог-організатор</option>
             <option value="master_class_teacher">🔧 Майстер-класний керівник (налагодження)</option>
           </select>
           <div style="font-size:.75rem;color:var(--danger);margin-top:5px;line-height:1.4;">

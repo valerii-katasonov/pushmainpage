@@ -72,8 +72,9 @@ export function isSchoolAdmin(){
   const r = currentUserData?.role;
   return r === 'director' || r === 'administrator';
 }
+// Роль із конструктора з галочкою «Оголошення» (педагог-організатор — теж)
 export function canPostSchoolWide(){
-  return isSchoolAdmin() || currentUserData?.role === 'organizer';
+  return isSchoolAdmin() || !!(window.hasPerm && window.hasPerm('news'));
 }
 export function canPostAtAll(){
   return canPostSchoolWide() || isTeacherRole(currentUserData?.role);
@@ -116,7 +117,7 @@ export async function loadNews(){
   const now = Date.now();
   const role = currentUserData?.role;
   // isTeacherRole, а не лише 'teacher': класний керівник теж має бачити прострочені
-  const isPoster = role === 'director' || role === 'administrator' || role === 'organizer' || isTeacherRole(role);
+  const isPoster = role === 'director' || role === 'administrator' || canPostSchoolWide() || isTeacherRole(role);
   return Object.keys(v).map(id => ({ id, ...v[id] }))
     .filter(a => a && a.text)
     .filter(a => isPoster || !a.expTs || now < a.expTs)
@@ -127,7 +128,9 @@ export async function loadNews(){
 // Персоналу — усе: директор має бачити, що пишуть учителі.
 function visibleTo(a, role, cls){
   if(a.scope === 'school') return true;
-  if(role === 'director' || role === 'administrator' || role === 'organizer') return true;
+  if(role === 'director' || role === 'administrator' || canPostSchoolWide()) return true;
+  // Інші ролі з конструктора класу не мають — бачать шкільні оголошення
+  if(window.isCustomRole && window.isCustomRole(role)) return false;
   return a.class === cls;
 }
 

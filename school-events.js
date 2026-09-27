@@ -295,10 +295,26 @@ window.orgShowSchedule = async function(containerId){
   }
 };
 
-// ══════════ КАБІНЕТ ПЕДАГОГА-ОРГАНІЗАТОРА ══════════
+// ══════════ КАБІНЕТ РОЛІ З КОНСТРУКТОРА ══════════
+// Педагог-організатор і будь-яка роль, зібрана директором галочками.
+// Показуємо лише блоки, на які є право; решта прихована. Самі дані однаково
+// стережуть правила бази — сховати блок тут означає лише не плутати людину.
 window.initOrganizerScreen = function(){
+  const role = currentUserData && currentUserData.role;
+  const has = p => !!(window.hasPerm && window.hasPerm(p, role));
+  const def = window.roleDef ? window.roleDef(role) : null;
+  const title = document.getElementById('o-title');
+  if(title && def) title.textContent = `${def.icon || '🧩'} ${def.name}`;
+  const show = (id, on) => { const el = document.getElementById(id); if(el) el.style.display = on ? '' : 'none'; };
+  show('o-sec-calendar', has('calendar'));
+  show('o-sec-news', has('news'));
+  show('o-sec-schedule', has('schedule'));
+  show('o-sec-meals', has('meals'));
+  show('o-no-perms', !['calendar', 'news', 'schedule', 'meals'].some(has));
+  // Події місяця бачать усі — це просто календар школи
   renderMonthEvents('o-month-events', '');
-  renderCalendarManager('o-cal-manager', 'ocm');
-  renderScheduleViewer('o-schedule');
+  if(has('calendar')) renderCalendarManager('o-cal-manager', 'ocm');
+  if(has('schedule')) renderScheduleViewer('o-schedule');
   if(window.renderNewsFeed) window.renderNewsFeed('o-news-feed');
+  if(has('meals') && window.renderStaffMeals) window.renderStaffMeals();
 };

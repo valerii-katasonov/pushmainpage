@@ -53,7 +53,8 @@ const ROLE_LABEL = {
   art_school_teacher:'Вчитель мистецтв', music_teacher:'Вчитель музики',
   psychologist:'Психолог', nurse:'Медсестра', secretary:'Секретар'
 };
-const roleLabel = r => ROLE_LABEL[r] || (r ? String(r) : '');
+// Роль із конструктора — її назва (common.js → roleDef), а не 'cr_…'
+const roleLabel = r => ROLE_LABEL[r] || (window.roleDef && window.roleDef(r) ? window.roleDef(r).name : '') || (r ? String(r) : '');
 const clsLabel  = c => c ? String(c).replace('class_','') + ' клас' : '';
 
 // Підпис під імʼям співробітника.

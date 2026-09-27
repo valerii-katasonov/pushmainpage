@@ -8,6 +8,7 @@
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, push, remove, update, query, limitToLast, orderByKey, endBefore } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { auth, db, countAttendanceDays, attendanceAuthor, canClearDayAbsence, clearDayAbsence, showToast, getClassNum, LEVEL_MAX_CLASS, displayGrade, gradeClass6, teacherAccessMatrix, getWeekDates, formatAttendanceSlotLabel, gradeTypesCache, loadGradeTypesCache, calculateStudentWeightedAvg, escJs, escHtml, localDateString, normalizeRoles, getUserRoles, mergeAccountRoles, parentAccountPatch, ROLE_LABELS, currentUserData, dayNamesUA, sendPasswordReset, normalizeChildren, renderParentsBlock, logAction, AUDIT_LABELS, getParentProfile, parentFullName, getSchoolRange, getAllUsers, invalidateUsersCache, getUsersSnap, stuName, invalidateStudentDir, subjectsLabel, syncStaffCard, shrinkImage, dayKeys, invalidateParentLinks, emailKey } from './common.js';
+import { loadCustomRoles, customRoles, ROLE_PERMS, ORGANIZER_DEFAULT, roleDef } from './common.js';
 import { setAccess, revokeAllPaths, revokeAccess, accessList, accessBasis, judgeSubject, ACCESS_SRC } from './access.js';
 
 let directorSkillsTemp=[];
@@ -615,7 +616,7 @@ window.grantStaffRole=async function(){
   }catch(e){alert('Помилка: '+e.message);}
 };
 // ══════════ ПЕРСОНАЛ: список ══════════
-window.loadStaffList=async function(){invalidateUsersCache();
+window.loadStaffList=async function(){invalidateUsersCache();fillCustomRoleOptions();
   const box=document.getElementById('staff-list');
   if(!box)return;
   box.innerHTML='<p class="empty-msg">Завантаження...</p>';
@@ -2964,4 +2965,138 @@ window.accReconcileApply = async function(){
   } finally { ACC.busy = false; ACC.items = null; }
   showToast(fail ? `⚠️ Забрано ${ok}, не вдалося ${fail}` : `✅ Забрано: ${ok}`);
   await window.openAccessOverview(true);
+};
+
+
+// ══════════ КОНСТРУКТОР РОЛЕЙ ══════════
+//
+// Роль = назва, значок і набір прав (ROLE_PERMS у common.js). Права
+// скінченні: кожне — це блок кабінету плюс правило бази (PERM у
+// database.rules.gen.py). Галочка тут нічого не відкриває сама — вона лише
+// записує custom_roles/{id}, а доступ перевіряє база.
+// 'organizer' — шаблон «Педагог-організатор»: його можна налаштувати, але
+// не видалити. Нові ролі отримують id 'cr_…'.
+const RB_ID = /^(organizer|cr_[a-z0-9]{3,24})$/;
+function allCustomRoles(){
+  const out = { organizer: roleDef('organizer') || ORGANIZER_DEFAULT };
+  for(const id of Object.keys(customRoles || {})) if(RB_ID.test(id) && customRoles[id] && customRoles[id].name) out[id] = customRoles[id];
+  return out;
+}
+// Пункти ролей із конструктора в мультивиборі «Управління персоналом»
+function fillCustomRoleOptions(){
+  const sel = document.getElementById('new-staff-role');
+  if(!sel) return;
+  sel.querySelectorAll('option[data-custom]').forEach(o => o.remove());
+  for(const [id, d] of Object.entries(allCustomRoles())){
+    const o = document.createElement('option');
+    o.value = id; o.dataset.custom = '1';
+    o.textContent = `${d.icon || '🧩'} ${d.name}`;
+    sel.appendChild(o);
+  }
+  sel.size = Math.min(10, sel.options.length);
+}
+async function rbCounts(){
+  const snap = await get(child(ref(db), 'pre_approved_roles'));
+  const cnt = {};
+  if(snap.exists()) for(const v of Object.values(snap.val() || {}))
+    for(const r of normalizeRoles(v)) cnt[r] = (cnt[r] || 0) + 1;
+  return cnt;
+}
+function rbPermsHtml(rp, perms){
+  return `<div class="rb-perms">${Object.entries(ROLE_PERMS).map(([k, p]) => `
+    <label class="rb-perm"><input type="checkbox" id="${rp}-p-${k}" ${perms && perms[k] ? 'checked' : ''}>
+      <span>${p.icon} ${escHtml(p.label)}<small>${escHtml(p.hint)}</small></span></label>`).join('')}</div>`;
+}
+window.openRoleBuilder = async function(){
+  const box = document.getElementById('rb-body');
+  if(!box) return;
+  box.innerHTML = '<p class="empty-msg">Завантаження...</p>';
+  try{
+    await loadCustomRoles();
+    const cnt = await rbCounts();
+    const roles = allCustomRoles();
+    box.innerHTML = Object.entries(roles).map(([id, d]) => {
+      const n = cnt[id] || 0, p = 'rb-' + id;
+      return `<div class="rb-card">
+        <div class="rb-head">
+          <input type="text" id="${p}-icon" class="rb-icon" maxlength="4" value="${escHtml(d.icon || '🧩')}" aria-label="Значок">
+          <input type="text" id="${p}-name" class="rb-name" maxlength="40" value="${escHtml(d.name || '')}" aria-label="Назва ролі">
+          ${id === 'organizer' ? '<span class="rb-tpl">шаблон</span>' : ''}
+        </div>
+        ${rbPermsHtml(p, d.perms)}
+        <div class="rb-foot">
+          <span class="rb-count">Призначено: ${n}</span>
+          <button type="button" style="background:var(--brand-ink);color:#fff;" onclick="rbSave('${escJs(id)}')">💾 Зберегти</button>
+          ${id === 'organizer' ? '' : `<button type="button" style="background:var(--danger-soft);color:var(--danger);border:1px solid var(--danger-line);" onclick="rbDelete('${escJs(id)}')" ${n ? `disabled title="Спершу заберіть цю роль у ${n} людей"` : ''}>🗑 Видалити</button>`}
+        </div></div>`;
+    }).join('')
+    + `<div class="rb-card rb-new">
+        <b style="font-size:.85rem;color:var(--accent-ink);">➕ Нова роль</b>
+        <div class="rb-head" style="margin-top:7px;">
+          <input type="text" id="rb-new-icon" class="rb-icon" maxlength="4" value="🧩" aria-label="Значок">
+          <input type="text" id="rb-new-name" class="rb-name" maxlength="40" placeholder="Назва (напр. Психолог)" aria-label="Назва ролі">
+        </div>
+        ${rbPermsHtml('rb-new', {})}
+        <div class="rb-foot"><span class="rb-count"></span>
+          <button type="button" style="background:var(--accent-ink);color:#fff;" onclick="rbCreate()">Створити роль</button></div>
+      </div>`;
+    fillCustomRoleOptions();
+  }catch(e){
+    box.innerHTML = `<p class="empty-msg" style="color:var(--danger);">Не вдалося завантажити ролі: ${escHtml(e.message)}</p>`;
+  }
+};
+function rbRead(rp){
+  const name = (document.getElementById(`${rp}-name`)?.value || '').trim();
+  const icon = Array.from((document.getElementById(`${rp}-icon`)?.value || '').trim()).slice(0, 2).join('') || '🧩';
+  const perms = {};
+  for(const k of Object.keys(ROLE_PERMS)) perms[k] = !!document.getElementById(`${rp}-p-${k}`)?.checked;
+  return { name, icon, perms };
+}
+function rbCheck(r){
+  if(r.name.length < 2) return 'Вкажіть назву ролі (від 2 символів).';
+  const taken = Object.entries(ROLE_LABELS).some(([id, l]) => String(l).replace(/^\S+\s/, '').toLowerCase() === r.name.toLowerCase() && !/^(organizer|cr_)/.test(id));
+  if(taken) return 'Така назва вже є серед вбудованих ролей — оберіть іншу, щоб не плутати.';
+  return '';
+}
+let rbBusy = false;
+async function rbWrite(id, r, note){
+  if(rbBusy) return false;
+  rbBusy = true;
+  try{
+    await set(ref(db, `custom_roles/${id}`), { ...r, by: currentUserData?.email || '', ts: Date.now() });
+    logAction('settings', { value: `роль ${note}: ${r.name} [${Object.keys(r.perms).filter(k => r.perms[k]).join(', ') || 'без прав'}]` });
+    return true;
+  }catch(e){
+    alert('Не вдалося зберегти: ' + e.message + '\n\nЯкщо тут PERMISSION_DENIED — опублікуйте нові правила бази.');
+    return false;
+  }finally{ rbBusy = false; }
+}
+window.rbSave = async function(id){
+  if(!RB_ID.test(id)) return;
+  const r = rbRead('rb-' + id), err = rbCheck(r);
+  if(err) return alert(err);
+  if(!Object.values(r.perms).some(Boolean) && !confirm('У ролі не відмічено жодного права — людина побачить лише календар подій. Зберегти?')) return;
+  if(await rbWrite(id, r, 'змінено')){ showToast('✅ Роль збережено. Люди з цією роллю побачать зміни після оновлення сторінки.');  await window.openRoleBuilder(); }
+};
+window.rbCreate = async function(){
+  const r = rbRead('rb-new'), err = rbCheck(r);
+  if(err) return alert(err);
+  if(Object.values(allCustomRoles()).some(d => (d.name || '').toLowerCase() === r.name.toLowerCase())) return alert('Роль із такою назвою вже є.');
+  if(!Object.values(r.perms).some(Boolean)) return alert('Відмітьте хоча б одне право.');
+  const id = 'cr_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  if(await rbWrite(id, r, 'створено')){ showToast(`✅ Роль «${r.name}» створено — видайте її в «Управління персоналом»`);  await window.openRoleBuilder(); }
+};
+window.rbDelete = async function(id){
+  if(!/^cr_/.test(id)) return;
+  const cnt = await rbCounts();
+  if(cnt[id]) return alert(`Цю роль має ${cnt[id]} людей. Спершу заберіть її в «Управління персоналом».`);
+  const d = allCustomRoles()[id];
+  if(!confirm(`Видалити роль «${d ? d.name : id}»?`)) return;
+  try{
+    await remove(ref(db, `custom_roles/${id}`));
+    delete ROLE_LABELS[id];
+    logAction('settings', { value: `роль видалено: ${d ? d.name : id}` });
+    showToast('🗑 Роль видалено');
+    await window.openRoleBuilder();
+  }catch(e){ alert('Не вдалося видалити: ' + e.message); }
 };

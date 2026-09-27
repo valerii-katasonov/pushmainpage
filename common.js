@@ -545,6 +545,40 @@ export const ROLE_LABELS={
   parent:'👪 Батьки', student:'🎒 Учень', kitchen:'🍽️ Кухня',
   organizer:'🎭 Педагог-організатор'
 };
+// ══════════ КОНСТРУКТОР РОЛЕЙ ══════════
+// custom_roles/{id} = {name, icon, perms:{news,calendar,schedule,chat,meals}}
+// Директор збирає роль галочками (director.js → «🧩 Конструктор ролей»).
+// Кожне право відкриває конкретний блок кабінету і конкретні вузли бази
+// (database.rules.gen.py → PERM). 'organizer' — шаблон, решта — 'cr_…'.
+export const ROLE_PERMS = {
+  news:     { icon: '📣', label: 'Оголошення', hint: 'писати оголошення школі й будь-якому класу, нагадувати про них' },
+  calendar: { icon: '🗓️', label: 'Календар подій', hint: 'додавати й видаляти свята та культурно-виховні заходи' },
+  schedule: { icon: '📅', label: 'Розклад усіх класів', hint: 'переглядати й друкувати розклад будь-якого класу' },
+  chat:     { icon: '💬', label: 'Контакт у чаті', hint: 'зʼявлятися в списку контактів, щоб батьки й учителі могли написати' },
+  meals:    { icon: '🍽', label: 'Власне харчування', hint: 'замовляти собі обід, як персонал' }
+};
+export const ORGANIZER_DEFAULT = { name: 'Педагог-організатор', icon: '🎭', perms: { news: true, calendar: true, schedule: true, chat: true } };
+export let customRoles = {};
+export function isCustomRole(r){ return r === 'organizer' || /^cr_[a-z0-9]{3,24}$/.test(String(r || '')); }
+export function roleDef(r){
+  if(customRoles[r]) return customRoles[r];
+  return r === 'organizer' ? ORGANIZER_DEFAULT : null;
+}
+export function hasPerm(p, r){
+  const d = roleDef(r === undefined ? currentUserData?.role : r);
+  return !!(d && d.perms && d.perms[p] === true);
+}
+export async function loadCustomRoles(){
+  try{
+    const snap = await get(child(ref(db), 'custom_roles'));
+    customRoles = snap.exists() ? (snap.val() || {}) : {};
+  }catch(e){ customRoles = {}; }
+  for(const [id, d] of Object.entries({ organizer: ORGANIZER_DEFAULT, ...customRoles }))
+    if(d && d.name) ROLE_LABELS[id] = `${d.icon || '🧩'} ${d.name}`;
+  return customRoles;
+}
+window.hasPerm = hasPerm; window.isCustomRole = isCustomRole; window.loadCustomRoles = loadCustomRoles;
+window.roleDef = roleDef;
 // ═══════════════════════════════════════════════════════════════
 //  РОЛЬ ДЛЯ НАЛАГОДЖЕННЯ: master_class_teacher
 //
@@ -2210,7 +2244,7 @@ window.handleDateChange=function(){
   if(isTeacherRole(currentUserData.role)){updateSubjectList();loadTeacherDashboard();loadCurrentTopicAndHW();listenTeacherAttendance();}
   else if(currentUserData.role==='director'){loadDirectorDashboard();document.getElementById('d-detail-hw-class')&&(document.getElementById('d-detail-hw-class').value='');}
   else if(currentUserData.role==='kitchen'){/* кухня працює тижнями — має власну навігацію */}
-  else if(currentUserData.role==='organizer'){/* педагог-організатор: без журналу й дашборда дня */}
+  else if(isCustomRole(currentUserData.role)){/* роль із конструктора: без журналу й дашборда дня */}
   else if(currentUserData.role==='administrator'){loadAdminDashboard();}
   else if(currentUserData.role==='student'){loadStudentDashboard();}
   else{loadParentDashboard();}
@@ -2685,6 +2719,12 @@ export async function publishContactCard(){
       written=true;
     }
     if(!staffRole)return written?true:'роль не визначено';
+    // Роль із конструктора без галочки «Контакт у чаті» в довіднику не
+    // показуємо — і прибираємо стару картку, якщо право зняли.
+    if(isCustomRole(staffRole)&&!hasPerm('chat',staffRole)){
+      await remove(ref(db,`staff_directory/${se}`)).catch(()=>{});
+      return written?true:'роль без контакту в чаті';
+    }
     // Класи та предмети вчителя беремо з його власного рядка teacher_access.
     // Записуємо саме ПЕРЕЛІК ПРЕДМЕТІВ на клас, а не просто «має цей клас»:
     // батькові номер класу нічого не каже, йому треба знати, що це вчитель
@@ -2914,6 +2954,8 @@ async function initUserSession(){
   // switchRole(), інакше попередній кабінет залишиться на екрані поверх нового.
   document.querySelectorAll('.panel').forEach(p=>p.style.display='none');
   document.getElementById('calendar-block').style.display='block';updateProfileBar();
+  // Ролі з конструктора — до маршруту: від них залежать підписи й кабінет
+  await loadCustomRoles();
   hideBootSplash();
   const r=currentUserData.role;
   if(r==='director'){document.getElementById('director-screen').style.display='block';callWhenReady('initDirTabs');callWhenReady('openFromNotification', 600, ['director-screen']);document.getElementById('teacher-class-selector-box').style.display='none';loadTeachersListForDirector();loadDirectorTeacherSkillsList();handleDateChange();loadDrafts();callWhenReady('loadBellCoverage');
@@ -2926,7 +2968,7 @@ async function initUserSession(){
   // Педагог-організатор — не вчитель: розклад, календар подій, оголошення.
   // Гілка стоїть до isTeacherRole і до загального else, який відкрив би
   // людині кабінет батьків.
-  else if(r==='organizer'){document.getElementById('organizer-screen').style.display='block';document.getElementById('teacher-class-selector-box').style.display='none';const gd=document.getElementById('global-date'),gl=document.getElementById('global-date-label');if(gd)gd.style.display='none';if(gl)gl.style.display='none';callWhenReady('initOrganizerScreen');callWhenReady('renderPushInvite', 600, ['o-push-invite']);}
+  else if(isCustomRole(r)){document.getElementById('organizer-screen').style.display='block';document.getElementById('teacher-class-selector-box').style.display='none';const gd=document.getElementById('global-date'),gl=document.getElementById('global-date-label');if(gd)gd.style.display='none';if(gl)gl.style.display='none';callWhenReady('initOrganizerScreen');callWhenReady('renderPushInvite', 600, ['o-push-invite']);}
   else if(r==='administrator'){document.getElementById('admin-screen').style.display='block';document.getElementById('teacher-class-selector-box').style.display='none';handleDateChange();}
   else if(isTeacherRole(r)){
     document.getElementById('teacher-screen').style.display='block';document.getElementById('teacher-class-selector-box').style.display='block';
@@ -3417,7 +3459,7 @@ export async function renderPushInvite(containerId){
     // після переїзду на новий домен дозвіл треба давати заново, і банер
     // зʼявляється в усіх одразу, у найневдаліший момент.
     const staff = isTeacherRole(currentUserData?.role)
-      || ['director','administrator','kitchen','organizer'].includes(currentUserData?.role);
+      || ['director','administrator','kitchen'].includes(currentUserData?.role) || isCustomRole(currentUserData?.role);
     if(Date.now() - snoozed < (staff ? 24*3600*1000 : 7*24*3600*1000)) return;
     box.style.display = 'block';
     box.className = 'push-invite';
