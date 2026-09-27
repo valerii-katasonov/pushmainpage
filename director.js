@@ -620,11 +620,21 @@ window.loadStaffList=async function(){invalidateUsersCache();
   if(!box)return;
   box.innerHTML='<p class="empty-msg">Завантаження...</p>';
   try{
-    const [approvedSnap,usersSnap]=await Promise.all([
+    const [approvedSnap,usersSnap,accSnap,headsSnap]=await Promise.all([
       get(child(ref(db),'pre_approved_roles')),
-      getUsersSnap()
+      getUsersSnap(),
+      get(child(ref(db),'teacher_access')).catch(()=>null),
+      get(child(ref(db),'class_teachers')).catch(()=>null)
     ]);
     const approved=approvedSnap.exists()?approvedSnap.val():{};
+    // Класи біля ролей: «Класний керівник (3)», «Вчитель (1, 3, 5)».
+    // Керівництво — з class_teachers, викладання — з матриці доступу.
+    const acc=(accSnap&&accSnap.exists())?accSnap.val():{};
+    const headOf={};
+    if(headsSnap&&headsSnap.exists()) for(const [cls,h] of Object.entries(headsSnap.val()||{}))
+      if(h&&h.teacherEmail)(headOf[emailKey(h.teacherEmail)]=headOf[emailKey(h.teacherEmail)]||[]).push(cls);
+    const nums=list=>[...new Set(list)].sort((a,b)=>getClassNum(a)-getClassNum(b)).map(c=>String(c).replace('class_','')).join(', ');
+    STAFF_CACHE.approved=approved; STAFF_CACHE.users=byEmailOf(usersSnap); STAFF_CACHE.headOf=headOf; STAFF_CACHE.acc=acc;
     const users=usersSnap.exists()?usersSnap.val():{};
     // Індекс users за safeEmail — щоб показати ім'я та статус
     const byEmail={};
@@ -650,7 +660,17 @@ window.loadStaffList=async function(){invalidateUsersCache();
         <div class="staff-main">
           <div><b>${escHtml(name)}</b>${isMe?' <span style="font-size:.75rem;color:var(--brand-ink);">(це ви)</span>':''}${neverLoggedIn?' <span style="font-size:.75rem;color:var(--warn);">ще не входив</span>':''}</div>
           <div class="staff-email">${escHtml(email)}</div>
-          <div class="staff-roles">${roles.map(r=>`<span class="staff-role-tag">${escHtml(ROLE_LABELS[r]||r)}</span>`).join('')}</div>
+          <div class="staff-roles">${roles.map(r=>{
+            const cls=r==='class_teacher'?nums(headOf[safeEmail]||[])
+              :(STAFF_TEACHING.includes(r)?nums(Object.keys(acc[safeEmail]||{})):'');
+            // Останню роль і власну адміністративну не знімаємо хрестиком:
+            // перше — це «Видалити», друге — замкнуло б директора поза кабінетом.
+            const lockSelf=isMe&&(r==='director'||r==='administrator');
+            const canX=roles.length>1&&!lockSelf;
+            return `<span class="staff-role-tag">${escHtml(ROLE_LABELS[r]||r)}${cls?` <span class="staff-role-cls">(${escHtml(cls)})</span>`:''}`
+              +(canX?`<button type="button" class="staff-role-x" aria-label="Забрати роль ${escHtml(ROLE_LABELS[r]||r)}" title="Забрати цю роль" onclick="removeStaffRole('${escJs(safeEmail)}','${escJs(r)}')">✕</button>`:'')
+              +`</span>`;}).join('')}${(headOf[safeEmail]||[]).length&&!roles.includes('class_teacher')
+              ?`<span class="staff-role-tag staff-role-warn" title="Призначено класним керівником, але ролі «Класний керівник» немає">🎓 кл. керівник (${escHtml(nums(headOf[safeEmail]))}) — без ролі</span>`:''}</div>
         </div>
         <div class="staff-actions">
           <button class="staff-edit" onclick="openStaffProfile('${escJs(safeEmail)}')" data-tip="Змінити імʼя та фото">✏️ Профіль</button>
@@ -661,6 +681,57 @@ window.loadStaffList=async function(){invalidateUsersCache();
     });
     box.innerHTML=html;
   }catch(e){box.innerHTML=`<p style="color:red;font-size:.8rem;">Помилка: ${escHtml(e.message)}</p>`;}
+};
+// ══════════ ПЕРСОНАЛ: зняти одну роль ══════════
+// Ролі, для яких у дужках показуємо класи з матриці доступу
+const STAFF_TEACHING=['teacher','art_school_teacher','music_teacher'];
+const STAFF_CACHE={};
+function byEmailOf(usersSnap){
+  const out={};
+  if(usersSnap&&usersSnap.exists()) for(const [uid,u] of Object.entries(usersSnap.val()||{}))
+    if(u&&u.email) out[emailKey(u.email)]={uid,...u};
+  return out;
+}
+let staffRoleBusy=false;
+window.removeStaffRole=async function(se,role){
+  if(staffRoleBusy)return;
+  // Ролі — свіжі з бази, а не зі знімка списку: між натисканнями хтось міг їх змінити
+  const cur=await get(child(ref(db),`pre_approved_roles/${se}`));
+  const roles=normalizeRoles(cur.exists()?cur.val():null);
+  if(!roles.includes(role))return window.loadStaffList();
+  const rest=roles.filter(r=>r!==role);
+  if(!rest.length)return alert('Це остання роль. Щоб забрати доступ повністю, натисніть «🗑 Видалити».');
+  if(se===emailKey(currentUserData?.email)&&(role==='director'||role==='administrator'))
+    return alert('Свою адміністративну роль зняти не можна — ви втратите доступ до цього кабінету.');
+  const u=(STAFF_CACHE.users||{})[se];
+  const who=u&&(u.firstName||u.lastName)?`${u.firstName||''} ${u.lastName||''}`.trim():se.replace(/_/g,'.');
+  const label=ROLE_LABELS[role]||role;
+  const notes=[];
+  const heads=(STAFF_CACHE.headOf||{})[se]||[];
+  if(role==='class_teacher'&&heads.length)
+    notes.push(`• Людина лишається класним керівником ${heads.map(c=>c.replace('class_','')).join(', ')} кл. у «🎓 Призначення класних керівників» — там і змініть керівника.`);
+  const teachingLeft=rest.some(r=>STAFF_TEACHING.includes(r)||r==='class_teacher'||r==='master_class_teacher');
+  const accCls=Object.keys((STAFF_CACHE.acc||{})[se]||{});
+  if(!teachingLeft&&accCls.length)
+    notes.push(`• Доступ до класів (${accCls.map(c=>c.replace('class_','')).join(', ')}) лишається в матриці — заберіть його в «👁 Хто має доступ до класів», якщо він більше не потрібен.`);
+  if(!confirm(`Забрати роль «${label}» у ${who}?\n\nЗалишаться: ${rest.map(r=>ROLE_LABELS[r]||r).join(', ')}.`+(notes.length?'\n\n'+notes.join('\n'):'')))return;
+  staffRoleBusy=true;
+  try{
+    await set(ref(db,`pre_approved_roles/${se}`),rest);
+    // Профіль людини — одразу, щоб не чекати її наступного входу. Батьківська
+    // роль (parent_links) — окреме джерело, її повертаємо на місце.
+    if(u&&u.uid){
+      const pl=await get(child(ref(db),`parent_links/${se}`));
+      const allRoles=mergeAccountRoles(rest,pl.exists()?pl.val():null);
+      const patch={roles:allRoles};
+      if(!allRoles.includes(u.role))patch.role=allRoles[0];
+      await update(ref(db,`users/${u.uid}`),patch);
+    }
+    await syncStaffCard(se).catch(()=>false);
+    logAction('staff_grant',{target:se.replace(/_/g,'.'),value:'знято: '+role});
+    showToast(`✅ Роль «${label}» забрано`);
+  }catch(e){alert('Не вдалося: '+e.message);}
+  finally{staffRoleBusy=false;await window.loadStaffList();}
 };
 // ══════════ ПЕРСОНАЛ: скидання пароля ══════════
 // Пароль лежить у Firebase Auth, а не в базі порталу, тому перестворення
