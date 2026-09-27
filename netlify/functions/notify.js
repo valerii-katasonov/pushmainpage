@@ -334,6 +334,14 @@ const EVENTS = {
                                : p.important ? '❗ Важливе оголошення' : '📣 Оголошення школи',
                         body: `${p.subject ? p.subject + ': ' : ''}${p.value || 'Нове оголошення в кабінеті'}`,
                         tag: 'news' + (p.ref ? '-' + p.ref : '') }),
+  // Нагадування директора вчителю про незаповнений журнал. Текст складаємо
+  // ТУТ і лише з чисел: функція приймає запити без входу, тож вільний текст
+  // «від директора» дозволив би будь-кому розсилати вчителям що завгодно.
+  reminder:   (p) => ({ title: '📝 Нагадування про журнал',
+                        body: 'Не заповнено: ' + ([p.topics && `тем — ${p.topics}`, p.hw && `ДЗ — ${p.hw}`,
+                                                   p.grades && `класів без оцінок — ${p.grades}`].filter(Boolean).join(', ') || 'записи')
+                              + '. Відкрийте портал і допишіть.',
+                        tag: 'reminder' }),
   menu:       (p) => ({ title: p.value === 'upd' ? '🍽️ Меню змінено' : '🍽️ Меню опубліковано',
                         body: p.value === 'upd' ? `Кухня оновила меню${p.subject ? ' на ' + p.subject : ''}`
                                                 : `Меню${p.subject ? ' на ' + p.subject : ''} вже в кабінеті`,
@@ -364,7 +372,7 @@ exports.handler = async (event) => {
   if (!build) return fail(400, 'Невідомий тип події', origin);
   // Чат адресується поштами (body.to), меню й новини — усій школі.
   // Ні тим, ні тим клас та імʼя учня не потрібні.
-  const isBroadcast = body.type === 'menu' || body.type === 'news' || body.type === 'chat';
+  const isBroadcast = body.type === 'menu' || body.type === 'news' || body.type === 'chat' || body.type === 'reminder';
   // ДЗ — подія класу: потрібен клас, але не потрібне (і не передається) імʼя учня.
   const isClassWide = body.type === 'homework';
   const cls = String(body.class || '').slice(0, 20);
@@ -372,7 +380,7 @@ exports.handler = async (event) => {
   if (isClassWide && !cls) return fail(400, 'Не вказано клас', origin);
   if (!isBroadcast && !isClassWide && (!cls || !studentName))
     return fail(400, 'Не вказано клас або учня', origin);
-  if (body.type === 'chat' && !(Array.isArray(body.to) && body.to.length))
+  if ((body.type === 'chat' || body.type === 'reminder') && !(Array.isArray(body.to) && body.to.length))
     return fail(400, 'Не вказано, кому надсилати', origin);
 
   // Для повідомлення про відсутність/запізнення: дата й хвилини — лише
@@ -382,6 +390,10 @@ exports.handler = async (event) => {
   const lateReason = String(body.reason || '');
   const msg = build({
     subject: String(body.subject || '').slice(0, 80),
+    // Лічильники для нагадування — лише цілі числа 0…999
+    topics: /^\d{1,3}$/.test(String(body.topics ?? '')) ? Number(body.topics) : 0,
+    hw:     /^\d{1,3}$/.test(String(body.hw ?? '')) ? Number(body.hw) : 0,
+    grades: /^\d{1,3}$/.test(String(body.grades ?? '')) ? Number(body.grades) : 0,
     // Лише прапорці й id у відомому вигляді: функція приймає запити без входу
     important: body.important === true,
     remind: body.remind === true,
@@ -415,6 +427,9 @@ exports.handler = async (event) => {
       ? await findTeacherTargets(token, cls)
       : body.type === 'chat'
       ? await findByEmails(token, Array.isArray(body.to) ? body.to.slice(0, 30) : [])
+      // Нагадування — лише одному вчителю за раз
+      : body.type === 'reminder'
+      ? await findByEmails(token, Array.isArray(body.to) ? body.to.slice(0, 1) : [])
       : (body.type === 'news' ? await findNewsTargets(token, cls)
       : (isClassWide ? await findClassTargets(token, cls)
       : (isBroadcast ? await findMealTargets(token)
@@ -443,7 +458,8 @@ exports.handler = async (event) => {
       // «оновлено меню» потрапляв на розклад і шукав меню сам.
       menu:     'meals',
       homework: 'hw',
-      chat:     'chat'      // особливий випадок: відкриваємо саме листування
+      chat:     'chat',     // особливий випадок: відкриваємо саме листування
+      reminder: 'lesson'    // учитель — одразу на вкладку уроку
     };
     const tab = TAB_BY_TYPE[body.type] || 'day';
     // Адреса кабінету — з lib/site.js, а не з першого елемента списку
