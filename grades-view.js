@@ -36,7 +36,6 @@
 //     — дзеркало СВОЄЇ дитини: клас цілком родині читати не можна.
 //     v — оцінка, t — тип роботи (від нього залежить коефіцієнт).
 //   comments/{клас}/{дата}/{предмет}/{учень}
-//   reactions/{клас}/{дата}/{предмет}/{учень}
 //
 // Вузол дзеркала читаємо ЦІЛКОМ, за рік: це дані однієї дитини, вони
 // маленькі, і з них одразу виходять обидва погляди. Паралельні читання
@@ -95,7 +94,7 @@ let gvSubject = '';       // обраний предмет
 // Дані, які приносять підписки. null означає «ще не приходило» — це не те
 // саме, що порожньо, і плутати їх не можна: саме на цій різниці й
 // трималася помилка з порожнім блоком.
-let gvMirror=null, gvComments=null, gvReactions=null, gvScales=null;
+let gvMirror=null, gvComments=null, gvScales=null;
 let gvError='';
 // Хто зараз у кабінеті — потрібно для пошуку своїх записів у спільних вузлах
 let gvCls='', gvSid='', gvName='', gvProfileSid='';
@@ -103,16 +102,16 @@ let gvCls='', gvSid='', gvName='', gvProfileSid='';
 // нові дані, замість того щоб гасити екран.
 let gvLastWeekHtml='', gvLastSubjHtml='';
 
-let offMirror=null, offComments=null, offReactions=null, offScales=null;
+let offMirror=null, offComments=null, offScales=null;
 let subKeyMirror='', subKeyWeek='', subKeyScales='';
 
 function drop(fn){ if(fn){ try{ fn(); }catch(e){} } return null; }
 
 export function stopGradesListeners(){
   offMirror=drop(offMirror); offComments=drop(offComments);
-  offReactions=drop(offReactions); offScales=drop(offScales);
+  offScales=drop(offScales);
   subKeyMirror=subKeyWeek=subKeyScales='';
-  gvMirror=gvComments=gvReactions=gvScales=null;
+  gvMirror=gvComments=gvScales=null;
 }
 window.stopGradesListeners = stopGradesListeners;
 
@@ -128,17 +127,14 @@ function subscribeMirror(cls,sid){
 function subscribeWeek(cls,days){
   const key=`${cls}|${days[0]}`;
   if(subKeyWeek===key && offComments) return;
-  offComments=drop(offComments); offReactions=drop(offReactions);
-  subKeyWeek=key; gvComments=null; gvReactions=null;
+  offComments=drop(offComments);
+  subKeyWeek=key; gvComments=null;
   const rangeOf = node => query(child(ref(db),`${node}/${cls}`), orderByKey(), startAt(days[0]), endAt(days[4]));
-  // Коментарі й реакції лежать у вузлах класу, тож беремо лише пʼять
+  // Коментарі лежать у вузлі класу, тож беремо лише пʼять
   // ключів показаного тижня, а не весь рік.
   offComments=onValue(rangeOf('comments'),
     snap=>{ gvComments=snap.exists()?(snap.val()||{}):{}; paintWeek(); },
     ()=>{ gvComments={}; paintWeek(); });
-  offReactions=onValue(rangeOf('reactions'),
-    snap=>{ gvReactions=snap.exists()?(snap.val()||{}):{}; paintWeek(); },
-    ()=>{ gvReactions={}; paintWeek(); });
 }
 
 function subscribeScales(cls){
@@ -302,14 +298,6 @@ function retakeBtn(cls, subj, date, v, numericScale){
      onclick="sendRetakeRequest('${escJs(cls)}','${escJs(subj)}','${escJs(date)}','${escJs(who)}',${n})">🔄 Покращити</button>`;
 }
 
-function reactionRow(date, subj, mine){
-  const btn = (em) => `<button style="background:none;border:none;font-size:1.2rem;cursor:pointer;`
-    + `filter:${mine===em?'none':'grayscale(100%)'};opacity:${mine===em?'1':'.5'};padding:3px;width:auto;margin:0;"`
-    + ` onclick="sendReaction('${escJs(date)}','${escJs(subj)}','${em}')">${em}</button>`;
-  return `<div style="display:flex;gap:6px;margin-top:6px;padding-top:6px;border-top:1px dashed var(--line-soft);align-items:center;">`
-    + btn('👍') + btn('❤️') + btn('🔥') + `</div>`;
-}
-
 // Вхідна точка: прив'язати підписки до поточної дитини й намалювати те,
 // що вже прийшло. Викликається дашбордом, перемиканням вкладки та
 // стрілками тижнів — усі три випадки тепер дешеві, бо мережі тут немає.
@@ -358,7 +346,7 @@ function paintWeek(){
   }
   // Ще не все приїхало. Малювати половину не можна: батько побачить
   // «коментарів немає» там, де вони просто ще в дорозі.
-  if(gvMirror===null || gvComments===null || gvReactions===null){
+  if(gvMirror===null || gvComments===null){
     box.innerHTML = gvLastWeekHtml || '<p class="empty-msg">Завантаження...</p>';
     return;
   }
@@ -386,14 +374,12 @@ function paintWeek(){
     const rows = subjs.map(s => {
       const grades=items.filter(i => i.subj === s);
       const cm = mineOf(cmDay[s]) || '';
-      const rx = mineOf(((gvReactions||{})[ds]||{})[s]) || null;
       const tName = gvTeachers[subjKey(s)] || gvTeachers[s.trim()];
       const tHtml = tName ? ` <span style="font-size:0.8rem;color:var(--brand-deep);font-weight:normal;">👩‍🏫 ${escHtml(tName)}</span>` : '';
       return `<li style="margin-bottom:9px;"><b>${escHtml(s)}</b>${tHtml}<br>`
         + grades.map(g=>gradeChip(g.v,g.t,cls,gvScales?.[s]?.max)
           +retakeBtn(cls,s,g.date,g.v,gvScales?.[s]?.max)+renderWorkPhotos(g.workPhotos)).join(' ')
-        + (cm ? `<div style="background:var(--surface-2);padding:5px 9px;border-radius:6px;font-style:italic;font-size:.88rem;margin-top:4px;">${escHtml(cm)}</div>`
-                + reactionRow(ds, s, rx) : '')
+        + (cm ? `<div style="background:var(--surface-2);padding:5px 9px;border-radius:6px;font-style:italic;font-size:.88rem;margin-top:4px;">${escHtml(cm)}</div>` : '')
         + `</li>`;
     }).join('');
     return `<div class="gv-day"><div class="gv-day-head">${escHtml(dayName(ds))}, ${escHtml(human(ds))}</div>

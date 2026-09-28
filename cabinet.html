@@ -2403,7 +2403,6 @@
     @media (pointer: coarse) {
       input[type=text], input[type=email], input[type=password], input[type=number], input[type=search], input[type=date], input[type=month], input:not([type]), select, textarea {font-size:16px !important; }
       button {min-height:44px; }
-      .reaction-btn {min-height:44px !important;min-width:44px !important; }
       .g-cell {min-height:var(--touch-target);min-width:var(--touch-target); }
       .journal-table .g-cell {min-height:32px;min-width:32px; }
     }
@@ -2459,8 +2458,6 @@
       #edit-cell-modal .modal-content {padding:16px 12px; }
       /* Toast remains at bottom (standard UX) */
       .toast {font-size:.85rem;padding:11px 14px; }
-      /* Reactions modal */
-      .reaction-box {gap:5px; }
     }
     /* === MEDIUM MOBILE (481-767px) === */
     @media (min-width: 481px) and (max-width: 767px) {
@@ -2578,7 +2575,6 @@
       #edit-cell-modal .modal-content {max-width:95%; }
       #profile-modal .modal-content,
       #wrapped-modal .modal-content,
-      #reactions-modal .modal-content {max-width:540px; }
       #inbox-modal .modal-content {max-width:720px;height:85vh; }
       .modal-overlay {padding:30px; }
       /* ───── Журнал table комфортнее (base font up; em metrics scale with it) ───── */
@@ -2775,6 +2771,11 @@
 .fw-note{font-size:.75rem;color:var(--ink-3);margin:4px 0;}
 .fw-day{border-top:1px dashed var(--warn-line);padding:5px 0;}
 .fw-day summary{cursor:pointer;font-size:.82rem;}
+.fw-catch-all>summary{cursor:pointer;list-style:none;}
+.fw-catch-all>summary::-webkit-details-marker{display:none;}
+.fw-catch-all>summary .fw-title{display:inline;}
+.fw-catch-all>summary .fw-title::before{content:"▸ ";}
+.fw-catch-all[open]>summary .fw-title::before{content:"▾ ";}
 .fw-count{color:var(--ink-3);font-size:.75rem;}
 /* «💬 Хочу обговорити» */
 .tk-list{list-style:none;margin:4px 0;padding:0;}
@@ -4236,12 +4237,8 @@
           <button onclick="teacherMarkAbsent()" style="flex:0 0 auto;margin-top:0;background:var(--brand-deep);color:#fff;width:auto;padding:9px 15px;font-size:.85rem;">Відмітити</button>
         </div>
       </div>
-      <!-- Реакції + Підсумки + Перездачі -->
+      <!-- Підсумки + Перездачі -->
       <div style="display:flex;gap:9px;margin:14px 0 0 0;">
-        <div role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" style="flex:1;background:var(--warn-soft);padding:14px;border-radius:12px;text-align:center;cursor:pointer;" onclick="showReactionsDetails()">
-          <h4 style="margin:0;color:var(--warn);font-size:.82rem;">❤️ Реакції</h4>
-          <p id="t-karma-counter" style="font-size:1.6rem;font-weight:800;color:var(--warn);margin:4px 0;">0</p>
-        </div>
         <div role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" id="t-wrapped-btn" style="flex:1;background:linear-gradient(135deg,var(--ok-soft),var(--brand-soft));padding:14px;border-radius:12px;text-align:center;cursor:pointer;" onclick="showWeeklyWrapped()">
           <h4 style="margin:0;color:var(--brand-ink);font-size:.82rem;">📊 Підсумки</h4>
           <p style="font-size:1.6rem;margin:4px 0;">🎁</p>
@@ -5504,14 +5501,6 @@
     <button onclick="closeModal()" style="background:var(--ok);color:#fff;width:100%;margin-top:9px;">Дякую!</button>
   </div>
 </div>
-<!-- Reactions Modal -->
-<div id="reactions-modal" class="modal-overlay">
-  <div class="modal-content" style="max-width:500px;max-height:80vh;display:flex;flex-direction:column;">
-    <h2 style="color:var(--warn);margin-top:0;">❤️ Реакції</h2>
-    <div id="reactions-list" style="overflow-y:auto;text-align:left;padding:9px 0;"></div>
-    <button onclick="closeReactionsModal()" style="background:var(--ink);color:#fff;width:100%;margin-top:13px;">Закрити</button>
-  </div>
-</div>
 <!-- Retake Requests Modal -->
 <div id="retake-modal" class="modal-overlay">
   <div class="modal-content" style="max-width:500px;">
@@ -5520,7 +5509,7 @@
     <button onclick="closeRetakeModal()" style="background:var(--ink);color:#fff;width:100%;margin-top:13px;">Закрити</button>
   </div>
 </div>
-<!-- PHASE 7: Sticker Stats Modal (same structure as #reactions-modal) -->
+<!-- PHASE 7: Sticker Stats Modal (same structure as the other modals) -->
 <div id="sticker-stats-modal" class="modal-overlay">
   <div class="modal-content" style="max-width:500px;max-height:80vh;display:flex;flex-direction:column;">
     <h3 style="margin-top:0;color:var(--warn);">🌟 Статистика наліпок</h3>

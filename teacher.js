@@ -3,7 +3,7 @@
 // filling (topic + homework), behavior grades, textbooks, the
 // legacy curriculum topic checklist, teacher-side retake request
 // review, class/attendance management, teacher dashboard counters,
-// exams calendar, and reactions/weekly-wrapped.
+// exams calendar, and weekly-wrapped.
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, push, remove, update, onValue } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { renderNewsFeed } from './news.js';
@@ -64,7 +64,6 @@ window.removeHomeworkAttachment=function(index){
 // teacherAttendanceListener is reassigned only here and read/invoked from
 // common.js's logoutUser — plain export/import.
 export let teacherAttendanceListener=null;
-window.myDetailedReactions=[];
 
 // ══════════ TEACHER: TOPIC & HW ══════════
 
@@ -1738,11 +1737,8 @@ export function loadTeacherDashboard(){
   const cls=getActiveClass();const uid=auth.currentUser.uid;
   // Retake counter
   get(ref(db,`retake_requests/${cls}`)).then(snap=>{if(snap.exists()){const d=snap.val();let cnt=0;for(let s in d)for(let dt in d[s])for(let st in d[s][dt])if(d[s][dt][st].status==='pending')cnt++;document.getElementById('t-retake-counter').innerText=cnt;}else document.getElementById('t-retake-counter').innerText=0;});
-  Promise.all([get(child(ref(db),`reactions/${cls}`)),get(child(ref(db),`authors/${cls}`)),get(child(ref(db),`comments/${cls}`))]).then(([rs,as,cs])=>{
-    let cnt=0;window.myDetailedReactions=[];
-    if(rs.exists()&&as.exists()){const reactions=rs.val();const authors=as.val();const comments=cs.exists()?cs.val():{};for(let d in reactions)for(let s in reactions[d])if(authors[d]&&authors[d][s]===uid)for(let st in reactions[d][s]){cnt++;let emoji=reactions[d][s][st];let cm=(comments[d]&&comments[d][s]&&comments[d][s][st])?comments[d][s][st]:'Без коментаря';window.myDetailedReactions.push({date:d,subject:s,student:st,emoji,comment:cm});}window.myDetailedReactions.sort((a,b)=>new Date(b.date)-new Date(a.date));}
-    document.getElementById('t-karma-counter').innerText=cnt;
-  });
+  // «❤️ Реакції» батьків прибрано (28.09.2026): лічильник рахував їх за
+  // автором ДЗ, і реакція на коментар до оцінки діставалась не тому.
   if(currentUserData.role!=='art_school_teacher'){
     const date=document.getElementById('global-date').value;
     renderHwList(cls,date,'t-daily-hw-list');
@@ -1886,32 +1882,7 @@ window.renderExamsCalendar=function(){const cls=getActiveClass();const ym=docume
 window.manageDayExams=function(ds){const cls=getActiveClass();const dd=document.getElementById('exams-day-details');dd.style.display='block';get(child(ref(db),`exams/${cls}/${ds.substring(0,7)}/${ds}`)).then(snap=>{let ex=snap.exists()?snap.val():{};let lh='';for(let s in ex){const me=ex[s]===auth.currentUser.uid;const db2=me?`<button aria-label="Видалити контрольну з ${escHtml(s)}" onclick="deleteExam('${ds}','${escJs(s)}')" style="background:none;border:none;color:var(--danger);cursor:pointer;font-weight:700;padding:0 4px;width:auto;margin:0;font-size:1.1rem;">✖</button>`:'';lh+=`<li style="margin-bottom:7px;display:flex;justify-content:space-between;align-items:center;background:#fff;padding:7px 11px;border-radius:8px;border:1px solid var(--line-soft);"><span><b>${escHtml(s)}</b></span>${db2}</li>`;}let h=`<h4 style="margin-top:0;color:var(--warn);border-bottom:1px dashed var(--warn);padding-bottom:9px;">Контрольні: ${ds.split('-').reverse().join('.')}</h4>`;h+=`<ul style="padding-left:0;list-style:none;margin-bottom:13px;">${lh||'<li class="empty-msg">Жодної</li>'}</ul>`;const[yy,mm,dd2]=ds.split('-');const dn=dayKeys[new Date(yy,mm-1,dd2).getDay()];let ds2=new Set();window.getTodayLessonsFlattened(dn).forEach(item=>{const sn=window.getValidSubjectName(item);if(sn)ds2.add(sn);});let fe=currentUserData.role==='teacher'?[...ds2].filter(s=>window.isSubjectAllowed(cls,s)).sort():[...ds2].sort();let so=fe.map(s=>`<option value="${escHtml(s)}">${escHtml(s)}</option>`).join('');if(!so){so='<option disabled>Немає предметів</option>';}h+=`<div style="display:flex;gap:9px;"><select id="exam-add-subj" style="flex:1;margin:0;">${so}</select><button style="background:var(--ok);color:#fff;width:auto;padding:9px 13px;margin:0;" onclick="addExam('${ds}')">Додати</button></div>`;dd.innerHTML=h;});};
 window.addExam=function(ds){const s=document.getElementById('exam-add-subj').value;if(!s)return;const cls=getActiveClass();const ym=ds.substring(0,7);get(child(ref(db),`exams/${cls}/${ym}/${ds}`)).then(snap=>{let cnt=snap.exists()?Object.keys(snap.val()).length:0;if(cnt>=2)return alert('❌ Ліміт: більше 2 контрольних не можна!');set(ref(db,`exams/${cls}/${ym}/${ds}/${s}`),auth.currentUser.uid).then(()=>{renderExamsCalendar();manageDayExams(ds);});});};
 window.deleteExam=function(ds,s){const cls=getActiveClass();remove(ref(db,`exams/${cls}/${ds.substring(0,7)}/${ds}/${s}`)).then(()=>{renderExamsCalendar();manageDayExams(ds);});};
-// ══════════ REACTIONS & WRAPPED (teacher side) ══════════
-window.showReactionsDetails=async function(){
-  document.getElementById('reactions-modal').style.display='flex';
-  const list=document.getElementById('reactions-list');
-  list.innerHTML='<p class="empty-msg" style="text-align:center;">⏳ Завантаження імен...</p>';
-  if(!window.myDetailedReactions?.length){list.innerHTML='<p class="empty-msg" style="text-align:center;">Немає реакцій.</p>';return;}
-  const cls=getActiveClass();
-  try{await getStudentDir(cls,true);}
-  catch(e){list.innerHTML='<p class="empty-msg" style="color:var(--danger);">Не вдалося завантажити імена учнів.</p>';return;}
-  let h='<ul style="list-style:none;padding:0;margin:0;">';
-  window.myDetailedReactions.forEach(r=>{
-    const [y,m,d]=r.date.split('-');
-    const resolved=stuName(cls,r.student);
-    const name=resolved===r.student&&/^-[A-Za-z0-9_-]{15,}$/.test(r.student)
-      ?'Учня немає у списку класу':resolved;
-    h+=`<li style="background:var(--surface-2);border:1px solid var(--line-soft);border-radius:8px;padding:11px;margin-bottom:9px;">
-      <div style="display:flex;justify-content:space-between;border-bottom:1px dashed var(--line);padding-bottom:4px;margin-bottom:7px;">
-        <span style="font-weight:700;color:var(--brand-ink);">${escHtml(name)}</span><span style="font-size:1.3rem;">${escHtml(r.emoji)}</span>
-      </div>
-      <div style="font-size:.78rem;color:var(--ink-3);margin-bottom:4px;">📅 ${d}.${m}.${y} | 📚 ${escHtml(r.subject)}</div>
-      <div style="font-size:.88rem;color:var(--ink);background:var(--surface-2);padding:7px;border-radius:6px;font-style:italic;">"${escHtml(r.comment)}"</div>
-    </li>`;
-  });
-  list.innerHTML=h+'</ul>';
-};
-window.closeReactionsModal=function(){document.getElementById('reactions-modal').style.display='none';};
+// ══════════ WRAPPED (teacher side) ══════════
 window.showWeeklyWrapped=function(){confetti({particleCount:200,spread:90,origin:{y:0.6},zIndex:2000});document.getElementById('wrapped-modal').style.display='flex';document.body.style.overflow='hidden';const uid=auth.currentUser.uid;const cls=getActiveClass();Promise.all([get(child(ref(db),`homeworks/${cls}`)),get(child(ref(db),`comments/${cls}`)),get(child(ref(db),`stickers/${cls}`)),get(child(ref(db),`authors/${cls}`))]).then(([hs,cs,ss,as])=>{const a=as.exists()?as.val():{};let hw=0;if(hs.exists()){const d=hs.val();for(let dt in d)for(let s in d[dt])if(a[dt]&&a[dt][s]===uid)hw++;}document.getElementById('w-hw').innerText=hw;let com=0;if(cs.exists()){const d=cs.val();for(let dt in d)for(let s in d[dt])if(a[dt]&&a[dt][s]===uid)com+=Object.keys(d[dt][s]).length;}document.getElementById('w-com').innerText=com;let st=0;if(ss.exists()){const d=ss.val();for(let student in d)for(let k in d[student]){const rec=d[student][k];if(rec&&typeof rec==='object'){if(rec.by===uid)st++;continue;}const[dt,s]=k.split('_');if(a[dt]&&a[dt][s]===uid)st++;}}document.getElementById('w-st').innerText=st;});};
 window.closeModal=function(){document.getElementById('wrapped-modal').style.display='none';document.body.style.overflow='';};
 // ══════════ ІСТОРІЯ НАЛІПОК У СТАТИСТИЦІ ══════════

@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════════════════
 // parent-student.js — parent-screen and student-screen: dynamic
 // "today's schedule" widget, payments mockup, attendance submit,
-// grade reactions, and retake-request submission (the review side
+// retake-request submission (the review side
 // lives in teacher.js).
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, remove } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
@@ -1161,10 +1161,6 @@ window.submitAttendance=async function(role='parent'){
     console.warn('Відмітка збережена, push не надіслано:', result.error || 'немає підписаних отримувачів');
 };
 window.updateAttOptionsStudent=function(){ fillAttReasons('s'); };
-window.sendReaction=function(date,subject,emoji){if(!currentUserData)return;
-  set(ref(db,`reactions/${getActiveClass()}/${date}/${subject}/${currentUserData.studentId||currentUserData.studentName}`),emoji)
-    .then(()=>loadParentDashboard())
-    .catch(e=>showToast('Не вдалося надіслати: ' + e.message));};
 // ══════════ STUDENT DASHBOARD ══════════
 export function loadStudentDashboard(){
   renderNewsFeed('s-news-feed');

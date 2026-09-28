@@ -93,8 +93,10 @@ export function catchUpDays(statusByDate, topicsBySk, hwByDate, plans, aliases){
 }
 export function catchUpHtml(days){
   if(!days.length) return '';
-  return `<div class="fw-title">📚 Що пропущено <span class="fw-sub">за ${LOOKBACK_DAYS} днів</span></div>`
-    + days.map((d, i) => `<details class="fw-day"${i === 0 ? ' open' : ''}>
+  // Згорнуто за замовчуванням — і сам блок, і кожен день: це довідка на
+  // випадок потреби, а не те, що має займати пів «Сьогодні».
+  return `<details class="fw-catch-all"><summary><span class="fw-title">📚 Що пропущено</span> <span class="fw-sub">за ${LOOKBACK_DAYS} днів: ${days.length} ${days.length === 1 ? 'день' : days.length < 5 ? 'дні' : 'днів'}</span></summary>`
+    + days.map(d => `<details class="fw-day">
       <summary><b>${escHtml(dayTitle(d.date))}</b> — ${d.allDay ? 'не було весь день' : `пропущено уроки: ${escHtml(d.slots.join(', '))}`}
         <span class="fw-count">${d.items.length ? `${d.items.length} предм.` : ''}</span></summary>
       ${d.items.length ? `<ul class="fw-list">${d.items.map(it => `<li><b>${escHtml(it.subject)}</b>
@@ -103,7 +105,7 @@ export function catchUpHtml(days){
           ${d.allDay ? '' : '<p class="fw-note">Показано всі предмети дня — не лише пропущені уроки.</p>'}`
         : '<p class="fw-note">Учителі ще не внесли теми й ДЗ за цей день.</p>'}
     </details>`).join('')
-    + '<p class="fw-note">Повне ДЗ з файлами — у вкладці «📚 ДЗ».</p>';
+    + '<p class="fw-note">Повне ДЗ з файлами — у вкладці «📚 ДЗ».</p></details>';
 }
 export async function renderCatchUp(boxId){
   const box = document.getElementById(boxId);
