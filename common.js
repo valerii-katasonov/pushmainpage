@@ -2893,7 +2893,8 @@ export function openTabByKey(screenId, want){
   }
   if(want === 'talk'){
     const dir = screenId === 'director-screen' || screenId === 'admin-screen';
-    if(dir || !openTabByKey(screenId, 'day')) return false;
+    // Батьки — вкладка «Школа», учитель — «Сьогодні»
+    if(dir || !openTabByKey(screenId, screenId === 'parent-screen' ? 'school' : 'day')) return false;
     scrollToBox(screenId === 'parent-screen' ? 'p-talk' : 't-talk');
     return true;
   }

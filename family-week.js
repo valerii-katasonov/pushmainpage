@@ -13,15 +13,10 @@
 // Той самий підсумок у пʼятницю приходить push-ем (netlify/functions/
 // week-digest.js) і відкриває кабінет саме тут.
 //
-// НАВАНТАЖЕННЯ ДЗ. Під підсумком батько одним дотиком каже, як було з ДЗ
-// цього тижня: мало / нормально / забагато (hw_load/{клас}/{понеділок}/{uid}).
-// Учителям не відкрито; директор у «🔍 Контролі» бачить лише зведення по
-// класу і лише від трьох відповідей.
-//
-// Окрім цього голосу нічого не пишемо — лише читаємо те, що родині й так відкрито.
+// Нічого не пишемо в базу — лише читаємо те, що родині й так відкрито.
 // ═══════════════════════════════════════════════════════════════
-import { ref, get, set, child, query, orderByKey, startAt, endAt } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, auth, showToast, currentUserData, escHtml, localDateString, mondayOf, dayKeys, dayNamesUA, displayGrade,
+import { ref, get, child, query, orderByKey, startAt, endAt } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+import { db, currentUserData, escHtml, localDateString, mondayOf, dayKeys, dayNamesUA, displayGrade,
          getStudentDir, resolveStudentKey, planKeyWith, subjKey } from './common.js';
 import { topicNames } from './parent-student.js';
 
@@ -150,15 +145,7 @@ export function upcomingExams(examsByMonth, from, to){
       if(d >= from && d <= to) for(const s of Object.keys(subs || {})) out.push({ date: d, subject: s });
   return out.sort((a, b) => a.date.localeCompare(b.date));
 }
-export const HW_LOAD = { 1: '😌 Мало', 2: '👍 Нормально', 3: '😩 Забагато' };
-// load: null — не голосує (учень, персонал); {v} — голос батька або v: 0
-export function hwLoadHtml(load){
-  if(!load) return '';
-  return `<div class="fw-load"><span>Як вам навантаження ДЗ цього тижня?</span>`
-    + Object.entries(HW_LOAD).map(([v, t]) => `<button type="button" class="fw-lv${Number(v) === load.v ? ' on' : ''}" aria-pressed="${Number(v) === load.v}" onclick="fwHwLoad(${v})">${t}</button>`).join('')
-    + `<span class="fw-sub">Учителі відповіді не бачать; директор — лише загальну цифру по класу.</span></div>`;
-}
-export function digestHtml({ grades, status, exams, cls, load = null }){
+export function digestHtml({ grades, status, exams, cls }){
   const subj = Object.keys(grades).sort((a, b) => a.localeCompare(b, 'uk'));
   const n = subj.reduce((k, s) => k + grades[s].length, 0);
   const abs = Object.values(status).filter(s => s.absent).length, late = Object.values(status).filter(s => s.late).length;
@@ -167,20 +154,8 @@ export function digestHtml({ grades, status, exams, cls, load = null }){
   return `<div class="fw-title">📊 Тиждень коротко</div>
     <div class="fw-stats"><span>📝 Оцінок: <b>${n}</b></span><span>🚨 Днів із пропусками: <b>${abs}</b></span><span>⏰ Запізнень: <b>${late}</b></span><span>📅 Контрольних попереду: <b>${exams.length}</b></span></div>
     ${n ? `<ul class="fw-list">${subj.map(s => `<li><b>${escHtml(s)}</b>: ${grades[s].map(g => `<span class="fw-grade" title="${escHtml(wd(g.date))}">${escHtml(displayGrade(g.v, cls))}</span>`).join(' ')}</li>`).join('')}</ul>` : '<p class="fw-note">Цього тижня оцінок ще немає.</p>'}
-    ${exams.length ? `<p class="fw-exams"><b>Наступного тижня:</b> ${exams.map(e => `${escHtml(e.subject)} (${escHtml(wd(e.date))})`).join(', ')}</p>` : ''}
-    <div id="fw-load-box">${hwLoadHtml(load)}</div>`;
+    ${exams.length ? `<p class="fw-exams"><b>Наступного тижня:</b> ${exams.map(e => `${escHtml(e.subject)} (${escHtml(wd(e.date))})`).join(', ')}</p>` : ''}`;
 }
-const FW = { load: null };
-window.fwHwLoad = async function(v){
-  const L = FW.load;
-  if(!L || !HW_LOAD[v]) return;
-  try{ await set(ref(db, `hw_load/${L.cls}/${L.monday}/${L.uid}`), { v: Number(v), ts: Date.now() }); }
-  catch(e){ showToast('⚠️ Не вдалося зберегти: ' + e.message); return; }
-  L.v = Number(v);
-  const box = document.getElementById('fw-load-box');
-  if(box) box.innerHTML = hwLoadHtml(L);
-  showToast('Дякуємо! Відповідь можна змінити до кінця тижня');
-};
 export async function renderWeekDigest(boxId){
   const box = document.getElementById(boxId);
   if(!box) return;
@@ -190,18 +165,14 @@ export async function renderWeekDigest(boxId){
     const monday = mondayOf(localDateString), friday = addDays(monday, 4);
     const nextMon = addDays(monday, 7), nextFri = addDays(monday, 11);
     const months = [...new Set([monday.slice(0, 7), friday.slice(0, 7)])], exMonths = [...new Set([nextMon.slice(0, 7), nextFri.slice(0, 7)])];
-    const uid = auth.currentUser && auth.currentUser.uid;
-    const voter = currentUserData && currentUserData.role === 'parent' && uid;
-    const [mirrors, status, exams, vote] = await Promise.all([
+    const [mirrors, status, exams] = await Promise.all([
       Promise.all(months.map(m => val(`student_grades/${me.cls}/${me.key}/${m}`).catch(() => null))),
       attendanceFor(me.cls, me.key, me.name, schoolDaysBetween(monday, localDateString < friday ? localDateString : friday)),
-      Promise.all(exMonths.map(m => val(`exams/${me.cls}/${m}`).catch(() => null))),
-      voter ? val(`hw_load/${me.cls}/${monday}/${uid}`).catch(() => null) : null
+      Promise.all(exMonths.map(m => val(`exams/${me.cls}/${m}`).catch(() => null)))
     ]);
-    FW.load = voter ? { cls: me.cls, monday, uid, v: Number(vote && vote.v) || 0 } : null;
     const mirror = {}; months.forEach((m, i) => { if(mirrors[i]) mirror[m] = mirrors[i]; });
     const exMap = {}; exMonths.forEach((m, i) => { if(exams[i]) exMap[m] = exams[i]; });
-    box.innerHTML = digestHtml({ grades: weekGrades(mirror, monday, friday), status, exams: upcomingExams(exMap, nextMon, nextFri), cls: me.cls, load: FW.load });
+    box.innerHTML = digestHtml({ grades: weekGrades(mirror, monday, friday), status, exams: upcomingExams(exMap, nextMon, nextFri), cls: me.cls });
     box.style.display = 'block';
   }catch(e){
     console.warn('[Push School] тиждень коротко:', e.message);
