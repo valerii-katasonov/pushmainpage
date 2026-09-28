@@ -219,7 +219,10 @@ export async function childAttendanceRange(cls, keys, dates, strict=false){
     const got = await Promise.all(part.flatMap(d => ks.map(k =>
       get(child(ref(db), `attendance/${cls}/${d}/${k}`))
         .then(s => s.exists() ? [d, k, s.val()] : null)
-        .catch(e => { if(strict) throw e; return null; }))));
+        // Строго — лише для основного ключа. Запасний (імʼя для старих
+        // записів) правила можуть і не пустити, якщо написання в списку
+        // класу розійшлося з профілем: це не привід валити всю статистику.
+        .catch(e => { if(strict && k === ks[0]) throw e; return null; }))));
     for(const g of got) if(g) (out[g[0]] ||= {})[g[1]] = g[2];
   }
   return out;
