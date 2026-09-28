@@ -16,6 +16,11 @@
 // «УЖЕ ВІДБУВСЯ»: минула дата, або сьогодні й час закінчення минув. Урок
 // без часу в розкладі сьогодні не рахуємо — невідомо, чи він уже був.
 //
+// ГОЛОС БАТЬКІВ (лише зведення, без імен і текстів):
+//   • запити «💬 Хочу обговорити» без відповіді понад 3 дні — кому з учителів
+//     (talk_requests: предмет, дата, статус; текст директорові не відкрито)
+//   • навантаження ДЗ очима батьків по класу (hw_load), від 3 відповідей
+//
 // ВИНЯТКИ (control_settings): класи й предмети без ДЗ (1 клас, фізкультура
 // тощо) — там відсутність ДЗ не порушення. Налаштовує директор.
 // ═══════════════════════════════════════════════════════════════
@@ -75,6 +80,58 @@ export function lastGradeDates(grades){
           if(!out[k] || out[k] < d) out[k] = d;
         }
   return out;
+}
+
+// ── ГОЛОС БАТЬКІВ ──
+export const TALK_LATE_DAYS = 3, HW_LOAD_MIN = 3;
+// Учителі предмета в класі за матрицею доступу; немає — класний керівник
+// (так само вибирає адресатів сервер у notify.js)
+export function subjectTeacherKeys(access, heads, cls, subject){
+  const want = norm(subject), out = [];
+  for(const [key, row] of Object.entries(access || {})){
+    const raw = row && row[cls];
+    const list = (Array.isArray(raw) ? raw : Object.values(raw || {})).filter(v => typeof v === 'string');
+    if(list.some(v => v.trim() === 'Всі предмети' || norm(v) === want)) out.push(key);
+  }
+  if(!out.length && heads?.[cls]?.teacherEmail) out.push(emailKey(heads[cls].teacherEmail));
+  return [...new Set(out)];
+}
+// talk_requests/{клас}/{батько}/{id} → [{key, items:[{cls, subject, days}]}]
+export function talkOverdue(talk, access, heads, now, lateDays = TALK_LATE_DAYS){
+  const by = new Map();
+  for(const [cls, parents] of Object.entries(talk || {}))
+    for(const reqs of Object.values(parents || {}))
+      for(const r of Object.values(reqs || {})){
+        if(!r || r.status !== 'open') continue;
+        const days = Math.floor((now - (Number(r.ts) || 0)) / 864e5);
+        if(days < lateDays) continue;
+        const keys = subjectTeacherKeys(access, heads, cls, r.subject);
+        for(const k of keys.length ? keys : ['—']){
+          const cur = by.get(k) || { key: k, items: [] };
+          cur.items.push({ cls, subject: String(r.subject || ''), days });
+          by.set(k, cur);
+        }
+      }
+  return [...by.values()].map(x => ({ ...x, items: x.items.sort((a, b) => b.days - a.days) }))
+    .sort((a, b) => b.items.length - a.items.length || b.items[0].days - a.items[0].days);
+}
+// hw_load/{клас}/{понеділок}/{uid} = {v} → по класах за тижні періоду
+export function hwLoadSummary(hwLoad, fromWeek, toDate, minN = HW_LOAD_MIN){
+  const out = [];
+  for(const [cls, weeks] of Object.entries(hwLoad || {})){
+    const c = { cls, n: 0, few: 0, ok: 0, much: 0 };
+    for(const [week, votes] of Object.entries(weeks || {})){
+      if(week < fromWeek || week > toDate) continue;
+      for(const x of Object.values(votes || {})){
+        const v = Number(x && x.v);
+        if(v === 1) c.few++; else if(v === 2) c.ok++; else if(v === 3) c.much++; else continue;
+        c.n++;
+      }
+    }
+    if(c.n) out.push({ ...c, enough: c.n >= minN });
+  }
+  const share = x => x.enough ? x.much / x.n : -1;
+  return out.sort((a, b) => share(b) - share(a) || getClassNum(a.cls) - getClassNum(b.cls));
 }
 
 // ── АНАЛІЗ ── (чиста функція: усе потрібне приходить аргументом)
@@ -155,9 +212,11 @@ export async function loadControl(kind){
   // Тижні, що перекривають період (buildWorkload рахує потижнево)
   const mondays = []; for(let m = mondayOf(from); m <= to; m = addDays(m, 7)) mondays.push(m);
   const gFrom = addDays(today, -60), months = [...new Set([gFrom.slice(0, 7), addDays(today, -30).slice(0, 7), today.slice(0, 7)])];
-  const [schedules, catalogs, users, access, choices, subs, topics, calendar, settings, ...perClass] = await Promise.all([
+  const [schedules, catalogs, users, access, choices, subs, topics, calendar, settings, talk, heads, hwLoad, ...perClass] = await Promise.all([
     val('schedules'), val('subjects_catalog'), val('users'), val('teacher_access'), val('schedule_alt'),
     range('substitutions', mondays[0], addDays(mondays.at(-1), 6)), val('lesson_topics'), val(`academic_year/${ACTIVE_YEAR}`), val('control_settings'),
+    // Голос батьків — необовʼязковий: поки правила не опубліковано, решта працює
+    val('talk_requests').catch(() => null), val('class_teachers').catch(() => null), val('hw_load').catch(() => null),
     ...CLASSES.map(c => range(`homeworks/${c}`, from, to)),
     ...CLASSES.flatMap(c => months.map(m => val(`grades/${c}/${m}`)))
   ]);
@@ -175,7 +234,13 @@ export async function loadControl(kind){
     }
   }
   const out = analyzeControl({ teachers: [...byEmail.values()], topics, homeworks, grades, settings, from, to, today, nowMin });
-  return { ...out, kind, from, to, today, settings: { ...CONTROL_DEFAULTS, ...(settings || {}) } };
+  // Імена для запитів: з навантаження, інакше з users
+  const names = {};
+  for(const t of byEmail.values()) names[emailKey(t.email)] = t.name;
+  for(const u of Object.values(users || {})) if(u && u.email && !names[emailKey(u.email)]) names[emailKey(u.email)] = u.name || u.displayName || u.email;
+  const talkLate = talkOverdue(talk, access, heads, Date.now()).map(x => ({ ...x, name: names[x.key] || x.key.replace(/_/g, '.') }));
+  return { ...out, kind, from, to, today, settings: { ...CONTROL_DEFAULTS, ...(settings || {}) },
+           talkLate, hwLoad: hwLoadSummary(hwLoad, mondayOf(from), to) };
 }
 
 // ── ПОКАЗ ──
@@ -209,9 +274,20 @@ export function controlHtml(r){
           ${x.gaps.length || x.noGrades.length ? `<button type="button" class="ct-remind" onclick="ctRemind('${escJs(x.email)}')">🔔 Нагадати</button>` : ''}
         </td></tr>`).join('')
     + `</tbody></table></div><p class="cm-hint">Відсоток — частка уроків, що вже відбулися, де відмічено тему / задано ДЗ. Для ДЗ не рахуються класи й предмети-винятки (налаштування нижче). Спарені уроки — один день.</p></div>`;
+  if(r.talkLate) h += `<div class="ct-block"><h4>💬 Запити батьків без відповіді понад ${TALK_LATE_DAYS} дні</h4>`
+    + (r.talkLate.length ? `<ul>${r.talkLate.map(x => `<li><b>${escHtml(x.key === '—' ? 'учителя не знайдено в матриці доступу' : x.name)}</b>: ${x.items.length} — `
+        + x.items.map(i => `${escHtml(clsLabel(i.cls))} ${escHtml(i.subject)} (${i.days} дн.)`).join(', ') + '</li>').join('')}</ul>`
+      : '<p class="empty-msg">Усі запити батьків отримали відповідь вчасно.</p>')
+    + '<p class="cm-hint">Лише кількість, клас і предмет. Текст запитів бачать тільки вчителі класу.</p></div>';
   h += `<div class="ct-block"><h4>📚 Перевантаження ДЗ (від ${r.settings.maxHwPerDay} предметів на день)</h4>`
     + (r.overload.length ? `<ul>${r.overload.map(o => `<li>${escHtml(clsLabel(o.cls))} · ${escHtml(human(o.date))}: <b>${o.n}</b> — ${escHtml(o.subjects.join(', '))}</li>`).join('')}</ul>`
-      : '<p class="empty-msg">Перевантажених днів немає.</p>') + '</div>';
+      : '<p class="empty-msg">Перевантажених днів немає.</p>');
+  if(r.hwLoad) h += `<p><b>Очима батьків</b> (відповіді в «Тиждень коротко»):</p>`
+    + (r.hwLoad.length ? `<ul>${r.hwLoad.map(x => x.enough
+        ? `<li>${escHtml(clsLabel(x.cls))}: відповідей <b>${x.n}</b> — забагато <b${x.much * 100 / x.n >= 40 ? ' class="ct-pct bad"' : ''}>${Math.round(x.much * 100 / x.n)}%</b>, нормально ${Math.round(x.ok * 100 / x.n)}%, мало ${Math.round(x.few * 100 / x.n)}%</li>`
+        : `<li>${escHtml(clsLabel(x.cls))}: замало відповідей (${x.n}) — показуємо від ${HW_LOAD_MIN}</li>`).join('')}</ul>`
+      : '<p class="empty-msg">За цей період батьки ще не відповідали.</p>');
+  h += '</div>';
   return h;
 }
 

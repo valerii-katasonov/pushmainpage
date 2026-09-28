@@ -856,6 +856,9 @@ export function loadParentDashboard(){
   loadTextbooksForParent();
   renderBirthdays('p-birthdays',cls,currentUserData.studentName);
   if(window.renderMonthEvents) window.renderMonthEvents('p-month-events',cls);
+  if(window.renderWeekDigest) window.renderWeekDigest('p-week-digest');
+  if(window.renderCatchUp) window.renderCatchUp('p-catchup');
+  if(window.renderTalkParent) window.renderTalkParent('p-talk');
   renderFinalGrades('p-final-grades',cls,currentUserData.studentName);
   // Оцінки за тиждень і за предметом: одночасні виклики ділять один
   // запит, а при наступному відкритті вкладки перечитують зміни з бази.
@@ -1223,6 +1226,8 @@ export function loadStudentDashboard(){
   if(window.renderFreshNews) window.renderFreshNews('s-fresh-news');
   renderBirthdays('s-birthdays',cls,currentUserData.studentName);
   if(window.renderMonthEvents) window.renderMonthEvents('s-month-events',cls);
+  if(window.renderWeekDigest) window.renderWeekDigest('s-week-digest');
+  if(window.renderCatchUp) window.renderCatchUp('s-catchup');
   renderFinalGrades('s-final-grades',cls,currentUserData.studentName);
   if(window.renderGradesWeek) window.renderGradesWeek();
   if(window.renderGradesSubject) window.renderGradesSubject();

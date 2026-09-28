@@ -1750,6 +1750,8 @@ export function loadTeacherDashboard(){
   }
   renderBirthdays('t-birthdays',cls,'');
   if(window.renderMonthEvents) window.renderMonthEvents('t-month-events',cls);
+  // Запити батьків «💬 Хочу обговорити» — з усіх класів учителя, не лише вибраного
+  if(window.renderTalkTeacher) window.renderTalkTeacher('t-talk');
   // Зведення по басейну й автобусу — справа класного керівника: він веде
   // клас. Предметникові воно ні до чого, та й правила бази його не пустять.
   const actCard=document.getElementById('t-activities-card');

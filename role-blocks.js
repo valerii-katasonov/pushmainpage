@@ -196,7 +196,10 @@ async function workload(body, date){
       get(query(ref(db, 'substitutions'), orderByKey(), startAt(dates[0]), endAt(dates[4]))), val(`academic_year/${ACTIVE_YEAR}`)]);
     const users = {};
     for(const [se, d] of Object.entries(dir || {}))
-      if(d && d.name) users[se] = { email: se.replace(/_/g, '.'), firstName: d.name, role: d.role || 'teacher', roles: [d.role || 'teacher'] };
+      // У довіднику одна роль — перша службова. Учитель, який ще й директор,
+      // значився б «директором» і випав би з навантаження. Тому вчителем
+      // вважаємо кожного, у кого в картці є класи з предметами.
+      if(d && d.name){ const r = d.classes && Object.keys(d.classes).length ? 'teacher' : (d.role || ''); users[se] = { email: se.replace(/_/g, '.'), firstName: d.name, role: r, roles: [r] }; }
     const res = buildWorkload({ schedules: schedules || {}, catalogs: catalogs || {}, users, access: access || {}, choices: choices || {},
       subs: subsSnap.exists() ? subsSnap.val() : {}, topics: {}, calendar: calendar || {} }, monday, localDateString, ACTIVE_YEAR);
     const dur = m => `${Math.floor(m / 60)} год ${m % 60} хв`;

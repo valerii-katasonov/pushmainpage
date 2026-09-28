@@ -198,6 +198,32 @@ export async function getDateRange(path, from, to, strict=false){
     console.warn('getDateRange', path, e.message); return {};
   }
 }
+// ВІДВІДУВАНІСТЬ ОДНІЄЇ ДИТИНИ за дні — у формі діапазону {дата: {ключ: {...}}}.
+// Родині клас цілком не видно (правила: лише гілка своєї дитини), тож
+// читаємо поденно саму гілку — за ключем і, для старих записів, за імʼям.
+// Персонал читає одним запитом діапазону, як і раніше.
+export async function childAttendanceRange(cls, keys, dates, strict=false){
+  const ks = [...new Set((keys || []).filter(Boolean))];
+  const role = currentUserData && currentUserData.role;
+  if(!dates.length || !ks.length) return {};
+  if(role !== 'parent' && role !== 'student'){
+    const all = await getDateRange(`attendance/${cls}`, dates[0], dates[dates.length - 1], strict);
+    const out = {};
+    for(const d of dates){ const day = all[d]; if(!day) continue; for(const k of ks) if(day[k]){ (out[d] ||= {})[k] = day[k]; } }
+    return out;
+  }
+  const out = {};
+  // Пачками: сотня дрібних запитів за раз — нормально, тисяча — ні
+  for(let i = 0; i < dates.length; i += 40){
+    const part = dates.slice(i, i + 40);
+    const got = await Promise.all(part.flatMap(d => ks.map(k =>
+      get(child(ref(db), `attendance/${cls}/${d}/${k}`))
+        .then(s => s.exists() ? [d, k, s.val()] : null)
+        .catch(e => { if(strict) throw e; return null; }))));
+    for(const g of got) if(g) (out[g[0]] ||= {})[g[1]] = g[2];
+  }
+  return out;
+}
 // Той самий діапазон, але одразу по всіх класах: {class_1:{дата:{...}}, ...}
 export async function getSchoolRange(node, from, to, strict=false){
   const classes = [];
@@ -1826,7 +1852,9 @@ function linkifyUrls(text) {
   if (!text) return '';
   const urlRegex = /(https?:\/\/[^\s<]+)/g;
   return text.replace(urlRegex, url => {
-    return `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color:var(--brand-deep);text-decoration:underline;">${url}</a>`;
+    // Довге посилання без пробілів не переноситься саме й розпирає картку
+    // ДЗ за край екрана телефона — дозволяємо рвати його будь-де.
+    return `<a href="${url}" class="hw-link" target="_blank" rel="noopener noreferrer" style="color:var(--brand-deep);text-decoration:underline;overflow-wrap:anywhere;word-break:break-all;">${url}</a>`;
   });
 }
 
@@ -2493,11 +2521,16 @@ function bootMaybeGo(){
   bootTimer = setTimeout(bootSplashGo, left);
 }
 
+// Дотик до заставки (слухає вбудований скрипт у cabinet.html, щоб не
+// пропустити ранній дотик): кабінет готовий — зникаємо одразу; ще ні —
+// зникнемо, щойно буде готовий (window.__bootSkip).
+window.__bootSkipNow = function(){ if(bootAppReady) bootSplashGo(); };
+
 export function hideBootSplash(){
   if(bootSplashDone) return;
   bootAppReady = true;
   const el = document.getElementById('boot-splash');
-  if(!el) return bootSplashGo();
+  if(!el || window.__bootSkip) return bootSplashGo();
   const vid = document.getElementById('bs-video');
   // Сховане відео — це режим «зменшити рух»: чекати на його кінець
   // немає сенсу, воно й не починалося.
@@ -2787,7 +2820,8 @@ export function tabFromUrl(search){
   // openFromNotification просто нічого не зробить.
   // att — «Сьогодні» і прокрутка до відвідуваності (сповіщення вчителю
   // про відсутність чи запізнення учня)
-  return ['att','day','hw','meals','games','grades','school','profile','chat',
+  // talk — «Сьогодні» і прокрутка до запитів «💬 Хочу обговорити»
+  return ['att','talk','day','hw','meals','games','grades','school','profile','chat',
           'lesson','class','news',
           'ogl','uchni','study','rozklad','staff','stat','nalash'].includes(v) ? v : null;
 }
@@ -2834,6 +2868,15 @@ function scrollToAttendance(screenId, attempt = 0){
   setTimeout(() => card.classList.remove('flash-target'), 2400);
 }
 window.scrollToAttendance = scrollToAttendance;
+// Прокрутити до блоку, який малюється асинхронно (запити батьків)
+function scrollToBox(id, attempt = 0){
+  const el = document.getElementById(id);
+  if((!el || el.style.display === 'none' || !el.innerHTML) && attempt < 15) return setTimeout(() => scrollToBox(id, attempt + 1), 250);
+  if(!el) return;
+  try{ el.scrollIntoView({ behavior:'smooth', block:'start' }); }catch(e){ el.scrollIntoView(); }
+  el.classList.add('flash-target');
+  setTimeout(() => el.classList.remove('flash-target'), 2400);
+}
 
 export function openTabByKey(screenId, want){
   if(!want) return false;
@@ -2843,6 +2886,12 @@ export function openTabByKey(screenId, want){
     const dir = screenId === 'director-screen' || screenId === 'admin-screen';
     if(!dir && !openTabByKey(screenId, 'day')) return false;
     scrollToAttendance(screenId);
+    return true;
+  }
+  if(want === 'talk'){
+    const dir = screenId === 'director-screen' || screenId === 'admin-screen';
+    if(dir || !openTabByKey(screenId, 'day')) return false;
+    scrollToBox(screenId === 'parent-screen' ? 'p-talk' : 't-talk');
     return true;
   }
   if(want === 'chat'){
@@ -4318,14 +4367,26 @@ window.exportChildData=async function(cls,studentName){
       get(child(ref(db),`student_cards/${cls}/${sid}`)),
       get(child(ref(db),`grades/${cls}`)),
       get(child(ref(db),`grade_types/${cls}`)),
-      get(child(ref(db),`attendance/${cls}`)),
+      // Відвідуваність — лише гілка цієї дитини: клас цілком родині закритий.
+      // Навчальний рік: з 1 вересня до сьогодні, лише робочі дні.
+      (async()=>{
+        const y0=Number(String(ACADEMIC_YEAR_ID_LOCAL).slice(0,4))||new Date().getFullYear();
+        const ds=[];for(let d=new Date(y0,8,1),e=new Date();d<=e;d.setDate(d.getDate()+1)){const w=d.getDay();if(w>=1&&w<=5)ds.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`);}
+        const v=await childAttendanceRange(cls,[sid,studentName],ds);
+        // Під ключ sid — щоб pick() нижче знайшов записи і старого формату (за імʼям)
+        const byDate={};for(const d in v)byDate[d]={[sid]:Object.assign({},...Object.values(v[d]))};
+        return {exists:()=>Object.keys(byDate).length>0,val:()=>byDate};
+      })(),
       get(child(ref(db),`behavior_grades/${cls}`)),
       get(child(ref(db),`stickers/${cls}/${sid}`)),
       get(child(ref(db),`comments/${cls}`)),
       get(child(ref(db),`semester_grades/${cls}`)),
       get(child(ref(db),`retake_requests/${cls}`)),
-      get(child(ref(db),'parent_links')),
-      get(child(ref(db),'student_links'))
+      // Реєстри батьків читає лише персонал. Батькові вони закриті — і через
+      // це вивантаження «моїх даних» з кабінету батька досі падало цілком.
+      // Без них просто не буде розділу «батьки».
+      get(child(ref(db),'parent_links')).catch(()=>({exists:()=>false,val:()=>null})),
+      get(child(ref(db),'student_links')).catch(()=>({exists:()=>false,val:()=>null}))
     ]);
     // Дані інших дітей у вивантаження потрапити не повинні — усюди
     // фільтруємо строго по імені цієї дитини

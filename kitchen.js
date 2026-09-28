@@ -39,7 +39,7 @@
 //   через stuName(): воно може змінитися, ключ — ні.
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, update, remove, onValue } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, auth, currentUserData, showToast, escHtml, escJs, localDateString, logAction, notifyEvent, pushConfigured, renderPushWarning, getSchoolRange, sidOf, getStudentDir, resolveStudentKey, getDateRange, stuName, mondayOf } from './common.js';
+import { childAttendanceRange, db, auth, currentUserData, showToast, escHtml, escJs, localDateString, logAction, notifyEvent, pushConfigured, renderPushWarning, getSchoolRange, sidOf, getStudentDir, resolveStudentKey, getDateRange, stuName, mondayOf } from './common.js';
 import {renderMealOrphanList} from './meal-orphans.js';
 
 export const MEAL_CUTOFF_HOUR = 9;   // до 09:00 можна відмовитися від сьогоднішнього
@@ -2990,10 +2990,7 @@ window.saveMealSettings = async function(){
 // «Рахуємо...» лишався назавжди. Тут читаємо рівно те, що дозволено:
 // свій клас і свою дитину.
 export async function computeMyMealStats(from, to, cls, sid, withCost=false){
-  const [nameSnap, attRange] = await Promise.all([
-    get(child(ref(db), `students_list/${cls}/${sid}`)),
-    getDateRange(`attendance/${cls}`, from, to, true)
-  ]);
+  const nameSnap = await get(child(ref(db), `students_list/${cls}/${sid}`));
   const name=nameSnap.exists()?String(nameSnap.val()||''):String(currentUserData?.studentName||'');
   const [planSnap, altPlanSnap] = await Promise.all([
     get(child(ref(db), `meal_plan/${cls}/${sid}`)),
@@ -3009,6 +3006,9 @@ export async function computeMyMealStats(from, to, cls, sid, withCost=false){
     if(wd >= 1 && wd <= 5) dates.push(iso(d));   // вихідні не рахуємо
     d.setDate(d.getDate() + 1);
   }
+
+  // Відвідуваність — лише гілка цієї дитини (клас цілком родині закритий)
+  const attRange = await childAttendanceRange(cls, [sid, name], dates, true);
 
   // Дні, коли школи немає: канікули та свята. Раніше статистика їх не
   // знала й рахувала обіди за постійним планом навіть тоді, коли кухня

@@ -1178,6 +1178,8 @@
     .hw-file-row{display:flex;align-items:center;gap:9px;margin-top:4px;flex-wrap:wrap;}
     .hw-file-btn{display:inline-block;cursor:pointer;margin:0;padding:8px 14px;background:var(--surface-2);color:var(--brand-deep);border:1px solid var(--brand-line);border-radius:9px;font-size:.86rem;font-weight:700;white-space:nowrap;user-select:none;}
     .hw-file-btn:hover{background:var(--brand-soft);}
+    /* Посилання в тексті ДЗ (linkifyUrls) — переносимо, щоб не вилазило за картку */
+    a.hw-link{overflow-wrap:anywhere;word-break:break-all;}
     .hw-file-name{font-size:.82rem;color:var(--ink-3);overflow-wrap:anywhere;}
     .hw-file-hint{margin:5px 0 0 0;font-size:.76rem;color:var(--ink-3);line-height:1.4;}
     .hw-doc{display:inline-flex;align-items:center;gap:5px;padding:7px 11px;background:var(--surface-2);border:1px solid var(--brand-line);border-radius:8px;font-size:.8rem;color:var(--brand-deep);text-decoration:none;max-width:220px;}
@@ -2760,6 +2762,43 @@
 .ct-detail td{background:var(--surface-2);font-size:.8rem;}
 .ct-table{min-width:460px;}
 
+.fw-box{background:var(--surface);border:1px solid var(--brand-line);border-radius:10px;padding:9px 11px;margin-bottom:10px;}
+.fw-catch{border-color:var(--warn-line);background:var(--warn-soft);}
+.fw-title{font-size:.85rem;font-weight:800;color:var(--brand-ink);margin-bottom:6px;}
+.fw-catch .fw-title{color:var(--warn);}
+.fw-sub{font-weight:400;color:var(--ink-3);font-size:.75rem;}
+.fw-stats{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:.8rem;margin-bottom:6px;}
+.fw-list{margin:4px 0;padding-left:18px;font-size:.82rem;line-height:1.45;}
+.fw-list li{margin-bottom:4px;overflow-wrap:anywhere;}
+.fw-grade{display:inline-block;min-width:22px;text-align:center;padding:0 5px;border-radius:6px;background:var(--brand-soft);color:var(--brand-deep);font-weight:700;}
+.fw-exams{font-size:.8rem;margin:6px 0 0;}
+.fw-note{font-size:.75rem;color:var(--ink-3);margin:4px 0;}
+.fw-day{border-top:1px dashed var(--warn-line);padding:5px 0;}
+.fw-day summary{cursor:pointer;font-size:.82rem;}
+.fw-count{color:var(--ink-3);font-size:.75rem;}
+/* «💬 Хочу обговорити» */
+.tk-list{list-style:none;margin:4px 0;padding:0;}
+.tk-item{border-top:1px dashed var(--brand-line);padding:6px 0;font-size:.82rem;line-height:1.4;overflow-wrap:anywhere;}
+.tk-reason{color:var(--ink-2);}
+.tk-reply{margin-top:3px;padding:4px 7px;border-radius:7px;background:var(--brand-soft);color:var(--brand-deep);}
+.tk-st{font-size:.72rem;color:var(--ink-3);}
+.tk-st.ok{color:var(--ok);font-weight:700;}
+.tk-st.wait{color:var(--warn);font-weight:700;}
+.tk-badge{display:inline-block;min-width:18px;padding:0 6px;border-radius:9px;background:var(--danger);color:var(--surface);font-size:.72rem;text-align:center;}
+.tk-new,.tk-send{border:1px solid var(--brand-line);background:var(--brand-soft);color:var(--brand-deep);border-radius:8px;padding:5px 10px;font-weight:700;font-size:.8rem;cursor:pointer;margin-top:4px;}
+.tk-link{border:0;background:none;color:var(--ink-3);text-decoration:underline;font-size:.75rem;cursor:pointer;padding:2px 0;}
+.tk-form{margin-top:8px;display:flex;flex-direction:column;gap:6px;font-size:.8rem;}
+.tk-form select,.tk-form textarea,.tk-answer{width:100%;box-sizing:border-box;margin-top:2px;font:inherit;}
+.tk-reasons{display:flex;flex-wrap:wrap;gap:4px 12px;}
+.tk-form label{margin-top:0;font-size:.8rem;}
+.tk-reasons label{display:inline-flex;align-items:center;gap:4px;font-weight:400;}
+.tk-actions{display:flex;gap:10px;align-items:center;}
+.tk-done summary{cursor:pointer;font-size:.78rem;color:var(--ink-3);}
+/* Навантаження ДЗ у «Тиждень коротко» */
+.fw-load{margin-top:8px;font-size:.8rem;display:flex;flex-wrap:wrap;gap:5px;align-items:center;}
+.fw-lv{border:1px solid var(--brand-line);background:var(--surface);border-radius:14px;padding:3px 9px;font-size:.78rem;cursor:pointer;}
+.fw-lv.on{background:var(--brand-soft);color:var(--brand-deep);font-weight:700;border-color:var(--brand);}
+
 /* Список подій місяця під календарем */
 .cal-list{list-style:none;padding:0;margin:14px 0 0 0;}
 .cal-list .ev{display:flex;gap:10px;align-items:baseline;padding:7px 0;border-top:1px solid var(--line-soft);}
@@ -2936,6 +2975,15 @@
     try{
       var v = document.getElementById('bs-video');
       if(!v) return;
+      // Дотик пропускає заставку. Слухаємо ОДРАЗУ, ще до модулів: людина
+      // тисне в першу ж секунду, коли кабінет ще вантажиться. Такий дотик
+      // запамʼятовуємо — заставка зникне, щойно кабінет буде готовий, без
+      // досиджування ролика (див. hideBootSplash у common.js).
+      var bs = document.getElementById('boot-splash');
+      if(bs) bs.addEventListener('pointerdown', function(){
+        window.__bootSkip = true;
+        if(window.__bootSkipNow) window.__bootSkipNow();
+      });
       if(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches){
         v.removeAttribute('autoplay'); v.pause(); v.hidden = true; return;
       }
@@ -4138,6 +4186,8 @@
 
     <section class="screen-section" data-dtab="day">
       <!-- Дні народження. Найперше на вкладці. Розгорнуто лише найближчий тиждень, решта — під «ще N». -->
+      <!-- Запити батьків «💬 Хочу обговорити» (talk-requests.js). Лише коли є. -->
+      <div id="t-talk" class="fw-box tk-box" style="display:none;"></div>
       <div id="t-birthdays" class="bd-box" style="display:none;"></div>
       <div id="t-month-events" class="ev-box" style="display:none;"></div>
 
@@ -4642,6 +4692,9 @@
       <div id="p-fresh-news" class="fn-box" style="display:none;"></div>
       <div id="p-birthdays" class="bd-box" style="display:none;"></div>
       <div id="p-month-events" class="ev-box" style="display:none;"></div>
+      <div id="p-week-digest" class="fw-box" style="display:none;"></div>
+      <div id="p-catchup" class="fw-box fw-catch" style="display:none;"></div>
+      <div id="p-talk" class="fw-box tk-box" style="display:none;"></div>
       <h3>🕒 Запізнення та відсутність</h3>
       <div id="p-teacher-att-alert" style="display:none;background:var(--warn-soft);border:1px solid var(--warn-line);color:var(--warn);padding:11px 14px;border-radius:12px;margin-bottom:12px;font-size:.85rem;"></div>
       <div class="data-card att-quick" style="border-left-color:var(--danger);background:var(--surface-2);margin-top:0;">
@@ -4892,6 +4945,8 @@
       <!-- Дні народження. Найперше на вкладці, як і в інших кабінетах. -->
       <div id="s-birthdays" class="bd-box" style="display:none;"></div>
       <div id="s-month-events" class="ev-box" style="display:none;"></div>
+      <div id="s-week-digest" class="fw-box" style="display:none;"></div>
+      <div id="s-catchup" class="fw-box fw-catch" style="display:none;"></div>
 
       <h3>🕒 Запізнення та відсутність</h3>
       <!-- PHASE 2: Алерт про невизнану відмітку вчителя -->
@@ -5636,6 +5691,8 @@ document.addEventListener('DOMContentLoaded', function(){
 <script type="module" src="school-events.js"></script>
 <script type="module" src="role-blocks.js"></script>
 <script type="module" src="teacher-control.js"></script>
+<script type="module" src="family-week.js"></script>
+<script type="module" src="talk-requests.js"></script>
 <script type="module" src="chat.js"></script>
 <script type="module" src="breaks.js"></script>
 <script type="module" src="subjects.js"></script>
@@ -5656,7 +5713,7 @@ document.addEventListener('DOMContentLoaded', function(){
 <script type="module" src="staff-meals.js"></script>
 <script type="module" src="payment.js"></script>
 <script type="module" src="materials-audit.js"></script>
-<script type="module" src="workload.js?v=20260915-2"></script>
+<script type="module" src="workload.js"></script>
 <script type="module" src="clubs-catalog.js?v=20260915-3"></script>
 
   <!-- ═══ ЕКРАН ЗГОДИ ПРИ ВХОДІ ═══
