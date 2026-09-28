@@ -84,6 +84,53 @@ async function readDb(token, path) {
   return d;
 }
 
+async function patchDb(token, path, value) {
+  const r = await fetch(`${DB}/${path}.json?access_token=${encodeURIComponent(token)}`, { method: 'PATCH', body: JSON.stringify(value) });
+  if (!r.ok) throw new Error(`не вдалося записати ${path}: ${r.status}`);
+}
+
+// ── «💬 Хочу обговорити» (talk-requests.js) ──────────────────────
+// Клієнт передає лише АДРЕСУ запису (клас, пошта батька, id). Текст
+// сповіщення складаємо тут із самого запису: функція приймає запити без
+// входу, і вільний текст звідти дозволив би писати вчителям що завгодно.
+// Позначка notified / replyNotified робить повторний виклик порожнім.
+const TALK_REASONS = { grades: 'оцінки знизились', topic: 'не розуміє тему', hw: 'забагато чи заскладне ДЗ',
+                       behavior: 'поведінка чи стосунки в класі', other: 'інше' };
+const normSubj = s => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+// Учителі предмета в класі за матрицею доступу; немає — класний керівник
+function subjectTeachers(access, heads, cls, subject) {
+  const want = normSubj(subject), out = [];
+  for (const [key, row] of Object.entries(access || {})) {
+    const raw = row && row[cls];
+    const list = (Array.isArray(raw) ? raw : Object.values(raw || {})).filter(v => typeof v === 'string');
+    if (list.some(v => v.trim() === 'Всі предмети' || normSubj(v) === want)) out.push(key);
+  }
+  if (!out.length && heads && heads[cls] && heads[cls].teacherEmail) out.push(emailKey(heads[cls].teacherEmail));
+  return [...new Set(out)];
+}
+async function talkPlan(token, type, cls, who, id) {
+  const base = `talk_requests/${cls}/${who}/${id}`;
+  const meta = await readDb(token, base);
+  if (!meta || typeof meta !== 'object') return { note: 'Запиту немає' };
+  const done = type === 'talk' ? (meta.notified || meta.status !== 'open') : (meta.replyNotified || meta.status !== 'answered');
+  if (done) return { note: 'Уже надіслано' };
+  const at = Number(type === 'talk' ? meta.ts : meta.replyTs) || 0;
+  if (Date.now() - at > 24 * 3600e3) return { note: 'Запит застарий' };
+  const subject = String(meta.subject || '').slice(0, 80);
+  if (type === 'talk') {
+    // Не більше п'яти сповіщень від однієї родини в класі за добу
+    const mine = await readDb(token, `talk_requests/${cls}/${who}`).catch(() => null) || {};
+    if (Object.values(mine).filter(r => r && r.notified && Date.now() - Number(r.ts || 0) < 24 * 3600e3).length >= 5)
+      return { note: 'Забагато запитів за добу' };
+    await patchDb(token, base, { notified: true });
+    const [text, access, heads] = await Promise.all([
+      readDb(token, `talk_text/${cls}/${who}/${id}`).catch(() => null), readDb(token, 'teacher_access'), readDb(token, 'class_teachers')]);
+    return { emails: subjectTeachers(access, heads, cls, subject), params: { subject, ref: id, reason: TALK_REASONS[text && text.reason] || '' } };
+  }
+  await patchDb(token, base, { replyNotified: true });
+  return { emails: [meta.byEmail].filter(Boolean), params: { subject, ref: id } };
+}
+
 // Старі токени мають одну role/дитину, нові — весь набір. Обидва
 // формати читаються одночасно, тому оновлення не вимагає від усіх
 // користувачів негайно перевмикати сповіщення.
@@ -342,6 +389,13 @@ const EVENTS = {
                                                    p.grades && `класів без оцінок — ${p.grades}`].filter(Boolean).join(', ') || 'записи')
                               + '. Відкрийте портал і допишіть.',
                         tag: 'reminder' }),
+  // Імені дитини немає: сповіщення видно на заблокованому екрані
+  talk:       (p) => ({ title: '💬 Батьки просять звʼязатися',
+                        body: `${p.clsLabel ? p.clsLabel + ' · ' : ''}${p.subject || 'Предмет'}${p.reason ? ': ' + p.reason : ''}`,
+                        tag: 'talk' + (p.ref ? '-' + p.ref : '') }),
+  talk_reply: (p) => ({ title: '💬 Учитель відповів',
+                        body: `${p.subject || 'Предмет'}: відповідь на ваш запит — у кабінеті`,
+                        tag: 'talk-reply' + (p.ref ? '-' + p.ref : '') }),
   menu:       (p) => ({ title: p.value === 'upd' ? '🍽️ Меню змінено' : '🍽️ Меню опубліковано',
                         body: p.value === 'upd' ? `Кухня оновила меню${p.subject ? ' на ' + p.subject : ''}`
                                                 : `Меню${p.subject ? ' на ' + p.subject : ''} вже в кабінеті`,
@@ -375,10 +429,15 @@ exports.handler = async (event) => {
   const isBroadcast = body.type === 'menu' || body.type === 'news' || body.type === 'chat' || body.type === 'reminder';
   // ДЗ — подія класу: потрібен клас, але не потрібне (і не передається) імʼя учня.
   const isClassWide = body.type === 'homework';
+  // Запит батька вчителю / відповідь: лише адреса запису в базі
+  const isTalk = body.type === 'talk' || body.type === 'talk_reply';
+  const talkWho = String(body.who || ''), talkId = String(body.ref || '');
   const cls = String(body.class || '').slice(0, 20);
   const studentName = String(body.studentName || '').slice(0, 120);
   if (isClassWide && !cls) return fail(400, 'Не вказано клас', origin);
-  if (!isBroadcast && !isClassWide && (!cls || !studentName))
+  if (isTalk && !(/^class_\d{1,2}$/.test(cls) && /^[^.#$\[\]\/]{3,200}$/.test(talkWho) && /^[-_A-Za-z0-9]{1,40}$/.test(talkId)))
+    return fail(400, 'Некоректна адреса запиту', origin);
+  if (!isBroadcast && !isClassWide && !isTalk && (!cls || !studentName))
     return fail(400, 'Не вказано клас або учня', origin);
   if ((body.type === 'chat' || body.type === 'reminder') && !(Array.isArray(body.to) && body.to.length))
     return fail(400, 'Не вказано, кому надсилати', origin);
@@ -388,7 +447,7 @@ exports.handler = async (event) => {
   // текст сюди не пускаємо.
   const reportDate = /^\d{4}-\d{2}-\d{2}$/.test(String(body.date || '')) ? String(body.date) : '';
   const lateReason = String(body.reason || '');
-  const msg = build({
+  let msg = build({
     subject: String(body.subject || '').slice(0, 80),
     // Лічильники для нагадування — лише цілі числа 0…999
     topics: /^\d{1,3}$/.test(String(body.topics ?? '')) ? Number(body.topics) : 0,
@@ -423,7 +482,14 @@ exports.handler = async (event) => {
         ok: true, project: sa.project_id, tokens: list.length, eligible: eligible.length
       }) };
     }
-    const targets = body.type === 'attendance_report'
+    let talk = null;
+    if (isTalk) {
+      talk = await talkPlan(token, body.type, cls, talkWho, talkId);
+      if (!talk.emails) return { statusCode: 200, headers: cors(origin), body: JSON.stringify({ sent: 0, note: talk.note }) };
+      msg = build({ ...talk.params, clsLabel: cls.replace('class_', '') + ' клас' });
+    }
+    const targets = isTalk ? await findByEmails(token, talk.emails)
+      : body.type === 'attendance_report'
       ? await findTeacherTargets(token, cls)
       : body.type === 'chat'
       ? await findByEmails(token, Array.isArray(body.to) ? body.to.slice(0, 30) : [])
@@ -459,7 +525,9 @@ exports.handler = async (event) => {
       menu:     'meals',
       homework: 'hw',
       chat:     'chat',     // особливий випадок: відкриваємо саме листування
-      reminder: 'lesson'    // учитель — одразу на вкладку уроку
+      reminder: 'lesson',   // учитель — одразу на вкладку уроку
+      talk:       'talk',   // «Сьогодні» і прокрутка до блоку запитів
+      talk_reply: 'talk'
     };
     const tab = TAB_BY_TYPE[body.type] || 'day';
     // Адреса кабінету — з lib/site.js, а не з першого елемента списку
