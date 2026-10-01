@@ -330,13 +330,69 @@ async function findMealTargets(token) {
   return [...new Set(out)];
 }
 
+// ── Хто цього дня веде уроки в класі ──
+// КОПІЯ lessonTeachersOn з access.js (сервер не імпортує модулі браузера).
+// Змінюєте тут — змініть і там; tests-access.mjs звіряє обидві.
+const NO_NOTIFY_RE = /басейн|плаванн/i;
+const WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const ALL_SUBJECTS = 'Всі предмети';
+function itemNames(item){
+  const alt = item && item.alt ? (Array.isArray(item.alt) ? item.alt : Object.values(item.alt))
+    .map(x => typeof x === 'string' ? x : (x && x.ua) || '').map(s => String(s).trim()).filter(Boolean) : [];
+  if(alt.length > 1) return alt;
+  const raw = item && (typeof item.subject === 'object' ? (item.subject && item.subject.ua) : item.subject);
+  const s = String(raw || '').trim();
+  if(!s) return [];
+  const p = s.split(/\s+\/\s+/).map(x => x.trim()).filter(Boolean);
+  return p.length > 1 ? p : [s];
+}
+function lessonTeachersOn({ lessons, access, heads, subs, cls, weekday, keyOf }){
+  const out = new Set();
+  const head = heads && heads[cls] && heads[cls].teacherEmail;
+  if(head) out.add(keyOf(head));
+  if(!lessons || typeof lessons !== 'object' || !Object.keys(lessons).length) return { keys: out, known: false };
+  const raw = lessons[WEEK[weekday]] || [];
+  const slots = Array.isArray(raw) ? raw.map((s, i) => [String(i), s]) : Object.entries(raw);
+  const nm = s => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  const holders = name => Object.entries(access || {}).filter(([, row]) => {
+    const l = row && row[cls];
+    return (Array.isArray(l) ? l : Object.values(l || {})).some(v => typeof v === 'string' && (v.trim() === ALL_SUBJECTS || nm(v) === nm(name)));
+  }).map(([k]) => k);
+  for(const [idx, slot] of slots){
+    const items = Array.isArray(slot) ? slot : (slot && typeof slot === 'object' && Object.keys(slot).length ? [slot] : []);
+    for(const it of items){
+      if(!it || typeof it !== 'object' || it.type === 'break' || it.type === 'extra') continue;
+      for(const name of itemNames(it)){
+        if(NO_NOTIFY_RE.test(name)) continue;
+        const s = subs || {};
+        const cover = (s[idx] && nm(s[idx].subject) === nm(name)) ? s[idx] : (s.any && nm(s.any.subject) === nm(name)) ? s.any : null;
+        if(cover && cover.subEmail){ out.add(keyOf(cover.subEmail)); continue; }
+        if(it.teacherEmail){ out.add(keyOf(it.teacherEmail)); continue; }
+        holders(name).forEach(k => out.add(k));
+      }
+    }
+  }
+  return { keys: out, known: true };
+}
+
 // Родина попереджає вчителів свого класу, а не інші родини.
 // Клас у токені вчителя не є призначенням: звіряємо реєстр і матрицю.
-async function findTeacherTargets(token, cls) {
-  const [all, access, heads, approved] = await Promise.all([
+//
+// І НЕ ВСІХ УЧИТЕЛІВ КЛАСУ, А ТИХ, ХТО ЦЬОГО ДНЯ ТАМ ВЕДЕ УРОК. Учитель з
+// одним уроком у пʼятницю отримував сповіщення про клас щоранку, а супровід
+// на басейн — узагалі ні до чого. Класний керівник — завжди. Якщо розкладу
+// класу немає, лишається старе правило «усім з доступом» — краще зайве
+// сповіщення, ніж жодного.
+async function findTeacherTargets(token, cls, date) {
+  const day = /^\d{4}-\d{2}-\d{2}$/.test(String(date || '')) ? date : warsawToday();
+  const [all, access, heads, approved, lessons, subs] = await Promise.all([
     readDb(token, 'push_tokens'), readDb(token, 'teacher_access'),
-    readDb(token, 'class_teachers'),readDb(token,'pre_approved_roles')
+    readDb(token, 'class_teachers'),readDb(token,'pre_approved_roles'),
+    readDb(token, `schedules/${cls}/lessons`).catch(() => null),
+    readDb(token, `substitutions/${day}/${cls}`).catch(() => null)
   ]);
+  const [y, m, d] = day.split('-').map(Number);
+  const plan = lessonTeachersOn({ lessons, access, heads, subs, cls, weekday: new Date(Date.UTC(y, m - 1, d)).getUTCDay(), keyOf: emailKey });
   const head = emailKey(heads?.[cls]?.teacherEmail);
   const roles = ['teacher', 'class_teacher', 'art_school_teacher', 'music_teacher', 'master_class_teacher'];
   return [...new Set(Object.values(all || {}).filter(t => {
@@ -344,6 +400,7 @@ async function findTeacherTargets(token, cls) {
     const key = emailKey(t.email);
     const actual=(approved&&typeof approved==='object')?roleValues(approved[key]):tokenRoles(t);
     if(!roles.some(r=>actual.includes(r)))return false;
+    if(plan.known) return plan.keys.has(key);
     const assigned = access?.[key]?.[cls];
     const subjects = Array.isArray(assigned) ? assigned : Object.values(assigned || {});
     return key === head || subjects.some(v => typeof v === 'string' && v.trim());
@@ -401,6 +458,8 @@ const EVENTS = {
                                                 : `Меню${p.subject ? ' на ' + p.subject : ''} вже в кабінеті`,
                         tag: 'menu' })
 };
+
+exports._test = { lessonTeachersOn };
 
 exports.handler = async (event) => {
   const origin = event.headers.origin || event.headers.Origin || '';
@@ -490,7 +549,7 @@ exports.handler = async (event) => {
     }
     const targets = isTalk ? await findByEmails(token, talk.emails)
       : body.type === 'attendance_report'
-      ? await findTeacherTargets(token, cls)
+      ? await findTeacherTargets(token, cls, reportDate)
       : body.type === 'chat'
       ? await findByEmails(token, Array.isArray(body.to) ? body.to.slice(0, 30) : [])
       // Нагадування — лише одному вчителю за раз
