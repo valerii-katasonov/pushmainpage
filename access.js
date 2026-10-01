@@ -25,6 +25,7 @@ export const ACCESS_SRC = {
   schedule: 'розклад',
   catalog:  'каталог предметів',
   club:     'гурток',
+  substitute: 'заміна (тимчасово)',
   unknown:  'до журналу'
 };
 export const ALL_SUBJECTS = 'Всі предмети';
@@ -183,4 +184,148 @@ export function judgeSubject(classes, se, cls, subject){
   if(hits.some(e => e.open)) return { level: 'weak', why: 'у розкладі класу, учителя не вказано' };
   const others = [...new Set(hits.flatMap(e => [...e.owners]))];
   return { level: 'bad', why: 'закріплено за іншим учителем', others };
+}
+
+// ── ХТО ВЕДЕ УРОКИ В КЛАСІ В КОНКРЕТНИЙ ДЕНЬ ─────────────────────
+// Кому з учителів слати «учень відсутній / запізнюється». Раніше —
+// усім, хто має доступ до класу, щодня: учитель з одним уроком у пʼятницю
+// отримував сповіщення про клас щоранку, а супровід на басейн — теж.
+//
+// Тепер: класний керівник — завжди; решта — лише ті, хто цього дня веде
+// в класі урок (за розкладом, з урахуванням замін). Басейн/плавання не
+// рахуємо: це супровід, а не урок, і відсутність там нічого не змінює.
+//
+// ТА САМА ФУНКЦІЯ продубльована в netlify/functions/notify.js (сервер не
+// може імпортувати модуль браузера). Тести звіряють обидві копії на
+// однакових даних — див. tests-access.mjs.
+export const NO_NOTIFY_RE = /басейн|плаванн/i;
+const WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+export function itemNames(item){
+  const alt = item && item.alt ? (Array.isArray(item.alt) ? item.alt : Object.values(item.alt))
+    .map(x => typeof x === 'string' ? x : (x && x.ua) || '').map(s => String(s).trim()).filter(Boolean) : [];
+  if(alt.length > 1) return alt;
+  const raw = item && (typeof item.subject === 'object' ? (item.subject && item.subject.ua) : item.subject);
+  const s = String(raw || '').trim();
+  if(!s) return [];
+  const p = s.split(/\s+\/\s+/).map(x => x.trim()).filter(Boolean);
+  return p.length > 1 ? p : [s];
+}
+//   lessons — schedules/{клас}/lessons; subs — substitutions/{дата}/{клас}
+//   weekday — 0 неділя … 6 субота; keyOf — emailKey
+// → { keys: Set(ключів пошт), known: чи є розклад класу взагалі }
+export function lessonTeachersOn({ lessons, access, heads, subs, cls, weekday, keyOf }){
+  const out = new Set();
+  const head = heads && heads[cls] && heads[cls].teacherEmail;
+  if(head) out.add(keyOf(head));
+  if(!lessons || typeof lessons !== 'object' || !Object.keys(lessons).length) return { keys: out, known: false };
+  const raw = lessons[WEEK[weekday]] || [];
+  const slots = Array.isArray(raw) ? raw.map((s, i) => [String(i), s]) : Object.entries(raw);
+  const nm = s => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  const holders = name => Object.entries(access || {}).filter(([, row]) => {
+    const l = row && row[cls];
+    return (Array.isArray(l) ? l : Object.values(l || {})).some(v => typeof v === 'string' && (v.trim() === ALL_SUBJECTS || nm(v) === nm(name)));
+  }).map(([k]) => k);
+  for(const [idx, slot] of slots){
+    const items = Array.isArray(slot) ? slot : (slot && typeof slot === 'object' && Object.keys(slot).length ? [slot] : []);
+    for(const it of items){
+      if(!it || typeof it !== 'object' || it.type === 'break' || it.type === 'extra') continue;
+      for(const name of itemNames(it)){
+        if(NO_NOTIFY_RE.test(name)) continue;
+        const s = subs || {};
+        const cover = (s[idx] && nm(s[idx].subject) === nm(name)) ? s[idx] : (s.any && nm(s.any.subject) === nm(name)) ? s.any : null;
+        if(cover && cover.subEmail){ out.add(keyOf(cover.subEmail)); continue; }
+        if(it.teacherEmail){ out.add(keyOf(it.teacherEmail)); continue; }
+        holders(name).forEach(k => out.add(k));
+      }
+    }
+  }
+  return { keys: out, known: true };
+}
+// У які дні тижня (1–5) людина отримує сповіщення про клас — для таблиці доступу
+export function notifyWeekdays(se, cls, { schedules, access, heads, keyOf }){
+  const lessons = schedules && schedules[cls] && schedules[cls].lessons;
+  const days = [];
+  for(let wd = 1; wd <= 5; wd++){
+    const r = lessonTeachersOn({ lessons, access, heads, subs: null, cls, weekday: wd, keyOf });
+    if(!r.known) return null;              // розкладу немає — працює старе правило «усім з доступом»
+    if(r.keys.has(se)) days.push(wd);
+  }
+  return days;
+}
+
+// ── УТОЧНЕННЯ ПІДСТАВ ────────────────────────────────────────────
+// judgeSubject бачить лише розклад і каталоги. Але розклад, завантажений із
+// файлу, не знає вчителів, тож «предмет є в розкладі» — це «weak» для всіх,
+// хто колись отримав доступ: і для того, хто справді веде, і для того, хто
+// раз був на заміні, і для того, кого помилково поставили не в той клас.
+// Тут додаємо те, що відрізняє їх:
+//   • підтвердження директора (teacher_access_meta…ok) → ok;
+//   • той самий предмет у класі має ще хтось → 'dup' («хто веде?»);
+//   • людина була в цьому класі на заміні з цього предмета, а предмет має
+//     ще хтось → bad («лишилося після заміни»).
+// subHist — subHistory(substitutions)
+export function subHistory(substitutions, keyOf){
+  const out = {};
+  const nm = s => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  for(const [date, byCls] of Object.entries(substitutions || {}))
+    for(const [cls, slots] of Object.entries(byCls || {}))
+      for(const s of Object.values(slots || {})){
+        if(!s || !s.subEmail || !s.subject) continue;
+        (out[`${keyOf(s.subEmail)}|${cls}|${nm(s.subject)}`] ||= []).push(date);
+      }
+  for(const k of Object.keys(out)) out[k] = [...new Set(out[k])].sort();
+  return out;
+}
+export function refineJudge(base, { se, cls, subject, acc, meta, subHist }){
+  if(meta && meta.ok) return { level: 'ok', why: 'підтверджено директором' };
+  if(base.level !== 'weak' || subject === ALL_SUBJECTS) return base;
+  const nm = s => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  const others = Object.keys(acc || {}).filter(k => k !== se && accessList(acc[k] && acc[k][cls]).some(s => nm(s) === nm(subject)));
+  const dates = ((subHist || {})[`${se}|${cls}|${nm(subject)}`] || []);
+  const dm = d => d.slice(8, 10) + '.' + d.slice(5, 7);
+  const when = dates.length ? dates.slice(-3).map(dm).join(', ') : '';
+  if(others.length && dates.length) return { level: 'bad', why: `лишилося після заміни (${when}); предмет має`, others, kind: 'sub' };
+  // Ті, хто сам лише заміняв, не роблять предмет «спірним» для основного вчителя
+  const real = others.filter(k => !((subHist || {})[`${k}|${cls}|${nm(subject)}`] || []).length);
+  if(real.length) return { level: 'dup', why: 'цей предмет у класі має також', others: real };
+  if(dates.length) return { ...base, why: `${base.why}; була заміна ${when}` };
+  return base;
+}
+
+// ── ТИМЧАСОВИЙ ДОСТУП НА ЗАМІНУ ──────────────────────────────────
+// temp_access/{пошта}/{клас} = {until, subj, date, by, at}. Діє до кінця дня
+// заміни + TEMP_GRACE_DAYS (дописати тему й оцінки). Постійний доступ на
+// заміну більше не видаємо — саме з нього бралися «вічні» доступи.
+export const TEMP_GRACE_DAYS = 3;
+export function tempUntil(date, grace = TEMP_GRACE_DAYS){
+  const [y, m, d] = String(date).split('-').map(Number);
+  return new Date(y, m - 1, d + grace, 23, 59, 59).getTime();
+}
+// current — наявний запис temp_access/{пошта}/{клас} або null
+export function tempAccessPaths(se, cls, subject, date, current, by){
+  const cur = current && typeof current === 'object' ? current : {};
+  const until = Math.max(Number(cur.until) || 0, tempUntil(date));
+  const subj = { ...(cur.subj || {}) };
+  if(subject) subj[subjKey(subject)] = String(subject).slice(0, 80);
+  const at = Date.now();
+  const p = { [`temp_access/${se}/${cls}`]: { until, subj, date: String(date).slice(0, 10), by: by || '', at } };
+  p[`access_log/${logKey()}`] = { at, by: by || '', t: se, cls, src: 'substitute', act: 'grant', subj: subject ? [subject] : ['заміна'],
+                                  note: `тимчасово до ${new Date(until).toLocaleDateString('uk-UA')}` };
+  return p;
+}
+export async function grantTempAccess(se, cls, subject, date){
+  const s = await get(child(ref(db), `temp_access/${se}/${cls}`)).catch(() => null);
+  const p = tempAccessPaths(se, cls, subject, date, s && s.exists() ? s.val() : null, who());
+  await update(ref(db), p);
+  return p;
+}
+// Злиття для кабінету вчителя: постійні предмети + чинні тимчасові
+export function mergeTempAccess(matrix, temp, now = Date.now()){
+  const out = { ...(matrix || {}) };
+  for(const [cls, t] of Object.entries(temp || {})){
+    if(!t || !(Number(t.until) > now)) continue;
+    const add = Object.values(t.subj || {}).filter(x => typeof x === 'string');
+    out[cls] = [...new Set([...accessList(out[cls]), ...add])];
+  }
+  return out;
 }

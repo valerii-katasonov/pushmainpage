@@ -1231,6 +1231,15 @@ window.loadClassOrders = async function(){
         <span>${allMode?`усі класи (${clsList.length})`:`${escHtml(cls.replace('class_',''))} клас`}, ${escHtml(human(date))}</span></div>
       ${hasBrkChoice?`<div class="k-ord-menu">Сніданок: А — ${escHtml(brkChoice.a)} · Б — ${escHtml(brkChoice.b)}</div>`:''}
       ${hasChoice?`<div class="k-ord-menu">Вибір на ${escHtml(choice.label)}: А — ${escHtml(choice.a)} · Б — ${escHtml(choice.b)}. Якщо варіант не змінювали, діє А.</div>`:''}
+      <!-- Друк і вивантаження — НАГОРІ: список на всю школу довгий, і гортати
+           до кінця заради кнопки кухні незручно. -->
+      <div class="k-ord-actions k-ord-top">
+        <button onclick="printClassOrders()" class="k-ord-print">🖨️ Аркуш на друк</button>
+        <button onclick="printClassOrders('pdf')" class="k-ord-pdf">📕 Зберегти PDF</button>
+        <button onclick="exportClassOrders()" class="k-ord-csv">📄 CSV</button>
+      </div>
+      <p class="k-ord-hint">PDF зберігається через те саме вікно друку: у полі «Принтер» оберіть «Зберегти як PDF».
+        Файл вийде такий самий, як на папері, і називатиметься за днем і класом.</p>
       <!-- data-l на кожній клітинці — це підпис колонки. Коли шрифт великий,
            таблиця розкладається на картки (див. @media у cabinet.html), шапка
            ховається, і без цих підписів не було б зрозуміло, де обід, а де
@@ -1245,14 +1254,7 @@ window.loadClassOrders = async function(){
       </div>
       ${renderMealOrphanList(orphans, resolutions, !resolutionSnap.readError)}
       <p class="k-ord-hint">Натисніть ✓ або —, щоб додати чи зняти порцію вручну; кожна колонка А/Б перемикає свій варіант.
-        Це для тих, хто звернувся вже після дедлайну; дію буде записано в журнал.</p>
-      <div class="k-ord-actions">
-        <button onclick="printClassOrders()" class="k-ord-print">🖨️ Аркуш на друк</button>
-        <button onclick="printClassOrders('pdf')" class="k-ord-pdf">📕 Зберегти PDF</button>
-        <button onclick="exportClassOrders()" class="k-ord-csv">📄 CSV</button>
-      </div>
-      <p class="k-ord-hint">PDF зберігається через те саме вікно друку: у полі «Принтер» оберіть «Зберегти як PDF».
-        Файл вийде такий самий, як на папері, і називатиметься за днем і класом.</p>`;
+        Це для тих, хто звернувся вже після дедлайну; дію буде записано в журнал.</p>`;
   }catch(e){
     box.innerHTML = `<p style="color:red;font-size:.8rem;">Помилка: ${escHtml(e.message)}</p>`;
   }

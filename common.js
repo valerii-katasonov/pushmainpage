@@ -584,10 +584,10 @@ export const ROLE_PERMS = {
   calendar: { icon: '🗓️', label: 'Календар подій', hint: 'додавати й видаляти свята та культурно-виховні заходи' },
   schedule: { icon: '📅', label: 'Розклад усіх класів', hint: 'переглядати й друкувати розклад будь-якого класу' },
   chat:     { icon: '💬', label: 'Контакт у чаті', hint: 'зʼявлятися в списку контактів, щоб батьки й учителі могли написати' },
-  meals:    { icon: '🍽', label: 'Власне харчування', hint: 'замовляти собі обід, як персонал' },
+  meals:    { icon: '🍽', label: 'Замовлення їжі', hint: 'замовляти собі обід і їжу на винос, як персонал (меню видно там само)' },
   // група 2 — довідкове: ці дані й так бачить кожен, хто увійшов
   bells:    { icon: '🔔', label: 'Розклад дзвінків', hint: 'перегляд за класами', group: 'info' },
-  menu:     { icon: '🥗', label: 'Меню їдальні', hint: 'меню на поточний тиждень', group: 'info' },
+  menu:     { icon: '🥗', label: 'Меню їдальні', hint: 'лише перегляд меню на тиждень, без замовлення', group: 'info' },
   clubs:    { icon: '🎨', label: 'Гуртки', hint: 'каталог гуртків цього року і хто їх веде', group: 'info' },
   // група 3 — дані дітей, ЛИШЕ ПЕРЕГЛЯД (role-blocks.js, PERM_READS у правилах)
   birthdays:  { icon: '🎂', label: 'Дні народження школи', hint: 'імена учнів і день/місяць народження на місяць уперед', group: 'kids' },
@@ -2718,7 +2718,24 @@ onAuthStateChanged(auth,async user=>{
         + '. Перевірте інтернет і спробуйте ще раз.', 'login-err');
   }
 });
-async function fetchTeacherAccess(se){const s=await get(child(ref(db),`teacher_access/${se}`));teacherAccessMatrix=s.exists()?s.val():{};}
+async function fetchTeacherAccess(se){
+  const [s,t]=await Promise.all([get(child(ref(db),`teacher_access/${se}`)),
+    // Тимчасовий доступ на дні заміни (temp_access). Не критичний: якщо
+    // правила ще старі, просто не буде класу заміни.
+    get(child(ref(db),`temp_access/${se}`)).catch(()=>null)]);
+  teacherAccessMatrix=mergeTempMatrix(s.exists()?s.val():{},t&&t.exists()?t.val():{});
+}
+// Те саме, що mergeTempAccess в access.js (тут без імпорту — щоб не робити
+// кільця модулів): постійні предмети + тимчасові, чий термін не минув.
+export function mergeTempMatrix(matrix,temp,now=Date.now()){
+  const out={...(matrix||{})};
+  const list=v=>(Array.isArray(v)?v:Object.values(v||{})).filter(x=>typeof x==='string'&&x.trim()).map(x=>x.trim());
+  for(const [cls,t] of Object.entries(temp||{})){
+    if(!t||!(Number(t.until)>now))continue;
+    out[cls]=[...new Set([...list(out[cls]),...list(t.subj)])];
+  }
+  return out;
+}
 
 // ══════════ САМОВІДНОВЛЕННЯ ЗАПИСУ В pre_approved_roles ══════════
 // Акаунти, створені до появи правил доступу, є в users, але їх немає у

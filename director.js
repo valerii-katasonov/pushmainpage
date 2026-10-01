@@ -9,7 +9,8 @@
 import { ref, set, get, child, push, remove, update, query, limitToLast, orderByKey, endBefore } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { auth, db, countAttendanceDays, attendanceAuthor, canClearDayAbsence, clearDayAbsence, showToast, getClassNum, LEVEL_MAX_CLASS, displayGrade, gradeClass6, teacherAccessMatrix, getWeekDates, formatAttendanceSlotLabel, gradeTypesCache, loadGradeTypesCache, calculateStudentWeightedAvg, escJs, escHtml, localDateString, normalizeRoles, getUserRoles, mergeAccountRoles, parentAccountPatch, ROLE_LABELS, currentUserData, dayNamesUA, sendPasswordReset, normalizeChildren, renderParentsBlock, logAction, AUDIT_LABELS, getParentProfile, parentFullName, getSchoolRange, getAllUsers, invalidateUsersCache, getUsersSnap, stuName, invalidateStudentDir, subjectsLabel, syncStaffCard, shrinkImage, dayKeys, invalidateParentLinks, emailKey } from './common.js';
 import { loadCustomRoles, customRoles, ROLE_PERMS, PERM_GROUPS, ORGANIZER_DEFAULT, roleDef } from './common.js';
-import { setAccess, revokeAllPaths, revokeAccess, accessList, accessBasis, judgeSubject, ACCESS_SRC } from './access.js';
+import { setAccess, revokeAllPaths, revokeAccess, accessList, accessBasis, judgeSubject, refineJudge, subHistory, notifyWeekdays, grantTempAccess, ACCESS_SRC, ALL_SUBJECTS } from './access.js';
+import { subjKey } from './common.js';
 
 let directorSkillsTemp=[];
 
@@ -59,6 +60,9 @@ window.confirmSubstitute=async function(email,cls,subj,date){
   const t=(window.globalTeachersList||[]).find(t=>t.email===email);
   await set(ref(db,`substitutions/${date}/${cls}/any`),
     {subject:subj,subEmail:email,subName:t?t.name:email,origName:'',by:currentUserData?.email||'',ts:Date.now()});
+  // Тимчасовий доступ на дні заміни — щоб учитель міг вести журнал і не
+  // отримав постійний доступ до чужого класу
+  await grantTempAccess(emailKey(email),cls,subj,date).catch(e=>console.warn('Тимчасовий доступ:',e.message));
   logAction('substitute',{cls,subject:subj,date,target:t?t.name:email});
   showToast(`✅ Заміну призначено: ${t?t.name:email} → ${subj} у ${cls.replace('class_','')} класі`);
   document.getElementById('sm-results').innerHTML='<p style="color:var(--ok);font-weight:700;">✅ Заміну підтверджено!</p>';
@@ -1413,6 +1417,7 @@ window.assignSubstitute=async function(cls,idx,subject,origName,val){
   const [subEmail,subName]=val.split('|');
   await set(ref(db,`substitutions/${date}/${cls}/${idx}`),
             {subject,origName,subEmail,subName,by:currentUserData?.email||'',ts:Date.now()});
+  await grantTempAccess(emailKey(subEmail),cls,subject,date).catch(e=>console.warn('Тимчасовий доступ:',e.message));
   logAction('substitute',{cls,subject,date,target:subName,from:origName});
   showToast(`✅ Заміна: ${subName}`);
   window.loadAbsenceDay();
@@ -2772,6 +2777,7 @@ const accDate = ts => ts ? new Date(ts).toLocaleDateString('uk-UA', { day: '2-di
 const ACC_LEVEL = {
   ok:   { bg: 'var(--surface-2)', line: 'var(--line)' },
   weak: { bg: 'var(--surface-2)', line: 'var(--line)' },
+  dup:  { bg: 'var(--warn-soft)', line: 'var(--warn-line)' },
   bad:  { bg: 'var(--warn-soft)', line: 'var(--warn-line)' }
 };
 
@@ -2786,6 +2792,9 @@ async function loadAccessData(){
   ]);
   // Журнал — не критичний: без нього таблиця все одно правильна
   const logSnap = await get(query(ref(db, 'access_log'), orderByKey(), limitToLast(60))).catch(() => null);
+  // Історія замін — щоб упізнати доступ, що лишився після одноразової
+  // заміни. Не критична: без неї просто не буде цієї підказки.
+  const subsAll = await get(child(ref(db), 'substitutions')).then(s => s.exists() ? s.val() : {}).catch(() => ({}));
   const names = {};
   if(usersSnap && usersSnap.exists()) for(const u of Object.values(usersSnap.val())){
     if(!u || !u.email) continue;
@@ -2793,7 +2802,8 @@ async function loadAccessData(){
     names[emailKey(u.email)] = { name: n || u.email, email: u.email, disabled: !!u.disabled };
   }
   const log = logSnap && logSnap.exists() ? Object.values(logSnap.val()).filter(Boolean).sort((a, b) => (b.at || 0) - (a.at || 0)) : [];
-  ACC.data = { acc: acc || {}, meta: meta || {}, classes: accessBasis({ schedules, heads, catalog, clubs }, emailKey), names, log };
+  ACC.data = { acc: acc || {}, meta: meta || {}, classes: accessBasis({ schedules, heads, catalog, clubs }, emailKey), names, log,
+               schedules: schedules || {}, heads: heads || {}, subHist: subHistory(subsAll, emailKey) };
 }
 const accName = se => (ACC.data.names[se] && ACC.data.names[se].name) || String(se).replace(/_/g, '.');
 
@@ -2803,19 +2813,31 @@ function accessRows(){
   for(const [se, byCls] of Object.entries(acc)){
     for(const [cls, raw] of Object.entries(byCls || {})){
       const metaList = Object.values((meta[se] && meta[se][cls]) || {});
-      const subjects = accessList(raw).map(s => ({ s, meta: metaList.find(x => x && x.s === s) || null, j: judgeSubject(classes, se, cls, s) }));
+      const subjects = accessList(raw).map(s => {
+        const m = metaList.find(x => x && x.s === s) || null;
+        return { s, meta: m, j: refineJudge(judgeSubject(classes, se, cls, s), { se, cls, subject: s, acc, meta: m, subHist: ACC.data.subHist }) };
+      });
       if(!subjects.length) continue;
       const head = !!(classes[cls] && classes[cls].heads.has(se));
-      rows.push({ se, cls, head, subjects,
+      const days = notifyWeekdays(se, cls, { schedules: ACC.data.schedules, access: acc, heads: ACC.data.heads, keyOf: emailKey });
+      rows.push({ se, cls, head, subjects, days,
         bad: subjects.every(x => x.j.level === 'bad'),
-        attention: subjects.some(x => x.j.level === 'bad') });
+        attention: subjects.some(x => x.j.level === 'bad' || x.j.level === 'dup') });
     }
   }
   return rows.sort((a, b) => accName(a.se).localeCompare(accName(b.se), 'uk') || getClassNum(a.cls) - getClassNum(b.cls));
 }
+const WD_UA = ['', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт'];
+// Коли людина отримує сповіщення про відсутність/запізнення в цьому класі
+function rowNotify(r){
+  if(r.days === null) return '🔔 щодня (у класу немає розкладу)';
+  if(r.head) return '🔔 щодня (кл. керівник)';
+  return r.days.length ? `🔔 ${r.days.map(d => WD_UA[d]).join(', ')}` : '🔕 сповіщень немає';
+}
 function rowBasis(r){
   if(r.head) return '🎓 кл. керівник';
   if(r.bad) return '<span style="color:var(--danger);font-weight:600;">⚠️ немає підстав</span>';
+  if(r.subjects.some(x => x.j.level === 'dup')) return '<span style="color:var(--warn);font-weight:600;">❓ предмет має ще хтось — хто веде?</span>';
   if(r.attention) return '<span style="color:var(--warn);font-weight:600;">⚠️ частина предметів без підстав</span>';
   if(r.subjects.some(x => x.s === 'Всі предмети')) return 'ℹ️ усі предмети, хоча не кл. керівник';
   return r.subjects.some(x => x.j.level === 'ok') ? '✅ за розкладом / каталогом' : '🗓 предмети є в розкладі класу';
@@ -2870,15 +2892,15 @@ window.renderAccessOverview = function(){
       const st = ACC_LEVEL[x.j.level];
       return `<span title="${escHtml(who + ' · ' + judgeText(x.j))}" style="display:inline-flex;align-items:center;gap:4px;margin:2px 4px 2px 0;padding:2px 4px 2px 8px;border-radius:12px;font-size:.78rem;`
         + `background:${st.bg};border:1px solid ${st.line};">`
-        + `${x.j.level === 'bad' ? '⚠️ ' : ''}${escHtml(x.s)} <span style="color:var(--ink-3);font-size:.7rem;">· ${escHtml(src)}</span>`
+        + `${x.j.level === 'bad' ? '⚠️ ' : x.j.level === 'dup' ? '❓ ' : ''}${escHtml(x.s)} <span style="color:var(--ink-3);font-size:.7rem;">· ${escHtml(src)}</span>`
         + (r.head ? '' : `<button type="button" aria-label="Забрати предмет" title="Забрати цей предмет" style="all:unset;cursor:pointer;padding:0 4px;color:var(--danger);font-weight:700;" onclick="accRevoke('${escJs(r.se)}','${escJs(r.cls)}','${escJs(x.s)}')">✕</button>`)
         + `</span>`;
     }).join('');
-    const why = r.subjects.filter(x => x.j.level === 'bad').map(x => `${escHtml(x.s)} — ${escHtml(judgeText(x.j))}`).join('<br>');
+    const why = r.subjects.filter(x => x.j.level === 'bad' || x.j.level === 'dup').map(x => `${escHtml(x.s)} — ${escHtml(judgeText(x.j))}`).join('<br>');
     h += `<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);${r.bad ? 'background:var(--danger-soft);' : ''}">`
       + `<b style="min-width:62px;">${escHtml(accClsLabel(r.cls))}</b>`
       + `<div style="flex:1 1 260px;">${chips}${why ? `<div style="font-size:.72rem;color:var(--ink-2);margin-top:3px;">${why}</div>` : ''}</div>`
-      + `<div style="font-size:.75rem;color:var(--ink-2);flex:0 1 200px;">${rowBasis(r)}</div>`
+      + `<div style="font-size:.75rem;color:var(--ink-2);flex:0 1 200px;">${rowBasis(r)}<br><span style="color:var(--ink-3);">${escHtml(rowNotify(r))}</span></div>`
       + (r.head
           ? `<span style="font-size:.72rem;color:var(--ink-3);" title="Щоб забрати клас, спершу призначте іншого класного керівника">🔒</span>`
           : `<button type="button" style="width:auto;padding:5px 10px;font-size:.75rem;background:var(--danger);color:#fff;margin:0;" onclick="accRevoke('${escJs(r.se)}','${escJs(r.cls)}','')">Забрати клас</button>`)
@@ -2924,47 +2946,101 @@ window.accRevoke = async function(se, cls, subject){
   finally{ ACC.busy = false; }
 };
 
-// Звірка: пропонуємо зняти лише те, на що точно немає підстав (bad).
-// Видане вручну — показуємо, але не позначаємо: це може бути свідомий виняток.
+// Звірка, два кроки на одному екрані:
+//   1. ЗАБРАТИ — немає підстав: предмета немає в розкладі класу (часто — не
+//      той клас), закріплено за іншим, або лишилося після заміни. Позначено
+//      одразу, крім виданого вручну.
+//   2. ХТО ВЕДЕ? — той самий предмет у класі мають кілька людей, а розклад
+//      не каже, хто з них. Директор обирає; решті доступ забираємо, а вибір
+//      запамʼятовуємо (teacher_access_meta…ok) — більше не питатимемо.
+//      «Ведуть усі» — для підгруп (англійська у двох учителів).
 window.accReconcile = function(){
   if(!ACC.data || ACC.busy) return;
-  const items = [];
+  const items = [], groups = new Map();
   for(const r of accessRows()){
     if(r.head) continue;
     const bad = r.subjects.filter(x => x.j.level === 'bad');
-    if(!bad.length) continue;
-    items.push({ se: r.se, cls: r.cls, subj: bad.map(x => x.s), why: bad.map(x => judgeText(x.j)),
-                 whole: bad.length === r.subjects.length, manual: bad.every(x => x.meta && x.meta.src === 'manual') });
+    if(bad.length) items.push({ se: r.se, cls: r.cls, subj: bad.map(x => x.s), why: bad.map(x => judgeText(x.j)),
+                                whole: bad.length === r.subjects.length, manual: bad.every(x => x.meta && x.meta.src === 'manual') });
+    for(const x of r.subjects.filter(x => x.j.level === 'dup')){
+      const gk = `${r.cls}|${x.s.trim().toLowerCase()}`;
+      const g = groups.get(gk) || { cls: r.cls, subj: x.s, holders: [] };
+      g.holders.push({ se: r.se, s: x.s, meta: x.meta, sub: (ACC.data.subHist[`${r.se}|${r.cls}|${x.s.trim().toLowerCase().replace(/\s+/g, ' ')}`] || []).length,
+                       manual: !!(x.meta && x.meta.src === 'manual') });
+      groups.set(gk, g);
+    }
   }
+  // Ті, хто вже підтверджений, теж мають бути в групі як варіант
+  for(const g of groups.values()){
+    for(const [se, byCls] of Object.entries(ACC.data.acc)){
+      if(g.holders.some(h => h.se === se)) continue;
+      const s = accessList(byCls && byCls[g.cls]).find(v => v.trim().toLowerCase() === g.subj.trim().toLowerCase());
+      const m = s && (Object.values((ACC.data.meta[se] || {})[g.cls] || {}).find(m => m && m.s === s) || null);
+      if(s && m && m.ok) g.holders.push({ se, s, meta: m, confirmed: true });
+    }
+  }
+  const dup = [...groups.values()].filter(g => g.holders.length > 1).sort((a, b) => getClassNum(a.cls) - getClassNum(b.cls) || a.subj.localeCompare(b.subj, 'uk'));
   const box = document.getElementById('acc-ov-body');
-  if(!items.length){ showToast('✅ Зайвого доступу немає'); return; }
-  ACC.items = items;
-  box.innerHTML = `<p style="font-size:.83rem;color:var(--ink-2);margin:8px 0;">Предмети, яких немає в розкладі й каталогах класу або які там закріплені за іншими вчителями. `
-    + `Видане вручну не позначено — це може бути свідомий виняток. «Всі предмети» тут не пропонуються: це рішення директора.</p>`
+  if(!items.length && !dup.length){ showToast('✅ Зайвого чи спірного доступу немає'); return; }
+  ACC.items = items; ACC.dup = dup;
+  let h = '';
+  if(items.length) h += `<h4 style="margin:10px 0 4px;">1. Забрати — немає підстав (${items.length})</h4>`
+    + `<p style="font-size:.8rem;color:var(--ink-2);margin:0 0 6px;">Предмета немає в розкладі класу (часто — не той клас), він закріплений за іншим учителем або лишився після заміни. Видане вручну не позначено — це може бути свідомий виняток.</p>`
     + items.map((it, i) => `<label style="display:flex;gap:8px;align-items:flex-start;padding:6px 0;border-bottom:1px solid var(--line);font-size:.83rem;cursor:pointer;">`
       + `<input type="checkbox" data-acc-i="${i}" ${it.manual ? '' : 'checked'} style="width:auto;margin-top:3px;">`
       + `<span><b>${escHtml(accName(it.se))}</b> — ${escHtml(accClsLabel(it.cls))}: ${escHtml(it.subj.join(', '))}`
       + `${it.whole ? ' <span style="color:var(--danger);">(увесь клас)</span>' : ''}${it.manual ? ' <span style="color:var(--ink-3);">· видано вручну</span>' : ''}`
-      + `<br><span style="font-size:.75rem;color:var(--ink-3);">${escHtml([...new Set(it.why)].join('; '))}</span></span></label>`).join('')
-    + `<div style="display:flex;gap:8px;margin-top:10px;"><button type="button" style="background:var(--danger);color:#fff;" onclick="accReconcileApply()">Забрати вибране</button>`
+      + `<br><span style="font-size:.75rem;color:var(--ink-3);">${escHtml([...new Set(it.why)].join('; '))}</span></span></label>`).join('');
+  if(dup.length) h += `<h4 style="margin:14px 0 4px;">2. Хто веде? (${dup.length})</h4>`
+    + `<p style="font-size:.8rem;color:var(--ink-2);margin:0 0 6px;">Предмет у класі мають кілька людей, а розклад не каже, хто з них веде. Оберіть — решті доступ буде забрано, а вибір запамʼятаємо. «Ведуть усі» — для підгруп.</p>`
+    + dup.map((g, i) => `<div style="padding:7px 0;border-bottom:1px solid var(--line);font-size:.83rem;">`
+      + `<b>${escHtml(accClsLabel(g.cls))} · ${escHtml(g.subj)}</b><div style="display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:4px;">`
+      + g.holders.map((x, j) => `<label style="display:inline-flex;gap:5px;align-items:center;margin:0;font-weight:400;cursor:pointer;">`
+        + `<input type="radio" name="acc-dup-${i}" value="${j}" style="width:auto;margin:0;"> ${escHtml(accName(x.se))}`
+        + `<span style="color:var(--ink-3);font-size:.72rem;">${x.confirmed ? ' · підтверджено' : ''}${x.sub ? ' · був на заміні' : ''}${x.manual ? ' · вручну' : ''}</span></label>`).join('')
+      + `<label style="display:inline-flex;gap:5px;align-items:center;margin:0;font-weight:400;cursor:pointer;"><input type="radio" name="acc-dup-${i}" value="all" style="width:auto;margin:0;"> ведуть усі</label>`
+      + `<label style="display:inline-flex;gap:5px;align-items:center;margin:0;font-weight:400;cursor:pointer;color:var(--ink-3);"><input type="radio" name="acc-dup-${i}" value="" checked style="width:auto;margin:0;"> вирішу пізніше</label>`
+      + `</div></div>`).join('');
+  h += `<div style="display:flex;gap:8px;margin-top:12px;"><button type="button" style="background:var(--danger);color:#fff;" onclick="accReconcileApply()">Застосувати</button>`
     + `<button type="button" style="background:var(--surface-2);color:var(--ink);" onclick="renderAccessOverview()">Скасувати</button></div>`;
+  box.innerHTML = h;
 };
+// Що зробити за вибором «хто веде»: { revoke:[{se,cls,subj}], confirm:[{se,cls,s,meta}] }
+export function dupPlan(g, choice){
+  if(choice === '' || choice === undefined || choice === null) return { revoke: [], confirm: [] };
+  if(choice === 'all') return { revoke: [], confirm: g.holders.map(x => ({ se: x.se, cls: g.cls, s: x.s, meta: x.meta })) };
+  const keep = g.holders[+choice];
+  if(!keep) return { revoke: [], confirm: [] };
+  return { revoke: g.holders.filter(x => x !== keep).map(x => ({ se: x.se, cls: g.cls, subj: [x.s] })),
+           confirm: [{ se: keep.se, cls: g.cls, s: keep.s, meta: keep.meta }] };
+}
 window.accReconcileApply = async function(){
-  if(ACC.busy || !ACC.items) return;
+  if(ACC.busy || (!ACC.items && !ACC.dup)) return;
   const picked = [...document.querySelectorAll('[data-acc-i]')].filter(c => c.checked).map(c => ACC.items[+c.dataset.accI]).filter(Boolean);
-  if(!picked.length) return alert('Нічого не вибрано.');
-  if(!confirm(`Забрати доступ у ${picked.length} записах? Кожне відкликання потрапить у журнал.`)) return;
+  const plans = (ACC.dup || []).map((g, i) => dupPlan(g, document.querySelector(`input[name="acc-dup-${i}"]:checked`)?.value));
+  const revokes = [...picked, ...plans.flatMap(p => p.revoke)];
+  const confirms = plans.flatMap(p => p.confirm);
+  if(!revokes.length && !confirms.length) return alert('Нічого не вибрано.');
+  if(!confirm(`Забрати доступ: ${revokes.length}. Підтвердити, хто веде: ${confirms.length}.\n\nКожне відкликання потрапить у журнал.`)) return;
   ACC.busy = true;
   let ok = 0, fail = 0;
   const touched = new Set();
   try{
-    for(const it of picked){
+    for(const it of revokes){
       try{ await revokeAccess(it.se, it.cls, it.subj, 'звірка з розкладом'); ok++; touched.add(it.se); }
       catch(e){ fail++; console.warn('Звірка доступу:', it, e.message); }
     }
+    if(confirms.length){
+      const at = Date.now(), by = currentUserData?.email || '', p = {};
+      for(const c of confirms){
+        const m = c.meta || {};
+        p[`teacher_access_meta/${c.se}/${c.cls}/${subjKey(c.s)}`] = { s: c.s, src: m.src || 'unknown', by: m.by || '', at: m.at || 0, ok: true, okBy: by, okAt: at };
+      }
+      try{ await update(ref(db), p); ok += confirms.length; }catch(e){ fail += confirms.length; console.warn('Підтвердження доступу:', e.message); }
+    }
     for(const se of touched) await syncStaffCard(se).catch(() => false);
-  } finally { ACC.busy = false; ACC.items = null; }
-  showToast(fail ? `⚠️ Забрано ${ok}, не вдалося ${fail}` : `✅ Забрано: ${ok}`);
+  } finally { ACC.busy = false; ACC.items = null; ACC.dup = null; }
+  showToast(fail ? `⚠️ Виконано ${ok}, не вдалося ${fail}` : `✅ Готово: ${ok}`);
   await window.openAccessOverview(true);
 };
 
