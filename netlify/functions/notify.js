@@ -352,7 +352,9 @@ function lessonTeachersOn({ lessons, access, heads, subs, cls, weekday, keyOf })
   if(head) out.add(keyOf(head));
   if(!lessons || typeof lessons !== 'object' || !Object.keys(lessons).length) return { keys: out, known: false };
   const raw = lessons[WEEK[weekday]] || [];
-  const slots = Array.isArray(raw) ? raw.map((s, i) => [String(i), s]) : Object.entries(raw);
+  // Array.from, а не map: Firebase віддає «дірявий» масив, коли якийсь
+  // номер уроку пропущено, а map дірки зберігає — і перебір падав.
+  const slots = Array.isArray(raw) ? Array.from(raw, (s, i) => [String(i), s]) : (raw && typeof raw === 'object' ? Object.entries(raw) : []);
   const nm = s => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
   const holders = name => Object.entries(access || {}).filter(([, row]) => {
     const l = row && row[cls];
