@@ -48,7 +48,9 @@ const myKey = () => emailKey(currentUserData?.email || auth.currentUser?.email |
 // через портал, і власний рядок у своєму ж підрахунку її тільки заплутає.
 export function staffEats(role){
   return ['director','administrator','teacher','class_teacher','art_school_teacher',
-          'music_teacher','master_class_teacher','psychologist','nurse','secretary'].includes(role);
+          'music_teacher','master_class_teacher','psychologist','nurse','secretary'].includes(role)
+    // Роль із конструктора — лише з галочкою «Власне харчування»
+    || !!(typeof window !== 'undefined' && window.hasPerm && window.hasPerm('meals', role));
 }
 
 const money = v => (Math.round(Number(v||0)*100)/100).toFixed(2).replace('.00','');
@@ -99,7 +101,7 @@ export async function renderStaffMeals(){
 
   // Після 17:00 показуємо вже завтрашній день — з тієї ж причини, що й
   // батькам: сьогоднішній обід давно з'їдено.
-  const day = smDate || menuAnchor(localDateString, new Date().getHours());
+  const day = smDate || orderableDay(menuAnchor(localDateString, new Date().getHours()));
   box.innerHTML = '<p class="empty-msg">Завантаження...</p>';
 
   try{
@@ -205,8 +207,23 @@ export async function renderStaffMeals(){
 }
 window.renderStaffMeals = renderStaffMeals;
 
+// День, який показуємо першим. Якщо на сьогодні замовлення вже закрито
+// (після MEAL_CUTOFF_HOUR), — одразу найближчий робочий день: інакше людина
+// вдень бачила лише «🔒 змінити на сьогодні не можна» і вирішувала, що
+// замовити не може взагалі (так і було з педагогом-організатором).
+export function orderableDay(day, editable = mealsEditable){
+  let d = day;
+  for(let i = 0; i < 7 && !editable(d).ok; i++){
+    const x = new Date(d + 'T12:00:00');
+    do{ x.setDate(x.getDate() + 1); }while(x.getDay() === 0 || x.getDay() === 6);
+    const p2 = n => String(n).padStart(2,'0');
+    d = `${x.getFullYear()}-${p2(x.getMonth()+1)}-${p2(x.getDate())}`;
+  }
+  return d;
+}
+
 window.smShiftDay = function(delta){
-  const base = smDate || menuAnchor(localDateString, new Date().getHours());
+  const base = smDate || orderableDay(menuAnchor(localDateString, new Date().getHours()));
   const d = new Date(base + 'T12:00:00');
   d.setDate(d.getDate() + delta);
   // Вихідні пропускаємо: школа в суботу не годує, і два порожні екрани
