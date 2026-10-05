@@ -45,6 +45,12 @@
 [functions."week-digest"]
   schedule = "0 14 * * 5"
 
+# «📅 Зміни в розкладі» — кожні 20 хвилин звіряє розклад класів зі знімком
+# і шле родинам один push на клас (див. netlify/functions/schedule-changes.js).
+# Уночі сама нічого не шле; перший запуск лише запамʼятовує розклад.
+[functions."schedule-changes"]
+  schedule = "*/20 * * * *"
+
 [functions."meal-ledger"]
   schedule = "0 5,9,13,17,21 * * *"
 

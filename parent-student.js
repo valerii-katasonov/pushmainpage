@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════════════════
 // parent-student.js — parent-screen and student-screen: dynamic
 // "today's schedule" widget, payments mockup, attendance submit,
-// retake-request submission (the review side
+// grade reactions, and retake-request submission (the review side
 // lives in teacher.js).
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, remove } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
@@ -858,6 +858,7 @@ export function loadParentDashboard(){
   if(window.renderMonthEvents) window.renderMonthEvents('p-month-events',cls);
   if(window.renderWeekDigest) window.renderWeekDigest('p-week-digest');
   if(window.renderCatchUp) window.renderCatchUp('p-catchup');
+  if(window.renderSchedChanges) window.renderSchedChanges('p-sched-changes');
   if(window.renderTalkParent) window.renderTalkParent('p-talk');
   renderFinalGrades('p-final-grades',cls,currentUserData.studentName);
   // Оцінки за тиждень і за предметом: одночасні виклики ділять один
@@ -1161,6 +1162,10 @@ window.submitAttendance=async function(role='parent'){
     console.warn('Відмітка збережена, push не надіслано:', result.error || 'немає підписаних отримувачів');
 };
 window.updateAttOptionsStudent=function(){ fillAttReasons('s'); };
+window.sendReaction=function(date,subject,emoji){if(!currentUserData)return;
+  set(ref(db,`reactions/${getActiveClass()}/${date}/${subject}/${currentUserData.studentId||currentUserData.studentName}`),emoji)
+    .then(()=>loadParentDashboard())
+    .catch(e=>showToast('Не вдалося надіслати: ' + e.message));};
 // ══════════ STUDENT DASHBOARD ══════════
 export function loadStudentDashboard(){
   renderNewsFeed('s-news-feed');
@@ -1224,6 +1229,7 @@ export function loadStudentDashboard(){
   if(window.renderMonthEvents) window.renderMonthEvents('s-month-events',cls);
   if(window.renderWeekDigest) window.renderWeekDigest('s-week-digest');
   if(window.renderCatchUp) window.renderCatchUp('s-catchup');
+  if(window.renderSchedChanges) window.renderSchedChanges('s-sched-changes');
   renderFinalGrades('s-final-grades',cls,currentUserData.studentName);
   if(window.renderGradesWeek) window.renderGradesWeek();
   if(window.renderGradesSubject) window.renderGradesSubject();

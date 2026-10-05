@@ -15,7 +15,7 @@
 //
 // Нічого не пишемо в базу — лише читаємо те, що родині й так відкрито.
 // ═══════════════════════════════════════════════════════════════
-import { ref, get, child, query, orderByKey, startAt, endAt } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+import { ref, get, child, query, orderByKey, startAt, endAt, limitToLast } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { db, currentUserData, escHtml, localDateString, mondayOf, dayKeys, dayNamesUA, displayGrade,
          getStudentDir, resolveStudentKey, planKeyWith, subjKey } from './common.js';
 import { topicNames } from './parent-student.js';
@@ -179,5 +179,32 @@ export async function renderWeekDigest(boxId){
     box.style.display = 'none';
   }
 }
+// ── ЗМІНИ В РОЗКЛАДІ ──
+// schedule_changes/{клас} пише серверна функція schedule-changes разом із
+// push-ем. Тут — те саме на «Сьогодні» ще SCHED_DAYS днів: сповіщення легко
+// змахнути, не прочитавши.
+export const SCHED_DAYS = 7;
+export function schedChangesHtml(entries, now = Date.now()){
+  const fresh = Object.values(entries || {}).filter(e => e && Array.isArray(e.lines) && now - (Number(e.ts) || 0) < SCHED_DAYS * 864e5)
+    .sort((a, b) => b.ts - a.ts);
+  if(!fresh.length) return '';
+  const dm = ts => { const d = new Date(ts); return `${p2(d.getDate())}.${p2(d.getMonth() + 1)}`; };
+  return `<div class="fw-title">📅 Зміни в розкладі</div><ul class="fw-list">`
+    + fresh.flatMap(e => e.lines.map(l => `<li><span class="fw-sub">${escHtml(dm(e.ts))}</span> ${escHtml(l)}</li>`)).join('')
+    + '</ul>';
+}
+export async function renderSchedChanges(boxId){
+  const box = document.getElementById(boxId);
+  if(!box) return;
+  try{
+    const cls = currentUserData && currentUserData.class;
+    if(!cls){ box.style.display = 'none'; return; }
+    const s = await get(query(ref(db, `schedule_changes/${cls}`), orderByKey(), limitToLast(5)));
+    const html = schedChangesHtml(s.exists() ? s.val() : {});
+    box.innerHTML = html;
+    box.style.display = html ? 'block' : 'none';
+  }catch(e){ box.style.display = 'none'; }
+}
+window.renderSchedChanges = renderSchedChanges;
 window.renderCatchUp = renderCatchUp;
 window.renderWeekDigest = renderWeekDigest;
