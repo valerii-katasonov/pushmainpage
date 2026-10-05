@@ -2766,6 +2766,9 @@
 .fw-box{background:var(--surface);border:1px solid var(--brand-line);border-radius:10px;padding:9px 11px;margin-bottom:10px;}
 .fw-catch{border-color:var(--warn-line);background:var(--warn-soft);}
 .fw-sched{border-color:var(--brand);}
+.cell-notify{display:flex;gap:8px;align-items:flex-start;margin-top:14px;padding:9px 11px;border-radius:10px;background:var(--brand-soft);border:1px solid var(--brand-line);font-weight:600;font-size:.85rem;color:var(--brand-deep);cursor:pointer;}
+.cell-notify input{width:auto;margin:2px 0 0;}
+.cell-notify small{display:block;font-weight:400;color:var(--ink-3);font-size:.75rem;margin-top:2px;}
 .fw-title{font-size:.85rem;font-weight:800;color:var(--brand-ink);margin-bottom:6px;}
 .fw-catch .fw-title{color:var(--warn);}
 .fw-sub{font-weight:400;color:var(--ink-3);font-size:.75rem;}
@@ -5371,6 +5374,8 @@
       </div>
       <button type="button" class="row-tools-auto" onclick="autoBreaksForDay()">⏱ Розставити перерви за часом уроків</button>
     </div>
+    <label id="cell-notify-wrap" class="cell-notify"><input type="checkbox" id="cell-notify" checked>
+      <span>🔔 Одразу повідомити батьків про зміну<small>час, урок чи вчитель — push родинам класу. Зніміть, якщо це лише виправлення.</small></span></label>
     <div style="display:flex;gap:9px;margin-top:22px;">
       <button onclick="deleteMatrixCell()" style="background:var(--surface);color:var(--danger);border:2px solid var(--danger-line);margin-top:0;flex:1;">Очистити</button>
       <button onclick="saveMatrixCell()" style="background:var(--brand-deep);color:#fff;margin-top:0;flex:2;">Зберегти</button>

@@ -9,6 +9,7 @@ import { ACTIVE_YEAR } from './director.js';
 import { topicNames } from './parent-student.js';
 import { db, getActiveClass, currentUserData, displayGrade, gradeClass6, calculateStudentWeightedAvg, validDailyGrade, getClassNum, LEVEL_MAX_CLASS, GRADE_WEIGHTS, dayKeys, dayNamesUA, showToast, normalizeTimeRange, localDateString, summarizeAttendanceSlots, attendanceForLesson, gradeTypesCache, escJs, escHtml, notifyEvent, logAction, getUserRoles, getUsersSnap, stuName, gradeWritePaths, journalGradeKey, journalBaseDate, journalSlot, expandAltSubjects, altOptions, splitAltName, altPairKey, mondayOf, isBreakItem, insertSlot, removeSlot, makeBreak, withBreaks, slotBounds, hhmmFromMins, emailKey, subjKey, planKeyWith, getDateRange, openTabByKey, fetchSubjectTeachers } from './common.js';
 import { grantAccess } from './access.js';
+import { auth } from './common.js';
 
 // globalTeacherAccess is reassigned only in this file (openVisualMatrixModal)
 // and read from common.js (window.getDefaultTeacher) — plain export/import.
@@ -1868,3 +1869,59 @@ window.saveMatrixCell=async function(){
   if(te&&subj&&type!=='break'&&currentMatrixMode==='live'){const se=emailKey(te);for(let tc of tClasses)await grantAccess(se,tc,[subj],'schedule');}
   closeEditCellModal();if(currentMatrixMode!=='live')window.calculateMatrixWarnings();renderMatrixGrid();showToast("✅ Збережено!");}catch(e){alert("Помилка: "+e.message);}};
 window.deleteMatrixCell=async function(){const clsId=document.getElementById('cell-edit-class').value;const ri=parseInt(document.getElementById('cell-edit-row').value);const sis=document.getElementById('cell-edit-subindex').value;const day=document.getElementById('matrix-day-select').value;const dp=currentMatrixMode==='live'?'schedules':`schedule_drafts/${currentMatrixMode}`;if(globalAllSchedules[clsId]?.lessons?.[day]){let da=dayArr(globalAllSchedules[clsId].lessons[day]);let es=da[ri];let si2=Array.isArray(es)?[...es]:(es&&es.subject?[es]:[]);if(sis!=='')si2.splice(parseInt(sis),1);da[ri]=si2.length===0?{}:si2;await set(ref(db,`${dp}/${clsId}/lessons/${day}`),da);closeEditCellModal();if(currentMatrixMode!=='live')window.calculateMatrixWarnings();renderMatrixGrid();showToast("🗑️ Видалено!");}};
+
+
+// ══════════ «🔔 ОДРАЗУ ПОВІДОМИТИ БАТЬКІВ» ══════════
+// Галочка в картці уроку, увімкнена за замовчуванням. Після збереження
+// (а також очищення клітинки чи дій над рядком) у чинному розкладі
+// кличемо netlify/functions/schedule-notify.js з класами, що змінилися.
+// Текст сповіщення сервер складає сам — порівнянням зі знімком розкладу.
+// Галочку знято — це виправлення: родинам нічого не йде, і щогодинна
+// звірка теж не скаже (знімок оновлюється «тихо»).
+export function changedClasses(before, after){
+  return [...new Set([...Object.keys(before || {}), ...Object.keys(after || {})])]
+    .filter(c => /^class_\d{1,2}$/.test(c) && before[c] !== after[c]);
+}
+const lessonsJson = () => Object.fromEntries(Object.entries(globalAllSchedules || {}).map(([c, v]) => [c, JSON.stringify((v && v.lessons) || {})]));
+export async function notifyScheduleEdit(classes, notify){
+  if(!classes.length) return null;
+  try{
+    const idToken = auth.currentUser && await auth.currentUser.getIdToken();
+    const r = await fetch('/.netlify/functions/schedule-notify', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idToken, classes, mode: notify ? 'now' : 'silent' }) });
+    const d = await r.json().catch(() => ({}));
+    if(!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+    if(!notify) return d;
+    const st = Object.values(d.result || {});
+    const sent = st.filter(x => x.status === 'sent'), queued = st.filter(x => x.status === 'queued');
+    if(sent.length) showToast(`🔔 Батькам надіслано: ${sent.map(x => x.lines.length).reduce((a, b) => a + b, 0)} змін(и)`);
+    else if(queued.length) showToast('🔔 Сповіщення піде батькам о 7:00 — уночі не турбуємо');
+    else if(st.some(x => x.status === 'baseline')) showToast('Розклад запамʼятовано — наступні зміни підуть батькам');
+    return d;
+  }catch(e){
+    showToast('⚠️ Розклад збережено, але сповістити батьків не вдалося: ' + e.message);
+    return null;
+  }
+}
+for(const name of ['saveMatrixCell', 'deleteMatrixCell', 'deleteMatrixRow', 'insertMatrixRow', 'autoBreaksForDay']){
+  const orig = window[name];
+  if(typeof orig !== 'function') continue;
+  window[name] = async function(...args){
+    const live = currentMatrixMode === 'live';
+    const box = document.getElementById('cell-notify');
+    const notify = !box || box.checked;              // галочку читаємо ДО збереження: вікно закриється
+    const before = live ? lessonsJson() : null;
+    const res = await orig.apply(this, args);
+    if(live) await notifyScheduleEdit(changedClasses(before, lessonsJson()), notify);
+    return res;
+  };
+}
+const openCell = window.openCellEditor;
+if(typeof openCell === 'function') window.openCellEditor = async function(...args){
+  const r = await openCell.apply(this, args);
+  // Щоразу знову увімкнено: «не повідомляти» — свідомий вибір для однієї правки
+  const box = document.getElementById('cell-notify'), wrap = document.getElementById('cell-notify-wrap');
+  if(box) box.checked = true;
+  if(wrap) wrap.style.display = currentMatrixMode === 'live' ? '' : 'none';
+  return r;
+};
