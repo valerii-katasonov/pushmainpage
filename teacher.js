@@ -7,7 +7,7 @@
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, push, remove, update, onValue } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { renderNewsFeed } from './news.js';
-import { db, auth, attendanceAuthor, canClearDayAbsence, clearDayAbsence, CLOUDINARY_URL, UPLOAD_PRESET, HW_FILE_EXT, HW_FILE_MAX_MB, fileExt, isImageUrl, isAudioUrl, cldImage, safeHttpUrl, getActiveClass, currentUserData, showToast, displayGrade, validDailyGrade, getClassNum, LEVEL_MAX_CLASS, LEVEL_LETTERS, renderHwItem, renderHwList, dayKeys, formatAttendanceSlotLabel, STICKER_GOAL, stickerGoal, escJs, escHtml, safeUrl, normalizeChildren, notifyEvent, logAction, renderBirthdays, teacherAccessMatrix, getUsersSnap, getStudentDir, stuName, gradeWritePaths, journalBaseDate, journalSlot, localDateString, isMasterTeacher, gradeTypesCache, subjKey, emailKey, subjectsForClassWeek } from './common.js';
+import { db, auth, attendanceAuthor, canClearDayAbsence, clearDayAbsence, CLOUDINARY_URL, UPLOAD_PRESET, uploadToCloudinary, HW_FILE_EXT, HW_FILE_MAX_MB, fileExt, isImageUrl, isAudioUrl, cldImage, safeHttpUrl, getActiveClass, currentUserData, showToast, displayGrade, validDailyGrade, getClassNum, LEVEL_MAX_CLASS, LEVEL_LETTERS, renderHwItem, renderHwList, dayKeys, formatAttendanceSlotLabel, STICKER_GOAL, stickerGoal, escJs, escHtml, safeUrl, normalizeChildren, notifyEvent, logAction, renderBirthdays, teacherAccessMatrix, getUsersSnap, getStudentDir, stuName, gradeWritePaths, journalBaseDate, journalSlot, localDateString, isMasterTeacher, gradeTypesCache, subjKey, emailKey, subjectsForClassWeek } from './common.js';
 import { populateTopicSelector, availableTopicsCache, planKey, loadAliases, isDoubleLesson, doubleLessonNumbers } from './curriculum.js';
 
 let currentHwImages=[];
@@ -814,7 +814,8 @@ window.hwFilesPicked=function(input){
   const files=Array.from(input.files||[]);
   if(!files.length){ clearHwAudioPreview('hw-audio-preview');if(lbl){lbl.textContent='Файл не обрано';lbl.style.color='var(--ink-3)';} return; }
   const bad=files.filter(f=>!HW_FILE_EXT.includes(fileExt(f.name)));
-  const big=files.filter(f=>f.size>HW_FILE_MAX_MB*1024*1024);
+  // Фото стискаємо перед відправкою (uploadToCloudinary) — для них межа більша
+  const big=files.filter(f=>f.size>(/^image\/(jpeg|png|webp|heic|heif)$/i.test(f.type||'')?40:HW_FILE_MAX_MB)*1024*1024);
   if(bad.length||big.length){
     input.value='';
     clearHwAudioPreview('hw-audio-preview');
@@ -890,7 +891,9 @@ async function runSave(btnId, label, sm, job){
         ? '⛔ Немає прав на запис у цей клас. Директор має відкрити його вам у «Матриці доступу вчителів».'
         : ('❌ Не збережено: '+((e&&e.message)||'невідома помилка'));
     }
-    showToast('❌ Не вдалося зберегти');
+    // Причину — і в підказку внизу: у швидкій картці ДЗ іншого місця для
+    // неї немає, і вчитель бачив лише «не вдалося», не знаючи, що робити.
+    showToast(denied?'⛔ Немає прав на запис у цей клас':('❌ Не вдалося зберегти: '+(((e&&e.message)||'невідома помилка').slice(0,160))));
   }finally{
     if(btn){ btn.disabled=false; btn.innerText=label; }
   }
@@ -1029,13 +1032,7 @@ window.saveHomework=function(){
     if(fileInput&&fileInput.files.length>0){
       sm.style.display='block';sm.innerText='⏳ Завантаження файлів...';
       sm.style.color='var(--warn)';sm.style.background='var(--warn-soft)';
-      const uploaded=await Promise.all(Array.from(fileInput.files).map(async file=>{
-        const fd=new FormData(); fd.append('file',file); fd.append('upload_preset',UPLOAD_PRESET);
-        const r=await fetch(CLOUDINARY_URL,{method:'POST',body:fd});
-        const d=await r.json();
-        if(!d.secure_url) throw new Error('файл не завантажився: '+(d.error&&d.error.message||'невідома причина'));
-        return d.secure_url;
-      }));
+      const uploaded=await Promise.all(Array.from(fileInput.files).map(file=>uploadToCloudinary(file)));
       finalImageUrls=[...finalImageUrls,...uploaded];
     }
 
@@ -2267,7 +2264,7 @@ export async function renderTeacherHwDay(){
           <div id="${id}-audio-preview" class="hw-audio-preview"></div>
           <div id="${id}-saved-files" class="hw-saved-list">${hwSavedAttachmentsHtml(have,'hwdRemoveAttachment',id)}</div>
           <p class="hw-file-hint">Фото, аудіо (MP3, M4A, WAV, OGG, AAC), документ
-            (DOC, DOCX) або таблиця (XLS, XLSX, CSV). До ${HW_FILE_MAX_MB} МБ на файл.
+            (DOC, DOCX) або таблиця (XLS, XLSX, CSV). До ${HW_FILE_MAX_MB} МБ на файл (великі фото портал зменшить сам).
             Нові файли додаються до збережених; непотрібні видаляються кнопкою ✕.</p>
           <div class="hwd-actions">
             <span class="hwd-dirty" id="${id}-dirty"></span>
@@ -2339,7 +2336,8 @@ window.hwdFilesPicked=function(id){
   const files=Array.from((input&&input.files)||[]);
   if(!files.length){ clearHwAudioPreview(id+'-audio-preview');if(lbl){lbl.textContent='Файл не обрано';lbl.style.color='var(--ink-3)';} return; }
   const bad=files.filter(f=>!HW_FILE_EXT.includes(fileExt(f.name)));
-  const big=files.filter(f=>f.size>HW_FILE_MAX_MB*1024*1024);
+  // Фото стискаємо перед відправкою (uploadToCloudinary) — для них межа більша
+  const big=files.filter(f=>f.size>(/^image\/(jpeg|png|webp|heic|heif)$/i.test(f.type||'')?40:HW_FILE_MAX_MB)*1024*1024);
   if(bad.length||big.length){
     input.value='';
     clearHwAudioPreview(id+'-audio-preview');
@@ -2382,13 +2380,9 @@ window.hwdSave=function(id){
     if(fileInput&&fileInput.files.length>0){
       const dm=document.getElementById(id+'-dirty');
       if(dm) dm.textContent='⏳ Завантаження файлів...';
-      const uploaded=await Promise.all(Array.from(fileInput.files).map(async file=>{
-        const fd=new FormData(); fd.append('file',file); fd.append('upload_preset',UPLOAD_PRESET);
-        const r=await fetch(CLOUDINARY_URL,{method:'POST',body:fd});
-        const d=await r.json();
-        if(!d.secure_url) throw new Error('файл не завантажився: '+((d.error&&d.error.message)||'невідома причина'));
-        return d.secure_url;
-      }));
+      let uploaded;
+      try{ uploaded=await Promise.all(Array.from(fileInput.files).map(file=>uploadToCloudinary(file))); }
+      catch(e){ if(dm) dm.textContent='❌ '+e.message; throw e; }   // не лишати «Завантаження...» назавжди
       images=[...images,...uploaded];
     }
 

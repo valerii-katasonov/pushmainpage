@@ -145,6 +145,73 @@ export const HW_FILE_EXT=['jpg','jpeg','png','gif','webp','heic','heif',
                           'doc','docx','xls','xlsx','csv',
                           'mp3','m4a','wav','ogg','oga','aac','flac','webm','opus'];
 export const HW_FILE_MAX_MB=10;
+
+// ── ЗАВАНТАЖЕННЯ ФАЙЛУ В CLOUDINARY — ОДНЕ МІСЦЕ НА ВЕСЬ ПОРТАЛ ──
+//
+// ЧОМУ. Фото з сучасного iPhone — 24–48 Мп і 5–12 МБ. Безкоштовний тариф
+// Cloudinary приймає зображення до 25 Мп і 10 МБ: такий знімок відхилявся,
+// а вчитель бачив лише «❌ Не вдалося зберегти» (жовтень 2026). До того ж
+// 10 МБ через мобільний інтернет — це хвилина очікування.
+//
+// Тому фото перед відправкою зменшуємо до UPLOAD_MAX_SIDE по довшій
+// стороні (для ДЗ і робіт цього з запасом вистачає) і стискаємо в JPEG.
+// Невеликі фото, GIF і не-зображення йдуть як є. Не вийшло прочитати
+// зображення (HEIC не в Safari) — теж як є: хай вирішує сервер.
+export const UPLOAD_MAX_SIDE = 2560;
+const UPLOAD_SHRINK_BYTES = 3 * 1024 * 1024, UPLOAD_SHRINK_PIXELS = 12e6, UPLOAD_TIMEOUT_MS = 120000;
+export function shrinkTarget(w, h, max = UPLOAD_MAX_SIDE){
+  const k = Math.min(1, max / Math.max(w, h));
+  return { w: Math.max(1, Math.round(w * k)), h: Math.max(1, Math.round(h * k)) };
+}
+export function needsShrink(file, w, h){
+  return !!file && /^image\/(jpeg|png|webp|heic|heif)$/i.test(file.type || '')
+    && (file.size > UPLOAD_SHRINK_BYTES || w * h > UPLOAD_SHRINK_PIXELS || Math.max(w, h) > UPLOAD_MAX_SIDE);
+}
+async function shrinkForUpload(file){
+  if(!file || !/^image\//i.test(file.type || '') || /gif|svg/i.test(file.type)) return file;
+  try{
+    const url = URL.createObjectURL(file);
+    const img = await new Promise((ok, bad) => { const i = new Image(); i.onload = () => ok(i); i.onerror = bad; i.src = url; });
+    URL.revokeObjectURL(url);
+    const w = img.naturalWidth, h = img.naturalHeight;
+    if(!needsShrink(file, w, h)) return file;
+    const t = shrinkTarget(w, h);
+    const cv = document.createElement('canvas'); cv.width = t.w; cv.height = t.h;
+    const ctx = cv.getContext('2d');
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, t.w, t.h);      // прозорий PNG не має стати чорним
+    ctx.drawImage(img, 0, 0, t.w, t.h);
+    const blob = await new Promise(ok => cv.toBlob(ok, 'image/jpeg', 0.85));
+    if(!blob || blob.size >= file.size) return file;
+    return new File([blob], String(file.name || 'photo').replace(/\.[^.]+$/, '') + '.jpg', { type: 'image/jpeg' });
+  }catch(e){ return file; }
+}
+// Пояснення людською мовою для відмови сервера чи мережі
+export function uploadErrorText(msg, name, net = false){
+  const m = String(msg || '');
+  const f = name ? `«${name}»: ` : '';
+  if(/exceed|too large|maximum|megapixel|file size/i.test(m)) return f + 'файл завеликий для сервера. Зменшіть фото або надішліть інший файл.';
+  if(/format|not allowed|invalid image|unsupported/i.test(m)) return f + 'такий формат файлу сервер не приймає.';
+  // Мережеві причини — лише для винятку fetch (net): текст сервера «Upload failed»
+  // містить «load failed» і інакше вдавав би обрив звʼязку.
+  if(net && /abort|timeout|timed out/i.test(m)) return f + 'повільний інтернет — файл не встиг завантажитися. Спробуйте ще раз або з Wi-Fi.';
+  if(net) return f + 'немає звʼязку з сервером файлів. Перевірте інтернет і спробуйте ще раз.';
+  return f + 'файл не завантажився (' + (m || 'невідома причина') + ')';
+}
+export async function uploadToCloudinary(file){
+  const ready = await shrinkForUpload(file);
+  const fd = new FormData(); fd.append('file', ready); fd.append('upload_preset', UPLOAD_PRESET);
+  const ctl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timer = ctl ? setTimeout(() => ctl.abort(), UPLOAD_TIMEOUT_MS) : null;
+  let r, d;
+  try{
+    r = await fetch(CLOUDINARY_URL, { method: 'POST', body: fd, ...(ctl ? { signal: ctl.signal } : {}) });
+    d = await r.json().catch(() => ({}));
+  }catch(e){ throw new Error(uploadErrorText(e && (e.name === 'AbortError' ? 'timeout' : e.message), file && file.name, true)); }
+  finally{ if(timer) clearTimeout(timer); }
+  if(!r.ok || !d.secure_url) throw new Error(uploadErrorText(d && d.error && d.error.message, file && file.name));
+  return d.secure_url;
+}
+window.uploadToCloudinary = uploadToCloudinary;
 const IMG_EXT=['jpg','jpeg','png','gif','webp','heic','heif'];
 const AUDIO_EXT=['mp3','m4a','wav','ogg','oga','aac','flac','webm','opus'];
 

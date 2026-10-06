@@ -1,6 +1,6 @@
 // Фото роботи належать одній оцінці й лежать у захищеному дзеркалі учня.
 import { ref, get } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, CLOUDINARY_URL, UPLOAD_PRESET, escHtml, safeHttpUrl } from './common.js';
+import { db, CLOUDINARY_URL, UPLOAD_PRESET, uploadToCloudinary, escHtml, safeHttpUrl } from './common.js';
 let photos=[],generation=0,loading=false,readError='',busy=false,changed=false;
 export function renderWorkPhotos(urls){
   const valid=(Array.isArray(urls)?urls:[]).map(safeHttpUrl).filter(Boolean);
@@ -11,7 +11,7 @@ function renderEditorWork(){
   const box=document.getElementById('gep-work-existing');if(!box)return;
   if(loading){box.textContent='Завантаження фото...';return;}
   if(readError){box.textContent='Не вдалося прочитати фото. Закрийте й відкрийте оцінку повторно.';return;}
-  box.innerHTML=photos.map((url,i)=>`<div style="display:flex;gap:8px;align-items:center;font-size:.8rem;">${renderWorkPhotos([url])}<button type="button" onclick="removeGradeWorkPhoto(${i})" style="width:auto;padding:4px;color:var(--red);" ${busy?'disabled':''}>✖</button></div>`).join('');
+  box.innerHTML=photos.map((url,i)=>`<div style="display:flex;gap:8px;align-items:center;font-size:.8rem;">${renderWorkPhotos([url])}<button type="button" onclick="removeGradeWorkPhoto(${i})" style="width:auto;padding:4px;color:var(--danger);" ${busy?'disabled':''}>✖</button></div>`).join('');
 }
 export async function loadGradeWork(cls,sid,ym,subj,date){
   const gen=++generation;photos=[];loading=true;readError='';pendingFiles=null;changed=false;
@@ -42,11 +42,10 @@ export async function prepareGradeWork(){
   // Послідовне завантаження зберігає вже отримані URL для повторної
   // спроби запису: збій бази не змушує завантажувати ті самі фото знову.
   while(files.length){
-    const file=files[0],form=new FormData();form.append('file',file);form.append('upload_preset',UPLOAD_PRESET);
-    const response=await fetch(CLOUDINARY_URL,{method:'POST',body:form});
-    const data=await response.json();
-    if(!response.ok||!safeHttpUrl(data.secure_url))throw Error('Фото не завантажено: '+(data.error?.message||'помилка сервера'));
-    photos.push(data.secure_url);changed=true;files.shift();
+    const file=files[0];
+    const url=await uploadToCloudinary(file);
+    if(!safeHttpUrl(url))throw Error('Фото не завантажено: сервер повернув невірну адресу');
+    photos.push(url);changed=true;files.shift();
     // FileList недоступний для поелементної зміни: решту файлів тримаємо
     // окремо, щоб повторна спроба не подвоїла успішні вкладення.
     pendingFiles=files.slice();

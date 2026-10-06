@@ -19,7 +19,7 @@ import { ref, get, set, child, query, orderByKey, startAt, endAt }
   from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { db, currentUserData, getActiveClass, escHtml, escJs, mondayOf, localDateString,
          renderHwItem, booksForSubject, nextLessonDate, dayNamesUA, dayKeys, subjKey, planKeyWith, fetchSubjectTeachers,
-         CLOUDINARY_URL, UPLOAD_PRESET, showToast }
+         CLOUDINARY_URL, UPLOAD_PRESET, uploadToCloudinary, showToast }
   from './common.js';
 import { topicNames } from './parent-student.js';
 import { ACTIVE_YEAR } from './director.js';
@@ -458,15 +458,7 @@ window.submitHomeworkPhotos = async function(){
   }
 
   try {
-    const uploaded = await Promise.all(Array.from(filesInput.files).map(async file => {
-      const fd = new FormData();
-      fd.append('file', file);
-      fd.append('upload_preset', UPLOAD_PRESET);
-      const r = await fetch(CLOUDINARY_URL, { method:'POST', body:fd });
-      const d = await r.json();
-      if(!d.secure_url) throw new Error('Помилка завантаження файлу: ' + (d.error?.message || 'невідомо'));
-      return d.secure_url;
-    }));
+    const uploaded = await Promise.all(Array.from(filesInput.files).map(file => uploadToCloudinary(file)));
 
     const subRef = child(ref(db), `homework_submissions/${cls}/${date}/${subjKey(subject)}/${sid}`);
     const prevSnap = await get(subRef);
