@@ -1485,7 +1485,7 @@ function rsmcc(lesson,dTName,isOvr,clsId,row,si){const sn=typeof lesson.subject=
 export function classHourRow(day, time){
   const hs = parseTimeRange(time).start;
   if(hs == null) return -1;
-  const rows = (day || []).map(raw => {
+  const rows = Array.from(day || [], raw => {
     const items = Array.isArray(raw) ? raw : (raw && raw.subject ? [raw] : []);
     const it = items.find(x => x && parseTimeRange(x.time).start != null);
     const b = it ? parseTimeRange(it.time) : null;
@@ -1499,7 +1499,11 @@ export function classHourRow(day, time){
     return { row: r, conflict: false };
   }
   let prev = -1; rows.forEach((r, i) => { if(r.b && r.b.start <= hs) prev = i; });
-  // У «дірці» між уроками (урок уже скінчився) — поруч із ним, накладки немає
+  // У «дірці» між уроками (урок уже скінчився): якщо там є порожній рядок
+  // (вільний урок, а далі ще уроки/гуртки) — саме в нього; інакше поруч.
+  for(let r = prev + 1; r < rows.length && !rows[r].b; r++){
+    if(!rows[r].lesson) return { row: r, conflict: false };
+  }
   return { row: Math.max(0, prev), conflict: false };
 }
 function classHourCell(h, conflict){
