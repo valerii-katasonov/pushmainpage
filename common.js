@@ -353,21 +353,25 @@ export async function getStudentDir(cls, force){
   // students_left/{клас} (пише removeStudent / transferStudent), а для тих,
   // кого прибрали раніше, — з прив'язок батьків, де ключ і імʼя ще лежать
   // поруч. Ні те, ні те не обовʼязкове: родині ці вузли закриті.
-  const left = {};
   const [lsnap, links] = await Promise.all([
     get(child(ref(db), `students_left/${cls}`)).catch(() => null),
-    (currentUserData && currentUserData.role !== 'parent' && currentUserData.role !== 'student')
-      ? getParentLinks().catch(() => null) : null
+    isFamilyRole() ? null : getParentLinks().catch(() => null)
   ]);
+  const left = leftOf(cls, byId, lsnap && lsnap.exists() ? lsnap.val() : null, links);
+  _stuDir[cls] = { byId, byName, byLoose, left };
+  return _stuDir[cls];
+}
+const isFamilyRole = () => !currentUserData || currentUserData.role === 'parent' || currentUserData.role === 'student';
+// Вибулі класу: students_left/{клас} + (для давніших) прив'язки батьків
+export function leftOf(cls, byId, leftNode, links){
+  const left = {};
   for(const k of Object.values(links || {}))
     for(const kid of normalizeChildren(k))
       if(kid && kid.class === cls && kid.studentId && !(kid.studentId in byId) && kid.studentName)
         left[kid.studentId] = { name: String(kid.studentName) };
-  if(lsnap && lsnap.exists())
-    for(const [sid, r] of Object.entries(lsnap.val() || {}))
-      if(r && r.name && !(sid in byId)) left[sid] = { name: String(r.name), to: r.to || '' };
-  _stuDir[cls] = { byId, byName, byLoose, left };
-  return _stuDir[cls];
+  for(const [sid, r] of Object.entries(leftNode || {}))
+    if(r && r.name && !(sid in byId)) left[sid] = { name: String(r.name), to: r.to || '' };
+  return left;
 }
 // «Імʼя (вибув)» / «Імʼя (переведено в 5 кл.)» для учня, якого вже немає в класі
 export function leftLabel(rec){
@@ -497,8 +501,15 @@ export function nameKeyLoose(s){
   return nameKey(s).split(' ').filter(Boolean).sort().join(' ');
 }
 export async function preloadStudentDirs(){
-  const snap = await get(child(ref(db), 'students_list'));
+  // Разом зі списками — і вибулі (див. getStudentDir): довідник, складений
+  // тут, інакше «не знав» би їх, і в історії знову стояв би ключ.
+  const [snap, lsnap, links] = await Promise.all([
+    get(child(ref(db), 'students_list')),
+    isFamilyRole() ? null : get(child(ref(db), 'students_left')).catch(() => null),
+    isFamilyRole() ? null : getParentLinks().catch(() => null)
+  ]);
   const all = snap.exists() ? snap.val() : {};
+  const leftAll = lsnap && lsnap.exists() ? (lsnap.val() || {}) : {};
   for(const cls in all){
     const byId = {}, byName = {}, byLoose = {};
     for(const sid in all[cls]){
@@ -509,8 +520,11 @@ export async function preloadStudentDirs(){
       // Неоднозначні збіги позначаємо і далі не використовуємо
       byLoose[lk] = (lk in byLoose) ? '__ambiguous__' : sid;
     }
-    _stuDir[cls] = { byId, byName, byLoose };
+    _stuDir[cls] = { byId, byName, byLoose, left: leftOf(cls, byId, leftAll[cls], links) };
   }
+  // Клас, з якого вибули всі (або порожній у списку), теж має знати вибулих
+  for(const cls of new Set([...Object.keys(leftAll), ...Object.values(links || {}).flatMap(k => normalizeChildren(k).map(x => x && x.class))]))
+    if(cls && /^class_\d{1,2}$/.test(cls) && !_stuDir[cls]) _stuDir[cls] = { byId: {}, byName: {}, byLoose: {}, left: leftOf(cls, {}, leftAll[cls], links) };
   return _stuDir;
 }
 // Який ключ учня використовувати: з профілю чи знайдений заново.
