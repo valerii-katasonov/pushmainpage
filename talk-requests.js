@@ -34,6 +34,25 @@ const RECENT_DAYS = 30;               // скільки показувати з�
 // Ключ пошти — так само, як у правилах бази (auth.token.email.replace('.','_'))
 export const seKey = e => String(e || '').replace(/\./g, '_');
 const norm = s => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+// КОПІЯ sameSubj з access.js
+// Чи це той самий предмет. Назви приходять із різних місць — матриця
+// доступу, розклад із файлу, каталог — і пишуться по-різному: «Укр. мова» і
+// «Українська мова», «Англ. мова» і «Англійська мова», чергування «Музика /
+// Фізкультура». Точне порівняння тихо відрізало вчителя від сповіщень.
+// Правило: однакові після нормалізації; або є спільна частина чергування;
+// або слова попарно збігаються, де скорочення (від 3 літер) — початок слова.
+function sameSubj(a, b){
+  const nz = s => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  const A = nz(a), B = nz(b);
+  if(!A || !B) return false;
+  if(A === B) return true;
+  const pa = A.split(/\s*\/\s*/).filter(x => x.length >= 3), pb = B.split(/\s*\/\s*/).filter(x => x.length >= 3);
+  if(pa.length > 1 || pb.length > 1) return pa.some(x => pb.some(y => sameSubj(x, y)));
+  const ta = A.split(/[\s.,()\-]+/).filter(Boolean), tb = B.split(/[\s.,()\-]+/).filter(Boolean);
+  if(!ta.length || ta.length !== tb.length) return false;
+  return ta.every((x, i) => { const y = tb[i]; if(x === y) return true; const s = x.length < y.length ? x : y, l = x.length < y.length ? y : x; return s.length >= 3 && l.startsWith(s); });
+}
+
 const p2 = n => String(n).padStart(2, '0');
 const dm = ts => { const d = new Date(Number(ts) || 0); return `${p2(d.getDate())}.${p2(d.getMonth() + 1)}`; };
 const clsLabel = c => String(c).replace('class_', '') + ' кл.';
@@ -65,7 +84,7 @@ export function teacherSees(req, mySubjects, isHead){
   if(isHead) return true;
   const list = (Array.isArray(mySubjects) ? mySubjects : Object.values(mySubjects || {})).filter(s => typeof s === 'string');
   if(list.some(s => s.trim() === 'Всі предмети')) return true;
-  return list.some(s => norm(s) === norm(req.subject) || subjKey(s) === subjKey(req.subject));
+  return list.some(s => sameSubj(s, req.subject) || subjKey(s) === subjKey(req.subject));
 }
 
 // Що батько може надіслати зараз (null — можна, інакше пояснення)

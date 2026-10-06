@@ -7,7 +7,7 @@ import { ref, set, get, child, update } from "https://www.gstatic.com/firebasejs
 import { loadGradeWork, prepareGradeWork, setGradeWorkBusy, hasGradeWorkChanges } from './grade-work.js';
 import { ACTIVE_YEAR } from './director.js';
 import { topicNames } from './parent-student.js';
-import { db, getActiveClass, currentUserData, displayGrade, gradeClass6, calculateStudentWeightedAvg, validDailyGrade, getClassNum, LEVEL_MAX_CLASS, GRADE_WEIGHTS, dayKeys, dayNamesUA, showToast, normalizeTimeRange, localDateString, summarizeAttendanceSlots, attendanceForLesson, gradeTypesCache, escJs, escHtml, notifyEvent, logAction, getUserRoles, getUsersSnap, stuName, gradeWritePaths, journalGradeKey, journalBaseDate, journalSlot, expandAltSubjects, altOptions, splitAltName, altPairKey, mondayOf, isBreakItem, insertSlot, removeSlot, makeBreak, withBreaks, slotBounds, hhmmFromMins, emailKey, subjKey, planKeyWith, getDateRange, openTabByKey, fetchSubjectTeachers } from './common.js';
+import { db, getActiveClass, currentUserData, displayGrade, gradeClass6, calculateStudentWeightedAvg, validDailyGrade, getClassNum, LEVEL_MAX_CLASS, GRADE_WEIGHTS, dayKeys, dayNamesUA, showToast, normalizeTimeRange, localDateString, summarizeAttendanceSlots, attendanceForLesson, gradeTypesCache, escJs, escHtml, notifyEvent, logAction, getUserRoles, getUsersSnap, stuName, gradeWritePaths, journalGradeKey, journalBaseDate, journalSlot, expandAltSubjects, altOptions, splitAltName, altPairKey, mondayOf, isBreakItem, insertSlot, removeSlot, makeBreak, withBreaks, slotBounds, hhmmFromMins, emailKey, subjKey, planKeyWith, getDateRange, openTabByKey, fetchSubjectTeachers, parseTimeRange } from './common.js';
 import { grantAccess } from './access.js';
 import { auth } from './common.js';
 
@@ -1468,26 +1468,66 @@ function noTeacherCell(){
 }
 
 function rsmcc(lesson,dTName,isOvr,clsId,row,si){const sn=typeof lesson.subject==='string'?lesson.subject:(lesson.subject.ua||'');const ts=lesson.time||'';const isB=isBreakItem(lesson);const isX=lesson.type==='extra';const sl=JSON.stringify(lesson).replace(/&/g,"&amp;").replace(/'/g,"&apos;").replace(/"/g,"&quot;");const oc=`event.stopPropagation();openCellEditor('${clsId}',${row},${si},${sl})`;const wc=hasWC(row,clsId,si);if(isB)return`<div class="matrix-cell cell-break" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" onclick="${oc}"><div class="cell-subj">${escHtml(sn)}</div><div class="cell-time">${escHtml(ts)}</div></div>`;if(isX){let xi='';if(lesson.extraData){if(lesson.extraData.format==='individual')xi=`<div class="cell-student-linked">👤${escHtml(lesson.extraData.student||'')}</div>`;else xi=`<div class="cell-student-linked" style="background:var(--surface-2);color:var(--brand-ink);">👥Група</div>`;}const th=dTName?`<div class="cell-teacher">👨‍🏫${escHtml(dTName)}${isOvr?' <span data-tip="Веде не той, хто закріплений за предметом — заміна">🔄</span>':''}</div>`:noTeacherCell();return`<div class="matrix-cell cell-club ${wc}" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" onclick="${oc}"><div class="cell-subj">🎸${escHtml(sn)}</div>${th}${xi}<div class="cell-time">🕘${escHtml(ts)}</div></div>`;}const th=dTName?`<div class="cell-teacher">👨‍🏫${escHtml(dTName)}${isOvr?' <span data-tip="Веде не той, хто закріплений за предметом — заміна">🔄</span>':''}</div>`:noTeacherCell();return`<div class="matrix-cell cell-lesson ${wc}" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" onclick="${oc}"><div class="cell-subj">${escHtml(sn)}</div>${th}<div class="cell-time">🕘${escHtml(ts)}</div></div>`;}
-// Класні години цього дня — рядком під сіткою.
+// ── КЛАСНА ГОДИНА В СІТЦІ ──
+// Раніше класні години йшли списком над сіткою, і директор мусив звіряти
+// його з клітинками в голові. Тепер класна година стоїть у стовпчику свого
+// класу, у рядку свого часу — зеленою клітинкою 🎓. Лежить вона, як і
+// раніше, окремо (class_hour), тож клітинка лише показує її: натискання
+// не відкриває редактор уроку, а підказує, де її змінюють.
 //
-// ЧОМУ РЯДКОМ, А НЕ КЛІТИНКОЮ В СІТЦІ. Сітка редагована: натискання на
-// клітинку відкриває редактор і пише в schedules. Класна година там не
-// живе, тож підроблена клітинка або мовчки загубилася б при збереженні,
-// або, гірше, потрапила б у розклад і зникла з першим імпортом.
-window.renderClassHourNote=function(day){
-  const box=document.getElementById('matrix-hours-note');
-  if(!box)return;
-  const all=window.allClassHours||{};
-  const list=[];
-  for(let i=1;i<=11;i++){
-    const h=all[`class_${i}`];
-    if(h&&h.day===day&&h.time) list.push(`${i} кл. — ${h.time}`);
+// Рядок: той, чий час накриває початок класної години (перерва — нормально,
+// урок — накладка ⚠️); якщо вона після всіх уроків — перший вільний рядок.
+export function classHourRow(day, time){
+  const hs = parseTimeRange(time).start;
+  if(hs == null) return -1;
+  const rows = (day || []).map(raw => {
+    const items = Array.isArray(raw) ? raw : (raw && raw.subject ? [raw] : []);
+    const it = items.find(x => x && parseTimeRange(x.time).start != null);
+    const b = it ? parseTimeRange(it.time) : null;
+    return { b, lesson: items.some(x => x && x.subject && !isBreakItem(x)) };
+  });
+  const hit = rows.findIndex(r => r.b && r.b.start <= hs && hs < r.b.end);
+  if(hit >= 0) return { row: hit, conflict: rows[hit].lesson };
+  const last = rows.reduce((m, r, i) => r.b ? i : m, -1);
+  if(last < 0 || hs >= rows[last].b.end){
+    let r = last + 1; while(r < rows.length && (rows[r].b || rows[r].lesson)) r++;
+    return { row: r, conflict: false };
   }
-  box.style.display=list.length?'block':'none';
-  box.innerHTML=list.length
-    ? `🕘 <b>Класні години цього дня:</b> ${escHtml(list.join(' · '))}<br>
-       <span style="color:var(--ink-3);">Їх немає в сітці — вони зберігаються окремо від розкладу. Не ставте на цей час уроки.</span>`
-    : '';
+  let prev = -1; rows.forEach((r, i) => { if(r.b && r.b.start <= hs) prev = i; });
+  // У «дірці» між уроками (урок уже скінчився) — поруч із ним, накладки немає
+  return { row: Math.max(0, prev), conflict: false };
+}
+function classHourCell(h, conflict){
+  return `<div class="matrix-cell cell-classhour${conflict ? ' conflict' : ''}" role="button" tabindex="0"
+    onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"
+    onclick="event.stopPropagation();showToast('🎓 Класну годину змінює класний керівник: вкладка «Клас» → «🕘 Класна година»')">
+    <div class="cell-subj">🎓 Класна година</div>
+    ${conflict ? '<div class="cell-teacher">⚠️ накладка з уроком</div>' : ''}
+    <div class="cell-time">🕘${escHtml(h.time)}</div></div>`;
+}
+function injectClassHours(day){
+  const tb = document.getElementById('matrix-tbody');
+  if(!tb) return;
+  const all = window.allClassHours || {};
+  for(let c = 1; c <= 11; c++){
+    const cls = `class_${c}`, h = all[cls];
+    if(!h || h.day !== day || !h.time) continue;
+    const pos = classHourRow(dayArr(globalAllSchedules[cls]?.lessons?.[day]), h.time);
+    if(!pos || pos.row < 0) continue;
+    while(tb.rows.length <= pos.row){
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td class="time-col" style="color:var(--ink-3);">🎓</td>' + '<td></td>'.repeat(11);
+      tb.appendChild(tr);
+    }
+    const td = tb.rows[pos.row].cells[c];
+    if(!td) continue;
+    td.insertAdjacentHTML('afterbegin', classHourCell(h, pos.conflict));
+  }
+}
+// Список над сіткою більше не потрібен — класні години стоять у самій сітці
+window.renderClassHourNote=function(){
+  const box=document.getElementById('matrix-hours-note');
+  if(box){ box.style.display='none'; box.innerHTML=''; }
 };
 
 window.renderMatrixGrid=function(){const day=document.getElementById('matrix-day-select').value;window.renderClassHourNote(day);const th=document.getElementById('matrix-thead-row');const tb=document.getElementById('matrix-tbody');th.innerHTML='<th class="time-col">№/Час</th>';for(let i=1;i<=11;i++)th.innerHTML+=`<th>${i} Кл</th>`;tb.innerHTML='';let maxR=8;for(let i=1;i<=11;i++){const cls=`class_${i}`;maxR=Math.max(maxR,dayArr(globalAllSchedules[cls]?.lessons?.[day]).length);}maxR+=1;let lc=1;for(let row=0;row<maxR;row++){let tr=document.createElement('tr');let bc=0;let lsc=0;for(let c=1;c<=11;c++){const clsId=`class_${c}`;const la=dayArr(globalAllSchedules[clsId]?.lessons?.[day]);const raw=la[row];let items=Array.isArray(raw)?raw:(raw&&raw.subject?[raw]:[]);items.forEach(l=>{if(l&&l.subject){if(isBreakItem(l))bc++;else lsc++;}});}const isB=bc>0&&bc>=lsc;const isE=bc===0&&lsc===0;if(isB)tr.innerHTML='<td class="time-col" style="background:var(--accent-soft);color:var(--accent-ink);">☕</td>';else if(isE)tr.innerHTML='<td class="time-col" style="color:var(--ink-3);font-size:1.1rem;">+</td>';else tr.innerHTML=`<td class="time-col">Ур.${lc++}</td>`;for(let c=1;c<=11;c++){const clsId=`class_${c}`;const la=dayArr(globalAllSchedules[clsId]?.lessons?.[day]);const raw=la[row];let items=Array.isArray(raw)?raw:(raw&&raw.subject?[raw]:[]);let td=document.createElement('td');let h='';if(items.length>0){h+=`<div class="matrix-cell-container">`;items.forEach((lesson,si)=>{const sn=typeof lesson.subject==='string'?lesson.subject:(lesson.subject.ua||'');const te=lesson.teacherEmail||'';let dn=lesson.teacherName||'';let isOvr=false;const isB2=isBreakItem(lesson);if(!isB2){if(!te&&sn){const dt=lesson.type==='extra'?window.getClubTeacher?.(clsId,sn):window.getDefaultTeacher(clsId,sn);if(dt)dn=dt.name;
@@ -1925,3 +1965,13 @@ if(typeof openCell === 'function') window.openCellEditor = async function(...arg
   if(wrap) wrap.style.display = currentMatrixMode === 'live' ? '' : 'none';
   return r;
 };
+
+// Класні години — поверх готової сітки (див. injectClassHours)
+{
+  const base = window.renderMatrixGrid;
+  window.renderMatrixGrid = function(...a){
+    const r = base.apply(this, a);
+    try{ injectClassHours(document.getElementById('matrix-day-select').value); }catch(e){ console.warn('класні години в сітці:', e.message); }
+    return r;
+  };
+}

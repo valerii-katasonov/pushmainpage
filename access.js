@@ -16,7 +16,7 @@
 // Сам teacher_access не змінює формату: його читають правила бази,
 // кабінет учителя і розсилка сповіщень.
 // ═══════════════════════════════════════════════════════════════
-import { ref, get, child, push, update } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+import { ref, get, child, push, update, query, orderByKey, startAt, endAt } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { db, auth, currentUserData, subjKey } from './common.js';
 
 export const ACCESS_SRC = {
@@ -129,6 +129,24 @@ export function revokeAllPaths(se, access, note){
 //          ІНШИМИ людьми.
 // Звірка пропонує знімати тільки bad.
 const norm = s => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+// Чи це той самий предмет. Назви приходять із різних місць — матриця
+// доступу, розклад із файлу, каталог — і пишуться по-різному: «Укр. мова» і
+// «Українська мова», «Англ. мова» і «Англійська мова», чергування «Музика /
+// Фізкультура». Точне порівняння тихо відрізало вчителя від сповіщень.
+// Правило: однакові після нормалізації; або є спільна частина чергування;
+// або слова попарно збігаються, де скорочення (від 3 літер) — початок слова.
+export function sameSubj(a, b){
+  const nz = s => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  const A = nz(a), B = nz(b);
+  if(!A || !B) return false;
+  if(A === B) return true;
+  const pa = A.split(/\s*\/\s*/).filter(x => x.length >= 3), pb = B.split(/\s*\/\s*/).filter(x => x.length >= 3);
+  if(pa.length > 1 || pb.length > 1) return pa.some(x => pb.some(y => sameSubj(x, y)));
+  const ta = A.split(/[\s.,()\-]+/).filter(Boolean), tb = B.split(/[\s.,()\-]+/).filter(Boolean);
+  if(!ta.length || ta.length !== tb.length) return false;
+  return ta.every((x, i) => { const y = tb[i]; if(x === y) return true; const s = x.length < y.length ? x : y, l = x.length < y.length ? y : x; return s.length >= 3 && l.startsWith(s); });
+}
+
 const parts = s => { const n = norm(s); const p = n.split(/\s*\/\s*/).filter(x => x.length >= 3); return p.length > 1 ? [n, ...p] : [n]; };
 
 //   schedules      — schedules/{клас}/{lessons|clubs}/{день}/[слоти]
@@ -178,7 +196,7 @@ export function judgeSubject(classes, se, cls, subject){
   if(c && c.heads.has(se)) return { level: 'ok', why: 'класний керівник' };
   if(subject === ALL_SUBJECTS) return { level: 'weak', why: 'на всі предмети, але не класний керівник' };
   if(!c) return { level: 'bad', why: 'у класу немає розкладу' };
-  const hits = parts(subject).map(n => c.subj.get(n)).filter(Boolean);
+  const hits = [...c.subj.entries()].filter(([k]) => sameSubj(k, subject)).map(([, e]) => e);
   if(!hits.length) return { level: 'bad', why: 'предмета немає в розкладі класу' };
   if(hits.some(e => e.owners.has(se))) return { level: 'ok', why: 'за цією людиною в розкладі/каталозі' };
   if(hits.some(e => e.open)) return { level: 'weak', why: 'у розкладі класу, учителя не вказано' };
@@ -225,7 +243,7 @@ export function lessonTeachersOn({ lessons, access, heads, subs, cls, weekday, k
   const nm = s => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
   const holders = name => Object.entries(access || {}).filter(([, row]) => {
     const l = row && row[cls];
-    return (Array.isArray(l) ? l : Object.values(l || {})).some(v => typeof v === 'string' && (v.trim() === ALL_SUBJECTS || nm(v) === nm(name)));
+    return (Array.isArray(l) ? l : Object.values(l || {})).some(v => typeof v === 'string' && (v.trim() === ALL_SUBJECTS || sameSubj(v, name)));
   }).map(([k]) => k);
   for(const [idx, slot] of slots){
     const items = Array.isArray(slot) ? slot : (slot && typeof slot === 'object' && Object.keys(slot).length ? [slot] : []);
@@ -234,7 +252,7 @@ export function lessonTeachersOn({ lessons, access, heads, subs, cls, weekday, k
       for(const name of itemNames(it)){
         if(NO_NOTIFY_RE.test(name)) continue;
         const s = subs || {};
-        const cover = (s[idx] && nm(s[idx].subject) === nm(name)) ? s[idx] : (s.any && nm(s.any.subject) === nm(name)) ? s.any : null;
+        const cover = (s[idx] && sameSubj(s[idx].subject, name)) ? s[idx] : (s.any && sameSubj(s.any.subject, name)) ? s.any : null;
         if(cover && cover.subEmail){ out.add(keyOf(cover.subEmail)); continue; }
         if(it.teacherEmail){ out.add(keyOf(it.teacherEmail)); continue; }
         holders(name).forEach(k => out.add(k));
@@ -278,17 +296,24 @@ export function subHistory(substitutions, keyOf){
   for(const k of Object.keys(out)) out[k] = [...new Set(out[k])].sort();
   return out;
 }
+// Дати замін людини в класі з цього предмета (назви — гнучко, див. sameSubj)
+export function subDatesFor(subHist, se, cls, subject){
+  const pre = `${se}|${cls}|`, out = [];
+  for(const [k, v] of Object.entries(subHist || {}))
+    if(k.startsWith(pre) && sameSubj(k.slice(pre.length), subject)) out.push(...v);
+  return [...new Set(out)].sort();
+}
 export function refineJudge(base, { se, cls, subject, acc, meta, subHist }){
   if(meta && meta.ok) return { level: 'ok', why: 'підтверджено директором' };
   if(base.level !== 'weak' || subject === ALL_SUBJECTS) return base;
   const nm = s => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
-  const others = Object.keys(acc || {}).filter(k => k !== se && accessList(acc[k] && acc[k][cls]).some(s => nm(s) === nm(subject)));
-  const dates = ((subHist || {})[`${se}|${cls}|${nm(subject)}`] || []);
+  const others = Object.keys(acc || {}).filter(k => k !== se && accessList(acc[k] && acc[k][cls]).some(s => sameSubj(s, subject)));
+  const dates = subDatesFor(subHist, se, cls, subject);
   const dm = d => d.slice(8, 10) + '.' + d.slice(5, 7);
   const when = dates.length ? dates.slice(-3).map(dm).join(', ') : '';
   if(others.length && dates.length) return { level: 'bad', why: `лишилося після заміни (${when}); предмет має`, others, kind: 'sub' };
   // Ті, хто сам лише заміняв, не роблять предмет «спірним» для основного вчителя
-  const real = others.filter(k => !((subHist || {})[`${k}|${cls}|${nm(subject)}`] || []).length);
+  const real = others.filter(k => !subDatesFor(subHist, k, cls, subject).length);
   if(real.length) return { level: 'dup', why: 'цей предмет у класі має також', others: real };
   if(dates.length) return { ...base, why: `${base.why}; була заміна ${when}` };
   return base;
@@ -310,7 +335,8 @@ export function tempAccessPaths(se, cls, subject, date, current, by){
   const subj = { ...(cur.subj || {}) };
   if(subject) subj[subjKey(subject)] = String(subject).slice(0, 80);
   const at = Date.now();
-  const p = { [`temp_access/${se}/${cls}`]: { until, subj, date: String(date).slice(0, 10), by: by || '', at } };
+  const lastDate = [String(cur.date || ''), String(date).slice(0, 10)].sort().pop();
+  const p = { [`temp_access/${se}/${cls}`]: { until, subj, date: lastDate, by: by || '', at } };
   p[`access_log/${logKey()}`] = { at, by: by || '', t: se, cls, src: 'substitute', act: 'grant', subj: subject ? [subject] : ['заміна'],
                                   note: `тимчасово до ${new Date(until).toLocaleDateString('uk-UA')}` };
   return p;
@@ -330,4 +356,31 @@ export function mergeTempAccess(matrix, temp, now = Date.now()){
     out[cls] = [...new Set([...accessList(out[cls]), ...add])];
   }
   return out;
+}
+
+// Заміну скасували — тимчасовий доступ перераховуємо з тих замін, що
+// лишилися (від 3 днів тому до 3 місяців уперед). Не лишилося жодної —
+// доступ знімаємо одразу, а не чекаємо, поки мине строк.
+//   subsByDate — substitutions за цей проміжок: {дата: {клас: {слот: {...}}}}
+export function tempFromSubs(se, cls, subsByDate, keyOf){
+  let until = 0, last = '';
+  const subj = {};
+  for(const [d, byCls] of Object.entries(subsByDate || {}))
+    for(const s of Object.values((byCls || {})[cls] || {})){
+      if(!s || !s.subEmail || keyOf(s.subEmail) !== se) continue;
+      until = Math.max(until, tempUntil(d));
+      if(d > last) last = d;
+      if(s.subject) subj[subjKey(s.subject)] = String(s.subject).slice(0, 80);
+    }
+  return until ? { until, subj, date: last } : null;
+}
+export async function recomputeTempAccess(se, cls, today, keyOf){
+  const [y, m, d] = String(today).split('-').map(Number);
+  const iso = dt => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+  const from = iso(new Date(y, m - 1, d - TEMP_GRACE_DAYS)), to = iso(new Date(y, m - 1, d + 92));
+  const snap = await get(query(ref(db, 'substitutions'), orderByKey(), startAt(from), endAt(to)));
+  const t = tempFromSubs(se, cls, snap.exists() ? snap.val() : {}, keyOf);
+  const p = { [`temp_access/${se}/${cls}`]: t ? { ...t, by: who(), at: Date.now() } : null };
+  await update(ref(db), p);
+  return t;
 }

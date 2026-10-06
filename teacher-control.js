@@ -85,26 +85,58 @@ export function lastGradeDates(grades){
 export const TALK_LATE_DAYS = 3;
 // Учителі предмета в класі за матрицею доступу; немає — класний керівник
 // (так само вибирає адресатів сервер у notify.js)
-export function subjectTeacherKeys(access, heads, cls, subject){
-  const want = norm(subject), out = [];
+// КОПІЯ sameSubj з access.js (тут без імпорту — модуль тестується окремо)
+// Чи це той самий предмет. Назви приходять із різних місць — матриця
+// доступу, розклад із файлу, каталог — і пишуться по-різному: «Укр. мова» і
+// «Українська мова», «Англ. мова» і «Англійська мова», чергування «Музика /
+// Фізкультура». Точне порівняння тихо відрізало вчителя від сповіщень.
+// Правило: однакові після нормалізації; або є спільна частина чергування;
+// або слова попарно збігаються, де скорочення (від 3 літер) — початок слова.
+function sameSubj(a, b){
+  const nz = s => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  const A = nz(a), B = nz(b);
+  if(!A || !B) return false;
+  if(A === B) return true;
+  const pa = A.split(/\s*\/\s*/).filter(x => x.length >= 3), pb = B.split(/\s*\/\s*/).filter(x => x.length >= 3);
+  if(pa.length > 1 || pb.length > 1) return pa.some(x => pb.some(y => sameSubj(x, y)));
+  const ta = A.split(/[\s.,()\-]+/).filter(Boolean), tb = B.split(/[\s.,()\-]+/).filter(Boolean);
+  if(!ta.length || ta.length !== tb.length) return false;
+  return ta.every((x, i) => { const y = tb[i]; if(x === y) return true; const s = x.length < y.length ? x : y, l = x.length < y.length ? y : x; return s.length >= 3 && l.startsWith(s); });
+}
+// Кому приписати запит. Якщо директор при звірці доступу підтвердив, хто
+// веде предмет (teacher_access_meta…ok), — лише цим людям: інакше в
+// «Контролі» винним виявлявся б і той, у кого лишився зайвий доступ.
+export function subjectTeacherKeys(access, heads, cls, subject, meta){
+  const out = [];
   for(const [key, row] of Object.entries(access || {})){
     const raw = row && row[cls];
     const list = (Array.isArray(raw) ? raw : Object.values(raw || {})).filter(v => typeof v === 'string');
-    if(list.some(v => v.trim() === 'Всі предмети' || norm(v) === want)) out.push(key);
+    if(list.some(v => v.trim() === 'Всі предмети' || sameSubj(v, subject))) out.push(key);
   }
+  const confirmed = out.filter(k => Object.values((meta?.[k] || {})[cls] || {}).some(m => m && m.ok && sameSubj(m.s, subject)));
+  if(confirmed.length) return confirmed;
   if(!out.length && heads?.[cls]?.teacherEmail) out.push(emailKey(heads[cls].teacherEmail));
   return [...new Set(out)];
 }
+// Навчальні дні (пн–пт) від дня запиту до сьогодні: запит у пʼятницю ввечері
+// не стає «простроченим» у понеділок.
+export function schoolDaysSince(ts, now){
+  const a = new Date(Number(ts) || 0), b = new Date(now);
+  a.setHours(0, 0, 0, 0); b.setHours(0, 0, 0, 0);
+  let n = 0;
+  for(const d = new Date(a); d < b; d.setDate(d.getDate() + 1)){ const w = d.getDay(); if(w >= 1 && w <= 5) n++; }
+  return n;
+}
 // talk_requests/{клас}/{батько}/{id} → [{key, items:[{cls, subject, days}]}]
-export function talkOverdue(talk, access, heads, now, lateDays = TALK_LATE_DAYS){
+export function talkOverdue(talk, access, heads, now, lateDays = TALK_LATE_DAYS, meta = null){
   const by = new Map();
   for(const [cls, parents] of Object.entries(talk || {}))
     for(const reqs of Object.values(parents || {}))
       for(const r of Object.values(reqs || {})){
         if(!r || r.status !== 'open') continue;
-        const days = Math.floor((now - (Number(r.ts) || 0)) / 864e5);
+        const days = schoolDaysSince(r.ts, now);
         if(days < lateDays) continue;
-        const keys = subjectTeacherKeys(access, heads, cls, r.subject);
+        const keys = subjectTeacherKeys(access, heads, cls, r.subject, meta);
         for(const k of keys.length ? keys : ['—']){
           const cur = by.get(k) || { key: k, items: [] };
           cur.items.push({ cls, subject: String(r.subject || ''), days });
@@ -192,11 +224,11 @@ export async function loadControl(kind){
   // Тижні, що перекривають період (buildWorkload рахує потижнево)
   const mondays = []; for(let m = mondayOf(from); m <= to; m = addDays(m, 7)) mondays.push(m);
   const gFrom = addDays(today, -60), months = [...new Set([gFrom.slice(0, 7), addDays(today, -30).slice(0, 7), today.slice(0, 7)])];
-  const [schedules, catalogs, users, access, choices, subs, topics, calendar, settings, talk, heads, ...perClass] = await Promise.all([
+  const [schedules, catalogs, users, access, choices, subs, topics, calendar, settings, talk, heads, accMeta, ...perClass] = await Promise.all([
     val('schedules'), val('subjects_catalog'), val('users'), val('teacher_access'), val('schedule_alt'),
     range('substitutions', mondays[0], addDays(mondays.at(-1), 6)), val('lesson_topics'), val(`academic_year/${ACTIVE_YEAR}`), val('control_settings'),
     // Голос батьків — необовʼязковий: поки правила не опубліковано, решта працює
-    val('talk_requests').catch(() => null), val('class_teachers').catch(() => null),
+    val('talk_requests').catch(() => null), val('class_teachers').catch(() => null), val('teacher_access_meta').catch(() => null),
     ...CLASSES.map(c => range(`homeworks/${c}`, from, to)),
     ...CLASSES.flatMap(c => months.map(m => val(`grades/${c}/${m}`)))
   ]);
@@ -218,7 +250,7 @@ export async function loadControl(kind){
   const names = {};
   for(const t of byEmail.values()) names[emailKey(t.email)] = t.name;
   for(const u of Object.values(users || {})) if(u && u.email && !names[emailKey(u.email)]) names[emailKey(u.email)] = u.name || u.displayName || u.email;
-  const talkLate = talkOverdue(talk, access, heads, Date.now()).map(x => ({ ...x, name: names[x.key] || x.key.replace(/_/g, '.') }));
+  const talkLate = talkOverdue(talk, access, heads, Date.now(), TALK_LATE_DAYS, accMeta).map(x => ({ ...x, name: names[x.key] || x.key.replace(/_/g, '.') }));
   return { ...out, kind, from, to, today, settings: { ...CONTROL_DEFAULTS, ...(settings || {}) },
            talkLate };
 }
@@ -254,7 +286,7 @@ export function controlHtml(r){
           ${x.gaps.length || x.noGrades.length ? `<button type="button" class="ct-remind" onclick="ctRemind('${escJs(x.email)}')">🔔 Нагадати</button>` : ''}
         </td></tr>`).join('')
     + `</tbody></table></div><p class="cm-hint">Відсоток — частка уроків, що вже відбулися, де відмічено тему / задано ДЗ. Для ДЗ не рахуються класи й предмети-винятки (налаштування нижче). Спарені уроки — один день.</p></div>`;
-  if(r.talkLate) h += `<div class="ct-block"><h4>💬 Запити батьків без відповіді понад ${TALK_LATE_DAYS} дні</h4>`
+  if(r.talkLate) h += `<div class="ct-block"><h4>💬 Запити батьків без відповіді понад ${TALK_LATE_DAYS} навчальні дні</h4>`
     + (r.talkLate.length ? `<ul>${r.talkLate.map(x => `<li><b>${escHtml(x.key === '—' ? 'учителя не знайдено в матриці доступу' : x.name)}</b>: ${x.items.length} — `
         + x.items.map(i => `${escHtml(clsLabel(i.cls))} ${escHtml(i.subject)} (${i.days} дн.)`).join(', ') + '</li>').join('')}</ul>`
       : '<p class="empty-msg">Усі запити батьків отримали відповідь вчасно.</p>')
