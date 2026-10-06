@@ -1191,7 +1191,11 @@ window.openVisualMatrixModal=async function(mode){
   // потрібен лише для випадайки «хто веде урок» у редакторі клітинки.
   let uSnap=null, usersDenied=false;
   try{ uSnap=await getUsersSnap(); }
-  catch(e){ usersDenied=true; denied.push(`список персоналу (users): ${e.message}`); }
+  // Відмова тут — норма для ролей без доступу до users (учитель, режим
+  // налагодження). Сітка й імена вчителів від цього не страждають: імена
+  // беруться з каталогу предметів. Бракує лише випадайки «хто веде» в
+  // редакторі клітинки — про це й кажемо, без лякаючого «Permission denied».
+  catch(e){ usersDenied=true; }
   window.globalTeachersList=[];
   if(uSnap&&uSnap.exists()){const u=uSnap.val();for(let uid in u){const us=u[uid];const rs=getUserRoles(us);if(rs.some(r=>r==='teacher'||r==='class_teacher'||r==='art_school_teacher'||r==='music_teacher')&&us.email&&!us.disabled){const n=(us.firstName||us.lastName)?`${us.firstName||''} ${us.lastName||''}`.trim():"Ім'я";const se=emailKey(us.email);window.globalTeachersList.push({email:us.email,name:n,safeEmail:se});}}}
   window._matrixAccDenied=accDenied;
@@ -1238,10 +1242,11 @@ window.openVisualMatrixModal=async function(mode){
     const list=Array.isArray(arr)?arr:Object.values(arr||{});
     list.forEach(i=>{ const items=Array.isArray(i)?i:(i&&i.subject?[i]:[]); mon+=items.length; });
   });
-  const accNote = denied.length
+  const accNote = (denied.length
     ? ` · Недоступно: ${denied.join(' · ')}. Сітка побудована без цих даних —`
       + ' імена вчителів не підставляються. Уроки, час і предмети редагуються звично.'
-    : '';
+    : '')
+    + (usersDenied ? ' · Список учителів для вибору в клітинці бачить лише директор.' : '');
   say((clsKeys.length
     ? `${mode==='live'?'Чинний розклад':'Чернетка «'+mode+'»'}: класів ${clsKeys.length}, уроків у понеділок ${mon}.`
     : `${mode==='live'?'Чинний розклад':'Чернетка «'+mode+'»'} порожня — жодного класу. Додайте уроки клацанням по клітинці.`)
