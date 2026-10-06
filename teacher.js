@@ -472,12 +472,14 @@ window.openQuickJournal=async function(){
   document.getElementById('quick-journal-modal').style.display='flex';
   try{
     const ym=date.slice(0,7);
-    const [stSnap,gSnap,tSnap,aSnap,cardSnap,scaleSnap]=await Promise.all([
+    // Картки учнів (і алергії в них) тут не читаємо: у швидкому журналі
+    // позначка ⚠️ лише заважала, а медичні дані потрібні класному
+    // керівнику, не кожному предметнику (див. «🗂 Картки учнів»).
+    const [stSnap,gSnap,tSnap,aSnap,scaleSnap]=await Promise.all([
       get(child(ref(db),`students_list/${cls}`)),
       get(child(ref(db),`grades/${cls}/${ym}/${subj}/${date}`)),
       get(child(ref(db),`grade_types/${cls}/${ym}/${subj}/${date}`)),
       get(child(ref(db),`attendance/${cls}/${date}`)),
-      get(child(ref(db),`student_cards/${cls}`)),
       get(child(ref(db),`grade_scales/${cls}/${subj}`))
     ]);
     const junior=getClassNum(cls)<=LEVEL_MAX_CLASS;
@@ -493,12 +495,6 @@ window.openQuickJournal=async function(){
         .sort((a,b)=>a.nm.localeCompare(b.nm,'uk')):[];
     if(students.length===0){box.innerHTML='<p class="empty-msg">У класі немає учнів.</p>';return;}
     const g=gSnap.exists()?gSnap.val():{}, t=tSnap.exists()?tSnap.val():{}, a=aSnap.exists()?aSnap.val():{};
-    // Алергії показуємо і тут: на уроці це найпотрібніше місце
-    const allerg={};
-    if(cardSnap.exists()&&stSnap.exists()){
-      const cards=cardSnap.val(), names=stSnap.val();
-      for(const k in names)if(cards[k]&&cards[k].allergies)allerg[k]=cards[k].allergies;
-    }
     const slotKey=document.getElementById('t-mark-absent-lesson')?.value||'all';
     box.innerHTML=students.map((s,i)=>{
       // СТАТУС — САМЕ ЦЬОГО УРОКУ, А НЕ БУДЬ-ЯКОГО ЗА ДЕНЬ.
@@ -535,7 +531,7 @@ window.openQuickJournal=async function(){
              data-orig="${escHtml(current)}" placeholder="${box.dataset.modifiers==='1'?'1–6 ±':`1–${box.dataset.scale}`}">`;
       return `<div class="qj-row" data-sid="${escHtml(s.sid)}" data-name="${escHtml(s.nm)}">
         <div class="qj-n">${i+1}</div>
-        <div class="qj-name">${escHtml(s.nm)}${allerg[s.sid]?` <span class="po-allergy" data-tip="${escHtml(allerg[s.sid])}">⚠️</span>`:''}${
+        <div class="qj-name">${escHtml(s.nm)}${
           elsewhere.length?`<span class="qj-elsewhere" data-tip="Відмічено на іншому уроці">· ${escHtml(elsewhere.join(', '))}</span>`:''}</div>
         <div class="qj-att">
           <button type="button" class="qj-b ok${status===''?' on':''}" aria-label="Присутній: ${escHtml(s.nm)}" onclick="qjSet(this,'')">✓</button>
@@ -1740,6 +1736,7 @@ export async function listenTeacherAttendance(){
 window.listenTeacherAttendance=listenTeacherAttendance;
 // ══════════ TEACHER DASHBOARD ══════════
 export function loadTeacherDashboard(){
+  if(window.refreshClassCardsBtn) window.refreshClassCardsBtn(getActiveClass());
   renderNewsFeed('t-news-feed');
   const cls=getActiveClass();const uid=auth.currentUser.uid;
   // Retake counter

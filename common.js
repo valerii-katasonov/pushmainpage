@@ -347,8 +347,33 @@ export async function getStudentDir(cls, force){
       byLoose[lk] = (lk in byLoose) ? '__ambiguous__' : sid;
     }
   }
-  _stuDir[cls] = { byId, byName, byLoose };
+  // ВИБУЛІ. Учня прибрали зі списку класу (перейшов до іншої школи чи
+  // переведений) — а його відмітки, оцінки й коментарі в історії лишаються,
+  // і там замість імені стояв технічний ключ «-P-OCC9…». Імʼя беремо зі
+  // students_left/{клас} (пише removeStudent / transferStudent), а для тих,
+  // кого прибрали раніше, — з прив'язок батьків, де ключ і імʼя ще лежать
+  // поруч. Ні те, ні те не обовʼязкове: родині ці вузли закриті.
+  const left = {};
+  const [lsnap, links] = await Promise.all([
+    get(child(ref(db), `students_left/${cls}`)).catch(() => null),
+    (currentUserData && currentUserData.role !== 'parent' && currentUserData.role !== 'student')
+      ? getParentLinks().catch(() => null) : null
+  ]);
+  for(const k of Object.values(links || {}))
+    for(const kid of normalizeChildren(k))
+      if(kid && kid.class === cls && kid.studentId && !(kid.studentId in byId) && kid.studentName)
+        left[kid.studentId] = { name: String(kid.studentName) };
+  if(lsnap && lsnap.exists())
+    for(const [sid, r] of Object.entries(lsnap.val() || {}))
+      if(r && r.name && !(sid in byId)) left[sid] = { name: String(r.name), to: r.to || '' };
+  _stuDir[cls] = { byId, byName, byLoose, left };
   return _stuDir[cls];
+}
+// «Імʼя (вибув)» / «Імʼя (переведено в 5 кл.)» для учня, якого вже немає в класі
+export function leftLabel(rec){
+  if(!rec || !rec.name) return '';
+  const to = /^class_\d{1,2}$/.test(rec.to || '') ? `переведено в ${rec.to.replace('class_', '')} кл.` : 'вибув';
+  return `${rec.name} (${to})`;
 }
 export function invalidateStudentDir(cls){ if(cls) delete _stuDir[cls]; else Object.keys(_stuDir).forEach(k=>delete _stuDir[k]); }
 // Чи вже прочитано список класу. Питання не пусте: половина кабінету
@@ -525,7 +550,7 @@ export function matchSid(dir, name){
 window.preloadStudentDirs = preloadStudentDirs;
 export function stuName(cls, key){
   const d = _stuDir[cls];
-  return (d && d.byId[key]) || key;
+  return (d && (d.byId[key] || (d.left && leftLabel(d.left[key])))) || key;
 }
 // Синхронний зворотний переклад — для побудови шляхів
 export function stuId(cls, name){
@@ -3880,13 +3905,15 @@ export async function renderParentsBlock(containerId,cls){
     const [stSnap,plVal,cardSnap]=await Promise.all([
       get(child(ref(db),`students_list/${cls}`)),
       getParentLinks(),
-      get(child(ref(db),`student_cards/${cls}`))
+      // Картки читають лише класний керівник і адміністрація. Іншим —
+      // список без позначок, а не помилка на весь блок.
+      get(child(ref(db),`student_cards/${cls}`)).catch(()=>null)
     ]);
     let usersSnap=null, slSnap=null, loginInfoDenied=false;
     try{
       [usersSnap,slSnap]=await Promise.all([getUsersSnap(), get(child(ref(db),'student_links'))]);
     }catch(e){ loginInfoDenied=true; }
-    const cards=cardSnap.exists()?cardSnap.val():{};
+    const cards=cardSnap&&cardSnap.exists()?cardSnap.val():{};
     const students=stSnap.exists()?Object.values(stSnap.val()).sort((a,b)=>String(a).localeCompare(String(b),'uk')):[];
     if(students.length===0){box.innerHTML='<p class="empty-msg">У цьому класі ще немає учнів.</p>';return;}
     const loggedIn=new Set();
@@ -4042,6 +4069,55 @@ async function loadClassTeacherCache(){
   classTeacherCache={};
   if(s.exists()){const d=s.val();for(const c in d)if(d[c]?.teacherEmail)classTeacherCache[c]=d[c].teacherEmail;}
 }
+// ── «🗂 КАРТКИ УЧНІВ» ДЛЯ КЛАСНОГО КЕРІВНИКА ──
+// Окреме місце в «Швидких діях»: увесь клас списком, біля кожного — що
+// важливо з картки одразу (алергія, заборона забирати) і скільки полів
+// заповнено. Натиснув — відкрилася картка (openStudentCard).
+const CARD_KEYS = CARD_GROUPS.flatMap(g => g.fields.map(f => f.k));
+export function cardSummary(c){
+  const v = k => String((c && c[k]) || '').trim();
+  const none = s => !s || /^(немає|нема|ні|-|—|no|brak)$/i.test(s);
+  return { filled: CARD_KEYS.filter(k => v(k)).length, total: CARD_KEYS.length,
+           allergy: !none(v('allergies')), ban: !none(v('pickupBan')), medical: !none(v('conditions')) || !none(v('meds')) };
+}
+export async function isHeadOf(cls){
+  const r = currentUserData?.role;
+  if(r === 'director' || r === 'administrator' || isMasterTeacher(r)) return true;
+  await loadClassTeacherCache().catch(() => {});
+  return !!(cls && classTeacherCache[cls] && currentUserData?.email && classTeacherCache[cls].toLowerCase() === currentUserData.email.toLowerCase());
+}
+window.refreshClassCardsBtn = async function(cls){
+  const b = document.getElementById('t-cards-btn');
+  if(b) b.style.display = (await isHeadOf(cls)) ? '' : 'none';
+};
+window.openClassCards = async function(){
+  const cls = getActiveClass();
+  const box = document.getElementById('ccards-list');
+  document.getElementById('ccards-class').textContent = cls ? `· ${String(cls).replace('class_', '')} клас` : '';
+  document.getElementById('class-cards-modal').style.display = 'flex';
+  box.innerHTML = '<p class="empty-msg">Завантаження...</p>';
+  try{
+    const [stSnap, cardSnap] = await Promise.all([get(child(ref(db), `students_list/${cls}`)), get(child(ref(db), `student_cards/${cls}`))]);
+    const list = stSnap.exists() ? Object.entries(stSnap.val()).map(([k, n]) => ({ k, n: String(n) })).sort((a, b) => a.n.localeCompare(b.n, 'uk')) : [];
+    const cards = cardSnap.exists() ? cardSnap.val() : {};
+    if(!list.length){ box.innerHTML = '<p class="empty-msg">У класі немає учнів.</p>'; return; }
+    box.innerHTML = list.map(s => {
+      const c = cardSummary(cards[s.k]);
+      return `<button type="button" class="cc-row" onclick="openStudentCard('${escJs(cls)}','${escJs(s.k)}','${escJs(s.n)}')">
+        <span class="cc-name">${escHtml(s.n)}</span>
+        ${c.ban ? '<span class="cc-chip bad">🚫 заборона забирати</span>' : ''}
+        ${c.allergy ? '<span class="cc-chip bad">⚠️ алергія</span>' : ''}
+        ${c.medical ? '<span class="cc-chip warn">💊 медичне</span>' : ''}
+        <span class="cc-chip ${c.filled === 0 ? 'warn' : c.filled === c.total ? 'ok' : ''}">${c.filled ? `${c.filled}/${c.total}` : 'порожня'}</span>
+      </button>`;
+    }).join('');
+  }catch(e){
+    box.innerHTML = /permission/i.test(e.message || '')
+      ? '<p class="empty-msg">Картки цього класу бачить лише його класний керівник і адміністрація.</p>'
+      : `<p class="empty-msg" style="color:var(--danger);">Не вдалося завантажити: ${escHtml(e.message)}</p>`;
+  }
+};
+
 let cardTarget={cls:'',key:'',name:''};
 window.openStudentCard=async function(cls,key,name){
   try{
@@ -4074,7 +4150,9 @@ window.openStudentCard=async function(cls,key,name){
     // напис-заглушка, і людина не знала б, зламалося чи просто повільно.
     console.error("common.js → sc-fields", err);
     const _b=document.getElementById("sc-fields");
-    if(_b)_b.innerHTML='<p class="empty-msg" style="color:var(--danger);">Не вдалося завантажити: '+((err&&err.message)||'невідома помилка')+'</p>';
+    if(_b)_b.innerHTML=/permission/i.test((err&&err.message)||'')
+      ? '<p class="empty-msg">Картку учня бачать лише класний керівник цього класу й адміністрація.</p>'
+      : '<p class="empty-msg" style="color:var(--danger);">Не вдалося завантажити: '+escHtml((err&&err.message)||'невідома помилка')+'</p>';
   }
 };
 window.closeStudentCard=function(){document.getElementById('student-card-modal').style.display='none';};

@@ -2766,6 +2766,15 @@
 .fw-box{background:var(--surface);border:1px solid var(--brand-line);border-radius:10px;padding:9px 11px;margin-bottom:10px;}
 .fw-catch{border-color:var(--warn-line);background:var(--warn-soft);}
 .fw-sched{border-color:var(--brand);}
+.qa-cards{background:var(--brand-ink);color:#fff;}
+.cc-hint{font-size:.78rem;color:var(--ink-3);text-align:center;margin:-4px 0 10px;}
+.cc-row{display:flex;align-items:center;gap:8px;width:100%;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:9px 11px;margin:0 0 6px;color:var(--ink);font-weight:600;font-size:.88rem;cursor:pointer;}
+.cc-row:hover{border-color:var(--brand);}
+.cc-name{flex:1;min-width:0;overflow-wrap:anywhere;}
+.cc-chip{font-size:.72rem;font-weight:600;padding:2px 7px;border-radius:9px;background:var(--surface-2);color:var(--ink-2);white-space:nowrap;}
+.cc-chip.warn{background:var(--warn-soft);color:var(--warn);}
+.cc-chip.bad{background:var(--danger-soft);color:var(--danger);}
+.cc-chip.ok{background:var(--ok-soft);color:var(--ok);}
 .cell-notify{display:flex;gap:8px;align-items:flex-start;margin-top:14px;padding:9px 11px;border-radius:10px;background:var(--brand-soft);border:1px solid var(--brand-line);font-weight:600;font-size:.85rem;color:var(--brand-deep);cursor:pointer;}
 .cell-notify input{width:auto;margin:2px 0 0;}
 .cell-notify small{display:block;font-weight:400;color:var(--ink-3);font-size:.75rem;margin-top:2px;}
@@ -4210,6 +4219,7 @@
         <button onclick="openJournalModal('teacher')" class="qa-btn qa-journal">📖 Журнал</button>
         <button onclick="showUngraded()" class="qa-btn qa-ungraded">🔍 Без оцінок</button>
         <button onclick="openQuickJournal()" class="qa-btn qa-quick">⚡ Швидкий журнал</button>
+        <button id="t-cards-btn" onclick="openClassCards()" class="qa-btn qa-cards" style="display:none;">🗂 Картки учнів</button>
         <button onclick="openClassBroadcast()" class="qa-btn qa-broadcast">✉️ Повідомлення класу</button>
         <button onclick="printClassSchedule()" class="qa-btn qa-print">🖨️ Друк розкладу</button>
         <button onclick="openStickerStatsModal()" class="qa-btn" style="background:var(--warn);color:#fff;">🌟 Статистика наліпок</button>
@@ -5191,6 +5201,15 @@
     <div id="sc-fields"></div>
     <button id="sc-save" onclick="saveStudentCard()" style="background:var(--brand-deep);color:#fff;margin-top:14px;">💾 Зберегти</button>
     <button onclick="closeStudentCard()" style="background:var(--surface-2);color:var(--ink);margin-top:7px;border:1px solid var(--line);">Закрити</button>
+  </div>
+</div>
+<!-- Картки учнів класу — для класного керівника (common.js, openClassCards) -->
+<div id="class-cards-modal" class="modal-overlay">
+  <div class="modal-content" style="max-width:620px;text-align:left;">
+    <h2 style="color:var(--brand-ink);margin-top:0;text-align:center;">🗂 Картки учнів <span id="ccards-class" style="font-weight:400;color:var(--ink-3);font-size:.9rem;"></span></h2>
+    <p class="cc-hint">Медичні відомості, хто забирає дитину, контакти. Бачать лише класний керівник і адміністрація.</p>
+    <div id="ccards-list"><p class="empty-msg">Завантаження...</p></div>
+    <button onclick="document.getElementById('class-cards-modal').style.display='none'" style="background:var(--surface-2);color:var(--ink);margin-top:12px;border:1px solid var(--line);">Закрити</button>
   </div>
 </div>
 <!-- Вхід учня: додати, змінити або прибрати власну пошту для входу -->

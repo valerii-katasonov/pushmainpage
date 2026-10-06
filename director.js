@@ -6,10 +6,10 @@
 // (Class Teacher Assignment lives in curriculum.js — see that file's
 // header for why.)
 // ═══════════════════════════════════════════════════════════════
-import { ref, set, get, child, push, remove, update, query, limitToLast, orderByKey, endBefore } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+import { ref, set, get, child, push, remove, update, query, limitToLast, orderByKey, endBefore, startAt } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { auth, db, countAttendanceDays, attendanceAuthor, canClearDayAbsence, clearDayAbsence, showToast, getClassNum, LEVEL_MAX_CLASS, displayGrade, gradeClass6, teacherAccessMatrix, getWeekDates, formatAttendanceSlotLabel, gradeTypesCache, loadGradeTypesCache, calculateStudentWeightedAvg, escJs, escHtml, localDateString, normalizeRoles, getUserRoles, mergeAccountRoles, parentAccountPatch, ROLE_LABELS, currentUserData, dayNamesUA, sendPasswordReset, normalizeChildren, renderParentsBlock, logAction, AUDIT_LABELS, getParentProfile, parentFullName, getSchoolRange, getAllUsers, invalidateUsersCache, getUsersSnap, stuName, invalidateStudentDir, subjectsLabel, syncStaffCard, shrinkImage, dayKeys, invalidateParentLinks, emailKey } from './common.js';
 import { loadCustomRoles, customRoles, ROLE_PERMS, PERM_GROUPS, ORGANIZER_DEFAULT, roleDef } from './common.js';
-import { setAccess, revokeAllPaths, revokeAccess, accessList, accessBasis, judgeSubject, refineJudge, subHistory, notifyWeekdays, grantTempAccess, ACCESS_SRC, ALL_SUBJECTS } from './access.js';
+import { setAccess, revokeAllPaths, revokeAccess, accessList, accessBasis, judgeSubject, refineJudge, subHistory, subDatesFor, notifyWeekdays, grantTempAccess, recomputeTempAccess, ACCESS_SRC, ALL_SUBJECTS } from './access.js';
 import { subjKey } from './common.js';
 
 let directorSkillsTemp=[];
@@ -1424,7 +1424,10 @@ window.assignSubstitute=async function(cls,idx,subject,origName,val){
 };
 window.clearSubstitute=async function(cls,idx){
   const date=document.getElementById('sa-date').value;
+  // Хто був на заміні — щоб перерахувати його тимчасовий доступ
+  const was=await get(child(ref(db),`substitutions/${date}/${cls}/${idx}`)).then(s=>s.exists()?s.val():null).catch(()=>null);
   await remove(ref(db,`substitutions/${date}/${cls}/${idx}`));
+  if(was&&was.subEmail)await recomputeTempAccess(emailKey(was.subEmail),cls,localDateString,emailKey).catch(e=>console.warn('Тимчасовий доступ:',e.message));
   showToast('Заміну прибрано');
   window.loadAbsenceDay();
 };
@@ -1823,7 +1826,10 @@ window.saveStudentName=async function(cls,key,oldName){
 window.removeStudent=async function(cls,key,name){
   if(!confirm(`Прибрати ${name} зі списку ${cls.replace('class_','')} класу?\n\nВиставлені оцінки, відвідуваність і коментарі ЗАЛИШАТЬСЯ в журналі —\nвони зберігаються окремо і не видаляються.\n\nПродовжити?`))return;
   try{
-    await remove(ref(db,`students_list/${cls}/${key}`));
+    // Імʼя лишається в students_left: у старих відмітках, оцінках і
+    // коментарях учень показується «Імʼя (вибув)», а не технічним ключем.
+    await update(ref(db),{[`students_list/${cls}/${key}`]:null,
+      [`students_left/${cls}/${key}`]:{name:String(name).slice(0,120),at:Date.now(),by:currentUserData?.email||''}});
     invalidateStudentDir(cls);
     if(window.preloadStudentDirs) await window.preloadStudentDirs();
     showToast(`🗑️ ${name} прибраний зі списку`);
@@ -1867,8 +1873,10 @@ window.transferStudent=async function(){
     if(!key)throw new Error('Учня не знайдено у списку класу.');
     // Add to the destination first, remove from the source second — if the second
     // write fails the student is duplicated (visible, fixable) rather than lost.
+    const realName=(await get(child(ref(db),`students_list/${fromCls}/${key}`))).val()||name;
     await push(ref(db,`students_list/${toCls}`),name);
-    await remove(ref(db,`students_list/${fromCls}/${key}`));
+    await update(ref(db),{[`students_list/${fromCls}/${key}`]:null,
+      [`students_left/${fromCls}/${key}`]:{name:String(realName).slice(0,120),to:toCls,at:Date.now(),by:currentUserData?.email||''}});
     const changes=await repointStudentAccounts(name,fromCls,toCls);
     await push(ref(db,'migration_log'),{type:'transfer',student:name,from:fromCls,to:toCls,at:localDateString,by:'director'});
     out.innerHTML=`<div class="data-card" style="border-left-color:var(--ok);background:var(--surface-2);margin-top:0;"><b style="color:var(--ok);">✅ ${escHtml(name)} → ${toCls.replace('class_','')} клас</b><br><span style="font-size:.8rem;color:var(--ink-2);">Оновлено: ${changes.length?escHtml(changes.join(', ')):'лише список класу (акаунтів ще немає)'}</span></div>`;
@@ -2794,7 +2802,9 @@ async function loadAccessData(){
   const logSnap = await get(query(ref(db, 'access_log'), orderByKey(), limitToLast(60))).catch(() => null);
   // Історія замін — щоб упізнати доступ, що лишився після одноразової
   // заміни. Не критична: без неї просто не буде цієї підказки.
-  const subsAll = await get(child(ref(db), 'substitutions')).then(s => s.exists() ? s.val() : {}).catch(() => ({}));
+  // Лише останній рік: давніші заміни для звірки нічого не важать, а вузол росте
+  const yearAgo = new Date(Date.now() - 400 * 864e5).toISOString().slice(0, 10);
+  const subsAll = await get(query(ref(db, 'substitutions'), orderByKey(), startAt(yearAgo))).then(s => s.exists() ? s.val() : {}).catch(() => ({}));
   const names = {};
   if(usersSnap && usersSnap.exists()) for(const u of Object.values(usersSnap.val())){
     if(!u || !u.email) continue;
@@ -2965,7 +2975,7 @@ window.accReconcile = function(){
     for(const x of r.subjects.filter(x => x.j.level === 'dup')){
       const gk = `${r.cls}|${x.s.trim().toLowerCase()}`;
       const g = groups.get(gk) || { cls: r.cls, subj: x.s, holders: [] };
-      g.holders.push({ se: r.se, s: x.s, meta: x.meta, sub: (ACC.data.subHist[`${r.se}|${r.cls}|${x.s.trim().toLowerCase().replace(/\s+/g, ' ')}`] || []).length,
+      g.holders.push({ se: r.se, s: x.s, meta: x.meta, sub: subDatesFor(ACC.data.subHist, r.se, r.cls, x.s).length,
                        manual: !!(x.meta && x.meta.src === 'manual') });
       groups.set(gk, g);
     }
