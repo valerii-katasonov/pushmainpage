@@ -92,7 +92,7 @@ function renderGradeTypeButtons(){
   }).join('')
   // Тематична — не з довідника коефіцієнтів: ваги в неї немає, вона
   // завершує тему. Тому кнопка своя й завжди остання.
-  + `<button type="button" class="type-btn type-btn-thematic" data-type="${THEMATIC}" data-tip="${THEMATIC_LABEL}: закриває тему, середній бал далі рахується заново" onclick="selectGradeType('${THEMATIC}')">📘 ${THEMATIC}</button>`;
+  + `<button type="button" class="type-btn type-btn-thematic" data-type="${THEMATIC}" data-tip="Тематична — закриває тему" onclick="selectGradeType('${THEMATIC}')">📘 ${THEMATIC}</button>`;
 }
 // Підказка в редакторі для тематичної: середньозважений поточних оцінок
 // теми (від попередньої тематичної учня до цього стовпця). Учитель
@@ -249,7 +249,7 @@ window.confirmGrade=async function(){
   closeGradeEditor();renderJournalTable();showToast(`✅ ${stuName(gepCls,gepStudent)}: ${displayGrade(val,gepCls,journalNumericScale)} (${gepType})`);
   // Сповіщаємо батьків/учня. Оцінку показуємо у вигляді, який бачить сім'я
   // (для 1-5 класів — літерою, а не цифрою).
-  notifyEvent('grade',{class:gepCls,studentName:stuName(gepCls,gepStudent),subject:gepSubj,value:displayGrade(val,gepCls,journalNumericScale)});
+  notifyEvent('grade',{class:gepCls,studentName:stuName(gepCls,gepStudent),subject:gepSubj,value:displayGrade(val,gepCls,journalNumericScale)+(gepType===THEMATIC?' (тематична)':'')});
   logAction('grade_set',{cls:gepCls,target:stuName(gepCls,gepStudent),subject:gepSubj,date:gepDate,value:val,gtype:gepType});
 };
 window.deleteGrade=async function(){
@@ -769,7 +769,7 @@ window.renderJournalTable=async function(){
       if(colTypesSnap.exists())Object.assign(journalColumnTypes,colTypesSnap.val());
       if(colSnap.exists())Object.assign(manualCounts,colSnap.val());
     });
-    journalCache={grades:gradesData,types:typesData};
+    journalCache={grades:gradesData,types:typesData,colTypes:journalColumnTypes};
     const attDataAll=attSnap.exists()?attSnap.val():{};
     const retakeData=retakeSnap.exists()?retakeSnap.val():{};
     const attData={};for(let d in attDataAll)if(months.some(ym=>d.startsWith(ym)))attData[d]=attDataAll[d];
@@ -859,7 +859,7 @@ window.renderJournalTable=async function(){
       const last=slot===Math.max(...dateCols.filter(c=>c.ds===ds).map(c=>c.slot));
       const add=canEdit&&last&&slot<30
         ?`<button type="button" class="j-add-column" onclick="addJournalColumn('${ds}')" aria-label="Додати стовпець" data-tip="Додати ще одну оцінку на цей день">＋</button>`
-         +`<button type="button" class="j-add-column j-add-thematic" onclick="addJournalColumn('${ds}','${THEMATIC}')" aria-label="Додати стовпець тематичної" data-tip="Тематична оцінка: окремий стовпець, після неї середній бал рахується заново">📘</button>`:'';
+         +`<button type="button" class="j-add-column j-add-thematic" onclick="addJournalColumn('${ds}','${THEMATIC}')" aria-label="Додати стовпець тематичної" data-tip="Додати тематичну (ТО)">📘</button>`:'';
       const remove=canEdit&&last&&manual===slot&&slot>scheduled
         ?`<button type="button" class="j-remove-column" onclick="removeJournalColumn('${ds}')" aria-label="Видалити додатковий стовпець" data-tip="Видалити порожній додатковий стовпець">−</button>`:'';
       const actions=add||remove?`<div class="j-column-actions">${remove}${add}</div>`:'';
@@ -962,7 +962,35 @@ window.handleGradeClick=function(e,cls,subj,ds,student,yMonth,existingVal,existi
 // ══════════ PHASE 4b: PER-DATE PRESET "ТИП" (before any grades exist) ══════════
 window.setJournalColumnType=async function(cls,subj,yMonth,date,type){
   try{
-    await set(ref(db,`journal_column_types/${cls}/${yMonth}/${subj}/${date}`),type||null);
+    // Стовпець стає тематичним (або перестає ним бути), а оцінки в ньому
+    // вже стоять: тип кожної оцінки зберігається окремо, тож без переведення
+    // стовпець лише «називався б» тематичним, а рахувався б як звичайний.
+    const prev=journalCache.colTypes?.[date]||'';
+    const toTh=type===THEMATIC, fromTh=prev===THEMATIC&&!toTh;
+    const patch={[`journal_column_types/${cls}/${yMonth}/${subj}/${date}`]:type||null};
+    if(toTh||fromTh){
+      const cell=journalCache.grades?.[date]||{};
+      const sids=Object.keys(cell).filter(sid=>cell[sid]!==''&&cell[sid]!=null
+        &&(toTh?(journalCache.types?.[date]?.[sid]||'П')!==THEMATIC:journalCache.types?.[date]?.[sid]===THEMATIC));
+      if(sids.length){
+        const newType=toTh?THEMATIC:(type||'П');
+        const msg=toTh
+          ?`У стовпці вже є оцінки: ${sids.length}. Зробити їх тематичними?\n\nТак — оцінки стануть тематичними (ТО) і закриють тему.\nСкасувати — стовпець не зміниться.`
+          :`У стовпці тематичні оцінки: ${sids.length}. Перевести їх у «${newType}»?\n\nТак — вони знову рахуватимуться в поточному середньому.\nСкасувати — стовпець не зміниться.`;
+        if(!confirm(msg)){renderJournalTable();return;}
+        sids.forEach(sid=>{
+          patch[`grade_types/${cls}/${yMonth}/${subj}/${date}/${sid}`]=newType;
+          patch[`student_grades/${cls}/${sid}/${yMonth}/${subj}/${date}/t`]=newType;
+        });
+        await update(ref(db),patch);
+        logAction('grade_set',{cls,subject:subj,date,value:`тип стовпця → ${newType}: ${sids.length} оц.`});
+        showToast(`✅ Тип стовпця: ${newType} · оцінок переведено: ${sids.length}`);
+        renderJournalTable();
+        return;
+      }
+    }
+    await update(ref(db),patch);
+    if(toTh||fromTh)renderJournalTable();
     showToast(type?`✅ Тип на ${journalBaseDate(date).split('-').reverse().join('.')}: ${type}`:'🗑️ Тип знято');
   }catch(e){showToast('❌ Тип не збережено: '+e.message);renderJournalTable();}
 };

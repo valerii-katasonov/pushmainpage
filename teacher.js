@@ -204,6 +204,7 @@ export function loadCurrentTopicAndHW(){
   const bookCustomEl=document.getElementById('hw-textbook-custom');
   if(pagesEl)pagesEl.value='';
   if(bookCustomEl)bookCustomEl.value='';
+  window.setHwTrainers?.('main',[]);
   /* Topic loading is now handled by populateTopicSelector() → loadSavedTopicForLesson() */
   get(ref(db,`homeworks/${cls}/${date}/${subject}`)).then(snap=>{
     if(gen!==hwLoadGeneration||getActiveClass()!==cls||document.getElementById('global-date')?.value!==date||document.getElementById('t-subject')?.value!==subject)return;
@@ -215,6 +216,7 @@ export function loadCurrentTopicAndHW(){
     // Повертаємо у форму те, з чого завдання складали: інакше наступне
     // збереження зібрало б текст із порожніх полів і затерло сторінки.
     if(pagesEl&&val.pages)pagesEl.value=val.pages;
+    window.setHwTrainers?.('main',val.trainers||[]);
     if(val.book&&val.book.title){
       const sel=document.getElementById('hw-textbook');
       // Випадайка заповнюється окремо й асинхронно, тож обираємо збережений
@@ -543,8 +545,10 @@ window.openQuickJournal=async function(){
     }).join('');
     // Тип оцінки — один на весь урок, як зазвичай і буває
     const ts=document.getElementById('qj-type');
-    const codes=Object.keys(gradeTypesCache).length?Object.keys(gradeTypesCache):['П','У','ДЗ','СР','К'];
-    ts.innerHTML=codes.map(c=>`<option value="${escHtml(c)}">${escHtml((gradeTypesCache[c]&&gradeTypesCache[c].label)||c)}</option>`).join('');
+    // Тематична (ТО) — не з довідника коефіцієнтів, тож додаємо її окремо:
+    // швидким журналом ставлять і тематичні на весь клас.
+    const codes=[...(Object.keys(gradeTypesCache).length?Object.keys(gradeTypesCache):['П','У','ДЗ','СР','К']).filter(c=>c!=='ТО'),'ТО'];
+    ts.innerHTML=codes.map(c=>`<option value="${escHtml(c)}">${escHtml(c==='ТО'?'📘 Тематична (ТО)':(gradeTypesCache[c]&&gradeTypesCache[c].label)||c)}</option>`).join('');
     const firstType=Object.values(t)[0];
     if(firstType&&codes.includes(firstType))ts.value=firstType;
     box.dataset.slot=slotKey;
@@ -590,7 +594,7 @@ window.saveQuickJournal=async function(){
       if(v!==orig){
         gPatch[sid]=v||null;
         tPatch[sid]=v?gtype:null;
-        if(v){nG++;gradeNotices.push({class:cls,studentName:name,subject:subj,value:displayGrade(v,cls,document.getElementById('qj-body').dataset.numericScale==='1')});}
+        if(v){nG++;gradeNotices.push({class:cls,studentName:name,subject:subj,value:displayGrade(v,cls,document.getElementById('qj-body').dataset.numericScale==='1')+(gtype==='ТО'?' (тематична)':'')});}
       }
       // Відвідуваність пишемо лише там, де вчитель щось позначив
       const status=r.dataset.status;
@@ -748,7 +752,7 @@ window.doHwCopy=async function(){
   const targets=Array.from(document.querySelectorAll('#hw-copy-classes input:checked')).map(i=>i.value);
   if(targets.length===0)return alert('Оберіть хоча б один клас.');
   const text=document.getElementById('t-hw').value.trim();
-  if(!text&&currentHwImages.length===0)return alert('Поле ДЗ порожнє — нічого копіювати.');
+  if(!text&&currentHwImages.length===0&&!(window.getHwTrainers?.('main')||[]).length)return alert('Поле ДЗ порожнє — нічого копіювати.');
   const names=targets.map(c=>c.replace('class_','')).join(', ');
   if(!confirm(`Скопіювати це ДЗ у класи: ${names}?\n\nПредмет: ${subject}\nДата: ${date.split('-').reverse().join('.')}\n\nЯкщо в цих класах на цю дату вже є ДЗ — воно буде замінено.\nТеми уроків не копіюються.`))return;
   const btn=document.getElementById('btn-hw-copy-do');
@@ -766,6 +770,8 @@ window.doHwCopy=async function(){
     const bTitle=bCustom||(bSel?bSel.value:'');
     const bUrl=bCustom?'':(bOpt?(bOpt.getAttribute('data-url')||''):'');
     if(bTitle&&bUrl)payload.book={title:bTitle,url:bUrl};
+    const trs=window.getHwTrainers?.('main')||[];
+    if(trs.length)payload.trainers=trs;
     for(const c of targets){
       const hwRef=ref(db,`homeworks/${c}/${date}/${subject}`);
       // Те саме правило, що й при звичайному збереженні: сповіщаємо лише
@@ -1013,6 +1019,8 @@ window.saveHomework=function(){
     const bookTitle=bookCustom||(bookSel?bookSel.value:'');
     const bookUrl=bookCustom?'':(bookOpt?(bookOpt.getAttribute('data-url')||''):'');
 
+    // Тренажери з бази (trainers.js) — копії {title,url}
+    const trainers=window.getHwTrainers?.('main')||[];
     // Поле ДЗ порожнє, але вказано підручник і сторінки — це і є завдання.
     if(!hwText&&!(fileInput&&fileInput.files.length)){
       const pages=document.getElementById('hw-pages')?.value.trim()||'';
@@ -1040,7 +1048,7 @@ window.saveHomework=function(){
     // Якщо прибрали останнє вкладення з завдання без тексту, зберігати
     // порожню картку немає сенсу. Кнопка «Зберегти ДЗ» у цьому випадку
     // підтверджує видалення самого порожнього завдання.
-    if(!hwText&&finalImageUrls.length===0){
+    if(!hwText&&finalImageUrls.length===0&&!trainers.length){
       if(!existed){showToast('⚠️ Завдання порожнє — нічого зберігати');return false;}
       await update(ref(db),{[`homeworks/${cls}/${date}/${subject}`]:null,[`authors/${cls}/${date}/${subject}`]:null});
       currentHwImages=[];renderMainHwAttachments();setTimeout(()=>loadTeacherDashboard(),300);
@@ -1059,6 +1067,7 @@ window.saveHomework=function(){
     // Тепер їх можна відновити у формі.
     const pagesRaw=document.getElementById('hw-pages')?.value.trim()||'';
     if(pagesRaw)rec.pages=pagesRaw;
+    if(trainers.length)rec.trainers=trainers;
     await set(hwRef,rec);
     // Сповіщення не має права зірвати збереження: воно вже відбулося.
     if(!existed)notifyEvent('homework',{class:cls,subject}).catch(()=>{});
@@ -2248,6 +2257,11 @@ export async function renderTeacherHwDay(){
           <label>📄 Сторінки / вправи</label>
           <input type="text" id="${id}-pages" placeholder="напр. с. 45, вправи 3–5"
                  value="${escHtml(rec?(rec.pages||''):'')}" oninput="hwdDirty('${id}')">
+          <label>🎯 Тренажери</label>
+          <div class="tr-hw-row" style="margin-top:3px;">
+            <div id="${id}-trainers" class="tr-hw-chips"></div>
+            <button type="button" class="tr-hw-add" onclick="pickHwTrainer('${id}','${escJs(l.subject)}')">🎯 Додати тренажер</button>
+          </div>
           <label>📎 Фото або файл</label>
           <!-- Нативну кнопку вибору файлу малює браузер, і напис на ній —
                мовою браузера. Тому input сховано, а видима кнопка — label. -->
@@ -2272,6 +2286,7 @@ export async function renderTeacherHwDay(){
       </div>`;
     }).join('') + `<p class="hwd-hint">Заповнене позначається галочкою й згортається.
         Тема уроку — на вкладці «Урок».</p>`;
+    lessons.forEach((l,i)=>window.setHwTrainers?.(`hwd-${i}`,(saved[l.subject]&&saved[l.subject].trainers)||[]));
   }catch(e){
     console.error('ДЗ на день:',e);
     box.innerHTML=`<p class="empty-msg" style="color:var(--danger);">Не вдалося завантажити: ${escHtml(e.message||'')}</p>`;
@@ -2385,7 +2400,8 @@ window.hwdSave=function(id){
 
     const hwRef=ref(db,`homeworks/${cls}/${date}/${subject}`);
     const existed=(await get(hwRef)).exists();
-    if(!hwText&&images.length===0){
+    const trainers=window.getHwTrainers?.(id)||[];
+    if(!hwText&&images.length===0&&!trainers.length){
       if(!existed){showToast('⚠️ Завдання порожнє');return false;}
       await update(ref(db),{[`homeworks/${cls}/${date}/${subject}`]:null,[`authors/${cls}/${date}/${subject}`]:null});
       row.classList.remove('done','dirty');hwDayState[subject]={saved:false,dirty:false,images:[]};
@@ -2398,6 +2414,7 @@ window.hwdSave=function(id){
     const rec={text:hwText, images, ts:Date.now()};
     if(bookTitle&&bookUrl) rec.book={title:bookTitle,url:bookUrl};
     if(pages) rec.pages=pages;
+    if(trainers.length) rec.trainers=trainers;
     await set(hwRef,rec);
     await set(ref(db,`authors/${cls}/${date}/${subject}`),auth.currentUser.uid);
     if(!existed) notifyEvent('homework',{class:cls,subject}).catch(()=>{});

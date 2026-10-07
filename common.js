@@ -2083,6 +2083,12 @@ export function renderHwItem(subject,data,books){
     };
     if(data.image)add(data.image);
     if(data.images&&Array.isArray(data.images))data.images.forEach(add);
+    // 🎯 Тренажери з бази вчителів — копія назви й посилання в самому ДЗ
+    if(Array.isArray(data.trainers))data.trainers.forEach(t=>{
+      const tu=safeHttpUrl(t&&t.url);
+      if(tu)att+=`<a class="hw-doc hw-trainer" href="${escHtml(tu)}" target="_blank" rel="noopener noreferrer">`
+               + `🎯 <span>${escHtml(t.title||tu)}</span></a>`;
+    });
     att+='</div>';
   }
   // Якщо підручник збережено окремим полем — він уже показаний кнопкою вище,
