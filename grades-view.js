@@ -48,7 +48,7 @@ import { ref, get, child, query, orderByKey, startAt, endAt, onValue }
   from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { db, currentUserData, getActiveClass, getClassNum, LEVEL_MAX_CLASS, escHtml, escJs, mondayOf,
          localDateString, displayGrade, gradeClass6, levelNum, getGradeWeight,
-         calculateStudentWeightedAvg, renderGradeFormulaInfo, dayNamesUA, dayKeys, journalBaseDate, journalSlot,
+         calculateStudentWeightedAvg, renderGradeFormulaInfo, THEMATIC, topicBreakdown, dayNamesUA, dayKeys, journalBaseDate, journalSlot,
          stuId, hasStudentDir, getStudentDir, fetchSubjectTeachers, subjKey }
   from './common.js';
 
@@ -243,12 +243,17 @@ export function subjectStats(mirror, subj, cls){
     if(junior&&Number(r.v)>6)return;
     vals[r.date] = r.v; types[r.date] = r.t || 'П';
   });
-  const avg = calculateStudentWeightedAvg(vals, types);
+  // Середній — поточної теми: після тематичної рахунок починається заново.
+  const topics = topicBreakdown(vals, types);
+  const avg = topics.current.avg;
   // Скільки оцінок реально лягло в розрахунок: літера без числового
   // відповідника (щось нестандартне) у середнє не потрапляє, і мовчати
   // про це не можна — інакше «3 оцінки, середній 5.0» виглядає як помилка.
-  const counted = rows.filter(r => levelNum(r.v) !== null&&(!junior||!(Number(r.v)>6))).length;
-  return { rows, avg, counted };
+  const counted = topics.current.count;
+  const thematic = topics.thematic;
+  const thN = thematic.map(x => x.n).filter(n => n !== null);
+  const thematicMean = thN.length ? thN.reduce((a,b)=>a+b,0)/thN.length : null;
+  return { rows, avg, counted, since: topics.current.from, thematic, thematicMean };
 }
 
 // ── ПОКАЗ ───────────────────────────────────────────────────────
@@ -466,7 +471,7 @@ function paintSubject(){
     + subjects.map(s => `<option value="${escHtml(s)}"${s===gvSubject?' selected':''}>${escHtml(s)}</option>`).join('')
     + `</select>` + tHtml;
 
-  const { rows, avg, counted } = subjectStats(gvMirror, gvSubject, cls);
+  const { rows, avg, counted, since, thematic, thematicMean } = subjectStats(gvMirror, gvSubject, cls);
   const scaleMax=scales?.[gvSubject]?.max||null;
   const avgTxt = avg === null ? '—' : avg.toFixed(2);
   // Підпис під числом обовʼязковий. Батьки читають будь-яке середнє як
@@ -474,8 +479,9 @@ function paintSubject(){
   // ставити її сам, а не підтверджувати пораховане порталом.
   const head = `<div style="background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:11px;text-align:center;">
       <div style="font-size:1.9rem;font-weight:800;color:var(--purple,var(--brand-deep));line-height:1.1;">${escHtml(avgTxt)}</div>
-      <div style="font-size:.78rem;color:var(--ink-2);margin-top:3px;">середній бал з предмета «${escHtml(gvSubject)}»
-        · оцінок у розрахунку: ${counted} · ${getClassNum(cls)<=LEVEL_MAX_CLASS?'рівні П/С/Д/В':`шкала: 1–${scaleMax||6}`}${rows.length>counted?` · ${rows.length-counted} без числового відповідника або історичних балів понад 6 не враховано`:''}</div>
+      <div style="font-size:.78rem;color:var(--ink-2);margin-top:3px;">${since?`середній бал поточної теми (після тематичної ${escHtml(human(journalBaseDate(since)))})`:'середній бал'} з предмета «${escHtml(gvSubject)}»
+        · оцінок у розрахунку: ${counted} · ${getClassNum(cls)<=LEVEL_MAX_CLASS?'рівні П/С/Д/В':`шкала: 1–${scaleMax||6}`}</div>
+      ${thematic.length?`<div style="font-size:.8rem;color:var(--brand-deep);margin-top:6px;">📘 Тематичні: ${thematic.map(x=>escHtml(String(displayGrade(x.v, cls, scaleMax)))).join(', ')}${thematicMean!==null?` · середнє <b>${thematicMean.toFixed(2)}</b>`:''}</div>`:''}
       <div style="font-size:.75rem;color:var(--ink-3);margin-top:5px;">Це не підсумкова оцінка й не прогноз:
         підсумкову виставляє вчитель.</div>
     </div>`;
@@ -485,7 +491,7 @@ function paintSubject(){
         `<li style="display:flex;align-items:center;gap:9px;padding:5px 0;flex-wrap:wrap;">
            <span style="color:var(--ink-3);font-size:.82rem;min-width:52px;">${escHtml(human(r.day))}${r.slot>1?` · ${r.slot}`:''}</span>
            ${gradeChip(r.v, r.t, cls, scaleMax)}${renderWorkPhotos(r.workPhotos)}
-           <span style="font-size:.75rem;color:var(--ink-3);">${r.t ? `вага ×${escHtml(String(getGradeWeight(r.t)))}` : ''}</span>
+           <span style="font-size:.75rem;color:var(--ink-3);">${r.t===THEMATIC ? '📘 тематична' : r.t ? `вага ×${escHtml(String(getGradeWeight(r.t)))}` : ''}</span>
          </li>`).join('') + `</ul>`
     : '<p class="empty-msg">З цього предмета оцінок ще немає.</p>';
 

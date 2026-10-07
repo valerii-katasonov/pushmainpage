@@ -190,6 +190,14 @@
     .g-cell:hover{transform:scale(1.12);box-shadow:0 2px 8px rgba(0,0,0,.18);}
     .g-val{font-weight:800;font-size:.95rem;line-height:1;}
     .g-type{font-size:.75rem;font-weight:700;line-height:1.2;letter-spacing:.02em;text-transform:uppercase;}
+    /* Тематична оцінка: рамка в клітинці, риска під заголовком стовпця */
+    .g-cell.g-thematic{box-shadow:0 0 0 2px var(--brand-deep) inset;}
+    .journal-table th.th-thematic{color:var(--brand-deep);box-shadow:inset 0 -3px 0 var(--brand-deep);}
+    .j-add-thematic{font-size:.8em;}
+    .type-btn.type-btn-thematic{border-color:var(--brand-deep);color:var(--brand-deep);}
+    .type-btn.type-btn-thematic.active{background:var(--brand-deep);color:var(--surface);}
+    .gep-thematic-hint{display:none;margin-top:8px;padding:7px 9px;border-radius:8px;background:var(--brand-soft);color:var(--brand-deep);font-size:.78rem;line-height:1.35;}
+    .gep-thematic-hint .gep-thematic-apply{margin:6px 0 0;padding:4px 10px;width:auto;font-size:.78rem;border-radius:7px;background:var(--brand-deep);color:var(--surface);border:none;cursor:pointer;}
     .g6{background:var(--brand-soft);color:var(--g6);}
     .g5{background:var(--ok-soft);color:var(--g5);}
     .g4{background:var(--surface-2);color:var(--g4);}

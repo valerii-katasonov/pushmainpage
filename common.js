@@ -1286,6 +1286,7 @@ export function calculateWeightedAverage(grades,types){
       const val=levelNum(grades[date][student]);
       if(val===null) continue;
       const type=(types&&types[date]&&types[date][student])||'П';
+      if(type===THEMATIC) continue;   // тематична — підсумок теми, а не ще одна поточна
       const weight=getGradeWeight(type);
       totalScore+=val*weight; totalWeight+=weight;
     }
@@ -1297,10 +1298,75 @@ export function calculateStudentWeightedAvg(studentGrades,studentTypes){
   let totalW=0; let totalS=0;
   for(let key in studentGrades){
     const val=levelNum(studentGrades[key]); if(val===null) continue;
-    const type=studentTypes?.[key]||'П'; const w=getGradeWeight(type);
+    const type=studentTypes?.[key]||'П'; if(type===THEMATIC) continue;
+    const w=getGradeWeight(type);
     totalS+=val*w; totalW+=w;
   }
   return totalW>0?totalS/totalW:null;
+}
+
+// ══════════ ТЕМАТИЧНІ ОЦІНКИ ══════════
+// Тематична — оцінка за вивчену тему. Лежить окремим стовпцем журналу
+// (тип стовпця «ТО») і в оцінки той самий тип «ТО» — тож її видно всюди,
+// де видно тип оцінки, включно з дзеркалом родини.
+//
+// ПРАВИЛА
+//  • У середньозважений поточних вона НЕ входить (calculate* вище її
+//    пропускають) — інакше тема рахувалася б двічі.
+//  • Після тематичної середній бал рахується заново: «поточна тема» —
+//    це оцінки ПІСЛЯ останньої тематичної цього учня. Межа саме своя, а
+//    не стовпця класу: хто тематичну ще не отримав (хворів), у того тема
+//    ще не закрита, і середнє в нього не обнуляється.
+//  • Семестрова = середнє арифметичне тематичних за семестр.
+//
+// Код «ТО», а не «Т»: «Т» у школі вже зайнято — «Тест».
+export const THEMATIC='ТО';
+export const THEMATIC_LABEL='Тематична';
+export const isThematic=t=>t===THEMATIC;
+// Хронологія ключів журналу: «YYYY-MM-DD» і «YYYY-MM-DD__N». Рядкове
+// порівняння тут бреше: «__10» < «__2».
+export function gradeKeyCmp(a,b){
+  const da=journalBaseDate(a), dbb=journalBaseDate(b);
+  if(da!==dbb) return da<dbb?-1:1;
+  return journalSlot(a)-journalSlot(b);
+}
+// Розкладає оцінки учня на теми.
+//   grades {ключ: значення}, types {ключ: тип}
+// → { thematic:[{key,v,n,from,avg,count}], current:{from, avg, count} }
+//   from — ключ попередньої тематичної (null — з початку), avg — середньозважений
+//   поточних оцінок цієї теми (для тематичної — те, що їй передувало).
+export function topicBreakdown(grades,types){
+  const keys=Object.keys(grades||{}).filter(k=>grades[k]!==''&&grades[k]!=null).sort(gradeKeyCmp);
+  const thematic=[]; let seg={}, segT={}, from=null;
+  const close=()=>({avg:calculateStudentWeightedAvg(seg,segT),count:Object.keys(seg).filter(k=>levelNum(seg[k])!==null).length});
+  for(const k of keys){
+    const t=(types&&types[k])||'П';
+    if(isThematic(t)){
+      const c=close();
+      thematic.push({key:k,v:grades[k],n:levelNum(grades[k]),from,avg:c.avg,count:c.count});
+      seg={}; segT={}; from=k;
+    }else{ seg[k]=grades[k]; segT[k]=t; }
+  }
+  const c=close();
+  return { thematic, current:{from, avg:c.avg, count:c.count} };
+}
+// Середнє поточної теми (після останньої тематичної).
+export function currentTopicAvg(grades,types){ return topicBreakdown(grades,types).current.avg; }
+// Середнє арифметичне тематичних (без ваг — так вимагає правило семестрової).
+export function thematicMean(grades,types){
+  const ns=topicBreakdown(grades,types).thematic.map(x=>x.n).filter(n=>n!==null);
+  return ns.length?ns.reduce((a,b)=>a+b,0)/ns.length:null;
+}
+// Що запропонувати в клітинку тематичної: середньозважений поточних від
+// попередньої тематичної учня до цього стовпця включно.
+export function topicAvgBefore(grades,types,key){
+  const g={}, t={};
+  for(const k in (grades||{})){
+    if(k===key||gradeKeyCmp(k,key)>0) continue;
+    g[k]=grades[k]; t[k]=(types&&types[k])||'П';
+  }
+  const cur=topicBreakdown(g,t).current;
+  return cur;
 }
 // Phase 5: compact "how the average is calculated" info block for parent/student
 // grade cards (#p-daily-comments-list / #s-daily-comments-list). Returned as a
@@ -1315,6 +1381,7 @@ export function renderGradeFormulaInfo(){
   return `<li style="list-style:none;background:var(--brand-soft);border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-bottom:9px;font-size:.78rem;color:var(--ink-2);">
     <b style="color:var(--brand-deep);">ℹ️ Як рахується середній бал:</b> Σ(оцінка × коефіцієнт) / Σ(коефіцієнт)
     <div style="margin-top:5px;">${items}</div>
+    <div style="margin-top:5px;"><b>📘 ${THEMATIC}</b> — тематична: оцінка за тему. Після неї середній бал рахується заново, а семестрова — середнє арифметичне тематичних.</div>
   </li>`;
 }
 // ══════════ UTILITIES ══════════

@@ -1048,6 +1048,7 @@ window.addGradeType=async function(){
   const label=document.getElementById('gt-new-label').value.trim();
   const weight=parseFloat(document.getElementById('gt-new-weight').value);
   if(!code||!label||isNaN(weight)||weight<=0)return alert("Заповніть усі поля коректно!");
+  if(code.toUpperCase()==='ТО')return alert('Код «ТО» зарезервовано за тематичною оцінкою — оберіть інший.');
   if(gradeTypesCache[code]&&!confirm(`Тип "${code}" вже існує. Перезаписати?`))return;
   await set(ref(db,`grade_type_defs/${code}`),{label,shortLabel:code,weight});
   document.getElementById('gt-new-code').value='';document.getElementById('gt-new-label').value='';document.getElementById('gt-new-weight').value='';

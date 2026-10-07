@@ -7,7 +7,7 @@ import { ref, set, get, child, update } from "https://www.gstatic.com/firebasejs
 import { loadGradeWork, prepareGradeWork, setGradeWorkBusy, hasGradeWorkChanges } from './grade-work.js';
 import { ACTIVE_YEAR } from './director.js';
 import { topicNames } from './parent-student.js';
-import { db, getActiveClass, currentUserData, displayGrade, gradeClass6, calculateStudentWeightedAvg, validDailyGrade, getClassNum, LEVEL_MAX_CLASS, GRADE_WEIGHTS, dayKeys, dayNamesUA, showToast, normalizeTimeRange, localDateString, summarizeAttendanceSlots, attendanceForLesson, gradeTypesCache, escJs, escHtml, notifyEvent, logAction, getUserRoles, getUsersSnap, stuName, gradeWritePaths, journalGradeKey, journalBaseDate, journalSlot, expandAltSubjects, altOptions, splitAltName, altPairKey, mondayOf, isBreakItem, insertSlot, removeSlot, makeBreak, withBreaks, slotBounds, hhmmFromMins, emailKey, subjKey, planKeyWith, getDateRange, openTabByKey, fetchSubjectTeachers, parseTimeRange } from './common.js';
+import { db, getActiveClass, currentUserData, displayGrade, gradeClass6, calculateStudentWeightedAvg, validDailyGrade, getClassNum, LEVEL_MAX_CLASS, GRADE_WEIGHTS, dayKeys, dayNamesUA, showToast, normalizeTimeRange, localDateString, summarizeAttendanceSlots, attendanceForLesson, gradeTypesCache, escJs, escHtml, notifyEvent, logAction, getUserRoles, getUsersSnap, stuName, gradeWritePaths, journalGradeKey, journalBaseDate, journalSlot, expandAltSubjects, altOptions, splitAltName, altPairKey, mondayOf, isBreakItem, insertSlot, removeSlot, makeBreak, withBreaks, slotBounds, hhmmFromMins, emailKey, subjKey, planKeyWith, getDateRange, openTabByKey, fetchSubjectTeachers, parseTimeRange, THEMATIC, THEMATIC_LABEL, topicBreakdown, topicAvgBefore } from './common.js';
 import { grantAccess } from './access.js';
 import { auth } from './common.js';
 
@@ -72,7 +72,7 @@ function pluralUA(n,forms){
 }
 
 // ══════════ GRADE EDITOR POPUP ══════════
-window.selectGradeType=function(type){gepType=type;document.querySelectorAll('.type-btn').forEach(b=>b.classList.toggle('active',b.dataset.type===type));};
+window.selectGradeType=function(type){gepType=type;document.querySelectorAll('.type-btn').forEach(b=>b.classList.toggle('active',b.dataset.type===type));renderThematicHint();};
 // Phase 5: #gep-type-btns is no longer 7-8 hardcoded <button> tags in HTML —
 // they're generated here from gradeTypesCache (falls back to GRADE_WEIGHTS'
 // codes if the cache hasn't loaded yet), same className/onclick pattern as before.
@@ -89,8 +89,46 @@ function renderGradeTypeButtons(){
     // паузою — виглядає як гальмування порталу. Своя підказка з'являється
     // одразу (див. [data-tip] у cabinet.html).
     return `<button type="button" class="type-btn" data-type="${code}" data-tip="${escHtml(label)}" onclick="selectGradeType('${code}')">${shortLabel}</button>`;
-  }).join('');
+  }).join('')
+  // Тематична — не з довідника коефіцієнтів: ваги в неї немає, вона
+  // завершує тему. Тому кнопка своя й завжди остання.
+  + `<button type="button" class="type-btn type-btn-thematic" data-type="${THEMATIC}" data-tip="${THEMATIC_LABEL}: закриває тему, середній бал далі рахується заново" onclick="selectGradeType('${THEMATIC}')">📘 ${THEMATIC}</button>`;
 }
+// Підказка в редакторі для тематичної: середньозважений поточних оцінок
+// теми (від попередньої тематичної учня до цього стовпця). Учитель
+// вирішує сам — кнопка лише підставляє округлене.
+let journalCache={grades:{},types:{}};
+function renderThematicHint(){
+  const pop=document.getElementById('grade-editor-popup');
+  if(!pop)return;
+  let box=document.getElementById('gep-thematic-hint');
+  if(!box){
+    box=document.createElement('div');box.id='gep-thematic-hint';box.className='gep-thematic-hint';
+    const anchor=document.getElementById('gep-type-btns');
+    anchor?anchor.insertAdjacentElement('afterend',box):pop.appendChild(box);
+  }
+  if(gepType!==THEMATIC||!gepStudent){box.style.display='none';box.innerHTML='';return;}
+  const g={},t={};
+  for(const k in journalCache.grades){const v=journalCache.grades[k]?.[gepStudent];if(v){g[k]=v;t[k]=journalCache.types[k]?.[gepStudent]||'П';}}
+  const cur=topicAvgBefore(g,t,gepDate);
+  const junior=getClassNum(gepCls)<=LEVEL_MAX_CLASS;
+  const since=cur.from?`з ${journalBaseDate(cur.from).split('-').reverse().join('.')}`:'з початку періоду в журналі';
+  if(cur.avg===null){
+    box.style.display='block';
+    box.innerHTML=`📘 <b>${THEMATIC_LABEL}</b> · поточних оцінок за тему (${since}) немає — оцінку ставите самостійно.`;
+    return;
+  }
+  const n=Math.min(junior?5:journalScaleMax,Math.max(junior?2:1,Math.round(cur.avg)));
+  const shown=displayGrade(String(n),gepCls,journalNumericScale);
+  box.style.display='block';
+  box.innerHTML=`📘 <b>${THEMATIC_LABEL}</b> · середній за тему (${since}, оцінок: ${cur.count}): <b>${cur.avg.toFixed(2)}</b>
+    <button type="button" class="gep-thematic-apply" onclick="applyThematicSuggestion('${escJs(String(shown))}')">Поставити ${escHtml(String(shown))}</button>`;
+}
+window.applyThematicSuggestion=function(v){
+  const input=document.getElementById('gep-value');if(input)input.value=v;
+  if(getClassNum(gepCls)<=LEVEL_MAX_CLASS)window.selectGradeLevel(v);
+  syncGradeModifierButtons();
+};
 // Phase 4b: added presetType param — when a cell has no existing grade_type yet (new grade),
 // the editor now prefills from the date column's pre-set "Тип" (journal_column_types) instead
 // of always defaulting to 'П'.
@@ -233,7 +271,8 @@ document.addEventListener('click',function(e){const p=document.getElementById('g
 // ══════════════════════════════════════════════════════════════════
 //  ПІДСУМКОВІ (СЕМЕСТРОВІ) ОЦІНКИ
 // ══════════════════════════════════════════════════════════════════
-// Система рахує середньозважений бал за період семестру і ПРОПОНУЄ оцінку,
+// Система рахує середнє арифметичне тематичних (якщо їх немає — середньозважений
+// поточних) за період семестру і ПРОПОНУЄ оцінку,
 // але останнє слово завжди за вчителем: пропозицію видно окремо від
 // підсумкової, і будь-яку правку видно в журналі дій.
 // Зберігаємо і те, що запропонувала система, і те, що поставив учитель —
@@ -326,11 +365,17 @@ window.renderSemesterTable=async function(){
         }
       }
     }
-    let rows='';let filled=0;
+    let rows='';let filled=0;let thematicStudents=0;
     students.forEach(st=>{
       const eligible=junior?Object.fromEntries(Object.entries(per[st.sid].g).filter(([,value])=>!(Number(value)>6))):per[st.sid].g;
-      const avg=calculateStudentWeightedAvg(eligible,per[st.sid].t);
-      const cnt=Object.keys(per[st.sid].g).length;
+      // Семестрова — середнє арифметичне ТЕМАТИЧНИХ за семестр. Поки
+      // тематичних немає (старі семестри, предмети без тем) — як раніше,
+      // середньозважений поточних, і про це видно в таблиці.
+      const th=topicBreakdown(eligible,per[st.sid].t).thematic.map(x=>x.n).filter(n=>n!==null);
+      const byThematic=th.length>0;
+      if(byThematic)thematicStudents++;
+      const avg=byThematic?th.reduce((a,b)=>a+b,0)/th.length:calculateStudentWeightedAvg(eligible,per[st.sid].t);
+      const cnt=byThematic?th.length:Object.keys(per[st.sid].g).length;
       // Старі бали понад 6 не переводимо у рівень навмання: для них
       // учитель обирає підсумкову літеру самостійно.
       const auto=avg!==null&&(!junior||avg<=6)?String(Math.min(scaleMax,Math.max(1,Math.round(avg)))):'';
@@ -350,15 +395,21 @@ window.renderSemesterTable=async function(){
       const changed=saved[st.sid]&&saved[st.sid].auto&&String(saved[st.sid].auto)!==String(saved[st.sid].value);
       rows+=`<tr>
         <td class="sem-name">${escHtml(st.nm)}</td>
-        <td class="sem-avg">${avg!==null?avg.toFixed(2):'—'}<br><span class="sem-cnt">${cnt} оц.</span></td>
+        <td class="sem-avg">${avg!==null?avg.toFixed(2):'—'}<br><span class="sem-cnt">${byThematic?`📘 ${cnt} тем.`:`${cnt} оц.`}</span></td>
         <td class="sem-auto">${suggested?escHtml(suggested):'—'}</td>
         <td>${gradeInput}</td>
         <td class="sem-flag">${changed?'<span data-tip="Відрізняється від запропонованої">✎</span>':''}</td>
       </tr>`;
     });
+    const howNote=thematicStudents===students.length
+      ?'📘 Пропонується середнє арифметичне тематичних оцінок за семестр.'
+      :thematicStudents
+        ?`📘 Пропонується середнє арифметичне тематичних. У ${students.length-thematicStudents} з ${students.length} учнів тематичних за семестр немає — для них середньозважений поточних (позначено «оц.»).`
+        :'Тематичних оцінок за семестр немає — пропонується середньозважений поточних. Коли з’являться тематичні, семестрова рахуватиметься з них.';
     box.innerHTML=`<p class="sem-info">Період: ${escHtml(sem.startDate.split('-').reverse().join('.'))} — ${escHtml(sem.endDate.split('-').reverse().join('.'))} · виставлено: <b>${filled} з ${students.length}</b></p>
+      <p class="sem-info" style="margin-top:-4px;">${howNote}</p>
       <div class="sem-wrap"><table class="sem-table">
-        <thead><tr><th>Учень</th><th>Серед.<br>зваж.</th><th>Пропо-<br>новано</th><th>Підсум-<br>кова</th><th></th></tr></thead>
+        <thead><tr><th>Учень</th><th>${thematicStudents?'Серед.<br>тем.':'Серед.<br>зваж.'}</th><th>Пропо-<br>новано</th><th>Підсум-<br>кова</th><th></th></tr></thead>
         <tbody>${rows}</tbody></table></div>`;
   }catch(e){if(request===semesterRenderSeq)box.innerHTML=`<p style="color:red;font-size:.8rem;">Помилка: ${escHtml(e.message)}</p>`;}
 };
@@ -718,6 +769,7 @@ window.renderJournalTable=async function(){
       if(colTypesSnap.exists())Object.assign(journalColumnTypes,colTypesSnap.val());
       if(colSnap.exists())Object.assign(manualCounts,colSnap.val());
     });
+    journalCache={grades:gradesData,types:typesData};
     const attDataAll=attSnap.exists()?attSnap.val():{};
     const retakeData=retakeSnap.exists()?retakeSnap.val():{};
     const attData={};for(let d in attDataAll)if(months.some(ym=>d.startsWith(ym)))attData[d]=attDataAll[d];
@@ -766,7 +818,11 @@ window.renderJournalTable=async function(){
       const [yy,mm]=ym.split('-');
       monthRow+=`<th colspan="${count}" style="background:${bandColorOf(bandIdx)};">${monthNamesUA[parseInt(mm)-1]} ${yy}</th>`;
     });
-    monthRow+='<th class="avg-col" rowspan="2">Зважений<br>сер. бал</th></tr>';
+    // Якщо в журналі є тематичні — середній рахується від останньої
+    // тематичної учня, і заголовок має про це казати.
+    const anyThematic=Object.values(journalColumnTypes).includes(THEMATIC)
+      ||Object.values(typesData).some(m=>m&&Object.values(m).includes(THEMATIC));
+    monthRow+=`<th class="avg-col" rowspan="2">${anyThematic?'Сер. бал<br>поточної теми':'Зважений<br>сер. бал'}</th></tr>`;
     // Row 2: day-of-month + weekday (+ editable/preset "тип" control) — same content
     // as before, just tinted to match its month's band so the grouping reads clearly
     // top-to-bottom, not just from the label row.
@@ -791,22 +847,26 @@ window.renderJournalTable=async function(){
         // yMonth — the range can now span several Firebase month-keys at once.
         typeCell=`<br><select class="jct-type-select" onclick="event.stopPropagation();" onchange="setJournalColumnType('${cls}','${escJs(subj)}','${ym}','${key}',this.value)" data-tip="Тип оцінки на цей стовпець">
           <option value="">—</option>
-          ${typeCodes.map(t=>`<option value="${t}" ${presetType===t?'selected':''}>${t} ×${weightOf(t)}</option>`).join('')}
+          ${typeCodes.filter(t=>t!==THEMATIC).map(t=>`<option value="${t}" ${presetType===t?'selected':''}>${t} ×${weightOf(t)}</option>`).join('')}
+          <option value="${THEMATIC}" ${presetType===THEMATIC?'selected':''}>📘 ${THEMATIC} — тематична</option>
         </select>`;
+      } else if(presetType===THEMATIC){
+        typeCell=`<br><span style="font-size:.69em;color:var(--brand-deep);font-weight:700;">📘 тематична</span>`;
       } else {
         typeCell=presetType?`<br><span style="font-size:.69em;color:var(--warn);">${presetType}${weightOf(presetType)?` ×${weightOf(presetType)}`:''}</span>`:'';
       }
       const label=slot<=scheduled?`Урок ${slot}`:`Оцінка ${slot}`;
       const last=slot===Math.max(...dateCols.filter(c=>c.ds===ds).map(c=>c.slot));
       const add=canEdit&&last&&slot<30
-        ?`<button type="button" class="j-add-column" onclick="addJournalColumn('${ds}')" aria-label="Додати стовпець" data-tip="Додати ще одну оцінку на цей день">＋</button>`:'';
+        ?`<button type="button" class="j-add-column" onclick="addJournalColumn('${ds}')" aria-label="Додати стовпець" data-tip="Додати ще одну оцінку на цей день">＋</button>`
+         +`<button type="button" class="j-add-column j-add-thematic" onclick="addJournalColumn('${ds}','${THEMATIC}')" aria-label="Додати стовпець тематичної" data-tip="Тематична оцінка: окремий стовпець, після неї середній бал рахується заново">📘</button>`:'';
       const remove=canEdit&&last&&manual===slot&&slot>scheduled
         ?`<button type="button" class="j-remove-column" onclick="removeJournalColumn('${ds}')" aria-label="Видалити додатковий стовпець" data-tip="Видалити порожній додатковий стовпець">−</button>`:'';
       const actions=add||remove?`<div class="j-column-actions">${remove}${add}</div>`:'';
 
       const flagsHtml = journalFlagsHtml(journalDayNotes[ds], ds);
 
-      dayRow+=`<th class="${isToday?'today-col':''}" style="background:${bandColor};" title="${ds} · ${label}">${day}<br><span style="font-size:.78em;font-weight:400;">${dayN[dow]} · ${label}</span>${flagsHtml}${typeCell}${actions}</th>`;
+      dayRow+=`<th class="${isToday?'today-col':''}${presetType===THEMATIC?' th-thematic':''}" style="background:${bandColor};" title="${ds} · ${label}">${day}<br><span style="font-size:.78em;font-weight:400;">${dayN[dow]} · ${label}</span>${flagsHtml}${typeCell}${actions}</th>`;
     });
     dayRow+='</tr>';
     let thead='<thead>'+monthRow+dayRow+'</thead>';
@@ -822,9 +882,12 @@ window.renderJournalTable=async function(){
       const eligible=getClassNum(cls)<=LEVEL_MAX_CLASS
         ?Object.fromEntries(Object.entries(stGrades).filter(([,value])=>{if(Number(value)>6){legacyExcluded++;return false;}return true;}))
         :stGrades;
-      const avg=calculateStudentWeightedAvg(eligible,stTypes);
+      const topics=topicBreakdown(eligible,stTypes);
+      const avg=topics.current.avg;
       if(avg!==null){classWeightedAvg+=avg;classCount++;}
       const avgStr=avg!==null?avg.toFixed(2):'-';
+      const thN=topics.thematic.map(x=>x.n).filter(n=>n!==null);
+      const thLine=thN.length?`<br><span style="font-size:.72em;color:var(--brand-deep);" data-tip="Середнє арифметичне тематичних у видимому періоді">📘 ${(thN.reduce((a,b)=>a+b,0)/thN.length).toFixed(2)}</span>`:'';
       let rowHtml=`<tr><td class="sn" title="${escHtml(st.nm)}">${escHtml(st.nm)}</td>`;
       dateCols.forEach(({ds,key,slot,ym,lessonKey})=>{
         const isToday=ds===localDateString;
@@ -844,7 +907,7 @@ window.renderJournalTable=async function(){
         if(gradeVal){
           const gc=journalNumericScale?'g-scale':gradeClass6(gradeVal);
           const gradeAction=canEdit?` role="button" tabindex="0" aria-label="Оцінка ${escHtml(st.nm)} ${ds}: ${escHtml(String(dispVal))}" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" onclick="handleGradeClick(event,'${cls}','${escJs(subj)}','${key}','${escJs(st.sid)}','${ym}','${escJs(String(gradeVal))}','${escJs(String(gradeType))}','${escJs(String(presetType))}')"`:'';
-          cell+=`<span class="g-cell ${gc}"${gradeAction}><span class="g-val">${escHtml(String(dispVal))}</span>${gradeType?`<span class="g-type">${escHtml(String(gradeType))}</span>`:''}</span>`;
+          cell+=`<span class="g-cell ${gc}${gradeType===THEMATIC?' g-thematic':''}"${gradeAction}><span class="g-val">${escHtml(String(dispVal))}</span>${gradeType?`<span class="g-type">${escHtml(String(gradeType))}</span>`:''}</span>`;
         } else if(canEdit){
           cell+=`<span class="g-cell g-empty" role="button" tabindex="0" aria-label="Додати оцінку ${escHtml(st.nm)} ${ds}" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" onclick="handleGradeClick(event,'${cls}','${escJs(subj)}','${key}','${escJs(st.sid)}','${ym}','','','${escJs(String(presetType))}')">＋</span>`;
         }
@@ -853,7 +916,7 @@ window.renderJournalTable=async function(){
       });
       const roundedAvg=avg!==null?Math.min(journalScaleMax,Math.max(1,Math.round(avg))):null;
       const avgGc=roundedAvg!==null?(journalNumericScale?'g-scale':gradeClass6(roundedAvg)):'';
-      rowHtml+=`<td class="avg-col"><span class="${avgGc}" style="border-radius:6px;padding:.16em .39em;font-weight:800;">${displayGrade(roundedAvg!==null?String(roundedAvg):'-',cls,journalNumericScale)}</span><br><span style="font-size:.78em;color:var(--ink-3);">${avgStr}</span></td>`;
+      rowHtml+=`<td class="avg-col"><span class="${avgGc}" style="border-radius:6px;padding:.16em .39em;font-weight:800;">${displayGrade(roundedAvg!==null?String(roundedAvg):'-',cls,journalNumericScale)}</span><br><span style="font-size:.78em;color:var(--ink-3);">${avgStr}</span>${thLine}</td>`;
       rowHtml+='</tr>';tbody+=rowHtml;
     });
     tbody+='</tbody>';
@@ -886,7 +949,7 @@ window.renderJournalTable=async function(){
         .map(x=>`${x.c}×${x.w}`)
         .join(', ');
       wAvgDiv.style.display='block';
-      wAvgDiv.innerHTML=`<b style="color:var(--brand-deep);">📊 Середньозважений бал класу з ${subj}${periodLabel}:</b><br>
+      wAvgDiv.innerHTML=`<b style="color:var(--brand-deep);">📊 Середньозважений бал класу з ${subj}${anyThematic?' (поточна тема)':periodLabel}:</b><br>
         <span style="font-size:1.6rem;font-weight:800;color:var(--brand-deep);">${ca}</span>
         ${weightHint?`<span style="font-size:.8rem;color:var(--ink-3);margin-left:8px;">(зважений: ${weightHint})</span>`:''}`;
     } else wAvgDiv.style.display='none';
@@ -903,7 +966,7 @@ window.setJournalColumnType=async function(cls,subj,yMonth,date,type){
     showToast(type?`✅ Тип на ${journalBaseDate(date).split('-').reverse().join('.')}: ${type}`:'🗑️ Тип знято');
   }catch(e){showToast('❌ Тип не збережено: '+e.message);renderJournalTable();}
 };
-window.addJournalColumn=async function(day){
+window.addJournalColumn=async function(day,type){
   if(!journalIsTeacher||journalMode!=='edit'||journalColumnBusy)return;
   const cls=document.getElementById('j-class-select').value;
   const subj=document.getElementById('j-subj-select').value;
@@ -912,9 +975,15 @@ window.addJournalColumn=async function(day){
   if(count>=30)return showToast('⚠️ Не більше 30 стовпців на день');
   journalColumnBusy=true;
   try{
-    await set(ref(db,`journal_columns/${cls}/${day.slice(0,7)}/${subj}/${day}/count`),count+1);
+    // Стовпець і його тип — одним записом: інакше між ними журнал встиг
+    // би перемалюватися зі звичайним стовпцем на місці тематичного.
+    const ym=day.slice(0,7);
+    await update(ref(db),{
+      [`journal_columns/${cls}/${ym}/${subj}/${day}/count`]:count+1,
+      ...(type?{[`journal_column_types/${cls}/${ym}/${subj}/${journalGradeKey(day,count+1)}`]:type}:{})
+    });
     await renderJournalTable();
-    showToast('✅ Стовпець додано');
+    showToast(type===THEMATIC?'📘 Стовпець тематичної додано':'✅ Стовпець додано');
   }catch(e){showToast('❌ Стовпець не додано: '+e.message);}
   finally{journalColumnBusy=false;}
 };
