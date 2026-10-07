@@ -255,6 +255,15 @@
        are the real floor, so fit-to-width measures true content width.) */
     .journal-table{border-collapse:collapse;font-size:calc(.8rem*var(--journal-scale,1));text-align:center;}
     .journal-table th{background:var(--brand-soft);color:var(--brand-deep);font-weight:800;position:sticky;top:0;z-index:3;border:1px solid var(--line);padding:.55em .31em;white-space:nowrap;}
+    /* Підказка [data-tip] у заголовку стовпця: кожен «липкий» th — окремий
+       шар (z-index:3), і СУСІДНІЙ стовпець малювався поверх неї, обрізаючи
+       текст. Стовпець, над яким курсор чи фокус, піднімаємо над сусідами
+       й над закріпленими кутами (6). */
+    .journal-table thead tr th:hover,.journal-table thead tr th:focus-within,
+    .journal-table thead tr.jt-day-row th:hover,.journal-table thead tr.jt-day-row th:focus-within,
+    .journal-table thead tr.jt-month-row th:hover{z-index:8;}
+    .journal-table td:hover,.journal-table td:focus-within{position:relative;z-index:4;}
+    .journal-table td.sn:hover,.journal-table td.avg-col:hover{position:sticky;}
     .journal-table td{border:1px solid var(--line-soft);padding:.16em;vertical-align:middle;height:2.66em;min-width:2.5em;max-width:3.75em;}
     /* Колонка з прізвищем. max-width тут ОБОВʼЯЗКОВИЙ: загальне правило для td
        вище ставить max-width:3.75em (воно розраховане на вузькі клітинки з
