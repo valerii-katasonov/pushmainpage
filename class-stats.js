@@ -11,9 +11,12 @@
 //
 // ЯК РАХУЄМО (за обраний період; за замовчуванням — поточний семестр)
 //   Пропущено днів  — дні з відміткою «відсутній» на ВЕСЬ ДЕНЬ.
-//   Пропущено уроків — окремі уроки з відміткою «відсутній» у дні, коли
-//                      дитина була в школі (весь пропущений день тут не
-//                      дублюється).
+//   Пропущено уроків — УСІ пропущені уроки без подвійного рахунку:
+//                      • за пропущений день — стільки, скільки уроків у
+//                        класу цього дня тижня за розкладом (без перерв і
+//                        гуртків/факультативів); окремі відмітки на уроках
+//                        цього ж дня вже не додаються;
+//                      • в інші дні — кожен урок, відмічений «відсутній».
 //   Запізнень       — дні, коли було хоч одне запізнення.
 //   Середній з предмета — так само, як пропонується семестрова: середнє
 //                      арифметичне тематичних, якщо вони вже є; інакше —
@@ -28,7 +31,7 @@
 import { ref, get, child } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { db, escHtml, escJs, getClassNum, LEVEL_MAX_CLASS, topicBreakdown, calculateStudentWeightedAvg,
          childAttendanceRange, getDateRange, getActiveClass, academicYearId, displayGrade, getStudentDir,
-         stuName, formatAttendanceSlotLabel, localDateString } from './common.js';
+         stuName, formatAttendanceSlotLabel, localDateString, isBreakItem, dayKeys } from './common.js';
 
 // ── ЧИСТА ЛОГІКА (покрита тестами) ─────────────────────────────
 export function lowThreshold(max, junior){
@@ -61,22 +64,53 @@ export function lowSubjects(perSubj, scaleOf, junior){
   }
   return out.sort((a, b) => a.avg - b.avg || a.subj.localeCompare(b.subj, 'uk'));
 }
+// Скільки уроків у класу кожного дня тижня за розкладом:
+//   lessons: schedules/{клас}/lessons = {Monday: [рядок, ...], ...}
+// Рядок — урок або кілька паралельних (групи) — рахується ОДИН раз.
+// Перерви не рахуємо; гуртки й факультативи (type 'extra') теж — їх
+// відвідують не всі, і «пропущений день» не означає пропущений гурток.
+export function lessonsPerWeekday(lessons){
+  const out = {};
+  for(const day in (lessons || {})){
+    const rows = Array.isArray(lessons[day]) ? lessons[day] : Object.values(lessons[day] || {});
+    out[day] = rows.filter(r => {
+      const items = Array.isArray(r) ? r : (r ? [r] : []);
+      return items.some(x => x && x.subject && !isBreakItem(x) && x.type !== 'extra');
+    }).length;
+  }
+  return out;
+}
+const weekdayOf = ds => { const [y, m, d] = ds.split('-').map(Number); return dayKeys[new Date(y, m - 1, d).getDay()]; };
 // byDate: {дата: {урок|'all': {status, reason}}} — відмітки ОДНІЄЇ дитини
-export function attendanceSummary(byDate){
+// perDay: результат lessonsPerWeekday — скільки уроків за пропущений день
+export function attendanceSummary(byDate, perDay){
   const days = [], lessons = [], late = [];
+  let lessonCount = 0, inDays = 0;
   for(const d of Object.keys(byDate || {}).sort()){
     const slots = byDate[d] || {};
     const all = slots.all && slots.all.status === 'absent';
-    if(all) days.push({ date: d, reason: slots.all.reason || '' });
     let wasLate = false;
+    const missed = new Set();
     for(const k in slots){
       const r = slots[k]; if(!r || !r.status) continue;
       if(r.status === 'late') wasLate = true;
-      else if(r.status === 'absent' && k !== 'all' && !all) lessons.push({ date: d, slot: k, reason: r.reason || '' });
+      else if(r.status === 'absent' && k !== 'all') missed.add(k);
+    }
+    if(all){
+      // Увесь день: уроки дня за розкладом. Відмітки на окремих уроках
+      // цього дня — ті самі уроки, тож не додаються. Якщо розкладу на цей
+      // день немає, беремо хоча б відмічені уроки.
+      const n = Math.max((perDay && perDay[weekdayOf(d)]) || 0, missed.size);
+      days.push({ date: d, reason: slots.all.reason || '', lessons: n });
+      lessonCount += n; inDays += n;
+    }else{
+      [...missed].sort((a, b) => Number(a) - Number(b) || String(a).localeCompare(String(b)))
+        .forEach(k => lessons.push({ date: d, slot: k, reason: slots[k].reason || '' }));
+      lessonCount += missed.size;
     }
     if(wasLate) late.push({ date: d });
   }
-  return { days, lessons, late };
+  return { days, lessons, late, lessonCount, inDays };
 }
 // Відмітки могли лягти під ключем учня і (старі) під імʼям — зливаємо.
 export function mergeKeys(attRange, keys){
@@ -89,17 +123,51 @@ export function mergeKeys(attRange, keys){
   }
   return out;
 }
-// Періоди: семестри року + увесь рік. За замовчуванням — семестр, у якому
-// сьогодні; якщо такого немає — рік.
+// ПЕРІОДИ: місяць, семестр або рік.
+//   months    — місяці навчального року від вересня до поточного;
+//   semesters — семестри з налаштувань року;
+//   year      — увесь навчальний рік.
+// За замовчуванням — поточний семестр; якщо семестрів не задано — поточний місяць.
+const MONTHS_UA = ['Січень','Лютий','Березень','Квітень','Травень','Червень','Липень','Серпень','Вересень','Жовтень','Листопад','Грудень'];
 export function periodsFrom(semesters, year, today){
   const y0 = Number(String(year).slice(0, 4)) || Number(String(today).slice(0, 4));
-  const list = Object.entries(semesters || {})
+  const semList = Object.entries(semesters || {})
     .filter(([, s]) => s && s.startDate && s.endDate)
     .map(([id, s]) => ({ id, name: s.name || id, start: s.startDate, end: s.endDate }))
     .sort((a, b) => a.start.localeCompare(b.start));
-  list.push({ id: 'year', name: 'Увесь навчальний рік', start: `${y0}-09-01`, end: `${y0 + 1}-08-31` });
-  const cur = list.find(p => p.id !== 'year' && p.start <= today && today <= p.end) || list[list.length - 1];
-  return { list, cur: cur.id };
+  const months = [];
+  for(let i = 0; i < 12; i++){
+    const y = i < 4 ? y0 : y0 + 1, m = ((8 + i) % 12) + 1;
+    const id = `${y}-${String(m).padStart(2, '0')}`;
+    if(`${id}-01` > today) break;
+    const last = new Date(y, m, 0).getDate();
+    months.push({ id, name: `${MONTHS_UA[m - 1]} ${y}`, start: `${id}-01`, end: `${id}-${String(last).padStart(2, '0')}` });
+  }
+  if(!months.length) months.push({ id: `${y0}-09`, name: `Вересень ${y0}`, start: `${y0}-09-01`, end: `${y0}-09-30` });
+  const yearP = { id: 'year', name: `${y0}–${y0 + 1} н.р.`, start: `${y0}-09-01`, end: `${y0 + 1}-08-31` };
+  const curSem = semList.find(p => p.start <= today && today <= p.end)
+    || [...semList].reverse().find(p => p.start <= today);
+  const curMonth = months[months.length - 1];
+  const cur = curSem ? { kind: 'semester', id: curSem.id } : { kind: 'month', id: curMonth.id };
+  return { months, semesters: semList, year: yearP, cur };
+}
+export function pickPeriod(P, sel){
+  if(!P) return null;
+  if(sel.kind === 'year') return P.year;
+  const list = sel.kind === 'semester' ? P.semesters : P.months;
+  return list.find(x => x.id === sel.id) || list[list.length - 1] || P.year;
+}
+// Перемикач «Місяць · Семестр · Рік» + вибір конкретного місяця/семестру
+function periodControl(P, sel, fn){
+  const kinds = [['month', 'Місяць'], ...(P.semesters.length ? [['semester', 'Семестр']] : []), ['year', 'Рік']];
+  const seg = `<div class="pst-seg" role="group" aria-label="Період">${kinds.map(([k, l]) =>
+    `<button type="button" class="pst-k${sel.kind === k ? ' on' : ''}" aria-pressed="${sel.kind === k}" onclick="${fn}('${k}')">${l}</button>`).join('')}</div>`;
+  const list = sel.kind === 'semester' ? P.semesters : sel.kind === 'month' ? P.months : null;
+  const cur = pickPeriod(P, sel);
+  const pick = list ? `<select class="pst-pick" aria-label="Оберіть ${sel.kind === 'month' ? 'місяць' : 'семестр'}" onchange="${fn}('${sel.kind}',this.value)">${
+      list.map(x => `<option value="${escHtml(x.id)}"${x.id === cur.id ? ' selected' : ''}>${escHtml(x.name)}</option>`).join('')}</select>`
+    : `<span class="pst-range">${escHtml(human(cur.start))}.${cur.start.slice(0, 4)} – ${escHtml(human(cur.end))}.${cur.end.slice(0, 4)}</span>`;
+  return `<div class="pst">${seg}${pick}</div>`;
 }
 export function monthsIn(start, end){
   const out = []; let [y, m] = start.slice(0, 7).split('-').map(Number); const [ey, em] = end.slice(0, 7).split('-').map(Number);
@@ -134,8 +202,8 @@ function lowListHtml(low, cls){
 }
 function attListHtml(a){
   const parts = [];
-  if(a.days.length) parts.push(`<div><b>Пропущені дні:</b> ${a.days.map(x => escHtml(human(x.date)) + (x.reason ? ` <span class="cst-r">(${escHtml(x.reason)})</span>` : '')).join(', ')}</div>`);
-  if(a.lessons.length) parts.push(`<div><b>Пропущені уроки:</b> ${a.lessons.map(x => `${escHtml(human(x.date))} ${escHtml(formatAttendanceSlotLabel(x.slot).replace('Урок ', 'ур.'))}`).join(', ')}</div>`);
+  if(a.days.length) parts.push(`<div><b>Пропущені дні:</b> ${a.days.map(x => escHtml(human(x.date)) + ` <span class="cst-r">(${x.lessons} ${plural(x.lessons, ['урок', 'уроки', 'уроків'])}${x.reason ? `, ${escHtml(x.reason)}` : ''})</span>`).join(', ')}</div>`);
+  if(a.lessons.length) parts.push(`<div><b>Окремі уроки:</b> ${a.lessons.map(x => `${escHtml(human(x.date))} ${escHtml(formatAttendanceSlotLabel(x.slot).replace('Урок ', 'ур.'))}`).join(', ')}</div>`);
   if(a.late.length) parts.push(`<div><b>Запізнення:</b> ${a.late.map(x => escHtml(human(x.date))).join(', ')}</div>`);
   return parts.join('') || '<p class="cst-none">Пропусків і запізнень немає.</p>';
 }
@@ -144,10 +212,17 @@ async function loadPeriods(){
   const s = await get(child(ref(db), `academic_year/${year}/semesters`)).catch(() => null);
   return periodsFrom(s && s.exists() ? s.val() : {}, year, localDateString);
 }
+// Розклад класу → уроків на день тижня. Раз на клас за сеанс.
+const perDayCache = {};
+async function perDayOf(cls){
+  if(perDayCache[cls]) return perDayCache[cls];
+  const s = await get(child(ref(db), `schedules/${cls}/lessons`)).catch(() => null);
+  return (perDayCache[cls] = lessonsPerWeekday(s && s.exists() ? s.val() : {}));
+}
 const clampEnd = p => (p.end < localDateString ? p.end : localDateString);
 
 // ══ КЛАСНИЙ КЕРІВНИК ════════════════════════════════════════════
-let csPeriods = null, csPeriod = '', csSeq = 0;
+let csP = null, csSel = null, csSeq = 0;
 function ensureClassModal(){
   let m = document.getElementById('class-stats-modal'); if(m) return m;
   m = document.createElement('div');
@@ -156,9 +231,9 @@ function ensureClassModal(){
   m.innerHTML = `<div class="modal-content cst-box">
       <div class="cst-head"><h3 id="cst-title">📊 Статистика класу <span id="cst-cls"></span></h3>
         <button type="button" class="cst-close" onclick="closeClassStats()" aria-label="Закрити">✕</button></div>
-      <label for="cst-period" class="cst-lbl">Період</label>
-      <select id="cst-period" onchange="setClassStatsPeriod(this.value)"></select>
-      <p class="cst-note">Низький бал: менше 4 за шкалою 1–12, менше 3 за шкалою 1–6 (у 1–4 класах — нижче рівня «С»).
+      <div id="cst-period"></div>
+      <p class="cst-note">«Пропущ. уроків» — усі пропущені уроки: за пропущений день — уроки цього дня за розкладом (без гуртків), плюс окремі уроки в інші дні; один урок двічі не рахується.
+        Низький бал: менше 4 за шкалою 1–12, менше 3 за шкалою 1–6 (у 1–4 класах — нижче рівня «С»).
         Середній — як для семестрової: з тематичних, а поки їх немає — середньозважений поточних. Натисніть на учня, щоб побачити подробиці.</p>
       <div id="cst-body"><p class="empty-msg">Завантаження...</p></div>
     </div>`;
@@ -168,15 +243,22 @@ function ensureClassModal(){
   return m;
 }
 window.closeClassStats = () => { const m = document.getElementById('class-stats-modal'); if(m) m.style.display = 'none'; };
-window.setClassStatsPeriod = id => { csPeriod = id; renderClassStats(); };
+// kind — 'month' | 'semester' | 'year'; id — конкретний місяць/семестр (якщо обрали зі списку)
+window.setClassStatsPeriod = (kind, id) => {
+  if(!csP) return;
+  const list = kind === 'semester' ? csP.semesters : csP.months;
+  const keep = csSel && csSel.kind === kind ? csSel.id : null;
+  csSel = { kind, id: id || keep || (kind === 'year' ? 'year' : (kind === csP.cur.kind ? csP.cur.id : list[list.length - 1]?.id)) };
+  paintClassPeriod(); renderClassStats();
+};
+function paintClassPeriod(){ const b = document.getElementById('cst-period'); if(b && csP) b.innerHTML = periodControl(csP, csSel, 'setClassStatsPeriod'); }
 window.openClassStats = async function(){
   const m = ensureClassModal(); m.style.display = 'flex';
   const cls = getActiveClass();
   document.getElementById('cst-cls').textContent = cls ? `· ${cls.replace('class_', '')} клас` : '';
   try{
-    if(!csPeriods){ const p = await loadPeriods(); csPeriods = p.list; csPeriod = p.cur; }
-    document.getElementById('cst-period').innerHTML = csPeriods.map(p =>
-      `<option value="${escHtml(p.id)}"${p.id === csPeriod ? ' selected' : ''}>${escHtml(p.name)} (${escHtml(human(p.start))} – ${escHtml(human(p.end))})</option>`).join('');
+    if(!csP){ csP = await loadPeriods(); csSel = { ...csP.cur }; }
+    paintClassPeriod();
   }catch(e){}
   renderClassStats();
 };
@@ -184,16 +266,17 @@ async function renderClassStats(){
   const req = ++csSeq;
   const box = document.getElementById('cst-body'); if(!box) return;
   const cls = getActiveClass();
-  const p = (csPeriods || []).find(x => x.id === csPeriod);
+  const p = csP && pickPeriod(csP, csSel);
   if(!cls || !p){ box.innerHTML = '<p class="empty-msg">Оберіть клас.</p>'; return; }
   box.innerHTML = '<p class="empty-msg">Рахую...</p>';
   try{
     const end = clampEnd(p), months = monthsIn(p.start, end);
     const junior = getClassNum(cls) <= LEVEL_MAX_CLASS;
-    const [stSnap, scSnap, att, ...per] = await Promise.all([
+    const [stSnap, scSnap, att, perDay, ...per] = await Promise.all([
       get(child(ref(db), `students_list/${cls}`)),
       get(child(ref(db), `grade_scales/${cls}`)).catch(() => null),
       getDateRange(`attendance/${cls}`, p.start, end, true),
+      perDayOf(cls),
       ...months.flatMap(ym => [get(child(ref(db), `grades/${cls}/${ym}`)), get(child(ref(db), `grade_types/${cls}/${ym}`))])
     ]);
     if(req !== csSeq) return;
@@ -218,18 +301,18 @@ async function renderClassStats(){
     });
     let tDays = 0, tLessons = 0, tLate = 0, tLow = 0;
     const rows = students.map((s, i) => {
-      const a = attendanceSummary(mergeKeys(att, [s.sid, s.nm]));
+      const a = attendanceSummary(mergeKeys(att, [s.sid, s.nm]), perDay);
       const low = lowSubjects(by[s.sid], scaleOf, junior);
-      tDays += a.days.length; tLessons += a.lessons.length; tLate += a.late.length; if(low.length) tLow++;
+      tDays += a.days.length; tLessons += a.lessonCount; tLate += a.late.length; if(low.length) tLow++;
       const id = `cst-r${i}`;
       const n = (v, cls2) => `<td class="cst-n${v ? ' ' + cls2 : ''}">${v}</td>`;
       return `<tr class="cst-row" tabindex="0" role="button" aria-expanded="false" aria-controls="${id}"
           onclick="toggleClassStatsRow(this,'${id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
-          <td class="cst-name">${escHtml(s.nm)}</td>${n(a.days.length, 'bad')}${n(a.lessons.length, 'warn')}${n(a.late.length, 'warn')}
+          <td class="cst-name">${escHtml(s.nm)}</td>${n(a.days.length, 'bad')}${n(a.lessonCount, 'warn')}${n(a.late.length, 'warn')}
           <td class="cst-n${low.length ? ' bad' : ''}">${low.length ? `${low.length} ▾` : '0'}</td></tr>
         <tr id="${id}" class="cst-detail" hidden><td colspan="5">${lowListHtml(low, cls)}${attListHtml(a)}</td></tr>`;
     }).join('');
-    box.innerHTML = `<p class="cst-sum">Разом: пропущено <b>${tDays}</b> ${plural(tDays, ['день', 'дні', 'днів'])} і <b>${tLessons}</b> ${plural(tLessons, ['урок', 'уроки', 'уроків'])} окремо,
+    box.innerHTML = `<p class="cst-sum">Разом: пропущено <b>${tDays}</b> ${plural(tDays, ['день', 'дні', 'днів'])} і <b>${tLessons}</b> ${plural(tLessons, ['урок', 'уроки', 'уроків'])} (з уроками пропущених днів),
         запізнень — <b>${tLate}</b>. Учнів із низьким балом хоча б з одного предмета: <b>${tLow}</b> з ${students.length}.</p>
       <div class="cst-wrap"><table class="cst-table"><thead><tr><th>Учень</th><th>Пропущ.<br>днів</th><th>Пропущ.<br>уроків</th><th>Запіз-<br>нень</th><th data-tip="Предметів із низьким середнім балом">Низький<br>бал</th></tr></thead>
       <tbody>${rows}</tbody></table></div>`;
@@ -245,16 +328,16 @@ window.toggleClassStatsRow = function(tr, id){
 // ══ БАТЬКИ Й УЧЕНЬ ══════════════════════════════════════════════
 // Кличе grades-view.js щоразу, як малює «За предметом»: оцінки беремо з
 // уже підписаного дзеркала, відвідуваність читаємо раз на дитину й період.
-let fsPeriods = null, fsPeriod = '', fsAtt = {}, fsSeq = 0, fsLast = null;
+let fsP = null, fsSel = null, fsAtt = {}, fsSeq = 0, fsLast = null;
 window.renderFamilyStats = async function(prefix, cls, sid, name, mirror, scales){
   fsLast = { prefix, cls, sid, name, mirror, scales };
   const box = document.getElementById(`${prefix}-family-stats`); if(!box || !cls || !sid) return;
   const req = ++fsSeq;
   try{
-    if(!fsPeriods){ const p = await loadPeriods(); fsPeriods = p.list; fsPeriod = p.cur; }
+    if(!fsP){ fsP = await loadPeriods(); fsSel = { ...fsP.cur }; }
   }catch(e){ return; }
   if(req !== fsSeq) return;
-  const p = fsPeriods.find(x => x.id === fsPeriod) || fsPeriods[0];
+  const p = pickPeriod(fsP, fsSel);
   const end = clampEnd(p), junior = getClassNum(cls) <= LEVEL_MAX_CLASS;
   // Оцінки з дзеркала: {місяць: {предмет: {ключ: {v, t}}}}
   const perSubj = {};
@@ -267,27 +350,31 @@ window.renderFamilyStats = async function(prefix, cls, sid, name, mirror, scales
   const attKey = `${cls}|${sid}|${p.id}|${end}`;
   const paint = a => {
     const tile = (v, label, cls2) => `<div class="fst-tile${v ? ' ' + cls2 : ''}"><b>${v === null ? '…' : v}</b><span>${label}</span></div>`;
-    const sel = `<select class="fst-period" aria-label="Період статистики" onchange="setFamilyStatsPeriod(this.value)">${fsPeriods.map(x =>
-      `<option value="${escHtml(x.id)}"${x.id === p.id ? ' selected' : ''}>${escHtml(x.name)}</option>`).join('')}</select>`;
-    box.innerHTML = `<div class="fst-head"><b>📊 Підсумок</b>${sel}</div>
+    box.innerHTML = `<div class="fst-head"><b>📊 Підсумок</b></div>${periodControl(fsP, fsSel, 'setFamilyStatsPeriod')}
       <div class="fst-tiles">
-        ${tile(a ? a.days.length : null, 'пропущено днів', 'bad')}${tile(a ? a.lessons.length : null, 'пропущено уроків', 'warn')}${tile(a ? a.late.length : null, 'запізнень', 'warn')}
+        ${tile(a ? a.days.length : null, 'пропущено днів', 'bad')}${tile(a ? a.lessonCount : null, 'пропущено уроків', 'warn')}${tile(a ? a.late.length : null, 'запізнень', 'warn')}
       </div>
       <details class="fst-low">
         <summary>${low.length ? `⚠️ Предметів із низьким середнім балом: <b>${low.length}</b>` : '✅ Предметів із низьким середнім балом немає'}</summary>
         ${lowListHtml(low, cls)}
         <p class="cst-note">Поріг: менше 4 за шкалою 1–12, менше 3 за шкалою 1–6 (у 1–4 класах — нижче рівня «С»). Середній — як для семестрової: з тематичних, а поки їх немає — середньозважений поточних. Підсумкову виставляє вчитель.</p>
       </details>
+      ${a && a.days.length && a.inDays ? `<p class="cst-note" style="margin:0 0 4px;">У т.ч. ${a.inDays} ${plural(a.inDays, ['урок', 'уроки', 'уроків'])} у пропущені дні (за розкладом) і ${a.lessonCount - a.inDays} окремо.</p>` : ''}
       ${a && (a.days.length || a.lessons.length || a.late.length) ? `<details class="fst-low"><summary>Дати пропусків і запізнень</summary>${attListHtml(a)}</details>` : ''}`;
   };
   if(fsAtt[attKey]){ paint(fsAtt[attKey]); return; }
   paint(null);
   try{
-    const raw = await childAttendanceRange(cls, [sid, name], schoolDays(p.start, end));
-    fsAtt[attKey] = attendanceSummary(mergeKeys(raw, [sid, name]));
+    const [raw, perDay] = await Promise.all([childAttendanceRange(cls, [sid, name], schoolDays(p.start, end)), perDayOf(cls)]);
+    fsAtt[attKey] = attendanceSummary(mergeKeys(raw, [sid, name]), perDay);
     if(req === fsSeq) paint(fsAtt[attKey]);
   }catch(e){
     if(req === fsSeq){ const t = box.querySelector('.fst-tiles'); if(t) t.innerHTML = '<p class="empty-msg">Відвідуваність не вдалося завантажити.</p>'; }
   }
 };
-window.setFamilyStatsPeriod = id => { fsPeriod = id; if(fsLast) window.renderFamilyStats(fsLast.prefix, fsLast.cls, fsLast.sid, fsLast.name, fsLast.mirror, fsLast.scales); };
+window.setFamilyStatsPeriod = (kind, id) => {
+  if(!fsP) return;
+  const list = kind === 'semester' ? fsP.semesters : fsP.months;
+  const keep = fsSel && fsSel.kind === kind ? fsSel.id : null;
+  fsSel = { kind, id: id || keep || (kind === 'year' ? 'year' : (kind === fsP.cur.kind ? fsP.cur.id : list[list.length - 1]?.id)) };
+  if(fsLast) window.renderFamilyStats(fsLast.prefix, fsLast.cls, fsLast.sid, fsLast.name, fsLast.mirror, fsLast.scales); };
