@@ -17,6 +17,9 @@
 //                        гуртків/факультативів); окремі відмітки на уроках
 //                        цього ж дня вже не додаються;
 //                      • в інші дні — кожен урок, відмічений «відсутній».
+//   За предметами    — ті самі уроки, розкладені за розкладом: пропущений
+//                      день дає по уроку кожному предмету цього дня, окремий
+//                      урок — своєму предмету (за номером уроку).
 //   Запізнень       — дні, коли було хоч одне запізнення.
 //   Середній з предмета — так само, як пропонується семестрова: середнє
 //                      арифметичне тематичних, якщо вони вже є; інакше —
@@ -69,23 +72,40 @@ export function lowSubjects(perSubj, scaleOf, junior){
 // Рядок — урок або кілька паралельних (групи) — рахується ОДИН раз.
 // Перерви не рахуємо; гуртки й факультативи (type 'extra') теж — їх
 // відвідують не всі, і «пропущений день» не означає пропущений гурток.
-export function lessonsPerWeekday(lessons){
+const subjName = x => { const sj = x && x.subject; const n = typeof sj === 'string' ? sj : (sj && (sj.ua || sj.pl)) || '';
+  return String(n || (x && Array.isArray(x.alt) ? x.alt.map(a => typeof a === 'string' ? a : (a && (a.ua || a.pl)) || '').filter(Boolean).join(' / ') : '')).trim(); };
+// Уроки кожного дня тижня: {Monday: [{num, label}]}. num — номер уроку
+// (саме під ним лежить відмітка на окремому уроці), label — предмет; для
+// паралельних груп з різними предметами — «А / Б».
+export function lessonRows(lessons){
   const out = {};
   for(const day in (lessons || {})){
     const rows = Array.isArray(lessons[day]) ? lessons[day] : Object.values(lessons[day] || {});
-    out[day] = rows.filter(r => {
-      const items = Array.isArray(r) ? r : (r ? [r] : []);
-      return items.some(x => x && x.subject && !isBreakItem(x) && x.type !== 'extra');
-    }).length;
+    out[day] = [];
+    rows.forEach(r => {
+      const items = (Array.isArray(r) ? r : (r ? [r] : [])).filter(x => x && (x.subject || x.alt) && !isBreakItem(x) && x.type !== 'extra');
+      if(!items.length) return;
+      const names = [...new Set(items.map(subjName).filter(Boolean))];
+      out[day].push({ num: String(items.find(x => x.number)?.number || ''), label: names.join(' / ') || 'Урок' });
+    });
   }
+  return out;
+}
+export function lessonsPerWeekday(lessons){
+  const rows = lessonRows(lessons), out = {};
+  for(const d in rows) out[d] = rows[d].length;
   return out;
 }
 const weekdayOf = ds => { const [y, m, d] = ds.split('-').map(Number); return dayKeys[new Date(y, m - 1, d).getDay()]; };
 // byDate: {дата: {урок|'all': {status, reason}}} — відмітки ОДНІЄЇ дитини
 // perDay: результат lessonsPerWeekday — скільки уроків за пропущений день
-export function attendanceSummary(byDate, perDay){
+// rows:   результат lessonRows — щоб розкласти пропуски ЗА ПРЕДМЕТАМИ
+//         (bySubj: {предмет: скільки уроків пропущено}). Без нього — лише числа.
+export function attendanceSummary(byDate, perDay, rows){
   const days = [], lessons = [], late = [];
   let lessonCount = 0, inDays = 0;
+  const bySubj = {};
+  const addS = (label, n = 1) => { if(n > 0) bySubj[label] = (bySubj[label] || 0) + n; };
   for(const d of Object.keys(byDate || {}).sort()){
     const slots = byDate[d] || {};
     const all = slots.all && slots.all.status === 'absent';
@@ -103,14 +123,32 @@ export function attendanceSummary(byDate, perDay){
       const n = Math.max((perDay && perDay[weekdayOf(d)]) || 0, missed.size);
       days.push({ date: d, reason: slots.all.reason || '', lessons: n });
       lessonCount += n; inDays += n;
+      if(rows){
+        const dayRows = rows[weekdayOf(d)] || [];
+        dayRows.forEach(r => addS(r.label));
+        // Відмічених уроків більше, ніж у розкладі (розкладу на день немає)
+        if(n > dayRows.length){
+          const known = new Set(dayRows.map(r => r.num));
+          const extra = [...missed].filter(k => !known.has(String(k)));
+          extra.slice(0, n - dayRows.length).forEach(k => addS(`Урок ${k}`));
+          addS('Предмет не визначено', n - dayRows.length - Math.min(extra.length, n - dayRows.length));
+        }
+      }
     }else{
+      const dayRows = (rows && rows[weekdayOf(d)]) || [];
       [...missed].sort((a, b) => Number(a) - Number(b) || String(a).localeCompare(String(b)))
-        .forEach(k => lessons.push({ date: d, slot: k, reason: slots[k].reason || '' }));
+        .forEach(k => {
+          const row = dayRows.find(r => r.num && r.num === String(k));
+          lessons.push({ date: d, slot: k, subj: row ? row.label : '', reason: slots[k].reason || '' });
+          if(rows) addS(row ? row.label : `Урок ${k}`);
+        });
       lessonCount += missed.size;
     }
     if(wasLate) late.push({ date: d });
   }
-  return { days, lessons, late, lessonCount, inDays };
+  const subjects = Object.entries(bySubj).map(([subj, n]) => ({ subj, n }))
+    .sort((a, b) => b.n - a.n || a.subj.localeCompare(b.subj, 'uk'));
+  return { days, lessons, late, lessonCount, inDays, subjects };
 }
 // Відмітки могли лягти під ключем учня і (старі) під імʼям — зливаємо.
 export function mergeKeys(attRange, keys){
@@ -200,10 +238,16 @@ function lowListHtml(low, cls){
   return `<ul class="cst-low">${low.map(x => `<li><b>${escHtml(x.subj)}</b> — ${avgText(x, cls)}
       <span>${x.by === 'thematic' ? `середнє ${x.n} ${plural(x.n, ['тематичної', 'тематичних', 'тематичних'])}` : `${x.n} ${plural(x.n, ['оцінка', 'оцінки', 'оцінок'])}`} · поріг ${Number.isInteger(x.thr) ? x.thr : x.thr.toFixed(1)}</span></li>`).join('')}</ul>`;
 }
+// Пропуски за предметами: «Математика — 4 · Англійська — 2»
+function subjAbsHtml(a){
+  if(!a || !a.subjects || !a.subjects.length) return '';
+  return `<div class="cst-subj"><b>Пропущено за предметами:</b> ${a.subjects.map(x =>
+    `<span class="cst-sj">${escHtml(x.subj)} — <b>${x.n}</b></span>`).join('')}</div>`;
+}
 function attListHtml(a){
   const parts = [];
   if(a.days.length) parts.push(`<div><b>Пропущені дні:</b> ${a.days.map(x => escHtml(human(x.date)) + ` <span class="cst-r">(${x.lessons} ${plural(x.lessons, ['урок', 'уроки', 'уроків'])}${x.reason ? `, ${escHtml(x.reason)}` : ''})</span>`).join(', ')}</div>`);
-  if(a.lessons.length) parts.push(`<div><b>Окремі уроки:</b> ${a.lessons.map(x => `${escHtml(human(x.date))} ${escHtml(formatAttendanceSlotLabel(x.slot).replace('Урок ', 'ур.'))}`).join(', ')}</div>`);
+  if(a.lessons.length) parts.push(`<div><b>Окремі уроки:</b> ${a.lessons.map(x => `${escHtml(human(x.date))} ${escHtml(formatAttendanceSlotLabel(x.slot).replace('Урок ', 'ур.'))}${x.subj ? ` <span class="cst-r">${escHtml(x.subj)}</span>` : ''}`).join(', ')}</div>`);
   if(a.late.length) parts.push(`<div><b>Запізнення:</b> ${a.late.map(x => escHtml(human(x.date))).join(', ')}</div>`);
   return parts.join('') || '<p class="cst-none">Пропусків і запізнень немає.</p>';
 }
@@ -217,12 +261,13 @@ const perDayCache = {};
 async function perDayOf(cls){
   if(perDayCache[cls]) return perDayCache[cls];
   const s = await get(child(ref(db), `schedules/${cls}/lessons`)).catch(() => null);
-  return (perDayCache[cls] = lessonsPerWeekday(s && s.exists() ? s.val() : {}));
+  const v = s && s.exists() ? s.val() : {};
+  return (perDayCache[cls] = { perDay: lessonsPerWeekday(v), rows: lessonRows(v) });
 }
 const clampEnd = p => (p.end < localDateString ? p.end : localDateString);
 
 // ══ КЛАСНИЙ КЕРІВНИК ════════════════════════════════════════════
-let csP = null, csSel = null, csSeq = 0;
+let csP = null, csSel = null, csSeq = 0, csSubj = '';
 function ensureClassModal(){
   let m = document.getElementById('class-stats-modal'); if(m) return m;
   m = document.createElement('div');
@@ -300,26 +345,34 @@ async function renderClassStats(){
       }
     });
     let tDays = 0, tLessons = 0, tLate = 0, tLow = 0;
-    const rows = students.map((s, i) => {
-      const a = attendanceSummary(mergeKeys(att, [s.sid, s.nm]), perDay);
+    // Фільтр «пропуски з предмета»: стовпець уроків показує лише цей предмет
+    const subjOpts = [...new Set(Object.values(perDay.rows).flat().map(r => r.label))].sort((a, b) => a.localeCompare(b, 'uk'));
+    if(csSubj && !subjOpts.includes(csSubj)) csSubj = '';
+    const stats = students.map(s => ({ s, a: attendanceSummary(mergeKeys(att, [s.sid, s.nm]), perDay.perDay, perDay.rows) }));
+    const lessonsOf = a => csSubj ? ((a.subjects.find(x => x.subj === csSubj) || {}).n || 0) : a.lessonCount;
+    const rows = stats.map(({ s, a }, i) => {
       const low = lowSubjects(by[s.sid], scaleOf, junior);
-      tDays += a.days.length; tLessons += a.lessonCount; tLate += a.late.length; if(low.length) tLow++;
+      tDays += a.days.length; tLessons += lessonsOf(a); tLate += a.late.length; if(low.length) tLow++;
       const id = `cst-r${i}`;
       const n = (v, cls2) => `<td class="cst-n${v ? ' ' + cls2 : ''}">${v}</td>`;
       return `<tr class="cst-row" tabindex="0" role="button" aria-expanded="false" aria-controls="${id}"
           onclick="toggleClassStatsRow(this,'${id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
-          <td class="cst-name">${escHtml(s.nm)}</td>${n(a.days.length, 'bad')}${n(a.lessonCount, 'warn')}${n(a.late.length, 'warn')}
+          <td class="cst-name">${escHtml(s.nm)}</td>${n(a.days.length, 'bad')}${n(lessonsOf(a), 'warn')}${n(a.late.length, 'warn')}
           <td class="cst-n${low.length ? ' bad' : ''}">${low.length ? `${low.length} ▾` : '0'}</td></tr>
-        <tr id="${id}" class="cst-detail" hidden><td colspan="5">${lowListHtml(low, cls)}${attListHtml(a)}</td></tr>`;
+        <tr id="${id}" class="cst-detail" hidden><td colspan="5">${lowListHtml(low, cls)}${subjAbsHtml(a)}${attListHtml(a)}</td></tr>`;
     }).join('');
-    box.innerHTML = `<p class="cst-sum">Разом: пропущено <b>${tDays}</b> ${plural(tDays, ['день', 'дні', 'днів'])} і <b>${tLessons}</b> ${plural(tLessons, ['урок', 'уроки', 'уроків'])} (з уроками пропущених днів),
+    const subjSel = subjOpts.length ? `<label class="cst-lbl" for="cst-subj">Пропуски з предмета</label>
+      <select id="cst-subj" onchange="setClassStatsSubj(this.value)"><option value="">Усі предмети</option>${subjOpts.map(o =>
+        `<option value="${escHtml(o)}"${o === csSubj ? ' selected' : ''}>${escHtml(o)}</option>`).join('')}</select>` : '';
+    box.innerHTML = subjSel + `<p class="cst-sum">Разом: пропущено <b>${tDays}</b> ${plural(tDays, ['день', 'дні', 'днів'])} і <b>${tLessons}</b> ${plural(tLessons, ['урок', 'уроки', 'уроків'])}${csSubj ? ` з предмета «${escHtml(csSubj)}»` : ''} (з уроками пропущених днів),
         запізнень — <b>${tLate}</b>. Учнів із низьким балом хоча б з одного предмета: <b>${tLow}</b> з ${students.length}.</p>
-      <div class="cst-wrap"><table class="cst-table"><thead><tr><th>Учень</th><th>Пропущ.<br>днів</th><th>Пропущ.<br>уроків</th><th>Запіз-<br>нень</th><th data-tip="Предметів із низьким середнім балом">Низький<br>бал</th></tr></thead>
+      <div class="cst-wrap"><table class="cst-table"><thead><tr><th>Учень</th><th>Пропущ.<br>днів</th><th>${csSubj ? `Пропущ.<br>${escHtml(csSubj)}` : 'Пропущ.<br>уроків'}</th><th>Запіз-<br>нень</th><th data-tip="Предметів із низьким середнім балом">Низький<br>бал</th></tr></thead>
       <tbody>${rows}</tbody></table></div>`;
   }catch(e){
     if(req === csSeq) box.innerHTML = `<p class="empty-msg" style="color:var(--danger);">Не вдалося порахувати: ${escHtml(e.message || '')}</p>`;
   }
 }
+window.setClassStatsSubj = v => { csSubj = v; renderClassStats(); };
 window.toggleClassStatsRow = function(tr, id){
   const d = document.getElementById(id); if(!d) return;
   d.hidden = !d.hidden; tr.setAttribute('aria-expanded', String(!d.hidden)); tr.classList.toggle('open', !d.hidden);
@@ -360,13 +413,14 @@ window.renderFamilyStats = async function(prefix, cls, sid, name, mirror, scales
         <p class="cst-note">Поріг: менше 4 за шкалою 1–12, менше 3 за шкалою 1–6 (у 1–4 класах — нижче рівня «С»). Середній — як для семестрової: з тематичних, а поки їх немає — середньозважений поточних. Підсумкову виставляє вчитель.</p>
       </details>
       ${a && a.days.length && a.inDays ? `<p class="cst-note" style="margin:0 0 4px;">У т.ч. ${a.inDays} ${plural(a.inDays, ['урок', 'уроки', 'уроків'])} у пропущені дні (за розкладом) і ${a.lessonCount - a.inDays} окремо.</p>` : ''}
+      ${a && a.subjects && a.subjects.length ? `<details class="fst-low"><summary>Пропущені уроки за предметами</summary>${subjAbsHtml(a)}</details>` : ''}
       ${a && (a.days.length || a.lessons.length || a.late.length) ? `<details class="fst-low"><summary>Дати пропусків і запізнень</summary>${attListHtml(a)}</details>` : ''}`;
   };
   if(fsAtt[attKey]){ paint(fsAtt[attKey]); return; }
   paint(null);
   try{
     const [raw, perDay] = await Promise.all([childAttendanceRange(cls, [sid, name], schoolDays(p.start, end)), perDayOf(cls)]);
-    fsAtt[attKey] = attendanceSummary(mergeKeys(raw, [sid, name]), perDay);
+    fsAtt[attKey] = attendanceSummary(mergeKeys(raw, [sid, name]), perDay.perDay, perDay.rows);
     if(req === fsSeq) paint(fsAtt[attKey]);
   }catch(e){
     if(req === fsSeq){ const t = box.querySelector('.fst-tiles'); if(t) t.innerHTML = '<p class="empty-msg">Відвідуваність не вдалося завантажити.</p>'; }
