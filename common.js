@@ -4174,8 +4174,11 @@ export async function isHeadOf(cls){
   return !!(cls && classTeacherCache[cls] && currentUserData?.email && classTeacherCache[cls].toLowerCase() === currentUserData.email.toLowerCase());
 }
 window.refreshClassCardsBtn = async function(cls){
+  const head = await isHeadOf(cls);
   const b = document.getElementById('t-cards-btn');
-  if(b) b.style.display = (await isHeadOf(cls)) ? '' : 'none';
+  if(b) b.style.display = head ? '' : 'none';
+  const s = document.getElementById('t-stats-btn');
+  if(s) s.style.display = head ? '' : 'none';
 };
 window.openClassCards = async function(){
   const cls = getActiveClass();
@@ -4604,6 +4607,7 @@ let ACADEMIC_YEAR_ID_LOCAL=(()=>{
   return m>=8 ? `${y}-${y+1}` : `${y-1}-${y}`;
 })();
 window.setActiveYearLocal=(v)=>{ if(/^\d{4}-\d{4}$/.test(v||'')) ACADEMIC_YEAR_ID_LOCAL=v; };
+export function academicYearId(){ return ACADEMIC_YEAR_ID_LOCAL; }
 // ══════════════════════════════════════════════════════════════════
 //  ВИВАНТАЖЕННЯ ДАНИХ ДИТИНИ
 // ══════════════════════════════════════════════════════════════════

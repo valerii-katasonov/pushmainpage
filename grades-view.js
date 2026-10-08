@@ -458,6 +458,8 @@ function paintSubject(){
     box.innerHTML = gvLastSubjHtml || '<p class="empty-msg">Завантаження...</p>';
     return;
   }
+  // 📊 Підсумок (class-stats.js): пропуски, запізнення, предмети з низьким балом
+  window.renderFamilyStats?.(isPupil()?'s':'p', gvCls, gvSid, gvName, gvMirror, gvScales || {});
   const cls = gvCls, scales = gvScales || {};
   const subjects = subjectsWithGrades(gvMirror);
   if(!subjects.length){ gvLastSubjHtml=''; box.innerHTML = '<p class="empty-msg">Оцінок ще немає.</p>'; return; }

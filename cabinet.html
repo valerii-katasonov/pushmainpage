@@ -1863,6 +1863,43 @@
     .textbook-item{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:8px;background:var(--surface-2);border-radius:9px;border:1px solid var(--brand-line);margin-bottom:6px;font-size:.85rem;}
     .textbook-item a{color:var(--brand-deep);font-weight:700;text-decoration:none;flex:1;min-width:150px;overflow-wrap:anywhere;}
     .textbook-item a:hover{text-decoration:underline;}
+    /* ── 📊 Статистика учнів (class-stats.js) ── */
+    .cst-box{max-width:720px!important;text-align:left!important;}
+    .cst-head{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+    .cst-head h3{margin:0;color:var(--brand-ink);font-size:1.1rem;}
+    .cst-close{width:auto;margin:0;padding:4px 10px;background:none;border:1px solid var(--line);border-radius:8px;color:var(--ink-2);cursor:pointer;}
+    .cst-lbl{display:block;font-size:.8rem;margin-top:10px;}
+    .cst-note{font-size:.75rem;color:var(--ink-3);line-height:1.4;margin:8px 0;}
+    .cst-sum{font-size:.85rem;color:var(--ink-2);margin:6px 0 10px;}
+    .cst-wrap{overflow-x:auto;}
+    .cst-table{width:100%;border-collapse:collapse;font-size:.85rem;}
+    .cst-table th{background:var(--brand-soft);color:var(--brand-deep);font-size:.75rem;padding:6px 4px;border:1px solid var(--line);}
+    .cst-table td{border:1px solid var(--line-soft);padding:6px;}
+    .cst-row{cursor:pointer;}
+    .cst-row:hover,.cst-row.open{background:var(--surface-2);}
+    .cst-name{font-weight:700;}
+    .cst-n{text-align:center;color:var(--ink-3);}
+    .cst-n.bad{color:var(--danger);font-weight:800;}
+    .cst-n.warn{color:var(--warn);font-weight:800;}
+    .cst-detail td{background:var(--surface-2);font-size:.8rem;line-height:1.5;}
+    .cst-low{margin:4px 0 8px;padding-left:18px;}
+    .cst-low li span{color:var(--ink-3);font-size:.75rem;}
+    .cst-none{margin:4px 0;color:var(--ok);font-size:.8rem;}
+    .cst-r{color:var(--ink-3);}
+    .fst-card:empty{display:none;}
+    .fst-card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:11px;text-align:left;}
+    .fst-head{display:flex;align-items:center;justify-content:space-between;gap:8px;color:var(--brand-deep);}
+    .fst-head>b{white-space:nowrap;}
+    .cst-table td.cst-name{min-width:8em;}
+    .fst-period{width:auto;max-width:60%;margin:0;padding:4px 8px;font-size:.78rem;}
+    .fst-tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0 6px;}
+    .fst-tile{background:var(--surface-2);border-radius:10px;padding:8px 4px;text-align:center;}
+    .fst-tile b{display:block;font-size:1.5rem;line-height:1.1;color:var(--ink-3);}
+    .fst-tile span{font-size:.72rem;color:var(--ink-2);}
+    .fst-tile.bad b{color:var(--danger);}
+    .fst-tile.warn b{color:var(--warn);}
+    .fst-low{margin-top:6px;font-size:.85rem;}
+    .fst-low summary{cursor:pointer;color:var(--brand-deep);padding:4px 0;}
     /* ── 🎯 База тренажерів ── */
     .tr-box{max-width:620px!important;text-align:left!important;}
     .tr-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;}
@@ -4277,6 +4314,7 @@
         <button onclick="showUngraded()" class="qa-btn qa-ungraded">🔍 Без оцінок</button>
         <button onclick="openQuickJournal()" class="qa-btn qa-quick">⚡ Швидкий журнал</button>
         <button id="t-cards-btn" onclick="openClassCards()" class="qa-btn qa-cards" style="display:none;">🗂 Картки учнів</button>
+        <button id="t-stats-btn" onclick="openClassStats()" class="qa-btn qa-cards" style="display:none;">📊 Статистика класу</button>
         <button onclick="openClassBroadcast()" class="qa-btn qa-broadcast">✉️ Повідомлення класу</button>
         <button onclick="printClassSchedule()" class="qa-btn qa-print">🖨️ Друк розкладу</button>
         <button onclick="openStickerStatsModal()" class="qa-btn" style="background:var(--warn);color:#fff;">🌟 Статистика наліпок</button>
@@ -4916,6 +4954,7 @@
 
     <section class="screen-section" data-dtab="grades">
       <h3>📈 За предметом</h3>
+      <div id="p-family-stats" class="fst-card"></div>
       <div class="data-card" style="border-left-color:var(--purple,var(--brand-deep));background:var(--surface-2);margin-top:0;">
         <div id="p-grades-subject"><p class="empty-msg">Завантаження...</p></div>
       </div>
@@ -5154,6 +5193,7 @@
         <div id="s-grades-week"><p class="empty-msg">Завантаження...</p></div>
       </div>
       <div class="data-card" style="border-left-color:var(--brand-deep);background:var(--surface-2);">
+        <div id="s-family-stats" class="fst-card"></div>
         <h4 style="margin-top:0;color:var(--brand-deep);">📈 За предметом:</h4>
         <div id="s-grades-subject"><p class="empty-msg">Завантаження...</p></div>
       </div>
@@ -5792,6 +5832,7 @@ document.addEventListener('DOMContentLoaded', function(){
 <script type="module" src="family-week.js"></script>
 <script type="module" src="talk-requests.js"></script>
 <script type="module" src="trainers.js"></script>
+<script type="module" src="class-stats.js"></script>
 <script type="module" src="chat.js"></script>
 <script type="module" src="breaks.js"></script>
 <script type="module" src="subjects.js"></script>
