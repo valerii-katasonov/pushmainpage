@@ -61,7 +61,7 @@ export function whoList(seen, reacts, names){
     const child = s.child ? childDisplayName(s.child) : '';
     const who = s.role === 'student'
       ? (child || 'Учень')
-      : ((names && s.se && names[s.se]) || (s.pr === 'mother' ? 'Мати' : s.pr === 'father' ? 'Батько' : 'Батьки'));
+      : (s.se || s.pr ? parentLabel(names && names[s.se], s.se, s.pr) : 'Батьки');
     const label = s.role === 'student' ? `${who} (учень)` : (child ? `${who} — ${child}` : who);
     people.push({ uid, se: s.se || '', cls: s.cls || '', label, ts: s.ts || 0, react: REACT_KEYS.includes(r) ? r : null });
   });
@@ -69,6 +69,13 @@ export function whoList(seen, reacts, names){
 }
 // ПІБ батька з профілю; порожньо, якщо не заповнено (parentFullName дає «—»)
 const pName = prof => { const n = parentFullName(prof, ''); return n && n !== '—' ? n : ''; };
+const PR = { mother: 'мати', father: 'батько', guardian: 'опікун' };
+// Ключ пошти назад у пошту: у ключі крапки замінені на «_». Підкреслення
+// в самій адресі трапляються рідко, тож для показу цього досить.
+export const seToEmail = se => String(se || '').replace(/_/g, '.');
+// Як підписати батька, що не заповнив ПІБ: пошта + хто він дитині. Інакше
+// в списку стоїть лише ім'я дитини — і мама з татом виглядають дублями.
+export const parentLabel = (name, se, pr) => name || `${seToEmail(se) || 'без пошти'}${PR[pr] ? ` (${PR[pr]})` : ''}`;
 // Родини класу, які ще не переглянули (для оголошення класу)
 export function notSeenInClass(links, cls, seenSe){
   const out = [];
@@ -77,10 +84,11 @@ export function notSeenInClass(links, cls, seenSe){
     const mine = kids.filter(k => k && k.class === cls);
     if(!mine.length || seenSe.has(se)) continue;
     const prof = getParentProfile(links[se]);
-    const pn = pName(prof), kids2 = mine.map(k => childDisplayName(k.studentName)).join(', ');
-    out.push(pn ? `${pn} — ${kids2}` : kids2);
+    const kids2 = mine.map(k => childDisplayName(k.studentName)).join(', ');
+    out.push({ kid: kids2, text: `${parentLabel(pName(prof), se, mine[0].role)} — ${kids2}` });
   }
-  return out.sort((a, b) => a.localeCompare(b, 'uk'));
+  // За дитиною: мама й тато однієї дитини стоять поруч
+  return out.sort((a, b) => a.kid.localeCompare(b.kid, 'uk') || a.text.localeCompare(b.text, 'uk')).map(x => x.text);
 }
 
 // ── ХТО ЩО МОЖЕ ─────────────────────────────────────────────────
