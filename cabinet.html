@@ -1064,6 +1064,29 @@
     .nw-title{margin:0 0 5px 0;font-size:.95rem;color:var(--ink);font-weight:700;}
     .nw-text{font-size:.87rem;line-height:1.5;color:var(--ink);}
     .nw-foot{display:flex;align-items:center;gap:10px;margin-top:9px;padding-top:8px;border-top:1px dashed var(--line-soft);}
+    /* ── Реакції на оголошення (news-reactions.js) ── */
+    .nr-bar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px;}
+    .nr-bar:empty{display:none;}
+    .nr-btn{width:auto;margin:0;display:inline-flex;align-items:center;gap:4px;padding:4px 9px;border-radius:999px;border:1px solid var(--line);background:var(--surface);font-size:1rem;line-height:1.2;cursor:pointer;}
+    .nr-btn span{font-size:.75rem;font-weight:700;color:var(--ink-2);}
+    .nr-btn.on{background:var(--brand-soft);border-color:var(--brand-deep);}
+    .nr-btn.on span{color:var(--brand-deep);}
+    .nr-chip{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:999px;background:var(--surface-2);border:1px solid var(--line-soft);font-size:.82rem;}
+    .nr-none{font-size:.75rem;color:var(--ink-3);}
+    .nr-who{width:auto;margin:0 0 0 auto;padding:4px 10px;border-radius:8px;border:1px solid var(--brand-line);background:var(--surface);color:var(--brand-deep);font-size:.78rem;cursor:pointer;}
+    .nwho-box{max-width:560px!important;text-align:left!important;}
+    .nwho-head{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+    .nwho-head h3{margin:0;color:var(--brand-ink);font-size:1.1rem;}
+    .nwho-close{width:auto;margin:0;padding:4px 10px;background:none;border:1px solid var(--line);border-radius:8px;color:var(--ink-2);cursor:pointer;}
+    .nwho-sub{font-size:.82rem;color:var(--ink-2);margin:4px 0 8px;}
+    .nwho-sec{margin:10px 0;font-size:.85rem;}
+    .nwho-sec ul{margin:5px 0;padding-left:18px;line-height:1.5;}
+    .nwho-sec li span{color:var(--ink-3);font-size:.75rem;}
+    .nwho-r{margin:4px 0;line-height:1.45;}
+    .nwho-e{display:inline-block;min-width:46px;font-weight:700;}
+    .nwho-cls summary{cursor:pointer;color:var(--brand-deep);padding:3px 0;}
+    .nwho-ok{color:var(--ok);margin:4px 0;}
+    .nwho-note{font-size:.75rem;color:var(--ink-3);border-top:1px dashed var(--line-soft);padding-top:8px;}
     .nw-author{font-size:.75rem;color:var(--ink-3);}
     .nw-del{width:auto;min-height:var(--touch-target);margin:0 0 0 auto;padding:8px 12px;font-size:.8125rem;background:transparent;color:var(--danger);border:1px solid var(--danger-line);border-radius:7px;cursor:pointer;}
     .nw-imp-row{display:flex;align-items:flex-start;gap:9px;margin:12px 0 4px;font-size:.85rem;}
@@ -5844,6 +5867,7 @@ document.addEventListener('DOMContentLoaded', function(){
 <script type="module" src="talk-requests.js"></script>
 <script type="module" src="trainers.js"></script>
 <script type="module" src="class-stats.js"></script>
+<script type="module" src="news-reactions.js"></script>
 <script type="module" src="chat.js"></script>
 <script type="module" src="breaks.js"></script>
 <script type="module" src="subjects.js"></script>

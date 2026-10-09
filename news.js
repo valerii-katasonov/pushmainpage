@@ -177,6 +177,7 @@ export async function renderNewsFeed(containerId){
         </div>
         ${a.title ? `<h4 class="nw-title">${escHtml(a.title)}</h4>` : ''}
         <div class="nw-text">${escHtml(a.text).replace(/\n/g,'<br>')}</div>
+        <div class="nr-bar" data-nid="${escHtml(a.id)}"></div>
         <div class="nw-foot">
           <span class="nw-author">${escHtml(a.authorName || 'Школа')}</span>
           <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;align-items:center;margin-left:auto;">
@@ -188,6 +189,7 @@ export async function renderNewsFeed(containerId){
         </div>
       </article>`;
     }).join('');
+    window.hydrateNewsReactions?.(box);   // реакції й «хто переглянув» (news-reactions.js)
     markSeen();
   }catch(e){
     box.innerHTML = `<p class="empty-msg" style="color:var(--danger);">Не вдалося завантажити: ${escHtml(e.message)}</p>`;
@@ -260,6 +262,7 @@ export async function renderFreshNews(containerId){
         </div>
         ${a.title ? `<h4 class="nw-title">${escHtml(a.title)}</h4>` : ''}
         <div class="nw-text">${escHtml(a.text).replace(/\n/g,'<br>')}</div>
+        <div class="nr-bar" data-nid="${escHtml(a.id)}"></div>
         <div class="fn-foot">
           <span>${escHtml(a.authorName || 'Школа')}</span>
           <span class="fn-left" data-tip="Далі оголошення лишиться у вкладці «Школа»">${
@@ -268,6 +271,7 @@ export async function renderFreshNews(containerId){
       </article>`;
     }).join('')
     + `<button type="button" class="fn-all" onclick="goToNewsFeed()">Усі оголошення →</button>`;
+    window.hydrateNewsReactions?.(box);
   }catch(e){
     // Оголошення — не те, заради чого варто лякати людину червоним
     // написом на головній. Мовчки ховаємо; повна стрічка у «Школа»
