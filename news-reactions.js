@@ -68,7 +68,7 @@ export function whoList(seen, reacts, names){
   return people.sort((a, b) => (a.cls || 'z').localeCompare(b.cls || 'z', 'uk', { numeric: true }) || a.label.localeCompare(b.label, 'uk'));
 }
 // ПІБ батька з профілю; порожньо, якщо не заповнено (parentFullName дає «—»)
-const pName = prof => { const n = parentFullName(prof, ''); return n && n !== '—' ? n : ''; };
+export const pName = prof => { const n = parentFullName(prof, ''); return n && n !== '—' ? n : ''; };
 const PR = { mother: 'мати', father: 'батько', guardian: 'опікун' };
 // Ключ пошти назад у пошту: у ключі крапки замінені на «_». Підкреслення
 // в самій адресі трапляються рідко, тож для показу цього досить.

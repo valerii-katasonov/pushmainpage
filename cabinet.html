@@ -1073,6 +1073,25 @@
     .cr-sum{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;}
     .cr-chip{padding:3px 9px;border-radius:999px;background:var(--surface-2);border:1px solid var(--line);font-size:.8rem;}
     .cr-chip.warn{background:var(--warn-soft);border-color:var(--warn-line);color:var(--warn);}
+    /* ── 💬 Коментарі учням (comments-view.js) ── */
+    .cv-box{max-width:720px!important;text-align:left!important;}
+    .cv-head{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+    .cv-head h3{margin:0;color:var(--brand-ink);font-size:1.1rem;}
+    .cv-close{width:auto;margin:0;padding:4px 10px;background:none;border:1px solid var(--line);border-radius:8px;color:var(--ink-2);cursor:pointer;}
+    .cv-filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin:4px 0 8px;}
+    .cv-filters label{font-size:.75rem;color:var(--ink-2);display:flex;flex-direction:column;gap:3px;}
+    .cv-filters select{margin:0;padding:6px 8px;font-size:.82rem;}
+    .cv-sum{font-size:.85rem;color:var(--ink-2);margin:6px 0 10px;}
+    .cv-note{font-size:.75rem;color:var(--ink-3);margin:4px 0;}
+    .cv-item{border:1px solid var(--line);border-radius:10px;padding:9px 11px;margin-bottom:8px;background:var(--surface);font-size:.85rem;}
+    .cv-top{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline;}
+    .cv-top b{color:var(--brand-ink);}
+    .cv-text{margin:6px 0;padding:6px 9px;border-radius:7px;background:var(--surface-2);font-style:italic;white-space:pre-wrap;overflow-wrap:anywhere;}
+    .cv-author,.cv-seen,.cv-react{font-size:.78rem;margin-top:3px;line-height:1.45;}
+    .cv-seen.cv-no{color:var(--warn);}
+    .cv-react{color:var(--brand-deep);font-weight:600;}
+    .cv-react.warn{color:var(--warn);}
+    .cv-mute{color:var(--ink-3);font-weight:400;}
     /* ── Реакції на оголошення (news-reactions.js) ── */
     .nr-bar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px;}
     .nr-bar:empty{display:none;}
@@ -3685,6 +3704,7 @@
       <div style="display:flex;gap:9px;flex-wrap:wrap;">
         <button onclick="openVisualMatrixModal('live')" style="flex:1;min-width:170px;background:var(--brand-deep);color:#fff;margin-top:0;font-size:.95rem;padding:11px;">🗓️ Розклад</button>
         <button onclick="openJournalModal('director')" style="flex:1;min-width:170px;background:linear-gradient(135deg,var(--brand-deep),var(--brand-deep));color:#fff;margin-top:0;font-size:.95rem;padding:11px;">📖 Журнал</button>
+        <button onclick="openCommentsView()" style="flex:1;min-width:170px;background:var(--brand-deep);color:#fff;margin-top:0;font-size:.95rem;padding:11px;">💬 Коментарі учням</button>
         <button onclick="openChatModal('director')" data-chatbtn="1" style="flex:1;min-width:170px;background:linear-gradient(135deg,var(--brand-deep),var(--brand-deep));color:#fff;margin-top:0;font-size:.95rem;padding:11px;">💬 Чат з батьками</button>
       </div>
     </section>
@@ -4358,6 +4378,7 @@
         <button onclick="openQuickJournal()" class="qa-btn qa-quick">⚡ Швидкий журнал</button>
         <button id="t-cards-btn" onclick="openClassCards()" class="qa-btn qa-cards" style="display:none;">🗂 Картки учнів</button>
         <button id="t-stats-btn" onclick="openClassStats()" class="qa-btn qa-cards" style="display:none;">📊 Статистика класу</button>
+        <button onclick="openCommentsView()" class="qa-btn qa-cards">💬 Коментарі учням</button>
         <button onclick="openClassBroadcast()" class="qa-btn qa-broadcast">✉️ Повідомлення класу</button>
         <button onclick="printClassSchedule()" class="qa-btn qa-print">🖨️ Друк розкладу</button>
         <button onclick="openStickerStatsModal()" class="qa-btn" style="background:var(--warn);color:#fff;">🌟 Статистика наліпок</button>
@@ -5877,6 +5898,7 @@ document.addEventListener('DOMContentLoaded', function(){
 <script type="module" src="trainers.js"></script>
 <script type="module" src="class-stats.js"></script>
 <script type="module" src="news-reactions.js"></script>
+<script type="module" src="comments-view.js"></script>
 <script type="module" src="chat.js"></script>
 <script type="module" src="breaks.js"></script>
 <script type="module" src="subjects.js"></script>

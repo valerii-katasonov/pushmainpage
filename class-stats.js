@@ -196,7 +196,7 @@ export function pickPeriod(P, sel){
   return list.find(x => x.id === sel.id) || list[list.length - 1] || P.year;
 }
 // Перемикач «Місяць · Семестр · Рік» + вибір конкретного місяця/семестру
-function periodControl(P, sel, fn){
+export function periodControl(P, sel, fn){
   const kinds = [['month', 'Місяць'], ...(P.semesters.length ? [['semester', 'Семестр']] : []), ['year', 'Рік']];
   const seg = `<div class="pst-seg" role="group" aria-label="Період">${kinds.map(([k, l]) =>
     `<button type="button" class="pst-k${sel.kind === k ? ' on' : ''}" aria-pressed="${sel.kind === k}" onclick="${fn}('${k}')">${l}</button>`).join('')}</div>`;
@@ -251,7 +251,7 @@ function attListHtml(a){
   if(a.late.length) parts.push(`<div><b>Запізнення:</b> ${a.late.map(x => escHtml(human(x.date))).join(', ')}</div>`);
   return parts.join('') || '<p class="cst-none">Пропусків і запізнень немає.</p>';
 }
-async function loadPeriods(){
+export async function loadPeriods(){
   const year = academicYearId();
   const s = await get(child(ref(db), `academic_year/${year}/semesters`)).catch(() => null);
   return periodsFrom(s && s.exists() ? s.val() : {}, year, localDateString);

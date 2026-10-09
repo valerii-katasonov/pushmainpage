@@ -1750,9 +1750,12 @@ export function loadTeacherDashboard(){
   const cls=getActiveClass();const uid=auth.currentUser.uid;
   // Retake counter
   get(ref(db,`retake_requests/${cls}`)).then(snap=>{if(snap.exists()){const d=snap.val();let cnt=0;for(let s in d)for(let dt in d[s])for(let st in d[s][dt])if(d[s][dt][st].status==='pending')cnt++;document.getElementById('t-retake-counter').innerText=cnt;}else document.getElementById('t-retake-counter').innerText=0;});
-  Promise.all([get(child(ref(db),`reactions/${cls}`)),get(child(ref(db),`authors/${cls}`)),get(child(ref(db),`comments/${cls}`))]).then(([rs,as,cs])=>{
+  Promise.all([get(child(ref(db),`reactions/${cls}`)),get(child(ref(db),`authors/${cls}`)),get(child(ref(db),`comments/${cls}`)),get(child(ref(db),`comment_meta/${cls}`)).catch(()=>null)]).then(([rs,as,cs,ms])=>{
     let cnt=0;window.myDetailedReactions=[];
-    if(rs.exists()&&as.exists()){const reactions=rs.val();const authors=as.val();const comments=cs.exists()?cs.val():{};for(let d in reactions)for(let s in reactions[d])if(authors[d]&&authors[d][s]===uid)for(let st in reactions[d][s]){cnt++;let emoji=reactions[d][s][st];let cm=(comments[d]&&comments[d][s]&&comments[d][s][st])?comments[d][s][st]:'Без коментаря';window.myDetailedReactions.push({date:d,subject:s,student:st,emoji,comment:cm});}window.myDetailedReactions.sort((a,b)=>new Date(b.date)-new Date(a.date));}
+    // Мій коментар: автор записаний у comment_meta; для старих — за тим, хто вносив ДЗ уроку
+    const meta=ms&&ms.exists()?ms.val():{};
+    const mine=(d,s,st)=>{const m=meta[d]&&meta[d][s]&&meta[d][s][st];return m?m.by===uid:!!(as.exists()&&as.val()[d]&&as.val()[d][s]===uid);};
+    if(rs.exists()){const reactions=rs.val();const comments=cs.exists()?cs.val():{};for(let d in reactions)for(let s in reactions[d])for(let st in reactions[d][s]){if(!mine(d,s,st))continue;cnt++;let emoji=reactions[d][s][st];let cm=(comments[d]&&comments[d][s]&&comments[d][s][st])?comments[d][s][st]:'Без коментаря';window.myDetailedReactions.push({date:d,subject:s,student:st,emoji,comment:cm});}window.myDetailedReactions.sort((a,b)=>new Date(b.date)-new Date(a.date));}
     document.getElementById('t-karma-counter').innerText=cnt;
   });
   if(currentUserData.role!=='art_school_teacher'){
@@ -1878,7 +1881,13 @@ window.saveComment=async function(){
   const btn=document.getElementById('btn-save-comment');
   commentSaving=true;if(btn){btn.disabled=true;btn.textContent='⏳ Збереження...';}
   try{
-    await set(ref(db,`comments/${cls}/${date}/${subj}/${st}`),cm);
+    // Разом із текстом — хто написав (comment_meta): за цим учитель
+    // бачить свої коментарі й реакції на них, навіть у «Перерві» чи «ГПД».
+    await update(ref(db),{
+      [`comments/${cls}/${date}/${subj}/${st}`]:cm,
+      [`comment_meta/${cls}/${date}/${subj}/${st}`]:{by:auth.currentUser.uid,se:emailKey(auth.currentUser.email||''),
+        name:[currentUserData?.firstName,currentUserData?.lastName].filter(Boolean).join(' ').slice(0,80)||String(auth.currentUser.email||'').slice(0,80),ts:Date.now()}
+    });
   }catch(e){
     showToast('❌ Коментар не збережено: '+(e.message||e));
     return;

@@ -280,6 +280,13 @@ const dayName = ds => {
 
 // Своє значення з вузла «{учень: значення}»: запис міг лягти і під
 // ідентифікатором, і під імʼям — так само, як у решті кабінету.
+// Під яким саме ключем лежить свій запис — для відмітки «переглянуто»
+function keyOf(map,sid,name,profileSid){
+  if(!map) return '';
+  sid=sid??gvSid; name=name??gvName; profileSid=profileSid??gvProfileSid;
+  for(const k of [sid,profileSid,name]) if(k && map[k] !== undefined) return k;
+  return '';
+}
 function mineOf(map,sid,name,profileSid){
   if(!map) return undefined;
   sid=sid??gvSid; name=name??gvName; profileSid=profileSid??gvProfileSid;
@@ -392,13 +399,14 @@ function paintWeek(){
     const rows = subjs.map(s => {
       const grades=items.filter(i => i.subj === s);
       const cm = mineOf(cmDay[s]) || '';
+      const cmKey = keyOf(cmDay[s]);
       const rx = mineOf(((gvReactions||{})[ds]||{})[s]) || null;
       const tName = gvTeachers[subjKey(s)] || gvTeachers[s.trim()];
       const tHtml = tName ? ` <span style="font-size:0.8rem;color:var(--brand-deep);font-weight:normal;">👩‍🏫 ${escHtml(tName)}</span>` : '';
       return `<li style="margin-bottom:9px;"><b>${escHtml(s)}</b>${tHtml}<br>`
         + grades.map(g=>gradeChip(g.v,g.t,cls,gvScales?.[s]?.max)
           +retakeBtn(cls,s,g.date,g.v,gvScales?.[s]?.max)+renderWorkPhotos(g.workPhotos)).join(' ')
-        + (cm ? `<div style="background:var(--surface-2);padding:5px 9px;border-radius:6px;font-style:italic;font-size:.88rem;margin-top:4px;">${escHtml(cm)}</div>`
+        + (cm ? `<div data-cm-cls="${escHtml(cls)}" data-cm-date="${escHtml(ds)}" data-cm-subj="${escHtml(s)}" data-cm-sid="${escHtml(cmKey)}" style="background:var(--surface-2);padding:5px 9px;border-radius:6px;font-style:italic;font-size:.88rem;margin-top:4px;">${escHtml(cm)}</div>`
                 + reactionRow(ds, s, rx) : '')
         + `</li>`;
     }).join('');
@@ -408,6 +416,8 @@ function paintWeek(){
 
   gvLastWeekHtml = nav + (blocks || '<p class="empty-msg">Цього тижня оцінок і коментарів немає.</p>');
   box.innerHTML = gvLastWeekHtml;
+  // Коментар, що побув на екрані, — «переглянуто» для вчителя (comments-view.js)
+  window.observeCommentsSeen?.(box);
 }
 window.renderGradesWeek = renderGradesWeek;
 
