@@ -623,6 +623,16 @@ window.invalidateUsersCache = invalidateUsersCache;
 // grade_types/{cls}/{yMonth}/{subj}/{date}/{student}) written by journal.js's
 // confirmGrade()/deleteGrade(). Naming them the same caused real data to
 // collide (see loadGradeTypesCache below for the incident this fixed).
+// Реакції родини на коментар учителя: reactions/{клас}/{дата}/{предмет}/{учень} = емодзі.
+// Одна на коментар; повторне натискання знімає. Список той самий у правилах
+// бази (database.rules.gen.py) — міняти парою. Перші три — давні (уже є в базі).
+// Є й «незадоволення», але ввічливе: на зауваження вчителя батько може
+// відповісти «Засмучені» або «Поговоримо вдома», а не лише «👍».
+export const COMMENT_REACTS=[
+  {e:'👍',t:'Дякуємо'},{e:'❤️',t:'Приємно'},{e:'🔥',t:'Супер'},
+  {e:'👌',t:'Взяли до уваги'},{e:'🤝',t:'Поговоримо вдома'},
+  {e:'😔',t:'Засмучені'},{e:'🤔',t:'Є питання'}];
+export const commentReactLabel=e=>(COMMENT_REACTS.find(r=>r.e===e)||{}).t||'';
 export const GRADE_WEIGHTS={'П':1.0,'У':1.0,'ДЗ':0.5,'СР':1.5,'ДК':1.5,'ПР':1.5,'ПЗ':1.5,'К':2.0};
 // Best-guess full Ukrainian labels used only to seed grade_type_defs on first run —
 // director can rename via delete+recreate in the new "🎯 Типи оцінок" panel if wrong.

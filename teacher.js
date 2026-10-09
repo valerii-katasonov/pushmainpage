@@ -7,7 +7,7 @@
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, push, remove, update, onValue } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { renderNewsFeed } from './news.js';
-import { db, auth, attendanceAuthor, canClearDayAbsence, clearDayAbsence, CLOUDINARY_URL, UPLOAD_PRESET, uploadToCloudinary, HW_FILE_EXT, HW_FILE_MAX_MB, fileExt, isImageUrl, isAudioUrl, cldImage, safeHttpUrl, getActiveClass, currentUserData, showToast, displayGrade, validDailyGrade, getClassNum, LEVEL_MAX_CLASS, LEVEL_LETTERS, renderHwItem, renderHwList, dayKeys, formatAttendanceSlotLabel, STICKER_GOAL, stickerGoal, escJs, escHtml, safeUrl, normalizeChildren, notifyEvent, logAction, renderBirthdays, teacherAccessMatrix, getUsersSnap, getStudentDir, stuName, gradeWritePaths, journalBaseDate, journalSlot, localDateString, isMasterTeacher, gradeTypesCache, subjKey, emailKey, subjectsForClassWeek } from './common.js';
+import { db, auth, attendanceAuthor, canClearDayAbsence, clearDayAbsence, CLOUDINARY_URL, UPLOAD_PRESET, uploadToCloudinary, HW_FILE_EXT, HW_FILE_MAX_MB, fileExt, isImageUrl, isAudioUrl, cldImage, safeHttpUrl, getActiveClass, currentUserData, showToast, displayGrade, validDailyGrade, getClassNum, LEVEL_MAX_CLASS, LEVEL_LETTERS, renderHwItem, renderHwList, dayKeys, formatAttendanceSlotLabel, STICKER_GOAL, stickerGoal, escJs, escHtml, safeUrl, normalizeChildren, notifyEvent, logAction, renderBirthdays, teacherAccessMatrix, getUsersSnap, getStudentDir, stuName, gradeWritePaths, journalBaseDate, journalSlot, localDateString, isMasterTeacher, gradeTypesCache, subjKey, emailKey, subjectsForClassWeek, COMMENT_REACTS, commentReactLabel } from './common.js';
 import { populateTopicSelector, availableTopicsCache, planKey, loadAliases, isDoubleLesson, doubleLessonNumbers } from './curriculum.js';
 
 let currentHwImages=[];
@@ -1907,7 +1907,12 @@ window.showReactionsDetails=async function(){
   const cls=getActiveClass();
   try{await getStudentDir(cls,true);}
   catch(e){list.innerHTML='<p class="empty-msg" style="color:var(--danger);">Не вдалося завантажити імена учнів.</p>';return;}
-  let h='<ul style="list-style:none;padding:0;margin:0;">';
+  // Зведення зверху: скільки яких реакцій. «Засмучені» й «Є питання» —
+  // першими: на них варто відповісти.
+  const cnt={};window.myDetailedReactions.forEach(r=>cnt[r.emoji]=(cnt[r.emoji]||0)+1);
+  const order=['😔','🤔',...COMMENT_REACTS.map(x=>x.e).filter(e=>e!=='😔'&&e!=='🤔')];
+  let h=`<div class="cr-sum">${order.filter(e=>cnt[e]).map(e=>`<span class="cr-chip${e==='😔'||e==='🤔'?' warn':''}">${e} ${escHtml(commentReactLabel(e))}: <b>${cnt[e]}</b></span>`).join('')}</div>`;
+  h+='<ul style="list-style:none;padding:0;margin:0;">';
   window.myDetailedReactions.forEach(r=>{
     const [y,m,d]=r.date.split('-');
     const resolved=stuName(cls,r.student);
@@ -1915,7 +1920,7 @@ window.showReactionsDetails=async function(){
       ?'Учня немає у списку класу':resolved;
     h+=`<li style="background:var(--surface-2);border:1px solid var(--line-soft);border-radius:8px;padding:11px;margin-bottom:9px;">
       <div style="display:flex;justify-content:space-between;border-bottom:1px dashed var(--line);padding-bottom:4px;margin-bottom:7px;">
-        <span style="font-weight:700;color:var(--brand-ink);">${escHtml(name)}</span><span style="font-size:1.3rem;">${escHtml(r.emoji)}</span>
+        <span style="font-weight:700;color:var(--brand-ink);">${escHtml(name)}</span><span style="font-size:1.3rem;" title="${escHtml(commentReactLabel(r.emoji))}">${escHtml(r.emoji)} <small style="font-size:.72rem;color:var(--ink-2);">${escHtml(commentReactLabel(r.emoji))}</small></span>
       </div>
       <div style="font-size:.78rem;color:var(--ink-3);margin-bottom:4px;">📅 ${d}.${m}.${y} | 📚 ${escHtml(r.subject)}</div>
       <div style="font-size:.88rem;color:var(--ink);background:var(--surface-2);padding:7px;border-radius:6px;font-style:italic;">"${escHtml(r.comment)}"</div>

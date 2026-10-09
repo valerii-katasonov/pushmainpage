@@ -1162,9 +1162,15 @@ window.submitAttendance=async function(role='parent'){
     console.warn('Відмітка збережена, push не надіслано:', result.error || 'немає підписаних отримувачів');
 };
 window.updateAttOptionsStudent=function(){ fillAttReasons('s'); };
-window.sendReaction=function(date,subject,emoji){if(!currentUserData)return;
-  set(ref(db,`reactions/${getActiveClass()}/${date}/${subject}/${currentUserData.studentId||currentUserData.studentName}`),emoji)
-    .then(()=>loadParentDashboard())
+// cur — реакція, що вже стоїть: натиснули її ж — знімаємо.
+window.sendReaction=function(date,subject,emoji,cur){if(!currentUserData)return;
+  const next=cur===emoji?null:emoji;
+  set(ref(db,`reactions/${getActiveClass()}/${date}/${subject}/${currentUserData.studentId||currentUserData.studentName}`),next)
+    .then(()=>{
+      // «Є питання» — не кінець розмови: підказуємо, де її почати
+      if(next==='🤔')showToast('🤔 Учитель побачить реакцію. Щоб поставити питання — «💬 Хочу обговорити» у вкладці «Школа» (натисніть сюди)',()=>window.openTabByKey?.('parent-screen','talk'));
+      loadParentDashboard();
+    })
     .catch(e=>showToast('Не вдалося надіслати: ' + e.message));};
 // ══════════ STUDENT DASHBOARD ══════════
 export function loadStudentDashboard(){

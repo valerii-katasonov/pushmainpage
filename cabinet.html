@@ -1064,6 +1064,15 @@
     .nw-title{margin:0 0 5px 0;font-size:.95rem;color:var(--ink);font-weight:700;}
     .nw-text{font-size:.87rem;line-height:1.5;color:var(--ink);}
     .nw-foot{display:flex;align-items:center;gap:10px;margin-top:9px;padding-top:8px;border-top:1px dashed var(--line-soft);}
+    /* ── Реакції на коментар учителя (grades-view.js) ── */
+    .cr-row{display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:6px;padding-top:6px;border-top:1px dashed var(--line-soft);}
+    .cr-btn{width:auto;margin:0;padding:3px 7px;border-radius:999px;border:1px solid var(--line-soft);background:var(--surface);font-size:1.05rem;line-height:1.2;cursor:pointer;opacity:.6;filter:grayscale(70%);}
+    .cr-btn:hover{opacity:1;filter:none;}
+    .cr-btn.on{opacity:1;filter:none;background:var(--brand-soft);border-color:var(--brand-deep);}
+    .cr-cur{font-size:.75rem;color:var(--brand-deep);font-weight:700;margin-left:2px;}
+    .cr-sum{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;}
+    .cr-chip{padding:3px 9px;border-radius:999px;background:var(--surface-2);border:1px solid var(--line);font-size:.8rem;}
+    .cr-chip.warn{background:var(--warn-soft);border-color:var(--warn-line);color:var(--warn);}
     /* ── Реакції на оголошення (news-reactions.js) ── */
     .nr-bar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px;}
     .nr-bar:empty{display:none;}

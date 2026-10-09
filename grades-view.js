@@ -49,7 +49,7 @@ import { ref, get, child, query, orderByKey, startAt, endAt, onValue }
 import { db, currentUserData, getActiveClass, getClassNum, LEVEL_MAX_CLASS, escHtml, escJs, mondayOf,
          localDateString, displayGrade, gradeClass6, levelNum, getGradeWeight,
          calculateStudentWeightedAvg, renderGradeFormulaInfo, THEMATIC, topicBreakdown, dayNamesUA, dayKeys, journalBaseDate, journalSlot,
-         stuId, hasStudentDir, getStudentDir, fetchSubjectTeachers, subjKey }
+         stuId, hasStudentDir, getStudentDir, fetchSubjectTeachers, subjKey, COMMENT_REACTS }
   from './common.js';
 
 // Кабінети батьків і учня лежать у розмітці ОДНОЧАСНО, тож «взяти той
@@ -307,12 +307,13 @@ function retakeBtn(cls, subj, date, v, numericScale){
      onclick="sendRetakeRequest('${escJs(cls)}','${escJs(subj)}','${escJs(date)}','${escJs(who)}',${n})">🔄 Покращити</button>`;
 }
 
-function reactionRow(date, subj, mine){
-  const btn = (em) => `<button style="background:none;border:none;font-size:1.2rem;cursor:pointer;`
-    + `filter:${mine===em?'none':'grayscale(100%)'};opacity:${mine===em?'1':'.5'};padding:3px;width:auto;margin:0;"`
-    + ` onclick="sendReaction('${escJs(date)}','${escJs(subj)}','${em}')">${em}</button>`;
-  return `<div style="display:flex;gap:6px;margin-top:6px;padding-top:6px;border-top:1px dashed var(--line-soft);align-items:center;">`
-    + btn('👍') + btn('❤️') + btn('🔥') + `</div>`;
+// Реакція на коментар: одна, повторне натискання знімає. Обрана — з
+// підписом, щоб учитель і батьки однаково розуміли, що вона означає.
+export function reactionRow(date, subj, mine){
+  const btn = r => `<button type="button" class="cr-btn${mine===r.e?' on':''}" aria-pressed="${mine===r.e}" aria-label="${r.t}" data-tip="${r.t}"`
+    + ` onclick="sendReaction('${escJs(date)}','${escJs(subj)}','${r.e}','${escJs(mine||'')}')">${r.e}</button>`;
+  const cur = COMMENT_REACTS.find(r => r.e === mine);
+  return `<div class="cr-row">${COMMENT_REACTS.map(btn).join('')}${cur ? `<span class="cr-cur">${escHtml(cur.t)}</span>` : ''}</div>`;
 }
 
 // Вхідна точка: прив'язати підписки до поточної дитини й намалювати те,
