@@ -3452,6 +3452,25 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
 .nw-more{display:inline-block;width:auto;max-width:none;min-height:32px;margin:2px 0 4px;padding:0 2px;background:none;border:none;color:var(--brand-deep);font:inherit;font-size:.82rem;font-weight:800;cursor:pointer;text-decoration:underline;text-underline-offset:2px;}
 .nw-more[hidden]{display:none;}
 .nw-more:focus-visible{outline:3px solid var(--brand-deep);outline-offset:2px;}
+.modal-content.mc-enh{--mc-px:16px;padding-top:0 !important;padding-bottom:0 !important;padding-left:var(--mc-px) !important;padding-right:var(--mc-px) !important;}
+.modal-content.mc-enh::after{content:'';display:block;height:14px;}
+.mc-head{position:sticky;top:0;z-index:3;display:flex;align-items:center;gap:8px;margin:0 calc(-1 * var(--mc-px)) 12px;padding:12px var(--mc-px) 10px;background:var(--surface);border-bottom:1px solid var(--line-soft);text-align:left;}
+.mc-head > h1,.mc-head > h2,.mc-head > h3,.mc-head > h4{flex:1;min-width:0;margin:0 !important;padding:0;border:none;font-size:1.1rem;line-height:1.3;text-align:left !important;}
+.mc-head .mc-x{flex:0 0 auto;width:40px;height:40px;min-height:40px;margin:0;padding:0;border-radius:50%;background:var(--surface-2);color:var(--ink-2);border:1px solid var(--line);font-size:1rem;line-height:1;cursor:pointer;}
+.mc-head .mc-x:hover{background:var(--line-soft);}
+.mc-head .mc-x:focus-visible{outline:3px solid var(--brand-deep);outline-offset:2px;}
+.mc-foot{position:sticky;bottom:0;z-index:3;display:flex;flex-wrap:wrap;gap:8px;margin:14px calc(-1 * var(--mc-px)) -14px;padding:10px var(--mc-px) calc(10px + env(safe-area-inset-bottom));background:var(--surface);border-top:1px solid var(--line-soft);box-shadow:0 -8px 14px -12px rgba(0,0,0,.35);}
+.mc-foot.only-close{display:none;}
+.mc-foot > div{display:contents !important;}
+.mc-foot button{flex:1 1 140px;width:auto !important;max-width:none !important;margin:0 !important;min-height:44px;}
+.mc-foot .mc-sec{order:-1;flex:0 1 auto;}
+.mc-foot .mc-pri{flex:2 1 160px;}
+.modal-overlay > .modal-content.mc-enh::before{display:none;}
+@media (max-width:767px){
+  .mc-head{padding-top:16px;}
+  .mc-head::before{content:'';position:absolute;top:5px;left:50%;width:40px;height:4px;margin-left:-20px;border-radius:2px;background:var(--line);}
+}
+@media print{.mc-head .mc-x,.mc-foot{display:none !important;}}
 </style>
 </head>
 <!-- auth-mode СТОЇТЬ ТУТ ОДРАЗУ, а не чекає на скрипт.
@@ -6286,6 +6305,7 @@ document.addEventListener('DOMContentLoaded', function(){
 <script type="module" src="consult.js"></script>
 <script type="module" src="streaks.js"></script>
 <script type="module" src="hw-done-view.js"></script>
+<script type="module" src="modal-ui.js"></script>
 <script src="theme.js"></script>
 <script type="module" src="chat.js"></script>
 <script type="module" src="breaks.js"></script>
