@@ -3265,7 +3265,8 @@ async function initUserSession(){
     document.getElementById('t-matrix-btn-wrapper').style.display=(isArt||isMasterTeacher(r))?'grid':'none';
     document.getElementById('t-mark-absent-block').style.display=isArt?'none':'flex';
     document.getElementById('t-exams-journal-btns').style.display=isArt?'none':'grid';
-    document.getElementById('t-wrapped-btn').style.display=isArt?'none':'block';
+    {const ah=document.getElementById('t-actions-h');if(ah)ah.style.display=isArt?'none':'';}
+    document.getElementById('t-wrapped-btn').style.display=isArt?'none':'';
     document.getElementById('t-hw-list-wrapper').style.display=isArt?'none':'block';
     document.getElementById('t-hw-input-wrapper').style.display=isArt?'none':'block';
     document.getElementById('t-topic-card').style.display=isArt?'none':'block';

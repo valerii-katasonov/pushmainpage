@@ -3316,7 +3316,7 @@ body.ui-sheet-lock{overflow:hidden;}
 @keyframes uiSheetUp{from{transform:translateY(40px);opacity:.6;}to{transform:none;opacity:1;}}
 @media (max-width:767px){
   .ui-bnav:not([hidden]){display:flex;position:fixed;left:0;right:0;bottom:0;z-index:900;gap:2px;background:var(--surface);border-top:1px solid var(--line);padding:4px 6px calc(4px + env(safe-area-inset-bottom));box-shadow:0 -2px 12px rgba(0,0,0,.08);}
-  html.bnav-on #parent-screen-tabs,html.bnav-on #student-screen-tabs{display:none !important;}
+  html.bnav-on #parent-screen-tabs,html.bnav-on #student-screen-tabs,html.bnav-on #teacher-screen-tabs,html.bnav-on #director-screen #dtab-bar{display:none !important;}
   html.bnav-on body{padding-bottom:calc(76px + env(safe-area-inset-bottom));}
   html.bnav-on #toast-container{bottom:calc(84px + env(safe-area-inset-bottom));}
   .modal-overlay{align-items:flex-end;padding:0 !important;}
@@ -3484,6 +3484,27 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
 .fw-fold .fw-seen{font-size:.75rem;font-weight:700;color:var(--ink-3);}
 .fw-fold-sub{margin-top:6px;font-size:.82rem;}
 .fw-fold-sub > summary{font-weight:700;color:var(--ink-3);}
+.t-today .qa-grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-bottom:14px;}
+.t-today .qa-btn{background:var(--surface);color:var(--ink);border:1px solid var(--line-soft);box-shadow:var(--card-shadow);justify-content:flex-start;text-align:left;font-weight:700;min-height:48px;padding:10px 12px;}
+.t-today .qa-btn.qa-journal{background:var(--brand-deep);color:var(--surface);border-color:transparent;}
+:root[data-theme="dark"] .t-today .qa-btn.qa-journal{color:var(--surface-2);}
+@media (prefers-color-scheme: dark){:root[data-theme="auto"] .t-today .qa-btn.qa-journal{color:var(--surface-2);}}
+.t-today .qa-btn:hover{transform:none;border-color:var(--brand-line);box-shadow:var(--card-shadow);}
+.t-today .qa-btn:focus-visible{outline:3px solid var(--brand-deep);outline-offset:2px;}
+.t-today .ui-tiles .ui-tile{cursor:pointer;}
+.t-today .ui-tile:focus-visible{outline:3px solid var(--brand-deep);outline-offset:2px;}
+.t-today .t-att-card #t-mark-absent-block{border-top:1px solid var(--line-soft) !important;}
+.ui-tile.bad b{color:var(--danger);}
+.d-today .d-tiles{grid-template-columns:repeat(2,minmax(0,1fr));}
+@media (min-width:600px){.d-today .d-tiles{grid-template-columns:repeat(4,minmax(0,1fr));}}
+.d-today .d-brk{margin-top:-4px;}
+.d-today .d-fold > summary{cursor:pointer;font-weight:800;list-style:none;display:flex;align-items:center;gap:8px;}
+.d-today .d-fold > summary::-webkit-details-marker{display:none;}
+.d-today .d-fold > summary::after{content:'▾';margin-left:auto;color:var(--ink-3);font-size:.8rem;}
+.d-today .d-fold[open] > summary::after{content:'▴';}
+.d-today .d-att-card .ui-card-h{color:var(--danger);}
+.t-now-acts{margin:-4px 0 12px;}
+.t-now-acts .ui-btn{flex:1;}
 </style>
 </head>
 <!-- auth-mode СТОЇТЬ ТУТ ОДРАЗУ, а не чекає на скрипт.
@@ -4096,34 +4117,34 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
       </div>
     </section>
 
-    <section class="screen-section" data-dtab="ogl">
-      <h3>🚀 Швидкі дії</h3>
-      <div style="display:flex;gap:9px;flex-wrap:wrap;">
-        <button onclick="openVisualMatrixModal('live')" style="flex:1;min-width:170px;background:var(--brand-deep);color:#fff;margin-top:0;font-size:.95rem;padding:11px;">🗓️ Розклад</button>
-        <button onclick="openJournalModal('director')" style="flex:1;min-width:170px;background:linear-gradient(135deg,var(--brand-deep),var(--brand-deep));color:#fff;margin-top:0;font-size:.95rem;padding:11px;">📖 Журнал</button>
-        <button onclick="openCommentsView()" style="flex:1;min-width:170px;background:var(--brand-deep);color:#fff;margin-top:0;font-size:.95rem;padding:11px;">💬 Коментарі учням</button>
-        <button onclick="openChatModal('director')" data-chatbtn="1" style="flex:1;min-width:170px;background:linear-gradient(135deg,var(--brand-deep),var(--brand-deep));color:#fff;margin-top:0;font-size:.95rem;padding:11px;">💬 Чат з батьками</button>
+    <section class="screen-section ui-today t-today d-today" data-dtab="ogl">
+      <!-- «Огляд» директора — ті самі компоненти, що в учителя й батьків:
+           спершу числа дня (плитки), під ними хто відсутній, далі дії,
+           аналітика й басейн/автобус. Ідентифікатори ті самі — director.js
+           не змінювався. -->
+      <div class="ui-tiles d-tiles" role="group" aria-label="Школа сьогодні">
+        <div role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" class="ui-tile info" onclick="toggleHomeworkBreakdown()" title="Показати, хто що задав"><b id="d-hw-counter">0</b><span id="d-hw-title">📚 ДЗ</span></div>
+        <div role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" class="ui-tile ok" onclick="toggleCommentsBreakdown()" title="Показати, хто що написав"><b id="d-com-counter">0</b><span id="d-com-title">💬 Коментарі</span></div>
+        <div role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" class="ui-tile warn" onclick="toggleWeekBreakdown()" title="Учень × день за тиждень"><b id="d-week-late">0</b><span>⏰ запізнень за тиждень</span></div>
+        <div role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" class="ui-tile bad" onclick="toggleWeekBreakdown()" title="Учень × день за тиждень"><b id="d-week-absent">0</b><span>🚨 відсутніх за тиждень</span></div>
       </div>
-    </section>
-
-    <section class="screen-section" data-dtab="ogl">
-      <h3>📊 Огляд</h3>
-      <div style="display:flex;flex-direction:column;gap:24px;margin-bottom:18px;">
-      <details id="d-overview-materials" class="data-card" style="border-left-color:var(--brand-ink);background:var(--surface-2);margin:0;" ontoggle="if(this.open)loadMaterialsAudit()">
-        <summary style="cursor:pointer;font-weight:800;">📚 Підручники та календарне планування</summary>
-        <p style="font-size:.83rem;color:var(--ink-2);">Перевірка предметів із розкладу та каталогу на поточний навчальний рік. Планування вважається доданим, якщо є теми; це не оцінка повноти плану.</p>
-        <div class="ma-filters">
-          <select id="d-materials-class" aria-label="Клас" onchange="renderMaterialsAudit()"><option value="">Усі класи</option></select>
-          <input id="d-materials-search" type="search" placeholder="Предмет або вчитель" aria-label="Предмет або вчитель" oninput="renderMaterialsAudit()">
-          <label><input type="checkbox" id="d-materials-missing" onchange="renderMaterialsAudit()">Лише незаповнені</label>
-          <button type="button" id="d-materials-refresh" onclick="loadMaterialsAudit()">Оновити</button>
-        </div>
-        <p id="d-materials-summary" style="font-size:.83rem;font-weight:700;"></p>
-        <div id="d-materials-results"><p class="empty-msg">Відкрийте блок, щоб перевірити матеріали.</p></div>
-      </details>
-      <!-- Статистика -->
-      <details id="d-overview-averages" class="data-card" style="border-left-color:var(--brand-deep);background:var(--surface-2);margin:0;">
-        <summary style="cursor:pointer;font-weight:800;color:var(--brand-deep);">📈 Середні оцінки</summary>
+      <div id="d-hw-breakdown" class="ui-card d-brk" style="display:none;"></div>
+      <div id="d-com-breakdown" class="ui-card d-brk" style="display:none;"></div>
+      <div id="d-week-breakdown" class="ui-card d-brk" style="display:none;"></div>
+      <div class="ui-card d-att-card">
+        <h4 id="d-att-header" class="ui-card-h">🚨 Відсутні та запізнення</h4>
+        <ul id="d-unified-att-list" class="list-dash" style="padding-left:0;list-style:none;margin:0;"><li class="empty-msg is-loading">Завантаження...</li></ul>
+      </div>
+      <h3 class="ui-h">Дії</h3>
+      <div class="qa-grid">
+        <button onclick="openJournalModal('director')" class="qa-btn qa-journal">📖 Журнал</button>
+        <button onclick="openVisualMatrixModal('live')" class="qa-btn">🗓️ Розклад</button>
+        <button onclick="openCommentsView()" class="qa-btn">💬 Коментарі учням</button>
+        <button onclick="openChatModal('director')" data-chatbtn="1" class="qa-btn">✉️ Чат з батьками</button>
+      </div>
+      <h3 class="ui-h">Звіти</h3>
+      <details id="d-overview-averages" class="ui-card d-fold">
+        <summary>📈 Середні оцінки</summary>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;margin-bottom:9px;">
           <select id="d-stat-class" onchange="updateDirectorStatSubjects()" style="flex:1;min-width:110px;">
             <option value="">Оберіть клас...</option>
@@ -4136,41 +4157,21 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
         </div>
         <div id="d-stat-results"><p class="empty-msg">Оберіть клас та предмет.</p></div>
       </details>
-      </div>
-      <!-- Дашборд -->
-      <div style="display:flex;gap:9px;margin:16px 0;">
-        <div role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" onclick="toggleHomeworkBreakdown()" title="Показати, хто що задав"
-             style="flex:1;background:var(--brand-soft);padding:14px;border-radius:12px;text-align:center;cursor:pointer;">
-          <h4 id="d-hw-title" style="margin:0;color:var(--brand-ink);font-size:.82rem;">📚 ДЗ</h4>
-          <p id="d-hw-counter" style="font-size:1.7rem;font-weight:800;color:var(--brand-ink);margin:4px 0;">0</p>
-          <span style="font-size:.75rem;color:var(--brand-ink);">натисніть — деталі</span>
+      <details id="d-overview-materials" class="ui-card d-fold" ontoggle="if(this.open)loadMaterialsAudit()">
+        <summary>📚 Підручники та календарне планування</summary>
+        <p style="font-size:.83rem;color:var(--ink-2);">Перевірка предметів із розкладу та каталогу на поточний навчальний рік. Планування вважається доданим, якщо є теми; це не оцінка повноти плану.</p>
+        <div class="ma-filters">
+          <select id="d-materials-class" aria-label="Клас" onchange="renderMaterialsAudit()"><option value="">Усі класи</option></select>
+          <input id="d-materials-search" type="search" placeholder="Предмет або вчитель" aria-label="Предмет або вчитель" oninput="renderMaterialsAudit()">
+          <label><input type="checkbox" id="d-materials-missing" onchange="renderMaterialsAudit()">Лише незаповнені</label>
+          <button type="button" id="d-materials-refresh" onclick="loadMaterialsAudit()">Оновити</button>
         </div>
-        <div role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" onclick="toggleCommentsBreakdown()" title="Показати, хто що написав"
-             style="flex:1;background:var(--accent-soft);padding:14px;border-radius:12px;text-align:center;cursor:pointer;">
-          <h4 id="d-com-title" style="margin:0;color:var(--accent-ink);font-size:.82rem;">💬 Коментарів</h4>
-          <p id="d-com-counter" style="font-size:1.7rem;font-weight:800;color:var(--accent-ink);margin:4px 0;">0</p>
-          <span style="font-size:.75rem;color:var(--accent-ink);">натисніть — деталі</span>
-        </div>
-      </div>
-      <div id="d-hw-breakdown" style="display:none;background:var(--surface);border:1px solid var(--brand-line);border-radius:12px;padding:12px;margin:-6px 0 16px;"></div>
-      <div id="d-com-breakdown" style="display:none;background:var(--surface);border:1px solid var(--accent-soft);border-radius:12px;padding:12px;margin:-6px 0 16px;"></div>
-      <div role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" onclick="toggleWeekBreakdown()" title="Показати, з чого складаються числа"
-           style="background:var(--warn-soft);padding:14px;border-radius:12px;text-align:center;margin-bottom:16px;cursor:pointer;">
-        <h4 style="margin:0;color:var(--warn);font-size:.88rem;">🗓️ Статистика тижня</h4>
-        <div style="display:flex;justify-content:space-around;margin-top:9px;">
-          <div><p id="d-week-late" style="font-size:1.4rem;font-weight:800;color:var(--warn);margin:0;">0</p><span style="font-size:.75rem;color:var(--ink-3);">запізнень</span></div>
-          <div><p id="d-week-absent" style="font-size:1.4rem;font-weight:800;color:var(--danger);margin:0;">0</p><span style="font-size:.75rem;color:var(--ink-3);">відсутніх</span></div>
-        </div>
-        <span style="font-size:.75rem;color:var(--warn);">натисніть — деталі</span>
-      </div>
-      <div id="d-week-breakdown" style="display:none;background:var(--surface);border:1px solid var(--warn-line);border-radius:12px;padding:12px;margin:-10px 0 16px;"></div>
-      <div class="data-card" style="border-left-color:var(--danger);background:var(--surface-2);margin-top:0;">
-        <h4 id="d-att-header" style="margin-top:0;color:var(--danger);">🚨 Відсутні та Запізнення</h4>
-        <ul id="d-unified-att-list" class="list-dash" style="padding-left:0;list-style:none;"><li class="empty-msg is-loading">Завантаження...</li></ul>
-      </div>
+        <p id="d-materials-summary" style="font-size:.83rem;font-weight:700;"></p>
+        <div id="d-materials-results"><p class="empty-msg">Відкрийте блок, щоб перевірити матеріали.</p></div>
+      </details>
       <!-- Басейн і автобус по всій школі -->
-      <div class="data-card" style="border-left-color:var(--brand-deep);background:var(--surface-2);">
-        <h4 style="margin-top:0;color:var(--brand-deep);">🏊 Басейн і 🚌 автобус — уся школа</h4>
+      <div class="ui-card">
+        <h4 class="ui-card-h">🏊 Басейн і 🚌 автобус — уся школа</h4>
         <div id="d-activities"><p class="empty-msg is-loading">Завантаження...</p></div>
       </div>
     </section>
@@ -4753,43 +4754,21 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
     <div id="t-push-invite" style="display:none;"></div>
 
 
-    <section class="screen-section" data-dtab="day">
-      <!-- Дні народження. Найперше на вкладці. Розгорнуто лише найближчий тиждень, решта — під «ще N». -->
+    <!-- УЧИТЕЛЬ · «СЬОГОДНІ» (10.10.2026, ті самі компоненти, що в батьків):
+         «Зараз» (свій урок у вибраному класі) з переходом до уроку й
+         відвідуваності; плитки «що чекає»; відвідуваність; дії однією
+         сіткою; ДЗ класу; запити батьків, дні народження, басейн. -->
+    <section class="screen-section ui-today t-today" data-dtab="day">
+      <div id="t-now" style="display:none;"></div>
       <!-- Запити батьків «💬 Хочу обговорити» (talk-requests.js). Лише коли є. -->
       <div id="t-talk" class="fw-box tk-box" style="display:none;"></div>
-      <div id="t-birthdays" class="bd-box" style="display:none;"></div>
-      <div id="t-month-events" class="ev-box" style="display:none;"></div>
-
-      <!-- Басейн і автобус. Показуємо лише класному керівникові: у нього
-           свій клас, і правила бази до чужих його однаково не пустять. -->
-      <div class="data-card" id="t-activities-card"
-           style="border-left-color:var(--brand-deep);background:var(--surface-2);display:none;">
-        <h4 style="margin-top:0;color:var(--brand-deep);">🏊 Басейн і 🚌 автобус — ваш клас</h4>
-        <div id="t-activities"><p class="empty-msg is-loading">Завантаження...</p></div>
+      <div class="ui-tiles" role="group" aria-label="Що чекає">
+        <div role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" class="ui-tile" onclick="showReactionsDetails()" title="Реакції батьків на ваші коментарі"><b id="t-karma-counter">0</b><span>❤️ реакції</span></div>
+        <div role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" id="t-retake-btn" class="ui-tile warn" onclick="openRetakeRequestsModal()" title="Запити на перездачу"><b id="t-retake-counter">0</b><span>🔄 перездачі</span></div>
+        <div role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" id="t-chat-btn" class="ui-tile info" onclick="openChatModal('teacher')" data-chatbtn="1" title="Листування з батьками"><b>✉️</b><span>чат з батьками</span></div>
       </div>
-      <h3>🚀 Швидкі дії</h3>
-      <div class="qa-grid" id="t-exams-journal-btns">
-        <button onclick="openExamsCalendar()" class="qa-btn qa-exams">📅 Контрольні</button>
-        <button onclick="openJournalModal('teacher')" class="qa-btn qa-journal">📖 Журнал</button>
-        <button onclick="showUngraded()" class="qa-btn qa-ungraded">🔍 Без оцінок</button>
-        <button onclick="openQuickJournal()" class="qa-btn qa-quick">⚡ Швидкий журнал</button>
-        <button id="t-cards-btn" onclick="openClassCards()" class="qa-btn qa-cards" style="display:none;">🗂 Картки учнів</button>
-        <button id="t-stats-btn" onclick="openClassStats()" class="qa-btn qa-cards" style="display:none;">📊 Статистика класу</button>
-        <button onclick="openCommentsView()" class="qa-btn qa-cards">💬 Коментарі учням</button>
-        <button onclick="openConsultTeacher()" class="qa-btn qa-cards">🗓 Консультації</button>
-        <button onclick="openHwDoneView()" class="qa-btn qa-cards">✓ Виконання ДЗ</button>
-        <button onclick="openClassBroadcast()" class="qa-btn qa-broadcast">✉️ Повідомлення класу</button>
-        <button onclick="printClassSchedule()" class="qa-btn qa-print">🖨️ Друк розкладу</button>
-        <button onclick="openStickerStatsModal()" class="qa-btn" style="background:var(--warn);color:#fff;">🌟 Статистика наліпок</button>
-        <button id="t-matrix-btn-wrapper" onclick="openVisualMatrixModal('live')" class="qa-btn qa-matrix" style="display:none;">🗓️ Матриця розкладу</button>
-      </div>
-    </section>
-
-    <section class="screen-section" data-dtab="day">
-      <h3>📋 Сьогодні</h3>
-      <!-- Відвідуваність -->
-      <div class="data-card" style="border-left-color:var(--danger);background:var(--surface-2);margin-top:0;">
-        <h4 id="t-att-header" style="margin-top:0;color:var(--danger);">🚨 Відвідуваність</h4>
+      <div class="ui-card t-att-card">
+        <h4 id="t-att-header" class="ui-card-h">Відвідуваність</h4>
         <p id="t-att-hint" style="margin:-6px 0 8px 0;font-size:.75rem;color:var(--ink-3);line-height:1.4;"></p>
         <ul id="t-attendance-list" class="list-dash" style="list-style:none;padding-left:0;"><li class="empty-msg is-loading">Завантаження...</li></ul>
         <!-- ДАТА СТОЇТЬ ПОРУЧ ІЗ КНОПКОЮ, А НЕ ВГОРІ СТОРІНКИ.
@@ -4810,36 +4789,38 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
           <button onclick="teacherMarkAbsent()" style="flex:0 0 auto;margin-top:0;background:var(--brand-deep);color:#fff;width:auto;padding:9px 15px;font-size:.85rem;">Відмітити</button>
         </div>
       </div>
-      <!-- Реакції + Підсумки + Перездачі -->
-      <div style="display:flex;gap:9px;margin:14px 0 0 0;">
-        <div role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" style="flex:1;background:var(--warn-soft);padding:14px;border-radius:12px;text-align:center;cursor:pointer;" onclick="showReactionsDetails()">
-          <h4 style="margin:0;color:var(--warn);font-size:.82rem;">❤️ Реакції</h4>
-          <p id="t-karma-counter" style="font-size:1.6rem;font-weight:800;color:var(--warn);margin:4px 0;">0</p>
-        </div>
-        <div role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" id="t-wrapped-btn" style="flex:1;background:linear-gradient(135deg,var(--ok-soft),var(--brand-soft));padding:14px;border-radius:12px;text-align:center;cursor:pointer;" onclick="showWeeklyWrapped()">
-          <h4 style="margin:0;color:var(--brand-ink);font-size:.82rem;">📊 Підсумки</h4>
-          <p style="font-size:1.6rem;margin:4px 0;">🎁</p>
-        </div>
-        <div role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" id="t-retake-btn" style="flex:1;background:var(--warn-soft);padding:14px;border-radius:12px;text-align:center;cursor:pointer;" onclick="openRetakeRequestsModal()">
-          <h4 style="margin:0;color:var(--warn);font-size:.82rem;">🔄 Перездачі</h4>
-          <p id="t-retake-counter" style="font-size:1.6rem;font-weight:800;color:var(--warn);margin:4px 0;">0</p>
-        </div>
+      <h3 class="ui-h" id="t-actions-h">Дії</h3>
+      <div class="qa-grid" id="t-exams-journal-btns">
+        <button onclick="openExamsCalendar()" class="qa-btn qa-exams">📅 Контрольні</button>
+        <button onclick="openJournalModal('teacher')" class="qa-btn qa-journal">📖 Журнал</button>
+        <button onclick="showUngraded()" class="qa-btn qa-ungraded">🔍 Без оцінок</button>
+        <button onclick="openQuickJournal()" class="qa-btn qa-quick">⚡ Швидкий журнал</button>
+        <button id="t-cards-btn" onclick="openClassCards()" class="qa-btn qa-cards" style="display:none;">🗂 Картки учнів</button>
+        <button id="t-stats-btn" onclick="openClassStats()" class="qa-btn qa-cards" style="display:none;">📊 Статистика класу</button>
+        <button onclick="openCommentsView()" class="qa-btn qa-cards">💬 Коментарі учням</button>
+        <button onclick="openConsultTeacher()" class="qa-btn qa-cards">🗓 Консультації</button>
+        <button onclick="openHwDoneView()" class="qa-btn qa-cards">✓ Виконання ДЗ</button>
+        <button onclick="openClassBroadcast()" class="qa-btn qa-broadcast">✉️ Повідомлення класу</button>
+        <button onclick="printClassSchedule()" class="qa-btn qa-print">🖨️ Друк розкладу</button>
+        <button onclick="openStickerStatsModal()" class="qa-btn">🌟 Статистика наліпок</button>
+        <button id="t-wrapped-btn" onclick="showWeeklyWrapped()" class="qa-btn">🎁 Підсумки тижня</button>
+        <button id="t-matrix-btn-wrapper" onclick="openVisualMatrixModal('live')" class="qa-btn qa-matrix" style="display:none;">🗓️ Матриця розкладу</button>
       </div>
-      <div style="display:flex;gap:9px;margin:14px 0 0 0;" id="t-chat-row">
-        <div role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" id="t-chat-btn" style="flex:1;background:var(--brand-soft);padding:14px;border-radius:12px;text-align:center;cursor:pointer;" onclick="openChatModal('teacher')" data-chatbtn="1">
-          <h4 style="margin:0;color:var(--brand-deep);font-size:.82rem;">💬 Чат з батьками</h4>
-          <p style="font-size:1.6rem;margin:4px 0;">✉️</p>
-        </div>
-      </div>
-      <!-- ДЗ зведення -->
-      <div id="t-hw-list-wrapper" class="data-card" style="border-left-color:var(--brand-deep);background:var(--surface-2);margin:14px 0 0 0;">
-        <h4 style="margin-top:0;color:var(--brand-deep);">📋 ДЗ класу сьогодні:</h4>
+      <div id="t-hw-list-wrapper" class="ui-card">
+        <h4 class="ui-card-h">ДЗ класу сьогодні</h4>
         <ul id="t-daily-hw-list" class="list-dash"></ul>
         <!-- ЗДАНІ РОБОТИ УЧНІВ ЗА ДЕНЬ -->
         <div id="t-daily-submissions-wrapper" style="display:none;margin-top:12px;border-top:1px dashed var(--line);padding-top:10px;">
           <h5 style="margin:0 0 8px 0;color:var(--brand-deep);font-size:0.88rem;">📥 Здані роботи за цей день:</h5>
           <div id="t-daily-submissions-list"></div>
         </div>
+      </div>
+      <div id="t-birthdays" class="bd-box" style="display:none;"></div>
+      <div id="t-month-events" class="ev-box" style="display:none;"></div>
+      <!-- Басейн і автобус — лише класному керівникові (свій клас) -->
+      <div class="ui-card" id="t-activities-card" style="display:none;">
+        <h4 class="ui-card-h">Басейн і автобус — ваш клас</h4>
+        <div id="t-activities"><p class="empty-msg is-loading">Завантаження...</p></div>
       </div>
     </section>
 
@@ -6323,6 +6304,7 @@ document.addEventListener('DOMContentLoaded', function(){
 <script type="module" src="streaks.js"></script>
 <script type="module" src="hw-done-view.js"></script>
 <script type="module" src="modal-ui.js"></script>
+<script type="module" src="staff-today.js"></script>
 <script src="theme.js"></script>
 <script type="module" src="chat.js"></script>
 <script type="module" src="breaks.js"></script>
