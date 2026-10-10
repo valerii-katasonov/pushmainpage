@@ -95,6 +95,15 @@ export function canRemind(a, role, uid){
 
 const lastSeen = () => { try{ return Number(localStorage.getItem(SEEN_KEY)) || 0; }catch(e){ return 0; } };
 const markSeen = () => { try{ localStorage.setItem(SEEN_KEY, String(Date.now())); }catch(e){} };
+// Коли людина ВОСТАННЄ відкривала стрічку — до цього входу. Беремо один
+// раз при завантаженні: стрічка під час входу оновлює позначку, і без
+// цього все стало б «старим» ще до того, як людина це побачила.
+const SEEN_AT_START = lastSeen();
+// Згорнути: усе, що вже було в стрічці минулого разу, і все, що людина
+// прочитала (news-reactions.js) у попередній візит. Раніше дивилися лише
+// на «прочитано» — а воно зараховується, коли оголошення секунду було на
+// екрані, тож старі оголошення, до яких не догортали, лишались розгорнуті.
+const isFolded = a => (SEEN_AT_START > 0 && (a.ts || 0) <= SEEN_AT_START) || !!window.isNewsReadBefore?.(a.id);
 
 function timeAgo(ts){
   const min = Math.round((Date.now() - ts) / 60000);
@@ -167,7 +176,7 @@ export async function renderNewsFeed(containerId){
       const reminded = a.remindedAt
         ? `<span class="nw-time" style="margin-left:0;" title="Коли востаннє надіслано нагадування">🔔 ${escHtml(new Date(a.remindedAt).toLocaleString('uk-UA',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}))}</span>` : '';
       // Прочитане в минулий візит — згорнуте (news-reactions.js)
-      const folded = !isNew && !!window.isNewsReadBefore?.(a.id);
+      const folded = isFolded(a);
       return `<article class="nw-item${a.important?' imp':''}${newsColorClass(a)}${isNew?' new':''}${folded?' is-collapsed':''}">
         <div class="nw-head">
           ${badge}
@@ -257,7 +266,7 @@ export async function renderFreshNews(containerId){
       const badge = a.scope === 'school'
         ? '<span class="nw-tag school">Вся школа</span>'
         : `<span class="nw-tag cls">${escHtml(String(a.class||'').replace('class_',''))} клас</span>`;
-      const folded = !!window.isNewsReadBefore?.(a.id);
+      const folded = isFolded(a);
       return `<article class="fn-item${a.important?' imp':''}${newsColorClass(a)}${folded?' is-collapsed':''}">
         <div class="nw-head">
           ${badge}
