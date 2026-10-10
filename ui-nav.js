@@ -18,7 +18,12 @@
 // екрана, а до контейнера.
 // ═══════════════════════════════════════════════════════════════
 
+// Персонал (10.10.2026): учителю — день, урок, ДЗ, клас; директору —
+// огляд, новини, учні, контроль. Решта — у «Ще».
+export const BARS = { 'director-screen': 'dtab-bar' };
 export const MAIN = {
+  'teacher-screen':  ['day', 'lesson', 'hwday', 'class'],
+  'director-screen': ['ogl', 'news', 'uchni', 'control'],
   // «Їжа» — щоденна (замовлення обідів), «Школа» — рідше: вона в «Ще»
   'parent-screen':  ['day', 'hw', 'grades', 'meals'],
   'student-screen': ['day', 'hw', 'grades', 'study']
@@ -51,7 +56,7 @@ function itemHtml(p, cls){
 export function buildNav(screenId){
   if(navs[screenId]) return navs[screenId];
   const scr = document.getElementById(screenId);
-  const bar = document.getElementById(`${screenId}-tabs`);
+  const bar = document.getElementById(BARS[screenId] || `${screenId}-tabs`);
   if(!scr || !bar || !MAIN[screenId]) return null;
   const tabs = [...bar.querySelectorAll('.dtab[data-t]')].map(b => ({ btn: b, ...tabParts(b) }));
   const main = MAIN[screenId].map(t => tabs.find(x => x.t === t)).filter(Boolean);
