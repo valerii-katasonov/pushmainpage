@@ -3133,14 +3133,15 @@
 .cal-none{font-size:.8rem;color:var(--ink-3);margin:14px 0 0 0;}
 
 /* Встановлення застосунку */
-.install-box .inst{background:var(--surface-2);border:1px solid var(--brand-line);border-radius:12px;padding:15px;}
-.install-box .inst.ok{background:var(--surface-2);border-color:var(--ok-line);}
-.install-box .inst b{display:block;color:var(--ink);font-size:.92rem;margin-bottom:6px;}
-.install-box .inst p{margin:0 0 8px 0;font-size:.83rem;color:var(--ink-3);line-height:1.45;}
-.install-box .inst-steps{margin:0 0 8px 0;padding-left:20px;font-size:.83rem;color:var(--ink-2);line-height:1.6;}
-.install-box .inst-steps li{margin-bottom:3px;}
-.install-box .inst-note{font-size:.77rem !important;color:var(--ink-3) !important;margin-bottom:0 !important;}
-.install-box .inst-btn{width:100%;background:var(--brand-ink);color:var(--on-fill);padding:11px;border-radius:10px;font-weight:700;margin-top:4px;}
+:is(.install-box,#install-block) .inst{background:var(--surface-2);border:1px solid var(--brand-line);border-radius:12px;padding:15px;}
+:is(.install-box,#install-block) .inst.ok{background:var(--surface-2);border-color:var(--ok-line);}
+:is(.install-box,#install-block) .inst b{display:block;color:var(--ink);font-size:.92rem;margin-bottom:6px;}
+:is(.install-box,#install-block) .inst p{margin:0 0 8px 0;font-size:.83rem;color:var(--ink-3);line-height:1.45;}
+:is(.install-box,#install-block) .inst-steps{margin:0 0 8px 0;padding-left:20px;font-size:.83rem;color:var(--ink-2);line-height:1.6;}
+:is(.install-box,#install-block) .inst-steps li{margin-bottom:3px;}
+:is(.install-box,#install-block) .inst-note{font-size:.77rem !important;color:var(--ink-3) !important;margin-bottom:0 !important;}
+:is(.install-box,#install-block) .inst-btn{width:100%;max-width:none;background:var(--brand-deep);color:var(--on-fill);border:none;padding:12px;border-radius:12px;font-weight:800;margin-top:4px;min-height:46px;box-shadow:var(--card-shadow);}
+:is(.install-box,#install-block) .inst-btn:hover{filter:brightness(1.08);}
 
 /* Розподіл за варіантами основної страви */
 .k-choice{background:var(--surface-2);border:1px solid var(--brand-line);border-radius:10px;padding:9px 12px;margin-top:10px;}
@@ -3575,6 +3576,8 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
 .journal-actions .ja-btn:hover{border-color:var(--brand-line);background:var(--brand-soft);}
 .journal-actions .ja-pri{background:var(--brand-deep);color:var(--on-fill);border-color:transparent;}
 .journal-actions .ja-pri:hover{background:var(--brand-deep);filter:brightness(1.08);}
+.journal-actions .ja-sec{background:var(--brand-soft);color:var(--brand-deep);border-color:var(--brand-line);}
+.journal-actions .ja-sec:hover{background:var(--brand-soft);border-color:var(--brand-deep);}
 .journal-actions .ja-close{flex:0 1 160px;color:var(--ink-2);}
 .t-now-acts{margin:-4px 0 12px;}
 .t-now-acts .ui-btn{flex:1;max-width:none;}
@@ -6111,7 +6114,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
     <div id="j-weighted-avg" style="margin-top:var(--space-3);background:var(--brand-soft);border-radius:var(--card-radius);padding:var(--space-3);font-size:var(--text-sm);display:none;"></div>
     <div class="journal-actions" style="display:flex;gap:9px;margin-top:13px;flex-wrap:wrap;">
       <button onclick="openSemesterGrades()" class="ja-btn ja-pri">🎓 Підсумкові оцінки</button>
-      <button id="btn-export-journal-pdf" onclick="exportJournalToPDF()" class="ja-btn">📄 Експорт PDF</button>
+      <button id="btn-export-journal-pdf" onclick="exportJournalToPDF()" class="ja-btn ja-sec">📄 Експорт PDF</button>
       <button onclick="closeJournalModal()" class="ja-btn ja-close">Закрити</button>
     </div>
   </div>
