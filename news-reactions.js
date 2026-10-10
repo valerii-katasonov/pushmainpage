@@ -97,6 +97,45 @@ const isFamily = () => role() === 'parent' || role() === 'student';
 const isStaffViewer = () => { const r = role(); return r === 'director' || r === 'administrator' || isTeacherRole(r); };
 
 // ── ПЕРЕГЛЯНУТО ─────────────────────────────────────────────────
+// ── ЗГОРТАННЯ ПРОЧИТАНИХ ─────────────────────────────────────────
+// Оголошення, прочитане в ПОПЕРЕДНІЙ візит, показуємо згорнутим: дві
+// перші рядки, реакції й «Розгорнути». Прочитане зараз лишається
+// розгорнутим до наступного входу — інакше воно складалося б просто
+// під очима. «Прочитано» — те саме, що «переглянуто» (секунда на
+// екрані); час зберігаємо на цьому пристрої.
+const READ_LS = 'push_school_news_read_at';
+const PAGE_START = Date.now();
+let readAt = null;
+function readMap(){
+  if(readAt) return readAt;
+  try{ readAt = JSON.parse(localStorage.getItem(READ_LS) || '{}') || {}; }catch(e){ readAt = {}; }
+  return readAt;
+}
+function noteRead(id){
+  const uid = auth.currentUser?.uid; if(!uid) return;
+  const m = readMap(), key = `${uid}|${id}`;
+  if(m[key]) return;
+  m[key] = Date.now();
+  // Не більше 400 записів: найстаріші відкидаємо
+  const keys = Object.keys(m);
+  if(keys.length > 400) keys.sort((a, b) => m[a] - m[b]).slice(0, keys.length - 400).forEach(k => delete m[k]);
+  try{ localStorage.setItem(READ_LS, JSON.stringify(m)); }catch(e){}
+}
+export function wasReadBefore(id, uid = auth.currentUser?.uid){
+  if(!uid || !id) return false;
+  const t = readMap()[`${uid}|${id}`];
+  if(t) return t < PAGE_START;
+  // Переглянуті до появи згортання (лише список id) — теж «раніше»
+  return seenSet().has(`${uid}|${id}`);
+}
+window.isNewsReadBefore = id => wasReadBefore(id);
+window.toggleNewsItem = function(btn){
+  const art = btn && btn.closest('article'); if(!art) return;
+  const open = art.classList.toggle('is-collapsed') === false;
+  btn.setAttribute('aria-expanded', String(open));
+  btn.textContent = open ? 'Згорнути' : 'Розгорнути';
+};
+
 let seenIds = null;
 function seenSet(){
   if(seenIds) return seenIds;
@@ -104,6 +143,7 @@ function seenSet(){
   return seenIds;
 }
 async function markSeen(id){
+  noteRead(id);                                   // для згортання — усім ролям
   const uid = auth.currentUser?.uid; if(!uid || !isFamily()) return;
   const s = seenSet(); const key = `${uid}|${id}`;
   if(s.has(key)) return;
@@ -170,7 +210,14 @@ window.hydrateNewsReactions = function(container){
   container.querySelectorAll('.nr-bar[data-nid]').forEach(b => {
     const id = b.dataset.nid;
     if(cache[id]) paint(id); else hydrateOne(b, id);
-    if(isFamily()){ const art = b.closest('article') || b; art.dataset.nid = id; observe(art); }
+    // Переглянуте рахуємо всім (для згортання); у базу «переглянуто» пише лише родина
+    const art = b.closest('article') || b; art.dataset.nid = id; observe(art);
+    // Короткий текст і так уміщається у дві рядки — кнопка «Розгорнути» зайва
+    if(art.classList.contains('is-collapsed')){
+      const t = art.querySelector('.nw-text'), more = art.querySelector('.nw-more');
+      // (лише якщо блок видно: у схованій вкладці висоти нульові й «вміщається» все)
+      if(t && more && t.offsetParent !== null && t.clientHeight > 0 && t.scrollHeight <= t.clientHeight + 2 && !art.querySelector('.nw-foot button, .fn-foot button')) more.hidden = true;
+    }
   });
 };
 window.reactNews = async function(id, k){

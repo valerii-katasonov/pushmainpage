@@ -166,7 +166,9 @@ export async function renderNewsFeed(containerId){
         : '';
       const reminded = a.remindedAt
         ? `<span class="nw-time" style="margin-left:0;" title="Коли востаннє надіслано нагадування">🔔 ${escHtml(new Date(a.remindedAt).toLocaleString('uk-UA',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}))}</span>` : '';
-      return `<article class="nw-item${a.important?' imp':''}${newsColorClass(a)}${isNew?' new':''}">
+      // Прочитане в минулий візит — згорнуте (news-reactions.js)
+      const folded = !isNew && !!window.isNewsReadBefore?.(a.id);
+      return `<article class="nw-item${a.important?' imp':''}${newsColorClass(a)}${isNew?' new':''}${folded?' is-collapsed':''}">
         <div class="nw-head">
           ${badge}
           ${a.important ? IMP_TAG : ''}
@@ -177,6 +179,7 @@ export async function renderNewsFeed(containerId){
         </div>
         ${a.title ? `<h4 class="nw-title">${escHtml(a.title)}</h4>` : ''}
         <div class="nw-text">${escHtml(a.text).replace(/\n/g,'<br>')}</div>
+        ${folded?'<button type="button" class="nw-more" aria-expanded="false" onclick="toggleNewsItem(this)">Розгорнути</button>':''}
         <div class="nr-bar" data-nid="${escHtml(a.id)}"></div>
         <div class="nw-foot">
           <span class="nw-author">${escHtml(a.authorName || 'Школа')}</span>
@@ -254,7 +257,8 @@ export async function renderFreshNews(containerId){
       const badge = a.scope === 'school'
         ? '<span class="nw-tag school">Вся школа</span>'
         : `<span class="nw-tag cls">${escHtml(String(a.class||'').replace('class_',''))} клас</span>`;
-      return `<article class="fn-item${a.important?' imp':''}${newsColorClass(a)}">
+      const folded = !!window.isNewsReadBefore?.(a.id);
+      return `<article class="fn-item${a.important?' imp':''}${newsColorClass(a)}${folded?' is-collapsed':''}">
         <div class="nw-head">
           ${badge}
           ${a.important ? IMP_TAG : ''}
@@ -262,6 +266,7 @@ export async function renderFreshNews(containerId){
         </div>
         ${a.title ? `<h4 class="nw-title">${escHtml(a.title)}</h4>` : ''}
         <div class="nw-text">${escHtml(a.text).replace(/\n/g,'<br>')}</div>
+        ${folded?'<button type="button" class="nw-more" aria-expanded="false" onclick="toggleNewsItem(this)">Розгорнути</button>':''}
         <div class="nr-bar" data-nid="${escHtml(a.id)}"></div>
         <div class="fn-foot">
           <span>${escHtml(a.authorName || 'Школа')}</span>

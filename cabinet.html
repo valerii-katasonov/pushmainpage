@@ -3447,6 +3447,11 @@ html.bnav-on .pk-hello{bottom:calc(64px + env(safe-area-inset-bottom));}
 .hwd-donecnt{cursor:pointer;text-decoration:underline;text-underline-offset:2px;}
 .hwd-donecnt:focus-visible{outline:3px solid var(--brand-deep);outline-offset:2px;}
 @media (max-width:480px){.hdv-lists{grid-template-columns:minmax(0,1fr);}}
+article.is-collapsed .nw-text{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
+.nw-more{display:inline-block;width:auto;max-width:none;min-height:32px;margin:2px 0 4px;padding:0 2px;background:none;border:none;color:var(--brand-deep);font:inherit;font-size:.82rem;font-weight:800;cursor:pointer;text-decoration:underline;text-underline-offset:2px;}
+.nw-more[hidden]{display:none;}
+.nw-more:focus-visible{outline:3px solid var(--brand-deep);outline-offset:2px;}
 </style>
 </head>
 <!-- auth-mode СТОЇТЬ ТУТ ОДРАЗУ, а не чекає на скрипт.

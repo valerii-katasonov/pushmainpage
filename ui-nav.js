@@ -19,7 +19,8 @@
 // ═══════════════════════════════════════════════════════════════
 
 export const MAIN = {
-  'parent-screen':  ['day', 'hw', 'grades', 'school'],
+  // «Їжа» — щоденна (замовлення обідів), «Школа» — рідше: вона в «Ще»
+  'parent-screen':  ['day', 'hw', 'grades', 'meals'],
   'student-screen': ['day', 'hw', 'grades', 'study']
 };
 const MQ_TEXT = '(max-width: 767px)';
