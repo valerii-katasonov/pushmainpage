@@ -3427,6 +3427,26 @@ body.ui-sheet-lock{overflow:hidden;}
 html.bnav-on .pk-hello{bottom:calc(64px + env(safe-area-inset-bottom));}
 :root[data-theme="dark"] .ui-btn-1{color:var(--surface-2);}
 @media (prefers-color-scheme: dark){:root[data-theme="auto"] .ui-btn-1{color:var(--surface-2);}}
+.hdv-box{max-width:640px;text-align:left;position:relative;}
+.hdv-box .hdv-x{position:absolute;top:8px;right:8px;width:44px;height:44px;min-height:44px;padding:0;margin:0;border-radius:50%;background:transparent;color:var(--ink-3);font-size:1.1rem;}
+.hdv-box h3{padding-right:44px;}
+.hdv-row{border:1px solid var(--line-soft);border-radius:12px;margin-bottom:8px;background:var(--surface);}
+.hdv-row > summary{display:grid;grid-template-columns:1fr auto;gap:4px 10px;align-items:center;padding:10px 12px;cursor:pointer;list-style:none;}
+.hdv-row > summary::-webkit-details-marker{display:none;}
+.hdv-what{display:flex;flex-direction:column;min-width:0;}
+.hdv-what small{color:var(--ink-3);font-size:.75rem;}
+.hdv-count{font-size:.85rem;color:var(--ink-2);white-space:nowrap;}
+.hdv-count b{font-size:1.1rem;color:var(--ok);}
+.hdv-bar{grid-column:1/-1;height:5px;border-radius:3px;background:var(--line-soft);overflow:hidden;}
+.hdv-bar i{display:block;height:100%;background:var(--ok);}
+.hdv-lists{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;padding:0 12px 12px;}
+.hdv-lists h5{margin:4px 0 6px;font-size:.8rem;color:var(--ink-2);}
+.hdv-lists ul{list-style:none;margin:0;padding:0;font-size:.85rem;}
+.hdv-lists li{display:flex;flex-direction:column;padding:3px 0;border-bottom:1px dashed var(--line-soft);}
+.hdv-lists li small{color:var(--ink-3);font-size:.72rem;}
+.hwd-donecnt{cursor:pointer;text-decoration:underline;text-underline-offset:2px;}
+.hwd-donecnt:focus-visible{outline:3px solid var(--brand-deep);outline-offset:2px;}
+@media (max-width:480px){.hdv-lists{grid-template-columns:minmax(0,1fr);}}
 </style>
 </head>
 <!-- auth-mode СТОЇТЬ ТУТ ОДРАЗУ, а не чекає на скрипт.
@@ -4720,6 +4740,7 @@ html.bnav-on .pk-hello{bottom:calc(64px + env(safe-area-inset-bottom));}
         <button id="t-stats-btn" onclick="openClassStats()" class="qa-btn qa-cards" style="display:none;">📊 Статистика класу</button>
         <button onclick="openCommentsView()" class="qa-btn qa-cards">💬 Коментарі учням</button>
         <button onclick="openConsultTeacher()" class="qa-btn qa-cards">🗓 Консультації</button>
+        <button onclick="openHwDoneView()" class="qa-btn qa-cards">✓ Виконання ДЗ</button>
         <button onclick="openClassBroadcast()" class="qa-btn qa-broadcast">✉️ Повідомлення класу</button>
         <button onclick="printClassSchedule()" class="qa-btn qa-print">🖨️ Друк розкладу</button>
         <button onclick="openStickerStatsModal()" class="qa-btn" style="background:var(--warn);color:#fff;">🌟 Статистика наліпок</button>
@@ -6259,6 +6280,7 @@ document.addEventListener('DOMContentLoaded', function(){
 <script type="module" src="notif-center.js"></script>
 <script type="module" src="consult.js"></script>
 <script type="module" src="streaks.js"></script>
+<script type="module" src="hw-done-view.js"></script>
 <script src="theme.js"></script>
 <script type="module" src="chat.js"></script>
 <script type="module" src="breaks.js"></script>

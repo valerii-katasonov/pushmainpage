@@ -2301,7 +2301,9 @@ export async function renderTeacherHwDay(){
             l.numbers.length>1?' <span class="hwd-dbl">спарені</span>':''}</span>
           ${l.viaSub?'<span class="hwd-sub">заміна</span>':''}
           <span class="hwd-state" id="${id}-state">${rec?'задано':'не задано'}</span>
-          <span class="hwd-donecnt" id="${id}-donecnt" hidden></span>
+          <span class="hwd-donecnt" id="${id}-donecnt" hidden role="link" tabindex="0" title="Хто позначив виконаним"
+                onclick="event.stopPropagation();openHwDoneView({cls:'${escJs(cls)}',date:'${escJs(date)}',subj:'${escJs(l.subject)}'})"
+                onkeydown="if(event.key==='Enter'){event.preventDefault();event.stopPropagation();this.click();}"></span>
           <span class="hwd-chev">▾</span>
         </button>
         <div class="hwd-body" id="${id}-body" style="display:none;">
@@ -2354,7 +2356,7 @@ export async function renderTeacherHwDay(){
         if(!el||!saved[l.subject])return;
         const n=Object.keys(v[subjKey(l.subject)]||{}).length;
         el.textContent=`✓ ${n}${total?'/'+total:''}`;
-        el.title=`Позначили «виконано»: ${n}${total?' з '+total:''}`;
+        el.title=`Позначили «виконано»: ${n}${total?' з '+total:''} — натисніть, щоб побачити хто`;
         el.hidden=false;
       });
     });
