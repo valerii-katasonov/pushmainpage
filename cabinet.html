@@ -3455,6 +3455,12 @@ html.bnav-on .pk-hello{bottom:calc(64px + env(safe-area-inset-bottom));}
 .hdv-row > summary::-webkit-details-marker{display:none;}
 .hdv-what{display:flex;flex-direction:column;min-width:0;}
 .hdv-what small{color:var(--ink-3);font-size:.75rem;}
+.hdv-prev{margin-top:3px;font-size:.82rem;color:var(--ink-2);line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere;}
+.hdv-row[open] .hdv-prev{display:none;}
+.hdv-task{margin:0 12px 10px;padding:10px 12px;border-radius:10px;background:var(--brand-soft);border:1px solid var(--brand-line);}
+.hdv-task h5{margin:0 0 4px;font-size:.8rem;color:var(--ink-2);}
+.hdv-task p{margin:0;font-size:.88rem;color:var(--ink);white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.45;}
+.hdv-task small{display:block;margin-top:4px;color:var(--ink-3);font-size:.75rem;}
 .hdv-count{font-size:.85rem;color:var(--ink-2);white-space:nowrap;}
 .hdv-count b{font-size:1.1rem;color:var(--ok);}
 .hdv-bar{grid-column:1/-1;height:5px;border-radius:3px;background:var(--line-soft);overflow:hidden;}

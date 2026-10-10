@@ -30,6 +30,23 @@ const fmt = ts => ts ? new Date(ts).toLocaleString('uk-UA', { day: '2-digit', mo
 const hasHw = v => !!v && (typeof v === 'string' ? !!v.trim()
   : !!((v.text && String(v.text).trim()) || (v.images && v.images.length) || (v.trainers && Object.keys(v.trainers).length)));
 
+// Що саме задано: текст + скільки фото й тренажерів. Без цього вчитель
+// бачив лише «Математика, задано 08.10» — і мусив згадувати, що там було.
+export function hwInfo(v){
+  if(!v) return { text: '', photos: 0, trainers: 0 };
+  if(typeof v === 'string') return { text: v.trim(), photos: 0, trainers: 0 };
+  return { text: String(v.text || '').trim(),
+           photos: Array.isArray(v.images) ? v.images.length : Object.keys(v.images || {}).length,
+           trainers: Object.keys(v.trainers || {}).length };
+}
+const PREVIEW = 90;
+export function hwPreview(info){
+  const t = info.text.replace(/\s+/g, ' ');
+  const extra = [info.photos ? `📷 ${info.photos}` : '', info.trainers ? `🎯 ${info.trainers}` : ''].filter(Boolean).join(' · ');
+  const short = t.length > PREVIEW ? t.slice(0, PREVIEW).replace(/\s+\S*$/, '') + '…' : t;
+  return [short, extra].filter(Boolean).join(' · ');
+}
+
 // hw {дата: {предмет: запис}}, done {дата: {ключПредмета: {учень: {ts, by}}}},
 // names {учень: імʼя} → [{date, subj, total, done:[…], notDone:[…]}], нові згори
 export function buildRows(hw, done, names, { head = false, allowed = [], canon = k => k } = {}){
@@ -52,7 +69,7 @@ export function buildRows(hw, done, names, { head = false, allowed = [], canon =
       const doneList = Object.keys(marks).map(sid => ({ sid, name: names[sid] || sid, ts: Number(marks[sid] && marks[sid].ts) || 0, by: (marks[sid] && marks[sid].by) || '' }))
         .sort((a, b) => a.name.localeCompare(b.name, 'uk'));
       const notDone = roster.filter(sid => !marks[sid]).map(sid => ({ sid, name: names[sid] })).sort((a, b) => a.name.localeCompare(b.name, 'uk'));
-      rows.push({ date, subj, total: roster.length, done: doneList, notDone });
+      rows.push({ date, subj, hw: hwInfo(hw[date][subj]), total: roster.length, done: doneList, notDone });
     }
   }
   return rows;
@@ -65,11 +82,15 @@ export function rowsHtml(rows, open = {}){
     const isOpen = open.date === r.date && (!open.subj || open.subj === r.subj);
     const who = r.done.map(d => `<li><span>${escHtml(d.name)}</span><small>${d.by === 'student' ? 'учень' : 'батьки'}${d.ts ? ' · ' + escHtml(fmt(d.ts)) : ''}</small></li>`).join('');
     const not = r.notDone.map(d => `<li><span>${escHtml(d.name)}</span></li>`).join('');
+    const info = r.hw || { text: '', photos: 0, trainers: 0 };
+    const prev = hwPreview(info);
+    const extra = [info.photos ? `📷 фото: ${info.photos}` : '', info.trainers ? `🎯 тренажерів: ${info.trainers}` : ''].filter(Boolean).join(' · ');
+    const full = (info.text || extra) ? `<div class="hdv-task"><h5>📚 Що задано</h5>${info.text ? `<p>${escHtml(info.text)}</p>` : ''}${extra ? `<small>${escHtml(extra)}</small>` : ''}</div>` : '';
     return `<details class="hdv-row" data-date="${escHtml(r.date)}" data-subj="${escHtml(r.subj)}"${isOpen ? ' open' : ''}>
-      <summary><span class="hdv-what"><b>${escHtml(r.subj)}</b><small>задано ${escHtml(human(r.date))}</small></span>
+      <summary><span class="hdv-what"><b>${escHtml(r.subj)}</b><small>задано ${escHtml(human(r.date))}</small>${prev ? `<span class="hdv-prev">${escHtml(prev)}</span>` : ''}</span>
         <span class="hdv-count"><b>${n}</b>${r.total ? ` з ${r.total}` : ''}</span>
         <span class="hdv-bar" aria-hidden="true"><i style="width:${pct}%"></i></span></summary>
-      <div class="hdv-lists">
+      ${full}<div class="hdv-lists">
         <div><h5>✓ Позначили (${n})</h5>${n ? `<ul>${who}</ul>` : '<p class="ui-note">Ще ніхто.</p>'}</div>
         <div><h5>○ Ще не позначили (${r.notDone.length})</h5>${r.notDone.length ? `<ul>${not}</ul>` : '<p class="ui-note">Усі позначили 🎉</p>'}</div>
       </div></details>`;
