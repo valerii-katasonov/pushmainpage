@@ -2012,12 +2012,33 @@ window.openStickerStatsModal=async function(reopenSid=''){
   const list=document.getElementById('sticker-stats-list');
   list.innerHTML='<p class="empty-msg is-loading" style="text-align:center;">⏳ Завантаження...</p>';
   const cls = (currentUserData && (currentUserData.class || (currentUserData.role === 'parent' && (currentUserData.children?.[0]?.class || currentUserData.kids?.[0]?.class)))) || getActiveClass();
-  const [stuSnap,stSnap]=await Promise.all([
-    get(child(ref(db),`students_list/${cls}`)),
-    get(child(ref(db),`stickers/${cls}`))
-  ]);
-  const students=stuSnap.exists()?Object.entries(stuSnap.val()).map(([sid,nm])=>({sid,nm:String(nm)})):[];
-  const stickersData=stSnap.exists()?stSnap.val():{};
+  // РОДИНА БАЧИТЬ ЛИШЕ СВОЮ ДИТИНУ. stickers/{клас} тепер читає лише
+  // персонал (приватність, 09.10.2026), тож читання всього класу давало
+  // батькам «Permission denied». Читаємо листки своєї дитини — під
+  // ідентифікатором і під іменем (старі наліпки) — і показуємо одну картку.
+  const family=currentUserData?.role==='parent'||currentUserData?.role==='student';
+  let students, stickersData;
+  if(family){
+    const nm=String(currentUserData.studentName||'');
+    const keys=[...new Set([window.stuId?.(cls,nm),currentUserData.studentId,nm].filter(Boolean))];
+    const snaps=await Promise.all(keys.map(k=>get(child(ref(db),`stickers/${cls}/${k}`)).catch(()=>null)));
+    const sid=keys[0]||nm;
+    stickersData={};
+    keys.forEach((k,i)=>{
+      const v=snaps[i]&&snaps[i].exists()?snaps[i].val():null;
+      if(!v||typeof v!=='object')return;
+      const into=k===nm?nm:sid;                 // під іменем — окремо (так його показує історія)
+      stickersData[into]={...(stickersData[into]||{}),...v};
+    });
+    students=nm||sid?[{sid,nm:nm||sid}]:[];
+  }else{
+    const [stuSnap,stSnap]=await Promise.all([
+      get(child(ref(db),`students_list/${cls}`)),
+      get(child(ref(db),`stickers/${cls}`))
+    ]);
+    students=stuSnap.exists()?Object.entries(stuSnap.val()).map(([sid,nm])=>({sid,nm:String(nm)})):[];
+    stickersData=stSnap.exists()?stSnap.val():{};
+  }
   if(students.length===0){list.innerHTML='<p class="empty-msg" style="text-align:center;">Учнів немає.</p>';return;}
   const goal=stickerGoal(cls);
   renderStickerGoalBox(cls, goal);
@@ -2048,7 +2069,7 @@ window.openStickerStatsModal=async function(reopenSid=''){
   let h='<ul class="sg-stats-list">';
   stats.forEach((s,i)=>{
     const pct=Math.min((s.count/goal)*100,100);
-    const medal=i===0?'🥇 ':i===1?'🥈 ':i===2?'🥉 ':'';
+    const medal=family?'':i===0?'🥇 ':i===1?'🥈 ':i===2?'🥉 ':'';
     const header=`<span class="sg-student-name">${medal}${escHtml(s.name)}</span><span class="sg-count">🌟 ${s.count}</span>`;
     h+=`<li class="sg-student">${canSeeHistory?`<details class="sg-student-details" data-student-sid="${escHtml(s.sid)}"><summary aria-label="Історія наліпок: ${escHtml(s.name)}">${header}</summary>${renderStickerStatsHistory(s.records,issuerNames,auth.currentUser?.uid||'',selfName,s.sid,canManageHistory)}</details>`:`<div class="sg-student-heading">${header}</div>`}
       <div class="sg-progress"><div style="width:${pct}%;"></div></div>
