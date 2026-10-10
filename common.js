@@ -567,6 +567,15 @@ export function stuName(cls, key){
   return (d && (d.byId[key] || (d.left && leftLabel(d.left[key])))) || key;
 }
 // Синхронний зворотний переклад — для побудови шляхів
+// Ключ учня в записі → ідентифікатор зі списку класу. Старі записи
+// лежать за іменем («KATASONOV DANIIL»), нові — за ідентифікатором; одна
+// дитина не повинна рахуватися двічі. Невідомий ключ повертаємо як є.
+export function canonSid(dir, key){
+  if(!dir || !key) return key;
+  if(dir.byId && dir.byId[key] != null) return key;
+  return matchSid(dir, key) || key;
+}
+window.canonSid = canonSid;
 export function stuId(cls, name){
   return matchSid(_stuDir[cls], name);
 }

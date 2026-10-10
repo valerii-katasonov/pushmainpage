@@ -19,7 +19,7 @@ import { ref, get, set, update, child, query, orderByKey, startAt, endAt }
   from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { db, currentUserData, getActiveClass, escHtml, escJs, mondayOf, localDateString,
          renderHwItem, booksForSubject, nextLessonDate, dayNamesUA, dayKeys, subjKey, planKeyWith, fetchSubjectTeachers,
-         CLOUDINARY_URL, UPLOAD_PRESET, uploadToCloudinary, showToast, stuId }
+         CLOUDINARY_URL, UPLOAD_PRESET, uploadToCloudinary, showToast, stuId, sidOf }
   from './common.js';
 import { topicNames } from './parent-student.js';
 import { ACTIVE_YEAR } from './director.js';
@@ -160,9 +160,18 @@ export async function renderHwWeekView(boxId, weekStart){
   // на кожне завдання тижня (їх зазвичай 10–25, запити паралельні).
   const role = currentUserData?.role;
   const family = role === 'parent' || role === 'student';
-  const sid = family ? (stuId(cls, currentUserData?.studentName) || currentUserData?.studentId || currentUserData?.studentName || '') : '';
+  // КЛЮЧ ДИТИНИ — ІДЕНТИФІКАТОР ЗІ СПИСКУ КЛАСУ, і чекаємо, поки список
+  // прочитається. Тут стояв синхронний stuId: якщо список класу ще не
+  // встиг завантажитися, позначка лягала під імʼям («KATASONOV DANIIL»),
+  // а наступна — під ідентифікатором. Учитель бачив дитину двічі
+  // («3 з 16», хоча позначили двоє), а батько — «не позначено».
+  // Старі позначки під імʼям читаємо й прибираємо при наступному натисканні.
+  const sid = family ? ((await sidOf(cls, currentUserData?.studentName).catch(() => null))
+    || currentUserData?.studentId || currentUserData?.studentName || '') : '';
+  const okKey = k => !!k && !/[.#$\[\]\/]/.test(k);
+  const legacy = family ? [...new Set([currentUserData?.studentId, currentUserData?.studentName])].filter(k => okKey(k) && k !== sid) : [];
   if(my !== hwSeq) return;                       // поки читали тиждень, почали новий показ
-  const ctx = { cls, sid, role, done: new Set() };
+  const ctx = { cls, sid, legacy, role, done: new Set() };
   if(family && sid){
     // Позначки читаємо лише для того, що буде на екрані: дні тижня й
     // завдання, які потраплять у «ДЗ на завтра» (із минулого тижня).
@@ -172,8 +181,10 @@ export async function renderHwWeekView(boxId, weekStart){
     Object.keys(byDate).forEach(ds => Object.keys(byDate[ds] || {}).forEach(subj => {
       if(days.includes(ds) || (hasSch && nextLessonDate(window.schedule, subj, ds, skip) === nsd)) keys.push(`${ds}|${subjKey(subj)}`);
     }));
-    const got = await Promise.all(keys.map(k => { const [ds, sk] = k.split('|');
-      return get(child(ref(db), `hw_done/${cls}/${ds}/${sk}/${sid}`)).then(x => x.exists() ? k : null).catch(() => null); }));
+    const has = path => get(child(ref(db), path)).then(x => x.exists()).catch(() => false);
+    const got = await Promise.all(keys.map(async k => { const [ds, sk] = k.split('|');
+      const hits = await Promise.all([sid, ...legacy].map(id => has(`hw_done/${cls}/${ds}/${sk}/${id}`)));
+      return hits.some(Boolean) ? k : null; }));
     got.filter(Boolean).forEach(k => ctx.done.add(k));
   }
   if(my !== hwSeq) return;                       // застарілий показ — не чіпаємо стан нового
@@ -330,7 +341,7 @@ window.renderHwWeekView = renderHwWeekView;
 // ── ✓ ВИКОНАНО ───────────────────────────────────────────────────
 // Кнопка тієї самої задачі може стояти двічі (у «ДЗ на завтра» і в дні
 // тижня) — оновлюємо обидві й лічильник у шапці тижня.
-let hwDoneCtx = { cls: '', sid: '', role: '', done: new Set() };
+let hwDoneCtx = { cls: '', sid: '', legacy: [], role: '', done: new Set() };
 export function hwDonePaint(k, on){
   document.querySelectorAll('.hw-done-btn').forEach(b => {
     if(b.dataset.k !== k) return;
@@ -345,7 +356,7 @@ export function hwDonePaint(k, on){
   }
 }
 window.toggleHwDone = async function(btn){
-  const k = btn && btn.dataset.k; const { cls, sid, role } = hwDoneCtx;
+  const k = btn && btn.dataset.k; const { cls, sid, role, legacy = [] } = hwDoneCtx;
   if(!k || !cls || !sid) return;
   const [ds, sk] = k.split('|');
   const on = !hwDoneCtx.done.has(k);
@@ -354,10 +365,13 @@ window.toggleHwDone = async function(btn){
     // Разом із дзеркалом student_hw_done (учень другим сегментом): з нього
     // родина читає свої позначки діапазоном дат — для серій (streaks.js).
     const ts = Date.now();
-    await update(ref(db), {
+    const upd = {
       [`hw_done/${cls}/${ds}/${sk}/${sid}`]: on ? { ts, by: role === 'student' ? 'student' : 'parent' } : null,
       [`student_hw_done/${cls}/${sid}/${ds}/${sk}`]: on ? ts : null
-    });
+    };
+    // Стара позначка під імʼям — прибираємо, щоб дитина не рахувалася двічі
+    legacy.forEach(id => { upd[`hw_done/${cls}/${ds}/${sk}/${id}`] = null; upd[`student_hw_done/${cls}/${id}/${ds}/${sk}`] = null; });
+    await update(ref(db), upd);
     if(on) hwDoneCtx.done.add(k); else hwDoneCtx.done.delete(k);
     hwDonePaint(k, on);
     if(window.renderStreaks) window.renderStreaks();

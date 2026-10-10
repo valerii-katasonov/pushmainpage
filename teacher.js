@@ -2356,7 +2356,8 @@ export async function renderTeacherHwDay(){
       lessons.forEach((l,i)=>{
         const el=document.getElementById(`hwd-${i}-donecnt`);
         if(!el||!saved[l.subject])return;
-        const n=Object.keys(v[subjKey(l.subject)]||{}).length;
+        // Унікальні учні: позначка під імʼям і під ідентифікатором — одна дитина
+        const n=new Set(Object.keys(v[subjKey(l.subject)]||{}).map(k=>window.canonSid?window.canonSid(dir,k):k)).size;
         el.textContent=`✓ ${n}${total?'/'+total:''}`;
         el.title=`Позначили «виконано»: ${n}${total?' з '+total:''} — натисніть, щоб побачити хто`;
         el.hidden=false;

@@ -15,7 +15,7 @@
 // Позначка — слово родини, а не перевірка: так і підписано у вікні.
 // ═══════════════════════════════════════════════════════════════
 import { db, auth, currentUserData, escHtml, escJs, getActiveClass, getDateRange, teacherAccessMatrix,
-         isHeadOf, getStudentDir, subjKey, localDateString } from './common.js';
+         isHeadOf, getStudentDir, subjKey, localDateString, canonSid } from './common.js';
 
 export const WINDOW_DAYS = 14;
 const ALL = 'Всі предмети';
@@ -32,7 +32,7 @@ const hasHw = v => !!v && (typeof v === 'string' ? !!v.trim()
 
 // hw {дата: {предмет: запис}}, done {дата: {ключПредмета: {учень: {ts, by}}}},
 // names {учень: імʼя} → [{date, subj, total, done:[…], notDone:[…]}], нові згори
-export function buildRows(hw, done, names, { head = false, allowed = [] } = {}){
+export function buildRows(hw, done, names, { head = false, allowed = [], canon = k => k } = {}){
   const all = head || (allowed || []).map(norm).includes(norm(ALL));
   const mine = new Set((allowed || []).map(norm));
   const roster = Object.keys(names || {});
@@ -41,7 +41,14 @@ export function buildRows(hw, done, names, { head = false, allowed = [] } = {}){
     for(const subj of Object.keys(hw[date] || {}).sort((a, b) => a.localeCompare(b, 'uk'))){
       if(!hasHw(hw[date][subj])) continue;
       if(!all && !mine.has(norm(subj))) continue;
-      const marks = (done && done[date] && done[date][subjKey(subj)]) || {};
+      // Одна дитина — один рядок: позначки під імʼям і під ідентифікатором
+      // зводимо до ідентифікатора зі списку класу, лишаючи найсвіжішу
+      const raw = (done && done[date] && done[date][subjKey(subj)]) || {};
+      const marks = {};
+      for(const k of Object.keys(raw)){
+        const id = canon(k), v = raw[k] || {};
+        if(!marks[id] || (Number(v.ts) || 0) > (Number(marks[id].ts) || 0)) marks[id] = v;
+      }
       const doneList = Object.keys(marks).map(sid => ({ sid, name: names[sid] || sid, ts: Number(marks[sid] && marks[sid].ts) || 0, by: (marks[sid] && marks[sid].by) || '' }))
         .sort((a, b) => a.name.localeCompare(b.name, 'uk'));
       const notDone = roster.filter(sid => !marks[sid]).map(sid => ({ sid, name: names[sid] })).sort((a, b) => a.name.localeCompare(b.name, 'uk'));
@@ -108,7 +115,7 @@ async function render(){
     if(my !== seq) return;
     const raw = (teacherAccessMatrix || {})[cls];
     const allowed = Array.isArray(raw) ? raw : Object.values(raw || {});
-    const rows = buildRows(hw, done, (dir && dir.byId) || {}, { head: head || isAdminRole(currentUserData && currentUserData.role), allowed });
+    const rows = buildRows(hw, done, (dir && dir.byId) || {}, { head: head || isAdminRole(currentUserData && currentUserData.role), allowed, canon: k => canonSid(dir, k) });
     body.innerHTML = rowsHtml(rows, cur.open);
     const opened = body.querySelector('details[open]');
     if(opened && opened.scrollIntoView) opened.scrollIntoView({ block: 'nearest' });

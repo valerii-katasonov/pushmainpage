@@ -16,7 +16,7 @@
 // (дзеркало hw_done, пишеться разом із ним) і ДЗ класу за 60 днів.
 // ═══════════════════════════════════════════════════════════════
 import { ref, get, child, query, orderByKey, startAt } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, currentUserData, getActiveClass, stuId, subjKey, escHtml, showToast } from './common.js';
+import { db, currentUserData, getActiveClass, sidOf, subjKey, escHtml, showToast } from './common.js';
 
 export const LOOKBACK_DAYS = 60;
 export const MILESTONES = [3, 5, 10, 15, 20, 30, 50];
@@ -98,7 +98,7 @@ export async function renderStreaks(){
   const prefix = u.role === 'student' ? 's' : u.role === 'parent' ? 'p' : '';
   const box = prefix && document.getElementById(`${prefix}-streak`);
   if(!box) return;
-  const cls = getActiveClass(), sid = stuId(cls, u.studentName) || u.studentId || u.studentName || '';
+  const cls = getActiveClass(), sid = (await sidOf(cls, u.studentName).catch(() => null)) || u.studentId || u.studentName || '';
   if(!cls || !sid){ box.hidden = true; return; }
   const my = ++seq, today = ymd(new Date()), from = shift(today, -LOOKBACK_DAYS);
   let hw, done;
