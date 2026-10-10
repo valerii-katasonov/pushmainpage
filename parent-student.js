@@ -1527,7 +1527,7 @@ async function caRenderLocal(){
       <input type="text" id="ca-pass" placeholder="мінімум 6 символів" autocapitalize="none">
       <p style="font-size:.75rem;color:var(--ink-3);margin:3px 0 0 0;">Пароль видно навмисне — ви маєте продиктувати його дитині.</p>
       <button onclick="caCreate()" id="ca-create"
-              style="background:var(--brand-ink);color:#fff;padding:11px;margin-top:13px;width:100%;">Створити доступ</button>
+              style="background:var(--brand-ink);color:var(--on-fill);padding:11px;margin-top:13px;width:100%;">Створити доступ</button>
       <div id="ca-msg" style="display:none;font-size:.82rem;margin-top:9px;"></div>`;
     return;
   }
@@ -1544,7 +1544,7 @@ async function caRenderLocal(){
     <label for="ca-newpass" style="margin-top:13px;">Новий пароль</label>
     <input type="text" id="ca-newpass" placeholder="мінімум 6 символів" autocapitalize="none">
     <button onclick="caPassword()" id="ca-pwd"
-            style="background:var(--brand-ink);color:#fff;padding:11px;margin-top:9px;width:100%;">Змінити пароль</button>
+            style="background:var(--brand-ink);color:var(--on-fill);padding:11px;margin-top:9px;width:100%;">Змінити пароль</button>
     <button onclick="caDisable(${off ? 'false' : 'true'})" id="ca-toggle"
             style="background:${off ? 'var(--ok)' : 'var(--line-soft)'};color:${off ? '#fff' : 'var(--ink-2)'};padding:10px;margin-top:7px;width:100%;">
       ${off ? 'Увімкнути доступ' : 'Вимкнути доступ'}</button>

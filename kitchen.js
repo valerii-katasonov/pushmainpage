@@ -1918,7 +1918,7 @@ window.loadMealStats = async function(){
       </tbody></table></div>
       ${taHistoryBlock}
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:11px;">
-        <button onclick="exportMealStatsPdf()" style="background:linear-gradient(135deg,var(--danger),var(--danger));color:#fff;border:none;border-radius:8px;padding:9px 16px;font-weight:700;cursor:pointer;">📕 Зберегти PDF</button>
+        <button onclick="exportMealStatsPdf()" style="background:linear-gradient(135deg,var(--danger),var(--danger));color:var(--on-fill);border:none;border-radius:8px;padding:9px 16px;font-weight:700;cursor:pointer;">📕 Зберегти PDF</button>
         <button onclick="exportMealStats()" style="background:var(--brand-soft);color:var(--brand-ink);border:1px solid var(--brand-line);padding:9px 16px;border-radius:8px;font-weight:700;cursor:pointer;">📄 Вивантажити CSV</button>
       </div>`;
     window.__mealStats = { from, to, cls: selectedCls, rows };

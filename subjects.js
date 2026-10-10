@@ -304,7 +304,7 @@ window.renderRenameSubject = async function(){
     <label style="font-size:.8rem;color:var(--accent-ink);font-weight:600;">Нова назва:</label>
     <input type="text" id="rs-new" placeholder="Наприклад: Англійська мова" style="margin-top:4px;">
     <button type="button" id="rs-check" onclick="checkRenameSubject()"
-            style="background:var(--accent-ink);color:#fff;margin-top:11px;">🔍 Порахувати, що зміниться</button>
+            style="background:var(--accent-ink);color:var(--on-fill);margin-top:11px;">🔍 Порахувати, що зміниться</button>
     <div id="rs-report"></div>`;
 };
 
@@ -439,7 +439,7 @@ window.checkRenameSubject = async function(){
     ${totalMerged ? `<div class="rs-warn">У ${totalMerged} гілках уже є записи з новою назвою — вони зіллються, а не перезапишуться.</div>` : ''}
     <div class="rs-warn">Перенесення не можна відмінити однією кнопкою. Переконайтеся, що назва написана правильно.</div>
     <button type="button" id="rs-go" onclick="applyRenameSubject()"
-            style="background:var(--danger);color:#fff;margin-top:11px;">
+            style="background:var(--danger);color:var(--on-fill);margin-top:11px;">
       Перейменувати «${escHtml(oldName)}» → «${escHtml(newName)}»</button>`;
 };
 

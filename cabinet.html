@@ -68,6 +68,11 @@
                                  головні кнопки, шапки, заголовки */
       --brand-soft:#E0F7FA;   /* підкладка картки, виділення */
       --brand-line:#B2EBF2;   /* межа в бренд-гамі */
+      --on-fill:#FFFFFF;      /* текст НА кольоровій заливці (кнопка, бейдж).
+                                 У темній темі заливки світлішають (бірюза,
+                                 червоний, жовтий), і білий текст на них
+                                 зникав: «Закрити» на світло-сірому — 1.2:1.
+                                 Там цей токен стає темним — див. блок тем. */
 
       /* ── Акцент ── */
       --accent:#FF4076;       /* «Акцентний для Web» з брендбука. Один на
@@ -137,7 +142,7 @@
     :root[data-theme="dark"]{
       --ink:#E3ECEF; --ink-2:#B8C7CC; --ink-3:#93A7AD; --line:#2D3D43; --line-soft:#223137;
       --surface:#16232A; --surface-2:#0E181D; --surface-glass:rgba(22,35,42,.96); --shimmer:rgba(255,255,255,.07);
-      --brand:#00BCD4; --brand-ink:#4DD0E1; --brand-deep:#4294DA; --brand-soft:#0D262D; --brand-line:#1F5763;
+      --brand:#00BCD4; --brand-ink:#4DD0E1; --brand-deep:#4294DA; --brand-soft:#0D262D; --brand-line:#1F5763; --on-fill:#0B1A20;
       --accent:#FF4076; --accent-ink:#FF8AAE; --accent-soft:#4A1A2A;
       --ok:#5CCB93; --ok-soft:#12321F; --ok-line:#28603F; --warn:#F2B552; --warn-soft:#3A2A0E; --warn-line:#6E5120;
       --danger:#FF7676; --danger-soft:#3E1818; --danger-line:#702C2C;
@@ -148,7 +153,7 @@
       :root[data-theme="auto"]{
       --ink:#E3ECEF; --ink-2:#B8C7CC; --ink-3:#93A7AD; --line:#2D3D43; --line-soft:#223137;
       --surface:#16232A; --surface-2:#0E181D; --surface-glass:rgba(22,35,42,.96); --shimmer:rgba(255,255,255,.07);
-      --brand:#00BCD4; --brand-ink:#4DD0E1; --brand-deep:#4294DA; --brand-soft:#0D262D; --brand-line:#1F5763;
+      --brand:#00BCD4; --brand-ink:#4DD0E1; --brand-deep:#4294DA; --brand-soft:#0D262D; --brand-line:#1F5763; --on-fill:#0B1A20;
       --accent:#FF4076; --accent-ink:#FF8AAE; --accent-soft:#4A1A2A;
       --ok:#5CCB93; --ok-soft:#12321F; --ok-line:#28603F; --warn:#F2B552; --warn-soft:#3A2A0E; --warn-line:#6E5120;
       --danger:#FF7676; --danger-soft:#3E1818; --danger-line:#702C2C;
@@ -159,7 +164,7 @@
     :root .force-light,:root #report-card-render{
       --ink:#333333; --ink-2:#46585E; --ink-3:#5E7076; --line:#DCE5E8; --line-soft:#EDF2F4;
       --surface:#FFFFFF; --surface-2:#F4F8F9; --surface-glass:rgba(255,255,255,.95); --shimmer:rgba(255,255,255,.6);
-      --brand:#00BCD4; --brand-ink:#00697C; --brand-deep:#01579B; --brand-soft:#E0F7FA; --brand-line:#B2EBF2;
+      --brand:#00BCD4; --brand-ink:#00697C; --brand-deep:#01579B; --brand-soft:#E0F7FA; --brand-line:#B2EBF2; --on-fill:#FFFFFF;
       --accent:#FF4076; --accent-ink:#C2185B; --accent-soft:#FFE3EB;
       --ok:#1E7E4A; --ok-soft:#E8F6EF; --ok-line:#A8DCC1; --warn:#9A5B00; --warn-soft:#FFF4E0; --warn-line:#F0CE96;
       --danger:#C62828; --danger-soft:#FDECEA; --danger-line:#F2B8B5;
@@ -171,7 +176,7 @@
     @media print{ :root[data-theme]{ /* друк — завжди світлий, хоч би яка тема на екрані */
       --ink:#333333; --ink-2:#46585E; --ink-3:#5E7076; --line:#DCE5E8; --line-soft:#EDF2F4;
       --surface:#FFFFFF; --surface-2:#F4F8F9; --surface-glass:rgba(255,255,255,.95); --shimmer:rgba(255,255,255,.6);
-      --brand:#00BCD4; --brand-ink:#00697C; --brand-deep:#01579B; --brand-soft:#E0F7FA; --brand-line:#B2EBF2;
+      --brand:#00BCD4; --brand-ink:#00697C; --brand-deep:#01579B; --brand-soft:#E0F7FA; --brand-line:#B2EBF2; --on-fill:#FFFFFF;
       --accent:#FF4076; --accent-ink:#C2185B; --accent-soft:#FFE3EB;
       --ok:#1E7E4A; --ok-soft:#E8F6EF; --ok-line:#A8DCC1; --warn:#9A5B00; --warn-soft:#FFF4E0; --warn-line:#F0CE96;
       --danger:#C62828; --danger-soft:#FDECEA; --danger-line:#F2B8B5;
@@ -195,7 +200,7 @@
     .theme-seg{display:inline-flex;border:1px solid var(--brand-line);border-radius:10px;overflow:hidden;margin-top:6px;}
     .theme-seg button{width:auto;margin:0;padding:7px 12px;border:none;border-right:1px solid var(--brand-line);border-radius:0;background:var(--surface);color:var(--brand-deep);font-size:.82rem;cursor:pointer;}
     .theme-seg button:last-child{border-right:none;}
-    .theme-seg button.on{background:var(--brand-deep);color:#fff;}
+    .theme-seg button.on{background:var(--brand-deep);color:var(--on-fill);}
 
     /* ЦИФРИ В ТАБЛИЦЯХ — МОНОШИРИННІ.
        У Nunito цифри пропорційні: «1» вужча за «4», тож у вузьких колонках
@@ -226,9 +231,9 @@
        тепер візуально СЛАБША за головну, як і має бути.
 
        Червона заливка лишається тільки там, де дія справді незворотна. */
-    .btn-login{background:var(--brand-deep);color:#fff;}
+    .btn-login{background:var(--brand-deep);color:var(--on-fill);}
     .btn-logout{background:var(--surface);color:var(--ink-2);border:1px solid var(--line);margin-top:var(--space-5);}
-    .btn-save{background:var(--brand-deep);color:#fff;}
+    .btn-save{background:var(--brand-deep);color:var(--on-fill);}
     .panel{display:none;}
     /* ── DESIGN SYSTEM: .screen-section groups related cards/details under one
        heading on every role screen (admin/director/teacher/parent/student).
@@ -393,7 +398,7 @@
        відповідає з паузою: здається, що портал гальмує. Тому підпис
        лежить у data-tip, а показуємо його самі — миттєво. */
     [data-tip]{position:relative;}
-    [data-tip]:hover::after,[data-tip]:focus-visible::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:5px 9px;border-radius:6px;font-size:.75rem;font-weight:600;white-space:nowrap;z-index:60;pointer-events:none;box-shadow:0 3px 10px rgba(0,0,0,.22);}
+    [data-tip]:hover::after,[data-tip]:focus-visible::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:var(--ink);color:var(--on-fill);padding:5px 9px;border-radius:6px;font-size:.75rem;font-weight:600;white-space:nowrap;z-index:60;pointer-events:none;box-shadow:0 3px 10px rgba(0,0,0,.22);}
     /* Хвостик, щоб було видно, до якої саме кнопки належить підказка */
     [data-tip]:hover::before,[data-tip]:focus-visible::before{content:'';position:absolute;bottom:calc(100% + 1px);left:50%;transform:translateX(-50%);border:5px solid transparent;border-top-color:var(--ink-2);z-index:60;pointer-events:none;}
     /* На дотику підказка не має сенсу — і не має перекривати сусідні
@@ -406,7 +411,7 @@
     .type-btn.active{border-color:var(--brand-ink);background:var(--brand-soft);color:var(--brand-ink);}
     .editor-actions{display:flex;gap:5px;margin-top:8px;}
     .editor-actions button{flex:1;padding:8px;margin:0;font-size:.82rem;border-radius:8px;}
-    .btn-confirm{background:var(--brand-deep);color:#fff;}
+    .btn-confirm{background:var(--brand-deep);color:var(--on-fill);}
     .btn-delete{background:var(--surface);color:var(--danger);border:2px solid var(--danger-line);}
     .btn-cancel{background:var(--line-soft);color:var(--ink);}
     /* ── JOURNAL FLAGS FOR TOPIC/HOMEWORK ── */
@@ -509,7 +514,7 @@
        брендом — і пляма зникає, і сенс лишається. */
     .lesson-row.current{background:var(--brand-soft);border-color:var(--brand);box-shadow:0 2px 10px rgba(0,188,212,.22);}
     .lesson-row.passed{opacity:.45;}
-    .lesson-num{width:24px;height:24px;border-radius:50%;background:var(--brand-ink);color:#fff;font-size:.75rem;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+    .lesson-num{width:24px;height:24px;border-radius:50%;background:var(--brand-ink);color:var(--on-fill);font-size:.75rem;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
     .lesson-row.current .lesson-num{background:var(--brand-ink);animation:pulse 2s infinite;}
     @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(39,174,96,.4)}50%{box-shadow:0 0 0 8px rgba(39,174,96,0)}}
     .lesson-info{flex:1;min-width:0;}
@@ -560,14 +565,14 @@
     .moved-notice p{margin:0 0 6px 0;color:var(--ok);}
     .moved-notice p:last-of-type{margin-bottom:0;}
     .moved-notice code{background:rgba(67,160,71,.12);border-radius:5px;padding:1px 5px;font-size:.85em;font-weight:700;}
-    .moved-notice button{display:block;width:auto;margin:13px 0 0;padding:9px 18px;font-size:.82rem;font-weight:700;background:var(--ok);color:#fff;border:none;border-radius:10px;cursor:pointer;}
+    .moved-notice button{display:block;width:auto;margin:13px 0 0;padding:9px 18px;font-size:.82rem;font-weight:700;background:var(--ok);color:var(--on-fill);border:none;border-radius:10px;cursor:pointer;}
     .moved-notice button:hover{background:var(--ok);}
     .k-prices{background:var(--surface);border:1px solid var(--brand-line);border-radius:12px;padding:11px 13px;margin-bottom:13px;}
     .k-prices summary{font-weight:700;color:var(--brand-ink);cursor:pointer;font-size:.9rem;}
     .k-prices-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:11px 0 9px;}
     .k-prices-grid label{display:flex;flex-direction:column;gap:3px;font-size:.75rem;color:var(--ink-2);}
     .k-prices-grid input{margin:0;font-size:.9rem;padding:8px 10px;}
-    .k-prices-save{width:auto;margin:0;padding:9px 16px;font-size:.83rem;font-weight:700;background:var(--brand-ink);color:#fff;border:none;border-radius:9px;cursor:pointer;}
+    .k-prices-save{width:auto;margin:0;padding:9px 16px;font-size:.83rem;font-weight:700;background:var(--brand-ink);color:var(--on-fill);border:none;border-radius:9px;cursor:pointer;}
     .k-total-money b{color:var(--ok);}
     .pms-money{margin-top:11px;background:var(--ok-soft);border:1px solid var(--ok-line);border-radius:12px;padding:12px 14px;text-align:center;}
     .pms-money b{display:block;font-size:1.5rem;font-weight:800;color:var(--ok);line-height:1.15;}
@@ -584,12 +589,12 @@
     .pay-row:last-of-type{border-bottom:none;}
     .pay-label{flex:0 0 92px;font-size:.8125rem;color:var(--ink-2);text-transform:uppercase;letter-spacing:.02em;}
     .pay-value{flex:1;min-width:0;font-size:.86rem;color:var(--ok);overflow-wrap:anywhere;}
-    .pay-copy{width:auto;min-height:var(--touch-target);margin:0;flex:0 0 auto;padding:8px 12px;font-size:.8125rem;font-weight:700;background:var(--ok);color:#fff;border:none;border-radius:8px;cursor:pointer;}
+    .pay-copy{width:auto;min-height:var(--touch-target);margin:0;flex:0 0 auto;padding:8px 12px;font-size:.8125rem;font-weight:700;background:var(--ok);color:var(--on-fill);border:none;border-radius:8px;cursor:pointer;}
     .pay-note{font-size:.76rem;color:var(--ink-2);line-height:1.45;margin:11px 0 0;}
     .pay-form label{display:block;font-size:.78rem;color:var(--ink);font-weight:600;margin-bottom:9px;}
     .pay-form label small{display:block;font-weight:400;color:var(--ink-3);font-size:.75rem;margin-bottom:2px;}
     .pay-form input{margin:0;font-size:.88rem;}
-    .pay-form button{width:auto;margin:4px 0 0;padding:9px 16px;font-size:.83rem;font-weight:700;background:var(--ok);color:#fff;border:none;border-radius:9px;cursor:pointer;}
+    .pay-form button{width:auto;margin:4px 0 0;padding:9px 16px;font-size:.83rem;font-weight:700;background:var(--ok);color:var(--on-fill);border:none;border-radius:9px;cursor:pointer;}
     .pay-preview{margin-top:11px;font-size:.8rem;color:var(--ink);background:var(--surface);border:1px solid var(--ok-line);border-radius:9px;padding:9px 11px;}
     .pay-warn{color:var(--warn);font-size:.76rem;}
     /* ── Харчування персоналу ── */
@@ -598,7 +603,7 @@
     .k-staff-price{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:11px;}
     .k-staff-price label{font-size:.75rem;color:var(--ink-2);flex:1 1 100%;}
     .k-staff-price input{margin:0;max-width:120px;}
-    .k-staff-price button{width:auto;margin:0;padding:9px 14px;font-size:.82rem;background:var(--brand-ink);color:#fff;border:none;border-radius:9px;cursor:pointer;}
+    .k-staff-price button{width:auto;margin:0;padding:9px 14px;font-size:.82rem;background:var(--brand-ink);color:var(--on-fill);border:none;border-radius:9px;cursor:pointer;}
     .stm-nav{display:flex;align-items:center;gap:10px;margin-bottom:11px;}
     .stm-nav button{width:auto;margin:0;padding:8px 14px;font-weight:800;background:var(--surface-2);color:var(--brand-deep);border:1px solid var(--brand-line);border-radius:10px;cursor:pointer;}
     .stm-day{flex:1;min-width:0;text-align:center;line-height:1.25;}
@@ -609,9 +614,9 @@
     .stm-dish b{flex:1;min-width:0;font-size:.88rem;color:var(--ink);overflow-wrap:anywhere;}
     .stm-choice{display:flex;gap:8px;margin:9px 0;flex-wrap:wrap;}
     .stm-ab{flex:1;min-width:140px;margin:0;padding:10px;font-size:.82rem;font-weight:700;background:var(--surface);color:var(--brand-ink);border:2px solid var(--brand-line);border-radius:11px;cursor:pointer;}
-    .stm-ab.on{background:var(--brand-ink);color:#fff;border-color:var(--brand-ink);}
+    .stm-ab.on{background:var(--brand-ink);color:var(--on-fill);border-color:var(--brand-ink);}
     .stm-act{margin:12px 0 8px;}
-    .stm-take{width:100%;margin:0;padding:13px;font-size:.92rem;font-weight:800;border:none;border-radius:12px;background:var(--brand-ink);color:#fff;cursor:pointer;}
+    .stm-take{width:100%;margin:0;padding:13px;font-size:.92rem;font-weight:800;border:none;border-radius:12px;background:var(--brand-ink);color:var(--on-fill);cursor:pointer;}
     .stm-take.on{background:var(--brand-soft);color:var(--brand-ink);border:2px solid var(--brand);}
     .stm-plan{font-size:.78rem;color:var(--ink-2);}
     .stm-plan a{color:var(--brand-ink);text-decoration:none;border-bottom:1px dotted;}
@@ -642,7 +647,7 @@
     .pay-amount{font-weight:800;font-size:1rem;}
     .pay-paid{color:var(--ok);}
     .pay-due{color:var(--danger);}
-    .pay-btn{width:auto;padding:10px var(--space-4);margin:0;font-size:var(--text-sm);border-radius:var(--badge-radius);background:var(--brand-deep);color:#fff;}
+    .pay-btn{width:auto;padding:10px var(--space-4);margin:0;font-size:var(--text-sm);border-radius:var(--badge-radius);background:var(--brand-deep);color:var(--on-fill);}
     /* ── DESIGN SYSTEM: unified badge base (was 3 near-duplicate declarations) ── */
     .debt-badge,.paid-badge{padding:4px 10px;border-radius:var(--badge-radius);font-size:var(--text-xs);font-weight:700;}
     .debt-badge{background:var(--danger-soft);border:1px solid var(--danger-line);color:var(--danger);}
@@ -790,7 +795,7 @@
     .staff-role-warn{background:var(--warn-soft);color:var(--warn);border-color:var(--warn-line);}
     /* ── AI-ЧЕРНЕТКА ДЗ ── */
     .ai-hw-row{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:7px;}
-    #btn-ai-hw,#btn-ai-comment{width:auto;margin:0;padding:8px 14px;font-size:.82rem;font-weight:700;border:none;border-radius:9px;cursor:pointer;background:linear-gradient(135deg,var(--brand-deep),var(--brand-deep));color:#fff;}
+    #btn-ai-hw,#btn-ai-comment{width:auto;margin:0;padding:8px 14px;font-size:.82rem;font-weight:700;border:none;border-radius:9px;cursor:pointer;background:linear-gradient(135deg,var(--brand-deep),var(--brand-deep));color:var(--on-fill);}
     #btn-ai-hw:disabled,#btn-ai-comment:disabled{opacity:.6;cursor:wait;}
     .ai-hw-note{font-size:.75rem;color:var(--ink-3);font-style:italic;}
     /* ── Вкладки кабінету директора ── */
@@ -802,8 +807,8 @@
     .dtab{flex:0 0 auto;width:auto;min-height:var(--touch-target);margin:0;padding:10px 15px;font-size:.875rem;font-weight:600;white-space:nowrap;background:var(--surface);color:var(--ink-2);border:1px solid var(--brand-line);border-radius:20px;cursor:pointer;transition:background .12s,border-color .12s,color .12s;}
     .dtab:hover{border-color:var(--ink-3);color:var(--ink);}
     .dtab-icon{display:inline-block;margin-right:6px;line-height:1;vertical-align:-.08em;}
-    .dtab.on{background:var(--brand-ink);border-color:var(--brand-ink);color:#fff;}
-    .dtab-badge{display:none;margin-left:6px;background:var(--brand-deep);color:#fff;font-size:.75rem;padding:1px 6px;border-radius:10px;font-weight:700;}
+    .dtab.on{background:var(--brand-ink);border-color:var(--brand-ink);color:var(--on-fill);}
+    .dtab-badge{display:none;margin-left:6px;background:var(--brand-deep);color:var(--on-fill);font-size:.75rem;padding:1px 6px;border-radius:10px;font-weight:700;}
     .dtab-badge.show{display:inline-block;}
     @media (max-width:1023px){
       /* Липне до верху лише там, де довгий сувій і вузький екран */
@@ -818,7 +823,7 @@
       #dtab-bar{overflow-x:auto;justify-content:flex-start;scrollbar-width:thin;}
       #dtab-bar .dtab{flex:0 0 auto;}
     }
-    .chat-dot{display:none;margin-left:7px;min-width:19px;height:19px;padding:0 6px;border-radius:10px;background:var(--brand-deep);color:#fff;font-size:.75rem;font-weight:800;line-height:19px;text-align:center;vertical-align:middle;box-shadow:0 0 0 2px rgba(255,255,255,.6);}
+    .chat-dot{display:none;margin-left:7px;min-width:19px;height:19px;padding:0 6px;border-radius:10px;background:var(--brand-deep);color:var(--on-fill);font-size:.75rem;font-weight:800;line-height:19px;text-align:center;vertical-align:middle;box-shadow:0 0 0 2px rgba(255,255,255,.6);}
     .chat-dot.show{display:inline-block;animation:dotPop .25s ease;}
     @keyframes dotPop{from{transform:scale(.5);opacity:0}to{transform:scale(1);opacity:1}}
     /* СПИСОК ВІДСУТНІХ — ДВІ КОЛОНКИ.
@@ -856,11 +861,11 @@
     .att-daywarn{display:block;padding:7px 10px;border-radius:8px;margin-bottom:7px;font-size:.78rem;line-height:1.35;}
     .att-daywarn.future{background:var(--danger-soft);color:var(--danger);border:1px solid var(--danger-line);}
     .att-daywarn.past{background:var(--brand-soft);color:var(--brand-deep);border:1px solid var(--brand-line);}
-    .att-cls{font-size:.75rem;background:var(--brand-ink);color:#fff;padding:2px 6px;border-radius:4px;white-space:nowrap;}
+    .att-cls{font-size:.75rem;background:var(--brand-ink);color:var(--on-fill);padding:2px 6px;border-radius:4px;white-space:nowrap;}
     /* Скасування відмітки відсутності — навмисно скромна кнопка: дія
        рідкісна й виправна, тиснути її щодня ніхто не має. */
     .att-undo{flex:0 0 auto;align-self:center;display:inline-block;background:var(--surface);border:1px solid var(--red,var(--danger));color:var(--red,var(--danger));border-radius:8px;padding:9px 12px;font-size:.8125rem;font-weight:700;cursor:pointer;width:auto;margin:0;white-space:nowrap;min-height:var(--touch-target);}
-    .att-undo:hover{background:var(--red,var(--danger));color:#fff;}
+    .att-undo:hover{background:var(--red,var(--danger));color:var(--on-fill);}
     /* У статусі родини кнопка живе в потоці тексту — там їй потрібен відступ */
     #p-att-status .att-undo,#s-att-status .att-undo{margin-left:7px;vertical-align:middle;}
     .att-undo-note{display:block;font-size:.75rem;color:var(--ink-3);font-weight:400;margin-top:3px;}
@@ -869,7 +874,7 @@
     .push-invite{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--brand-soft);border:1px solid var(--brand-line);border-radius:12px;padding:11px 14px;margin-bottom:14px;font-size:.84rem;color:var(--brand-ink);line-height:1.45;}
     .push-invite span{flex:1;min-width:180px;}
     .pi-go,.pi-x{width:auto;margin:0;padding:7px 14px;font-size:.79rem;font-weight:700;border-radius:9px;cursor:pointer;}
-    .pi-go{background:var(--brand-ink);color:#fff;border:none;}
+    .pi-go{background:var(--brand-ink);color:var(--on-fill);border:none;}
     .pi-x{background:transparent;color:var(--brand-ink);border:1px solid var(--brand-line);}
     /* ── Вікно чату ── */
     /* Підкладка чату НЕ скролиться. Коли два скролери вкладені один в
@@ -891,7 +896,7 @@
     .chat-compose{display:flex;align-items:flex-end;gap:8px;padding:10px 12px;background:var(--surface);border-top:1px solid var(--line-soft);flex-shrink:0;}
     .chat-compose textarea{flex:1;margin:0;padding:10px 14px;border:1px solid var(--brand-line);border-radius:20px;resize:none;max-height:110px;font-size:.9rem;line-height:1.4;font-family:inherit;}
     .chat-compose textarea:focus{border-color:var(--brand-ink);outline:none;}
-    .chat-send{width:var(--touch-target);height:var(--touch-target);flex:none;margin:0;padding:0;border:none;border-radius:50%;background:var(--brand-ink);color:#fff;font-size:1.05rem;cursor:pointer;line-height:1;}
+    .chat-send{width:var(--touch-target);height:var(--touch-target);flex:none;margin:0;padding:0;border:none;border-radius:50%;background:var(--brand-ink);color:var(--on-fill);font-size:1.05rem;cursor:pointer;line-height:1;}
     .chat-send:hover{filter:brightness(1.08);}
     @media (max-width:600px){
       .chat-win{max-width:100%;height:100%;max-height:none;border-radius:0;}
@@ -919,7 +924,7 @@
     .sp-pick input{display:none;}
     .sp-lab{display:block;font-size:.78rem;color:var(--ink-2);margin:9px 0 3px;}
     .sp-err{background:var(--danger-soft);color:var(--danger);padding:10px;border-radius:9px;font-size:.8rem;margin-top:11px;}
-    .sp-save{background:var(--brand-ink);color:#fff;padding:12px;width:100%;margin-top:14px;}
+    .sp-save{background:var(--brand-ink);color:var(--on-fill);padding:12px;width:100%;margin-top:14px;}
     .sp-cancel{background:var(--line-soft);color:var(--ink-2);padding:11px;width:100%;margin-top:8px;}
     .sp-note{font-size:.75rem;color:var(--ink-3);margin-top:11px;line-height:1.35;}
     .staff-av{width:38px;height:38px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;background:var(--line);color:var(--ink);font-weight:700;font-size:.9rem;position:relative;overflow:hidden;margin-right:10px;}
@@ -943,7 +948,7 @@
 .ch-time{font-size:.75rem;color:var(--ink-3);flex-shrink:0;}
     .ch-prev{font-size:.81rem;color:var(--ink-3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
     .ch-prev b{color:var(--ink-2);font-weight:600;}
-    .ch-badge{flex-shrink:0;min-width:20px;height:20px;padding:0 6px;border-radius:10px;background:var(--brand-ink);color:#fff;font-size:.75rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+    .ch-badge{flex-shrink:0;min-width:20px;height:20px;padding:0 6px;border-radius:10px;background:var(--brand-ink);color:var(--on-fill);font-size:.75rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
     .ch-empty{padding:40px 20px;text-align:center;color:var(--ink-3);font-size:2rem;line-height:1.6;}
     .ch-empty span{display:block;font-size:.85rem;color:var(--ink-3);margin-top:6px;}
     /* ── Чат: повідомлення ── */
@@ -951,7 +956,7 @@
     .ms-day span{background:rgba(0,0,0,.06);color:var(--ink-2);font-size:.75rem;padding:3px 11px;border-radius:20px;}
     .ms{max-width:78%;padding:8px 12px;margin-bottom:2px;font-size:.9rem;line-height:1.45;word-break:break-word;position:relative;}
     .ms.they{align-self:flex-start;background:var(--surface);color:var(--ink);border-radius:14px 14px 14px 4px;border:1px solid var(--line-soft);}
-    .ms.me{align-self:flex-end;background:var(--brand-ink);color:#fff;border-radius:14px 14px 4px 14px;}
+    .ms.me{align-self:flex-end;background:var(--brand-ink);color:var(--on-fill);border-radius:14px 14px 4px 14px;}
     .ms.grp.they{border-radius:4px 14px 14px 4px;}
     .ms.grp.me{border-radius:14px 4px 4px 14px;}
     .ms.last{margin-bottom:10px;}
@@ -973,7 +978,7 @@
     .cp-filters input[type=search]{margin:0 0 8px;}
     .cp-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;}
     .cp-chip{width:auto;margin:0;padding:6px 12px;border-radius:20px;background:var(--surface-2);color:var(--ink-2);border:1px solid var(--line-soft);font-size:.8rem;}
-    .cp-chip.on{background:var(--brand-ink);color:#fff;border-color:var(--brand-ink);}
+    .cp-chip.on{background:var(--brand-ink);color:var(--on-fill);border-color:var(--brand-ink);}
     .cp-tools{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:6px;}
     .cp-tools select{width:auto;margin:0;padding:6px 8px;font-size:.8rem;}
     .cp-all{width:auto;margin:0;padding:6px 10px;font-size:.78rem;background:var(--line-soft);color:var(--ink);}
@@ -987,14 +992,28 @@
       --tg-accent:#1f74b8; --tg-accent-soft:#e8f1fc; --tg-pill:#587a4a; --tg-react-out:#d9f2c6;
       --tg-name-1:#c03d44; --tg-name-2:#a8521a; --tg-name-3:#6c55c0; --tg-name-4:#2a7a25;
       --tg-name-5:#1a7477; --tg-name-6:#2a6ca6; --tg-name-7:#b43f7a;
+      --tg-ink:#000000; --tg-dot:rgba(255,255,255,.35); --tg-dot-2:rgba(255,255,255,.25); --tg-dot-3:rgba(60,90,40,.07);
     }
+    /* Темна тема чату: текст був чорним (#000) на темній шапці й списку —
+       імʼя співрозмовника й «Повідомлення» не читалися. Палітра — нічна
+       гама Telegram у зелених тонах порталу. */
+    :root[data-theme="dark"]{--tg-ink:#E9EEF0; --tg-bg:#17231B; --tg-bg-1:#1B291F; --tg-bg-2:#16211A; --tg-bg-3:#111A14;
+      --tg-out:#2A4A2E; --tg-out-meta:#9AD98F; --tg-muted:#9AACB2; --tg-hover:#1F2E35; --tg-line:#2D3D43;
+      --tg-accent:#5AA9E6; --tg-accent-soft:#16293A; --tg-pill:#3E5A35; --tg-react-out:#2F5534;
+      --tg-name-1:#FF8A8F; --tg-name-2:#F0A060; --tg-name-3:#A897F0; --tg-name-4:#7CCB73;
+      --tg-name-5:#5FC9CC; --tg-name-6:#74B4EE; --tg-name-7:#EE87BD; --tg-dot:rgba(255,255,255,.05); --tg-dot-2:rgba(255,255,255,.035); --tg-dot-3:rgba(0,0,0,.18);}
+    @media (prefers-color-scheme: dark){:root[data-theme="auto"]{--tg-ink:#E9EEF0; --tg-bg:#17231B; --tg-bg-1:#1B291F; --tg-bg-2:#16211A; --tg-bg-3:#111A14;
+      --tg-out:#2A4A2E; --tg-out-meta:#9AD98F; --tg-muted:#9AACB2; --tg-hover:#1F2E35; --tg-line:#2D3D43;
+      --tg-accent:#5AA9E6; --tg-accent-soft:#16293A; --tg-pill:#3E5A35; --tg-react-out:#2F5534;
+      --tg-name-1:#FF8A8F; --tg-name-2:#F0A060; --tg-name-3:#A897F0; --tg-name-4:#7CCB73;
+      --tg-name-5:#5FC9CC; --tg-name-6:#74B4EE; --tg-name-7:#EE87BD; --tg-dot:rgba(255,255,255,.05); --tg-dot-2:rgba(255,255,255,.035); --tg-dot-3:rgba(0,0,0,.18);}}
     /* ══════════ ЧАТ У СТИЛІ TELEGRAM ══════════
        Окремий блок і лише всередині #inbox-modal: решту порталу не чіпає.
        Кольори — світла тема Telegram: зелено-оливкове тло з візерунком,
        вхідні білі, власні світло-зелені, синій акцент. */
     #inbox-modal .chat-win{border-radius:14px;}
     #inbox-modal .chat-bar{padding:8px 10px;gap:8px;box-shadow:0 1px 2px rgba(16,35,47,.08);border-bottom:none;position:relative;z-index:1;}
-    #inbox-modal .chat-bar-title{font-size:1rem;font-weight:600;color:#000;}
+    #inbox-modal .chat-bar-title{font-size:1rem;font-weight:600;color:var(--tg-ink);}
     #inbox-modal .chat-bar-sub{color:var(--tg-muted);font-size:.8rem;}
     #inbox-modal .chat-icon{color:var(--tg-muted);}
     #inbox-modal .chat-icon:hover,#inbox-modal .chat-back:hover,#inbox-modal .chat-x:hover{background:var(--tg-hover);color:var(--tg-accent);}
@@ -1005,27 +1024,27 @@
     #inbox-modal .chat-scroll.list{padding:6px 0;}
     #inbox-modal .ch-row:hover{background:var(--tg-hover);}
     #inbox-modal .ch-av{width:54px;height:54px;font-size:1.05rem;font-weight:600;}
-    #inbox-modal .ch-name{font-size:.97rem;color:#000;}
+    #inbox-modal .ch-name{font-size:.97rem;color:var(--tg-ink);}
     #inbox-modal .ch-time{color:var(--tg-muted);font-size:.78rem;}
     #inbox-modal .ch-sub{color:var(--tg-muted);}
     #inbox-modal .ch-prev{color:var(--tg-muted);font-size:.9rem;margin-top:3px;}
-    #inbox-modal .ch-prev b{color:#000;font-weight:500;}
+    #inbox-modal .ch-prev b{color:var(--tg-ink);font-weight:500;}
     #inbox-modal .ch-badge{background:var(--tg-accent);min-width:22px;height:22px;border-radius:11px;font-size:.8rem;font-weight:600;}
     /* тло розмови */
     #inbox-modal .chat-scroll.msgs{
       background-color:var(--tg-bg);
       background-image:
-        radial-gradient(circle at 20% 30%,rgba(255,255,255,.35) 0 2px,transparent 3px),
-        radial-gradient(circle at 70% 80%,rgba(255,255,255,.25) 0 1.5px,transparent 2.5px),
-        radial-gradient(circle at 50% 50%,rgba(60,90,40,.07) 0 3px,transparent 4px),
+        radial-gradient(circle at 20% 30%,var(--tg-dot) 0 2px,transparent 3px),
+        radial-gradient(circle at 70% 80%,var(--tg-dot-2) 0 1.5px,transparent 2.5px),
+        radial-gradient(circle at 50% 50%,var(--tg-dot-3) 0 3px,transparent 4px),
         linear-gradient(160deg,var(--tg-bg-1) 0%,var(--tg-bg-2) 45%,var(--tg-bg-3) 100%);
       background-size:46px 46px,32px 32px,70px 70px,100% 100%;
       background-attachment:local;padding:6px 10px 10px;}
     /* бульбашки */
-    #inbox-modal .ms{max-width:80%;padding:6px 9px 6px 10px;font-size:.95rem;line-height:1.35;color:#000;border:none;
+    #inbox-modal .ms{max-width:80%;padding:6px 9px 6px 10px;font-size:.95rem;line-height:1.35;color:var(--tg-ink);border:none;
       box-shadow:0 1px 2px rgba(16,35,47,.15);margin-bottom:3px;border-radius:14px;}
     #inbox-modal .ms.they{background:var(--surface);border-radius:14px;}
-    #inbox-modal .ms.me{background:var(--tg-out);color:#000;border-radius:14px;}
+    #inbox-modal .ms.me{background:var(--tg-out);color:var(--tg-ink);border-radius:14px;}
     #inbox-modal .ms.last{margin-bottom:8px;}
     #inbox-modal .ms.last.they{border-bottom-left-radius:4px;}
     #inbox-modal .ms.last.me{border-bottom-right-radius:4px;}
@@ -1076,9 +1095,9 @@
     #inbox-modal .ms-react{width:auto;min-height:0;margin:0;padding:2px 8px 2px 6px;border:none;border-radius:14px;
       background:var(--tg-accent-soft);color:var(--tg-accent);font-size:.95rem;line-height:1.3;display:inline-flex;gap:4px;align-items:center;cursor:pointer;}
     #inbox-modal .ms-react span{font-size:.78rem;font-weight:600;}
-    #inbox-modal .ms-react.mine{background:var(--tg-accent);color:#fff;}
+    #inbox-modal .ms-react.mine{background:var(--tg-accent);color:var(--on-fill);}
     #inbox-modal .ms.me .ms-react{background:var(--tg-react-out);color:var(--tg-out-meta);}
-    #inbox-modal .ms.me .ms-react.mine{background:var(--tg-out-meta);color:#fff;}
+    #inbox-modal .ms.me .ms-react.mine{background:var(--tg-out-meta);color:var(--on-fill);}
     #inbox-modal .ms.big .ms-react{box-shadow:0 1px 2px rgba(16,35,47,.15);}
     /* кнопка ☺ збоку від повідомлення — лише там, де є наведення мишею */
     #inbox-modal .ms-react-btn{position:absolute;top:50%;transform:translateY(-50%);width:28px;height:28px;min-height:0;margin:0;padding:0;
@@ -1131,7 +1150,7 @@
     .nw-tag{font-size:.75rem;font-weight:700;padding:2px 8px;border-radius:20px;text-transform:uppercase;letter-spacing:.02em;}
     .nw-tag.school{background:var(--brand-soft);color:var(--brand-ink);}
     .nw-tag.cls{background:var(--brand-soft);color:var(--brand-deep);}
-    .nw-tag.imp{background:var(--danger);color:#fff;}
+    .nw-tag.imp{background:var(--danger);color:var(--on-fill);}
     .nw-dot{width:7px;height:7px;border-radius:50%;background:var(--brand-ink);}
     .nw-time{margin-left:auto;font-size:.75rem;color:var(--ink-3);}
     .nw-title{margin:0 0 5px 0;font-size:.95rem;color:var(--ink);font-weight:700;}
@@ -1349,7 +1368,7 @@
     /* Рівень у редакторі оцінки (1–5 класи) */
     .level-btns{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px;}
     .level-btn{width:auto;margin-top:0;flex:0 0 auto;padding:9px 14px;border:1px solid var(--line);background:var(--surface);color:var(--ink-2);border-radius:9px;font-weight:800;font-size:.95rem;cursor:pointer;}
-    .level-btn.active{background:var(--brand-ink);border-color:var(--brand-ink);color:#fff;}
+    .level-btn.active{background:var(--brand-ink);border-color:var(--brand-ink);color:var(--on-fill);}
     .gep-hint{width:100%;font-size:.75rem;color:var(--ink-3);margin:0 0 3px 0;font-weight:600;}
     /* Що збережено на цю дату — відповідь на питання «чи записалася тема» */
     .topic-saved{margin-top:10px;padding:9px 12px;border-radius:10px;font-size:.82rem;background:var(--ok-soft);color:var(--ok);line-height:1.5;}
@@ -1447,7 +1466,7 @@
     .gm-q{font-size:2.1rem;font-weight:800;color:var(--ink);text-align:center;padding:22px 0 18px;letter-spacing:.02em;}
     .gm-form{display:flex;gap:8px;}
     .gm-form input{flex:1;min-width:0;margin:0;font-size:1.4rem;font-weight:700;text-align:center;padding:11px;border:2px solid var(--line);border-radius:11px;}
-    .gm-form button{width:auto;margin:0;padding:11px 18px;background:var(--brand-deep);color:#fff;border:none;border-radius:11px;font-weight:700;cursor:pointer;}
+    .gm-form button{width:auto;margin:0;padding:11px 18px;background:var(--brand-deep);color:var(--on-fill);border:none;border-radius:11px;font-weight:700;cursor:pointer;}
     .gm-opts{display:grid;grid-template-columns:repeat(2,1fr);gap:9px;}
     .gm-opt{margin:0;padding:14px;font-size:1.1rem;font-weight:700;background:var(--brand-soft);color:var(--brand-deep);border:1px solid var(--line);border-radius:11px;cursor:pointer;}
     .gm-opt:hover{background:var(--brand-soft);}
@@ -1466,7 +1485,7 @@
     .gm-wrong b{width:100%;font-size:.78rem;color:var(--warn);font-weight:700;}
     .gm-wrong span{font-size:.85rem;font-weight:700;color:var(--ink);background:var(--surface);border-radius:7px;padding:4px 9px;}
     .gm-again{display:flex;gap:9px;}
-    .gm-again button{flex:1;margin:0;padding:12px;background:var(--brand-deep);color:#fff;border:none;border-radius:11px;font-weight:700;cursor:pointer;}
+    .gm-again button{flex:1;margin:0;padding:12px;background:var(--brand-deep);color:var(--on-fill);border:none;border-radius:11px;font-weight:700;cursor:pointer;}
     .gm-again .gm-ghost{background:var(--line-soft);color:var(--ink);}
     /* Вкладка «Домашні»: навігація по тижнях */
     .hw-nav{display:flex;align-items:center;gap:10px;margin-bottom:12px;}
@@ -1511,7 +1530,7 @@
     .si-nomail{color:var(--ink-3);font-style:italic;}
     .si-new{color:var(--ok);font-weight:700;}
     .si-old{color:var(--ink-3);}
-    .si-apply{margin-top:12px;background:var(--brand-deep);color:#fff;}
+    .si-apply{margin-top:12px;background:var(--brand-deep);color:var(--on-fill);}
     .si-apply:disabled{opacity:.45;cursor:default;}
     .si-hint{font-size:.75rem;color:var(--ink-3);margin-top:7px;line-height:1.5;}
     /* Клітинка обліку як кнопка — кухня дописує порцію після дедлайну */
@@ -1524,7 +1543,7 @@
     .k-ta-add>b{display:block;font-size:.84rem;color:var(--warn);margin-bottom:7px;}
     .k-ta-add-row{display:flex;gap:7px;flex-wrap:wrap;align-items:center;}
     .k-ta-add-row select{margin-top:0;flex:1;min-width:120px;}
-    .k-ta-add-btn{margin-top:0;width:auto;background:var(--warn);color:#fff;border:none;border-radius:9px;padding:10px 16px;font-weight:700;cursor:pointer;}
+    .k-ta-add-btn{margin-top:0;width:auto;background:var(--warn);color:var(--on-fill);border:none;border-radius:9px;padding:10px 16px;font-weight:700;cursor:pointer;}
     .k-ta-note{display:block;margin-top:7px;font-size:.75rem;color:var(--ink-3);}
     .k-cell-btn{background:none;border:1px dashed transparent;border-radius:7px;padding:2px 8px;margin:0;width:auto;cursor:pointer;font-size:inherit;}
     .k-cell-btn:hover{border-color:var(--brand-line);background:var(--brand-soft);}
@@ -1538,7 +1557,7 @@
     .pm-tab span{display:block;font-size:.75rem;color:var(--ink-3);text-transform:uppercase;}
     .pm-tab b{display:block;font-size:.75rem;color:var(--brand-ink);}
     .pm-tab.on{background:var(--brand-ink);border-color:var(--brand-ink);}
-    .pm-tab.on span,.pm-tab.on b{color:#fff;}
+    .pm-tab.on span,.pm-tab.on b{color:var(--on-fill);}
     .pm-tab.empty{opacity:.45;}
     .k-week-hint{display:block;font-size:.75rem;color:var(--brand);font-weight:600;text-transform:uppercase;letter-spacing:.03em;}
     .pm-title{font-size:.9rem;font-weight:800;color:var(--brand-ink);margin-bottom:7px;}
@@ -1556,7 +1575,7 @@
     .pm-btn.back{border-color:var(--ok-line);color:var(--ok);}
     .pm-btn.snack{border-color:var(--brand-deep);color:var(--brand-deep);}
     /* Разовий обід у дитини, яка зазвичай не обідає — головна дія дня */
-    .pm-btn.once{background:var(--ok);border-color:var(--ok);color:#fff;font-weight:700;}
+    .pm-btn.once{background:var(--ok);border-color:var(--ok);color:var(--on-fill);font-weight:700;}
     .pm-locked{font-size:.77rem;color:var(--ink-2);background:var(--warn-soft);border:1px solid var(--warn-line);border-radius:8px;padding:7px 10px;line-height:1.4;}
     .pm-links{margin-top:11px;display:flex;gap:14px;flex-wrap:wrap;}
     .pm-links a{font-size:.76rem;color:var(--brand-ink);text-decoration:none;font-weight:700;}
@@ -1655,12 +1674,12 @@
              border-radius:5px;padding:4px 8px;margin-bottom:8px;line-height:1.45;}
     .ko-menu b{color:var(--brand-ink);}
     .ko-table{width:100%;border-collapse:collapse;font-size:11.5px;font-variant-numeric:tabular-nums;}
-    .ko-table th{background:var(--brand-deep);color:#fff;border:1px solid var(--brand-deep);
+    .ko-table th{background:var(--brand-deep);color:var(--on-fill);border:1px solid var(--brand-deep);
                  padding:3px 4px;font-weight:800;font-size:10.5px;text-align:center;}
     .ko-table td{border:1px solid var(--line);padding:2.5px 4px;text-align:center;height:auto;}
     .ko-table tbody tr:nth-child(even) td{background:var(--surface-2);}
     .ko-table td.ko-num{width:22px;color:var(--ink-3);font-weight:700;}
-    .ko-table th.ko-num,.ko-table th.ko-name,.ko-table th.ko-note{color:#fff;}
+    .ko-table th.ko-num,.ko-table th.ko-name,.ko-table th.ko-note{color:var(--on-fill);}
     .ko-table .ko-name{text-align:left;font-weight:700;white-space:nowrap;}
     .ko-table td.ko-note{text-align:left;font-size:10px;color:var(--ink-2);}
     .ko-table th.ko-name,.ko-table th.ko-note{text-align:left;}
@@ -1694,7 +1713,7 @@
     .k-ord tr.k-ord-clsrow b{font-size:.86rem;color:var(--brand-deep);}
     /* Друк: колонка класу і роздільник */
     .ko-table td.ko-cl,.ko-table th.ko-cl{width:30px;font-weight:800;color:var(--brand-ink);}
-    .ko-table th.ko-cl{color:#fff;}
+    .ko-table th.ko-cl{color:var(--on-fill);}
     .ko-table tr.ko-clsrow td{background:var(--brand-soft)!important;color:var(--brand-ink);
       text-align:left;font-size:10.5px;padding:3px 6px;border-top:2px solid var(--brand);}
     .ko-table tr.ko-clsrow b{font-size:12px;color:var(--brand-deep);}
@@ -1708,7 +1727,7 @@
     /* Кнопки під списком замовлень */
     .k-ord-actions{display:flex;gap:9px;margin-top:11px;}
     .k-ord-actions.k-ord-top{margin:8px 0 4px;}
-    .k-ord-print{flex:2;background:var(--brand-deep);color:#fff;margin:0;}
+    .k-ord-print{flex:2;background:var(--brand-deep);color:var(--on-fill);margin:0;}
     .k-ord-pdf{flex:1;background:var(--surface);color:var(--brand-ink);border:1px solid var(--brand-line);margin:0;}
     .k-ord-csv{flex:1;background:var(--surface);color:var(--brand-ink);border:1px solid var(--brand-line);margin:0;}
     @media(max-width:520px){ .k-ord-actions{flex-wrap:wrap;} .k-ord-print{flex:1 0 100%;} }
@@ -1835,7 +1854,7 @@
     .pc-deadline{font-size:.75rem;color:var(--ink-3);margin-top:5px;}
     .pc-btns{display:flex;gap:8px;margin-top:10px;}
     .pc-yes,.pc-no{flex:1;margin:0;padding:10px;font-size:.85rem;font-weight:700;border:none;border-radius:9px;cursor:pointer;}
-    .pc-yes{background:var(--ok);color:#fff;}
+    .pc-yes{background:var(--ok);color:var(--on-fill);}
     .pc-no{background:var(--surface);color:var(--danger);border:1px solid var(--danger-line);}
     .pc-done{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:.83rem;font-weight:700;color:var(--ok);flex-wrap:wrap;}
     .pc-when{font-size:.75rem;color:var(--ink-3);font-weight:400;}
@@ -1911,7 +1930,7 @@
     .fin-title{font-size:.82rem;font-weight:800;color:var(--brand-ink);margin-bottom:6px;}
     .fin-row{display:flex;justify-content:space-between;align-items:center;gap:9px;padding:3px 0;font-size:.85rem;}
     #btn-hw-copy{width:auto;margin:0;padding:8px 14px;font-size:.82rem;font-weight:700;border:none;border-radius:9px;cursor:pointer;background:var(--brand-soft);color:var(--brand-deep);border:1px solid var(--brand-line);}
-    #btn-hw-copy:hover{background:var(--brand-deep);color:#fff;}
+    #btn-hw-copy:hover{background:var(--brand-deep);color:var(--on-fill);}
     .hw-copy-opt{display:flex;align-items:center;gap:8px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;margin-bottom:5px;font-size:.86rem;cursor:pointer;}
     .hw-copy-opt:hover{background:var(--surface-2);border-color:var(--brand-line);}
     .hw-copy-opt input[type=checkbox]{width:20px;height:20px;min-width:20px;margin:0;cursor:pointer;accent-color:var(--brand-ink);}
@@ -1924,7 +1943,7 @@
     .ai-hw-msg.err{background:var(--danger-soft);color:var(--danger);border-color:var(--danger-line);}
     /* Блоки AI у кабінетах батьків та учня */
     .ai-help-box{margin-top:11px;border-top:1px dashed var(--line);padding-top:10px;}
-    #btn-ai-parent,#btn-ai-student,#btn-ai-ann{width:auto;margin:0;padding:8px 14px;font-size:.82rem;font-weight:700;border:none;border-radius:9px;cursor:pointer;background:linear-gradient(135deg,var(--brand-deep),var(--brand-deep));color:#fff;white-space:nowrap;}
+    #btn-ai-parent,#btn-ai-student,#btn-ai-ann{width:auto;margin:0;padding:8px 14px;font-size:.82rem;font-weight:700;border:none;border-radius:9px;cursor:pointer;background:linear-gradient(135deg,var(--brand-deep),var(--brand-deep));color:var(--on-fill);white-space:nowrap;}
     #btn-ai-parent:disabled,#btn-ai-student:disabled,#btn-ai-ann:disabled{opacity:.6;cursor:wait;}
     .ai-out{margin-top:9px;background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--brand-deep);border-radius:9px;padding:11px 13px;font-size:.85rem;line-height:1.55;color:var(--ink);white-space:pre-wrap;}
     /* ── БАТЬКИ УЧНІВ (зріз для директора) ── */
@@ -1953,7 +1972,7 @@
     .po-login.none{color:var(--warn);background:var(--warn-soft);border-color:var(--warn-line);}
     .po-del{background:var(--danger-soft)!important;border-color:var(--danger-line)!important;}
     .po-del:hover{background:var(--danger)!important;}
-    .ds-ok{width:auto;margin:0;padding:2px 9px;font-size:.75rem;background:var(--brand-deep);color:#fff;border:none;border-radius:7px;cursor:pointer;}
+    .ds-ok{width:auto;margin:0;padding:2px 9px;font-size:.75rem;background:var(--brand-deep);color:var(--on-fill);border:none;border-radius:7px;cursor:pointer;}
         /* МІНІМАЛЬНА ШИРИНА НУЛЬ — інакше колонка не стискається.
        Елемент flex за замовчуванням не може стати вужчим за свій вміст, а
        вміст тут — пошта без жодного пробілу (dhavrylenko@gmail.com). Колонка
@@ -2009,7 +2028,7 @@
     /* ── Перемикач сповіщень ── */
     .push-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
     .push-label{flex:1;font-size:.85rem;font-weight:600;color:var(--ink-2);}
-    .push-btn{width:auto;margin:0;padding:10px 14px;font-size:.8rem;font-weight:700;border:none;border-radius:9px;cursor:pointer;background:var(--brand-deep);color:#fff;}
+    .push-btn{width:auto;margin:0;padding:10px 14px;font-size:.8rem;font-weight:700;border:none;border-radius:9px;cursor:pointer;background:var(--brand-deep);color:var(--on-fill);}
     .push-hint{font-size:.75rem;color:var(--ink-3);flex:1 1 100%;}
     .pe-section{margin-top:16px;border-top:1px dashed var(--line);padding-top:11px;}
     .pe-section b{font-size:.84rem;color:var(--brand-deep);}
@@ -2017,24 +2036,24 @@
     .pe-kid-name{flex:1;min-width:0;overflow-wrap:anywhere;font-size:.82rem;font-weight:600;color:var(--ink);}
     .pe-kid select{width:auto;flex:0 0 128px;margin:0;padding:5px 7px;font-size:.76rem;}
     .pe-unlink{width:auto;flex-shrink:0;margin:0;padding:5px 9px;font-size:.78rem;background:var(--danger-soft);color:var(--danger);border:1px solid var(--danger-line);border-radius:7px;cursor:pointer;}
-    .pe-unlink:hover{background:var(--brand-deep);color:#fff;}
+    .pe-unlink:hover{background:var(--brand-deep);color:var(--on-fill);}
     /* ── СПИСОК УЧНІВ У ДИРЕКТОРА ── */
     .ds-row{display:flex;align-items:center;gap:9px;padding:6px 8px;background:var(--surface);border:1px solid var(--line);border-radius:8px;margin-bottom:4px;font-size:.85rem;}
     .ds-num{width:22px;text-align:center;color:var(--ink-3);font-size:.75rem;flex-shrink:0;}
     .ds-name{flex:1;font-weight:600;color:var(--ink);word-break:break-word;}
     .ds-edit{width:auto;flex-shrink:0;margin:0;padding:6px 9px;font-size:.8rem;background:var(--warn-soft);border:1px solid var(--warn-line);border-radius:8px;cursor:pointer;}
     .ds-edit:hover{background:var(--warn-line);}
-    .ds-ok{width:auto;flex-shrink:0;margin:0;padding:6px 11px;font-size:.8rem;background:var(--brand-deep);color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:700;}
+    .ds-ok{width:auto;flex-shrink:0;margin:0;padding:6px 11px;font-size:.8rem;background:var(--brand-deep);color:var(--on-fill);border:none;border-radius:8px;cursor:pointer;font-weight:700;}
     .staff-actions{display:flex;flex-direction:column;gap:4px;flex-shrink:0;}
     .staff-reset{width:auto;margin:0;padding:6px 11px;font-size:.75rem;background:var(--brand-soft);color:var(--brand-deep);border:1px solid var(--brand-line);border-radius:8px;cursor:pointer;font-weight:700;white-space:nowrap;}
-    .staff-reset:hover{background:var(--brand-deep);color:#fff;}
+    .staff-reset:hover{background:var(--brand-deep);color:var(--on-fill);}
     .staff-del{width:auto;flex-shrink:0;margin:0;padding:6px 11px;font-size:.75rem;background:var(--danger-soft);color:var(--danger);border:1px solid var(--danger-line);border-radius:8px;cursor:pointer;font-weight:700;white-space:nowrap;}
-    .staff-del:hover{background:var(--brand-deep);color:#fff;}
+    .staff-del:hover{background:var(--brand-deep);color:var(--on-fill);}
     .skill-tag.remove{display:inline-flex;align-items:center;min-height:36px;cursor:pointer;background:var(--danger-soft);color:var(--danger);border-color:var(--danger-line);}
-    .skill-tag.remove:hover{background:var(--brand-deep);color:#fff;}
+    .skill-tag.remove:hover{background:var(--brand-deep);color:var(--on-fill);}
     /* ── RETAKE ── */
     .retake-btn{width:auto;padding:4px 10px;margin:0;font-size:var(--text-xs);background:var(--warn-soft);color:var(--warn);border:1px solid var(--warn-line);border-radius:var(--badge-radius);cursor:pointer;font-weight:700;}
-    .retake-btn:hover{background:var(--warn);color:#fff;}
+    .retake-btn:hover{background:var(--warn);color:var(--on-fill);}
     .retake-btn:disabled{opacity:.4;cursor:not-allowed;}
     /* ── CURRICULUM ── */
     .topic-row{display:flex;align-items:center;gap:8px;padding:6px;border-bottom:1px dashed var(--line-soft);font-size:.85rem;}
@@ -2161,7 +2180,7 @@
     .cell-time{font-size:.75rem;color:var(--ink-3);margin-top:auto;text-align:right;background:var(--surface-glass);padding:2px 4px;border-radius:4px;display:inline-block;align-self:flex-end;}
     .cell-student-linked{font-size:.75rem;color:var(--brand-deep);background:var(--brand-soft);padding:2px 6px;border-radius:4px;font-weight:800;margin-top:4px;border:1px solid var(--line);}
     .add-parallel-btn{display:flex;align-items:center;justify-content:center;min-height:var(--touch-target);font-size:.8125rem;color:var(--brand-deep);text-align:center;cursor:pointer;padding:8px;border:1px dashed var(--brand-deep);border-radius:6px;background:var(--surface-2);transition:.2s;margin-top:auto;}
-    .add-parallel-btn:hover{background:var(--brand-deep);color:#fff;}
+    .add-parallel-btn:hover{background:var(--brand-deep);color:var(--on-fill);}
     .cell-warning-travel{border:2px solid var(--warn)!important;box-shadow:inset 0 0 10px rgba(230,126,34,.3);}
     .cell-warning-conflict{border:2px solid var(--danger)!important;box-shadow:inset 0 0 10px rgba(231,76,60,.3);background-color:var(--danger-soft)!important;}
     /* ── Спільний план предмета ──
@@ -2176,7 +2195,7 @@
     .ca-edit select{margin:0;font-size:.85rem;}
     .ca-actions{display:flex;gap:7px;margin-top:8px;}
     .ca-ok,.ca-no{width:auto;margin:0;padding:6px 14px;font-size:.78rem;font-weight:700;border:none;border-radius:8px;cursor:pointer;}
-    .ca-ok{background:var(--brand-deep);color:#fff;}
+    .ca-ok{background:var(--brand-deep);color:var(--on-fill);}
     .ca-no{background:var(--line-soft);color:var(--ink-2);}
     .ca-note{margin-top:7px;color:var(--ink-3);line-height:1.45;font-size:.75rem;}
     /* Погодження накладок. Кнопка навмисно скромна: вона стоїть у кожному
@@ -2190,10 +2209,10 @@
     .qa-row{display:flex;gap:8px;margin:12px 0;flex-wrap:wrap;}
     .qa-btn{flex:1;min-width:130px;padding:var(--space-3) var(--space-2);border-radius:11px;border:none;cursor:pointer;font-weight:700;font-size:var(--text-sm);display:flex;align-items:center;justify-content:center;gap:6px;transition:.2s;margin:0;}
     .qa-btn:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,0,0,.15);}
-    .qa-grades{background:linear-gradient(135deg,var(--brand-deep),var(--brand-deep));color:#fff;}
+    .qa-grades{background:linear-gradient(135deg,var(--brand-deep),var(--brand-deep));color:var(--on-fill);}
     .qa-save{background:linear-gradient(135deg,var(--ok-line),var(--brand-line));color:var(--ink);}
-    .qa-exams{background:var(--warn);color:#fff;}
-    .qa-journal{background:linear-gradient(135deg,var(--brand-deep),var(--brand-deep));color:#fff;}
+    .qa-exams{background:var(--warn);color:var(--on-fill);}
+    .qa-journal{background:linear-gradient(135deg,var(--brand-deep),var(--brand-deep));color:var(--on-fill);}
     /* grade legend */
     .grade-legend{display:flex;gap:5px;flex-wrap:wrap;font-size:.75rem;margin:6px 0;}
     .grade-legend span{padding:2px 7px;border-radius:6px;font-weight:700;}
@@ -2211,7 +2230,7 @@
        і смуга як звичайний елемент ставала колонкою ліворуч замість того,
        щоб лягти на всю ширину. Фіксоване позиціювання не залежить від
        розкладки батька. */
-    #master-mode-banner{position:fixed;top:0;left:0;right:0;z-index:1200;background:repeating-linear-gradient(45deg,var(--danger),var(--danger) 12px,var(--danger) 12px,var(--danger) 24px);color:#fff;font-size:.78rem;font-weight:800;text-align:center;padding:7px 12px;letter-spacing:.02em;box-shadow:0 2px 8px rgba(0,0,0,.25);}
+    #master-mode-banner{position:fixed;top:0;left:0;right:0;z-index:1200;background:repeating-linear-gradient(45deg,var(--danger),var(--danger) 12px,var(--danger) 12px,var(--danger) 24px);color:var(--on-fill);font-size:.78rem;font-weight:800;text-align:center;padding:7px 12px;letter-spacing:.02em;box-shadow:0 2px 8px rgba(0,0,0,.25);}
     #master-mode-banner span{display:block;font-weight:400;font-size:.75rem;opacity:.9;}
     /* Запасний відступ на випадок, якщо скрипт не встиг поміряти смугу.
        Точне значення виставляє renderMasterBanner() за реальною висотою. */
@@ -2224,7 +2243,7 @@
     .bk-when span{display:block;font-weight:400;font-size:.75rem;color:var(--ink-3);}
     .bk-row input{flex:1;margin:0;font-size:.8rem;padding:7px 9px;}
     .bk-hint{font-size:.75rem;color:var(--brand-deep);margin-top:6px;}
-    .bk-apply{width:100%;margin-top:11px;padding:11px;background:var(--brand-deep);color:#fff;font-size:.84rem;}
+    .bk-apply{width:100%;margin-top:11px;padding:11px;background:var(--brand-deep);color:var(--on-fill);font-size:.84rem;}
     .bk-copy{width:100%;margin-top:7px;padding:10px;background:var(--surface);color:var(--brand-deep);border:1px solid var(--brand-deep);font-size:.82rem;}
     .bk-warn{background:var(--warn-soft);border-left:3px solid var(--warn);color:var(--warn);padding:9px 11px;border-radius:0 8px 8px 0;font-size:.77rem;margin-top:9px;line-height:1.45;}
     .bk-warn.small{font-size:.75rem;}
@@ -2233,7 +2252,7 @@
     .bk-copy-classes{display:flex;flex-wrap:wrap;gap:7px;}
     .bk-copy-classes label{display:flex;align-items:center;gap:5px;font-size:.78rem;color:var(--ink);background:var(--surface-2);padding:5px 9px;border-radius:7px;cursor:pointer;}
     .bk-copy-classes input{width:18px;height:18px;margin:0;}
-    .bk-copy-box>button{width:100%;margin-top:9px;padding:9px;background:var(--brand-deep);color:#fff;font-size:.8rem;}
+    .bk-copy-box>button{width:100%;margin-top:9px;padding:9px;background:var(--brand-deep);color:var(--on-fill);font-size:.8rem;}
     #bk-log:not(:empty){margin-top:11px;background:var(--ink);border-radius:9px;padding:9px 11px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.75rem;line-height:1.55;color:var(--ink-3);overflow-x:auto;}
     .bk-log-title{color:var(--ink-3);font-weight:700;margin-bottom:4px;}
     .bk-log-line.ok{color:var(--ok-line);}
@@ -2244,7 +2263,7 @@
     .row-tools-btns{display:flex;gap:6px;flex-wrap:wrap;}
     .row-tools-btns button{width:auto;margin:0;flex:1;min-width:120px;padding:8px 6px;font-size:.75rem;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:8px;}
     .row-tools-btns button:hover{background:var(--line-soft);}
-    .row-tools-auto{width:100%;margin-top:6px;padding:9px;font-size:.76rem;background:var(--ink-2);color:#fff;border:none;border-radius:8px;}
+    .row-tools-auto{width:100%;margin-top:6px;padding:9px;font-size:.76rem;background:var(--ink-2);color:var(--on-fill);border:none;border-radius:8px;}
     /* Предмети класу та перейменування */
     .sc-list{margin-top:11px;background:var(--surface);border-radius:10px;border:1px solid var(--accent-soft);overflow:hidden;}
     .sc-item{display:flex;align-items:center;gap:8px;padding:8px 11px;border-bottom:1px solid var(--line-soft);font-size:.82rem;}
@@ -2255,9 +2274,9 @@
     .sc-item button:hover{color:var(--danger);}
     .sc-add{display:flex;gap:7px;margin-top:9px;}
     .sc-add input{flex:1;margin:0;font-size:.84rem;}
-    .sc-add button{width:auto;margin:0;padding:9px 14px;background:var(--accent-ink);color:#fff;font-size:.82rem;}
+    .sc-add button{width:auto;margin:0;padding:9px 14px;background:var(--accent-ink);color:var(--on-fill);font-size:.82rem;}
     .sc-add-hint{margin-top:9px;font-size:.75rem;color:var(--brand-deep);background:var(--brand-soft);padding:9px 11px;border-radius:9px;}
-    .sc-add-hint button{width:auto;margin:6px 0 0;padding:5px 11px;background:var(--brand-deep);color:#fff;font-size:.75rem;display:block;}
+    .sc-add-hint button{width:auto;margin:6px 0 0;padding:5px 11px;background:var(--brand-deep);color:var(--on-fill);font-size:.75rem;display:block;}
     .sc-item{display:flex;align-items:center;gap:8px;padding:8px 11px;border-bottom:1px solid var(--line-soft);}
     .sc-name{flex:1;min-width:0;font-size:.82rem;color:var(--brand-deep);font-weight:600;}
     .sc-name i{display:block;font-style:normal;font-size:.75rem;color:var(--warn);font-weight:400;}
@@ -2281,7 +2300,7 @@
     .alt-when span{display:block;font-weight:400;font-size:.75rem;color:var(--ink-3);}
     .alt-opts{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center;}
     .alt-opt{margin:0;padding:7px 11px;font-size:.76rem;background:var(--surface-2);color:var(--ink-2);border:1px solid var(--line);border-radius:8px;width:auto;}
-    .alt-opt.on{background:var(--brand-deep);color:#fff;border-color:var(--brand-deep);font-weight:700;}
+    .alt-opt.on{background:var(--brand-deep);color:var(--on-fill);border-color:var(--brand-deep);font-weight:700;}
     .alt-opt:disabled{opacity:.55;cursor:not-allowed;}
     .alt-clear{margin:0;padding:7px 10px;font-size:.8rem;background:var(--surface);color:var(--ink-3);border:1px solid var(--line);border-radius:8px;width:auto;}
     .alt-none{font-size:.75rem;color:var(--warn);margin-top:5px;}
@@ -2293,7 +2312,7 @@
     .ch-cur.ch-none{color:var(--ink-3);}
     .ch-row{display:flex;gap:7px;flex-wrap:wrap;align-items:center;}
     .ch-row select{margin-top:0;flex:1;min-width:120px;}
-    .ch-save{margin-top:0;background:var(--ok);color:#fff;border:none;border-radius:9px;padding:10px 14px;font-weight:700;font-size:.82rem;cursor:pointer;width:auto;}
+    .ch-save{margin-top:0;background:var(--ok);color:var(--on-fill);border:none;border-radius:9px;padding:10px 14px;font-weight:700;font-size:.82rem;cursor:pointer;width:auto;}
     .ch-clear{margin-top:0;background:var(--line-soft);color:var(--ink-3);border:none;border-radius:9px;padding:10px 12px;font-weight:800;cursor:pointer;width:auto;}
     .ch-full{font-size:.76rem;color:var(--warn);}
     /* Класна година в розкладі родини — щоб не плуталася з уроком */
@@ -2306,7 +2325,7 @@
     /* Групи всередині вкладки «Урок». Раніше тринадцять блоків ішли
        суцільним списком, і знайти потрібний можна було лише перебором. */
     .lg-head{display:flex;align-items:center;gap:9px;margin:20px 0 9px 0;font-size:.82rem;font-weight:800;color:var(--ink-2);text-transform:uppercase;letter-spacing:.03em;border-bottom:2px solid var(--line-soft);padding-bottom:6px;}
-    .lg-head span{flex:none;width:22px;height:22px;border-radius:50%;background:var(--ink-2);color:#fff;font-size:.75rem;display:flex;align-items:center;justify-content:center;}
+    .lg-head span{flex:none;width:22px;height:22px;border-radius:50%;background:var(--ink-2);color:var(--on-fill);font-size:.75rem;display:flex;align-items:center;justify-content:center;}
     /* ── Швидкі дії: одна сітка замість трьох рядів ──
        Раніше це були три окремі ряди з різними відступами: у першого
        не було нижнього поля, у другого 14px, у третього верхнє 9px.
@@ -2316,11 +2335,11 @@
     .qa-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:var(--space-2);margin-bottom:var(--space-2);}
     .qa-grid:last-of-type{margin-bottom:0;}
     .qa-btn{min-width:0;min-height:var(--touch-target);white-space:normal;line-height:1.35;}
-    .qa-ungraded{background:var(--warn);color:#fff;}
-    .qa-quick{background:var(--brand-deep);color:#fff;}
-    .qa-broadcast{background:linear-gradient(135deg,var(--brand-deep),var(--brand-deep));color:#fff;}
+    .qa-ungraded{background:var(--warn);color:var(--on-fill);}
+    .qa-quick{background:var(--brand-deep);color:var(--on-fill);}
+    .qa-broadcast{background:linear-gradient(135deg,var(--brand-deep),var(--brand-deep));color:var(--on-fill);}
     .qa-print{background:var(--line-soft);color:var(--ink);}
-    .qa-matrix{background:var(--brand-deep);color:#fff;}
+    .qa-matrix{background:var(--brand-deep);color:var(--on-fill);}
     @media (max-width:520px){
       .qa-grid{grid-template-columns:1fr;}
     }
@@ -2329,7 +2348,7 @@
     .sg-box label{display:block;font-size:.78rem;font-weight:700;color:var(--warn);margin-bottom:6px;}
     .sg-row{display:flex;gap:7px;}
     .sg-row input{flex:1;margin:0;font-size:.9rem;}
-    .sg-row button{width:auto;margin:0;padding:9px 15px;background:var(--warn);color:#fff;font-size:.82rem;}
+    .sg-row button{width:auto;margin:0;padding:9px 15px;background:var(--warn);color:var(--on-fill);font-size:.82rem;}
     .sg-note{font-size:.75rem;color:var(--ink-2);margin-top:6px;line-height:1.4;}
     .sg-stats-list{list-style:none;padding:0;margin:0;}
     .sg-student{background:var(--surface-2);border:1px solid var(--line-soft);border-radius:8px;padding:11px;margin-bottom:9px;}
@@ -2356,7 +2375,7 @@
     .sg-remove-panel[hidden]{display:none;}
     .sg-remove-panel label{display:grid;gap:4px;font-size:.75rem;font-weight:700;color:var(--ink-2);}
     .sg-remove-panel select,.sg-remove-panel input{width:100%;margin:0;font-size:.8rem;}
-    .sg-remove-panel .sg-remove-actions button:first-child{background:var(--danger);border-color:var(--danger);color:#fff;}
+    .sg-remove-panel .sg-remove-actions button:first-child{background:var(--danger);border-color:var(--danger);color:var(--on-fill);}
     .sg-empty{font-size:.78rem;color:var(--ink-3);margin:10px 0 2px;}
     /* Уроки, що чергуються */
     .alt-badge{display:inline-block;background:var(--brand-soft);color:var(--brand-deep);border-radius:6px;padding:1px 6px;font-size:.75rem;font-weight:700;vertical-align:middle;margin-left:5px;}
@@ -2377,11 +2396,11 @@
     .si-num{white-space:nowrap;font-weight:700;color:var(--brand-deep);}
     .si-num span{display:block;font-weight:400;font-size:.75rem;color:var(--ink-3);}
     .si-warn{background:var(--warn-soft);border-left:3px solid var(--warn);color:var(--warn);padding:8px 10px;border-radius:0 8px 8px 0;font-size:.76rem;margin-top:8px;line-height:1.4;}
-    #si-save{background:var(--brand-deep);color:#fff;padding:11px;margin-top:11px;}
+    #si-save{background:var(--brand-deep);color:var(--on-fill);padding:11px;margin-top:11px;}
     #si-save:disabled{background:var(--line);color:var(--ink-3);cursor:not-allowed;}
     /* Розшифровка лічильника ДЗ у директора */
     .hwb-cls{display:flex;justify-content:space-between;align-items:center;background:var(--brand-soft);color:var(--brand-ink);padding:6px 10px;border-radius:8px;margin:10px 0 6px;font-size:.83rem;}
-    .hwb-cls span{background:var(--brand-ink);color:#fff;border-radius:10px;padding:1px 8px;font-size:.75rem;}
+    .hwb-cls span{background:var(--brand-ink);color:var(--on-fill);border-radius:10px;padding:1px 8px;font-size:.75rem;}
     .hwb-row{border-bottom:1px solid var(--line-soft);padding:6px 4px;}
     .hwb-row:last-child{border-bottom:none;}
     .hwb-subj{font-weight:700;font-size:.82rem;color:var(--ink);}
@@ -2403,10 +2422,10 @@
     .ta-edit{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 9px 0;padding:9px 11px;background:var(--surface-2);border:1px solid var(--warn-line);border-radius:9px;}
     .ta-edit input{margin-top:0;flex:1;min-width:110px;font-size:.82rem;}
     .ta-edit-btns{display:flex;gap:6px;width:100%;}
-    .ta-mini.save{background:var(--warn);color:#fff;border-color:var(--warn);}
+    .ta-mini.save{background:var(--warn);color:var(--on-fill);border-color:var(--warn);}
     /* Перемикач варіанта А/Б у кухні */
     .k-ab-btn{width:36px;height:36px;min-height:36px;padding:0;margin:0 2px 0 0;border:1px solid var(--line);background:var(--surface);color:var(--ink-3);border-radius:7px;font-weight:800;font-size:.76rem;cursor:pointer;line-height:1;}
-    .k-ab-btn.on{color:#fff;border-color:transparent;}
+    .k-ab-btn.on{color:var(--on-fill);border-color:transparent;}
     .k-ab-btn.on.a{background:var(--brand-deep);}
     .k-ab-btn.on.b{background:var(--brand);color:var(--ink);}
     /* Записи, що не звелися з учнями — це втрачені відповіді батьків */
@@ -2430,8 +2449,8 @@
     .act-choice{display:flex;gap:8px;flex-wrap:wrap;}
     .act-choice button{flex:1;min-width:130px;margin:0;padding:11px 12px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink);border-radius:10px;font-size:.85rem;font-weight:700;cursor:pointer;}
     .act-choice button:hover{border-color:var(--brand-deep);color:var(--brand-deep);background:var(--surface-2);}
-    .act-opt.on{background:var(--brand-deep);border-color:var(--brand-deep);color:#fff;}
-    .act-opt.on:hover{background:var(--brand-deep);color:#fff;}
+    .act-opt.on{background:var(--brand-deep);border-color:var(--brand-deep);color:var(--on-fill);}
+    .act-opt.on:hover{background:var(--brand-deep);color:var(--on-fill);}
     .act-more{margin-top:11px;border-top:1px dashed var(--brand-line);padding-top:9px;}
     .act-more>summary{cursor:pointer;font-size:.82rem;color:var(--brand-deep);font-weight:700;}
     .act-set{margin-top:11px;}
@@ -2460,11 +2479,11 @@
     .act-h{margin:11px 0 5px 0;font-size:.83rem;color:var(--ink);}
     .act-list{list-style:none;padding:0;margin:0;font-size:.82rem;}
     .act-list li{padding:5px 0;border-bottom:1px solid var(--line-soft);}
-    .act-cls{display:inline-block;background:var(--brand-deep);color:#fff;border-radius:4px;padding:1px 5px;font-size:.75rem;font-weight:700;margin-right:5px;}
+    .act-cls{display:inline-block;background:var(--brand-deep);color:var(--on-fill);border-radius:4px;padding:1px 5px;font-size:.75rem;font-weight:700;margin-right:5px;}
     .act-hint{font-size:.75rem;color:var(--ink-3);margin-top:9px;}
     .pm-ask-btns{display:flex;gap:8px;}
     .pm-ask-btns button{flex:1;margin:0;padding:11px;border-radius:10px;font-size:.86rem;}
-    .pm-ask-yes{background:var(--brand-deep);color:#fff;}
+    .pm-ask-yes{background:var(--brand-deep);color:var(--on-fill);}
     .pm-ask-no{background:var(--line-soft);color:var(--ink-2);}
     /* Календар на весь навчальний рік */
     .yc-wrap{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:6px;}
@@ -2494,7 +2513,7 @@
     .date-picker-box{background:var(--brand-soft);padding:14px;border-radius:12px;margin-bottom:18px;text-align:center;box-shadow:0 4px 10px rgba(0,109,119,.1);}
     #status-msg{display:none;margin-top:9px;text-align:center;font-weight:700;font-size:.92rem;padding:9px;border-radius:8px;}
     /* topic card */
-    .topic-card{background:linear-gradient(135deg,var(--brand-deep),var(--brand-deep));border:1px solid var(--brand-deep);border-radius:12px;padding:13px;margin-bottom:12px;}
+    .topic-card{background:var(--brand-soft);border:1px solid var(--brand-line);border-radius:12px;padding:13px;margin-bottom:12px;}
     .topic-card label{margin-top:0;color:var(--brand-deep);font-size:.83rem;}
     .wl-day{padding:10px;background:var(--surface-2);border-radius:9px;font-size:.8rem;overflow-wrap:anywhere;}
     .wl-day small{display:block;color:var(--ink-2);margin:5px 0;}
@@ -2571,7 +2590,7 @@
     .topic-status-bar{display:flex;justify-content:space-between;align-items:center;font-size:.76rem;color:var(--ink-2);margin-top:6px;padding:6px 10px;background:var(--brand-soft);border-radius:7px;}
     .topic-progress-mini{flex:1;height:5px;background:var(--line);border-radius:3px;margin:0 10px;overflow:hidden;min-width:30px;}
     .topic-progress-mini-fill{height:100%;background:linear-gradient(90deg,var(--brand-deep),var(--brand-deep));transition:width .4s;}
-    .ct-badge{display:inline-block;background:linear-gradient(135deg,var(--danger),var(--danger));color:#fff;padding:3px 10px;border-radius:12px;font-size:var(--text-xs);font-weight:800;margin-left:6px;text-transform:uppercase;letter-spacing:.5px;}
+    .ct-badge{display:inline-block;background:linear-gradient(135deg,var(--danger),var(--danger));color:var(--on-fill);padding:3px 10px;border-radius:12px;font-size:var(--text-xs);font-weight:800;margin-left:6px;text-transform:uppercase;letter-spacing:.5px;}
     /* ── PHASE 6: TOPIC DROPDOWN (replaces native <select>, color-coded remaining hours) ── */
     .topic-dropdown{position:relative;}
     .topic-dropdown-trigger{width:100%;min-height:var(--touch-target);text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:9px 11px;cursor:pointer;}
@@ -2610,7 +2629,7 @@
     .pl-fix{flex:1 1 100%;display:flex;flex-wrap:wrap;gap:6px;align-items:center;
             background:var(--warn-soft);border:1px solid var(--warn-line);border-radius:9px;padding:8px 10px;}
     .pl-fix select{flex:1 1 150px;margin:0;font-size:.8rem;padding:7px;}
-    .pl-fix button{width:auto;margin:0;padding:7px 12px;font-size:.78rem;background:var(--brand-deep);color:#fff;}
+    .pl-fix button{width:auto;margin:0;padding:7px 12px;font-size:.78rem;background:var(--brand-deep);color:var(--on-fill);}
     .pl-fix .pl-drop{background:var(--surface);color:var(--danger);border:2px solid var(--danger-line);}
     .pl-note{flex:1 1 100%;font-size:.75rem;color:var(--ink-2);line-height:1.4;}
     .pl-add{flex:1 1 100%;margin-top:2px;}
@@ -2647,7 +2666,7 @@
     .pe-add input{margin:0;padding:6px 8px;font-size:.8rem;border:1px solid var(--line);border-radius:7px;}
     .pe-add input[type=text]{flex:1;min-width:90px;}
     @media (max-width:30em){ .pe-add input[type=text]{flex:1 1 100%;order:-1;} }
-    .pe-add button{width:auto;margin:0;padding:6px 12px;font-size:.8rem;background:var(--brand-deep);color:#fff;border-radius:7px;cursor:pointer;white-space:nowrap;}
+    .pe-add button{width:auto;margin:0;padding:6px 12px;font-size:.8rem;background:var(--brand-deep);color:var(--on-fill);border-radius:7px;cursor:pointer;white-space:nowrap;}
     .pe-hint{font-size:.75rem;color:var(--ink-3);margin-top:8px;line-height:1.4;}
     /* ── Перетягування тем ──
        Ручка окремою кнопкою, а не «тягнемо весь рядок»: у рядку три поля
@@ -2664,7 +2683,7 @@
        обов'язково, інакше привид перехоплював би пошук рядка під
        вказівником і жоден перенос не спрацював би. */
     .pe-ghost{position:fixed;z-index:9000;pointer-events:none;margin:0;background:var(--surface);border:2px solid var(--brand-deep);border-radius:9px;padding:5px 7px;box-shadow:0 10px 24px rgba(13,71,161,.28);transform:rotate(-1deg);opacity:.97;}
-    .pe-ghost .pe-grip{background:var(--brand-deep);color:#fff;}
+    .pe-ghost .pe-grip{background:var(--brand-deep);color:var(--on-fill);}
     /* МІСЦЕ, КУДИ ТЕМА ЛЯЖЕ. Той самий рядок, тільки порожній: він
        їде списком услід за пальцем і показує майбутню позицію. */
     .pe-row.pe-slot{background:var(--brand-soft);border:2px dashed var(--brand-deep);border-radius:9px;}
@@ -2677,7 +2696,7 @@
     .pe-bar[hidden]{display:none;}
     #pe-bar-txt{flex:1 1 100%;font-size:.76rem;color:var(--warn);line-height:1.35;}
     .pe-bar button{width:auto;margin:0;padding:7px 13px;font-size:.8rem;border-radius:8px;cursor:pointer;border:1px solid transparent;white-space:nowrap;}
-    .pe-bar-save{background:var(--ok);color:#fff;flex:1;}
+    .pe-bar-save{background:var(--ok);color:var(--on-fill);flex:1;}
     .pe-bar-undo{background:var(--surface);color:var(--ink);border-color:var(--line) !important;}
     /* Поки триває запис нової нумерації — список не чіпаємо: другий
        перенос поверх незавершеного дав би дві різні відповіді на питання
@@ -2918,7 +2937,7 @@
   
 /* Рядок «Повідомлення» під вкладками: доступ звідусіль, але один раз */
 .p-chatbar{margin:0 0 14px 0;}
-.p-chatbar button{position:relative;width:100%;background:var(--brand-deep);color:#fff;padding:12px;border-radius:12px;font-weight:700;font-size:.92rem;}
+.p-chatbar button{position:relative;width:100%;background:var(--brand-deep);color:var(--on-fill);padding:12px;border-radius:12px;font-weight:700;font-size:.92rem;}
 /* Заглушка розділу оплат — без жодних сум */
 .pay-soon{display:flex;gap:14px;align-items:flex-start;background:var(--surface-2);border:1px dashed var(--line);border-radius:14px;padding:18px;}
 .pay-soon-icon{font-size:1.7rem;line-height:1;opacity:.5;}
@@ -2993,7 +3012,7 @@
 .cm-all{display:flex;align-items:center;gap:6px;font-weight:400;margin-top:8px;}
 .cm-all input{width:auto;margin:0;}
 .cm-hint{font-size:.75rem;color:var(--ink-3);margin:6px 0;line-height:1.35;}
-.cm-add{background:var(--accent-ink);color:#fff;}
+.cm-add{background:var(--accent-ink);color:var(--on-fill);}
 .cm-sub{font-size:.8rem;font-weight:800;color:var(--ink-2);margin:4px 0;}
 .cm-del{width:auto;min-height:32px;margin:0;padding:4px 10px;background:transparent;color:var(--danger);border:1px solid var(--danger-line);border-radius:7px;cursor:pointer;flex:0 0 auto;}
 .cm-past{margin-top:10px;font-size:.8rem;}
@@ -3053,7 +3072,7 @@
 .fw-box{background:var(--surface);border:1px solid var(--brand-line);border-radius:10px;padding:9px 11px;margin-bottom:10px;}
 .fw-catch{border-color:var(--warn-line);background:var(--warn-soft);}
 .fw-sched{border-color:var(--brand);}
-.qa-cards{background:var(--brand-ink);color:#fff;}
+.qa-cards{background:var(--brand-ink);color:var(--on-fill);}
 .cc-hint{font-size:.78rem;color:var(--ink-3);text-align:center;margin:-4px 0 10px;}
 .cc-row{display:flex;align-items:center;gap:8px;width:100%;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:9px 11px;margin:0 0 6px;color:var(--ink);font-weight:600;font-size:.88rem;cursor:pointer;}
 .cc-row:hover{border-color:var(--brand);}
@@ -3121,14 +3140,14 @@
 .install-box .inst-steps{margin:0 0 8px 0;padding-left:20px;font-size:.83rem;color:var(--ink-2);line-height:1.6;}
 .install-box .inst-steps li{margin-bottom:3px;}
 .install-box .inst-note{font-size:.77rem !important;color:var(--ink-3) !important;margin-bottom:0 !important;}
-.install-box .inst-btn{width:100%;background:var(--brand-ink);color:#fff;padding:11px;border-radius:10px;font-weight:700;margin-top:4px;}
+.install-box .inst-btn{width:100%;background:var(--brand-ink);color:var(--on-fill);padding:11px;border-radius:10px;font-weight:700;margin-top:4px;}
 
 /* Розподіл за варіантами основної страви */
 .k-choice{background:var(--surface-2);border:1px solid var(--brand-line);border-radius:10px;padding:9px 12px;margin-top:10px;}
 .k-choice-row{display:flex;align-items:center;gap:9px;padding:4px 0;font-size:.85rem;}
 .k-choice-row b{margin-left:auto;font-size:1rem;color:var(--brand-ink);}
 .k-choice-name{color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.k-ab{flex:0 0 22px;height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.75rem;color:#fff;}
+.k-ab{flex:0 0 22px;height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.75rem;color:var(--on-fill);}
 .k-ab.a{background:var(--brand-ink);} .k-ab.b{background:var(--brand-deep);}
 
 /* Вибір основної страви в кабінеті батьків */
@@ -3138,7 +3157,7 @@
 .pm-opt.on{border-color:var(--brand-ink);background:var(--brand-soft);}
 .pm-opt:disabled{opacity:.6;}
 .pm-opt-mark{flex:0 0 24px;height:24px;border-radius:7px;background:var(--line-soft);color:var(--ink-2);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.76rem;}
-.pm-opt.on .pm-opt-mark{background:var(--brand-ink);color:#fff;}
+.pm-opt.on .pm-opt-mark{background:var(--brand-ink);color:var(--on-fill);}
 .pm-opt-name{flex:1;min-width:0;overflow-wrap:anywhere;}
 .pm-opt-on{font-size:.75rem;color:var(--brand-ink);font-weight:700;}
 .pm-btn.brk{background:var(--warn-soft);color:var(--warn);}
@@ -3207,7 +3226,7 @@
 .cg-warn{display:block;font-style:normal;font-size:.75rem;color:var(--warn);margin-top:5px;}
 .cg-opt.small{padding:10px;}
 .cg-err{background:var(--danger-soft);border:1px solid var(--danger-line);color:var(--danger);border-radius:10px;padding:10px 12px;font-size:.82rem;margin:12px 0;}
-#cg-save,.mc-save{width:100%;background:var(--brand-ink);color:#fff;padding:13px;border-radius:12px;font-weight:700;font-size:.92rem;margin-top:14px;}
+#cg-save,.mc-save{width:100%;background:var(--brand-ink);color:var(--on-fill);padding:13px;border-radius:12px;font-weight:700;font-size:.92rem;margin-top:14px;}
 .cg-foot{font-size:.76rem;color:var(--ink-3);text-align:center;margin:10px 0 0 0;line-height:1.45;}
 .mc-when{font-size:.78rem;color:var(--ink-3);margin:0 0 11px 0;}
 
@@ -3223,7 +3242,7 @@
 @media(max-width:600px){.mb-history>div{grid-template-columns:80px minmax(0,1fr)}.mb-history>div small{grid-column:1/-1}.mb-adjust>div{grid-template-columns:minmax(0,1fr)}.mb-adjust #mb-adj-reason,.mb-adjust button{grid-column:auto}}
 @media(max-width:30em){.mb-person-pick{flex-direction:column}.mb-form{grid-template-columns:minmax(0,1fr)}.mb-form button,.mb-form small{grid-column:1}.mb-history>div{grid-template-columns:72px 78px minmax(0,1fr)}.k-prices-grid{grid-template-columns:minmax(0,1fr)}}
 .ui-today{/* Підхід 5 — єдині компоненти (ui-today.js): ui-now «що зараз», ui-btn 1/2/q (≥44px), ui-tiles «що нового», ui-sheet — шторка знизу, ui-how — довгі пояснення під «Як це працює». Лише токени — однаково в обох темах. */}
-.ui-now{background:linear-gradient(135deg,var(--brand-deep),var(--brand-ink));color:#fff;border-radius:18px;padding:16px;margin-bottom:12px;box-shadow:var(--card-shadow);}
+.ui-now{background:linear-gradient(135deg,var(--brand-deep),var(--brand-ink));color:var(--on-fill);border-radius:18px;padding:16px;margin-bottom:12px;box-shadow:var(--card-shadow);}
 .ui-now small{display:block;font-size:.75rem;font-weight:800;letter-spacing:.04em;text-transform:uppercase;opacity:.9;}
 .ui-now-l{font-size:1.25rem;font-weight:900;margin:2px 0;line-height:1.25;overflow-wrap:anywhere;}
 .ui-now-m{font-size:.85rem;opacity:.92;}
@@ -3242,7 +3261,7 @@
   :root[data-theme="auto"] .ui-now:not(.ui-now-calm) .ui-now-bar i{background:var(--brand-deep);}
 }
 .ui-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;width:auto;min-height:44px;padding:0 14px;margin:0;border-radius:12px;font:inherit;font-weight:800;font-size:.9rem;border:none;cursor:pointer;line-height:1.2;}
-.ui-btn-1{background:var(--brand-deep);color:#fff;}
+.ui-btn-1{background:var(--brand-deep);color:var(--on-fill);}
 .ui-btn-2{background:var(--surface);color:var(--brand-deep);border:1px solid var(--brand-line);box-shadow:var(--card-shadow);}
 .ui-btn-q{background:transparent;color:var(--brand-deep);padding:0 8px;}
 .ui-btn:disabled{opacity:.6;cursor:wait;}
@@ -3350,7 +3369,7 @@ body.ui-sheet-lock{overflow:hidden;}
 @media (max-width:767px){.ui-cmd-wrap{padding:8px;}.ui-cmd{max-height:85dvh;}.ui-cmd-foot{display:none;}}
 @media (prefers-reduced-motion:reduce){.toast-undo-bar{animation:none;}}
 #pb-bell{position:relative;width:auto;padding:7px 11px;margin:0;background:var(--surface-2);color:var(--ink-2);border:1px solid var(--line);border-radius:8px;font-size:.85rem;}
-.pb-bell-n{position:absolute;top:-7px;right:-7px;min-width:19px;height:19px;padding:0 5px;border-radius:10px;background:var(--accent);color:#fff;font-size:.7rem;font-weight:800;line-height:19px;text-align:center;box-shadow:0 0 0 2px var(--surface);}
+.pb-bell-n{position:absolute;top:-7px;right:-7px;min-width:19px;height:19px;padding:0 5px;border-radius:10px;background:var(--accent);color:var(--on-fill);font-size:.7rem;font-weight:800;line-height:19px;text-align:center;box-shadow:0 0 0 2px var(--surface);}
 .pb-bell-n[hidden]{display:none;}
 .nc-sheet{max-width:560px;}
 .nc-list{display:flex;flex-direction:column;gap:2px;max-height:65dvh;overflow-y:auto;margin:0 -4px;padding:0 4px;}
@@ -3550,6 +3569,13 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
 .d-today .d-fold > summary::after{content:'▾';margin-left:auto;color:var(--ink-3);font-size:.8rem;}
 .d-today .d-fold[open] > summary::after{content:'▴';}
 @media (max-width:420px){.d-today .ui-tiles .st-tile{padding:12px;column-gap:10px;} .d-today .st-ic{width:38px;height:38px;font-size:1.1rem;}}
+/* Журнал: одна головна дія (Підсумкові) — фірмовий синій; експорт і
+   закриття — спокійні. Червоний тут брехав: експорт нічого не видаляє. */
+.journal-actions .ja-btn{flex:1;min-width:140px;margin:0;border-radius:12px;min-height:46px;font-weight:800;background:var(--surface);color:var(--ink);border:1px solid var(--line);box-shadow:none;}
+.journal-actions .ja-btn:hover{border-color:var(--brand-line);background:var(--brand-soft);}
+.journal-actions .ja-pri{background:var(--brand-deep);color:var(--on-fill);border-color:transparent;}
+.journal-actions .ja-pri:hover{background:var(--brand-deep);filter:brightness(1.08);}
+.journal-actions .ja-close{flex:0 1 160px;color:var(--ink-2);}
 .t-now-acts{margin:-4px 0 12px;}
 .t-now-acts .ui-btn{flex:1;max-width:none;}
 .d-today .qa-grid{grid-template-columns:repeat(auto-fit,minmax(190px,1fr));}
@@ -3777,7 +3803,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
     <!-- Центр сповіщень (notif-center.js) -->
     <button type="button" id="pb-bell" onclick="openNotifs()" aria-label="Сповіщення" title="Сповіщення">🔔<span class="pb-bell-n" hidden></span></button>
     <button type="button" id="pb-search" onclick="openSearch()" aria-label="Пошук (Ctrl+K)" title="Пошук · Ctrl+K">🔍</button>
-    <button onclick="openProfileModal()" style="width:auto;padding:7px 13px;margin:0;background:var(--brand-ink);color:#fff;border-radius:8px;font-size:.85rem;" aria-label="Профіль">⚙️<span class="pb-lbl"> Профіль</span></button>
+    <button onclick="openProfileModal()" style="width:auto;padding:7px 13px;margin:0;background:var(--brand-ink);color:var(--on-fill);border-radius:8px;font-size:.85rem;" aria-label="Профіль">⚙️<span class="pb-lbl"> Профіль</span></button>
   </div>
   <!-- Смужка про переїзд на push.school. Лежить у розмітці, а не
        створюється кодом: вставлений «кудись у перший видимий екран» блок
@@ -3811,9 +3837,9 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
     <section class="screen-section">
       <h3>🚀 Швидкі дії</h3>
       <div style="display:flex;gap:9px;flex-wrap:wrap;">
-        <button onclick="openVisualMatrixModal('live')" style="flex:1;min-width:160px;background:var(--brand-deep);color:#fff;margin-top:0;font-size:.95rem;padding:11px;">🗓️ Розклад</button>
-        <button onclick="openJournalModal('administrator')" style="flex:1;min-width:160px;background:linear-gradient(135deg,var(--brand-deep),var(--brand-deep));color:#fff;margin-top:0;font-size:.95rem;padding:11px;">📖 Журнал</button>
-        <button onclick="openChatModal('administrator')" data-chatbtn="1" style="flex:1;min-width:160px;background:linear-gradient(135deg,var(--brand-deep),var(--brand-deep));color:#fff;margin-top:0;font-size:.95rem;padding:11px;">💬 Чат з батьками</button>
+        <button onclick="openVisualMatrixModal('live')" style="flex:1;min-width:160px;background:var(--brand-deep);color:var(--on-fill);margin-top:0;font-size:.95rem;padding:11px;">🗓️ Розклад</button>
+        <button onclick="openJournalModal('administrator')" style="flex:1;min-width:160px;background:linear-gradient(135deg,var(--brand-deep),var(--brand-deep));color:var(--on-fill);margin-top:0;font-size:.95rem;padding:11px;">📖 Журнал</button>
+        <button onclick="openChatModal('administrator')" data-chatbtn="1" style="flex:1;min-width:160px;background:linear-gradient(135deg,var(--brand-deep),var(--brand-deep));color:var(--on-fill);margin-top:0;font-size:.95rem;padding:11px;">💬 Чат з батьками</button>
       </div>
     </section>
 
@@ -3836,7 +3862,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
             <option value="Відмічено секретарем">Без причини</option><option value="через хворобу">Хвороба</option>
             <option value="за сімейними обставинами">Сімейні обставини</option><option value="запізнення">Запізнення</option>
           </select>
-          <button onclick="adminMarkAbsent()" style="margin-top:0;background:var(--brand-deep);color:#fff;width:auto;padding:9px 13px;font-size:.85rem;">Відмітити</button>
+          <button onclick="adminMarkAbsent()" style="margin-top:0;background:var(--brand-deep);color:var(--on-fill);width:auto;padding:9px 13px;font-size:.85rem;">Відмітити</button>
         </div>
       </div>
     </section>
@@ -3907,7 +3933,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
     <section class="screen-section" id="o-sec-news">
       <div class="data-card">
         <h3 style="margin-top:0;">📣 Оголошення</h3>
-        <button onclick="openNewsComposer()" style="background:var(--brand-ink);color:#fff;margin:0 0 10px 0;">➕ Нове оголошення</button>
+        <button onclick="openNewsComposer()" style="background:var(--brand-ink);color:var(--on-fill);margin:0 0 10px 0;">➕ Нове оголошення</button>
         <div id="o-news-feed" class="nw-feed"></div>
       </div>
     </section>
@@ -3954,7 +3980,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
       <div class="data-card" style="border-left-color:var(--brand-line);margin-top:0;">
         <p style="font-size:.76rem;color:var(--ink-3);margin:0 0 9px 0;">Заповніть дні й натисніть «Опублікувати». Батьки отримають сповіщення лише про ті дні, що змінилися.</p>
         <div id="k-menu-week"><p class="empty-msg is-loading">Завантаження...</p></div>
-        <button onclick="saveWeekMenu()" style="background:var(--brand-ink);color:#fff;margin-top:12px;">📢 Опублікувати тиждень</button>
+        <button onclick="saveWeekMenu()" style="background:var(--brand-ink);color:var(--on-fill);margin-top:12px;">📢 Опублікувати тиждень</button>
         <button onclick="checkNotifySetup()" style="background:var(--surface-2);color:var(--ink-2);border:1px solid var(--line);">🔍 Перевірити, чи працюють сповіщення</button>
         <div id="k-notify-info" style="display:none;"></div>
       </div>
@@ -4017,7 +4043,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
           <input type="text" id="k-ta-price" inputmode="decimal" placeholder="напр. 8.50">
           <label for="k-ta-note">Примітка <span style="font-weight:400;color:var(--ink-3);">— необовʼязково</span></label>
           <input type="text" id="k-ta-note" placeholder="напр. 200 г, без цукру">
-          <button onclick="addTakeawayItem()" style="background:var(--warn);color:#fff;padding:10px;margin-top:11px;width:100%;">Додати</button>
+          <button onclick="addTakeawayItem()" style="background:var(--warn);color:var(--on-fill);padding:10px;margin-top:11px;width:100%;">Додати</button>
         </div>
       </details>
 
@@ -4082,7 +4108,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
           <div style="flex:1;min-width:120px;"><label for="k-stat-from" style="font-size:.75rem;">Від</label><input type="date" id="k-stat-from"></div>
           <div style="flex:1;min-width:120px;"><label for="k-stat-to" style="font-size:.75rem;">До</label><input type="date" id="k-stat-to"></div>
         </div>
-        <button onclick="loadMealStats()" style="background:var(--brand-deep);color:#fff;">Порахувати</button>
+        <button onclick="loadMealStats()" style="background:var(--brand-deep);color:var(--on-fill);">Порахувати</button>
         <div id="k-stats"></div>
       </div>
     </section>
@@ -4132,7 +4158,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
           <label style="margin:0;">Без оцінок довше, днів <input type="number" id="ct-grade-gap" min="3" max="60" value="14"></label>
           <label style="margin:0;">Перевантаження ДЗ від, предметів <input type="number" id="ct-max-hw" min="2" max="15" value="6"></label>
         </div>
-        <button type="button" onclick="saveControlSettings()" style="background:var(--brand-ink);color:#fff;margin-top:8px;">💾 Зберегти</button>
+        <button type="button" onclick="saveControlSettings()" style="background:var(--brand-ink);color:var(--on-fill);margin-top:8px;">💾 Зберегти</button>
       </details>
     </section>
 
@@ -4244,7 +4270,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
             <input type="date" id="sm-date" style="flex:1;min-width:110px;margin-top:0;border:2px solid var(--ok);">
             <input type="text" id="sm-time" placeholder="09:00 - 09:45" style="flex:1;min-width:100px;margin-top:0;border:2px solid var(--ok);">
           </div>
-          <button onclick="findSubstitute()" style="background:var(--ok);color:#fff;padding:11px;margin-top:10px;">🔍 Знайти кандидатів</button>
+          <button onclick="findSubstitute()" style="background:var(--ok);color:var(--on-fill);padding:11px;margin-top:10px;">🔍 Знайти кандидатів</button>
           <div id="sm-results" style="margin-top:12px;"></div>
         </div>
       </details>
@@ -4257,9 +4283,9 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
           <div id="d-skills-current" style="margin-top:8px;min-height:30px;"></div>
           <div style="display:flex;gap:8px;margin-top:8px;">
             <input type="text" id="d-skill-input" placeholder="Додати предмет (напр. Фізика)" style="flex:2;margin-top:0;border:2px solid var(--brand-line);">
-            <button onclick="addTeacherSkill()" style="flex:1;margin-top:0;background:var(--brand-deep);color:#fff;padding:10px 8px;font-size:.85rem;">+ Додати</button>
+            <button onclick="addTeacherSkill()" style="flex:1;margin-top:0;background:var(--brand-deep);color:var(--on-fill);padding:10px 8px;font-size:.85rem;">+ Додати</button>
           </div>
-          <button onclick="saveTeacherSkills()" style="background:var(--brand-deep);color:#fff;padding:10px;margin-top:8px;font-size:.88rem;">💾 Зберегти скіли</button>
+          <button onclick="saveTeacherSkills()" style="background:var(--brand-deep);color:var(--on-fill);padding:10px;margin-top:8px;font-size:.88rem;">💾 Зберегти скіли</button>
         </div>
       </details>
       <!-- Конструктор -->
@@ -4269,7 +4295,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
           <div id="drafts-list-container"><p class="empty-msg is-loading">Завантаження...</p></div>
           <div style="display:flex;gap:9px;margin-top:12px;">
             <input type="text" id="new-draft-name" placeholder="Назва (напр. 2026-2027)" style="flex:2;margin-top:0;">
-            <button onclick="createNewDraft()" style="flex:1;margin-top:0;background:var(--brand-ink);color:#fff;">+ Створити</button>
+            <button onclick="createNewDraft()" style="flex:1;margin-top:0;background:var(--brand-ink);color:var(--on-fill);">+ Створити</button>
           </div>
         </div>
       </details>
@@ -4286,7 +4312,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
         <p class="cal-hint">Порівнює акаунти входу зі списками школи. Показує тих,
            хто ще жодного разу не заходив, і акаунти, яких у списках немає.</p>
         <button type="button" id="aa-run" onclick="runAccessAudit()"
-                style="background:var(--brand-deep);color:#fff;">🔍 Звірити доступи</button>
+                style="background:var(--brand-deep);color:var(--on-fill);">🔍 Звірити доступи</button>
         <div id="aa-out" style="margin-top:11px;"></div>
       </div>
     </section>
@@ -4315,7 +4341,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
             🔧 Майстер-класний керівник — тимчасова роль для налагодження: права класного
             керівника в усіх класах. Чужих переписок не бачить. Зніміть її перед передачею порталу школі.
           </div>
-          <button style="background:var(--danger);padding:8px;margin-top:9px;color:#fff;" onclick="grantStaffRole()">Надати доступ</button>
+          <button style="background:var(--danger);padding:8px;margin-top:9px;color:var(--on-fill);" onclick="grantStaffRole()">Надати доступ</button>
           <div style="margin-top:14px;border-top:1px dashed var(--line);padding-top:12px;">
             <div style="display:flex;justify-content:space-between;align-items:center;">
               <b style="font-size:.88rem;color:var(--danger);">👥 Список персоналу</b>
@@ -4413,7 +4439,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
           <label style="margin-top:13px;">Дозволені предмети:</label>
           <select id="d-acc-subjects" multiple style="height:130px;margin-top:4px;"><option value="" disabled>Оберіть клас...</option></select>
           <div id="d-acc-subj-src" style="display:none;font-size:.75rem;color:var(--ink-3);margin-top:5px;line-height:1.35;"></div>
-          <button style="background:var(--brand-ink);padding:11px;margin-top:13px;color:#fff;" onclick="grantTeacherAccess()">💾 Зберегти доступ</button>
+          <button style="background:var(--brand-ink);padding:11px;margin-top:13px;color:var(--on-fill);" onclick="grantTeacherAccess()">💾 Зберегти доступ</button>
         </div>
       </details>
       <details data-dtab="staff" style="background:var(--surface);padding:14px;border-radius:12px;border:1px solid var(--brand);" ontoggle="if(this.open)openAccessOverview()">
@@ -4426,7 +4452,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
             <label style="display:flex;gap:6px;align-items:center;font-size:.8rem;margin:0;"><input type="checkbox" id="acc-ov-stale" onchange="renderAccessOverview()" style="width:auto;margin:0;"> лише ті, що потребують уваги</label>
           </div>
           <div style="display:flex;gap:8px;margin-top:8px;">
-            <button type="button" style="background:var(--brand-ink);color:#fff;padding:9px;margin:0;" onclick="accReconcile()">🧹 Звірити з розкладом</button>
+            <button type="button" style="background:var(--brand-ink);color:var(--on-fill);padding:9px;margin:0;" onclick="accReconcile()">🧹 Звірити з розкладом</button>
             <button type="button" style="background:var(--surface-2);color:var(--ink);padding:9px;margin:0;border:1px solid var(--line);" onclick="openAccessOverview(true)">🔄 Оновити</button>
           </div>
           <div id="acc-ov-body"></div>
@@ -4449,7 +4475,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
             <option value="">-- Оберіть вчителя --</option>
           </select>
           <div id="ct-current-info" style="margin-top:8px;font-size:.83rem;color:var(--ink-2);padding:8px;background:var(--surface);border-radius:7px;display:none;"></div>
-          <button onclick="assignClassTeacher()" style="background:var(--warn);color:#fff;padding:11px;margin-top:10px;">💾 Призначити кл. керівника</button>
+          <button onclick="assignClassTeacher()" style="background:var(--warn);color:var(--on-fill);padding:11px;margin-top:10px;">💾 Призначити кл. керівника</button>
         </div>
       </details>
     </section>
@@ -4475,7 +4501,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
               <option value="class_7">7 Клас</option><option value="class_8">8 Клас</option><option value="class_9">9 Клас</option>
               <option value="class_10">10 Клас</option><option value="class_11">11 Клас</option>
             </select>
-            <button onclick="createConsent()" style="background:var(--ok);color:#fff;margin-top:8px;">➕ Створити запит</button>
+            <button onclick="createConsent()" style="background:var(--ok);color:var(--on-fill);margin-top:8px;">➕ Створити запит</button>
           </div>
         </div>
       </details>
@@ -4496,7 +4522,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
               <option value="інша причина">Інша причина</option>
             </select>
             <input type="text" id="sa-note" placeholder="Примітка (необов'язково)" style="margin-top:5px;">
-            <button onclick="markStaffAbsent()" style="background:var(--warn);color:#fff;margin-top:8px;">➕ Відмітити</button>
+            <button onclick="markStaffAbsent()" style="background:var(--warn);color:var(--on-fill);margin-top:8px;">➕ Відмітити</button>
           </div>
         </div>
       </details>
@@ -4541,7 +4567,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
       </details>
       <!-- AI-чернетка оголошення для батьків -->
       <div data-dtab="news" style="margin-bottom:12px;">
-        <button onclick="openNewsComposer()" style="background:var(--brand-ink);color:#fff;margin:0 0 10px 0;">➕ Нове оголошення</button>
+        <button onclick="openNewsComposer()" style="background:var(--brand-ink);color:var(--on-fill);margin:0 0 10px 0;">➕ Нове оголошення</button>
         <div id="d-news-feed" class="nw-feed"><p class="empty-msg is-loading">Завантаження...</p></div>
       </div>
       <details data-dtab="news" style="margin-bottom:12px;background:var(--warn-soft);padding:14px;border-radius:12px;border:1px solid var(--warn-line);">
@@ -4558,7 +4584,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
           </div>
           <p id="ai-ann-msg" class="ai-hw-msg" style="display:none;"></p>
           <textarea id="d-ann-out" rows="6" style="display:none;margin-top:8px;" placeholder="Тут з'явиться текст"></textarea>
-          <button type="button" id="btn-ann-copy" onclick="copyAnnouncement()" style="display:none;background:var(--warn);color:#fff;margin-top:7px;">📋 Скопіювати текст</button>
+          <button type="button" id="btn-ann-copy" onclick="copyAnnouncement()" style="display:none;background:var(--warn);color:var(--on-fill);margin-top:7px;">📋 Скопіювати текст</button>
         </div>
       </details>
       <h3>🎓 Учні</h3>
@@ -4603,13 +4629,13 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
               <option value="mother">👩 Мати</option><option value="father">👨 Батько</option><option value="guardian">🛡️ Опікун</option>
             </select>
             <input type="email" id="pl-email" placeholder="Email батьків" style="margin-top:5px;" autocapitalize="none" spellcheck="false">
-            <button onclick="directorLinkParent()" style="background:var(--brand-deep);color:#fff;margin-top:8px;">🔗 Прив'язати</button>
+            <button onclick="directorLinkParent()" style="background:var(--brand-deep);color:var(--on-fill);margin-top:8px;">🔗 Прив'язати</button>
           </div>
           <div style="margin-top:12px;border-top:1px dashed var(--brand-deep);padding-top:11px;">
             <b style="font-size:.85rem;color:var(--ok);">➕ Додати учня до класу</b>
             <input type="text" id="ds-new-name" placeholder="Прізвище та Ім'я" style="margin-top:6px;">
             <input type="email" id="ds-new-email" placeholder="Email учня (необов'язково — для власного входу)" style="margin-top:5px;" autocapitalize="none" spellcheck="false">
-            <button onclick="directorAddStudent()" style="background:var(--ok);color:#fff;margin-top:8px;">➕ Додати</button>
+            <button onclick="directorAddStudent()" style="background:var(--ok);color:var(--on-fill);margin-top:8px;">➕ Додати</button>
           </div>
         </div>
           <div style="margin-top:12px;border-top:1px dashed var(--brand-deep);padding-top:11px;">
@@ -4649,7 +4675,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
               <option value="class_10">10 Клас</option><option value="class_11">11 Клас</option>
             </select>
           </div>
-          <button onclick="transferStudent()" style="background:var(--brand-deep);color:#fff;padding:11px;margin-top:10px;">↔️ Перевести учня</button>
+          <button onclick="transferStudent()" style="background:var(--brand-deep);color:var(--on-fill);padding:11px;margin-top:10px;">↔️ Перевести учня</button>
           <div id="tr-result" style="margin-top:10px;"></div>
         </div>
       </details>
@@ -4672,7 +4698,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
           <div style="background:var(--warn-soft);border:1px solid var(--warn-line);border-radius:12px;padding:10px 14px;font-size:.83rem;color:var(--warn);">
             ⚠️ <b>Незворотна операція.</b> Усі учні переходять на клас вище (1→2, 2→3 … 10→11), а 11 клас випускається в архів. Оцінки, відвідуваність і коментарі залишаються в архіві своїх класів — переносяться лише списки учнів і прив'язки акаунтів.
           </div>
-          <button onclick="previewYearRollover()" style="background:var(--ok);color:#fff;padding:11px;margin-top:10px;">🔍 Переглянути зміни</button>
+          <button onclick="previewYearRollover()" style="background:var(--ok);color:var(--on-fill);padding:11px;margin-top:10px;">🔍 Переглянути зміни</button>
           <div id="yr-preview" style="margin-top:12px;"></div>
         </div>
       </details>
@@ -4693,7 +4719,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
             <input type="text" id="ay-sem-name" placeholder="Назва (напр. I семестр)" style="flex:2;min-width:140px;margin-top:0;">
             <input type="date" id="ay-sem-start" style="flex:1;min-width:120px;margin-top:0;">
             <input type="date" id="ay-sem-end" style="flex:1;min-width:120px;margin-top:0;">
-            <button onclick="addSemester()" style="flex:1;min-width:100px;margin-top:0;background:var(--warn);color:#fff;">+ Додати</button>
+            <button onclick="addSemester()" style="flex:1;min-width:100px;margin-top:0;background:var(--warn);color:var(--on-fill);">+ Додати</button>
           </div>
           <h4 style="margin:16px 0 7px 0;color:var(--warn);font-size:.86rem;">Канікули</h4>
           <div id="ay-breaks-list"></div>
@@ -4711,14 +4737,14 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
             <option value="class_7">7 Клас</option><option value="class_8">8 Клас</option><option value="class_9">9 Клас</option>
             <option value="class_10">10 Клас</option><option value="class_11">11 Клас</option>
           </select>
-          <button onclick="addBreak()" style="background:var(--warn);color:#fff;margin-top:8px;">+ Додати канікули</button>
+          <button onclick="addBreak()" style="background:var(--warn);color:var(--on-fill);margin-top:8px;">+ Додати канікули</button>
           <h4 style="margin:16px 0 7px 0;color:var(--warn);font-size:.86rem;">Свята</h4>
           <div id="ay-holidays-list"></div>
           <div style="background:var(--surface);border:1px dashed var(--warn-line);border-radius:10px;padding:11px;margin-top:11px;">
             <b style="font-size:.83rem;color:var(--warn);">📋 Перенести з іншого року</b>
             <p style="font-size:.75rem;color:var(--ink-3);margin:5px 0 7px;line-height:1.35;">Свята й канікули скопіюються в поточний рік, а дати зсунуться на відповідні дні. Те, що вже є, не дублюється.</p>
             <select id="ay-copy-from" style="margin-top:0;"></select>
-            <button type="button" id="ay-copy-btn" onclick="copyYearData()" style="background:var(--warn);color:#fff;padding:10px;margin-top:8px;">📋 Перенести з іншого року</button>
+            <button type="button" id="ay-copy-btn" onclick="copyYearData()" style="background:var(--warn);color:var(--on-fill);padding:10px;margin-top:8px;">📋 Перенести з іншого року</button>
           </div>
           <input type="text" id="ay-holiday-title" placeholder="Назва свята" style="margin-top:8px;">
           <input type="date" id="ay-holiday-date" style="margin-top:6px;">
@@ -4735,7 +4761,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
             <option value="general">🏫 Загальна школа</option>
             <option value="art_school">🎵 Школа мистецтв</option>
           </select>
-          <button onclick="addHoliday()" style="background:var(--warn);color:#fff;margin-top:8px;">+ Додати свято</button>
+          <button onclick="addHoliday()" style="background:var(--warn);color:var(--on-fill);margin-top:8px;">+ Додати свято</button>
         </div>
       </details>
       <!-- Свята й культурно-виховні заходи — той самий редактор, що в педагога-організатора -->
@@ -4755,10 +4781,10 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
             <option value="class_10">10 Клас</option><option value="class_11">11 Клас</option>
           </select>
           <div id="bell-slots-table" style="margin-top:10px;"><p class="empty-msg">Оберіть клас.</p></div>
-          <button onclick="addBellSlot()" style="background:var(--brand-deep);color:#fff;margin-top:8px;">+ Додати урок</button>
-          <button onclick="saveBellSchedule()" style="background:var(--brand-deep);color:#fff;margin-top:8px;">💾 Зберегти для цього класу</button>
+          <button onclick="addBellSlot()" style="background:var(--brand-deep);color:var(--on-fill);margin-top:8px;">+ Додати урок</button>
+          <button onclick="saveBellSchedule()" style="background:var(--brand-deep);color:var(--on-fill);margin-top:8px;">💾 Зберегти для цього класу</button>
           <!-- Один раз налаштувати — застосувати всім класам -->
-          <button onclick="applyBellToAllClasses()" style="background:var(--brand-ink);color:#fff;margin-top:8px;">📤 Застосувати цей розклад до ВСІХ класів</button>
+          <button onclick="applyBellToAllClasses()" style="background:var(--brand-ink);color:var(--on-fill);margin-top:8px;">📤 Застосувати цей розклад до ВСІХ класів</button>
           <!-- Хто який розклад має і в кого не вказано -->
           <div style="margin-top:14px;border-top:1px dashed var(--line);padding-top:10px;">
             <div style="display:flex;justify-content:space-between;align-items:center;">
@@ -4778,7 +4804,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
             <input type="text" id="gt-new-code" placeholder="Код (напр. ЛР)" style="width:90px;margin:0;">
             <input type="text" id="gt-new-label" placeholder="Назва" style="flex:1;min-width:140px;margin:0;">
             <input id="gt-new-weight" type="number" step="0.1" min="0.1" placeholder="Коеф." style="width:80px;margin:0;">
-            <button onclick="addGradeType()" style="background:var(--brand-deep);color:#fff;width:auto;padding:8px 14px;margin:0;">➕ Додати</button>
+            <button onclick="addGradeType()" style="background:var(--brand-deep);color:var(--on-fill);width:auto;padding:8px 14px;margin:0;">➕ Додати</button>
           </div>
         </div>
       </details>
@@ -4835,7 +4861,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
             <option value="Відмічено вчителем">Без причини</option><option value="через хворобу">Хвороба</option>
             <option value="за сімейними обставинами">Сімейні обставини</option><option value="запізнення">Запізнення</option>
           </select>
-          <button onclick="teacherMarkAbsent()" style="flex:0 0 auto;margin-top:0;background:var(--brand-deep);color:#fff;width:auto;padding:9px 15px;font-size:.85rem;">Відмітити</button>
+          <button onclick="teacherMarkAbsent()" style="flex:0 0 auto;margin-top:0;background:var(--brand-deep);color:var(--on-fill);width:auto;padding:9px 15px;font-size:.85rem;">Відмітити</button>
         </div>
       </div>
       <h3 class="ui-h" id="t-actions-h">Дії</h3>
@@ -4881,7 +4907,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
 
     <section class="screen-section" data-dtab="news">
       <h3>📣 Новини школи</h3>
-      <button onclick="openNewsComposer()" style="background:var(--brand-ink);color:#fff;margin-bottom:10px;">➕ Нове оголошення</button>
+      <button onclick="openNewsComposer()" style="background:var(--brand-ink);color:var(--on-fill);margin-bottom:10px;">➕ Нове оголошення</button>
       <div id="t-news-feed" class="nw-feed"><p class="empty-msg is-loading">Завантаження...</p></div>
     </section>
 
@@ -5061,7 +5087,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
           <div style="display:flex;gap:7px;margin-top:9px;">
             <input type="text" id="new-topic-title" placeholder="Нова тема..." style="flex:3;margin-top:0;font-size:.85rem;">
             <input type="number" id="new-topic-hours" placeholder="Год." style="flex:1;margin-top:0;font-size:.85rem;" min="1" max="10">
-            <button onclick="addCurriculumTopic()" style="flex:1;margin-top:0;background:var(--brand-deep);color:#fff;padding:10px 6px;font-size:.82rem;">+ Тема</button>
+            <button onclick="addCurriculumTopic()" style="flex:1;margin-top:0;background:var(--brand-deep);color:var(--on-fill);padding:10px 6px;font-size:.82rem;">+ Тема</button>
           </div>
         </div>
       </details>
@@ -5117,7 +5143,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
             <span id="curr-preview-class" style="font-size:.78rem;color:var(--ink-2);"></span>
           </div>
           <div id="curr-preview-content" style="max-height:280px;overflow-y:auto;"></div>
-          <button onclick="saveCurriculumToDb()" id="btn-save-curr" style="background:var(--brand-deep);color:#fff;padding:11px;margin-top:10px;">💾 Зберегти план у систему</button>
+          <button onclick="saveCurriculumToDb()" id="btn-save-curr" style="background:var(--brand-deep);color:var(--on-fill);padding:11px;margin-top:10px;">💾 Зберегти план у систему</button>
         </div>
         <details style="margin-top:10px;" ontoggle="if(this.open)reloadClassPlans()">
           <summary style="cursor:pointer;color:var(--brand-deep);font-size:.82rem;">📋 Усі плани класу <span id="pl-orphan-count" class="pl-badge pl-lost" style="display:none;"></span></summary>
@@ -5142,14 +5168,14 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
         <div style="display:flex;gap:7px;">
           <input type="text" id="t-tb-title" placeholder="Назва підручника" style="flex:2;margin-top:0;font-size:.85rem;">
           <input type="text" id="t-tb-url" placeholder="https://..." style="flex:3;margin-top:0;font-size:.85rem;">
-          <button type="button" id="btn-save-textbook" onclick="saveTextbook()" style="flex:1;margin-top:0;background:var(--brand-deep);color:#fff;padding:10px 6px;font-size:.82rem;">+ Додати</button>
+          <button type="button" id="btn-save-textbook" onclick="saveTextbook()" style="flex:1;margin-top:0;background:var(--brand-deep);color:var(--on-fill);padding:10px 6px;font-size:.82rem;">+ Додати</button>
         </div>
       </div>
       <!-- 🎯 Спільна база тренажерів (trainers.js): бачать і поповнюють усі вчителі -->
       <div style="margin-top:12px;background:var(--surface-2);padding:14px;border-radius:12px;border:1px solid var(--brand-line);">
         <h4 style="margin:0 0 6px 0;color:var(--brand-deep);font-size:.88rem;">🎯 База тренажерів</h4>
         <p style="margin:0 0 9px 0;font-size:.78rem;color:var(--ink-3);">Спільна для всіх учителів школи: назва, посилання й предмети. Звідси ж тренажер прикріплюється до ДЗ.</p>
-        <button type="button" onclick="openTrainers()" style="margin-top:0;background:var(--brand-deep);color:#fff;font-size:.85rem;">Відкрити базу тренажерів</button>
+        <button type="button" onclick="openTrainers()" style="margin-top:0;background:var(--brand-deep);color:var(--on-fill);font-size:.85rem;">Відкрити базу тренажерів</button>
       </div>
     </section>
 
@@ -5183,7 +5209,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
             <label style="margin-top:0;font-size:.75rem;color:var(--brand-deep);">Оцінка (1-6):</label>
             <input type="text" id="t-behavior-grade" placeholder="1-6" style="margin-top:0;border:2px solid var(--brand-deep);text-align:center;font-weight:800;color:var(--brand-deep);">
           </div>
-          <button onclick="saveBehaviorGrade()" style="flex:1;margin-top:0;background:var(--brand-deep);color:#fff;padding:11px 8px;font-size:.82rem;border-radius:10px;border:none;cursor:pointer;font-weight:700;">💾 Зберегти</button>
+          <button onclick="saveBehaviorGrade()" style="flex:1;margin-top:0;background:var(--brand-deep);color:var(--on-fill);padding:11px 8px;font-size:.82rem;border-radius:10px;border:none;cursor:pointer;font-weight:700;">💾 Зберегти</button>
         </div>
       </div>
       <!-- Наліпка -->
@@ -5229,7 +5255,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
           <span class="ai-hw-note">перепишу ввічливо й конструктивно</span>
         </div>
         <p id="ai-comment-msg" class="ai-hw-msg" style="display:none;"></p>
-        <button id="btn-save-comment" onclick="saveComment()" style="background:var(--brand-deep);color:#fff;padding:9px;margin-top:7px;border-radius:9px;font-size:.85rem;border:none;cursor:pointer;width:100%;font-weight:700;">💬 Зберегти коментар</button>
+        <button id="btn-save-comment" onclick="saveComment()" style="background:var(--brand-deep);color:var(--on-fill);padding:9px;margin-top:7px;border-radius:9px;font-size:.85rem;border:none;cursor:pointer;width:100%;font-weight:700;">💬 Зберегти коментар</button>
       </div>
     </section>
 
@@ -5267,7 +5293,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
           </select>
           <input type="email" id="parent-email" placeholder="Email батьків" style="margin-top:4px;">
           <select id="t-student-for-parent" style="margin-top:4px;"><option value="">Учень...</option></select>
-          <button style="background:var(--brand-deep);padding:8px;margin-top:9px;color:#fff;" onclick="linkParent()">Прив'язати Email</button>
+          <button style="background:var(--brand-deep);padding:8px;margin-top:9px;color:var(--on-fill);" onclick="linkParent()">Прив'язати Email</button>
         </div>
       </details>
     </section>
@@ -5739,7 +5765,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
     <div id="sem-body" style="margin-top:10px;"><p class="empty-msg">Оберіть період.</p></div>
     <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
       <button onclick="semesterFillAuto()" style="background:var(--brand-soft);color:var(--brand-ink);border:1px solid var(--brand-line);flex:1;min-width:150px;margin-top:0;">↧ Підставити запропоновані</button>
-      <button id="btn-sem-save" onclick="saveSemesterGrades()" style="background:var(--brand-deep);color:#fff;flex:1;min-width:150px;margin-top:0;">💾 Зберегти підсумкові</button>
+      <button id="btn-sem-save" onclick="saveSemesterGrades()" style="background:var(--brand-deep);color:var(--on-fill);flex:1;min-width:150px;margin-top:0;">💾 Зберегти підсумкові</button>
     </div>
     <button onclick="closeSemesterGrades()" style="background:var(--surface-2);color:var(--ink);margin-top:8px;border:1px solid var(--line);">Закрити</button>
   </div>
@@ -5755,7 +5781,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
     <select id="qj-type" style="margin-top:3px;"></select>
     <div class="qj-legend"><span><b>✓</b> присутній</span><span><b>З</b> запізнення</span><span><b>Н</b> відсутній</span></div>
     <div id="qj-body" style="margin-top:6px;max-height:52vh;overflow-y:auto;"></div>
-    <button id="btn-qj-save" onclick="saveQuickJournal()" style="background:var(--brand-deep);color:#fff;margin-top:12px;">💾 Зберегти все</button>
+    <button id="btn-qj-save" onclick="saveQuickJournal()" style="background:var(--brand-deep);color:var(--on-fill);margin-top:12px;">💾 Зберегти все</button>
     <button onclick="closeQuickJournal()" style="background:var(--surface-2);color:var(--ink);margin-top:7px;border:1px solid var(--line);">Скасувати</button>
   </div>
 </div>
@@ -5770,7 +5796,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
     </p>
     <textarea id="cb-text" rows="4" placeholder="Напр. Завтра принести альбом і олівці"></textarea>
     <p id="cb-status" style="font-size:.8rem;color:var(--ok);font-weight:700;margin:7px 0 0 0;"></p>
-    <button id="btn-cb-send" onclick="sendClassBroadcast()" style="background:var(--brand-deep);color:#fff;margin-top:10px;">✉️ Надіслати всім</button>
+    <button id="btn-cb-send" onclick="sendClassBroadcast()" style="background:var(--brand-deep);color:var(--on-fill);margin-top:10px;">✉️ Надіслати всім</button>
     <button onclick="closeClassBroadcast()" style="background:var(--surface-2);color:var(--ink);margin-top:7px;border:1px solid var(--line);">Скасувати</button>
   </div>
 </div>
@@ -5782,7 +5808,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
       <select id="ungraded-subject" class="act-subj" onchange="showUngraded()"></select></p>
     <p style="font-size:.76rem;color:var(--ink-3);margin:0 0 10px 0;">Перевіряються останні три місяці. Позначено тих, кого не оцінювали 14 днів і довше.</p>
     <div id="ungraded-body"></div>
-    <button onclick="closeUngraded()" style="background:var(--ink);color:#fff;margin-top:12px;">Закрити</button>
+    <button onclick="closeUngraded()" style="background:var(--ink);color:var(--on-fill);margin-top:12px;">Закрити</button>
   </div>
 </div>
 <!-- Копіювання ДЗ у паралельні класи -->
@@ -5797,7 +5823,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
       у кожного класу свій прогрес за календарним планом.
     </p>
     <div id="hw-copy-classes"></div>
-    <button id="btn-hw-copy-do" onclick="doHwCopy()" style="background:var(--brand-deep);color:#fff;margin-top:12px;">📋 Скопіювати</button>
+    <button id="btn-hw-copy-do" onclick="doHwCopy()" style="background:var(--brand-deep);color:var(--on-fill);margin-top:12px;">📋 Скопіювати</button>
     <button onclick="closeHwCopy()" style="background:var(--surface-2);color:var(--ink);margin-top:7px;border:1px solid var(--line);">Скасувати</button>
   </div>
 </div>
@@ -5814,7 +5840,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
       Режим перегляду. Редагувати картку можуть директор, адміністрація та класний керівник цього класу.
     </p>
     <div id="sc-fields"></div>
-    <button id="sc-save" onclick="saveStudentCard()" style="background:var(--brand-deep);color:#fff;margin-top:14px;">💾 Зберегти</button>
+    <button id="sc-save" onclick="saveStudentCard()" style="background:var(--brand-deep);color:var(--on-fill);margin-top:14px;">💾 Зберегти</button>
     <button onclick="closeStudentCard()" style="background:var(--surface-2);color:var(--ink);margin-top:7px;border:1px solid var(--line);">Закрити</button>
   </div>
 </div>
@@ -5842,7 +5868,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
       Після збереження учень заходить через «Перший вхід» і сам створює пароль.
       Якщо змінюєте адресу вже наявному учню — вхід за старою перестане діяти.
     </p>
-    <button onclick="saveStudentLogin()" style="background:var(--brand-deep);color:#fff;margin-top:14px;">💾 Зберегти</button>
+    <button onclick="saveStudentLogin()" style="background:var(--brand-deep);color:var(--on-fill);margin-top:14px;">💾 Зберегти</button>
     <button id="sl-remove" onclick="removeStudentLogin()" style="background:var(--danger-soft);color:var(--danger);border:1px solid var(--danger-line);margin-top:7px;display:none;">🔒 Прибрати вхід</button>
     <button onclick="closeStudentLogin()" style="background:var(--surface-2);color:var(--ink);margin-top:7px;border:1px solid var(--line);">Скасувати</button>
   </div>
@@ -5854,7 +5880,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
     <p style="text-align:center;font-size:.8rem;color:var(--ink-3);margin:0 0 4px 0;" id="pe-email">—</p>
     <p style="font-size:.76rem;color:var(--ink-3);text-align:center;margin:0 0 12px 0;">Незаповнені поля просто не показуються у списку</p>
     <div id="pe-fields"></div>
-    <button id="pe-save" onclick="saveParentProfile()" style="background:var(--brand-deep);color:#fff;margin-top:16px;">💾 Зберегти</button>
+    <button id="pe-save" onclick="saveParentProfile()" style="background:var(--brand-deep);color:var(--on-fill);margin-top:16px;">💾 Зберегти</button>
     <button onclick="closeParentEditor()" style="background:var(--surface-2);color:var(--ink);margin-top:8px;border:1px solid var(--line);">Скасувати</button>
   </div>
 </div>
@@ -5891,7 +5917,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
         Тут ви можете оновити медичні відомості, контакти та список тих,
         хто має право забирати дитину.
       </p>
-      <button type="button" onclick="openMyChildCard()" style="background:var(--brand-deep);color:#fff;margin-top:0;">📋 Відкрити картку дитини</button>
+      <button type="button" onclick="openMyChildCard()" style="background:var(--brand-deep);color:var(--on-fill);margin-top:0;">📋 Відкрити картку дитини</button>
       <button type="button" onclick="exportMyChildData()" style="background:var(--line-soft);color:var(--ink);border:1px solid var(--line);margin-top:7px;">📦 Завантажити всі дані про дитину</button>
       <p style="font-size:.75rem;color:var(--ink-3);margin:4px 0 0 0;">Файл у форматі JSON — усе, що портал зберігає про вашу дитину.</p>
     </div>
@@ -5907,14 +5933,14 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
       <div id="t-my-skills-tags" style="margin-top:6px;min-height:28px;"></div>
       <div style="display:flex;gap:7px;margin-top:7px;">
         <input type="text" id="t-skill-add-input" placeholder="Предмет..." style="flex:2;margin-top:0;font-size:.85rem;">
-        <button onclick="addMySkill()" style="flex:1;margin-top:0;background:var(--brand-deep);color:#fff;padding:9px 6px;font-size:.82rem;">+ Додати</button>
+        <button onclick="addMySkill()" style="flex:1;margin-top:0;background:var(--brand-deep);color:var(--on-fill);padding:9px 6px;font-size:.82rem;">+ Додати</button>
       </div>
     </div>
     <div style="margin-top:13px;padding-top:9px;border-top:1px dashed var(--line);text-align:left;">
       <label style="color:var(--danger);margin-top:0;">Зміна пароля:</label>
       <input type="password" id="profile-new-pass" placeholder="Новий пароль (від 6 символів)" style="margin-bottom:18px;border-color:var(--danger);">
     </div>
-    <button onclick="saveProfile()" id="btn-save-profile" style="background:var(--brand-deep);color:#fff;">💾 Зберегти</button>
+    <button onclick="saveProfile()" id="btn-save-profile" style="background:var(--brand-deep);color:var(--on-fill);">💾 Зберегти</button>
     <button onclick="closeProfileModal()" style="background:var(--surface-2);color:var(--ink);margin-top:9px;border:1px solid var(--line);">Скасувати</button>
   </div>
 </div>
@@ -5938,7 +5964,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
         <tbody id="matrix-tbody"></tbody>
       </table>
     </div>
-    <button onclick="closeVisualMatrixModal()" style="background:var(--ink);color:#fff;width:auto;min-width:180px;margin-top:18px;display:block;margin-left:auto;margin-right:auto;">Закрити</button>
+    <button onclick="closeVisualMatrixModal()" style="background:var(--ink);color:var(--on-fill);width:auto;min-width:180px;margin-top:18px;display:block;margin-left:auto;margin-right:auto;">Закрити</button>
   </div>
 </div>
 <!-- Швидке створення гуртка з конструктора розкладу -->
@@ -5952,7 +5978,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
     <select id="qcc-teacher"><option value="">— учителя не призначено —</option></select>
     <p id="qcc-error" style="display:none;color:var(--danger);font-size:.78rem;"></p>
     <div style="display:flex;gap:9px;margin-top:14px;">
-      <button type="button" id="qcc-save" onclick="saveQuickClub()" style="background:var(--ok);color:#fff;">Створити й вибрати</button>
+      <button type="button" id="qcc-save" onclick="saveQuickClub()" style="background:var(--ok);color:var(--on-fill);">Створити й вибрати</button>
       <button type="button" onclick="closeQuickClubCreator()" style="background:var(--surface-2);color:var(--ink-2);">Скасувати</button>
     </div>
   </div>
@@ -6019,7 +6045,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
       <span>🔔 Одразу повідомити батьків про зміну<small>час, урок чи вчитель — push родинам класу. Зніміть, якщо це лише виправлення.</small></span></label>
     <div style="display:flex;gap:9px;margin-top:22px;">
       <button onclick="deleteMatrixCell()" style="background:var(--surface);color:var(--danger);border:2px solid var(--danger-line);margin-top:0;flex:1;">Очистити</button>
-      <button onclick="saveMatrixCell()" style="background:var(--brand-deep);color:#fff;margin-top:0;flex:2;">Зберегти</button>
+      <button onclick="saveMatrixCell()" style="background:var(--brand-deep);color:var(--on-fill);margin-top:0;flex:2;">Зберегти</button>
     </div>
     <button onclick="closeEditCellModal()" style="background:transparent;color:var(--ink-3);border:1px solid var(--line);margin-top:9px;">Скасувати</button>
   </div>
@@ -6059,7 +6085,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
       <div id="j-scale-controls" style="display:none;align-items:center;gap:6px;flex-wrap:wrap;">
         <label for="j-scale-max" style="margin:0;font-size:.8rem;">Макс. бал:</label>
         <input id="j-scale-max" type="number" min="2" max="2000" step="1" value="6" style="width:76px;margin:0;padding:5px;">
-        <button type="button" onclick="saveJournalScale()" style="width:auto;margin:0;padding:6px 9px;background:var(--brand-ink);color:white;">Зберегти шкалу</button>
+        <button type="button" onclick="saveJournalScale()" style="width:auto;margin:0;padding:6px 9px;background:var(--brand-ink);color:var(--on-fill);">Зберегти шкалу</button>
         <span id="j-scale-info" style="font-size:.75rem;color:var(--ink-2);">Стандартна шкала 1–6</span>
       </div>
       <div style="display:flex;align-items:center;gap:6px;margin-left:auto;">
@@ -6084,9 +6110,9 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
     <!-- Weighted Average info -->
     <div id="j-weighted-avg" style="margin-top:var(--space-3);background:var(--brand-soft);border-radius:var(--card-radius);padding:var(--space-3);font-size:var(--text-sm);display:none;"></div>
     <div class="journal-actions" style="display:flex;gap:9px;margin-top:13px;flex-wrap:wrap;">
-      <button onclick="openSemesterGrades()" style="background:linear-gradient(135deg,var(--brand-ink),var(--brand-ink));color:#fff;flex:1;min-width:150px;margin-top:0;">🎓 Підсумкові оцінки</button>
-      <button id="btn-export-journal-pdf" onclick="exportJournalToPDF()" style="background:linear-gradient(135deg,var(--danger),var(--danger));color:#fff;flex:1;min-width:130px;margin-top:0;">📄 Експорт PDF</button>
-      <button onclick="closeJournalModal()" style="background:var(--ink);color:#fff;flex:1;min-width:110px;margin-top:0;">Закрити</button>
+      <button onclick="openSemesterGrades()" class="ja-btn ja-pri">🎓 Підсумкові оцінки</button>
+      <button id="btn-export-journal-pdf" onclick="exportJournalToPDF()" class="ja-btn">📄 Експорт PDF</button>
+      <button onclick="closeJournalModal()" class="ja-btn ja-close">Закрити</button>
     </div>
   </div>
 </div>
@@ -6098,7 +6124,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
     <input type="month" id="exam-month-select" onchange="renderExamsCalendar()" style="margin-bottom:13px;border:2px solid var(--warn);color:var(--warn);font-weight:700;text-align:center;">
     <div id="exams-cal-container"></div>
     <div id="exams-day-details" style="margin-top:18px;text-align:left;background:var(--surface-2);padding:14px;border-radius:12px;border:1px dashed var(--warn);display:none;"></div>
-    <button onclick="closeExamsModal()" style="background:var(--ink);color:#fff;width:100%;margin-top:18px;">Закрити</button>
+    <button onclick="closeExamsModal()" style="background:var(--ink);color:var(--on-fill);width:100%;margin-top:18px;">Закрити</button>
   </div>
 </div>
 <!-- Inbox / Chat Modal -->
@@ -6153,7 +6179,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
       <li>🌟 Наліпок: <b id="w-st" style="float:right;color:var(--warn);">0</b></li>
     </ul>
     <p style="font-weight:700;color:var(--warn);margin-top:18px;">Ви робите неймовірну роботу! ❤️</p>
-    <button onclick="closeModal()" style="background:var(--ok);color:#fff;width:100%;margin-top:9px;">Дякую!</button>
+    <button onclick="closeModal()" style="background:var(--ok);color:var(--on-fill);width:100%;margin-top:9px;">Дякую!</button>
   </div>
 </div>
 <!-- Reactions Modal -->
@@ -6161,7 +6187,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
   <div class="modal-content" style="max-width:500px;max-height:80vh;display:flex;flex-direction:column;">
     <h2 style="color:var(--warn);margin-top:0;">❤️ Реакції</h2>
     <div id="reactions-list" style="overflow-y:auto;text-align:left;padding:9px 0;"></div>
-    <button onclick="closeReactionsModal()" style="background:var(--ink);color:#fff;width:100%;margin-top:13px;">Закрити</button>
+    <button onclick="closeReactionsModal()" style="background:var(--ink);color:var(--on-fill);width:100%;margin-top:13px;">Закрити</button>
   </div>
 </div>
 <!-- Retake Requests Modal -->
@@ -6169,7 +6195,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
   <div class="modal-content" style="max-width:500px;">
     <h2 style="color:var(--warn);margin-top:0;">🔄 Запити на перездачу</h2>
     <div id="retake-list" style="text-align:left;max-height:60vh;overflow-y:auto;"></div>
-    <button onclick="closeRetakeModal()" style="background:var(--ink);color:#fff;width:100%;margin-top:13px;">Закрити</button>
+    <button onclick="closeRetakeModal()" style="background:var(--ink);color:var(--on-fill);width:100%;margin-top:13px;">Закрити</button>
   </div>
 </div>
 <!-- PHASE 7: Sticker Stats Modal (same structure as #reactions-modal) -->
@@ -6185,7 +6211,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
       <div class="sg-note" id="sticker-goal-note"></div>
     </div>
     <div id="sticker-stats-list" style="overflow-y:auto;text-align:left;padding:9px 0;"></div>
-    <button onclick="closeStickerStatsModal()" style="background:var(--ink);color:#fff;margin-top:13px;">Закрити</button>
+    <button onclick="closeStickerStatsModal()" style="background:var(--ink);color:var(--on-fill);margin-top:13px;">Закрити</button>
   </div>
 </div>
 <!-- ═══════════════════════ APP MODULES (ES modules) ═══════════════════════ -->
@@ -6195,7 +6221,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
   <div class="modal-content">
     <h3 style="color:var(--brand-ink);margin-top:0;">⚙️ Налаштування харчування</h3>
     <div id="meal-settings-body"></div>
-    <button onclick="saveMealSettings()" style="background:var(--brand-ink);color:#fff;">💾 Зберегти</button>
+    <button onclick="saveMealSettings()" style="background:var(--brand-ink);color:var(--on-fill);">💾 Зберегти</button>
     <button onclick="document.getElementById('meal-settings-modal').style.display='none'" style="background:var(--line-soft);color:var(--ink);">Закрити</button>
   </div>
 </div>
@@ -6259,7 +6285,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
     </label>
     <div id="nw-preview" class="nw-item nw-preview"><div class="nw-head"><span class="nw-tag school">Так виглядатиме</span></div><div class="nw-text">Картка оголошення у стрічці батьків.</div></div>
     <p style="font-size:.78rem;color:var(--ink-3);margin:8px 0 10px;">🔔 Батьки отримають сповіщення про кожне оголошення. Нагадати ще раз можна кнопкою «🔔 Нагадати» під опублікованим оголошенням.</p>
-    <button id="nw-publish" onclick="publishNews()" style="background:var(--brand-ink);color:#fff;">📢 Опублікувати</button>
+    <button id="nw-publish" onclick="publishNews()" style="background:var(--brand-ink);color:var(--on-fill);">📢 Опублікувати</button>
     <button onclick="document.getElementById('news-modal').style.display='none'" style="background:var(--line-soft);color:var(--ink);">Скасувати</button>
   </div>
 </div>
@@ -6272,8 +6298,8 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
     <label for="nwe-exp">Показувати оголошення до:</label>
     <input type="datetime-local" id="nwe-exp" style="margin-bottom:12px;width:100%;">
     <div style="display:flex;gap:8px;">
-      <button onclick="saveNewsExpiry()" style="flex:1;background:var(--brand-ink);color:#fff;">Зберегти</button>
-      <button onclick="clearNewsExpiry()" style="flex:1;background:var(--danger);color:#fff;border:none;border-radius:6px;cursor:pointer;">Прибрати термін</button>
+      <button onclick="saveNewsExpiry()" style="flex:1;background:var(--brand-ink);color:var(--on-fill);">Зберегти</button>
+      <button onclick="clearNewsExpiry()" style="flex:1;background:var(--danger);color:var(--on-fill);border:none;border-radius:6px;cursor:pointer;">Прибрати термін</button>
     </div>
     <button onclick="document.getElementById('news-expiry-modal').style.display='none'" style="background:var(--line-soft);color:var(--ink);width:100%;margin-top:8px;">Скасувати</button>
   </div>
@@ -6295,7 +6321,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
     <div id="hws-status" style="display:none;padding:8px;border-radius:6px;font-size:0.85rem;margin-bottom:10px;"></div>
 
     <div style="display:flex;gap:8px;">
-      <button id="hws-btn" onclick="submitHomeworkPhotos()" style="flex:1;background:var(--brand-ink);color:#fff;">Надіслати вчителю</button>
+      <button id="hws-btn" onclick="submitHomeworkPhotos()" style="flex:1;background:var(--brand-ink);color:var(--on-fill);">Надіслати вчителю</button>
       <button onclick="document.getElementById('hw-submit-modal').style.display='none'" style="background:var(--line-soft);color:var(--ink);">Скасувати</button>
     </div>
   </div>
@@ -6311,7 +6337,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
     <div id="cp-list" class="cp-list"><p class="empty-msg is-loading">Завантаження...</p></div>
     <!-- Зʼявляється, коли обрано більше одного співрозмовника -->
     <input type="text" id="cp-group-name" maxlength="60" placeholder="Назва групи (необовʼязково), напр. «Батьки 3 класу»" style="display:none;margin:0 0 10px;">
-    <button onclick="createChatFromPicker()" style="background:var(--brand-ink);color:#fff;">Почати розмову</button>
+    <button onclick="createChatFromPicker()" style="background:var(--brand-ink);color:var(--on-fill);">Почати розмову</button>
     <button onclick="closeChatPicker()" style="background:var(--line-soft);color:var(--ink);">Скасувати</button>
   </div>
 </div>
