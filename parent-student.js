@@ -888,6 +888,8 @@ export function loadParentDashboard(){
   // Textbooks
   loadTextbooksForParent();
   renderBirthdays('p-birthdays',cls,currentUserData.studentName);
+  // 🎂 Свято своєї дитини — картка нагорі й конфеті (ui-today.js)
+  if(window.renderBirthdayHero) window.renderBirthdayHero('p');
   if(window.renderMonthEvents) window.renderMonthEvents('p-month-events',cls);
   if(window.renderWeekDigest) window.renderWeekDigest('p-week-digest');
   if(window.renderCatchUp) window.renderCatchUp('p-catchup');
@@ -1308,6 +1310,7 @@ export function loadStudentDashboard(){
   // 🔥 Серія виконаного ДЗ (streaks.js)
   if(window.renderStreaks) window.renderStreaks();
   renderBirthdays('s-birthdays',cls,currentUserData.studentName);
+  if(window.renderBirthdayHero) window.renderBirthdayHero('s');
   if(window.renderMonthEvents) window.renderMonthEvents('s-month-events',cls);
   if(window.renderWeekDigest) window.renderWeekDigest('s-week-digest');
   if(window.renderCatchUp) window.renderCatchUp('s-catchup');

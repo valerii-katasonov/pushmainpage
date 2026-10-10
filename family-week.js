@@ -184,15 +184,28 @@ export async function renderWeekDigest(boxId){
 // push-ем. Тут — те саме на «Сьогодні» ще SCHED_DAYS днів: сповіщення легко
 // змахнути, не прочитавши.
 export const SCHED_DAYS = 7;
-export function schedChangesHtml(entries, now = Date.now()){
+// seenTs — до якої зміни людина вже бачила блок (у попередній вхід).
+// Нове — розгорнуте; уже бачене — згорнуте в один рядок «переглянуто».
+export function schedChangesHtml(entries, now = Date.now(), seenTs = 0){
   const fresh = Object.values(entries || {}).filter(e => e && Array.isArray(e.lines) && now - (Number(e.ts) || 0) < SCHED_DAYS * 864e5)
     .sort((a, b) => b.ts - a.ts);
   if(!fresh.length) return '';
   const dm = ts => { const d = new Date(ts); return `${p2(d.getDate())}.${p2(d.getMonth() + 1)}`; };
-  return `<div class="fw-title">📅 Зміни в розкладі</div><ul class="fw-list">`
-    + fresh.flatMap(e => e.lines.map(l => `<li><span class="fw-sub">${escHtml(dm(e.ts))}</span> ${escHtml(l)}</li>`)).join('')
-    + '</ul>';
+  const li = list => list.flatMap(e => e.lines.map(l => `<li><span class="fw-sub">${escHtml(dm(e.ts))}</span> ${escHtml(l)}</li>`)).join('');
+  const nw = fresh.filter(e => (Number(e.ts) || 0) > seenTs), old = fresh.filter(e => (Number(e.ts) || 0) <= seenTs);
+  const nOld = old.reduce((k, e) => k + e.lines.length, 0);
+  if(!nw.length){
+    return `<details class="fw-fold"><summary class="fw-title">📅 Зміни в розкладі <span class="fw-seen">${nOld} · переглянуто</span></summary>`
+      + `<ul class="fw-list">${li(old)}</ul></details>`;
+  }
+  return `<div class="fw-title">📅 Зміни в розкладі</div><ul class="fw-list">${li(nw)}</ul>`
+    + (old.length ? `<details class="fw-fold fw-fold-sub"><summary>ще ${nOld} — переглянуті раніше</summary><ul class="fw-list">${li(old)}</ul></details>` : '');
 }
+// Що з цього людина вже бачила — на цьому пристрої, окремо для кожного класу.
+// Знімок беремо при завантаженні: показане зараз згортається з НАСТУПНОГО входу.
+const SCHED_SEEN_LS = 'push_school_sched_seen';
+const schedSeenMap = () => { try{ return JSON.parse(localStorage.getItem(SCHED_SEEN_LS) || '{}') || {}; }catch(e){ return {}; } };
+const SCHED_SEEN_START = schedSeenMap();
 export async function renderSchedChanges(boxId){
   const box = document.getElementById(boxId);
   if(!box) return;
@@ -200,9 +213,13 @@ export async function renderSchedChanges(boxId){
     const cls = currentUserData && currentUserData.class;
     if(!cls){ box.style.display = 'none'; return; }
     const s = await get(query(ref(db, `schedule_changes/${cls}`), orderByKey(), limitToLast(5)));
-    const html = schedChangesHtml(s.exists() ? s.val() : {});
+    const entries = s.exists() ? s.val() : {};
+    const html = schedChangesHtml(entries, Date.now(), Number(SCHED_SEEN_START[cls]) || 0);
     box.innerHTML = html;
     box.style.display = html ? 'block' : 'none';
+    // Показали — запамʼятовуємо найновішу зміну як «переглянуту»
+    const top = Math.max(0, ...Object.values(entries).map(e => Number(e && e.ts) || 0));
+    if(html && top){ const m = schedSeenMap(); if((Number(m[cls]) || 0) < top){ m[cls] = top; try{ localStorage.setItem(SCHED_SEEN_LS, JSON.stringify(m)); }catch(e){} } }
   }catch(e){ box.style.display = 'none'; }
 }
 window.renderSchedChanges = renderSchedChanges;

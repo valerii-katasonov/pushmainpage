@@ -3471,6 +3471,19 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
   .mc-head::before{content:'';position:absolute;top:5px;left:50%;width:40px;height:4px;margin-left:-20px;border-radius:2px;background:var(--line);}
 }
 @media print{.mc-head .mc-x,.mc-foot{display:none !important;}}
+.bday-hero{display:flex;align-items:center;gap:14px;margin-bottom:12px;padding:16px;border-radius:18px;background:linear-gradient(135deg,var(--warn-soft),var(--accent-soft));border:1px solid var(--warn-line);color:var(--ink);box-shadow:var(--card-shadow);}
+.bday-hero .bday-cake{font-size:2.6rem;line-height:1;animation:bdayBob 1.6s ease-in-out infinite;}
+.bday-hero b{display:block;font-size:1.1rem;font-weight:900;line-height:1.3;}
+.bday-hero span{display:block;font-size:.88rem;color:var(--ink-2);margin-top:2px;}
+@keyframes bdayBob{0%,100%{transform:translateY(0) rotate(-4deg);}50%{transform:translateY(-4px) rotate(4deg);}}
+@media (prefers-reduced-motion:reduce){.bday-hero .bday-cake{animation:none;}}
+.fw-fold > summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;}
+.fw-fold > summary::-webkit-details-marker{display:none;}
+.fw-fold > summary::after{content:'▾';margin-left:auto;color:var(--ink-3);font-size:.8rem;}
+.fw-fold[open] > summary::after{content:'▴';}
+.fw-fold .fw-seen{font-size:.75rem;font-weight:700;color:var(--ink-3);}
+.fw-fold-sub{margin-top:6px;font-size:.82rem;}
+.fw-fold-sub > summary{font-weight:700;color:var(--ink-3);}
 </style>
 </head>
 <!-- auth-mode СТОЇТЬ ТУТ ОДРАЗУ, а не чекає на скрипт.
@@ -5255,6 +5268,8 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
          Поля форми (p-att-type, p-att-reason, p-att-status) — ті самі, тож
          відправка й скасування працюють як раніше. -->
     <section class="screen-section ui-today" data-dtab="day">
+      <!-- 🎂 Свято своєї дитини (ui-today.js) -->
+      <div id="p-bday" hidden></div>
       <div id="p-now" style="display:none;"></div>
       <div id="p-teacher-att-alert" style="display:none;background:var(--warn-soft);border:1px solid var(--warn-line);color:var(--warn);padding:11px 14px;border-radius:12px;margin-bottom:12px;font-size:.85rem;"></div>
       <div class="ui-btns">
@@ -5509,6 +5524,8 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
          (ui-today.js) — «Зараз», дві кнопки зі шторкою, плитки «що нового»,
          далі оголошення, розклад, календар. Поля s-att-* ті самі. -->
     <section class="screen-section ui-today" data-dtab="day">
+      <!-- 🎂 Свято своєї дитини (ui-today.js) -->
+      <div id="s-bday" hidden></div>
       <div id="s-now" style="display:none;"></div>
       <div id="s-teacher-att-alert" style="display:none;background:var(--warn-soft);border:1px solid var(--warn-line);color:var(--warn);padding:11px 14px;border-radius:12px;margin-bottom:12px;font-size:.85rem;"></div>
       <div class="ui-btns">

@@ -16,7 +16,7 @@
 // student_comments) і з homeworks класу. Вузли класу родині закриті.
 // ═══════════════════════════════════════════════════════════════
 import { ref, get, child } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, currentUserData, escHtml, showToast } from './common.js';
+import { db, currentUserData, escHtml, showToast, getUpcomingBirthdays, stuId, localDateString } from './common.js';
 
 const pad = n => String(n).padStart(2, '0');
 const hhmm = m => `${pad(Math.floor(m / 60))}:${pad(m % 60)}`;
@@ -297,5 +297,44 @@ window.gvOpenSubject = function(subj){
   if(target && target.scrollIntoView){ try{ target.scrollIntoView({ behavior: 'smooth', block: 'start' }); }catch(e){ target.scrollIntoView(); } }
 };
 
+// ── 🎂 ДЕНЬ НАРОДЖЕННЯ ДИТИНИ ────────────────────────────────────
+// Сьогодні свято у своєї дитини (у батьків) чи в самого учня — нагорі
+// «Сьогодні» святкова картка, а при першому вході цього дня на цьому
+// пристрої — конфеті. Дату беремо з того самого student_birthdays, що й
+// список «Дні народження» (рік не зберігається — віку не показуємо).
+export function bdayHtml(first, student){
+  const nm = escHtml(first || '');
+  return student
+    ? `<div class="bday-hero" role="status"><span class="bday-cake" aria-hidden="true">🎂</span>
+        <div><b>З днем народження!</b><span>${nm ? nm + ', у' : 'У'}ся школа вітає тебе. Гарного свята! 🎉</span></div></div>`
+    : `<div class="bday-hero" role="status"><span class="bday-cake" aria-hidden="true">🎂</span>
+        <div><b>Сьогодні ${nm ? nm + ' святкує' : 'ваша дитина святкує'} день народження!</b><span>Вітаємо всю вашу родину — гарного свята! 🎉</span></div></div>`;
+}
+let bdaySeq = 0;
+export async function renderBirthdayHero(prefix){
+  const box = document.getElementById(`${prefix}-bday`);
+  const u = currentUserData;
+  if(!box || !u) return;
+  const my = ++bdaySeq;
+  const cls = u.class, name = String(u.studentName || '').trim();
+  let list = [];
+  try{ list = await getUpcomingBirthdays(cls, localDateString, 0); }catch(e){ list = []; }
+  if(my !== bdaySeq) return;
+  const sid = stuId(cls, name) || u.studentId || '';
+  const me = (list || []).find(b => b.today && ((sid && b.key === sid) || String(b.name).trim() === name));
+  if(!me){ box.hidden = true; box.innerHTML = ''; return; }
+  const first = name.split(/\s+/).pop();
+  box.innerHTML = bdayHtml(first, prefix === 's');
+  box.hidden = false;
+  // Конфеті — раз на день на пристрої, а не на кожне оновлення сторінки
+  const k = `push_bday_${localDateString}_${cls}_${sid || name}`;
+  let fresh = true;
+  try{ fresh = !localStorage.getItem(k); localStorage.setItem(k, '1'); }catch(e){}
+  if(fresh && typeof window.confetti === 'function'){
+    const shot = (x, angle) => window.confetti({ particleCount: 90, spread: 70, angle, origin: { x, y: 0.7 } });
+    shot(0.1, 60); setTimeout(() => shot(0.9, 120), 250); setTimeout(() => window.confetti({ particleCount: 120, spread: 100, origin: { y: 0.4 } }), 600);
+  }
+}
+window.renderBirthdayHero = renderBirthdayHero;
 window.renderNowCard = renderNowCard;
 window.renderTodayTiles = renderTodayTiles;

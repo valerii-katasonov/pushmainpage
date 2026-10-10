@@ -4399,7 +4399,7 @@ export async function getUpcomingBirthdays(cls,todayStr,days){
     const i=windowIndex(win,md);
     if(i===-1)continue;
     const [m,d]=md.split('-');
-    out.push({name:names[key],md,idx:i,
+    out.push({key,name:names[key],md,idx:i,
               label:`${parseInt(d)} ${MONTHS_UA[parseInt(m)-1]}`,
               when:birthdayWhen(i),today:i===0});
   }
