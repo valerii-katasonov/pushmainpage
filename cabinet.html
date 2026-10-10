@@ -3484,17 +3484,64 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
 .fw-fold .fw-seen{font-size:.75rem;font-weight:700;color:var(--ink-3);}
 .fw-fold-sub{margin-top:6px;font-size:.82rem;}
 .fw-fold-sub > summary{font-weight:700;color:var(--ink-3);}
-.t-today .qa-grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-bottom:14px;}
-.t-today .qa-btn{background:var(--surface);color:var(--ink);border:1px solid var(--line-soft);box-shadow:var(--card-shadow);justify-content:flex-start;text-align:left;font-weight:700;min-height:48px;padding:10px 12px;}
+/* ══════════ «СЬОГОДНІ» ВЧИТЕЛЯ Й «ОГЛЯД» ДИРЕКТОРА ══════════
+   Брендбук: білі картки на ледь бірюзовому тлі, колір — малими дозами
+   (значок, число, вузька смуга), один насичений елемент на екран —
+   «Зараз» угорі. Головна дія (Журнал) — фірмовий синій.
+   Кожна плитка має свій колір-значення: ❤️ акцент, 🔄/⏰ увага,
+   🚨 тривога, ✉️/📚 бренд, 💬 норма. Кольори — лише в значку й числі. */
+.t-today{--st-shadow:0 1px 2px rgba(16,35,47,.05),0 6px 18px rgba(16,35,47,.06);}
+.t-today .ui-card,.t-today .st-tile,.t-today .qa-btn{border:1px solid var(--line);box-shadow:var(--st-shadow);}
+.t-today .ui-card{border-radius:18px;padding:16px 18px;}
+.t-today h3.ui-h{font-size:.78rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);margin:22px 4px 10px;}
+/* Плитки: значок у кольоровому квадраті ліворуч, число й підпис праворуч */
+.t-today .st-tiles{gap:12px;margin-bottom:16px;}
+.t-today .ui-tiles .st-tile{display:grid;grid-template-columns:auto 1fr;grid-template-rows:1fr 1fr;column-gap:12px;row-gap:0;align-items:center;justify-items:start;text-align:left;min-height:76px;padding:14px 16px;border-radius:18px;background:var(--surface);transition:transform .15s,border-color .15s,box-shadow .15s;}
+.t-today .st-tile:hover{transform:translateY(-1px);border-color:var(--brand-line);}
+.t-today .st-tile:focus-visible{outline:3px solid var(--brand-deep);outline-offset:2px;}
+.st-ic{grid-row:1 / 3;width:44px;height:44px;border-radius:14px;display:grid;place-items:center;font-style:normal;font-size:1.3rem;line-height:1;background:var(--brand-soft);}
+.st-tile b{align-self:end;font-size:1.6rem;line-height:1;font-weight:900;color:var(--ink);}
+.st-tile b.st-txt{font-size:1.1rem;}
+.st-tile span{align-self:start;margin-top:3px;font-size:.78rem;font-weight:700;color:var(--ink-3);line-height:1.25;}
+.st-accent .st-ic{background:var(--accent-soft);} .st-accent b{color:var(--accent-ink);}
+.st-warn .st-ic{background:var(--warn-soft);}     .st-warn b{color:var(--warn);}
+.st-danger .st-ic{background:var(--danger-soft);} .st-danger b{color:var(--danger);}
+.st-ok .st-ic{background:var(--ok-soft);}         .st-ok b{color:var(--ok);}
+.st-brand .st-ic{background:var(--brand-soft);}   .st-brand b{color:var(--brand-deep);}
+@media (max-width:560px){
+  .t-today:not(.d-today) .ui-tiles .st-tile{grid-template-columns:1fr;grid-template-rows:auto auto auto;justify-items:center;text-align:center;padding:12px 6px;row-gap:4px;}
+  .t-today:not(.d-today) .st-ic{grid-row:auto;width:38px;height:38px;font-size:1.1rem;border-radius:12px;}
+  .t-today:not(.d-today) .st-tile b{align-self:center;font-size:1.35rem;}
+  .t-today:not(.d-today) .st-tile span{margin-top:0;}
+}
+/* Картки зі смугою зліва — присутність */
+.t-today .st-card{position:relative;overflow:hidden;}
+.t-today .st-card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--danger);}
+.t-today .st-card .ui-card-h{font-size:1rem;}
+/* Форма відмітки: нейтральні поля, на компʼютері — один рядок */
+.t-today .t-att-card #t-mark-absent-block{border-top:1px solid var(--line-soft) !important;}
+.t-today .t-att-card #t-mark-absent-block input,.t-today .t-att-card #t-mark-absent-block select{border:1px solid var(--line) !important;background:var(--surface-2);border-radius:12px;min-height:44px;}
+.t-today .t-att-card #t-mark-absent-block button{border-radius:12px;min-height:44px;}
+@media (min-width:860px){
+  .t-today .t-att-card #t-mark-absent-block[style*="flex"]{display:grid !important;grid-template-columns:150px minmax(0,1.3fr) minmax(0,1fr) minmax(0,1fr) auto;align-items:center;}
+}
+/* Дії: групи з підписом, кнопка = значок у квадраті + назва */
+.qa-groups{display:grid;gap:14px;margin-bottom:16px;}
+.qa-gt{font-size:.74rem;font-weight:800;color:var(--ink-3);margin:0 4px 6px;}
+.t-today .qa-grid{grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px;margin:0;}
+.t-today .qa-btn{display:flex;align-items:center;justify-content:flex-start;gap:10px;text-align:left;background:var(--surface);color:var(--ink);font-weight:700;font-size:.9rem;min-height:54px;padding:8px 12px 8px 8px;border-radius:14px;transition:transform .15s,border-color .15s,background .15s;}
+.t-today .qa-btn[style*="display: grid"],.t-today .qa-btn[style*="display:grid"]{display:flex !important;}
+.qa-ic{flex:none;width:36px;height:36px;border-radius:11px;display:grid;place-items:center;font-size:1.1rem;line-height:1;background:var(--brand-soft);color:var(--brand-deep);font-weight:900;}
+.qa-l{min-width:0;line-height:1.25;}
+.t-today .qa-btn:hover{transform:translateY(-1px);border-color:var(--brand-line);background:var(--brand-soft);}
+.t-today .qa-btn:hover .qa-ic{background:var(--surface);}
+.t-today .qa-btn:focus-visible{outline:3px solid var(--brand-deep);outline-offset:2px;}
 .t-today .qa-btn.qa-journal{background:var(--brand-deep);color:var(--surface);border-color:transparent;}
+.t-today .qa-btn.qa-journal .qa-ic{background:rgba(255,255,255,.18);}
+.t-today .qa-btn.qa-journal:hover{background:var(--brand-deep);filter:brightness(1.08);}
 :root[data-theme="dark"] .t-today .qa-btn.qa-journal{color:var(--surface-2);}
 @media (prefers-color-scheme: dark){:root[data-theme="auto"] .t-today .qa-btn.qa-journal{color:var(--surface-2);}}
-.t-today .qa-btn:hover{transform:none;border-color:var(--brand-line);box-shadow:var(--card-shadow);}
-.t-today .qa-btn:focus-visible{outline:3px solid var(--brand-deep);outline-offset:2px;}
-.t-today .ui-tiles .ui-tile{cursor:pointer;}
-.t-today .ui-tile:focus-visible{outline:3px solid var(--brand-deep);outline-offset:2px;}
-.t-today .t-att-card #t-mark-absent-block{border-top:1px solid var(--line-soft) !important;}
-.ui-tile.bad b{color:var(--danger);}
+@media (max-width:560px){.t-today .qa-grid{grid-template-columns:1fr 1fr;gap:8px;} .t-today .qa-btn{font-size:.84rem;min-height:52px;padding:8px;gap:8px;} .qa-ic{width:32px;height:32px;}}
 .d-today .d-tiles{grid-template-columns:repeat(2,minmax(0,1fr));}
 @media (min-width:600px){.d-today .d-tiles{grid-template-columns:repeat(4,minmax(0,1fr));}}
 .d-today .d-brk{margin-top:-4px;}
@@ -3502,9 +3549,11 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
 .d-today .d-fold > summary::-webkit-details-marker{display:none;}
 .d-today .d-fold > summary::after{content:'▾';margin-left:auto;color:var(--ink-3);font-size:.8rem;}
 .d-today .d-fold[open] > summary::after{content:'▴';}
-.d-today .d-att-card .ui-card-h{color:var(--danger);}
+@media (max-width:420px){.d-today .ui-tiles .st-tile{padding:12px;column-gap:10px;} .d-today .st-ic{width:38px;height:38px;font-size:1.1rem;}}
 .t-now-acts{margin:-4px 0 12px;}
-.t-now-acts .ui-btn{flex:1;}
+.t-now-acts .ui-btn{flex:1;max-width:none;}
+.d-today .qa-grid{grid-template-columns:repeat(auto-fit,minmax(190px,1fr));}
+@media (max-width:560px){.d-today .qa-grid{grid-template-columns:1fr 1fr;}}
 </style>
 </head>
 <!-- auth-mode СТОЇТЬ ТУТ ОДРАЗУ, а не чекає на скрипт.
@@ -4122,26 +4171,26 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
            спершу числа дня (плитки), під ними хто відсутній, далі дії,
            аналітика й басейн/автобус. Ідентифікатори ті самі — director.js
            не змінювався. -->
-      <div class="ui-tiles d-tiles" role="group" aria-label="Школа сьогодні">
-        <div role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" class="ui-tile info" onclick="toggleHomeworkBreakdown()" title="Показати, хто що задав"><b id="d-hw-counter">0</b><span id="d-hw-title">📚 ДЗ</span></div>
-        <div role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" class="ui-tile ok" onclick="toggleCommentsBreakdown()" title="Показати, хто що написав"><b id="d-com-counter">0</b><span id="d-com-title">💬 Коментарі</span></div>
-        <div role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" class="ui-tile warn" onclick="toggleWeekBreakdown()" title="Учень × день за тиждень"><b id="d-week-late">0</b><span>⏰ запізнень за тиждень</span></div>
-        <div role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" class="ui-tile bad" onclick="toggleWeekBreakdown()" title="Учень × день за тиждень"><b id="d-week-absent">0</b><span>🚨 відсутніх за тиждень</span></div>
+      <div class="ui-tiles d-tiles st-tiles" role="group" aria-label="Школа сьогодні">
+        <div role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" class="ui-tile st-tile st-brand" onclick="toggleHomeworkBreakdown()" title="Показати, хто що задав"><i class="st-ic" aria-hidden="true">📚</i><b id="d-hw-counter">0</b><span id="d-hw-title">ДЗ</span></div>
+        <div role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" class="ui-tile st-tile st-ok" onclick="toggleCommentsBreakdown()" title="Показати, хто що написав"><i class="st-ic" aria-hidden="true">💬</i><b id="d-com-counter">0</b><span id="d-com-title">Коментарі</span></div>
+        <div role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" class="ui-tile st-tile st-warn" onclick="toggleWeekBreakdown()" title="Учень × день за тиждень"><i class="st-ic" aria-hidden="true">⏰</i><b id="d-week-late">0</b><span>запізнень за тиждень</span></div>
+        <div role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" class="ui-tile st-tile st-danger" onclick="toggleWeekBreakdown()" title="Учень × день за тиждень"><i class="st-ic" aria-hidden="true">🚨</i><b id="d-week-absent">0</b><span>відсутніх за тиждень</span></div>
       </div>
       <div id="d-hw-breakdown" class="ui-card d-brk" style="display:none;"></div>
       <div id="d-com-breakdown" class="ui-card d-brk" style="display:none;"></div>
       <div id="d-week-breakdown" class="ui-card d-brk" style="display:none;"></div>
-      <div class="ui-card d-att-card">
+      <div class="ui-card d-att-card st-card">
         <h4 id="d-att-header" class="ui-card-h">🚨 Відсутні та запізнення</h4>
         <ul id="d-unified-att-list" class="list-dash" style="padding-left:0;list-style:none;margin:0;"><li class="empty-msg is-loading">Завантаження...</li></ul>
       </div>
       <h3 class="ui-h">Дії</h3>
-      <div class="qa-grid">
-        <button onclick="openJournalModal('director')" class="qa-btn qa-journal">📖 Журнал</button>
-        <button onclick="openVisualMatrixModal('live')" class="qa-btn">🗓️ Розклад</button>
-        <button onclick="openCommentsView()" class="qa-btn">💬 Коментарі учням</button>
-        <button onclick="openChatModal('director')" data-chatbtn="1" class="qa-btn">✉️ Чат з батьками</button>
-      </div>
+      <div class="qa-groups"><div class="qa-group"><div class="qa-grid">
+        <button onclick="openJournalModal('director')" class="qa-btn qa-journal"><span class="qa-ic" aria-hidden="true">📖</span><span class="qa-l">Журнал</span></button>
+        <button onclick="openVisualMatrixModal('live')" class="qa-btn"><span class="qa-ic" aria-hidden="true">🗓️</span><span class="qa-l">Розклад</span></button>
+        <button onclick="openCommentsView()" class="qa-btn"><span class="qa-ic" aria-hidden="true">💬</span><span class="qa-l">Коментарі учням</span></button>
+        <button onclick="openChatModal('director')" data-chatbtn="1" class="qa-btn"><span class="qa-ic" aria-hidden="true">✉️</span><span class="qa-l">Чат з батьками</span></button>
+      </div></div></div>
       <h3 class="ui-h">Звіти</h3>
       <details id="d-overview-averages" class="ui-card d-fold">
         <summary>📈 Середні оцінки</summary>
@@ -4762,12 +4811,12 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
       <div id="t-now" style="display:none;"></div>
       <!-- Запити батьків «💬 Хочу обговорити» (talk-requests.js). Лише коли є. -->
       <div id="t-talk" class="fw-box tk-box" style="display:none;"></div>
-      <div class="ui-tiles" role="group" aria-label="Що чекає">
-        <div role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" class="ui-tile" onclick="showReactionsDetails()" title="Реакції батьків на ваші коментарі"><b id="t-karma-counter">0</b><span>❤️ реакції</span></div>
-        <div role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" id="t-retake-btn" class="ui-tile warn" onclick="openRetakeRequestsModal()" title="Запити на перездачу"><b id="t-retake-counter">0</b><span>🔄 перездачі</span></div>
-        <div role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" id="t-chat-btn" class="ui-tile info" onclick="openChatModal('teacher')" data-chatbtn="1" title="Листування з батьками"><b>✉️</b><span>чат з батьками</span></div>
+      <div class="ui-tiles st-tiles" role="group" aria-label="Що чекає">
+        <div role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" class="ui-tile st-tile st-accent" onclick="showReactionsDetails()" title="Реакції батьків на ваші коментарі"><i class="st-ic" aria-hidden="true">❤️</i><b id="t-karma-counter">0</b><span>реакції батьків</span></div>
+        <div role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" id="t-retake-btn" class="ui-tile st-tile st-warn" onclick="openRetakeRequestsModal()" title="Запити на перездачу"><i class="st-ic" aria-hidden="true">🔄</i><b id="t-retake-counter">0</b><span>перездачі</span></div>
+        <div role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" id="t-chat-btn" class="ui-tile st-tile st-brand" onclick="openChatModal('teacher')" data-chatbtn="1" title="Листування з батьками"><i class="st-ic" aria-hidden="true">✉️</i><b class="st-txt">Чат</b><span>з батьками</span></div>
       </div>
-      <div class="ui-card t-att-card">
+      <div class="ui-card t-att-card st-card">
         <h4 id="t-att-header" class="ui-card-h">Відвідуваність</h4>
         <p id="t-att-hint" style="margin:-6px 0 8px 0;font-size:.75rem;color:var(--ink-3);line-height:1.4;"></p>
         <ul id="t-attendance-list" class="list-dash" style="list-style:none;padding-left:0;"><li class="empty-msg is-loading">Завантаження...</li></ul>
@@ -4790,21 +4839,27 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
         </div>
       </div>
       <h3 class="ui-h" id="t-actions-h">Дії</h3>
-      <div class="qa-grid" id="t-exams-journal-btns">
-        <button onclick="openExamsCalendar()" class="qa-btn qa-exams">📅 Контрольні</button>
-        <button onclick="openJournalModal('teacher')" class="qa-btn qa-journal">📖 Журнал</button>
-        <button onclick="showUngraded()" class="qa-btn qa-ungraded">🔍 Без оцінок</button>
-        <button onclick="openQuickJournal()" class="qa-btn qa-quick">⚡ Швидкий журнал</button>
-        <button id="t-cards-btn" onclick="openClassCards()" class="qa-btn qa-cards" style="display:none;">🗂 Картки учнів</button>
-        <button id="t-stats-btn" onclick="openClassStats()" class="qa-btn qa-cards" style="display:none;">📊 Статистика класу</button>
-        <button onclick="openCommentsView()" class="qa-btn qa-cards">💬 Коментарі учням</button>
-        <button onclick="openConsultTeacher()" class="qa-btn qa-cards">🗓 Консультації</button>
-        <button onclick="openHwDoneView()" class="qa-btn qa-cards">✓ Виконання ДЗ</button>
-        <button onclick="openClassBroadcast()" class="qa-btn qa-broadcast">✉️ Повідомлення класу</button>
-        <button onclick="printClassSchedule()" class="qa-btn qa-print">🖨️ Друк розкладу</button>
-        <button onclick="openStickerStatsModal()" class="qa-btn">🌟 Статистика наліпок</button>
-        <button id="t-wrapped-btn" onclick="showWeeklyWrapped()" class="qa-btn">🎁 Підсумки тижня</button>
-        <button id="t-matrix-btn-wrapper" onclick="openVisualMatrixModal('live')" class="qa-btn qa-matrix" style="display:none;">🗓️ Матриця розкладу</button>
+      <div class="qa-groups" id="t-exams-journal-btns">
+        <div class="qa-group"><div class="qa-gt">Журнал і оцінки</div><div class="qa-grid">
+          <button onclick="openJournalModal('teacher')" class="qa-btn qa-journal"><span class="qa-ic" aria-hidden="true">📖</span><span class="qa-l">Журнал</span></button>
+          <button onclick="openQuickJournal()" class="qa-btn qa-quick"><span class="qa-ic" aria-hidden="true">⚡</span><span class="qa-l">Швидкий журнал</span></button>
+          <button onclick="showUngraded()" class="qa-btn qa-ungraded"><span class="qa-ic" aria-hidden="true">🔍</span><span class="qa-l">Без оцінок</span></button>
+          <button onclick="openExamsCalendar()" class="qa-btn qa-exams"><span class="qa-ic" aria-hidden="true">📅</span><span class="qa-l">Контрольні</span></button>
+        </div></div>
+        <div class="qa-group"><div class="qa-gt">Клас</div><div class="qa-grid">
+          <button id="t-cards-btn" onclick="openClassCards()" class="qa-btn qa-cards" style="display:none;"><span class="qa-ic" aria-hidden="true">🗂</span><span class="qa-l">Картки учнів</span></button>
+          <button id="t-stats-btn" onclick="openClassStats()" class="qa-btn qa-cards" style="display:none;"><span class="qa-ic" aria-hidden="true">📊</span><span class="qa-l">Статистика класу</span></button>
+          <button onclick="openCommentsView()" class="qa-btn qa-cards"><span class="qa-ic" aria-hidden="true">💬</span><span class="qa-l">Коментарі учням</span></button>
+          <button onclick="openHwDoneView()" class="qa-btn qa-cards"><span class="qa-ic" aria-hidden="true">✓</span><span class="qa-l">Виконання ДЗ</span></button>
+          <button onclick="openStickerStatsModal()" class="qa-btn"><span class="qa-ic" aria-hidden="true">🌟</span><span class="qa-l">Статистика наліпок</span></button>
+          <button id="t-wrapped-btn" onclick="showWeeklyWrapped()" class="qa-btn"><span class="qa-ic" aria-hidden="true">🎁</span><span class="qa-l">Підсумки тижня</span></button>
+        </div></div>
+        <div class="qa-group"><div class="qa-gt">Батьки й розклад</div><div class="qa-grid">
+          <button onclick="openConsultTeacher()" class="qa-btn qa-cards"><span class="qa-ic" aria-hidden="true">🗓</span><span class="qa-l">Консультації</span></button>
+          <button onclick="openClassBroadcast()" class="qa-btn qa-broadcast"><span class="qa-ic" aria-hidden="true">✉️</span><span class="qa-l">Повідомлення класу</span></button>
+          <button onclick="printClassSchedule()" class="qa-btn qa-print"><span class="qa-ic" aria-hidden="true">🖨️</span><span class="qa-l">Друк розкладу</span></button>
+          <button id="t-matrix-btn-wrapper" onclick="openVisualMatrixModal('live')" class="qa-btn qa-matrix" style="display:none;"><span class="qa-ic" aria-hidden="true">🗓️</span><span class="qa-l">Матриця розкладу</span></button>
+        </div></div>
       </div>
       <div id="t-hw-list-wrapper" class="ui-card">
         <h4 class="ui-card-h">ДЗ класу сьогодні</h4>

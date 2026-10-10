@@ -893,9 +893,9 @@ export async function loadDirectorDashboard(){
 const dLabel=date.split('-').reverse().slice(0,2).join('.');
 const isToday=date===localDateString;
 const hwT=document.getElementById('d-hw-title');
-if(hwT)hwT.innerText=`📚 ДЗ · ${isToday?'сьогодні':dLabel}`;
+if(hwT)hwT.innerText=`ДЗ · ${isToday?'сьогодні':dLabel}`;
 const comT=document.getElementById('d-com-title');
-if(comT)comT.innerText=`💬 Коментарі · ${isToday?'сьогодні':dLabel}`;
+if(comT)comT.innerText=`Коментарі · ${isToday?'сьогодні':dLabel}`;
 document.getElementById('d-hw-counter').innerText=hw;document.getElementById('d-com-counter').innerText=com;document.getElementById('d-week-late').innerText=wl;document.getElementById('d-week-absent').innerText=wa;document.getElementById('d-unified-att-list').innerHTML=attHtml||'<li class="empty-msg">Усі присутні!</li>';
 }catch(e){console.error(e);}}
 window.loadDirectorDashboard=loadDirectorDashboard;

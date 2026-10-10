@@ -3262,7 +3262,7 @@ async function initUserSession(){
     document.getElementById('teacher-screen').style.display='block';document.getElementById('teacher-class-selector-box').style.display='block';
     const isArt=r==='art_school_teacher';
     // Майстер-ролі показуємо матрицю розкладу — вона потрібна для налагодження
-    document.getElementById('t-matrix-btn-wrapper').style.display=(isArt||isMasterTeacher(r))?'grid':'none';
+    document.getElementById('t-matrix-btn-wrapper').style.display=(isArt||isMasterTeacher(r))?'':'none';
     document.getElementById('t-mark-absent-block').style.display=isArt?'none':'flex';
     document.getElementById('t-exams-journal-btns').style.display=isArt?'none':'grid';
     {const ah=document.getElementById('t-actions-h');if(ah)ah.style.display=isArt?'none':'';}
