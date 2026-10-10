@@ -44,6 +44,7 @@
 // змінитися на іншому пристрої, поки кабінет був відкритий.
 // ═══════════════════════════════════════════════════════════════
 import { renderWorkPhotos } from './grade-work.js';
+import { trendChartSVG, monthlySeries, trendInfo, trendBadge } from './grade-trend.js';
 import { ref, get, child, query, orderByKey, startAt, endAt, onValue }
   from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { db, currentUserData, getActiveClass, getClassNum, LEVEL_MAX_CLASS, escHtml, escJs, mondayOf,
@@ -125,20 +126,30 @@ function subscribeMirror(cls,sid){
     err=>{ gvError=err&&err.message||'база відмовила'; paintWeek(); paintSubject(); });
 }
 
+// КОМЕНТАРІ — З ДЗЕРКАЛА ДИТИНИ (09.10.2026).
+// Раніше родина читала comments/{клас} і reactions/{клас} за тиждень — тобто
+// коментарі всіх однокласників. Тепер ці вузли їй закриті, а своє лежить у
+// student_comments/{клас}/{дитина}/{дата}/{предмет} = {t, r}.
+// Тут дзеркало розкладається в ту саму форму {дата: {предмет: {ключ: …}}},
+// яку чекає решта коду, — тож малювання не змінилось.
+export function commentsFromMirror(mirror, key){
+  const cm = {}, rx = {};
+  for(const d in (mirror || {})) for(const s in (mirror[d] || {})){
+    const c = mirror[d][s] || {};
+    if(typeof c.t === 'string' && c.t){ ((cm[d] ||= {})[s] ||= {})[key] = c.t; }
+    if(c.r){ ((rx[d] ||= {})[s] ||= {})[key] = c.r; }
+  }
+  return { cm, rx };
+}
 function subscribeWeek(cls,days){
-  const key=`${cls}|${days[0]}`;
+  const key=`${cls}|${gvSid}|${days[0]}`;
   if(subKeyWeek===key && offComments) return;
   offComments=drop(offComments); offReactions=drop(offReactions);
   subKeyWeek=key; gvComments=null; gvReactions=null;
-  const rangeOf = node => query(child(ref(db),`${node}/${cls}`), orderByKey(), startAt(days[0]), endAt(days[4]));
-  // Коментарі й реакції лежать у вузлах класу, тож беремо лише пʼять
-  // ключів показаного тижня, а не весь рік.
-  offComments=onValue(rangeOf('comments'),
-    snap=>{ gvComments=snap.exists()?(snap.val()||{}):{}; paintWeek(); },
-    ()=>{ gvComments={}; paintWeek(); });
-  offReactions=onValue(rangeOf('reactions'),
-    snap=>{ gvReactions=snap.exists()?(snap.val()||{}):{}; paintWeek(); },
-    ()=>{ gvReactions={}; paintWeek(); });
+  const sid=gvSid;
+  offComments=onValue(query(child(ref(db),`student_comments/${cls}/${sid}`), orderByKey(), startAt(days[0]), endAt(days[4])),
+    snap=>{ const v=commentsFromMirror(snap.exists()?(snap.val()||{}):{}, sid); gvComments=v.cm; gvReactions=v.rx; paintWeek(); },
+    ()=>{ gvComments={}; gvReactions={}; paintWeek(); });
 }
 
 function subscribeScales(cls){
@@ -316,9 +327,9 @@ function retakeBtn(cls, subj, date, v, numericScale){
 
 // Реакція на коментар: одна, повторне натискання знімає. Обрана — з
 // підписом, щоб учитель і батьки однаково розуміли, що вона означає.
-export function reactionRow(date, subj, mine){
+export function reactionRow(date, subj, mine, key){
   const btn = r => `<button type="button" class="cr-btn${mine===r.e?' on':''}" aria-pressed="${mine===r.e}" aria-label="${r.t}" data-tip="${r.t}"`
-    + ` onclick="sendReaction('${escJs(date)}','${escJs(subj)}','${r.e}','${escJs(mine||'')}')">${r.e}</button>`;
+    + ` onclick="sendReaction('${escJs(date)}','${escJs(subj)}','${r.e}','${escJs(mine||'')}','${escJs(key||'')}')">${r.e}</button>`;
   const cur = COMMENT_REACTS.find(r => r.e === mine);
   return `<div class="cr-row">${COMMENT_REACTS.map(btn).join('')}${cur ? `<span class="cr-cur">${escHtml(cur.t)}</span>` : ''}</div>`;
 }
@@ -342,13 +353,13 @@ export function renderGradesWeek(weekStart, attempt=0){
   const sid = cls ? mySid(cls) : '';
   if(!cls || !sid){
     if(planRetry(attempt, n=>renderGradesWeek(weekStart,n))){
-      if(!(box.innerHTML||'').trim()) box.innerHTML='<p class="empty-msg">Завантаження...</p>';
+      if(!(box.innerHTML||'').trim()) box.innerHTML='<p class="empty-msg is-loading">Завантаження...</p>';
       return;
     }
     box.innerHTML = '<p class="empty-msg">Дитину не визначено.</p>'; return;
   }
   if(!waitForDir(cls, attempt, n=>renderGradesWeek(weekStart,n))){
-    if(!(box.innerHTML||'').trim()) box.innerHTML='<p class="empty-msg">Завантаження...</p>';
+    if(!(box.innerHTML||'').trim()) box.innerHTML='<p class="empty-msg is-loading">Завантаження...</p>';
     return;
   }
   stopRetry();
@@ -372,7 +383,7 @@ function paintWeek(){
   // Ще не все приїхало. Малювати половину не можна: батько побачить
   // «коментарів немає» там, де вони просто ще в дорозі.
   if(gvMirror===null || gvComments===null || gvReactions===null){
-    box.innerHTML = gvLastWeekHtml || '<p class="empty-msg">Завантаження...</p>';
+    box.innerHTML = gvLastWeekHtml || '<p class="empty-msg is-loading">Завантаження...</p>';
     return;
   }
   const days = weekDays(gvWeek), cls = gvCls;
@@ -403,18 +414,18 @@ function paintWeek(){
       const rx = mineOf(((gvReactions||{})[ds]||{})[s]) || null;
       const tName = gvTeachers[subjKey(s)] || gvTeachers[s.trim()];
       const tHtml = tName ? ` <span style="font-size:0.8rem;color:var(--brand-deep);font-weight:normal;">👩‍🏫 ${escHtml(tName)}</span>` : '';
-      return `<li style="margin-bottom:9px;"><b>${escHtml(s)}</b>${tHtml}<br>`
+      return `<li style="margin-bottom:9px;"><button type="button" class="gv-subj-link" data-subj="${escHtml(s)}" onclick="gvOpenSubject(this.dataset.subj)" title="Усі оцінки й графік з предмета">${escHtml(s)}</button>${tHtml}<br>`
         + grades.map(g=>gradeChip(g.v,g.t,cls,gvScales?.[s]?.max)
           +retakeBtn(cls,s,g.date,g.v,gvScales?.[s]?.max)+renderWorkPhotos(g.workPhotos)).join(' ')
         + (cm ? `<div data-cm-cls="${escHtml(cls)}" data-cm-date="${escHtml(ds)}" data-cm-subj="${escHtml(s)}" data-cm-sid="${escHtml(cmKey)}" style="background:var(--surface-2);padding:5px 9px;border-radius:6px;font-style:italic;font-size:.88rem;margin-top:4px;">${escHtml(cm)}</div>`
-                + reactionRow(ds, s, rx) : '')
+                + reactionRow(ds, s, rx, cmKey) : '')
         + `</li>`;
     }).join('');
     return `<div class="gv-day"><div class="gv-day-head">${escHtml(dayName(ds))}, ${escHtml(human(ds))}</div>
       <ul class="list-dash" style="margin:0;">${rows}</ul></div>`;
   }).join('');
 
-  gvLastWeekHtml = nav + (blocks || '<p class="empty-msg">Цього тижня оцінок і коментарів немає.</p>');
+  gvLastWeekHtml = nav + (blocks || `<div class="ui-empty"><b>Цього тижня оцінок і коментарів немає</b>Щойно вчитель поставить оцінку чи напише коментар — вони зʼявляться тут.<br><button type="button" class="ui-btn ui-btn-q" onclick="gvShiftWeek(-1)">← Попередній тиждень</button></div>`);
   box.innerHTML = gvLastWeekHtml;
   // Коментар, що побув на екрані, — «переглянуто» для вчителя (comments-view.js)
   window.observeCommentsSeen?.(box);
@@ -440,13 +451,13 @@ export function renderGradesSubject(subj, attempt=0){
   const sid = cls ? mySid(cls) : '';
   if(!cls || !sid){
     if(planRetry(attempt, n=>renderGradesSubject(subj,n))){
-      if(!(box.innerHTML||'').trim()) box.innerHTML='<p class="empty-msg">Завантаження...</p>';
+      if(!(box.innerHTML||'').trim()) box.innerHTML='<p class="empty-msg is-loading">Завантаження...</p>';
       return;
     }
     box.innerHTML = '<p class="empty-msg">Дитину не визначено.</p>'; return;
   }
   if(!waitForDir(cls, attempt, n=>renderGradesSubject(subj,n))){
-    if(!(box.innerHTML||'').trim()) box.innerHTML='<p class="empty-msg">Завантаження...</p>';
+    if(!(box.innerHTML||'').trim()) box.innerHTML='<p class="empty-msg is-loading">Завантаження...</p>';
     return;
   }
   stopRetry();
@@ -466,7 +477,7 @@ function paintSubject(){
     return;
   }
   if(gvMirror===null){
-    box.innerHTML = gvLastSubjHtml || '<p class="empty-msg">Завантаження...</p>';
+    box.innerHTML = gvLastSubjHtml || '<p class="empty-msg is-loading">Завантаження...</p>';
     return;
   }
   // 📊 Підсумок (class-stats.js): пропуски, запізнення, предмети з низьким балом
@@ -490,7 +501,7 @@ function paintSubject(){
   // Підпис під числом обовʼязковий. Батьки читають будь-яке середнє як
   // «яка буде оцінка в табелі», а підсумкову ставить учитель — і має
   // ставити її сам, а не підтверджувати пораховане порталом.
-  const head = `<div style="background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:11px;text-align:center;">
+  const head = `<div style="background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:11px;text-align:center;">
       <div style="font-size:1.9rem;font-weight:800;color:var(--purple,var(--brand-deep));line-height:1.1;">${escHtml(avgTxt)}</div>
       <div style="font-size:.78rem;color:var(--ink-2);margin-top:3px;">${since?`середній бал поточної теми (після тематичної ${escHtml(human(journalBaseDate(since)))})`:'середній бал'} з предмета «${escHtml(gvSubject)}»
         · оцінок у розрахунку: ${counted} · ${getClassNum(cls)<=LEVEL_MAX_CLASS?'рівні П/С/Д/В':`шкала: 1–${scaleMax||6}`}</div>
@@ -508,7 +519,15 @@ function paintSubject(){
          </li>`).join('') + `</ul>`
     : '<p class="empty-msg">З цього предмета оцінок ще немає.</p>';
 
-  gvLastSubjHtml = sel + head + `<ul class="list-dash" style="margin:0 0 9px 0;">${renderGradeFormulaInfo()}</ul>` + list;
+  // 📈 Графік: середній по місяцях + усі оцінки + поріг (grade-trend.js)
+  const junior=getClassNum(cls)<=LEVEL_MAX_CLASS, mx=junior?6:Number(scaleMax)||6;
+  const thr=junior||mx===6?3:mx===12?4:mx/3;
+  const chart=trendChartSVG(rows.map(r=>({date:r.date,v:r.v,t:r.t})),{max:junior?5:mx,min:junior?2:1,thr,levels:junior});
+  const gm={},tm={};rows.forEach(r=>{gm[r.date]=r.v;tm[r.date]=r.t||'П';});
+  const tinfo=trendInfo(monthlySeries(gm,tm),mx);
+  const chartHtml=chart?`<div class="gt-card"><div class="gt-head"><b>📈 Як змінюється середній бал</b>${trendBadge(tinfo,mx)}</div>${chart}
+      <div class="gt-legend"><span><i class="gt-k-line"></i>середній за місяць</span><span><i class="gt-k-dot"></i>оцінка</span><span><i class="gt-k-th"></i>тематична</span><span><i class="gt-k-thr"></i>поріг низького балу</span></div></div>`:'';
+  gvLastSubjHtml = sel + head + chartHtml + `<ul class="list-dash" style="margin:0 0 9px 0;">${renderGradeFormulaInfo()}</ul>` + list;
   box.innerHTML = gvLastSubjHtml;
 }
 window.renderGradesSubject = renderGradesSubject;

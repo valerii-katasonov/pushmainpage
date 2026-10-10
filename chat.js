@@ -257,7 +257,7 @@ window.openChatModal = async function(){
   document.getElementById('inbox-modal').style.display = 'flex';
   window.backToChatList();
   const box = document.getElementById('inbox-contacts-list');
-  box.innerHTML = '<p class="empty-msg" style="padding:20px;">Завантаження...</p>';
+  box.innerHTML = '<p class="empty-msg is-loading" style="padding:20px;">Завантаження...</p>';
 
   // Лічильник поколінь: між зняттям старої підписки й новою читається
   // довідник контактів. Якщо вікно переписок встигли закрити й відкрити
@@ -930,7 +930,7 @@ window.openChatPicker = async function(mode){
     ? 'Створиться ОКРЕМА переписка з усіма учасниками. Попереднє листування новий учасник не побачить.'
     : 'Оберіть одного або кількох.';
   modal.style.display = 'flex';
-  box.innerHTML = '<p class="empty-msg">Завантаження...</p>';
+  box.innerHTML = '<p class="empty-msg is-loading">Завантаження...</p>';
   const gn = document.getElementById('cp-group-name');
   if(gn){ gn.value = ''; gn.style.display = 'none'; }
   const filters = document.getElementById('cp-filters');

@@ -536,7 +536,7 @@ export async function loadWeekMenu(){
   const monday = currentMonday(), dates = weekDates(monday);
   const lbl = document.getElementById('k-week-label');
   if(lbl) lbl.innerHTML = `${human(dates[0])} — ${human(dates[4])}<br><small class="k-week-hint">${escHtml(weekHint(monday))}</small>`;
-  box.innerHTML = '<p class="empty-msg">Завантаження...</p>';
+  box.innerHTML = '<p class="empty-msg is-loading">Завантаження...</p>';
   const snaps = await Promise.all(dates.map(d=>get(child(ref(db),`menu/${d}`))));
   box.innerHTML = dates.map((date,i)=>{
     const m = snaps[i].exists() ? snaps[i].val() : {};
@@ -1012,7 +1012,7 @@ export async function loadMealPlans(){
   const box = document.getElementById('k-plan-list');
   if(!box) return;
   if(!cls){ box.innerHTML = '<p class="empty-msg">Оберіть клас.</p>'; return; }
-  box.innerHTML = '<p class="empty-msg">Завантаження...</p>';
+  box.innerHTML = '<p class="empty-msg is-loading">Завантаження...</p>';
   const [stSnap, plSnap] = await Promise.all([
     get(child(ref(db),`students_list/${cls}`)),
     get(child(ref(db),`meal_plan/${cls}`))
@@ -1154,7 +1154,7 @@ window.loadClassOrders = async function(){
   if(!box) return;
   if(!cls || !date){ box.innerHTML = '<p class="empty-msg">Оберіть клас і дату.</p>'; return; }
   const allMode = cls === ALL_CLASSES;
-  box.innerHTML = '<p class="empty-msg">Завантаження...</p>';
+  box.innerHTML = '<p class="empty-msg is-loading">Завантаження...</p>';
   try{
     // Для одного класу читаємо рівно його вузли. Читати всю школу заради
     // двадцяти дітей — зайвий трафік на кожне перемикання дати.
@@ -1276,7 +1276,7 @@ window.loadStaffOrders = async function(){
   const box  = document.getElementById('k-staff-orders');
   if(!box) return;
   const date = document.getElementById('k-order-date')?.value || localDateString;
-  box.innerHTML = '<p class="empty-msg">Завантаження...</p>';
+  box.innerHTML = '<p class="empty-msg is-loading">Завантаження...</p>';
   try{
     const [planSnap, daySnap, priceSnap, dirSnap, menuSnap, historySnap] = await Promise.all([
       get(child(ref(db),'staff_meals')),
@@ -3405,7 +3405,7 @@ export function mealMsg(text, bad){
 export async function loadTakeawayItems(){
   const box = document.getElementById('k-ta-items');
   if(!box) return;
-  box.innerHTML = '<p class="empty-msg">Завантаження...</p>';
+  box.innerHTML = '<p class="empty-msg is-loading">Завантаження...</p>';
   try{
     const snap = await get(child(ref(db),'takeaway_items'));
     const items = snap.exists() ? snap.val() : {};
@@ -3529,7 +3529,7 @@ window.loadTakeawayOrders = async function(){
   const date = document.getElementById('k-ta-date')?.value || localDateString;
   const box  = document.getElementById('k-ta-orders');
   if(!box) return;
-  box.innerHTML = '<p class="empty-msg">Завантаження...</p>';
+  box.innerHTML = '<p class="empty-msg is-loading">Завантаження...</p>';
   try{
     const [itSnap, ordSnap, stSnap, histSnap] = await Promise.all([
       get(child(ref(db),'takeaway_items')),

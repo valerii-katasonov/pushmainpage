@@ -37,16 +37,22 @@ const ALL = 'Всі предмети';
 // ── ЧИСТА ЛОГІКА ─────────────────────────────────────────────────
 // Плоский список коментарів за діапазоном дат.
 //   comments/meta/seen/reacts — вузли класу {дата: {предмет: {учень: ...}}}
-export function flattenComments(comments, meta, seen, reacts){
+// alias(ключ) — інший ключ того самого учня. Старі коментарі лежать під
+// ІМЕНЕМ, а родина (через дзеркало) ставить реакцію й «переглянуто» під
+// ідентифікатором — без цього вчитель їх не бачив.
+export function flattenComments(comments, meta, seen, reacts, alias = () => null){
   const out = [];
   for(const d in (comments || {})) for(const s in (comments[d] || {})) for(const sid in (comments[d][s] || {})){
     const text = comments[d][s][sid];
     if(typeof text !== 'string' || !text.trim()) continue;
     const m = meta?.[d]?.[s]?.[sid] || null;
-    const sn = seen?.[d]?.[s]?.[sid] || {};
-    const viewers = Object.entries(sn).filter(([, v]) => v && typeof v === 'object')
+    const alt = alias(sid);
+    const sn = { ...((alt && seen?.[d]?.[s]?.[alt]) || {}), ...(seen?.[d]?.[s]?.[sid] || {}) };
+    // Перегляди, старіші за останню правку тексту, — про попередній коментар
+    const since = (m && m.ts) || 0;
+    const viewers = Object.entries(sn).filter(([, v]) => v && typeof v === 'object' && (v.ts || 0) >= since)
       .map(([uid, v]) => ({ uid, ...v })).sort((a, b) => (a.ts || 0) - (b.ts || 0));
-    const reaction = reacts?.[d]?.[s]?.[sid] || null;
+    const reaction = reacts?.[d]?.[s]?.[sid] || (alt && reacts?.[d]?.[s]?.[alt]) || null;
     // Хто поставив реакцію: той, у кого в перегляді записана саме вона;
     // якщо таких кілька — останній за часом.
     const by = viewers.filter(v => v.r && v.r === reaction).sort((a, b) => (b.rts || 0) - (a.rts || 0))[0] || null;
@@ -142,7 +148,7 @@ function ensureModal(){
           <option value="">Усі</option><option value="unseen">Не переглянуті</option>
           <option value="reacted">З реакцією</option><option value="mine">Лише мої</option></select></label>
       </div>
-      <div id="cv-body"><p class="empty-msg">Завантаження...</p></div>
+      <div id="cv-body"><p class="empty-msg is-loading">Завантаження...</p></div>
     </div>`;
   m.addEventListener('click', e => { if(e.target === m) window.closeCommentsView(); });
   m.addEventListener('keydown', e => { if(e.key === 'Escape') window.closeCommentsView(); });
@@ -191,7 +197,7 @@ async function render(keepData){
   const key = `${cls}|${p.start}|${end}`;
   try{
     if(!keepData || !cvData || cvData.key !== key){
-      body.innerHTML = '<p class="empty-msg">Завантаження...</p>';
+      body.innerHTML = '<p class="empty-msg is-loading">Завантаження...</p>';
       const [cm, meta, seen, rx, links, head] = await Promise.all([
         getDateRange(`comments/${cls}`, p.start, end, true),
         getDateRange(`comment_meta/${cls}`, p.start, end),
@@ -207,7 +213,7 @@ async function render(keepData){
       const raw = (teacherAccessMatrix || {})[cls];
       const allowed = Array.isArray(raw) ? raw : Object.values(raw || {});
       const ctx = { head: head || isAdminRole(role()), allowed, uid: auth.currentUser?.uid || '' };
-      const list = flattenComments(cm, meta, seen, rx).filter(c => canSeeComment(c, ctx));
+      const list = flattenComments(cm, meta, seen, rx, k => (window.stuId && window.stuId(cls, k)) || null).filter(c => canSeeComment(c, ctx));
       cvData = { key, list, names, head: ctx.head };
     }
     const { list, names } = cvData;
@@ -234,7 +240,7 @@ async function render(keepData){
           ? `<div class="cv-react${c.reaction === '😔' || c.reaction === '🤔' ? ' warn' : ''}">${escHtml(c.reaction)} ${escHtml(lbl)} — ${
               c.reactBy ? `${escHtml(viewerLabel(c.reactBy, names, nm))}, ${escHtml(fmt(c.reactBy.rts))}` : '<span class="cv-mute">хто й коли — невідомо (поставлено до оновлення)</span>'}</div>` : '';
         return `<article class="cv-item">
-          <div class="cv-top"><b>${escHtml(nm)}</b><span>${escHtml(c.subj)}</span><span class="cv-mute">${escHtml(human(c.date))}</span></div>
+          <div class="cv-top"><button type="button" class="sn-link" onclick="openStudent360('${escJs(cls)}','${escJs(c.sid)}',event)">${escHtml(nm)}</button><span>${escHtml(c.subj)}</span><span class="cv-mute">${escHtml(human(c.date))}</span></div>
           <div class="cv-text">${escHtml(c.text)}</div>
           <div class="cv-author">✍️ ${author}</div>${views}${react}
         </article>`;

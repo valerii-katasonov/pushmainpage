@@ -137,7 +137,7 @@ function visibleTo(a, role, cls){
 export async function renderNewsFeed(containerId){
   const box = document.getElementById(containerId);
   if(!box) return;
-  box.innerHTML = '<p class="empty-msg">Завантаження...</p>';
+  box.innerHTML = '<p class="empty-msg is-loading">Завантаження...</p>';
   try{
     const all = await loadNews();
     const role = currentUserData?.role;
@@ -388,14 +388,20 @@ window.publishNews = async function(){
 };
 
 window.deleteNews = async function(id){
-  if(!confirm('Видалити це оголошення?')) return;
+  // Без «Ви впевнені?»: видаляємо одразу й 10 секунд даємо повернути
+  // (undo.js). Реакції й «прочитали» лежать окремо й не чіпаються.
+  const redraw = () => { renderNewsFeed('d-news-feed'); renderNewsFeed('t-news-feed'); renderNewsFeed('o-news-feed'); };
   try{
-    await remove(ref(db,`announcements/${id}`));
+    if(window.deleteWithUndo){
+      await window.deleteWithUndo({ paths: { [`announcements/${id}`]: null }, label: 'Оголошення видалено',
+        onUndo: () => { logAction('announcement', { value: 'повернуто' }); redraw(); } });
+    } else {
+      if(!confirm('Видалити це оголошення?')) return;
+      await remove(ref(db,`announcements/${id}`));
+      showToast('🗑️ Видалено');
+    }
     logAction('announcement', { value: 'видалено' });
-    showToast('🗑️ Видалено');
-    renderNewsFeed('d-news-feed');
-    renderNewsFeed('t-news-feed');
-    renderNewsFeed('o-news-feed');
+    redraw();
   }catch(e){ alert('Помилка: ' + e.message); }
 };
 

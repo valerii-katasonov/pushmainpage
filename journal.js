@@ -42,7 +42,7 @@ window.globalTeachersList = window.globalTeachersList || [];
 
 let journalMode='view'; let journalIsTeacher=false;
 let gradeSaving=false;
-let gepCls=''; let gepSubj=''; let gepDate=''; let gepStudent=''; let gepType='П'; let gepCellEl=null; let gepYMonth='';
+let gepCls=''; let gepSubj=''; let gepDate=''; let gepStudent=''; let gepType='П'; let gepCellEl=null; let gepYMonth=''; let gepHadValue=false;
 let journalScaleMax=6,journalNumericScale=false,journalRenderSeq=0,semesterRenderSeq=0,journalVisibleColumns=[];
 let journalColumnBusy=false;
 // Phase 4b/9: journal zoom state (10% steps, 40%-150%), applied via --journal-scale on
@@ -189,7 +189,7 @@ window.setGradeModifier=function(mod){
 function openGradeEditor(cls,subj,dateStr,student,yMonth,cellEl,existingVal,existingType,presetType){
   if(gradeSaving)return;
   loadGradeWork(cls,student,yMonth,subj,dateStr);
-  gepCls=cls;gepSubj=subj;gepDate=dateStr;gepStudent=student;gepYMonth=yMonth;gepCellEl=cellEl;gepType=existingType||presetType||'П';
+  gepCls=cls;gepSubj=subj;gepDate=dateStr;gepStudent=student;gepYMonth=yMonth;gepCellEl=cellEl;gepType=existingType||presetType||'П';gepHadValue=!!existingVal;
   document.getElementById('gep-label').textContent=`${stuName(cls,student)} | ${subj} | ${journalBaseDate(dateStr).split('-').reverse().join('.')} · стовпець ${journalSlot(dateStr)}`;
   document.getElementById('gep-value').value=existingVal||'';
   document.getElementById('gep-value').placeholder=gradeModifiersAllowed(cls)?'1–6, напр. 5+':`1–${journalScaleMax}`;
@@ -214,6 +214,9 @@ window.confirmGrade=async function(){
   let val=document.getElementById('gep-value').value.trim().replace('−','-');
   if(!val){
     if(hasGradeWorkChanges())return showToast('⚠️ Спершу вкажіть оцінку. Фото роботи не зберігаються без оцінки.');
+    // Порожня клітинка й лишилась порожньою — нічого не видаляли, тож і
+    // «Оцінку видалено · Повернути» та запис у журнал дій не потрібні
+    if(!gepHadValue){ window.closeGradeEditor(); return; }
     return window.deleteGrade();
   }
   // Рівень зберігаємо великою літерою: інакше в базі опиняться і «в», і «В»,
@@ -255,14 +258,19 @@ window.confirmGrade=async function(){
 window.deleteGrade=async function(){
   if(gradeSaving)return;
   gradeSaving=true;setGradeWorkBusy(true);
+  // «Видалено · Повернути» (undo.js): знімок клітинки (оцінка, тип,
+  // дзеркало родини з фото роботи) і повернення одним записом.
+  const who=stuName(gepCls,gepStudent);
+  const paths=gradeWritePaths(gepCls,gepYMonth,gepSubj,gepDate,gepStudent,null,null);
   try{
-    await update(ref(db), gradeWritePaths(gepCls,gepYMonth,gepSubj,gepDate,gepStudent,null,null));
+    if(window.deleteWithUndo) await window.deleteWithUndo({paths,label:`Оцінку видалено: ${who}`,onUndo:()=>renderJournalTable()});
+    else await update(ref(db), paths);
   }catch(e){
     console.error('Видалення оцінки:',e);
     showToast('❌ Не видалено: '+(e.message||''));
     return;
   }finally{gradeSaving=false;setGradeWorkBusy(false);}
-  closeGradeEditor();renderJournalTable();showToast('🗑️ Оцінку видалено');
+  closeGradeEditor();renderJournalTable();if(!window.deleteWithUndo)showToast('🗑️ Оцінку видалено');
   logAction('grade_del',{cls:gepCls,target:stuName(gepCls,gepStudent),subject:gepSubj,date:gepDate});
 };
 document.getElementById('gep-value').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();window.confirmGrade();}if(e.key==='Escape'){e.preventDefault();window.closeGradeEditor();}});
@@ -441,7 +449,13 @@ window.saveSemesterGrades=async function(){
       patch[sid]={value:v,auto,by:currentUserData?.email||'',ts:Date.now()};
       n++;if(auto&&auto!==v)manual++;
     });
-    await update(ref(db,`semester_grades/${cls}/${semId}/${subj}`),patch);
+    // Разом — дзеркало для родини (student_semester): вузол класу їй закритий
+    const all={};
+    for(const sid in patch){
+      all[`semester_grades/${cls}/${semId}/${subj}/${sid}`]=patch[sid];
+      all[`student_semester/${cls}/${sid}/${semId}/${subj}`]=patch[sid]?{value:patch[sid].value}:null;
+    }
+    await update(ref(db),all);
     logAction('semester_grade',{cls,subject:subj,value:`${semCache[semId]?.name||semId}: ${n} оц.`+(manual?`, змінено вручну: ${manual}`:'')});
     showToast(`✅ Підсумкові збережено (${n})`);
     window.renderSemesterTable();
@@ -806,12 +820,12 @@ window.renderJournalTable=async function(){
       if(last&&last.ym===c.ym)last.count++;
       else monthBands.push({ym:c.ym,count:1,bandIdx:monthBands.length});
     });
-    // Смуги місяців у журналі. Тут навмисно ЛІТЕРАЛИ, а не var(--…):
-    // ця таблиця йде на друк через html2canvas, а він перемальовує
-    // сторінку у власне полотно, і покладатися на те, що змінні доїдуть
-    // туди правильно, не хочеться. Значення — ті самі, що в токенах
-    // --brand-soft і --surface-2; міняти їх треба парою.
-    const bandColorOf=idx=>idx%2===0?'#E0F7FA':'#F4F8F9';
+    // Смуги місяців у журналі. Раніше тут стояли літерали заради html2canvas;
+    // тепер — токени (темна тема), а html2canvas бере вже обчислені кольори
+    // зі світлої теми: вивантаження обгорнуто в withLightTheme (theme.js).
+    // Токени, а не літерали: у темній темі смуги темніють разом із сторінкою.
+    // Вивантаження (html2canvas) робиться у світлій темі — withLightTheme нижче.
+    const bandColorOf=idx=>idx%2===0?'var(--brand-soft)':'var(--surface-2)';
     // Row 1: month bands, with rowspan-2 corner cells for the sticky student/avg columns
     let monthRow='<tr class="jt-month-row"><th class="sn" rowspan="2">Учень</th>';
     monthBands.forEach(({ym,count,bandIdx})=>{
@@ -888,7 +902,8 @@ window.renderJournalTable=async function(){
       const avgStr=avg!==null?avg.toFixed(2):'-';
       const thN=topics.thematic.map(x=>x.n).filter(n=>n!==null);
       const thLine=thN.length?`<br><span style="font-size:.72em;color:var(--brand-deep);" data-tip="Середнє арифметичне тематичних у видимому періоді">📘 ${(thN.reduce((a,b)=>a+b,0)/thN.length).toFixed(2)}</span>`:'';
-      let rowHtml=`<tr><td class="sn" title="${escHtml(st.nm)}">${escHtml(st.nm)}</td>`;
+      // Ім'я — кнопка: відкриває картку учня 360° (student-360.js)
+      let rowHtml=`<tr><td class="sn" title="${escHtml(st.nm)}"><button type="button" class="sn-link" onclick="openStudent360('${cls}','${escJs(st.sid)}',event)">${escHtml(st.nm)}</button></td>`;
       dateCols.forEach(({ds,key,slot,ym,lessonKey})=>{
         const isToday=ds===localDateString;
         // «Весь день» — у кожному стовпці дня; відмітка за уроком — у своєму.
@@ -1142,7 +1157,7 @@ window.exportJournalToPDF=async function(){
     // Capture at a consistent 100% zoom regardless of what the teacher currently has selected,
     // so the exported PDF layout doesn't depend on/get cropped by the on-screen zoom level.
     if(savedZoom!==100){journalZoomLevel=100;applyJournalZoom();await new Promise(r=>setTimeout(r,150));}
-    const canvas=await html2canvas(table,{scale:2,backgroundColor:'#ffffff'});
+    const canvas=await (window.withLightTheme?window.withLightTheme(()=>html2canvas(table,{scale:2,backgroundColor:'#ffffff'})):html2canvas(table,{scale:2,backgroundColor:'#ffffff'}));
     const imgData=canvas.toDataURL('image/png');
     const {jsPDF}=window.jspdf;
     const pdf=new jsPDF({orientation:'landscape',unit:'pt',format:'a4'});
@@ -1581,7 +1596,7 @@ function rsmcc(lesson,dTName,isOvr,clsId,row,si){const sn=typeof lesson.subject=
 // урок — накладка ⚠️); якщо вона після всіх уроків — перший вільний рядок.
 export function classHourRow(day, time){
   const hs = parseTimeRange(time).start;
-  if(hs == null) return -1;
+  if(hs == null) return { row: -1, conflict: false };   // викликач перевіряє pos.row < 0
   const rows = Array.from(day || [], raw => {
     const items = Array.isArray(raw) ? raw : (raw && raw.subject ? [raw] : []);
     const it = items.find(x => x && parseTimeRange(x.time).start != null);

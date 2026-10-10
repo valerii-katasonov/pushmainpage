@@ -114,7 +114,7 @@ function ensureModal(){
       <input type="search" id="tr-search" placeholder="🔍 Пошук за назвою" oninput="trSearch(this.value)">
       <div class="tr-label">Предмети <span>(можна кілька)</span></div>
       <div id="tr-filter" class="tr-chips"></div>
-      <div id="tr-list" class="tr-list"><p class="empty-msg">Завантаження...</p></div>
+      <div id="tr-list" class="tr-list"><p class="empty-msg is-loading">Завантаження...</p></div>
       <details id="tr-form-wrap" class="tr-form">
         <summary id="tr-form-sum">➕ Додати тренажер</summary>
         <label for="tr-f-title">Назва</label>
@@ -199,7 +199,7 @@ window.openTrainers = async function(opts){
     note.textContent = `📎 Оберіть тренажер для ДЗ${trPick.subject ? ` · ${trPick.subject}` : ''}. Можна кілька.`;
   }else note.style.display = 'none';
   m.style.display = 'flex';
-  document.getElementById('tr-list').innerHTML = '<p class="empty-msg">Завантаження...</p>';
+  document.getElementById('tr-list').innerHTML = '<p class="empty-msg is-loading">Завантаження...</p>';
   try{
     await loadAll(true);
   }catch(e){
@@ -282,11 +282,17 @@ window.saveTrainer = async function(){
 
 window.deleteTrainer = async function(id){
   const t = (trCache || []).find(x => x.id === id); if(!t || !canManage(t)) return;
-  if(!confirm(`Видалити «${t.title}» з бази?\n\nУ вже заданих ДЗ посилання залишиться.`)) return;
+  // Свій тренажер — «Видалено · Повернути» (undo.js). Чужий (директор
+  // прибирає за кимось) — з підтвердженням: правила не дадуть записати
+  // його назад від чужого імені, тож і обіцяти «повернути» не можна.
+  const own = t.by === myKey() && window.deleteWithUndo;
+  if(!own && !confirm(`Видалити «${t.title}» з бази?\n\nУ вже заданих ДЗ посилання залишиться.`)) return;
   try{
-    await remove(ref(db, `trainers/${id}`));
+    if(own) await window.deleteWithUndo({ paths: { [`trainers/${id}`]: null }, label: `«${t.title}» видалено`,
+      onUndo: async () => { await loadAll(true); paintAll(); } });
+    else { await remove(ref(db, `trainers/${id}`)); showToast('🗑️ Видалено'); }
     if(trEdit === id) resetForm();
-    showToast('🗑️ Видалено'); await loadAll(true); paintAll();
+    await loadAll(true); paintAll();
   }catch(e){ showToast('❌ Не видалено: ' + (e.message || '')); }
 };
 

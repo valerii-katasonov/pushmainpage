@@ -199,7 +199,7 @@ function ensureModal(){
       <div class="nwho-head"><h3 id="nwho-title">👁 Хто переглянув</h3>
         <button type="button" class="nwho-close" onclick="closeNewsWho()" aria-label="Закрити">✕</button></div>
       <div id="nwho-sub" class="nwho-sub"></div>
-      <div id="nwho-body"><p class="empty-msg">Завантаження...</p></div>
+      <div id="nwho-body"><p class="empty-msg is-loading">Завантаження...</p></div>
     </div>`;
   m.addEventListener('click', e => { if(e.target === m) window.closeNewsWho(); });
   m.addEventListener('keydown', e => { if(e.key === 'Escape') window.closeNewsWho(); });
@@ -211,7 +211,7 @@ window.openNewsWho = async function(id){
   if(!isStaffViewer()) return;
   const m = ensureModal(); m.style.display = 'flex';
   const body = document.getElementById('nwho-body'), sub = document.getElementById('nwho-sub');
-  body.innerHTML = '<p class="empty-msg">Завантаження...</p>'; sub.textContent = '';
+  body.innerHTML = '<p class="empty-msg is-loading">Завантаження...</p>'; sub.textContent = '';
   try{
     const [a, s, r, l] = await Promise.all([
       get(child(ref(db), `announcements/${id}`)),

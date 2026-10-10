@@ -155,7 +155,7 @@ export async function renderCalendarManager(containerId, prefix){
       <p class="cm-hint" id="${p}-hint">Захід зʼявиться в календарі батьків і в блоці «Події цього місяця». Уроки в цей день не скасовуються.</p>
       <button type="button" id="${p}-add" class="cm-add" onclick="calAdd('${escJs(p)}')">+ Додати</button>
     </div>
-    <div id="${p}-list" class="cm-list"><p class="empty-msg">Завантаження...</p></div>`;
+    <div id="${p}-list" class="cm-list"><p class="empty-msg is-loading">Завантаження...</p></div>`;
   await refreshCalendarList(p);
 }
 window.renderCalendarManager = renderCalendarManager;
@@ -235,10 +235,17 @@ window.calAdd = async function(p){
 window.calDelete = async function(p, kind, id){
   if(kind !== 'event' && kind !== 'holiday') return;
   const it = [...(CM[p]?.cal?.events || []), ...(CM[p]?.cal?.holidays || [])].find(x => x.id === id);
-  if(!confirm(`Видалити ${kind === 'event' ? 'захід' : 'свято'} «${it ? it.title : ''}»${it ? ' (' + dayLabel(it.date) + ')' : ''}?`)) return;
+  const path = `academic_year/${ACTIVE_YEAR}/${kind === 'event' ? 'events' : 'holidays'}/${id}`;
+  const what = `${kind === 'event' ? 'Захід' : 'Свято'} «${it ? it.title : ''}» видалено`;
   try{
-    await remove(ref(db, `academic_year/${ACTIVE_YEAR}/${kind === 'event' ? 'events' : 'holidays'}/${id}`));
-    showToast('🗑️ Видалено');
+    if(window.deleteWithUndo){
+      await window.deleteWithUndo({ paths: { [path]: null }, label: what,
+        onUndo: async () => { await refreshCalendarList(p); refreshEverywhere(); } });
+    } else {
+      if(!confirm(`Видалити ${kind === 'event' ? 'захід' : 'свято'} «${it ? it.title : ''}»?`)) return;
+      await remove(ref(db, path));
+      showToast('🗑️ Видалено');
+    }
     await refreshCalendarList(p);
     refreshEverywhere();
   }catch(e){ alert('Не вдалося видалити: ' + e.message); }
@@ -286,7 +293,7 @@ export function renderScheduleViewer(containerId){
 window.orgShowSchedule = async function(containerId){
   const cls = document.getElementById(`${containerId}-cls`).value;
   const view = document.getElementById(`${containerId}-view`);
-  view.innerHTML = '<p class="empty-msg">Завантаження...</p>';
+  view.innerHTML = '<p class="empty-msg is-loading">Завантаження...</p>';
   try{
     const s = await get(child(ref(db), `schedules/${cls}/lessons`));
     view.innerHTML = scheduleTableHtml(s.exists() ? s.val() : {});

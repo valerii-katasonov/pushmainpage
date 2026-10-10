@@ -262,7 +262,7 @@ async function loadLessonSubmissions(cls, date, subject){
 
     listEl.innerHTML = students.map(s => {
       const photos = (s.images || []).map(url => `
-        <a href="${escHtml(url)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;border:1px solid var(--line);border-radius:6px;overflow:hidden;width:60px;height:60px;background:#000;">
+        <a href="${safeUrl(url)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;border:1px solid var(--line);border-radius:6px;overflow:hidden;width:60px;height:60px;background:#000;">
           <img src="${escHtml(cldImage(url, 'c_fill,w_120,h_120'))}" style="width:100%;height:100%;object-fit:cover;" alt="Робота">
         </a>
       `).join('');
@@ -318,13 +318,13 @@ async function loadDailyHomeworkSubmissions(cls, date){
 
       const studentsHtml = students.map(s => {
         const photos = (s.images || []).map(url => `
-          <a href="${escHtml(url)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;border:1px solid var(--line);border-radius:6px;overflow:hidden;width:55px;height:55px;background:#000;">
+          <a href="${safeUrl(url)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;border:1px solid var(--line);border-radius:6px;overflow:hidden;width:55px;height:55px;background:#000;">
             <img src="${escHtml(cldImage(url, 'c_fill,w_110,h_110'))}" style="width:100%;height:100%;object-fit:cover;" alt="Робота">
           </a>
         `).join('');
         const timeStr = s.ts ? new Date(s.ts).toLocaleTimeString('uk-UA', {hour:'2-digit', minute:'2-digit'}) : '';
         return `
-          <details class="hw-sub-student" style="margin-bottom:6px;background:#fff;border:1px solid var(--line-soft);border-radius:6px;padding:6px;">
+          <details class="hw-sub-student" style="margin-bottom:6px;background:var(--surface);border:1px solid var(--line-soft);border-radius:6px;padding:6px;">
             <summary style="font-weight:600;cursor:pointer;display:flex;justify-content:space-between;align-items:center;">
               <span style="font-size:0.85rem;">👤 ${escHtml(s.studentName || 'Учень')} (${(s.images||[]).length} фото)</span>
               <small style="color:var(--ink-3);font-weight:normal;">⏰ ${timeStr}</small>
@@ -470,7 +470,7 @@ window.openQuickJournal=async function(){
   if(!subj)return showToast('⚠️ Предметів класу не задано. Директор заповнює їх у «📗 Предмети класу й учителі»');
   document.getElementById('qj-date').textContent=date.split('-').reverse().join('.');
   const box=document.getElementById('qj-body');
-  box.innerHTML='<p class="empty-msg">Завантаження...</p>';
+  box.innerHTML='<p class="empty-msg is-loading">Завантаження...</p>';
   document.getElementById('quick-journal-modal').style.display='flex';
   try{
     const ym=date.slice(0,7);
@@ -1050,7 +1050,12 @@ window.saveHomework=function(){
     // підтверджує видалення самого порожнього завдання.
     if(!hwText&&finalImageUrls.length===0&&!trainers.length){
       if(!existed){showToast('⚠️ Завдання порожнє — нічого зберігати');return false;}
-      await update(ref(db),{[`homeworks/${cls}/${date}/${subject}`]:null,[`authors/${cls}/${date}/${subject}`]:null});
+      const hwPaths={[`homeworks/${cls}/${date}/${subject}`]:null,[`authors/${cls}/${date}/${subject}`]:null};
+      if(window.deleteWithUndo){
+        // Після «Повернути» перечитуємо форму: інакше в ній лишився б порожній
+        // список фото, і наступне збереження затерло б повернуте ДЗ
+        await window.deleteWithUndo({paths:hwPaths,label:`ДЗ видалено: ${subject}`,onUndo:()=>{loadCurrentTopicAndHW();loadTeacherDashboard();}});
+      } else await update(ref(db),hwPaths);
       currentHwImages=[];renderMainHwAttachments();setTimeout(()=>loadTeacherDashboard(),300);
       return '✅ Порожнє ДЗ видалено';
     }
@@ -1118,7 +1123,7 @@ async function loadTextbooksForTeacher(refresh=true){
   const container=document.getElementById('t-textbooks-list');if(!container)return;
   const gen=++textbookGeneration;
   if(!subj){container.innerHTML='<p class="empty-msg">Оберіть предмет підручника.</p>';return;}
-  container.innerHTML='<p class="empty-msg">Завантаження...</p>';
+  container.innerHTML='<p class="empty-msg is-loading">Завантаження...</p>';
   try{
     const snap=await get(ref(db,`textbooks/${cls}/${subjKey(subj)}`));
     if(gen!==textbookGeneration)return;
@@ -1151,8 +1156,10 @@ window.saveTextbook=async function(){
 };
 window.removeTextbook=async function(cls,subj,key){
   try{
-    await remove(ref(db,`textbooks/${cls}/${subjKey(subj)}/${key}`));
-    showToast('🗑️ Видалено');await loadTextbooksForTeacher(false);
+    const p=`textbooks/${cls}/${subjKey(subj)}/${key}`;
+    if(window.deleteWithUndo) await window.deleteWithUndo({paths:{[p]:null},label:'Підручник прибрано',onUndo:()=>loadTextbooksForTeacher(false)});
+    else{ await remove(ref(db,p)); showToast('🗑️ Видалено'); }
+    await loadTextbooksForTeacher(false);
   }catch(e){showToast('❌ Не вдалося видалити підручник: '+e.message);}
 };
 // ══════════ CURRICULUM PLAN (legacy checklist) ══════════
@@ -1256,13 +1263,13 @@ window.openRetakeRequestsModal=async function(){
         const statusLabel=req.status==='approved'?'✅ Схвалено':req.status==='rejected'?'❌ Відхилено':'⏳ Очікує';
         html+=`<div style="background:var(--surface-2);border:1px solid var(--line-soft);border-radius:9px;padding:11px;margin-bottom:9px;">
           <div style="display:flex;justify-content:space-between;align-items:center;">
-            <div><b>${escHtml(stuName(cls,student))}</b> | ${escHtml(subj)} | ${journalBaseDate(date).split('-').reverse().join('.')}${journalSlot(date)>1?` · оцінка ${journalSlot(date)}`:''}</div>
+            <div><b>${escHtml(stuName(cls,student))}</b> | ${escHtml(subj)} | ${escHtml(journalBaseDate(date).split('-').reverse().join('.'))}${journalSlot(date)>1?` · оцінка ${journalSlot(date)}`:''}</div>
             <span style="color:${statusColor};font-size:.8rem;font-weight:700;">${statusLabel}</span>
           </div>
-          <div style="font-size:.8rem;color:var(--ink-3);margin-top:5px;">Поточна оцінка: <b>${req.grade||'—'}</b></div>
+          <div style="font-size:.8rem;color:var(--ink-3);margin-top:5px;">Поточна оцінка: <b>${escHtml(String(req.grade||'—'))}</b></div>
           ${req.status==='pending'?`<div style="display:flex;gap:7px;margin-top:8px;">
-            <button onclick="processRetake('${cls}','${escJs(subj)}','${date}','${escJs(student)}','approved')" style="flex:1;background:var(--ok);color:#fff;padding:7px;border-radius:8px;border:none;cursor:pointer;font-weight:700;font-size:.82rem;margin:0;">✅ Дозволити</button>
-            <button onclick="processRetake('${cls}','${escJs(subj)}','${date}','${escJs(student)}','rejected')" style="flex:1;background:var(--danger);color:#fff;padding:7px;border-radius:8px;border:none;cursor:pointer;font-weight:700;font-size:.82rem;margin:0;">❌ Відхилити</button>
+            <button onclick="processRetake('${escJs(cls)}','${escJs(subj)}','${escJs(date)}','${escJs(student)}','approved')" style="flex:1;background:var(--ok);color:#fff;padding:7px;border-radius:8px;border:none;cursor:pointer;font-weight:700;font-size:.82rem;margin:0;">✅ Дозволити</button>
+            <button onclick="processRetake('${escJs(cls)}','${escJs(subj)}','${escJs(date)}','${escJs(student)}','rejected')" style="flex:1;background:var(--danger);color:#fff;padding:7px;border-radius:8px;border:none;cursor:pointer;font-weight:700;font-size:.82rem;margin:0;">❌ Відхилити</button>
           </div>`:''}
         </div>`;
       }
@@ -1755,7 +1762,7 @@ export function loadTeacherDashboard(){
     // Мій коментар: автор записаний у comment_meta; для старих — за тим, хто вносив ДЗ уроку
     const meta=ms&&ms.exists()?ms.val():{};
     const mine=(d,s,st)=>{const m=meta[d]&&meta[d][s]&&meta[d][s][st];return m?m.by===uid:!!(as.exists()&&as.val()[d]&&as.val()[d][s]===uid);};
-    if(rs.exists()){const reactions=rs.val();const comments=cs.exists()?cs.val():{};for(let d in reactions)for(let s in reactions[d])for(let st in reactions[d][s]){if(!mine(d,s,st))continue;cnt++;let emoji=reactions[d][s][st];let cm=(comments[d]&&comments[d][s]&&comments[d][s][st])?comments[d][s][st]:'Без коментаря';window.myDetailedReactions.push({date:d,subject:s,student:st,emoji,comment:cm});}window.myDetailedReactions.sort((a,b)=>new Date(b.date)-new Date(a.date));}
+    if(rs.exists()){const reactions=rs.val();const comments=cs.exists()?cs.val():{};for(let d in reactions)for(let s in reactions[d])for(let st in reactions[d][s]){/* реакція під ідентифікатором, а старий коментар — під іменем */const ck=(comments[d]&&comments[d][s]&&comments[d][s][st]!==undefined)?st:(window.stuName?.(cls,st)||st);if(!mine(d,s,ck))continue;cnt++;let emoji=reactions[d][s][st];let cm=(comments[d]&&comments[d][s]&&comments[d][s][ck])?comments[d][s][ck]:'Без коментаря';window.myDetailedReactions.push({date:d,subject:s,student:st,emoji,comment:cm});}window.myDetailedReactions.sort((a,b)=>new Date(b.date)-new Date(a.date));}
     document.getElementById('t-karma-counter').innerText=cnt;
   });
   if(currentUserData.role!=='art_school_teacher'){
@@ -1883,8 +1890,19 @@ window.saveComment=async function(){
   try{
     // Разом із текстом — хто написав (comment_meta): за цим учитель
     // бачить свої коментарі й реакції на них, навіть у «Перерві» чи «ГПД».
+    // Новий текст замість старого — стара реакція родини була на ІНШИЙ
+    // коментар: прибираємо її, щоб 👍 не опинився під зауваженням.
+    // («Переглянуто» вчитель прибрати не може — його відсіює comments-view
+    // за часом правки, comment_meta.ts.) Той самий текст — нічого не чіпаємо.
+    const prev=await get(child(ref(db),`comments/${cls}/${date}/${subj}/${st}`)).then(x=>x.exists()?x.val():null).catch(()=>null);
+    const reset=(prev!==null&&prev!==cm)?{[`student_comments/${cls}/${st}/${date}/${subj}/r`]:null,[`reactions/${cls}/${date}/${subj}/${st}`]:null}:{};
     await update(ref(db),{
+      ...reset,
       [`comments/${cls}/${date}/${subj}/${st}`]:cm,
+      // Дзеркало для родини: клас цілком їй закритий (student_comments)
+      [`student_comments/${cls}/${st}/${date}/${subj}/t`]:cm,
+      // Коли написали — для центру сповіщень родини (notif-center.js)
+      [`student_comments/${cls}/${st}/${date}/${subj}/ts`]:Date.now(),
       [`comment_meta/${cls}/${date}/${subj}/${st}`]:{by:auth.currentUser.uid,se:emailKey(auth.currentUser.email||''),
         name:[currentUserData?.firstName,currentUserData?.lastName].filter(Boolean).join(' ').slice(0,80)||String(auth.currentUser.email||'').slice(0,80),ts:Date.now()}
     });
@@ -1904,9 +1922,11 @@ window.saveComment=async function(){
 window.openExamsCalendar=function(){document.getElementById('exams-modal').style.display='flex';document.getElementById('exam-class-label').innerText=document.getElementById('t-class-selector').options[document.getElementById('t-class-selector').selectedIndex].text;document.getElementById('exams-day-details').style.display='none';const mi=document.getElementById('exam-month-select');const dp=document.getElementById('global-date').value.split('-');mi.value=`${dp[0]}-${dp[1]}`;renderExamsCalendar();};
 window.closeExamsModal=function(){document.getElementById('exams-modal').style.display='none';};
 window.renderExamsCalendar=function(){const cls=getActiveClass();const ym=document.getElementById('exam-month-select').value;if(!ym)return;const[y,m]=ym.split('-');get(child(ref(db),`exams/${cls}/${y}-${m}`)).then(snap=>{const d=snap.exists()?snap.val():{};let h='<div class="cal-grid">';['Пн','Вт','Ср','Чт','Пт','Сб','Нд'].forEach(d2=>h+=`<div class="cal-header">${d2}</div>`);const dim=new Date(y,parseInt(m),0).getDate();let fd=new Date(y,parseInt(m)-1,1).getDay();if(fd===0)fd=7;for(let i=1;i<fd;i++)h+=`<div></div>`;for(let i=1;i<=dim;i++){const cd=`${y}-${m}-${String(i).padStart(2,'0')}`;const cnt=d[cd]?Object.keys(d[cd]).length:0;const cc=cnt===1?'has-1':cnt>=2?'has-2':'';h+=`<div class="cal-day ${cc}" role="button" tabindex="0" aria-label="Контрольні ${i}.${m}.${y}: ${cnt}" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" onclick="manageDayExams('${cd}')">${i}<br><small style="font-size:.75rem;">${cnt>0?cnt+' к.р.':''}</small></div>`;}h+='</div>';document.getElementById('exams-cal-container').innerHTML=h;});};
-window.manageDayExams=function(ds){const cls=getActiveClass();const dd=document.getElementById('exams-day-details');dd.style.display='block';get(child(ref(db),`exams/${cls}/${ds.substring(0,7)}/${ds}`)).then(snap=>{let ex=snap.exists()?snap.val():{};let lh='';for(let s in ex){const me=ex[s]===auth.currentUser.uid;const db2=me?`<button aria-label="Видалити контрольну з ${escHtml(s)}" onclick="deleteExam('${ds}','${escJs(s)}')" style="background:none;border:none;color:var(--danger);cursor:pointer;font-weight:700;padding:0 4px;width:auto;margin:0;font-size:1.1rem;">✖</button>`:'';lh+=`<li style="margin-bottom:7px;display:flex;justify-content:space-between;align-items:center;background:#fff;padding:7px 11px;border-radius:8px;border:1px solid var(--line-soft);"><span><b>${escHtml(s)}</b></span>${db2}</li>`;}let h=`<h4 style="margin-top:0;color:var(--warn);border-bottom:1px dashed var(--warn);padding-bottom:9px;">Контрольні: ${ds.split('-').reverse().join('.')}</h4>`;h+=`<ul style="padding-left:0;list-style:none;margin-bottom:13px;">${lh||'<li class="empty-msg">Жодної</li>'}</ul>`;const[yy,mm,dd2]=ds.split('-');const dn=dayKeys[new Date(yy,mm-1,dd2).getDay()];let ds2=new Set();window.getTodayLessonsFlattened(dn).forEach(item=>{const sn=window.getValidSubjectName(item);if(sn)ds2.add(sn);});let fe=currentUserData.role==='teacher'?[...ds2].filter(s=>window.isSubjectAllowed(cls,s)).sort():[...ds2].sort();let so=fe.map(s=>`<option value="${escHtml(s)}">${escHtml(s)}</option>`).join('');if(!so){so='<option disabled>Немає предметів</option>';}h+=`<div style="display:flex;gap:9px;"><select id="exam-add-subj" style="flex:1;margin:0;">${so}</select><button style="background:var(--ok);color:#fff;width:auto;padding:9px 13px;margin:0;" onclick="addExam('${ds}')">Додати</button></div>`;dd.innerHTML=h;});};
+window.manageDayExams=function(ds){const cls=getActiveClass();const dd=document.getElementById('exams-day-details');dd.style.display='block';get(child(ref(db),`exams/${cls}/${ds.substring(0,7)}/${ds}`)).then(snap=>{let ex=snap.exists()?snap.val():{};let lh='';for(let s in ex){const me=ex[s]===auth.currentUser.uid;const db2=me?`<button aria-label="Видалити контрольну з ${escHtml(s)}" onclick="deleteExam('${ds}','${escJs(s)}')" style="background:none;border:none;color:var(--danger);cursor:pointer;font-weight:700;padding:0 4px;width:auto;margin:0;font-size:1.1rem;">✖</button>`:'';lh+=`<li style="margin-bottom:7px;display:flex;justify-content:space-between;align-items:center;background:var(--surface);padding:7px 11px;border-radius:8px;border:1px solid var(--line-soft);"><span><b>${escHtml(s)}</b></span>${db2}</li>`;}let h=`<h4 style="margin-top:0;color:var(--warn);border-bottom:1px dashed var(--warn);padding-bottom:9px;">Контрольні: ${ds.split('-').reverse().join('.')}</h4>`;h+=`<ul style="padding-left:0;list-style:none;margin-bottom:13px;">${lh||'<li class="empty-msg">Жодної</li>'}</ul>`;const[yy,mm,dd2]=ds.split('-');const dn=dayKeys[new Date(yy,mm-1,dd2).getDay()];let ds2=new Set();window.getTodayLessonsFlattened(dn).forEach(item=>{const sn=window.getValidSubjectName(item);if(sn)ds2.add(sn);});let fe=currentUserData.role==='teacher'?[...ds2].filter(s=>window.isSubjectAllowed(cls,s)).sort():[...ds2].sort();let so=fe.map(s=>`<option value="${escHtml(s)}">${escHtml(s)}</option>`).join('');if(!so){so='<option disabled>Немає предметів</option>';}h+=`<div style="display:flex;gap:9px;"><select id="exam-add-subj" style="flex:1;margin:0;">${so}</select><button style="background:var(--ok);color:#fff;width:auto;padding:9px 13px;margin:0;" onclick="addExam('${ds}')">Додати</button></div>`;dd.innerHTML=h;});};
 window.addExam=function(ds){const s=document.getElementById('exam-add-subj').value;if(!s)return;const cls=getActiveClass();const ym=ds.substring(0,7);get(child(ref(db),`exams/${cls}/${ym}/${ds}`)).then(snap=>{let cnt=snap.exists()?Object.keys(snap.val()).length:0;if(cnt>=2)return alert('❌ Ліміт: більше 2 контрольних не можна!');set(ref(db,`exams/${cls}/${ym}/${ds}/${s}`),auth.currentUser.uid).then(()=>{renderExamsCalendar();manageDayExams(ds);});});};
-window.deleteExam=function(ds,s){const cls=getActiveClass();remove(ref(db,`exams/${cls}/${ds.substring(0,7)}/${ds}/${s}`)).then(()=>{renderExamsCalendar();manageDayExams(ds);});};
+window.deleteExam=function(ds,s){const cls=getActiveClass();const p=`exams/${cls}/${ds.substring(0,7)}/${ds}/${s}`;const after=()=>{renderExamsCalendar();manageDayExams(ds);};
+  // «Видалено · Повернути» замість мовчазного видалення (undo.js)
+  (window.deleteWithUndo?window.deleteWithUndo({paths:{[p]:null},label:`Контрольну прибрано: ${s}`,onUndo:after}):remove(ref(db,p))).then(after).catch(e=>showToast('❌ Не видалено: '+(e.message||'')));};
 // ══════════ REACTIONS & WRAPPED (teacher side) ══════════
 window.showReactionsDetails=async function(){
   document.getElementById('reactions-modal').style.display='flex';
@@ -1990,7 +2010,7 @@ window.openStickerStatsModal=async function(reopenSid=''){
   try{
   document.getElementById('sticker-stats-modal').style.display='flex';
   const list=document.getElementById('sticker-stats-list');
-  list.innerHTML='<p class="empty-msg" style="text-align:center;">⏳ Завантаження...</p>';
+  list.innerHTML='<p class="empty-msg is-loading" style="text-align:center;">⏳ Завантаження...</p>';
   const cls = (currentUserData && (currentUserData.class || (currentUserData.role === 'parent' && (currentUserData.children?.[0]?.class || currentUserData.kids?.[0]?.class)))) || getActiveClass();
   const [stuSnap,stSnap]=await Promise.all([
     get(child(ref(db),`students_list/${cls}`)),
@@ -2199,7 +2219,7 @@ export async function renderTeacherHwDay(){
   const cls=getActiveClass();
   const date=document.getElementById('global-date').value;
   if(!cls||!date){ box.innerHTML='<p class="empty-msg">Оберіть клас і дату.</p>'; return; }
-  box.innerHTML='<p class="empty-msg">Завантаження...</p>';
+  box.innerHTML='<p class="empty-msg is-loading">Завантаження...</p>';
 
   try{
     // Заміни потрібні ДО побудови списку: учитель на заміні має бачити
@@ -2260,6 +2280,7 @@ export async function renderTeacherHwDay(){
             l.numbers.length>1?' <span class="hwd-dbl">спарені</span>':''}</span>
           ${l.viaSub?'<span class="hwd-sub">заміна</span>':''}
           <span class="hwd-state" id="${id}-state">${rec?'задано':'не задано'}</span>
+          <span class="hwd-donecnt" id="${id}-donecnt" hidden></span>
           <span class="hwd-chev">▾</span>
         </button>
         <div class="hwd-body" id="${id}-body" style="display:none;">
@@ -2301,6 +2322,21 @@ export async function renderTeacherHwDay(){
     }).join('') + `<p class="hwd-hint">Заповнене позначається галочкою й згортається.
         Тема уроку — на вкладці «Урок».</p>`;
     lessons.forEach((l,i)=>window.setHwTrainers?.(`hwd-${i}`,(saved[l.subject]&&saved[l.subject].trainers)||[]));
+    // ✓ Скільки учнів позначили ДЗ виконаним (hw_done — пишуть родини).
+    // Без очікування: рядки вже на екрані, число дописується, коли прийде.
+    Promise.all([get(child(ref(db),`hw_done/${cls}/${date}`)).catch(()=>null),getStudentDir(cls).catch(()=>null)]).then(([ds,dir])=>{
+      // Поки читали, учитель перейшов на інший день чи клас — числа чужі
+      if((document.getElementById('global-date')||{}).value!==date||getActiveClass()!==cls)return;
+      const v=ds&&ds.exists()?(ds.val()||{}):{}, total=dir?Object.keys(dir.byId||{}).length:0;
+      lessons.forEach((l,i)=>{
+        const el=document.getElementById(`hwd-${i}-donecnt`);
+        if(!el||!saved[l.subject])return;
+        const n=Object.keys(v[subjKey(l.subject)]||{}).length;
+        el.textContent=`✓ ${n}${total?'/'+total:''}`;
+        el.title=`Позначили «виконано»: ${n}${total?' з '+total:''}`;
+        el.hidden=false;
+      });
+    });
   }catch(e){
     console.error('ДЗ на день:',e);
     box.innerHTML=`<p class="empty-msg" style="color:var(--danger);">Не вдалося завантажити: ${escHtml(e.message||'')}</p>`;
@@ -2417,13 +2453,17 @@ window.hwdSave=function(id){
     const trainers=window.getHwTrainers?.(id)||[];
     if(!hwText&&images.length===0&&!trainers.length){
       if(!existed){showToast('⚠️ Завдання порожнє');return false;}
-      await update(ref(db),{[`homeworks/${cls}/${date}/${subject}`]:null,[`authors/${cls}/${date}/${subject}`]:null});
+      const hwPaths={[`homeworks/${cls}/${date}/${subject}`]:null,[`authors/${cls}/${date}/${subject}`]:null};
+      if(window.deleteWithUndo){
+        // Перемальовуємо рядки дня: стан рядка (фото, «задано») — з бази
+        await window.deleteWithUndo({paths:hwPaths,label:`ДЗ видалено: ${subject}`,onUndo:()=>{window.renderTeacherHwDay?.();loadTeacherDashboard();}});
+      } else await update(ref(db),hwPaths);
       row.classList.remove('done','dirty');hwDayState[subject]={saved:false,dirty:false,images:[]};
       renderHwdSavedAttachments(id,[]);
       const mk=row.querySelector('.hwd-mark');if(mk)mk.textContent='○';
       const st=document.getElementById(id+'-state');if(st)st.textContent='не задано';
       const dm=document.getElementById(id+'-dirty');if(dm)dm.textContent='';
-      showToast(`✅ ${subject}: порожнє ДЗ видалено`);return false;
+      if(!window.deleteWithUndo)showToast(`✅ ${subject}: порожнє ДЗ видалено`);return false;
     }
     const rec={text:hwText, images, ts:Date.now()};
     if(bookTitle&&bookUrl) rec.book={title:bookTitle,url:bookUrl};

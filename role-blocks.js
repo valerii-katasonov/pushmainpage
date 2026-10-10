@@ -28,7 +28,7 @@ const val = async p => { const s = await get(child(ref(db), p)); return s.exists
 // ── група 1 ──────────────────────────────────────────────────────
 async function bells(body, cls){
   cls = cls || 'class_1';
-  body.innerHTML = `<select aria-label="Клас" onchange="rbkRender('bells',this.value)">${clsOptions(cls)}</select><div class="rbk-out"><p class="empty-msg">Завантаження...</p></div>`;
+  body.innerHTML = `<select aria-label="Клас" onchange="rbkRender('bells',this.value)">${clsOptions(cls)}</select><div class="rbk-out"><p class="empty-msg is-loading">Завантаження...</p></div>`;
   const out = body.querySelector('.rbk-out');
   try{
     const d = await val(`bell_schedules/${cls}`);
@@ -47,7 +47,7 @@ export function weekOf(dateStr){
   return Array.from({ length: 5 }, (_, i) => { const x = new Date(y, mo - 1, d + i); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; });
 }
 async function menu(body){
-  body.innerHTML = '<p class="empty-msg">Завантаження...</p>';
+  body.innerHTML = '<p class="empty-msg is-loading">Завантаження...</p>';
   try{
     const dates = weekOf(localDateString);
     const days = await Promise.all(dates.map(d => val(`menu/${d}`)));
@@ -62,7 +62,7 @@ async function menu(body){
 }
 
 async function clubs(body){
-  body.innerHTML = '<p class="empty-msg">Завантаження...</p>';
+  body.innerHTML = '<p class="empty-msg is-loading">Завантаження...</p>';
   try{
     const all = await val(`clubs_catalog/${ACTIVE_YEAR}`) || {};
     const rows = [];
@@ -78,7 +78,7 @@ async function clubs(body){
 // Дні народження всієї школи на місяць уперед. Та сама функція, що в
 // кабінеті класу: лише день і місяць, без року.
 async function birthdays(body){
-  body.innerHTML = '<p class="empty-msg">Завантаження...</p>';
+  body.innerHTML = '<p class="empty-msg is-loading">Завантаження...</p>';
   try{
     const per = await Promise.all(CLASSES.map(c => getUpcomingBirthdays(c, localDateString, 30).then(l => l.map(b => ({ ...b, cls: c }))).catch(() => [])));
     const list = per.flat().sort((a, b) => a.idx - b.idx || getClassNum(a.cls) - getClassNum(b.cls) || String(a.name).localeCompare(String(b.name), 'uk'));
@@ -90,7 +90,7 @@ async function birthdays(body){
 }
 
 async function activities(body){
-  body.innerHTML = '<div id="rbk-act-box"><p class="empty-msg">Завантаження...</p></div>';
+  body.innerHTML = '<div id="rbk-act-box"><p class="empty-msg is-loading">Завантаження...</p></div>';
   if(window.renderActivitySummary) await window.renderActivitySummary('rbk-act-box', 'school');
 }
 
@@ -111,7 +111,7 @@ export function attendanceRows(att, names){
 }
 async function attendance(body, date){
   date = date || localDateString;
-  body.innerHTML = `<input type="date" value="${escHtml(date)}" aria-label="Дата" onchange="rbkRender('attendance',this.value)"><div class="rbk-out"><p class="empty-msg">Завантаження...</p></div>`;
+  body.innerHTML = `<input type="date" value="${escHtml(date)}" aria-label="Дата" onchange="rbkRender('attendance',this.value)"><div class="rbk-out"><p class="empty-msg is-loading">Завантаження...</p></div>`;
   const out = body.querySelector('.rbk-out');
   try{
     const [names, ...days] = await Promise.all([val('students_list'), ...CLASSES.map(c => val(`attendance/${c}/${date}`))]);
@@ -126,7 +126,7 @@ async function attendance(body, date){
 }
 
 async function consents(body, id){
-  body.innerHTML = '<p class="empty-msg">Завантаження...</p>';
+  body.innerHTML = '<p class="empty-msg is-loading">Завантаження...</p>';
   try{
     const [all, students] = await Promise.all([val('consents'), val('students_list')]);
     if(!all){ body.innerHTML = '<p class="empty-msg">Запитів на згоду ще немає.</p>'; return; }

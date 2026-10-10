@@ -1777,7 +1777,7 @@ export async function renderPlanEditor(){
   if(!box) return;
   const p = planPath();
   if(!p){ box.innerHTML = '<p class="empty-msg">Спершу оберіть клас і предмет вище.</p>'; return; }
-  box.innerHTML = '<p class="empty-msg">Завантаження...</p>';
+  box.innerHTML = '<p class="empty-msg is-loading">Завантаження...</p>';
   try{
     const snap = await get(ref(db, `curriculum_plans/${p.cls}/${p.sk}/topics`));
     const topics = snap.exists() ? (snap.val() || {}) : {};

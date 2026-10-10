@@ -17,7 +17,7 @@
 //   policy_ack/{пошта} = { version, ts, opts:{med,push,child,birthday,photo} }
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, currentUserData, showToast, escHtml, logAction } from './common.js';
+import { db, auth, currentUserData, showToast, escHtml, logAction } from './common.js';
 
 // Дата версії документа. Змінили текст інформації для батьків — змініть і це.
 // Зміна версії означає, що екран згоди покажеться всім заново: попередня
@@ -55,12 +55,15 @@ export const CONSENT_OPTS = [
        + 'доступній лише батькам і персоналу школи.' }
 ];
 
-// Позначка збірки. Видно в консолі й у розділі згод: якщо на екрані стара
-// поведінка, першим ділом видно, чи взагалі доїхав новий файл.
-export const CONSENT_BUILD = '2026-08-31 · v2';
-console.log('consent.js', CONSENT_BUILD);
-
-const myKey = () => String(currentUserData?.email || '').toLowerCase().replace(/\./g, '_');
+// Ключ рядка — пошта з крапками, заміненими на підкреслення.
+//
+// Береться саме з auth, а не з профілю в базі, і БЕЗ toLowerCase. Правило
+// доступу звіряє ключ із auth.token.email.replace('.','_') — тобто з тим,
+// що бачить сам Firebase. Будь-яка інша обробка (нижній регістр, пошта з
+// профілю, яку колись записала школа) може дати інший рядок, і тоді запит
+// на власний же рядок отримає Permission denied. Джерело має бути одне.
+const myKey = () => String(auth?.currentUser?.email || currentUserData?.email || '')
+  .replace(/\./g, '_');
 
 // Читання з обмеженням у часі. Без нього будь-яке зависання запиту лишає
 // людину з написом «Завантаження...» назавжди, і причину видно лише в консолі.
@@ -196,8 +199,7 @@ export async function renderMyConsents(){
     await renderMyConsentsInner(box);
   }catch(e){
     console.warn('renderMyConsents:', e);
-    box.innerHTML = `<p class="empty-msg">Не вдалося показати згоди: ${escHtml(e.message || String(e))}
-      <br><small>Збірка ${escHtml(CONSENT_BUILD)}</small></p>`;
+    box.innerHTML = `<p class="empty-msg">Не вдалося показати згоди: ${escHtml(e.message || String(e))}</p>`;
   }
 }
 
@@ -210,13 +212,16 @@ async function renderMyConsentsInner(box){
     box.innerHTML = '<p class="empty-msg">Цей розділ призначений для батьків.</p>';
     return;
   }
-  box.innerHTML = '<p class="empty-msg">Завантаження...</p>';
+  box.innerHTML = '<p class="empty-msg is-loading">Завантаження...</p>';
   const ack = await getMyAck();
   const when = ack && ack.ts ? new Date(ack.ts).toLocaleDateString('uk-UA') : null;
   box.innerHTML = `
     ${ack && ack.error
       ? `<p class="cg-err" style="display:block;">Не вдалося прочитати ваші відповіді: ${escHtml(ack.error)}.
-         Галочки нижче показані незаповненими — збережіть їх ще раз.</p>` : ''}
+         ${/permission|denied/i.test(ack.error)
+           ? 'Схоже, у базі ще не опубліковані правила доступу для розділу згод '
+             + '(вузол <code>policy_ack</code>). Це робить школа в консолі Firebase.'
+           : 'Галочки нижче показані незаповненими — збережіть їх ще раз.'}</p>` : ''}
     ${when
       ? `<p class="mc-when">Відповіді збережено ${escHtml(when)} · версія документа ${escHtml(ack.version||'—')}</p>`
       : '<p class="mc-when">Ви ще не відповідали.</p>'}

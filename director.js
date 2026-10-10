@@ -45,7 +45,7 @@ window.findSubstitute=async function(){
   let html=`<p style="font-size:.82rem;color:var(--ink-2);margin-bottom:8px;">Знайдено <b>${candidates.length}</b> кандидатів для заміни <b>${subj}</b>:</p>`;
   candidates.forEach(c=>{
     const priority=c.teachesClass?'⭐ Вже веде цей клас':'';
-    html+=`<div style="background:#fff;border:1px solid var(--ok);border-radius:9px;padding:10px;margin-bottom:7px;display:flex;justify-content:space-between;align-items:center;">
+    html+=`<div style="background:var(--surface);border:1px solid var(--ok);border-radius:9px;padding:10px;margin-bottom:7px;display:flex;justify-content:space-between;align-items:center;">
       <div><b>${c.name}</b><br><span style="font-size:.75rem;color:var(--ink-3);">${c.email}</span> ${priority?`<br><span style="font-size:.75rem;color:var(--ok);font-weight:700;">${priority}</span>`:''}</div>
       <button onclick="confirmSubstitute('${c.email}','${cls}','${escJs(subj)}','${date}')" style="background:var(--ok);color:#fff;padding:7px 12px;border-radius:8px;border:none;cursor:pointer;font-weight:700;font-size:.78rem;margin:0;width:auto;">Призначити</button>
     </div>`;
@@ -456,7 +456,7 @@ window.switchAcademicYear = async function(){
 function formatClassesLabel(classes){if(classes==='all')return '🌟 Усі класи';if(Array.isArray(classes)&&classes.length>0)return classes.map(c=>c.replace('class_','')).sort((a,b)=>a-b).join(', ')+' кл.';return '—';}
 window.loadAcademicYear=function(){const lbl=document.getElementById('ay-year-label');if(lbl)lbl.innerText=ACTIVE_YEAR;window.fillYearSelect();window.fillCopyFromSelect();loadSemesters();loadBreaks();loadHolidays();};
 // --- Семестри ---
-function loadSemesters(){get(ref(db,`academic_year/${ACTIVE_YEAR}/semesters`)).then(snap=>{const c=document.getElementById('ay-semesters-list');if(snap.exists()){const d=snap.val();let h='';for(let id in d){const s=d[id];h+=`<div style="background:#fff;padding:9px 11px;border-radius:8px;border:1px solid var(--warn-line);margin-bottom:7px;display:flex;justify-content:space-between;align-items:center;"><div><b>${escHtml(s.name)}</b><br><span style="font-size:.78rem;color:var(--ink-3);">${(s.startDate||'').split('-').reverse().join('.')} — ${(s.endDate||'').split('-').reverse().join('.')}</span></div><button aria-label="Видалити семестр" onclick="removeSemester('${id}')" style="background:var(--danger);color:#fff;width:auto;padding:6px 10px;margin:0;border-radius:7px;font-size:.78rem;">🗑</button></div>`;}c.innerHTML=h||'<p class="empty-msg">Семестрів ще немає.</p>';}else c.innerHTML='<p class="empty-msg">Семестрів ще немає.</p>';});}
+function loadSemesters(){get(ref(db,`academic_year/${ACTIVE_YEAR}/semesters`)).then(snap=>{const c=document.getElementById('ay-semesters-list');if(snap.exists()){const d=snap.val();let h='';for(let id in d){const s=d[id];h+=`<div style="background:var(--surface);padding:9px 11px;border-radius:8px;border:1px solid var(--warn-line);margin-bottom:7px;display:flex;justify-content:space-between;align-items:center;"><div><b>${escHtml(s.name)}</b><br><span style="font-size:.78rem;color:var(--ink-3);">${(s.startDate||'').split('-').reverse().join('.')} — ${(s.endDate||'').split('-').reverse().join('.')}</span></div><button aria-label="Видалити семестр" onclick="removeSemester('${id}')" style="background:var(--danger);color:#fff;width:auto;padding:6px 10px;margin:0;border-radius:7px;font-size:.78rem;">🗑</button></div>`;}c.innerHTML=h||'<p class="empty-msg">Семестрів ще немає.</p>';}else c.innerHTML='<p class="empty-msg">Семестрів ще немає.</p>';});}
 window.addSemester=async function(){
   const name=document.getElementById('ay-sem-name').value.trim();
   const startDate=document.getElementById('ay-sem-start').value;
@@ -467,10 +467,13 @@ window.addSemester=async function(){
   document.getElementById('ay-sem-name').value='';document.getElementById('ay-sem-start').value='';document.getElementById('ay-sem-end').value='';
   showToast("✅ Семестр додано!");loadSemesters();
 };
-window.removeSemester=function(id){if(confirm("Видалити цей семестр?"))remove(ref(db,`academic_year/${ACTIVE_YEAR}/semesters/${id}`)).then(()=>{showToast("🗑️ Семестр видалено");loadSemesters();});};
+// Семестр — з підтвердженням, без «Повернути»: до нього привʼязані
+// підсумкові оцінки (semester_grades, student_semester), і після видалення
+// табель показав би сирий ключ замість назви. Одним знімком це не відкотиш.
+window.removeSemester=function(id){if(!confirm("Видалити цей семестр?\n\nПідсумкові оцінки, виставлені за нього, залишаться без назви семестру в табелі."))return;remove(ref(db,`academic_year/${ACTIVE_YEAR}/semesters/${id}`)).then(()=>{showToast("🗑️ Семестр видалено");loadSemesters();}).catch(e=>showToast("❌ "+e.message));};
 // --- Канікули ---
 window.toggleAllClasses=function(kind){const cb=document.getElementById(`ay-${kind}-all-classes`);const sel=document.getElementById(`ay-${kind}-classes`);sel.disabled=cb.checked;if(cb.checked)Array.from(sel.options).forEach(o=>o.selected=false);};
-function loadBreaks(){get(ref(db,`academic_year/${ACTIVE_YEAR}/breaks`)).then(snap=>{const c=document.getElementById('ay-breaks-list');if(snap.exists()){const d=snap.val();let h='';for(let id in d){const b=d[id];h+=`<div style="background:#fff;padding:9px 11px;border-radius:8px;border:1px solid var(--warn-line);margin-bottom:7px;display:flex;justify-content:space-between;align-items:center;"><div><b>${escHtml(b.title)}</b><br><span style="font-size:.78rem;color:var(--ink-3);">${(b.startDate||'').split('-').reverse().join('.')} — ${(b.endDate||'').split('-').reverse().join('.')} | ${formatClassesLabel(b.classes)}</span></div><button aria-label="Видалити канікули" onclick="removeBreak('${id}')" style="background:var(--danger);color:#fff;width:auto;padding:6px 10px;margin:0;border-radius:7px;font-size:.78rem;">🗑</button></div>`;}c.innerHTML=h||'<p class="empty-msg">Канікул ще немає.</p>';}else c.innerHTML='<p class="empty-msg">Канікул ще немає.</p>';});}
+function loadBreaks(){get(ref(db,`academic_year/${ACTIVE_YEAR}/breaks`)).then(snap=>{const c=document.getElementById('ay-breaks-list');if(snap.exists()){const d=snap.val();let h='';for(let id in d){const b=d[id];h+=`<div style="background:var(--surface);padding:9px 11px;border-radius:8px;border:1px solid var(--warn-line);margin-bottom:7px;display:flex;justify-content:space-between;align-items:center;"><div><b>${escHtml(b.title)}</b><br><span style="font-size:.78rem;color:var(--ink-3);">${(b.startDate||'').split('-').reverse().join('.')} — ${(b.endDate||'').split('-').reverse().join('.')} | ${formatClassesLabel(b.classes)}</span></div><button aria-label="Видалити канікули" onclick="removeBreak('${id}')" style="background:var(--danger);color:#fff;width:auto;padding:6px 10px;margin:0;border-radius:7px;font-size:.78rem;">🗑</button></div>`;}c.innerHTML=h||'<p class="empty-msg">Канікул ще немає.</p>';}else c.innerHTML='<p class="empty-msg">Канікул ще немає.</p>';});}
 window.addBreak=async function(){
   const title=document.getElementById('ay-break-title').value.trim();
   const startDate=document.getElementById('ay-break-start').value;
@@ -486,9 +489,9 @@ window.addBreak=async function(){
   document.getElementById('ay-break-all-classes').checked=false;sel.disabled=false;Array.from(sel.options).forEach(o=>o.selected=false);
   showToast("✅ Канікули додано!");loadBreaks();
 };
-window.removeBreak=function(id){if(confirm("Видалити ці канікули?"))remove(ref(db,`academic_year/${ACTIVE_YEAR}/breaks/${id}`)).then(()=>{showToast("🗑️ Видалено");loadBreaks();});};
+window.removeBreak=function(id){const p=`academic_year/${ACTIVE_YEAR}/breaks/${id}`;if(window.deleteWithUndo){window.deleteWithUndo({paths:{[p]:null},label:"Канікули видалено",onUndo:loadBreaks}).then(loadBreaks).catch(e=>showToast("❌ "+e.message));return;}if(confirm("Видалити?"))remove(ref(db,p)).then(()=>{showToast("🗑️ Видалено");loadBreaks();});};
 // --- Свята ---
-function loadHolidays(){get(ref(db,`academic_year/${ACTIVE_YEAR}/holidays`)).then(snap=>{const c=document.getElementById('ay-holidays-list');if(snap.exists()){const d=snap.val();let h='';for(let id in d){const hd=d[id];const typeLabel=hd.calendarType==='art_school'?'🎵 Школа мистецтв':'🏫 Загальна школа';h+=`<div style="background:#fff;padding:9px 11px;border-radius:8px;border:1px solid var(--warn-line);margin-bottom:7px;display:flex;justify-content:space-between;align-items:center;"><div><b>${escHtml(hd.title)}</b><br><span style="font-size:.78rem;color:var(--ink-3);">${(hd.date||'').split('-').reverse().join('.')} | ${formatClassesLabel(hd.classes)} | ${typeLabel}</span></div><button aria-label="Видалити свято" onclick="removeHoliday('${id}')" style="background:var(--danger);color:#fff;width:auto;padding:6px 10px;margin:0;border-radius:7px;font-size:.78rem;">🗑</button></div>`;}c.innerHTML=h||'<p class="empty-msg">Свят ще немає.</p>';}else c.innerHTML='<p class="empty-msg">Свят ще немає.</p>';});}
+function loadHolidays(){get(ref(db,`academic_year/${ACTIVE_YEAR}/holidays`)).then(snap=>{const c=document.getElementById('ay-holidays-list');if(snap.exists()){const d=snap.val();let h='';for(let id in d){const hd=d[id];const typeLabel=hd.calendarType==='art_school'?'🎵 Школа мистецтв':'🏫 Загальна школа';h+=`<div style="background:var(--surface);padding:9px 11px;border-radius:8px;border:1px solid var(--warn-line);margin-bottom:7px;display:flex;justify-content:space-between;align-items:center;"><div><b>${escHtml(hd.title)}</b><br><span style="font-size:.78rem;color:var(--ink-3);">${(hd.date||'').split('-').reverse().join('.')} | ${formatClassesLabel(hd.classes)} | ${typeLabel}</span></div><button aria-label="Видалити свято" onclick="removeHoliday('${id}')" style="background:var(--danger);color:#fff;width:auto;padding:6px 10px;margin:0;border-radius:7px;font-size:.78rem;">🗑</button></div>`;}c.innerHTML=h||'<p class="empty-msg">Свят ще немає.</p>';}else c.innerHTML='<p class="empty-msg">Свят ще немає.</p>';});}
 window.addHoliday=async function(){
   const title=document.getElementById('ay-holiday-title').value.trim();
   const date=document.getElementById('ay-holiday-date').value;
@@ -503,7 +506,7 @@ window.addHoliday=async function(){
   document.getElementById('ay-holiday-all-classes').checked=false;sel.disabled=false;Array.from(sel.options).forEach(o=>o.selected=false);
   showToast("✅ Свято додано!");loadHolidays();
 };
-window.removeHoliday=function(id){if(confirm("Видалити це свято?"))remove(ref(db,`academic_year/${ACTIVE_YEAR}/holidays/${id}`)).then(()=>{showToast("🗑️ Видалено");loadHolidays();});};
+window.removeHoliday=function(id){const p=`academic_year/${ACTIVE_YEAR}/holidays/${id}`;if(window.deleteWithUndo){window.deleteWithUndo({paths:{[p]:null},label:"Свято видалено",onUndo:loadHolidays}).then(loadHolidays).catch(e=>showToast("❌ "+e.message));return;}if(confirm("Видалити?"))remove(ref(db,p)).then(()=>{showToast("🗑️ Видалено");loadHolidays();});};
 // ══════════ TEACHER LIST FOR DIRECTOR (access matrix + staff mgmt) ══════════
 // Мультиролі: вчителем вважається той, у кого вчительська роль є СЕРЕД ролей,
 // а не лише як активна. Відключених (disabled) до списків не додаємо.
@@ -623,7 +626,7 @@ window.grantStaffRole=async function(){
 window.loadStaffList=async function(){invalidateUsersCache();fillCustomRoleOptions();
   const box=document.getElementById('staff-list');
   if(!box)return;
-  box.innerHTML='<p class="empty-msg">Завантаження...</p>';
+  box.innerHTML='<p class="empty-msg is-loading">Завантаження...</p>';
   try{
     const [approvedSnap,usersSnap,accSnap,headsSnap]=await Promise.all([
       get(child(ref(db),'pre_approved_roles')),
@@ -877,6 +880,7 @@ window.renderDirectorStats=async function(){const cls=document.getElementById('d
   const ca=cnt>0?(totalAvg/cnt).toFixed(2):'-';const classRounded=cnt>0?Math.min(scaleMax,Math.max(1,Math.round(Number(ca)))):'-';h+=`</tbody></table><div style="background:var(--brand-soft);border:1px solid var(--line);padding:12px;border-radius:8px;text-align:center;margin-top:10px;"><b style="color:var(--brand-deep);">🏆 Середній бал класу (${getClassNum(cls)<=LEVEL_MAX_CLASS?'рівні П/С/Д/В':`шкала 1–${scaleMax}`}):</b><br><span style="font-size:1.5rem;font-weight:800;color:var(--brand-deep);">${cnt?displayGrade(String(classRounded),cls,numericScale):'—'} (${ca})</span></div>`;rd.innerHTML=h;}catch(e){rd.innerHTML=`<p style="color:red;">Помилка: ${e.message}</p>`;}};
 // ══════════ DIRECTOR DASHBOARD ══════════
 export async function loadDirectorDashboard(){
+  ensurePrivacyMirrors();   // разово: дзеркала родини з наявних даних (не чекаємо)
   // Басейн і автобус — ПЕРШИМ ділом і під власним try. Виклик стояв у кінці
   // цієї довгої функції, і будь-яка помилка вище забирала його з собою:
   // у директора блок назавжди лишався на «Завантаження...». Рівно те саме
@@ -895,6 +899,67 @@ if(comT)comT.innerText=`💬 Коментарі · ${isToday?'сьогодні':
 document.getElementById('d-hw-counter').innerText=hw;document.getElementById('d-com-counter').innerText=com;document.getElementById('d-week-late').innerText=wl;document.getElementById('d-week-absent').innerText=wa;document.getElementById('d-unified-att-list').innerHTML=attHtml||'<li class="empty-msg">Усі присутні!</li>';
 }catch(e){console.error(e);}}
 window.loadDirectorDashboard=loadDirectorDashboard;
+
+// ══ РАЗОВЕ ЗАПОВНЕННЯ ДЗЕРКАЛ РОДИНИ (09.10.2026) ══
+// Родині закрито вузли класу (comments, reactions, semester_grades), і вона
+// читає власні дзеркала: student_comments і student_semester. Нові записи
+// вчителі вже пишуть у дзеркала самі; тут — разово переносимо ВЖЕ наявне.
+// Запускається у директора/адміністрації при вході, один раз (system_flags).
+// Ключ учня: якщо запис лежить під іменем (старі дані) — переводимо в
+// ідентифікатор зі списку класу, щоб родина його знайшла.
+export function buildMirrorPatch(lists, comments, reactions, semester){
+  const patch = {}; let nc = 0, ns = 0;
+  const OK_R = ['👍','❤️','🔥','👌','🤝','😔','🤔'];
+  const sidOf = (cls, key) => {
+    const l = lists[cls] || {};
+    if(l[key] !== undefined) return key;
+    const n = String(key).replace(/\s+/g, ' ').trim().toLowerCase();
+    for(const sid in l) if(String(l[sid]).replace(/\s+/g, ' ').trim().toLowerCase() === n) return sid;
+    return key;
+  };
+  const safe = k => !/[.#$\[\]/]/.test(k);
+  for(const cls in (comments || {})) for(const d in (comments[cls] || {})) for(const subj in (comments[cls][d] || {})){
+    for(const key in (comments[cls][d][subj] || {})){
+      const t = comments[cls][d][subj][key];
+      if(typeof t !== 'string' || !t || !safe(key)) continue;
+      const sid = sidOf(cls, key), base = `student_comments/${cls}/${sid}/${d}/${subj}`;
+      patch[`${base}/t`] = t.slice(0, 5000); nc++;
+      const r = reactions?.[cls]?.[d]?.[subj]?.[key];
+      if(OK_R.includes(r)) patch[`${base}/r`] = r;
+    }
+  }
+  for(const cls in (semester || {})) for(const sem in (semester[cls] || {})) for(const subj in (semester[cls][sem] || {})){
+    for(const key in (semester[cls][sem][subj] || {})){
+      const rec = semester[cls][sem][subj][key];
+      const v = rec && rec.value !== undefined ? String(rec.value) : '';
+      if(!v || v.length > 10 || !safe(key)) continue;
+      patch[`student_semester/${cls}/${sidOf(cls, key)}/${sem}/${subj}`] = { value: v }; ns++;
+    }
+  }
+  return { patch, nc, ns };
+}
+let mirrorsRunning = false;
+async function ensurePrivacyMirrors(){
+  const r = currentUserData?.role;
+  if(mirrorsRunning || (r !== 'director' && r !== 'administrator')) return;
+  mirrorsRunning = true;
+  try{
+    const flag = await get(child(ref(db), 'system_flags/mirrors_v1'));
+    if(flag.exists()) return;
+    const [ls, cs, rs, ss] = await Promise.all(['students_list', 'comments', 'reactions', 'semester_grades']
+      .map(n => get(child(ref(db), n)).then(x => x.exists() ? x.val() : {})));
+    const { patch, nc, ns } = buildMirrorPatch(ls, cs, rs, ss);
+    const keys = Object.keys(patch);
+    for(let i = 0; i < keys.length; i += 400){
+      const part = {}; keys.slice(i, i + 400).forEach(k => part[k] = patch[k]);
+      await update(ref(db), part);
+    }
+    await set(ref(db, 'system_flags/mirrors_v1'), { at: Date.now(), by: currentUserData?.email || '', comments: nc, semester: ns });
+    console.info(`[Push School] дзеркала родини заповнено: коментарів ${nc}, підсумкових ${ns}`);
+  }catch(e){ console.warn('[Push School] дзеркала родини:', e.message); }
+  finally{ mirrorsRunning = false; }
+}
+window.ensurePrivacyMirrors = ensurePrivacyMirrors;
 // ══════════ BELL SCHEDULES (Розклад дзвінків) ══════════
 let bellSlotsTemp=[];
 window.loadBellSchedule=async function(){
@@ -902,7 +967,7 @@ window.loadBellSchedule=async function(){
   const cls=document.getElementById('bell-class-select').value;
   const container=document.getElementById('bell-slots-table');
   if(!cls){container.innerHTML='<p class="empty-msg">Оберіть клас.</p>';bellSlotsTemp=[];return;}
-  container.innerHTML='<p class="empty-msg">Завантаження...</p>';
+  container.innerHTML='<p class="empty-msg is-loading">Завантаження...</p>';
   const snap=await get(ref(db,`bell_schedules/${cls}`));
   bellSlotsTemp=[];
   if(snap.exists()){
@@ -982,7 +1047,7 @@ window.applyBellToAllClasses=async function(){
 window.loadBellCoverage=async function(){
   const box=document.getElementById('bell-coverage');
   if(!box)return;
-  box.innerHTML='<p class="empty-msg">Завантаження...</p>';
+  box.innerHTML='<p class="empty-msg is-loading">Завантаження...</p>';
   try{
     const snap=await get(child(ref(db),'bell_schedules'));
     const data=snap.exists()?snap.val():{};
@@ -1013,7 +1078,7 @@ window.loadBellCoverage=async function(){
 // weighted-average calculations in sync immediately, without a page reload.
 window.loadGradeTypesAdmin=async function(){
   const c=document.getElementById('gt-types-table');
-  if(c)c.innerHTML='<p class="empty-msg">Завантаження...</p>';
+  if(c)c.innerHTML='<p class="empty-msg is-loading">Завантаження...</p>';
   await loadGradeTypesCache();
   renderGradeTypesTable();
 };
@@ -1025,7 +1090,7 @@ function renderGradeTypesTable(){
   let h='<div style="display:flex;flex-direction:column;gap:6px;">';
   codes.forEach(code=>{
     const t=gradeTypesCache[code]||{};
-    h+=`<div style="display:flex;gap:7px;align-items:center;background:#fff;border:1px solid var(--line);border-radius:8px;padding:7px 9px;">
+    h+=`<div style="display:flex;gap:7px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:7px 9px;">
       <span style="width:38px;text-align:center;font-weight:800;color:var(--brand-deep);">${code}</span>
       <span style="flex:1;font-size:.85rem;color:var(--ink-2);">${t.label||code}</span>
       <span style="font-size:.75rem;color:var(--ink-3);">×</span>
@@ -1211,7 +1276,7 @@ window.directorLinkParent=async function(){
 window.loadConsents=async function(){
   const box=document.getElementById('cs-list');
   if(!box)return;
-  box.innerHTML='<p class="empty-msg">Завантаження...</p>';
+  box.innerHTML='<p class="empty-msg is-loading">Завантаження...</p>';
   try{
     const [cSnap,rSnap,stSnap]=await Promise.all([
       get(child(ref(db),'consents')),
@@ -1326,7 +1391,7 @@ window.loadAbsenceDay=async function(){
   const date=document.getElementById('sa-date').value;
   const box=document.getElementById('sa-list');
   if(!box||!date)return;
-  box.innerHTML='<p class="empty-msg">Завантаження...</p>';
+  box.innerHTML='<p class="empty-msg is-loading">Завантаження...</p>';
   try{
     const [absSnap,subSnap,schedSnap]=await Promise.all([
       get(child(ref(db),`staff_absence/${date}`)),
@@ -1654,7 +1719,7 @@ window.loadAuditLog=async function(){
   // уже в памʼяті. Читаємо лише коли змінився місяць.
   if(ym===auditYm){ renderAuditRows(); return; }
   auditYm=ym; auditRows=[]; auditOldest=''; auditMore=true;
-  box.innerHTML='<p class="empty-msg">Завантаження...</p>';
+  box.innerHTML='<p class="empty-msg is-loading">Завантаження...</p>';
   try{
     const page=await auditFetch(ym,'');
     auditRows=page;
@@ -1903,7 +1968,7 @@ window.previewYearRollover=async function(){
       const st=lists[from]?Object.values(lists[from]):[];
       if(st.length===0)continue;
       total+=st.length;
-      rows+=`<div style="background:#fff;border:1px solid var(--line);border-radius:8px;padding:9px 12px;margin-bottom:6px;font-size:.85rem;"><b>${i} клас → ${i+1} клас</b> <span style="color:var(--ink-3);">(${st.length})</span><br><span style="color:var(--ink-2);">${escHtml(st.sort().join(', '))}</span></div>`;
+      rows+=`<div style="background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:9px 12px;margin-bottom:6px;font-size:.85rem;"><b>${i} клас → ${i+1} клас</b> <span style="color:var(--ink-3);">(${st.length})</span><br><span style="color:var(--ink-2);">${escHtml(st.sort().join(', '))}</span></div>`;
     }
     if(!rows){box.innerHTML='<p class="empty-msg">Немає учнів для переведення.</p>';return;}
     box.innerHTML=`<div style="max-height:280px;overflow-y:auto;margin-bottom:10px;">${rows}</div>
@@ -2548,7 +2613,7 @@ window.toggleHomeworkBreakdown = async function(){
   if(!opening) return;
 
   const date = document.getElementById('global-date').value;
-  box.innerHTML = '<p class="empty-msg">Завантаження...</p>';
+  box.innerHTML = '<p class="empty-msg is-loading">Завантаження...</p>';
   try{
     const [hw, au, usersSnap] = await Promise.all([
       getSchoolRange('homeworks', date, date),
@@ -2610,7 +2675,7 @@ window.toggleCommentsBreakdown = async function(){
   if(!opening) return;
 
   const date = document.getElementById('global-date').value;
-  box.innerHTML = '<p class="empty-msg">Завантаження...</p>';
+  box.innerHTML = '<p class="empty-msg is-loading">Завантаження...</p>';
   try{
     const cd = await getSchoolRange('comments', date, date);
     const human = date.split('-').reverse().join('.');
@@ -2658,7 +2723,7 @@ window.toggleWeekBreakdown = async function(){
 
   const date = document.getElementById('global-date').value;
   const wd = getWeekDates(date);
-  box.innerHTML = '<p class="empty-msg">Завантаження...</p>';
+  box.innerHTML = '<p class="empty-msg is-loading">Завантаження...</p>';
   try{
     const ad = await getSchoolRange('attendance', wd[0], wd[wd.length-1]);
     const UA = ['Пн','Вт','Ср','Чт','Пт','Сб','Нд'];
@@ -3104,7 +3169,7 @@ function rbPermsHtml(rp, perms){
 window.openRoleBuilder = async function(){
   const box = document.getElementById('rb-body');
   if(!box) return;
-  box.innerHTML = '<p class="empty-msg">Завантаження...</p>';
+  box.innerHTML = '<p class="empty-msg is-loading">Завантаження...</p>';
   try{
     await loadCustomRoles();
     const cnt = await rbCounts();

@@ -102,7 +102,7 @@ export async function renderStaffMeals(){
   // Після 17:00 показуємо вже завтрашній день — з тієї ж причини, що й
   // батькам: сьогоднішній обід давно з'їдено.
   const day = smDate || orderableDay(menuAnchor(localDateString, new Date().getHours()));
-  box.innerHTML = '<p class="empty-msg">Завантаження...</p>';
+  box.innerHTML = '<p class="empty-msg is-loading">Завантаження...</p>';
 
   try{
     const [menuSnap, planSnap, daySnap, priceSnap, itSnap, ordSnap, priceHistorySnap, takeawayHistorySnap] = await Promise.all([

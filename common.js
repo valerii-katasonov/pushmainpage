@@ -842,7 +842,9 @@ export function gradeWritePaths(cls, ym, subj, date, sid, value, type){
   const mirror=`student_grades/${cls}/${sid}/${ym}/${subj}/${date}`;
   // Оновлення оцінки не стирає фото роботи, збережені в цій клітинці.
   if(del)out[mirror]=null;
-  else{out[`${mirror}/v`]=value;out[`${mirror}/t`]=type||'';}
+  // ts — коли оцінку поставили (ключ дати — це день уроку, а не день
+  // запису). За ним центр сповіщень родини (notif-center.js) показує нове.
+  else{out[`${mirror}/v`]=value;out[`${mirror}/t`]=type||'';out[`${mirror}/ts`]=Date.now();}
   return out;
 }
 // Перший стовпець дня лишається у старому ключі YYYY-MM-DD. Наступні
@@ -1386,7 +1388,7 @@ export function renderGradeFormulaInfo(){
   const items=codes.map(code=>{
     const w=getGradeWeight(code);
     const label=(gradeTypesCache[code]&&gradeTypesCache[code].label)||code;
-    return `<span style="display:inline-block;background:#fff;border:1px solid var(--line);border-radius:6px;padding:2px 7px;margin:2px 3px 2px 0;font-size:.75rem;"><b>${code}</b> ${label} ×${w}</span>`;
+    return `<span style="display:inline-block;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:2px 7px;margin:2px 3px 2px 0;font-size:.75rem;"><b>${code}</b> ${label} ×${w}</span>`;
   }).join('');
   return `<li style="list-style:none;background:var(--brand-soft);border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-bottom:9px;font-size:.78rem;color:var(--ink-2);">
     <b style="color:var(--brand-deep);">ℹ️ Як рахується середній бал:</b> Σ(оцінка × коефіцієнт) / Σ(коефіцієнт)
@@ -1414,6 +1416,10 @@ export function showToast(msg, onTap){
   // Клікабельний тримаємо довше: на нього ще треба встигнути натиснути.
   setTimeout(()=>{t.style.opacity='0';setTimeout(()=>t.remove(),300);},onTap?9000:4000);
 }
+// Для вбудованих onclick і модулів, що не імпортують common.js напряму
+// (undo.js, класна година в журналі). Без цього рядка «↩️ Повернуто»
+// мовчки губилося.
+window.showToast = showToast;
 // Escapes a value for interpolation into a single-quoted JS string inside an
 // inline onclick="fn('...')" attribute. Ukrainian names and subjects routinely
 // contain apostrophes (Дем'яненко, Комп'ютерні науки, Мар'яна) — unescaped,
@@ -2166,7 +2172,7 @@ export async function renderHwList(cls,date,listId){
                   `).join('');
                   const timeStr = st.ts ? new Date(st.ts).toLocaleTimeString('uk-UA', {hour:'2-digit', minute:'2-digit'}) : '';
                   return `
-                    <details style="margin-bottom:4px;background:#fff;border:1px solid var(--line-soft);border-radius:6px;padding:6px;">
+                    <details style="margin-bottom:4px;background:var(--surface);border:1px solid var(--line-soft);border-radius:6px;padding:6px;">
                       <summary style="font-weight:600;font-size:0.8rem;cursor:pointer;display:flex;justify-content:space-between;align-items:center;">
                         <span>👤 ${escHtml(st.studentName || 'Учень')} (${(st.images||[]).length} фото)</span>
                         <small style="color:var(--ink-3);font-weight:normal;">⏰ ${timeStr}</small>
@@ -2310,6 +2316,8 @@ window.switchChild=async function(idx){
     if(window.refreshGamesTabIfOpen) window.refreshGamesTabIfOpen();
   });
   showToast(`👶 Дитина: ${k.studentName}`);
+  // Інша дитина / інший кабінет: пошук і дзвіночок мають перечитати своє
+  window.dispatchEvent(new Event('push:context'));
 };
 // Перемикач кабінетів — показується лише тим, у кого призначено >1 ролі.
 function renderRoleSwitcher(){
@@ -2365,6 +2373,8 @@ window.switchRole=async function(newRole){
   if(isTeacherRole(newRole))await fetchTeacherAccess(emailKey(currentUserData.email));
   initUserSession();
   showToast(`🔄 Кабінет: ${ROLE_LABELS[newRole]||newRole}`);
+  // Інша дитина / інший кабінет: пошук і дзвіночок мають перечитати своє
+  window.dispatchEvent(new Event('push:context'));
 };
 window.openProfileModal=async function(){
   document.getElementById('profile-modal').style.display='flex';
@@ -3990,7 +4000,7 @@ export async function renderParentsBlock(containerId,cls){
   const box=document.getElementById(containerId);
   if(!box)return;
   if(!cls){box.innerHTML='<p class="empty-msg">Оберіть клас.</p>';return;}
-  box.innerHTML='<p class="empty-msg">Завантаження...</p>';
+  box.innerHTML='<p class="empty-msg is-loading">Завантаження...</p>';
   try{
     // users і student_links читає лише директор: там персональні дані всіх
     // людей школи. Вони потрібні тільки для позначки «батьки вже заходили».
@@ -4195,7 +4205,7 @@ window.openClassCards = async function(){
   const box = document.getElementById('ccards-list');
   document.getElementById('ccards-class').textContent = cls ? `· ${String(cls).replace('class_', '')} клас` : '';
   document.getElementById('class-cards-modal').style.display = 'flex';
-  box.innerHTML = '<p class="empty-msg">Завантаження...</p>';
+  box.innerHTML = '<p class="empty-msg is-loading">Завантаження...</p>';
   try{
     const [stSnap, cardSnap] = await Promise.all([get(child(ref(db), `students_list/${cls}`)), get(child(ref(db), `student_cards/${cls}`))]);
     const list = stSnap.exists() ? Object.entries(stSnap.val()).map(([k, n]) => ({ k, n: String(n) })).sort((a, b) => a.n.localeCompare(b.n, 'uk')) : [];
@@ -4228,7 +4238,7 @@ window.openStudentCard=async function(cls,key,name){
   document.getElementById('sc-save').style.display=editable?'block':'none';
   document.getElementById('sc-readonly').style.display=editable?'none':'block';
   const box=document.getElementById('sc-fields');
-  box.innerHTML='<p class="empty-msg">Завантаження...</p>';
+  box.innerHTML='<p class="empty-msg is-loading">Завантаження...</p>';
   document.getElementById('student-card-modal').style.display='flex';
   const snap=await get(child(ref(db),`student_cards/${cls}/${key}`));
   const c=snap.exists()?snap.val():{};
@@ -4529,6 +4539,50 @@ window.canClearDayAbsence = canClearDayAbsence;
 // Рендеримо HTML і знімаємо його через html2canvas, а не малюємо текст
 // у jsPDF: вбудовані шрифти jsPDF не мають кирилиці, і текст вийшов би
 // «кракозябрами». Так само вже зроблено в експорті журналу.
+// ══ ДАНІ ОДНІЄЇ ДИТИНИ В «КЛАСНІЙ» ФОРМІ (09.10.2026) ══
+// Родині вузли класу (grades, comments, semester_grades, …) закриті —
+// читає вона лише дзеркала й листки своєї дитини. Табель, «мої дані» й
+// підсумкові очікують форму вузла класу, тож тут дзеркало розкладається
+// назад у неї — лише з однією дитиною. Персонал читає клас, як і раніше.
+const snapOf = v => ({ exists: () => !!v && Object.keys(v).length > 0, val: () => v || {} });
+// {семестр: {предмет: {ключ: {value}}}}
+export async function semesterGradesOf(cls, sid, name){
+  if(!isFamilyRole()){ const s = await get(child(ref(db), `semester_grades/${cls}`)); return s.exists() ? s.val() : {}; }
+  const out = {};
+  for(const k of [...new Set([sid, name].filter(Boolean))]){
+    const s = await get(child(ref(db), `student_semester/${cls}/${k}`)).catch(() => null);
+    if(!s || !s.exists()) continue;
+    const v = s.val();
+    for(const sem in v) for(const subj in (v[sem] || {})) ((out[sem] ||= {})[subj] ||= {})[k] = v[sem][subj];
+  }
+  return out;
+}
+window.semesterGradesOf = semesterGradesOf;
+async function familyExportSnaps(cls, sid){
+  const [gm, cm] = await Promise.all([
+    get(child(ref(db), `student_grades/${cls}/${sid}`)).catch(() => null),
+    get(child(ref(db), `student_comments/${cls}/${sid}`)).catch(() => null)]);
+  const g = gm && gm.exists() ? gm.val() : {}, grades = {}, types = {}, dates = [];
+  for(const m in g) for(const subj in (g[m] || {})) for(const d in (g[m][subj] || {})){
+    const c = g[m][subj][d] || {}; if(c.v === undefined || c.v === '') continue;
+    ((grades[m] ||= {})[subj] ||= {})[d] = { [sid]: c.v };
+    ((types[m] ||= {})[subj] ||= {})[d] = { [sid]: c.t || '' };
+    dates.push([subj, d]);
+  }
+  const c = cm && cm.exists() ? cm.val() : {}, comments = {};
+  for(const d in c) for(const subj in (c[d] || {})) if(c[d][subj]?.t) ((comments[d] ||= {})[subj] ||= {})[sid] = c[d][subj].t;
+  // Поведінка й заявки — листками: лише свої
+  const y0 = Number(String(ACADEMIC_YEAR_ID_LOCAL).slice(0, 4)) || new Date().getFullYear();
+  const days = []; for(let dt = new Date(y0, 8, 1), e = new Date(); dt <= e; dt.setDate(dt.getDate() + 1)){
+    const w = dt.getDay(); if(w >= 1 && w <= 5) days.push(`${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`); }
+  const beh = {}, ret = {};
+  for(let i = 0; i < days.length; i += 40) await Promise.all(days.slice(i, i + 40).map(d =>
+    get(child(ref(db), `behavior_grades/${cls}/${d.slice(0, 7)}/${d}/${sid}`)).then(x => { if(x.exists()) ((beh[d.slice(0, 7)] ||= {})[d] = { [sid]: x.val() }); }).catch(() => {})));
+  for(let i = 0; i < dates.length; i += 40) await Promise.all(dates.slice(i, i + 40).map(([subj, d]) =>
+    get(child(ref(db), `retake_requests/${cls}/${subj}/${d}/${sid}`)).then(x => { if(x.exists()) ((ret[subj] ||= {})[d] = { [sid]: x.val() }); }).catch(() => {})));
+  return { grades: snapOf(grades), types: snapOf(types), comments: snapOf(comments), beh: snapOf(beh), ret: snapOf(ret),
+           sem: snapOf(await semesterGradesOf(cls, sid, '')) };
+}
 window.downloadReportCard=async function(cls,studentName){
   // Дані лежать під постійним ідентифікатором; імʼя потрібне лише для шапки
   if(!window.html2canvas||!window.jspdf)return alert('Бібліотеки експорту не завантажились. Оновіть сторінку.');
@@ -4551,7 +4605,9 @@ window.downloadReportCard=async function(cls,studentName){
     };
     const [semR,gradesR,cardR,stR,scaleR] = await Promise.all([
       readOpt(`academic_year/${ACADEMIC_YEAR_ID_LOCAL}/semesters`),
-      readOpt(`semester_grades/${cls}`),
+      // Родині — з дзеркала своєї дитини; персоналу — вузол класу
+      (async()=>{ try{ return { snap: snapOf(await semesterGradesOf(cls, sid, studentName)) }; }
+                  catch(e){ return { err: `підсумкові: ${e.message || e.code || 'відмова'}` }; } })(),
       readOpt(`student_cards/${cls}/${sid}`),
       readOpt(`students_list/${cls}`),
       readOpt(`grade_scales/${cls}`)
@@ -4631,12 +4687,12 @@ window.exportChildData=async function(cls,studentName){
   showToast('⏳ Збираю дані...');
   try{
     const ym=(o,pick)=>{const r={};for(const m in o)if(pick(m))r[m]=o[m];return r;};
-    const [stSnap,cardSnap,gradesSnap,typesSnap,attSnap,behSnap,stickSnap,
+    let [stSnap,cardSnap,gradesSnap,typesSnap,attSnap,behSnap,stickSnap,
            comSnap,semSnap,retSnap,plSnap,slSnap]=await Promise.all([
       get(child(ref(db),`students_list/${cls}`)),
-      get(child(ref(db),`student_cards/${cls}/${sid}`)),
-      get(child(ref(db),`grades/${cls}`)),
-      get(child(ref(db),`grade_types/${cls}`)),
+      get(child(ref(db),`student_cards/${cls}/${sid}`)).catch(()=>snapOf(null)),
+      isFamilyRole()?null:get(child(ref(db),`grades/${cls}`)),
+      isFamilyRole()?null:get(child(ref(db),`grade_types/${cls}`)),
       // Відвідуваність — лише гілка цієї дитини: клас цілком родині закритий.
       // Навчальний рік: з 1 вересня до сьогодні, лише робочі дні.
       (async()=>{
@@ -4647,17 +4703,23 @@ window.exportChildData=async function(cls,studentName){
         const byDate={};for(const d in v)byDate[d]={[sid]:Object.assign({},...Object.values(v[d]))};
         return {exists:()=>Object.keys(byDate).length>0,val:()=>byDate};
       })(),
-      get(child(ref(db),`behavior_grades/${cls}`)),
-      get(child(ref(db),`stickers/${cls}/${sid}`)),
-      get(child(ref(db),`comments/${cls}`)),
-      get(child(ref(db),`semester_grades/${cls}`)),
-      get(child(ref(db),`retake_requests/${cls}`)),
+      isFamilyRole()?null:get(child(ref(db),`behavior_grades/${cls}`)),
+      get(child(ref(db),`stickers/${cls}/${sid}`)).catch(()=>snapOf(null)),
+      isFamilyRole()?null:get(child(ref(db),`comments/${cls}`)),
+      isFamilyRole()?null:get(child(ref(db),`semester_grades/${cls}`)),
+      isFamilyRole()?null:get(child(ref(db),`retake_requests/${cls}`)),
       // Реєстри батьків читає лише персонал. Батькові вони закриті — і через
       // це вивантаження «моїх даних» з кабінету батька досі падало цілком.
       // Без них просто не буде розділу «батьки».
       get(child(ref(db),'parent_links')).catch(()=>({exists:()=>false,val:()=>null})),
       get(child(ref(db),'student_links')).catch(()=>({exists:()=>false,val:()=>null}))
     ]);
+    // Родина: вузли класу їй закриті — беремо дзеркала своєї дитини
+    // в тій самій формі (familyExportSnaps), далі код спільний.
+    if(isFamilyRole()){
+      const f=await familyExportSnaps(cls,sid);
+      gradesSnap=f.grades;typesSnap=f.types;behSnap=f.beh;comSnap=f.comments;semSnap=f.sem;retSnap=f.ret;
+    }
     // Дані інших дітей у вивантаження потрапити не повинні — усюди
     // фільтруємо строго по імені цієї дитини
     const pick=(snap,depth)=>{
@@ -4859,7 +4921,7 @@ window.openParentEditor=async function(safeEmail){
   const modal=document.getElementById('parent-edit-modal');
   const body=document.getElementById('pe-fields');
   document.getElementById('pe-email').textContent=safeEmail.replace(/_/g,'.');
-  body.innerHTML='<p class="empty-msg">Завантаження...</p>';
+  body.innerHTML='<p class="empty-msg is-loading">Завантаження...</p>';
   modal.style.display='flex';
   const snap=await get(child(ref(db),`parent_links/${safeEmail}`));
   const rec=snap.exists()?snap.val():{};
@@ -5493,6 +5555,7 @@ window.stopAllListeners = stopAllListeners;
 
 window.logoutUser=async function(){
   stopAllListeners();
+  window.dispatchEvent(new Event('push:context'));
   if(parentLessonInterval)clearInterval(parentLessonInterval);
   document.getElementById('profile-bar').style.display='none';
 
@@ -5573,12 +5636,12 @@ window.loadAdminBellSchedule=async function(){
   const box=document.getElementById('a-bell-view');
   if(!box)return;
   if(!cls){box.innerHTML='<p class="empty-msg">Оберіть клас.</p>';return;}
-  box.innerHTML='<p class="empty-msg">Завантаження...</p>';
+  box.innerHTML='<p class="empty-msg is-loading">Завантаження...</p>';
   const snap=await get(ref(db,`bell_schedules/${cls}`));
   if(!snap.exists()){box.innerHTML='<p class="empty-msg">Розклад дзвінків не задано.</p>';return;}
   const d=snap.val();
   const rows=Object.keys(d).sort((a,b)=>(parseInt(a)||0)-(parseInt(b)||0))
-    .map(k=>`<div style="display:flex;justify-content:space-between;padding:6px 9px;background:#fff;border:1px solid var(--brand-line);border-radius:7px;margin-bottom:5px;font-size:.85rem;"><b>Урок ${escHtml(d[k].number??k)}</b><span style="color:var(--ink-2);">${escHtml(d[k].start||'—')} – ${escHtml(d[k].end||'—')}</span></div>`).join('');
+    .map(k=>`<div style="display:flex;justify-content:space-between;padding:6px 9px;background:var(--surface);border:1px solid var(--brand-line);border-radius:7px;margin-bottom:5px;font-size:.85rem;"><b>Урок ${escHtml(d[k].number??k)}</b><span style="color:var(--ink-2);">${escHtml(d[k].start||'—')} – ${escHtml(d[k].end||'—')}</span></div>`).join('');
   box.innerHTML=rows||'<p class="empty-msg">Уроків немає.</p>';
   }catch(err){
     // Читання не вдалося. Без цього блоку на екрані назавжди лишався б
@@ -5592,7 +5655,7 @@ window.loadAdminAcademicYear=async function(){
   try{
   const box=document.getElementById('a-academic-view');
   if(!box)return;
-  box.innerHTML='<p class="empty-msg">Завантаження...</p>';
+  box.innerHTML='<p class="empty-msg is-loading">Завантаження...</p>';
   const snap=await get(ref(db,'academic_year'));
   if(!snap.exists()){box.innerHTML='<p class="empty-msg">Навчальний рік не налаштовано.</p>';return;}
   const years=snap.val();const yearId=Object.keys(years)[0];const y=years[yearId]||{};
@@ -5600,7 +5663,7 @@ window.loadAdminAcademicYear=async function(){
     const items=obj?Object.values(obj):[];
     if(items.length===0)return `<h4 style="margin:12px 0 6px 0;color:var(--warn);font-size:.86rem;">${title}</h4><p class="empty-msg" style="margin:0;">Немає.</p>`;
     return `<h4 style="margin:12px 0 6px 0;color:var(--warn);font-size:.86rem;">${title}</h4>`+
-      items.map(it=>`<div style="background:#fff;border:1px solid var(--warn-line);border-radius:7px;padding:6px 9px;margin-bottom:5px;font-size:.83rem;">${fmt(it)}</div>`).join('');
+      items.map(it=>`<div style="background:var(--surface);border:1px solid var(--warn-line);border-radius:7px;padding:6px 9px;margin-bottom:5px;font-size:.83rem;">${fmt(it)}</div>`).join('');
   };
   box.innerHTML=
     section('Семестри',y.semesters,s=>`<b>${escHtml(s.name||'—')}</b><br><span style="color:var(--ink-2);">${escHtml(s.start||'')} – ${escHtml(s.end||'')}</span>`)+

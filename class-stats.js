@@ -35,6 +35,7 @@ import { ref, get, child } from "https://www.gstatic.com/firebasejs/10.8.1/fireb
 import { db, escHtml, escJs, getClassNum, LEVEL_MAX_CLASS, topicBreakdown, calculateStudentWeightedAvg,
          childAttendanceRange, getDateRange, getActiveClass, academicYearId, displayGrade, getStudentDir,
          stuName, formatAttendanceSlotLabel, localDateString, isBreakItem, dayKeys } from './common.js';
+import { monthlySeries, trendInfo, sparkSVG, trendBadge } from './grade-trend.js';
 
 // ── ЧИСТА ЛОГІКА (покрита тестами) ─────────────────────────────
 export function lowThreshold(max, junior){
@@ -233,18 +234,18 @@ function avgText(x, cls){
   const lvl = junior ? ` (${displayGrade(String(Math.max(2, Math.round(x.avg))), cls)})` : '';
   return `${r}${lvl}`;
 }
-function lowListHtml(low, cls){
+export function lowListHtml(low, cls){
   if(!low.length) return '<p class="cst-none">✅ Предметів із низьким середнім балом немає.</p>';
   return `<ul class="cst-low">${low.map(x => `<li><b>${escHtml(x.subj)}</b> — ${avgText(x, cls)}
       <span>${x.by === 'thematic' ? `середнє ${x.n} ${plural(x.n, ['тематичної', 'тематичних', 'тематичних'])}` : `${x.n} ${plural(x.n, ['оцінка', 'оцінки', 'оцінок'])}`} · поріг ${Number.isInteger(x.thr) ? x.thr : x.thr.toFixed(1)}</span></li>`).join('')}</ul>`;
 }
 // Пропуски за предметами: «Математика — 4 · Англійська — 2»
-function subjAbsHtml(a){
+export function subjAbsHtml(a){
   if(!a || !a.subjects || !a.subjects.length) return '';
   return `<div class="cst-subj"><b>Пропущено за предметами:</b> ${a.subjects.map(x =>
     `<span class="cst-sj">${escHtml(x.subj)} — <b>${x.n}</b></span>`).join('')}</div>`;
 }
-function attListHtml(a){
+export function attListHtml(a){
   const parts = [];
   if(a.days.length) parts.push(`<div><b>Пропущені дні:</b> ${a.days.map(x => escHtml(human(x.date)) + ` <span class="cst-r">(${x.lessons} ${plural(x.lessons, ['урок', 'уроки', 'уроків'])}${x.reason ? `, ${escHtml(x.reason)}` : ''})</span>`).join(', ')}</div>`);
   if(a.lessons.length) parts.push(`<div><b>Окремі уроки:</b> ${a.lessons.map(x => `${escHtml(human(x.date))} ${escHtml(formatAttendanceSlotLabel(x.slot).replace('Урок ', 'ур.'))}${x.subj ? ` <span class="cst-r">${escHtml(x.subj)}</span>` : ''}`).join(', ')}</div>`);
@@ -280,7 +281,7 @@ function ensureClassModal(){
       <p class="cst-note">«Пропущ. уроків» — усі пропущені уроки: за пропущений день — уроки цього дня за розкладом (без гуртків), плюс окремі уроки в інші дні; один урок двічі не рахується.
         Низький бал: менше 4 за шкалою 1–12, менше 3 за шкалою 1–6 (у 1–4 класах — нижче рівня «С»).
         Середній — як для семестрової: з тематичних, а поки їх немає — середньозважений поточних. Натисніть на учня, щоб побачити подробиці.</p>
-      <div id="cst-body"><p class="empty-msg">Завантаження...</p></div>
+      <div id="cst-body"><p class="empty-msg is-loading">Завантаження...</p></div>
     </div>`;
   m.addEventListener('click', e => { if(e.target === m) window.closeClassStats(); });
   m.addEventListener('keydown', e => { if(e.key === 'Escape') window.closeClassStats(); });
@@ -357,7 +358,7 @@ async function renderClassStats(){
       const n = (v, cls2) => `<td class="cst-n${v ? ' ' + cls2 : ''}">${v}</td>`;
       return `<tr class="cst-row" tabindex="0" role="button" aria-expanded="false" aria-controls="${id}"
           onclick="toggleClassStatsRow(this,'${id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
-          <td class="cst-name">${escHtml(s.nm)}</td>${n(a.days.length, 'bad')}${n(lessonsOf(a), 'warn')}${n(a.late.length, 'warn')}
+          <td class="cst-name"><button type="button" class="sn-link" onclick="openStudent360('${escJs(cls)}','${escJs(s.sid)}',event)" aria-label="Картка учня ${escHtml(s.nm)}">${escHtml(s.nm)}</button></td>${n(a.days.length, 'bad')}${n(lessonsOf(a), 'warn')}${n(a.late.length, 'warn')}
           <td class="cst-n${low.length ? ' bad' : ''}">${low.length ? `${low.length} ▾` : '0'}</td></tr>
         <tr id="${id}" class="cst-detail" hidden><td colspan="5">${lowListHtml(low, cls)}${subjAbsHtml(a)}${attListHtml(a)}</td></tr>`;
     }).join('');
@@ -377,6 +378,27 @@ window.toggleClassStatsRow = function(tr, id){
   const d = document.getElementById(id); if(!d) return;
   d.hidden = !d.hidden; tr.setAttribute('aria-expanded', String(!d.hidden)); tr.classList.toggle('open', !d.hidden);
 };
+
+// 📈 Динаміка за предметами: лінія, середній останнього місяця, стрілка.
+// Береться весь навчальний рік, а не обраний період: тренд — про рух.
+// Спершу ті, де стало гірше, — на них батькам варто звернути увагу.
+export function trendRows(perSubj, scaleOf, junior){
+  const order = { down: 0, flat: 1, up: 2, null: 3 };
+  return Object.keys(perSubj || {}).map(subj => {
+    const { g, t } = perSubj[subj];
+    const gg = junior ? Object.fromEntries(Object.entries(g).filter(([, v]) => !(Number(v) > 6))) : g;
+    const series = monthlySeries(gg, t), max = junior ? 6 : scaleOf(subj);
+    return { subj, series, max, info: trendInfo(series, max) };
+  }).filter(r => r.series.length).sort((a, b) => order[a.info.dir] - order[b.info.dir] || a.subj.localeCompare(b.subj, 'uk'));
+}
+export function trendListHtml(rows, cls, junior){
+  if(!rows.length) return '<p class="cst-none">Оцінок ще немає.</p>';
+  return `<ul class="gt-list">${rows.map(r => {
+    const last = r.info.last;
+    const shown = last === null ? '—' : junior ? displayGrade(String(Math.max(2, Math.round(last))), cls) : last.toFixed(1);
+    return `<li><button type="button" class="gt-subj gv-subj-link" data-subj="${escHtml(r.subj)}" onclick="gvOpenSubject(this.dataset.subj)" title="Детальний графік">${escHtml(r.subj)}</button>${sparkSVG(r.series, junior ? 5 : r.max, junior ? 2 : 1)}<span class="gt-last" title="Середній за останній місяць з оцінками">${escHtml(shown)}</span>${trendBadge(r.info, r.max)}</li>`;
+  }).join('')}</ul>`;
+}
 
 // ══ БАТЬКИ Й УЧЕНЬ ══════════════════════════════════════════════
 // Кличе grades-view.js щоразу, як малює «За предметом»: оцінки беремо з
@@ -400,9 +422,20 @@ window.renderFamilyStats = async function(prefix, cls, sid, name, mirror, scales
     const s = (perSubj[subj] ||= { g: {}, t: {} }); s.g[key] = c.v; s.t[key] = c.t || 'П';
   }
   const low = lowSubjects(perSubj, subj => Number(scales && scales[subj] && (scales[subj].max || scales[subj])) || 6, junior);
+  // Динаміка — за весь рік з дзеркала, без фільтра періоду
+  const allSubj = {};
+  for(const ym in (mirror || {})) for(const subj in (mirror[ym] || {})) for(const key in (mirror[ym][subj] || {})){
+    const c = mirror[ym][subj][key] || {}; if(c.v === '' || c.v == null) continue;
+    const s = (allSubj[subj] ||= { g: {}, t: {} }); s.g[key] = c.v; s.t[key] = c.t || 'П';
+  }
+  const trends = trendRows(allSubj, subj => Number(scales && scales[subj] && (scales[subj].max || scales[subj])) || 6, junior);
+  const worse = trends.filter(r => r.info.dir === 'down').length;
   const attKey = `${cls}|${sid}|${p.id}|${end}`;
   const paint = a => {
     const tile = (v, label, cls2) => `<div class="fst-tile${v ? ' ' + cls2 : ''}"><b>${v === null ? '…' : v}</b><span>${label}</span></div>`;
+    // Блок перемальовується на кожне оновлення оцінок — розгорнуті
+    // людиною списки (<details>) мають лишитися розгорнутими
+    const wasOpen = [...box.querySelectorAll('details > summary')].map(x => x.parentElement.open ? x.textContent.slice(0, 20) : null).filter(Boolean);
     box.innerHTML = `<div class="fst-head"><b>📊 Підсумок</b></div>${periodControl(fsP, fsSel, 'setFamilyStatsPeriod')}
       <div class="fst-tiles">
         ${tile(a ? a.days.length : null, 'пропущено днів', 'bad')}${tile(a ? a.lessonCount : null, 'пропущено уроків', 'warn')}${tile(a ? a.late.length : null, 'запізнень', 'warn')}
@@ -412,9 +445,15 @@ window.renderFamilyStats = async function(prefix, cls, sid, name, mirror, scales
         ${lowListHtml(low, cls)}
         <p class="cst-note">Поріг: менше 4 за шкалою 1–12, менше 3 за шкалою 1–6 (у 1–4 класах — нижче рівня «С»). Середній — як для семестрової: з тематичних, а поки їх немає — середньозважений поточних. Підсумкову виставляє вчитель.</p>
       </details>
+      <details class="fst-low"${trends.length ? ' open' : ''}>
+        <summary>📈 Динаміка за предметами${worse ? ` · <b>гірше: ${worse}</b>` : ''}</summary>
+        ${trendListHtml(trends, cls, junior)}
+        <p class="cst-note">Лінія — середній бал по місяцях; стрілка — останній місяць проти попереднього. Натисніть на предмет — відкриється детальний графік.</p>
+      </details>
       ${a && a.days.length && a.inDays ? `<p class="cst-note" style="margin:0 0 4px;">У т.ч. ${a.inDays} ${plural(a.inDays, ['урок', 'уроки', 'уроків'])} у пропущені дні (за розкладом) і ${a.lessonCount - a.inDays} окремо.</p>` : ''}
       ${a && a.subjects && a.subjects.length ? `<details class="fst-low"><summary>Пропущені уроки за предметами</summary>${subjAbsHtml(a)}</details>` : ''}
       ${a && (a.days.length || a.lessons.length || a.late.length) ? `<details class="fst-low"><summary>Дати пропусків і запізнень</summary>${attListHtml(a)}</details>` : ''}`;
+    box.querySelectorAll('details > summary').forEach(x => { if(wasOpen.includes(x.textContent.slice(0, 20))) x.parentElement.open = true; });
   };
   if(fsAtt[attKey]){ paint(fsAtt[attKey]); return; }
   paint(null);

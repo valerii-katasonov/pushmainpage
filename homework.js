@@ -15,11 +15,11 @@
 //
 // Тиждень читається ОДНИМ запитом діапазону, а не сімома по днях.
 // ═══════════════════════════════════════════════════════════════
-import { ref, get, set, child, query, orderByKey, startAt, endAt }
+import { ref, get, set, update, child, query, orderByKey, startAt, endAt }
   from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { db, currentUserData, getActiveClass, escHtml, escJs, mondayOf, localDateString,
          renderHwItem, booksForSubject, nextLessonDate, dayNamesUA, dayKeys, subjKey, planKeyWith, fetchSubjectTeachers,
-         CLOUDINARY_URL, UPLOAD_PRESET, uploadToCloudinary, showToast }
+         CLOUDINARY_URL, UPLOAD_PRESET, uploadToCloudinary, showToast, stuId }
   from './common.js';
 import { topicNames } from './parent-student.js';
 import { ACTIVE_YEAR } from './director.js';
@@ -91,9 +91,11 @@ async function loadSkipDates(){
 
 // ── Показ ───────────────────────────────────────────────────────
 
+let hwSeq = 0;   // захист від гонки: перемкнули дитину чи тиждень, поки читали
 export async function renderHwWeekView(boxId, weekStart){
   const box = document.getElementById(boxId);
   if(!box) return;
+  const my = ++hwSeq;
   const cls = getActiveClass();
   if(!cls){ box.innerHTML = '<p class="empty-msg">Клас не визначено.</p>'; return; }
 
@@ -118,7 +120,7 @@ export async function renderHwWeekView(boxId, weekStart){
     queryStart = `${prevDt.getFullYear()}-${String(prevDt.getMonth() + 1).padStart(2, '0')}-${String(prevDt.getDate()).padStart(2, '0')}`;
   } catch(e) {}
 
-  box.innerHTML = '<p class="empty-msg">Завантаження...</p>';
+  box.innerHTML = '<p class="empty-msg is-loading">Завантаження...</p>';
   let byDate = {}, books = {}, topics = {}, plans = {}, aliases = {}, skip = new Set(), teachersMap = {};
   try{
     // Один запит на весь тиждень замість п'яти по днях.
@@ -152,6 +154,36 @@ export async function renderHwWeekView(boxId, weekStart){
     return;
   }
 
+  // ✓ «Виконано» — лише для родини (батько чи учень позначає свою дитину).
+  // Позначки лежать як hw_done/{клас}/{дата}/{предмет}/{учень}: учитель
+  // читає день цілком, родина — лише свої листки, тож читаємо по одному
+  // на кожне завдання тижня (їх зазвичай 10–25, запити паралельні).
+  const role = currentUserData?.role;
+  const family = role === 'parent' || role === 'student';
+  const sid = family ? (stuId(cls, currentUserData?.studentName) || currentUserData?.studentId || currentUserData?.studentName || '') : '';
+  if(my !== hwSeq) return;                       // поки читали тиждень, почали новий показ
+  const ctx = { cls, sid, role, done: new Set() };
+  if(family && sid){
+    // Позначки читаємо лише для того, що буде на екрані: дні тижня й
+    // завдання, які потраплять у «ДЗ на завтра» (із минулого тижня).
+    const nsd = getNextSchoolDay(localDateString, skip);
+    const hasSch = !!(window.schedule && Object.keys(window.schedule).length);
+    const keys = [];
+    Object.keys(byDate).forEach(ds => Object.keys(byDate[ds] || {}).forEach(subj => {
+      if(days.includes(ds) || (hasSch && nextLessonDate(window.schedule, subj, ds, skip) === nsd)) keys.push(`${ds}|${subjKey(subj)}`);
+    }));
+    const got = await Promise.all(keys.map(k => { const [ds, sk] = k.split('|');
+      return get(child(ref(db), `hw_done/${cls}/${ds}/${sk}/${sid}`)).then(x => x.exists() ? k : null).catch(() => null); }));
+    got.filter(Boolean).forEach(k => ctx.done.add(k));
+  }
+  if(my !== hwSeq) return;                       // застарілий показ — не чіпаємо стан нового
+  hwDoneCtx = ctx;
+  const doneBtn = (ds, subj) => {
+    if(!family || !sid) return '';
+    const k = `${ds}|${subjKey(subj)}`, on = hwDoneCtx.done.has(k);
+    return `<button type="button" class="hw-done-btn${on ? ' on' : ''}" aria-pressed="${on}" data-k="${escHtml(k)}" onclick="toggleHwDone(this)">${on ? '✓ Виконано' : '○ Позначити виконаним'}</button>`;
+  };
+
   const today = localDateString;
   const nextSchoolDay = getNextSchoolDay(today, skip);
   const tomorrowItems = [];
@@ -163,7 +195,7 @@ export async function renderHwWeekView(boxId, weekStart){
       <button type="button" aria-label="Попередній тиждень" onclick="hwShiftWeek(-1)">←</button>
       <div class="hw-nav-mid">
         <b>${escHtml(human(days[0]))} – ${escHtml(human(days[4]))}</b>
-        <span>${total ? `завдань: ${total}` : 'завдань немає'}</span>
+        <span>${total ? `завдань: ${total}` : 'завдань немає'}${family && sid && total ? ` · <b id="hw-done-count">виконано: ${days.reduce((n,d)=>n+Object.keys(byDate[d]||{}).filter(sj=>hwDoneCtx.done.has(`${d}|${subjKey(sj)}`)).length,0)}</b>` : ''}</span>
       </div>
       <button type="button" aria-label="Наступний тиждень" onclick="hwShiftWeek(1)">→</button>
     </div>
@@ -199,7 +231,7 @@ export async function renderHwWeekView(boxId, weekStart){
           const submitBtn = `<div style="margin-top:6px;"><button type="button" class="nw-del" style="background:var(--brand-soft);color:var(--brand-ink);border:1px solid var(--brand-line);padding:3px 8px;border-radius:6px;font-size:0.75rem;cursor:pointer;" onclick="openHwSubmitModal('${escJs(cls)}','${escJs(ds)}','${escJs(subj)}')">📷 Здати роботу</button></div>`;
             
           const li = renderHwItem(subj, rec, booksForSubject(books, subj));
-          const extra = teacherTxt + topicTxt + dueTxt + helpTxt + submitBtn;
+          const extra = teacherTxt + topicTxt + dueTxt + helpTxt + doneBtn(ds, subj) + submitBtn;
           const cut = li.lastIndexOf('</li>');
           const htmlItem = cut < 0 ? li + extra : li.slice(0,cut) + extra + li.slice(cut);
           tomorrowItems.push(htmlItem);
@@ -269,7 +301,7 @@ export async function renderHwWeekView(boxId, weekStart){
       const submitBtn = `<div style="margin-top:6px;"><button type="button" class="nw-del" style="background:var(--brand-soft);color:var(--brand-ink);border:1px solid var(--brand-line);padding:3px 8px;border-radius:6px;font-size:0.75rem;cursor:pointer;" onclick="openHwSubmitModal('${escJs(cls)}','${escJs(ds)}','${escJs(subj)}')">📷 Здати роботу</button></div>`;
 
       const li = renderHwItem(subj, rec, booksForSubject(books, subj));
-      const extra = teacherTxt + topicTxt + dueTxt + helpTxt + submitBtn;
+      const extra = teacherTxt + topicTxt + dueTxt + helpTxt + doneBtn(ds, subj) + submitBtn;
       const cut = li.lastIndexOf('</li>');
       return cut < 0 ? li + extra : li.slice(0,cut) + extra + li.slice(cut);
     }).join('');
@@ -294,6 +326,46 @@ export async function renderHwWeekView(boxId, weekStart){
     `<p class="empty-msg">На цей тиждень завдань поки немає.</p>`);
 }
 window.renderHwWeekView = renderHwWeekView;
+
+// ── ✓ ВИКОНАНО ───────────────────────────────────────────────────
+// Кнопка тієї самої задачі може стояти двічі (у «ДЗ на завтра» і в дні
+// тижня) — оновлюємо обидві й лічильник у шапці тижня.
+let hwDoneCtx = { cls: '', sid: '', role: '', done: new Set() };
+export function hwDonePaint(k, on){
+  document.querySelectorAll('.hw-done-btn').forEach(b => {
+    if(b.dataset.k !== k) return;
+    b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on));
+    b.textContent = on ? '✓ Виконано' : '○ Позначити виконаним';
+  });
+  const c = document.getElementById('hw-done-count');
+  if(c){
+    // Рахуємо по днях тижня: там кожне завдання рівно один раз
+    const ks = [...document.querySelectorAll('.hw-day .hw-done-btn')].map(b => b.dataset.k);
+    c.textContent = `виконано: ${ks.filter(x => hwDoneCtx.done.has(x)).length}`;
+  }
+}
+window.toggleHwDone = async function(btn){
+  const k = btn && btn.dataset.k; const { cls, sid, role } = hwDoneCtx;
+  if(!k || !cls || !sid) return;
+  const [ds, sk] = k.split('|');
+  const on = !hwDoneCtx.done.has(k);
+  btn.disabled = true;
+  try{
+    // Разом із дзеркалом student_hw_done (учень другим сегментом): з нього
+    // родина читає свої позначки діапазоном дат — для серій (streaks.js).
+    const ts = Date.now();
+    await update(ref(db), {
+      [`hw_done/${cls}/${ds}/${sk}/${sid}`]: on ? { ts, by: role === 'student' ? 'student' : 'parent' } : null,
+      [`student_hw_done/${cls}/${sid}/${ds}/${sk}`]: on ? ts : null
+    });
+    if(on) hwDoneCtx.done.add(k); else hwDoneCtx.done.delete(k);
+    hwDonePaint(k, on);
+    if(window.renderStreaks) window.renderStreaks();
+    if(on) showToast(role === 'student' ? '✓ Молодець! Учитель побачить, що зроблено' : '✓ Позначено виконаним — учитель це побачить');
+  }catch(e){
+    showToast('❌ Не збережено: ' + (e.message || ''));
+  }finally{ btn.disabled = false; }
+};
 
 // Перемикання тижнів. 0 — повернутися до поточного.
 window.hwShiftWeek = function(delta){

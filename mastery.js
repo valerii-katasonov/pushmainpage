@@ -161,7 +161,7 @@ function renderRows(box, data, subject, classNum){
         + (r.lastAt ? ` · востаннє ${dateLabel(r.lastAt)}` : '')
       : `<span style="color:var(--ink-3);">ще ніхто з класу не заходив</span>`;
     const width = r.played ? Math.round((r.played / Math.max(1, r.rosterSize)) * 100) : 0;
-    return `<div style="background:#fff;border:1px solid var(--line);border-radius:10px;padding:11px;margin-bottom:8px;">
+    return `<div style="background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:11px;margin-bottom:8px;">
       <div style="font-weight:700;font-size:.9rem;">${r.icon} ${escHtml(r.title)}</div>
       <div style="font-size:.75rem;color:var(--ink-2);margin:2px 0 6px 0;">${topics}</div>
       <div style="font-size:.8rem;color:var(--ink);">${body}</div>
@@ -199,7 +199,7 @@ window.renderMastery = async function(boxId){
       + 'вони поки що є для 3 і 4 класів (математика).</p>';
     return;
   }
-  box.innerHTML = '<p class="empty-msg">Завантаження...</p>';
+  box.innerHTML = '<p class="empty-msg is-loading">Завантаження...</p>';
 
   const subject = areas[0];           // поки що предмет один; далі буде вибір
   try{

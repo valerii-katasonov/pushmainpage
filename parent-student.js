@@ -4,7 +4,7 @@
 // grade reactions, and retake-request submission (the review side
 // lives in teacher.js).
 // ═══════════════════════════════════════════════════════════════
-import { ref, set, get, child, remove } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+import { ref, set, get, child, remove, update } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { db, getActiveClass, currentUserData, getClassNum, LEVEL_MAX_CLASS, STICKER_GOAL, stickerGoal, getWeekDates, displayGrade, gradeClass6, showToast, renderHwItem, renderHwList, dayKeys, dayNamesUA, isBreakItem, parseTimeRange, fmtTimeRange, localDateString, formatAttendanceSlotLabel, renderGradeFormulaInfo, escJs, escHtml, safeUrl, renderBirthdays, stuName, stuId, auth, normalizeChildren, gradesFromMirror, mondayOf, altChoiceFor, resolveAlt, classHourItem, insertAtTime, minsOf, subjKey, planKeyWith, notifyEvent, getStudentDir, resolveStudentKey } from './common.js';
 import { ACTIVE_YEAR } from './director.js';
 import { renderParentMenu } from './kitchen.js';
@@ -442,6 +442,28 @@ function renderDynamicSchedule(role='parent'){
   }
   const lessons=buildDynamicSchedule(window.schedule,targetDayName,!showTomorrow,
                                     dateWithOffset(showTomorrow?nextDay.offset+1:0))||[];
+  // Заміни завантажені на дату з поля вгорі (global-date). На уроках
+  // іншого дня (завтрашній список, або в полі обрано іншу дату) їх
+  // показувати не можна — «заміна» потрапила б на чужий урок.
+  const subsOk = !showTomorrow && (document.getElementById('global-date')||{}).value === todayStr;
+  // Блок «Зараз» нагорі вкладки «Сьогодні» (ui-today.js). Той самий
+  // список уроків, що й нижче, — лише перерахований у прості числа.
+  if(window.renderNowCard){
+    try{
+      const toItems=list=>{ let k=0; return (list||[]).filter(l=>!l._break).map(l=>{
+        if(!l._classHour) k++;
+        const b=lessonBounds(l), sub=subsOk&&todaySubs[l._slot];
+        return { subj: typeof l.subject==='string'?l.subject:(l.subject&&l.subject.ua)||'',
+                 start:b.start, end:b.end, num:l._classHour?0:k, classHour:!!l._classHour,
+                 sub: sub ? (sub.subName||'заміна') : '' };
+      }).filter(x=>x.start!=null&&x.end!=null); };
+      if(showTomorrow){
+        const it=toItems(lessons);
+        window.renderNowCard(prefix,[],currentMins,{ over:!noToday,
+          nextDay:{ label: nextDay.offset===0?'Завтра':(dayNamesUA[targetDayName]||'Наступний день'), first:it[0], count:it.length } });
+      } else window.renderNowCard(prefix,toItems(todayLessons),currentMins);
+    }catch(e){ console.warn('Блок «Зараз»:', e); }
+  }
   const container=document.getElementById(`${prefix}-dynamic-schedule`);if(!container)return;
   if(realLessons(lessons)===0){
     // Три різні причини порожнього списку — і три різні відповіді.
@@ -488,7 +510,7 @@ function renderDynamicSchedule(role='parent'){
     }
     // Заміну директор зберігає за номером слота в розкладі, а не за
     // порядком у списку — тому шукаємо саме за _slot.
-    const sub=todaySubs[l._slot];
+    const sub=subsOk&&todaySubs[l._slot];
     html+=`<div class="lesson-row${isCurrent?' current':isPassed?' passed':''}${l._classHour?' class-hour':''}">
       <div class="lesson-num">${l._classHour?'🕘':num}</div>
       <div class="lesson-info">
@@ -571,7 +593,7 @@ window.renderParentCalendar=async function(role='parent'){
   const cls=getActiveClass();
   const grid=document.getElementById(`${prefix}-cal-grid`);
   if(!grid)return;
-  grid.innerHTML='<p class="empty-msg">⏳ Завантаження...</p>';
+  grid.innerHTML='<p class="empty-msg is-loading">⏳ Завантаження...</p>';
   // Без перехоплення відмова лишала б вічне «Завантаження...» — людина
   // дивилася б на спінер і не знала, зламалося щось чи просто повільно.
   let examsSnap,holidaysSnap,breaksSnap,eventsSnap;
@@ -684,7 +706,7 @@ window.showParentCalDayDetails=async function(role,ds){
   const prefix=role==='student'?'s':'p';
   const dd=document.getElementById(`${prefix}-cal-day-details`);
   if(!dd)return;
-  dd.style.display='block';dd.innerHTML='<p class="empty-msg">⏳ Завантаження...</p>';
+  dd.style.display='block';dd.innerHTML='<p class="empty-msg is-loading">⏳ Завантаження...</p>';
   const cls=getActiveClass();const ym=ds.substring(0,7);
   const myCalendarType=currentUserData?.isArtSchool?'art_school':'general';
   const classMatches=cs=>cs==='all'||(Array.isArray(cs)&&cs.includes(cls));
@@ -759,10 +781,18 @@ async function sendRetakeRequest(cls,subj,date,student,grade){
   let totalLessons=0;let subjLessons=0;
   if(yearSnap.exists()){const d=yearSnap.val();for(let m in d)if(d[m][subj])for(let dt in d[m][subj])subjLessons++;}
   const limit=Math.max(1,Math.floor(subjLessons*0.1));
-  const existingSnap=await get(ref(db,`retake_requests/${cls}/${subj}`));
-  let existing=0;if(existingSnap.exists()){const ed=existingSnap.val();for(let dt in ed)if(ed[dt][student])existing++;}
+  // Свої заявки — по датах, де в дитини є оцінка з предмета (заявки всього
+  // класу родині закриті). Заявка без оцінки неможлива, тож нічого не губимо.
+  const dates=[];if(yearSnap.exists()){const d=yearSnap.val();for(let m in d)if(d[m][subj])dates.push(...Object.keys(d[m][subj]));}
+  const got=await Promise.all(dates.map(dt=>get(ref(db,`retake_requests/${cls}/${subj}/${dt}/${student}`)).then(x=>x.exists()).catch(()=>false)));
+  const existing=got.filter(Boolean).length;
   if(existing>=limit){showToast(`🚫 Ви вже використали всі можливості для покращення оцінок з ${subj} (ліміт ${limit})`);return;}
-  await set(ref(db,`retake_requests/${cls}/${subj}/${date}/${student}`),{status:'pending',grade,requestDate:localDateString});
+  try{
+    await set(ref(db,`retake_requests/${cls}/${subj}/${date}/${student}`),{status:'pending',grade,requestDate:localDateString});
+  }catch(e){
+    // Правила приймають лише нову заявку: на цю оцінку її вже подавали
+    return showToast(/permission/i.test(e.message||'')?'ℹ️ Заявку на цю оцінку вже подано — рішення за вчителем':'❌ Не надіслано: '+(e.message||''));
+  }
   showToast(`🔄 Запит на перездачу надіслано вчителю!`);
 }
 window.sendRetakeRequest=sendRetakeRequest;
@@ -794,7 +824,8 @@ export function loadParentDashboard(){
       const keysToTry = [...new Set([sId, resolvedSid, sName].filter(Boolean))];
 
       const [classStickersSnap, ...directSnaps] = await Promise.all([
-        get(child(ref(db), `stickers/${cls}`)).catch(() => null),
+        // Клас цілком родині закритий — лише гілки своєї дитини нижче
+        Promise.resolve(null),
         ...keysToTry.map(k => get(child(ref(db), `stickers/${cls}/${k}`)).catch(() => null))
       ]);
 
@@ -852,6 +883,8 @@ export function loadParentDashboard(){
   // renderHwList('p-daily-hw-list'), loadAiDayContext('p'), renderDayTopics('p').
   // Свіжі оголошення школи — навпаки, тепер найперші на екрані.
   if(window.renderFreshNews) window.renderFreshNews('p-fresh-news');
+  // Плитки «що нового»: ДЗ дня, оцінки й коментарі за тиждень (ui-today.js)
+  if(window.renderTodayTiles) window.renderTodayTiles('p',cls,mySid(),date);
   // Textbooks
   loadTextbooksForParent();
   renderBirthdays('p-birthdays',cls,currentUserData.studentName);
@@ -868,6 +901,10 @@ export function loadParentDashboard(){
   Promise.all([loadTodaySubstitutions(cls,date),loadDayTopics(cls,date)])
     .then(()=>{renderDynamicSchedule('parent');});
   renderConsents();
+  // 🗓 Вільний час учителів для консультацій (consult.js)
+  if(window.renderParentConsult) window.renderParentConsult();
+  // 🔥 Серія виконаного ДЗ (streaks.js)
+  if(window.renderStreaks) window.renderStreaks();
   renderNewsFeed('p-news-feed');
   // Ключ дитини НЕ передаємо: хай renderParentMenu візьме його через
   // mealKey(). Раніше тут стояло studentId||studentName — сирий запасний
@@ -884,10 +921,18 @@ export function loadParentDashboard(){
 async function renderDashboardBehavior(prefix,cls,date){
   const box=document.getElementById(`${prefix}-behavior-list`);
   if(!box)return;
-  box.innerHTML='<p class="empty-msg">Завантаження...</p>';
+  box.innerHTML='<p class="empty-msg is-loading">Завантаження...</p>';
   try{
-    const snap=await get(child(ref(db),`behavior_grades/${cls}/${date.substring(0,7)}`));
-    const data=snap.exists()?snap.val():{};
+    // Лише свої листки: поведінка всього класу родині закрита.
+    // Тиждень може зачепити два місяці — місяць беремо з кожної дати.
+    const keys=[...new Set([mySid(),currentUserData?.studentId,currentUserData?.studentName].filter(Boolean))];
+    const data={};let ok=0,fail=null;
+    await Promise.all(getWeekDates(date).flatMap(day=>keys.map(k=>
+      get(child(ref(db),`behavior_grades/${cls}/${day.slice(0,7)}/${day}/${k}`))
+        .then(sn=>{ok++;if(sn.exists()&&(data[day]||{})[k]===undefined)(data[day]||={})[k]=sn.val();}).catch(e=>{fail=e;}))));
+    // Окремий ключ може не пройти правила (старе імʼя) — це не біда. Але
+    // якщо не пройшло жодне читання, мовчати «оцінок немає» не можна.
+    if(!ok&&fail)throw fail;
     let html='';
     for(const day of getWeekDates(date)){
       if(!data[day]||mineOf(data[day])===undefined)continue;
@@ -906,12 +951,16 @@ export async function renderFinalGrades(containerId,cls,studentName){
   const box=document.getElementById(containerId);
   if(!box)return;
   try{
-    const [semSnap,gradesSnap,scaleSnap,dir]=await Promise.all([
+    const dir0=await getStudentDir(cls).catch(()=>null);
+    const sid0=resolveStudentKey(dir0,currentUserData?.studentId,studentName).key;
+    // Підсумкові — з дзеркала своєї дитини (вузол класу родині закритий)
+    const [semSnap,semAll,scaleSnap]=await Promise.all([
       get(child(ref(db),`academic_year/${ACTIVE_YEAR}/semesters`)),
-      get(child(ref(db),`semester_grades/${cls}`)),
-      get(child(ref(db),`grade_scales/${cls}`)).catch(()=>null),
-      getStudentDir(cls).catch(()=>null)
+      window.semesterGradesOf(cls,sid0,studentName),
+      get(child(ref(db),`grade_scales/${cls}`)).catch(()=>null)
     ]);
+    const dir=dir0;
+    const gradesSnap={exists:()=>Object.keys(semAll||{}).length>0,val:()=>semAll};
     if(!gradesSnap.exists()){box.style.display='none';return;}
     const sems=semSnap.exists()?semSnap.val():{};
     const scales=getClassNum(cls)<=LEVEL_MAX_CLASS?{}:(scaleSnap?.exists()?scaleSnap.val():{});
@@ -936,7 +985,10 @@ export async function renderFinalGrades(containerId,cls,studentName){
     if(!html){box.style.display='none';return;}
     box.style.display='block';box.innerHTML=html;
   }catch(e){
-    box.innerHTML='<p class="empty-msg">Не вдалося завантажити згоди.</p>';
+    // Раніше тут писалося «згоди» (скопійовано з іншого блоку), а сам блок
+    // лишався схованим — помилку ніхто не бачив.
+    box.style.display='block';
+    box.innerHTML='<p class="empty-msg">Не вдалося завантажити підсумкові оцінки.</p>';
   }
 }
 // Табель активної дитини (у батьків) або власний (в учня)
@@ -951,21 +1003,29 @@ window.downloadMyReportCard=function(){
 export async function renderConsents(){
   const box=document.getElementById('p-consents');
   if(!box||currentUserData?.role!=='parent')return;
+  // Ховаємо/показуємо весь блок разом із заголовком «Запити школи»: без
+  // запитів на вкладці не має висіти порожній заголовок.
+  const wrap=document.getElementById('p-consents-block');
+  const show=v=>{ box.style.display=v; if(wrap) wrap.style.display=v; };
   const cls=currentUserData.class, sid=currentUserData.studentId||currentUserData.studentName;
   try{
-    const [cSnap,rSnap]=await Promise.all([
-      get(child(ref(db),'consents')),
-      get(child(ref(db),'consent_responses'))
-    ]);
-    if(!cSnap.exists()){box.style.display='none';return;}
-    const all=cSnap.val(), resp=rSnap.exists()?rSnap.val():{};
+    // Відповіді читаємо ЛИШЕ СВОЇ — по листку на запит. Раніше тут
+    // читався весь consent_responses, а правила дають родині тільки
+    // власний листок: читання падало, і блок запитів ховався в catch —
+    // батьки не бачили жодного запиту школи.
+    const cSnap=await get(child(ref(db),'consents'));
+    if(!cSnap.exists()){show('none');return;}
+    const all=cSnap.val();
     const mine=Object.keys(all).filter(id=>{
       const c=all[id];
       const list=Array.isArray(c.classes)?c.classes:[];
       return list.includes(cls);
     }).sort((a,b)=>(all[b].createdAt||0)-(all[a].createdAt||0));
-    if(mine.length===0){box.style.display='none';return;}
-    box.style.display='block';
+    if(mine.length===0){show('none');return;}
+    const resp={};
+    await Promise.all(mine.map(id=>get(child(ref(db),`consent_responses/${id}/${cls}/${sid}`))
+      .then(s=>{ if(s.exists()) resp[id]={[cls]:{[sid]:s.val()}}; }).catch(()=>{})));
+    show('block');
     box.innerHTML=mine.map(id=>{
       const c=all[id];
       const my=resp[id]&&resp[id][cls]&&resp[id][cls][sid];
@@ -985,7 +1045,7 @@ export async function renderConsents(){
              </div>`}
       </div>`;
     }).join('');
-  }catch(e){box.style.display='none';}
+  }catch(e){show('none');}
 }
 window.answerConsent=async function(id,answer){
   const cls=currentUserData?.class, sid=currentUserData?.studentId||currentUserData?.studentName;
@@ -1134,7 +1194,7 @@ window.submitAttendance=async function(role='parent'){
     await set(ref(db,`attendance/${cls}/${date}/${key}/${SELF_REPORT_SLOT}`),{status:type,reason,markedBy,by:(currentUserData&&currentUserData.email)||'',ts:Date.now()});
   }catch(e){
     alert('Не вдалося надіслати: '+e.message+'\n\nШкола цього не побачила. Спробуйте ще раз або зателефонуйте.');
-    return;
+    return false;   // шторка (ui-today.js) не має закриватися з «✅»
   }
   const el=document.getElementById(`${prefix}-att-status`);
   await renderSelfAttStatus(role);
@@ -1160,18 +1220,27 @@ window.submitAttendance=async function(role='parent'){
   // стануть невидимими.
   if(!(result.ok && result.sent))
     console.warn('Відмітка збережена, push не надіслано:', result.error || 'немає підписаних отримувачів');
+  return true;
 };
 window.updateAttOptionsStudent=function(){ fillAttReasons('s'); };
 // cur — реакція, що вже стоїть: натиснули її ж — знімаємо.
-window.sendReaction=function(date,subject,emoji,cur){if(!currentUserData)return;
+// key — під яким ключем лежить сам коментар (його дає grades-view).
+// Пишемо двічі одним запитом: у reactions (бачить учитель) і в дзеркало
+// student_comments (бачить сама родина — клас їй закритий).
+window.sendReaction=function(date,subject,emoji,cur,key){if(!currentUserData)return;
   const next=cur===emoji?null:emoji;
-  set(ref(db,`reactions/${getActiveClass()}/${date}/${subject}/${currentUserData.studentId||currentUserData.studentName}`),next)
+  const cls=getActiveClass(), k=key||currentUserData.studentId||currentUserData.studentName;
+  update(ref(db),{[`reactions/${cls}/${date}/${subject}/${k}`]:next,[`student_comments/${cls}/${k}/${date}/${subject}/r`]:next})
     .then(()=>{
       // Хто й коли поставив — для вчителя (comments-view.js)
-      window.markCommentReact?.(getActiveClass(),date,subject,currentUserData.studentId||currentUserData.studentName,next);
+      window.markCommentReact?.(cls,date,subject,k,next);
       // «Є питання» — не кінець розмови: підказуємо, де її почати
       if(next==='🤔')showToast('🤔 Учитель побачить реакцію. Щоб поставити питання — «💬 Хочу обговорити» у вкладці «Школа» (натисніть сюди)',()=>window.openTabByKey?.('parent-screen','talk'));
-      loadParentDashboard();
+      // Перемальовувати весь кабінет не треба: рядок реакцій оновить
+      // підписка на дзеркало коментарів (grades-view.js). Раніше тут стояв
+      // loadParentDashboard() — і в учня він підміняв таймер «Зараз» на
+      // батьківський, а в батьків щоразу перечитував увесь дашборд.
+      window.refreshNotifs?.();
     })
     .catch(e=>showToast('Не вдалося надіслати: ' + e.message));};
 // ══════════ STUDENT DASHBOARD ══════════
@@ -1193,7 +1262,8 @@ export function loadStudentDashboard(){
       const keysToTry = [...new Set([sId, resolvedSid, sName].filter(Boolean))];
 
       const [classStickersSnap, ...directSnaps] = await Promise.all([
-        get(child(ref(db), `stickers/${cls}`)).catch(() => null),
+        // Клас цілком родині закритий — лише гілки своєї дитини нижче
+        Promise.resolve(null),
         ...keysToTry.map(k => get(child(ref(db), `stickers/${cls}/${k}`)).catch(() => null))
       ]);
 
@@ -1233,6 +1303,10 @@ export function loadStudentDashboard(){
   loadTextbooksForParent('student');
   loadAiDayContext('s');
   if(window.renderFreshNews) window.renderFreshNews('s-fresh-news');
+  // Плитки «що нового» — як у батьків (ui-today.js)
+  if(window.renderTodayTiles) window.renderTodayTiles('s',cls,mySid(),date);
+  // 🔥 Серія виконаного ДЗ (streaks.js)
+  if(window.renderStreaks) window.renderStreaks();
   renderBirthdays('s-birthdays',cls,currentUserData.studentName);
   if(window.renderMonthEvents) window.renderMonthEvents('s-month-events',cls);
   if(window.renderWeekDigest) window.renderWeekDigest('s-week-digest');
@@ -1361,7 +1435,7 @@ export async function initChildAccess(){
 async function caLoadChildren(sel, box){
   if(caKidsLoading) return;
   caKidsLoading = true;
-  box.innerHTML = '<p class="empty-msg">Завантаження...</p>';
+  box.innerHTML = '<p class="empty-msg is-loading">Завантаження...</p>';
   try{
     const d = await caCall('children', {});
     caKids = (d.children || []).filter(k => k && k.studentName);
@@ -1662,7 +1736,7 @@ window.toggleWeekSchedule = function(prefix){
   const opening = box.style.display === 'none' || !box.style.display;
   if(opening) renderWeekSchedule(prefix);   // перемальовуємо щоразу: розклад міг оновитися
   box.style.display = opening ? 'block' : 'none';
-  if(btn) btn.textContent = opening ? '▲ Згорнути тиждень' : '📅 Показати весь тиждень';
+  if(btn) btn.textContent = opening ? '▲ Згорнути тиждень' : (btn.classList.contains('ui-btn') ? '📅 Весь тиждень' : '📅 Показати весь тиждень');
 };
 
 // ══════════════════════════════════════════════════════════════════
@@ -1705,7 +1779,7 @@ async function renderYearCalendar(role){
   const prefix = role === 'student' ? 's' : 'p';
   const box = document.getElementById(`${prefix}-cal-year`);
   const cls = getActiveClass();
-  box.innerHTML = '<p class="empty-msg">⏳ Завантаження...</p>';
+  box.innerHTML = '<p class="empty-msg is-loading">⏳ Завантаження...</p>';
 
   let holidaysSnap, breaksSnap, examsSnap;
   try{
