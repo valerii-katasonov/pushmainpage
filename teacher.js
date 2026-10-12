@@ -652,17 +652,17 @@ window.sendClassBroadcast=async function(){
     }
     if(targets.length===0){alert('У цьому класі немає прив\'язаних батьків.');return;}
     if(!confirm(`Надіслати повідомлення ${targets.length} отримувачам?\n\nКожен отримає його в особистий чат.`))return;
-    const mySafe=emailKey(currentUserData?.email);
-    const myName=((currentUserData?.firstName||'')+' '+(currentUserData?.lastName||'')).trim()||currentUserData?.email||'Вчитель';
-    for(const se of targets){
-      const chatId=[mySafe,se].sort().join('___');
-      await push(ref(db,`chats/${chatId}/messages`),
-        {from:mySafe,fromName:`${myName} (Вчитель)`,text,time:Date.now(),read:false});
-    }
-    logAction('broadcast',{cls,value:`${targets.length} отримувачів`});
-    document.getElementById('cb-status').textContent=`✅ Надіслано ${targets.length} отримувачам`;
+    // Через chat.js: там розмова створюється по-справжньому (учасники,
+    // покажчики обом) — інакше правила відхиляють запис, а батько не бачить чату
+    if(typeof window.broadcastToParents!=='function')throw new Error('модуль чату ще не завантажився — спробуйте за мить');
+    const res=await window.broadcastToParents(targets,text);
+    logAction('broadcast',{cls,value:`${res.sent} отримувачів${res.failed.length?`, не доставлено ${res.failed.length}`:''}`});
+    if(!res.sent)throw new Error('жодному отримувачу не вдалося надіслати. Перевірте, що ваша пошта є у «Управлінні персоналом».');
+    document.getElementById('cb-status').textContent=res.failed.length
+      ?`✅ Надіслано ${res.sent} · ⚠️ не вдалося ${res.failed.length}: ${res.failed.map(k=>k.replace(/_/g,'.')).join(', ')}`
+      :`✅ Надіслано ${res.sent} отримувачам`;
     document.getElementById('cb-text').value='';
-    showToast(`✉️ Надіслано: ${targets.length}`);
+    showToast(`✉️ Надіслано: ${res.sent}`);
   }catch(e){alert('Помилка: '+e.message);}
   finally{btn.disabled=false;btn.textContent='✉️ Надіслати всім';}
 };

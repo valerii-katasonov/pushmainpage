@@ -863,6 +863,54 @@ export function stopChatListeners(){
 }
 window.stopChatListeners = stopChatListeners;
 
+// ── ПОВІДОМЛЕННЯ ВСЬОМУ КЛАСУ (teacher.js → sendClassBroadcast) ──
+// Кожному з батьків — в особистий чат з учителем. РАНІШЕ розсилка писала
+// повідомлення прямо в chats/{id}/messages, не створюючи самого чату:
+// без members і staff правила такий запис відхиляють, і вчитель бачив
+// «PERMISSION_DENIED» на першому ж отримувачі. До того ж батько й не
+// знайшов би цю розмову — покажчика user_chats у нього не було.
+// Тепер: чат є — дописуємо; нема — створюємо так само, як із «+ Нова
+// розмова» (members, staff, покажчики обом), а потім пишемо.
+async function ensureDirectChat(otherKey){
+  const me = myKey();
+  const id = [me, otherKey].sort().join('___');
+  const known = await get(child(ref(db), `user_chats/${me}/${id}`)).catch(() => null);
+  if(!known || !known.exists()){
+    await update(ref(db, `chats/${id}`), {
+      members: { [me]: true, [otherKey]: true }, staff: me,
+      createdBy: me, createdAt: Date.now()
+    });
+    await set(ref(db, `user_chats/${me}/${id}`), true);
+    await set(ref(db, `user_chats/${otherKey}/${id}`), true);
+  }
+  return id;
+}
+// keys — ключі пошт батьків (parent_links). Повертає {sent, failed:[ключ]}
+export async function broadcastToParents(keys, text){
+  const role = currentUserData?.role;
+  const label = role==='director' ? '(Директор)' : role==='administrator' ? '(Секретар)' : '(Вчитель)';
+  const nm = myDisplayName();
+  const fromName = (hasOwnName() ? `${nm} ${label}` : nm).trim();
+  const me = myKey(), out = { sent: 0, failed: [] }, delivered = [];
+  for(const raw of [...new Set(keys.map(k => String(k || '').toLowerCase()))]){
+    if(!raw || raw === me) continue;
+    try{
+      const id = await ensureDirectChat(raw);
+      const ts = Date.now();
+      await push(ref(db, `chats/${id}/messages`), { from: me, fromName, text, time: ts, read: false });
+      await update(ref(db, `chats/${id}`), { lastMsg: { from: me, text: text.slice(0, 120), ts } }).catch(() => {});
+      out.sent++; delivered.push(raw);
+    }catch(e){
+      console.warn('Розсилка: не доставлено', raw, e.message);
+      out.failed.push(raw);
+    }
+  }
+  for(let i = 0; i < delivered.length; i += 30)
+    notifyEvent('chat', { to: delivered.slice(i, i + 30), subject: nm || 'Школа', value: 'нове повідомлення' });
+  return out;
+}
+window.broadcastToParents = broadcastToParents;
+
 window.sendInboxMessage = async function(){
   if(!currentChatId) return;
   const input = document.getElementById('msg-text-input');

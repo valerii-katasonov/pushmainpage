@@ -323,7 +323,10 @@ export async function renderBirthdayHero(prefix){
   const sid = stuId(cls, name) || u.studentId || '';
   const me = (list || []).find(b => b.today && ((sid && b.key === sid) || String(b.name).trim() === name));
   if(!me){ box.hidden = true; box.innerHTML = ''; return; }
-  const first = name.split(/\s+/).pop();
+  // У списку класу імена часто великими літерами («KATASONOV DANIIL») —
+  // на святковій картці це звучало б як крик. Пишемо «Daniil».
+  const raw = name.split(/\s+/).pop() || '';
+  const first = raw === raw.toUpperCase() ? raw.charAt(0) + raw.slice(1).toLowerCase() : raw;
   box.innerHTML = bdayHtml(first, prefix === 's');
   box.hidden = false;
   // Конфеті — раз на день на пристрої, а не на кожне оновлення сторінки
