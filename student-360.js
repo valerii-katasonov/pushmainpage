@@ -90,7 +90,7 @@ function ensureModal(){
   m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true'); m.setAttribute('aria-labelledby', 's3-title');
   m.innerHTML = `<div class="modal-content s3-box">
       <div class="s3-head">
-        <div><h3 id="s3-title">👤 Учень</h3><div id="s3-sub" class="s3-sub"></div></div>
+        <div class="s3-who"><img id="s3-av" class="s3-av" alt="" hidden><div><h3 id="s3-title">👤 Учень</h3><div id="s3-sub" class="s3-sub"></div></div></div>
         <button type="button" class="s3-close" onclick="closeStudent360()" aria-label="Закрити">✕</button>
       </div>
       <div id="s3-period"></div>
@@ -114,6 +114,12 @@ window.openStudent360 = async function(cls, sid, ev){
   await getStudentDir(cls).catch(() => {});
   document.getElementById('s3-title').textContent = `👤 ${stuName(cls, sid)}`;
   document.getElementById('s3-sub').textContent = `${cls.replace('class_', '')} клас`;
+  // Фото дитини, якщо батьки його поставили (child-photo.js)
+  const av = document.getElementById('s3-av'); av.hidden = true; av.removeAttribute('src');
+  if(window.childPhoto) window.childPhoto(cls, sid).then(url => {
+    if(url && s3.cls === cls && s3.sid === sid){ av.src = url; av.hidden = false;
+      document.getElementById('s3-title').textContent = stuName(cls, sid); }
+  }).catch(() => {});
   try{ if(!s3.P){ s3.P = await loadPeriods(); s3.sel = { ...s3.P.cur }; } }catch(e){}
   paintPeriod(); paintTabs(); load();
 };

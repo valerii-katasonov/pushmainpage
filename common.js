@@ -2279,7 +2279,7 @@ function renderChildSwitcher(){
   box.innerHTML=kids.map((k,i)=>{
     const on=k.studentName===currentUserData.studentName&&k.class===currentUserData.class;
     const nm=first(k.studentName);
-    return `<button type="button" class="pb-kid" role="tab" aria-selected="${on}" data-i="${i}" title="${escHtml(childDisplayName(k.studentName))}">`
+    return `<button type="button" class="pb-kid" role="tab" aria-selected="${on}" data-i="${i}" data-cls="${escHtml(k.class||'')}" data-name="${escHtml(k.studentName||'')}" data-sid="${escHtml(k.studentId||'')}" title="${escHtml(childDisplayName(k.studentName))}">`
       +`<span class="pb-kid-av" aria-hidden="true">${escHtml((nm[0]||'?').toUpperCase())}</span>${escHtml(nm)}`
       +`<small>${escHtml(String(k.class||'').replace('class_',''))} кл.</small></button>`;}).join('');
   box.querySelectorAll('.pb-kid').forEach(b=>b.addEventListener('click',()=>{

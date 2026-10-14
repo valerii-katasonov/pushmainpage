@@ -3627,6 +3627,23 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
 }
 @keyframes rlInM{from{opacity:0;transform:translateY(-14px);}to{opacity:1;transform:none;}}
 @media (max-width:480px){#profile-bar > #pb-reload{padding:7px 9px !important;}}
+/* 📷 Фото дитини (child-photo.js) */
+.kp-block{margin-top:13px;padding-top:11px;border-top:1px dashed var(--line);text-align:left;}
+.kp-row{display:flex;align-items:center;gap:14px;margin-top:6px;}
+.kp-av{flex:none;width:72px;height:72px;border-radius:50%;display:grid;place-items:center;font-size:1.6rem;font-weight:900;color:var(--on-fill);background:var(--brand-ink) center/cover no-repeat;border:3px solid var(--brand-soft);box-shadow:0 0 0 1px var(--brand-line);}
+.kp-av.has-photo{color:transparent;}
+.kp-acts{display:flex;flex-wrap:wrap;gap:8px;}
+.kp-btn{display:inline-flex;align-items:center;justify-content:center;width:auto;max-width:none;min-height:40px;margin:0;padding:0 14px;border-radius:10px;font-weight:800;font-size:.85rem;cursor:pointer;border:1px solid var(--line);background:var(--surface);color:var(--ink);}
+.kp-pick{background:var(--brand-deep);color:var(--on-fill);border-color:transparent;}
+.kp-del{color:var(--danger);}
+.kp-note{font-size:.74rem;color:var(--ink-3);margin:8px 0 0;line-height:1.4;}
+.pb-kid-av.has-photo{color:transparent;background-size:cover;background-position:center;background-color:var(--line-soft);}
+.pb-kid:not([aria-selected="true"]) .pb-kid-av.has-photo{opacity:.75;}
+.bday-hero .bday-cake.has-photo{position:relative;width:64px;height:64px;font-size:0;flex:none;}
+.bday-cake.has-photo img{width:64px;height:64px;border-radius:50%;object-fit:cover;border:3px solid var(--surface);box-shadow:0 2px 8px rgba(16,35,47,.15);}
+.bday-cake.has-photo i{position:absolute;right:-6px;bottom:-4px;font-style:normal;font-size:1.5rem;line-height:1;}
+.s3-av{width:48px;height:48px;border-radius:50%;object-fit:cover;flex:none;border:2px solid var(--brand-line);margin-right:10px;}
+.s3-who{display:flex;align-items:center;min-width:0;}
 .t-now-acts{margin:-4px 0 12px;}
 .t-now-acts .ui-btn{flex:1;max-width:none;}
 .d-today .qa-grid{grid-template-columns:repeat(auto-fit,minmax(190px,1fr));}
@@ -5962,6 +5979,8 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
     <!-- Сповіщення: показується всім, у кого браузер їх підтримує -->
     <button type="button" onclick="checkPush()" style="background:var(--line-soft);color:var(--ink-2);margin-top:10px;font-size:.8rem;">🔍 Перевірити сповіщення</button>
     <div id="push-toggle" style="display:none;margin-top:13px;padding-top:11px;border-top:1px dashed var(--line);text-align:left;"></div>
+    <!-- Фото дитини (child-photo.js): батьки й сам учень -->
+    <div id="child-photo-block" class="kp-block" hidden></div>
     <!-- Дані дитини: доступно лише батькам -->
     <div id="child-block" style="display:none;margin-top:13px;padding-top:11px;border-top:1px dashed var(--line);text-align:left;">
       <label style="color:var(--brand-deep);margin-top:0;">👶 Дані дитини</label>
@@ -6441,6 +6460,7 @@ document.addEventListener('DOMContentLoaded', function(){
 <script src="theme.js"></script>
 <script type="module" src="chat.js"></script>
 <script type="module" src="reload.js"></script>
+<script type="module" src="child-photo.js"></script>
 <script type="module" src="breaks.js"></script>
 <script type="module" src="subjects.js"></script>
 <script type="module" src="alternating.js"></script>
