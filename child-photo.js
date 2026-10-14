@@ -18,7 +18,7 @@
 // беремо з памʼяті пристрою, якщо база його зараз не віддає.
 // ═══════════════════════════════════════════════════════════════
 import { ref, get, set } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, currentUserData, getUserChildren, sidOf, showToast, escHtml, childDisplayName } from './common.js';
+import { db, auth, currentUserData, getUserChildren, sidOf, showToast, escHtml, childDisplayName } from './common.js';
 
 const LS = 'push_kid_photo_';
 const mem = {};
@@ -31,10 +31,34 @@ const lsSet = (k, v) => { try{ v ? localStorage.setItem(LS + k, v) : localStorag
 // пошук ішов лише за ідентифікатором, і фото другої дитини в перемикачі
 // то зʼявлялося, то зникало, то лишалося старим.
 const nameKey = (cls, name) => `${cls}|${String(name || '').trim().toLowerCase().replace(/\s+/g, ' ')}`;
+// ДРУГА ДИТИНА. Правила дають родині читати фото лише АКТИВНОЇ дитини
+// (так звіряються всі записи родини), тож фото другої в перемикачі
+// бралося тільки з памʼяті телефона — і на іншому пристрої чи після
+// очищення його не було, а старе могло лишитися. Тепер кожна вдала
+// відповідь бази копіюється в особистий вузол батька
+// kid_photos_mine/{uid}/{клас|імʼя} — його читає й пише лише він сам.
+// Для неактивної дитини перемикач бере фото звідти.
+const mineKey = (cls, name) => nameKey(cls, name).replace(/[.#$\[\]\/]/g, '_');
+const uid = () => auth && auth.currentUser && auth.currentUser.uid;
+async function readMine(cls, name){
+  if(!uid() || !name) return { url: '', ok: false };
+  try{
+    const s = await get(ref(db, `kid_photos_mine/${uid()}/${mineKey(cls, name)}`));
+    return { url: s.exists() && isPhoto(s.val()) ? s.val() : '', ok: true };
+  }catch(e){ return { url: '', ok: false }; }
+}
 function remember(cls, sid, name, v){
   if(sid){ mem[keyOf(cls, sid)] = v; lsSet(keyOf(cls, sid), v); }
-  if(name) lsSet(nameKey(cls, name), v);
+  if(!name) return;
+  const before = lsGet(nameKey(cls, name));
+  lsSet(nameKey(cls, name), v);
+  // У базу — лише коли змінилося (не на кожне перемальовування)
+  if(uid() && (before !== v || !mineSynced.has(mineKey(cls, name)))){
+    mineSynced.add(mineKey(cls, name));
+    set(ref(db, `kid_photos_mine/${uid()}/${mineKey(cls, name)}`), v || null).catch(() => {});
+  }
 }
+const mineSynced = new Set();
 export const isPhoto = v => typeof v === 'string' && /^data:image\/(jpeg|png|webp);base64,/.test(v) && v.length <= 60000;
 
 // Фото дитини (або ''). Спершу база, при відмові — памʼять пристрою.
@@ -75,11 +99,19 @@ async function paintSwitcher(){
     const on = b.getAttribute('aria-selected') === 'true';
     // Спершу — те, що памʼятає пристрій (миттєво, без мигання), потім
     // уточнюємо з бази. Пишемо в памʼять лише ВДАЛУ відповідь бази.
-    const sid = (await sidOf(cls, name).catch(() => null)) || b.dataset.sid || '';
-    let url = lsGet(nameKey(cls, name)) || (sid ? lsGet(keyOf(cls, sid)) : '');
-    const r = await readPhoto(cls, sid);
-    if(r.ok){ url = r.url; remember(cls, sid, name, r.url); }
-    else if(on && sid && mem[keyOf(cls, sid)]) url = mem[keyOf(cls, sid)];
+    let url = lsGet(nameKey(cls, name));
+    if(on){
+      // Активна — з основного вузла, під тим самим ключем, що й зберігали
+      const sid = (await sidOf(cls, name).catch(() => null)) || b.dataset.sid || '';
+      const r = await readPhoto(cls, sid);
+      if(r.ok){ url = r.url; remember(cls, sid, name, r.url); }
+      else if(sid && mem[keyOf(cls, sid)]) url = mem[keyOf(cls, sid)];
+    }else{
+      // Неактивна — з особистої копії батька; її відповідь головніша за
+      // памʼять телефона (там могло лишитися старе фото)
+      const r = await readMine(cls, name);
+      if(r.ok){ url = r.url; lsSet(nameKey(cls, name), r.url); }
+    }
     if(my !== paintSeq) return;                 // перемальовано новішим викликом
     const av = b.querySelector('.pb-kid-av'); if(!av) continue;
     const want = url ? `url("${url}")` : '';
