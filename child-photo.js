@@ -18,13 +18,23 @@
 // беремо з памʼяті пристрою, якщо база його зараз не віддає.
 // ═══════════════════════════════════════════════════════════════
 import { ref, get, set } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, currentUserData, getUserChildren, sidOf, stuId, shrinkImage, showToast, escHtml, childDisplayName } from './common.js';
+import { db, currentUserData, getUserChildren, sidOf, showToast, escHtml, childDisplayName } from './common.js';
 
 const LS = 'push_kid_photo_';
 const mem = {};
 const keyOf = (cls, sid) => `${cls}/${sid}`;
 const lsGet = k => { try{ return localStorage.getItem(LS + k) || ''; }catch(e){ return ''; } };
 const lsSet = (k, v) => { try{ v ? localStorage.setItem(LS + k, v) : localStorage.removeItem(LS + k); }catch(e){} };
+// Памʼять пристрою — ще й за ІМЕНЕМ дитини. Ідентифікатор другої дитини
+// (з іншого класу) родина не завжди може дізнатися — правила не дають
+// прочитати чужий список класу, — а імʼя є в перемикачі завжди. Раніше
+// пошук ішов лише за ідентифікатором, і фото другої дитини в перемикачі
+// то зʼявлялося, то зникало, то лишалося старим.
+const nameKey = (cls, name) => `${cls}|${String(name || '').trim().toLowerCase().replace(/\s+/g, ' ')}`;
+function remember(cls, sid, name, v){
+  if(sid){ mem[keyOf(cls, sid)] = v; lsSet(keyOf(cls, sid), v); }
+  if(name) lsSet(nameKey(cls, name), v);
+}
 export const isPhoto = v => typeof v === 'string' && /^data:image\/(jpeg|png|webp);base64,/.test(v) && v.length <= 60000;
 
 // Фото дитини (або ''). Спершу база, при відмові — памʼять пристрою.
@@ -51,13 +61,23 @@ async function activeKid(){
 }
 
 // ── Перемикач дітей у шапці: кружок з літерою → фото ──
+let paintSeq = 0;
 async function paintSwitcher(){
   const box = document.getElementById('pb-child-switcher'); if(!box) return;
-  for(const b of box.querySelectorAll('.pb-kid[data-cls]')){
+  const my = ++paintSeq;
+  for(const b of [...box.querySelectorAll('.pb-kid[data-cls]')]){
     const cls = b.dataset.cls, name = b.dataset.name;
-    const sid = stuId(cls, name) || b.dataset.sid || '';
     const on = b.getAttribute('aria-selected') === 'true';
-    const url = on ? await childPhoto(cls, sid) : (mem[keyOf(cls, sid)] || lsGet(keyOf(cls, sid)));
+    let url = '';
+    if(on){
+      // Активна дитина — той самий ключ, під яким фото зберігали (sidOf)
+      const sid = (await sidOf(cls, name).catch(() => null)) || b.dataset.sid || '';
+      url = await childPhoto(cls, sid, { fresh: true });
+      remember(cls, sid, name, url);
+    }else{
+      url = lsGet(nameKey(cls, name)) || (b.dataset.sid ? lsGet(keyOf(cls, b.dataset.sid)) : '');
+    }
+    if(my !== paintSeq) return;                 // перемальовано новішим викликом
     const av = b.querySelector('.pb-kid-av'); if(!av) continue;
     av.classList.toggle('has-photo', !!url);
     av.style.backgroundImage = url ? `url("${url}")` : '';
@@ -100,15 +120,16 @@ export async function renderPhotoBlock(){
       </div>
     </div>
     <p class="kp-note">Бачать лише ваша родина й учителі школи — однокласники та інші батьки не бачать.${many ? ' Щоб змінити фото іншої дитини, перемкніть її вгорі.' : ''}</p>`;
-  box.querySelector('#kp-file').addEventListener('change', e => { const f = e.target.files && e.target.files[0]; if(f) saveChildPhoto(f); });
+  box.querySelector('#kp-file').addEventListener('change', e => { const f = e.target.files && e.target.files[0]; e.target.value = ''; if(f) saveChildPhoto(f); });
 }
-export async function saveChildPhoto(file){
+export async function saveChildPhoto(file, crop = openCropper){
   const k = await activeKid(); if(!k) return;
   let url;
-  try{ url = await shrinkImage(file); }catch(e){ showToast('⚠️ ' + (e.message || 'Не вдалося обробити фото')); return; }
+  try{ url = await crop(file); }catch(e){ showToast('⚠️ ' + (e.message || 'Не вдалося відкрити фото')); return; }
+  if(!url) return;                                // натиснули «Скасувати»
   try{
     await set(ref(db, `student_photos/${k.cls}/${k.sid}`), url);
-    mem[keyOf(k.cls, k.sid)] = url; lsSet(keyOf(k.cls, k.sid), url);
+    remember(k.cls, k.sid, k.name, url);
     showToast('📷 Фото дитини збережено');
   }catch(e){
     showToast('❌ Не збережено: ' + (/permission/i.test(e.message || '') ? 'немає доступу (оновіть сторінку)' : e.message));
@@ -121,12 +142,103 @@ window.removeChildPhoto = async function(){
   if(!confirm('Прибрати фото дитини?')) return;
   try{
     await set(ref(db, `student_photos/${k.cls}/${k.sid}`), null);
-    mem[keyOf(k.cls, k.sid)] = ''; lsSet(keyOf(k.cls, k.sid), '');
+    remember(k.cls, k.sid, k.name, '');
     showToast('Фото прибрано');
   }catch(e){ showToast('❌ ' + (e.message || '')); return; }
   renderPhotoBlock(); paintSwitcher();
 };
 window.renderChildPhotoBlock = renderPhotoBlock;
+
+// ── ✂️ КАДРУВАННЯ ─────────────────────────────────────────────────
+// Раніше фото різалося «по центру» автоматично: обличчя часто опинялося
+// збоку чи обрізане. Тепер — коло, як у месенджерах: тягнете фото
+// пальцем/мишею, масштаб повзунком, колесом або двома пальцями.
+// Результат — 256×256 JPEG (≤ ~45 КБ), саме та область, що в колі.
+export const OUT_SIZE = 256, MAX_LEN = 45000;
+// Обмежуємо зсув, щоб фото завжди закривало все коло
+export function clampOffset(ox, oy, dw, dh, V){
+  return [Math.min(0, Math.max(V - dw, ox)), Math.min(0, Math.max(V - dh, oy))];
+}
+// Область оригіналу, видима у вікні V×V при масштабі scale і зсуві (ox, oy)
+export function cropRect(ox, oy, scale, V){
+  return { sx: -ox / scale, sy: -oy / scale, side: V / scale };
+}
+function loadImg(file){
+  return new Promise((res, rej) => {
+    if(!file || !/^image\//.test(file.type || '')) return rej(new Error('Це не зображення. Оберіть JPG або PNG.'));
+    const url = URL.createObjectURL(file), img = new Image();
+    img.onload = () => res({ img, url });
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('Не вдалося прочитати фото')); };
+    img.src = url;
+  });
+}
+export async function openCropper(file){
+  const { img, url } = await loadImg(file);
+  return new Promise(resolve => {
+    const w = img.naturalWidth, h = img.naturalHeight;
+    const ov = document.createElement('div');
+    ov.className = 'kp-crop-wrap'; ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true'); ov.setAttribute('aria-label', 'Кадрування фото');
+    ov.innerHTML = `<div class="kp-crop">
+        <b class="kp-crop-t">Розмістіть обличчя в колі</b>
+        <div class="kp-crop-v"><img alt="" draggable="false"><i aria-hidden="true"></i></div>
+        <label class="kp-zoom"><span aria-hidden="true">−</span><input type="range" min="1" max="4" step="0.01" value="1" aria-label="Масштаб"><span aria-hidden="true">+</span></label>
+        <p class="kp-crop-h">Тягніть фото, щоб посунути · колесо або два пальці — масштаб</p>
+        <div class="kp-crop-b"><button type="button" class="kp-btn" data-a="no">Скасувати</button><button type="button" class="kp-btn kp-pick" data-a="ok">Зберегти</button></div>
+      </div>`;
+    document.body.appendChild(ov);
+    const view = ov.querySelector('.kp-crop-v'), im = ov.querySelector('img'), range = ov.querySelector('input');
+    im.src = url;
+    const V = () => view.clientWidth || 280;
+    let zoom = 1, ox = 0, oy = 0;
+    const base = () => Math.max(V() / w, V() / h);
+    const apply = () => {
+      const sc = base() * zoom, dw = w * sc, dh = h * sc;
+      [ox, oy] = clampOffset(ox, oy, dw, dh, V());
+      im.style.width = dw + 'px'; im.style.height = dh + 'px';
+      im.style.transform = `translate(${ox}px,${oy}px)`;
+    };
+    // Масштаб відносно точки (cx, cy) у вікні — те, що під пальцем, лишається під пальцем
+    const setZoom = (z, cx = V() / 2, cy = V() / 2) => {
+      z = Math.min(4, Math.max(1, z));
+      const k = z / zoom; ox = cx - (cx - ox) * k; oy = cy - (cy - oy) * k; zoom = z;
+      range.value = String(z); apply();
+    };
+    // Стартово — по центру
+    { const sc = base(); ox = (V() - w * sc) / 2; oy = (V() - h * sc) / 2; apply(); }
+    const pts = new Map(); let last = null, pinch = null;
+    view.addEventListener('pointerdown', e => { view.setPointerCapture(e.pointerId); pts.set(e.pointerId, [e.clientX, e.clientY]); last = [e.clientX, e.clientY];
+      if(pts.size === 2){ const [a, b] = [...pts.values()]; pinch = { d: Math.hypot(a[0] - b[0], a[1] - b[1]), z: zoom }; } });
+    view.addEventListener('pointermove', e => {
+      if(!pts.has(e.pointerId)) return;
+      pts.set(e.pointerId, [e.clientX, e.clientY]);
+      if(pts.size >= 2 && pinch){
+        const [a, b] = [...pts.values()], r = view.getBoundingClientRect();
+        setZoom(pinch.z * Math.hypot(a[0] - b[0], a[1] - b[1]) / pinch.d, (a[0] + b[0]) / 2 - r.left, (a[1] + b[1]) / 2 - r.top);
+      }else if(last){ ox += e.clientX - last[0]; oy += e.clientY - last[1]; last = [e.clientX, e.clientY]; apply(); }
+    });
+    const up = e => { pts.delete(e.pointerId); if(pts.size < 2) pinch = null; last = pts.size ? [...pts.values()][0] : null; };
+    view.addEventListener('pointerup', up); view.addEventListener('pointercancel', up);
+    view.addEventListener('wheel', e => { e.preventDefault(); const r = view.getBoundingClientRect();
+      setZoom(zoom * (e.deltaY < 0 ? 1.08 : 1 / 1.08), e.clientX - r.left, e.clientY - r.top); }, { passive: false });
+    range.addEventListener('input', () => setZoom(Number(range.value)));
+    const done = v => { URL.revokeObjectURL(url); ov.remove(); document.removeEventListener('keydown', key); resolve(v); };
+    const key = e => { if(e.key === 'Escape') done(null); };
+    document.addEventListener('keydown', key);
+    ov.addEventListener('click', e => {
+      const a = e.target.closest('[data-a]'); if(!a) return;
+      if(a.dataset.a === 'no') return done(null);
+      const { sx, sy, side } = cropRect(ox, oy, base() * zoom, V());
+      const cv = document.createElement('canvas'); cv.width = cv.height = OUT_SIZE;
+      const ctx = cv.getContext('2d');
+      ctx.fillStyle = 'white'; ctx.fillRect(0, 0, OUT_SIZE, OUT_SIZE);   // прозорий PNG → білий фон
+      ctx.drawImage(img, sx, sy, side, side, 0, 0, OUT_SIZE, OUT_SIZE);
+      let q = 0.85, out = cv.toDataURL('image/jpeg', q);
+      while(out.length > MAX_LEN && q > 0.35){ q -= 0.1; out = cv.toDataURL('image/jpeg', q); }
+      done(out.length <= 60000 ? out : null);
+    });
+    window.addEventListener('resize', apply, { once: true });
+  });
+}
 
 function init(){
   const watch = (id, fn) => {
