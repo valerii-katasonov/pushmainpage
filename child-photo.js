@@ -157,8 +157,7 @@ export async function renderPhotoBlock(){
         ${url ? '<button type="button" class="kp-btn kp-del" onclick="removeChildPhoto()">Прибрати</button>' : ''}
       </div>
     </div>
-    <p class="kp-note">Бачать лише ваша родина й учителі школи — однокласники та інші батьки не бачать.${many ? ' Щоб змінити фото іншої дитини, перемкніть її вгорі.' : ''}</p>
-    <details class="kp-diag" ontoggle="if(this.open)kidPhotoDiag()"><summary>🔧 Діагностика</summary><pre id="kp-diag-out"></pre></details>`;
+    <p class="kp-note">Бачать лише ваша родина й учителі школи — однокласники та інші батьки не бачать.${many ? ' Щоб змінити фото іншої дитини, перемкніть її вгорі.' : ''}</p>`;
   box.querySelector('#kp-file').addEventListener('change', e => { const f = e.target.files && e.target.files[0]; e.target.value = ''; if(f) saveChildPhoto(f); });
 }
 export async function saveChildPhoto(file, crop = openCropper){
@@ -187,31 +186,6 @@ window.removeChildPhoto = async function(){
   renderPhotoBlock(); paintSwitcher();
 };
 window.renderChildPhotoBlock = renderPhotoBlock;
-
-// ── 🔧 ТИМЧАСОВА ДІАГНОСТИКА (Профіль → «Фото дитини» → «Діагностика») ──
-// Показує по кожній дитині, звідки береться фото: основний вузол, копія
-// батька, памʼять телефона і що реально намальовано в перемикачі.
-// «#» — короткий відбиток картинки: однакові числа = та сама картинка.
-const fp = v => { if(!v) return '—'; let h = 0; for(let i = 0; i < v.length; i += 7) h = (h * 31 + v.charCodeAt(i)) >>> 0; return `${Math.round(v.length / 1024)}КБ #${(h % 100000).toString().padStart(5, '0')}`; };
-window.kidPhotoDiag = async function(){
-  const out = document.getElementById('kp-diag-out'); if(!out) return;
-  out.textContent = 'Перевіряю…';
-  const u = currentUserData || {}, lines = [`uid: ${uid() ? uid().slice(0, 6) + '…' : 'НЕМАЄ'} · роль: ${u.role} · активна: ${u.studentName} (${u.class})`];
-  const kids = u.role === 'parent' ? getUserChildren(u) : [{ studentName: u.studentName, class: u.class }];
-  for(const k of kids){
-    const cls = k.class, name = k.studentName;
-    const sid = await sidOf(cls, name).catch(e => 'помилка: ' + e.message);
-    let main = '', mine = '';
-    try{ const s = await get(ref(db, `student_photos/${cls}/${sid}`)); main = s.exists() ? fp(String(s.val())) : 'немає'; }catch(e){ main = 'ВІДМОВА: ' + e.message; }
-    try{ const s = await get(ref(db, `kid_photos_mine/${uid()}/${mineKey(cls, name)}`)); mine = s.exists() ? fp(String(s.val())) : 'немає'; }catch(e){ mine = 'ВІДМОВА: ' + e.message; }
-    const btn = [...document.querySelectorAll('#pb-child-switcher .pb-kid')].find(b => b.dataset.name === name && b.dataset.cls === cls);
-    const bg = btn ? (btn.querySelector('.pb-kid-av').style.backgroundImage || '').replace(/^url\("?|"?\)$/g, '') : '';
-    lines.push(`\n${name} · ${cls} · sid: ${sid}${btn ? (btn.getAttribute('aria-selected') === 'true' ? ' · АКТИВНА' : '') : ' · (немає в перемикачі)'}`,
-      `  основний: ${main}`, `  копія батька: ${mine}  [ключ ${mineKey(cls, name)}]`,
-      `  телефон: ${fp(lsGet(nameKey(cls, name)))}`, `  у перемикачі: ${fp(bg)}`);
-  }
-  out.textContent = lines.join('\n');
-};
 
 // ── ✂️ КАДРУВАННЯ ─────────────────────────────────────────────────
 // Раніше фото різалося «по центру» автоматично: обличчя часто опинялося

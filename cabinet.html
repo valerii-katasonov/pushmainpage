@@ -780,8 +780,11 @@
     .pb-kids .pb-kid[aria-selected="true"]{background:var(--surface);color:var(--brand-deep);box-shadow:0 1px 2px rgba(16,35,47,.08),0 2px 8px rgba(16,35,47,.08);}
     .pb-kids .pb-kid[aria-selected="true"] small{background:var(--brand-soft);color:var(--brand-deep);}
     .pb-kids .pb-kid:focus-visible{outline:3px solid var(--brand-deep);outline-offset:1px;}
-    .pb-kid-av{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-size:.75rem;font-weight:900;color:var(--on-fill);background:var(--brand-ink);flex:none;}
-    .pb-kid:not([aria-selected="true"]) .pb-kid-av{background:var(--ink-3);}
+    .pb-kid-av{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-size:.75rem;font-weight:900;color:var(--on-fill);background-color:var(--brand-ink);background-size:cover;background-position:center;background-repeat:no-repeat;flex:none;}
+    /* Лише КОЛІР. Тут стояло скорочення background:, і воно в неактивної
+       дитини скидало background-size/position: фото 256×256 малювалося в
+       кружку 30 px у натуральну величину — видно було сірий куток картинки. */
+    .pb-kid:not([aria-selected="true"]) .pb-kid-av{background-color:var(--ink-3);}
     @media (max-width:480px){
       .pb-kids .pb-kid{min-width:0;padding:6px 8px;gap:6px;font-size:.86rem;}
       .pb-kids .pb-kid small{font-size:.68rem;padding:1px 6px;}
@@ -3637,10 +3640,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
 .kp-pick{background:var(--brand-deep);color:var(--on-fill);border-color:transparent;}
 .kp-del{color:var(--danger);}
 .kp-note{font-size:.74rem;color:var(--ink-3);margin:8px 0 0;line-height:1.4;}
-.kp-diag{margin-top:8px;font-size:.72rem;color:var(--ink-3);}
-.kp-diag summary{cursor:pointer;}
-.kp-diag pre{white-space:pre-wrap;word-break:break-all;font-size:.7rem;background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:8px;margin:6px 0 0;color:var(--ink-2);}
-.pb-kid-av.has-photo{color:transparent;background-size:cover;background-position:center;background-color:var(--line-soft);}
+.pb-kids .pb-kid .pb-kid-av.has-photo{color:transparent;background-size:cover;background-position:center;background-repeat:no-repeat;background-color:var(--line-soft);}
 .pb-kids .pb-kid-av.has-photo{width:30px;height:30px;box-shadow:0 0 0 2px var(--surface);}
 .pb-kid:not([aria-selected="true"]) .pb-kid-av.has-photo{box-shadow:0 0 0 2px var(--line);}
 /* ✂️ Кадрування фото дитини */
