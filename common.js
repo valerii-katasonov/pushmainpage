@@ -2270,11 +2270,23 @@ function renderChildSwitcher(){
   if(!box)return;
   const kids=currentUserData?.role==='parent'?getUserChildren(currentUserData):[];
   if(kids.length<2){box.style.display='none';box.innerHTML='';return;}
-  box.style.display='block';
-  box.innerHTML=`<select id="pb-child-select" data-tip="Переключити дитину">
-    ${kids.map((k,i)=>`<option value="${i}" ${k.studentName===currentUserData.studentName&&k.class===currentUserData.class?'selected':''}>👶 ${escHtml(childDisplayName(k.studentName))} (${escHtml(String(k.class||'').replace('class_',''))} кл.)</option>`).join('')}
-  </select>`;
-  document.getElementById('pb-child-select').addEventListener('change',e=>window.switchChild(parseInt(e.target.value,10)));
+  box.style.display='flex';
+  // Вкладки з іменем, а не випадайка: обидві дитини видно одразу, вибрана —
+  // підсвічена, перемикання — один дотик. Імʼя — лише власне (без прізвища,
+  // воно в родини спільне); «KATASONOV DANIIL» → «Daniil».
+  const first=n=>{const p=String(n||'').trim().split(/\s+/);const w=p.length>1?p.slice(1).join(' '):p[0]||'';
+    return w===w.toUpperCase()?w.toLowerCase().replace(/(^|[\s-])(\S)/g,(m,a,b)=>a+b.toUpperCase()):w;};
+  box.innerHTML=kids.map((k,i)=>{
+    const on=k.studentName===currentUserData.studentName&&k.class===currentUserData.class;
+    const nm=first(k.studentName);
+    return `<button type="button" class="pb-kid" role="tab" aria-selected="${on}" data-i="${i}" title="${escHtml(childDisplayName(k.studentName))}">`
+      +`<span class="pb-kid-av" aria-hidden="true">${escHtml((nm[0]||'?').toUpperCase())}</span>${escHtml(nm)}`
+      +`<small>${escHtml(String(k.class||'').replace('class_',''))} кл.</small></button>`;}).join('');
+  box.querySelectorAll('.pb-kid').forEach(b=>b.addEventListener('click',()=>{
+    if(b.getAttribute('aria-selected')==='true')return;
+    box.querySelectorAll('.pb-kid').forEach(x=>x.setAttribute('aria-selected',String(x===b)));
+    window.switchChild(parseInt(b.dataset.i,10));
+  }));
 }
 // Активна дитина зберігається в users/{uid}, тож після перезаходу батьки
 // потрапляють до тієї самої дитини, яку дивилися востаннє.
@@ -2324,7 +2336,7 @@ window.switchChild=async function(idx){
     // дітьми бачив би на вкладці ігри й результати попередньої.
     if(window.refreshGamesTabIfOpen) window.refreshGamesTabIfOpen();
   });
-  showToast(`👶 Дитина: ${k.studentName}`);
+  showToast(`👶 Дитина: ${childDisplayName(k.studentName)}`);
   // Інша дитина / інший кабінет: пошук і дзвіночок мають перечитати своє
   window.dispatchEvent(new Event('push:context'));
 };

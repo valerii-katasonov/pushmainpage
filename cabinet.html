@@ -770,6 +770,29 @@
     }
     #pb-role-switcher select{color:var(--brand-ink);border:1px solid var(--brand-ink);background:var(--surface-2);}
     #pb-child-switcher select{color:var(--brand-deep);border:1px solid var(--brand-deep);background:var(--surface-2);}
+    /* Рядок перемикачів під шапкою профілю */
+    #profile-bar > .pb-row{flex:1 0 100%;order:10;margin:-2px 0 0;}
+    .pb-kids{display:flex;gap:6px;padding:4px;background:var(--surface-2);border:1px solid var(--line);border-radius:14px;overflow-x:auto;scrollbar-width:none;}
+    .pb-kids::-webkit-scrollbar{display:none;}
+    .pb-kids .pb-kid{flex:1 1 0;min-width:max-content;max-width:none;width:auto;margin:0;display:flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:6px 14px;border:none;border-radius:11px;background:transparent;color:var(--ink-2);font:inherit;font-weight:800;font-size:.9rem;cursor:pointer;transition:background .15s,color .15s,box-shadow .15s;}
+    .pb-kids .pb-kid small{font-weight:700;font-size:.72rem;color:var(--ink-3);padding:2px 7px;border-radius:999px;background:var(--line-soft);}
+    .pb-kids .pb-kid:hover{color:var(--brand-deep);}
+    .pb-kids .pb-kid[aria-selected="true"]{background:var(--surface);color:var(--brand-deep);box-shadow:0 1px 2px rgba(16,35,47,.08),0 2px 8px rgba(16,35,47,.08);}
+    .pb-kids .pb-kid[aria-selected="true"] small{background:var(--brand-soft);color:var(--brand-deep);}
+    .pb-kids .pb-kid:focus-visible{outline:3px solid var(--brand-deep);outline-offset:1px;}
+    .pb-kid-av{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-size:.75rem;font-weight:900;color:var(--on-fill);background:var(--brand-ink);flex:none;}
+    .pb-kid:not([aria-selected="true"]) .pb-kid-av{background:var(--ink-3);}
+    @media (max-width:480px){
+      .pb-kids .pb-kid{min-width:0;padding:6px 8px;gap:6px;font-size:.86rem;}
+      .pb-kids .pb-kid small{font-size:.68rem;padding:1px 6px;}
+      .pb-kid-av{width:22px;height:22px;font-size:.68rem;}
+    }
+    .pb-kids .pb-kid small{white-space:nowrap;}
+    @media (max-width:400px){
+      #profile-bar{gap:8px !important;}
+      #profile-bar #pb-avatar{width:42px !important;height:42px !important;}
+      #profile-bar > button{padding:6px 8px !important;}
+    }
     /* Підстраховка: у порталі багато блоків, що генеруються з даних, і будь-який
        довгий рядок не має ламати сторінку цілком */
     html,body{max-width:100%;overflow-x:hidden;}
@@ -3817,21 +3840,22 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
     </form>
   </div>
   <!-- PROFILE BAR -->
-  <div id="profile-bar" style="display:none;align-items:center;gap:13px;margin-bottom:18px;background:var(--surface);padding:14px;border-radius:12px;box-shadow:0 4px 10px rgba(0,0,0,.05);border:1px solid var(--line-soft);">
+  <div id="profile-bar" style="display:none;align-items:center;flex-wrap:wrap;gap:13px;margin-bottom:18px;background:var(--surface);padding:14px;border-radius:12px;box-shadow:0 4px 10px rgba(0,0,0,.05);border:1px solid var(--line-soft);">
     <img id="pb-avatar" src="https://cdn-icons-png.flaticon.com/512/149/149071.png" style="width:48px;height:48px;border-radius:50%;object-fit:cover;border:2px solid var(--brand-ink);">
     <div style="flex:1;">
       <h3 id="pb-name" style="margin:0;font-size:1.05rem;color:var(--ink);border:none;padding:0;">Користувач</h3>
       <p id="pb-role" style="margin:0;font-size:.82rem;color:var(--ink-2);">Роль</p>
-      <!-- Перемикач кабінетів — видно лише тим, у кого кілька ролей -->
-      <div id="pb-role-switcher" style="display:none;margin-top:5px;"></div>
-      <!-- Перемикач дітей — для батьків, у яких у школі кілька дітей -->
-      <div id="pb-child-switcher" style="display:none;margin-top:5px;"></div>
     </div>
     <!-- Пошук по порталу (ui-search.js): Ctrl+K, ⌘K або «/» -->
     <!-- Центр сповіщень (notif-center.js) -->
     <button type="button" id="pb-bell" onclick="openNotifs()" aria-label="Сповіщення" title="Сповіщення">🔔<span class="pb-bell-n" hidden></span></button>
     <button type="button" id="pb-search" onclick="openSearch()" aria-label="Пошук (Ctrl+K)" title="Пошук · Ctrl+K">🔍</button>
     <button onclick="openProfileModal()" style="width:auto;padding:7px 13px;margin:0;background:var(--brand-ink);color:var(--on-fill);border-radius:8px;font-size:.85rem;" aria-label="Профіль">⚙️<span class="pb-lbl"> Профіль</span></button>
+    <!-- Перемикачі — окремим рядком на всю ширину. У рядку з імʼям вони
+         стискалися до «👶..» (4 кнопки шапки забирали місце), і прочитати,
+         яка дитина зараз вибрана, було неможливо. -->
+    <div id="pb-role-switcher" class="pb-row" style="display:none;"></div>
+    <div id="pb-child-switcher" class="pb-row pb-kids" style="display:none;" role="tablist" aria-label="Дитина"></div>
   </div>
   <!-- Смужка про переїзд на push.school. Лежить у розмітці, а не
        створюється кодом: вставлений «кудись у перший видимий екран» блок
