@@ -38,18 +38,23 @@ function remember(cls, sid, name, v){
 export const isPhoto = v => typeof v === 'string' && /^data:image\/(jpeg|png|webp);base64,/.test(v) && v.length <= 60000;
 
 // Фото дитини (або ''). Спершу база, при відмові — памʼять пристрою.
+// readPhoto → {url, ok}: ok=false — база не відповіла (немає доступу,
+// мережа). Тоді памʼять пристрою НЕ чіпаємо: раніше відмова записувала
+// туди порожнечу, і фото другої дитини в перемикачі зникало.
+async function readPhoto(cls, sid){
+  if(!cls || !sid) return { url: '', ok: false };
+  try{
+    const s = await get(ref(db, `student_photos/${cls}/${sid}`));
+    return { url: s.exists() && isPhoto(s.val()) ? s.val() : '', ok: true };
+  }catch(e){ return { url: '', ok: false }; }
+}
 export async function childPhoto(cls, sid, { fresh = false } = {}){
   if(!cls || !sid) return '';
   const k = keyOf(cls, sid);
   if(!fresh && k in mem) return mem[k];
-  try{
-    const s = await get(ref(db, `student_photos/${cls}/${sid}`));
-    const v = s.exists() && isPhoto(s.val()) ? s.val() : '';
-    mem[k] = v; lsSet(k, v);
-    return v;
-  }catch(e){
-    return (mem[k] = lsGet(k));
-  }
+  const r = await readPhoto(cls, sid);
+  if(r.ok){ mem[k] = r.url; lsSet(k, r.url); return r.url; }
+  return mem[k] || lsGet(k);
 }
 window.childPhoto = childPhoto;
 
@@ -68,19 +73,20 @@ async function paintSwitcher(){
   for(const b of [...box.querySelectorAll('.pb-kid[data-cls]')]){
     const cls = b.dataset.cls, name = b.dataset.name;
     const on = b.getAttribute('aria-selected') === 'true';
-    let url = '';
-    if(on){
-      // Активна дитина — той самий ключ, під яким фото зберігали (sidOf)
-      const sid = (await sidOf(cls, name).catch(() => null)) || b.dataset.sid || '';
-      url = await childPhoto(cls, sid, { fresh: true });
-      remember(cls, sid, name, url);
-    }else{
-      url = lsGet(nameKey(cls, name)) || (b.dataset.sid ? lsGet(keyOf(cls, b.dataset.sid)) : '');
-    }
+    // Спершу — те, що памʼятає пристрій (миттєво, без мигання), потім
+    // уточнюємо з бази. Пишемо в памʼять лише ВДАЛУ відповідь бази.
+    const sid = (await sidOf(cls, name).catch(() => null)) || b.dataset.sid || '';
+    let url = lsGet(nameKey(cls, name)) || (sid ? lsGet(keyOf(cls, sid)) : '');
+    const r = await readPhoto(cls, sid);
+    if(r.ok){ url = r.url; remember(cls, sid, name, r.url); }
+    else if(on && sid && mem[keyOf(cls, sid)]) url = mem[keyOf(cls, sid)];
     if(my !== paintSeq) return;                 // перемальовано новішим викликом
     const av = b.querySelector('.pb-kid-av'); if(!av) continue;
-    av.classList.toggle('has-photo', !!url);
-    av.style.backgroundImage = url ? `url("${url}")` : '';
+    const want = url ? `url("${url}")` : '';
+    if(av.style.backgroundImage !== want){        // без зайвих перемальовувань
+      av.classList.toggle('has-photo', !!url);
+      av.style.backgroundImage = want;
+    }
   }
 }
 // ── Святкова картка: торт → фото дитини з тортиком ──
@@ -172,10 +178,23 @@ function loadImg(file){
     img.src = url;
   });
 }
+// Фото з камери телефона — 12+ Мп. Рухати таке зображення під колом —
+// важко для телефона, і екран мигав. Робимо одну зменшену копію (до
+// 1400 px по більшій стороні) і далі працюємо лише з нею.
+const WORK_MAX = 1400;
+function workCopy(img){
+  const k = Math.min(1, WORK_MAX / Math.max(img.naturalWidth, img.naturalHeight));
+  const cv = document.createElement('canvas');
+  cv.width = Math.round(img.naturalWidth * k); cv.height = Math.round(img.naturalHeight * k);
+  cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+  return cv;
+}
 export async function openCropper(file){
-  const { img, url } = await loadImg(file);
+  const { img: orig, url: origUrl } = await loadImg(file);
+  const img = workCopy(orig); URL.revokeObjectURL(origUrl);
+  const url = img.toDataURL('image/jpeg', 0.92);
   return new Promise(resolve => {
-    const w = img.naturalWidth, h = img.naturalHeight;
+    const w = img.width, h = img.height;
     const ov = document.createElement('div');
     ov.className = 'kp-crop-wrap'; ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true'); ov.setAttribute('aria-label', 'Кадрування фото');
     ov.innerHTML = `<div class="kp-crop">
@@ -191,11 +210,15 @@ export async function openCropper(file){
     const V = () => view.clientWidth || 280;
     let zoom = 1, ox = 0, oy = 0;
     const base = () => Math.max(V() / w, V() / h);
+    // Розмір картинки не змінюємо ніколи — лише transform (без перерахунку
+    // макета), і не частіше за кадр екрана
+    im.style.width = w + 'px'; im.style.height = h + 'px';
+    let raf = 0;
+    const paint = () => { raf = 0; im.style.transform = `translate3d(${ox}px,${oy}px,0) scale(${base() * zoom})`; };
     const apply = () => {
-      const sc = base() * zoom, dw = w * sc, dh = h * sc;
-      [ox, oy] = clampOffset(ox, oy, dw, dh, V());
-      im.style.width = dw + 'px'; im.style.height = dh + 'px';
-      im.style.transform = `translate(${ox}px,${oy}px)`;
+      const sc = base() * zoom;
+      [ox, oy] = clampOffset(ox, oy, w * sc, h * sc, V());
+      if(!raf) raf = requestAnimationFrame(paint);
     };
     // Масштаб відносно точки (cx, cy) у вікні — те, що під пальцем, лишається під пальцем
     const setZoom = (z, cx = V() / 2, cy = V() / 2) => {
@@ -221,7 +244,7 @@ export async function openCropper(file){
     view.addEventListener('wheel', e => { e.preventDefault(); const r = view.getBoundingClientRect();
       setZoom(zoom * (e.deltaY < 0 ? 1.08 : 1 / 1.08), e.clientX - r.left, e.clientY - r.top); }, { passive: false });
     range.addEventListener('input', () => setZoom(Number(range.value)));
-    const done = v => { URL.revokeObjectURL(url); ov.remove(); document.removeEventListener('keydown', key); resolve(v); };
+    const done = v => { if(raf) cancelAnimationFrame(raf); ov.remove(); document.removeEventListener('keydown', key); resolve(v); };
     const key = e => { if(e.key === 'Escape') done(null); };
     document.addEventListener('keydown', key);
     ov.addEventListener('click', e => {
@@ -249,8 +272,12 @@ function init(){
   watch('p-bday', paintBday); watch('s-bday', paintBday);
   // Профіль відкрили — показуємо актуальне фото
   const pm = document.getElementById('profile-modal');
-  if(pm) new MutationObserver(() => { if(pm.style.display && pm.style.display !== 'none') renderPhotoBlock(); })
-    .observe(pm, { attributes: true, attributeFilter: ['style'] });
+  let pmOpen = false;
+  if(pm) new MutationObserver(() => {
+    const open = !!pm.style.display && pm.style.display !== 'none';
+    if(open && !pmOpen) renderPhotoBlock();          // лише в мить відкриття
+    pmOpen = open;
+  }).observe(pm, { attributes: true, attributeFilter: ['style'] });
   window.addEventListener('push:context', () => { for(const k in mem) delete mem[k]; });
 }
 if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
