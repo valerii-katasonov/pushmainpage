@@ -23,7 +23,7 @@
 import { ref, get, set, update, child } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { db, auth, currentUserData, escHtml, escJs, getActiveClass, getDateRange, teacherAccessMatrix,
          isHeadOf, COMMENT_REACTS, commentReactLabel, childDisplayName, getParentProfile, getStudentDir, stuName,
-         localDateString } from './common.js';
+         localDateString, isTeacherRole } from './common.js';
 import { periodControl, loadPeriods, pickPeriod } from './class-stats.js';
 import { pName, parentLabel } from './news-reactions.js';
 
@@ -139,6 +139,7 @@ function ensureModal(){
   m.innerHTML = `<div class="modal-content cv-box">
       <div class="cv-head"><h3 id="cv-title">💬 Коментарі учням</h3>
         <button type="button" class="cv-close" onclick="closeCommentsView()" aria-label="Закрити">✕</button></div>
+      <button type="button" id="cv-write" class="cv-write" onclick="cvWrite()" hidden>✍️ Написати коментар</button>
       <div id="cv-period"></div>
       <div class="cv-filters">
         <label>Клас<select id="cv-cls" onchange="cvSet('cls',this.value)"></select></label>
@@ -155,6 +156,34 @@ function ensureModal(){
   document.body.appendChild(m);
   return m;
 }
+// ✍️ НАПИСАТИ. Це вікно — журнал коментарів (хто писав, хто переглянув),
+// а саме поле коментаря живе у вкладці «Клас». Учителі шукали, де писати,
+// саме тут — тож кнопка веде прямо до поля: той самий клас, той самий
+// учень, курсор у тексті. Окремої другої форми не робимо, щоб не
+// роздвоювати логіку збереження (дзеркала, реакції, сповіщення).
+window.cvWrite = async function(){
+  const cls = cvF.cls, sid = cvF.sid;
+  const sel = document.getElementById('t-class-selector');
+  if(sel && cls && sel.value !== cls && [...sel.options].some(o => o.value === cls)){
+    sel.value = cls;
+    try{ await window.handleClassChange?.(); }catch(e){}
+  }
+  window.closeCommentsView();
+  window.goTeacherTab ? window.goTeacherTab('class')
+    : document.querySelector('#teacher-screen-tabs .dtab[data-t="class"]')?.click();
+  // Список учнів у полі наповнюється після зміни класу — чекаємо його
+  for(let i = 0; i < 20; i++){
+    const st = document.getElementById('t-student');
+    if(st && st.options.length > 1) break;
+    await new Promise(r => setTimeout(r, 150));
+  }
+  const st = document.getElementById('t-student');
+  if(st && sid && [...st.options].some(o => o.value === sid)) st.value = sid;
+  const card = document.getElementById('t-comment-card');
+  if(card){ try{ card.scrollIntoView({ behavior: 'smooth', block: 'center' }); }catch(e){ card.scrollIntoView(); } }
+  const area = document.getElementById('t-comment');
+  if(area) setTimeout(() => { try{ area.focus({ preventScroll: true }); }catch(e){ area.focus(); } }, 350);
+};
 window.closeCommentsView = () => { const m = document.getElementById('comments-view-modal'); if(m) m.style.display = 'none'; };
 function myClasses(){
   if(isAdminRole(role())) return Array.from({ length: 11 }, (_, i) => `class_${i + 1}`);
@@ -168,6 +197,8 @@ window.openCommentsView = async function(opts){
   cvF.sid = (opts && opts.sid) || ''; cvF.subj = ''; cvF.state = '';
   document.getElementById('cv-cls').innerHTML = classes.map(c => `<option value="${c}"${c === cvF.cls ? ' selected' : ''}>${c.replace('class_', '')} клас</option>`).join('');
   document.getElementById('cv-state').value = '';
+  const wb = document.getElementById('cv-write');
+  if(wb) wb.hidden = !isTeacherRole(role()) || !document.getElementById('t-comment');
   try{ if(!cvP){ cvP = await loadPeriods(); cvSel = { ...cvP.cur }; } }catch(e){}
   paintPeriod(); render();
 };
@@ -244,7 +275,9 @@ async function render(keepData){
           <div class="cv-text">${escHtml(c.text)}</div>
           <div class="cv-author">✍️ ${author}</div>${views}${react}
         </article>`;
-      }).join('') : '<p class="empty-msg">Коментарів за цими умовами немає.</p>');
+      }).join('') : `<p class="empty-msg">Коментарів за цими умовами немає.</p>${
+        document.getElementById('cv-write') && !document.getElementById('cv-write').hidden
+          ? '<p class="cv-note">Щоб написати коментар, натисніть «✍️ Написати коментар» угорі.</p>' : ''}`);
   }catch(e){
     if(req === cvSeq) body.innerHTML = `<p class="empty-msg" style="color:var(--danger);">Не вдалося завантажити: ${escHtml(e.message || '')}</p>`;
   }

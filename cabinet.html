@@ -1228,6 +1228,8 @@
     .cv-head{display:flex;align-items:center;justify-content:space-between;gap:10px;}
     .cv-head h3{margin:0;color:var(--brand-ink);font-size:1.1rem;}
     .cv-close{width:auto;margin:0;padding:4px 10px;background:none;border:1px solid var(--line);border-radius:8px;color:var(--ink-2);cursor:pointer;}
+    .cv-write{width:100%;max-width:none;margin:10px 0 4px;min-height:46px;border-radius:12px;background:var(--brand-deep);color:var(--on-fill);border:none;font-weight:800;cursor:pointer;}
+    .cv-write:hover{filter:brightness(1.08);}
     .cv-filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin:4px 0 8px;}
     .cv-filters label{font-size:.75rem;color:var(--ink-2);display:flex;flex-direction:column;gap:3px;}
     .cv-filters select{margin:0;padding:6px 8px;font-size:.82rem;}
@@ -5246,7 +5248,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
         </label>
       </div>
       <!-- Коментар -->
-      <div style="margin-top:13px;background:var(--brand-soft);padding:14px;border-radius:12px;border:1px solid var(--brand-deep);">
+      <div id="t-comment-card" style="margin-top:13px;background:var(--brand-soft);padding:14px;border-radius:12px;border:1px solid var(--brand-deep);">
         <h4 style="margin:0 0 8px 0;color:var(--brand-deep);font-size:.88rem;">💬 Коментар учню</h4>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
           <label style="flex:2;min-width:180px;font-size:.75rem;color:var(--brand-deep);font-weight:600;">Учень
