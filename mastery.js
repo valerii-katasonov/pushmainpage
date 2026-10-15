@@ -132,7 +132,9 @@ async function readPlanTopics(cls, subject){
   }catch(e){ console.warn('[Push School] освоєння: псевдоніми:', e.message); }
   const sk = planKeyWith(aliases, subject) || subjKey(subject);
   const snap = await get(child(ref(db), `curriculum_plans/${cls}/${sk}/topics`));
-  return snap.exists() ? (snap.val() || {}) : {};
+  // Архівні теми (лишилися після заміни плану) у статистиці не показуємо
+  const all = snap.exists() ? (snap.val() || {}) : {};
+  return Object.fromEntries(Object.entries(all).filter(([, t]) => t && !t.archived));
 }
 
 const pctLabel = v => v === null ? '—' : v + '%';

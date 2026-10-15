@@ -3285,6 +3285,8 @@
 /* Превʼю календарного планування */
 .curr-src{font-size:.75rem;color:var(--ink-3);margin:6px 0 4px 0;}
 .curr-warn{font-size:.76rem;color:var(--warn);background:var(--warn-soft);border:1px solid var(--warn-line);border-radius:8px;padding:7px 9px;margin:6px 0;line-height:1.4;}
+.curr-warn.curr-replace{color:var(--ink);background:var(--brand-soft);border-color:var(--brand-line);font-size:.8rem;}
+.curr-warn.curr-replace small{color:var(--ink-3);}
 .curr-warn.danger{color:var(--danger);background:var(--danger-soft);border-color:var(--danger-line);}
 .curr-subj-fix{width:100%;margin:4px 0 8px 0;font-size:.84rem;}
 .mb-box{background:var(--surface-2);border:1px solid var(--ok-line);border-radius:14px;padding:14px;min-width:0;max-width:100%}.mb-person-pick{display:flex;gap:8px;min-width:0}.mb-person-pick select{min-width:0;margin-top:0;text-overflow:ellipsis}.mb-person-pick #k-balance-class{flex:1}.mb-person-pick #k-balance-student{flex:2}.mb-head{background:var(--ok-soft);border-radius:12px;padding:14px;color:var(--ok);min-width:0;overflow-wrap:anywhere}.mb-head.bad{background:var(--danger-soft);color:var(--danger)}.mb-head.low{background:var(--warn-soft);color:var(--warn)}.mb-head span,.mb-head small{display:block}.mb-head b{display:block;font-size:1.75rem;margin:4px 0}.mb-pending{margin-top:9px;padding:10px;border-radius:9px;background:var(--warn-soft);font-size:.8rem;color:var(--warn)}.mb-note{margin:10px 0;font-size:.76rem;color:var(--ink-2);overflow-wrap:anywhere}.mb-form{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;margin-top:12px;min-width:0}.mb-form>*{min-width:0;max-width:100%}.mb-form label{font-size:.75rem;color:var(--ink-2);font-weight:700;overflow-wrap:anywhere}.mb-form input,.mb-form button{margin:3px 0 0;width:100%}.mb-form button,.mb-form small{grid-column:1/-1}.mb-form small{font-size:.75rem;color:var(--ink-2);overflow-wrap:anywhere}.mb-history{margin-top:12px;min-width:0}.mb-history summary{cursor:pointer;font-weight:700;color:var(--ok);overflow-wrap:anywhere}.mb-history>div{display:grid;grid-template-columns:85px 90px minmax(0,1fr);gap:7px;padding:7px 0;border-bottom:1px solid var(--ok-line);font-size:.76rem}.mb-history>div>*{min-width:0;overflow-wrap:anywhere}.mb-history b{color:var(--ok)}.mb-history b.neg{color:var(--danger)}.mb-history small{color:var(--ink-2)}
@@ -5250,7 +5252,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
         </div>
       </details>
       <details class="ls-tool">
-        <summary><span class="ls-ic" aria-hidden="true">📚</span><span class="ls-tt"><b>Навчальний план (теми)</b><small>Список тем предмета з годинами — з нього обирається тема уроку</small></span></summary>
+        <summary><span class="ls-ic" aria-hidden="true">📚</span><span class="ls-tt"><b>Простий чекліст тем</b><small>До 5 тем із галочкою «пройдено» — лише якщо календарного плану немає</small></span></summary>
         <div style="margin-top:12px;">
           <div id="curriculum-smart-alert" class="smart-alert">
             ⚠️ <b>Увага!</b> Залишок годин значно перевищує кількість тем. Перевірте план.
@@ -5264,7 +5266,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
         </div>
       </details>
       <details id="curriculum-upload-section" class="ls-tool" style="display:none;">
-        <summary><span class="ls-ic" aria-hidden="true">📅</span><span class="ls-tt"><b>Календарне планування <span class="ct-badge">Кл. керівник</span></b><small>Завантажити план з Excel або виправити окремі теми</small></span></summary>
+        <summary><span class="ls-ic" aria-hidden="true">📅</span><span class="ls-tt"><b>Календарне планування</b><small>Завантажити план з Excel або виправити окремі теми</small></span></summary>
         <div style="margin-top:12px;">
         
         <p style="font-size:.78rem;color:var(--ink-2);margin-bottom:10px;">Завантажте Excel-файл — портал збереже теми списком за предметом.

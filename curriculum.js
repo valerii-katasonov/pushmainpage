@@ -391,6 +391,60 @@ export async function loadAliases(cls, force){
 //
 // Крок рівно один: ланцюжок А→Б→В неможливий, бо звʼязати предмет із
 // тим, у кого план сам чужий, інтерфейс не дає.
+// ЗАМІНА ПЛАНУ НЕ ЛАМАЄ ВЖЕ ПРОВЕДЕНІ УРОКИ.
+//
+// Урок посилається на тему ідентифікатором (lesson_topics → topicId), а
+// назву бере з плану. Раніше при повторному завантаженні всі теми діставали
+// НОВІ ідентифікатори t_{номер}_{позиція}: уроки минулих тижнів або
+// показували «(тема видалена з плану)», або — гірше — підхоплювали чужу
+// тему, що випадково отримала той самий ідентифікатор. Батьки бачили в
+// щоденнику не ту тему, а вчитель — не ті години.
+//
+// Тепер: тема з тією самою назвою зберігає свій ідентифікатор (і години);
+// пройдена тема, якої в новому файлі немає, лишається в архіві
+// (archived:true) — уроки й далі показують її назву, але в списку вибору
+// й у статистиці її немає. Невикористані старі теми просто зникають.
+// Повертає {topics, kept, archived, added} — без звертань до бази.
+export function mergePlanTopics(existing, incoming){
+  const norm = v => String(v||'').replace(/\s+/g,' ').trim().toLowerCase();
+  const ex = existing || {};
+  const byTitle = {}, byLesson = {};
+  for(const id in ex){
+    const t = ex[id] || {};
+    if(t.archived) continue;
+    const k = norm(t.title);
+    if(k) byTitle[k] = (k in byTitle) ? null : id;        // дубль назви — не зіставляємо
+    if(t.lessonNum != null && !(t.lessonNum in byLesson)) byLesson[t.lessonNum] = id;
+  }
+  const used = new Set(), out = {};
+  let kept = 0, added = 0;
+  const freshId = (t, idx) => {
+    let id = `t_${t.lessonNum}_${idx}`, n = 2;
+    // Не займаємо жодного старого ідентифікатора: він може лишитися в архіві
+    while(id in out || id in ex) id = `t_${t.lessonNum}_${idx}_${n++}`;
+    return id;
+  };
+  (incoming || []).forEach((t, idx) => {
+    const k = norm(t.title);
+    const sameId = (k && byTitle[k] && !used.has(byTitle[k])) ? byTitle[k] : null;
+    // Години переносимо як і раніше: за назвою, інакше за номером уроку
+    const hoursFrom = sameId || ((byLesson[t.lessonNum] && !used.has(byLesson[t.lessonNum])) ? byLesson[t.lessonNum] : null);
+    const prevHU = hoursFrom ? (ex[hoursFrom].hoursUsed || 0) : 0;
+    const id = sameId || freshId(t, idx);
+    if(sameId){ used.add(sameId); kept++; } else added++;
+    out[id] = { ...t, hoursUsed: Math.min(prevHU, t.plannedHours) };
+  });
+  let archived = 0;
+  for(const id in ex){
+    const t = ex[id] || {};
+    if(used.has(id) || id in out) continue;
+    // Пройдена (або вже архівна) — лишаємо для старих уроків; решту прибираємо
+    if((t.hoursUsed || 0) > 0 || t.archived){ out[id] = { ...t, archived: true }; if(!t.archived) archived++; }
+  }
+  return { topics: out, kept, archived, added };
+}
+export const isLiveTopic = t => !!t && !t.archived;
+
 export function planKey(cls, subj){
   if(cls && cls !== aliasCls) return subjKey(subj);
   return planKeyWith(aliasMap, subj);
@@ -492,6 +546,29 @@ function renderCurriculumPreview(data){
   }
   container.innerHTML=html;
   document.getElementById('curr-preview-section').style.display='block';
+  showReplaceNotice(data);
+}
+// Що станеться з чинним планом — до натискання «Зберегти», а не після
+async function showReplaceNotice(data){
+  const container=document.getElementById('curr-preview-content'); if(!container) return;
+  const cls=currClass(); const parts=[];
+  for(const name in (data.sheets||{})){
+    const sh=data.sheets[name]; const subj=String(sh.meta.subject||'').trim(); if(!subj) continue;
+    try{
+      const snap=await get(ref(db,`curriculum_plans/${cls}/${planKey(cls, subj)}/topics`));
+      const ex=snap.exists()?(snap.val()||{}):{};
+      const live=Object.values(ex).filter(isLiveTopic);
+      if(!live.length) continue;
+      const m=mergePlanTopics(ex, sh.topics);
+      const usedLessons=live.reduce((a,t)=>a+(t.hoursUsed||0),0);
+      parts.push(`<b>${escHtml(subj)}</b>: зараз ${live.length} тем${usedLessons?`, проведено уроків за планом: ${usedLessons}`:''}. `
+        + `Збіглися за назвою: ${m.kept}${m.added?`, нових: ${m.added}`:''}${m.archived?`, піде в архів (пройдені, але відсутні у файлі): ${m.archived}`:''}.`);
+    }catch(e){ /* немає доступу — без попередження */ }
+  }
+  if(!parts.length || parsedCurriculum!==data) return;
+  container.insertAdjacentHTML('afterbegin', `<div class="curr-warn curr-replace">
+    <b>🔁 Це замінить чинний план.</b><br>${parts.join('<br>')}<br>
+    <small>Теми з тією самою назвою зберігають пройдені години; уже проведені уроки не зміняться.</small></div>`);
 }
 
 // Просте екранування для підстановки в onclick/oninput
@@ -546,6 +623,7 @@ window.saveCurriculumToDb=async function(){
     // при семи уроках предмета на тиждень це 245. MAX_TOPICS захищає базу
     // від зіпсованого файлу на тисячі рядків, а не від нормального плану.
     let trimmedWarnings=[];
+    let archivedTotal=0;
     for(let sheetName in parsedCurriculum.sheets){
       const s=parsedCurriculum.sheets[sheetName];
       // planKey, а не subjKey: якщо для цієї назви заведено спільний
@@ -557,59 +635,27 @@ window.saveCurriculumToDb=async function(){
         topicsToSave=topicsToSave.slice(0,MAX_TOPICS);
         trimmedWarnings.push(`${s.meta.subject}: -${cut}`);
       }
-      await set(ref(db,`curriculum_plans/${cls}/${sk}/meta`),{
-        ...s.meta,
-        uploadedBy:auth.currentUser.uid,
-        uploadedAt:localDateString
-      });
-      // ПЕРЕНОСИМО ВИТРАЧЕНІ ГОДИНИ — СПЕРШУ ЗА НАЗВОЮ, ПОТІМ ЗА НОМЕРОМ.
-      //
-      // Раніше зіставлення йшло ЛИШЕ за номером уроку. Через це найчастіша
-      // правка плану — вставити забуту тему в середину — тихо ламала облік:
-      // номери всіх наступних тем зсувалися на одиницю, і години сідали на
-      // сусідні теми. Учитель бачив, що «Додавання» раптом пройдено на
-      // третину, а «Віднімання» — взагалі з нуля.
-      //
-      // Назва теми зсуву не має. Тому головне зіставлення — за нею, а
-      // номер лишається запасним: для перейменованих тем і для планів, де
-      // назви повторюються.
       const existSnap=await get(ref(db,`curriculum_plans/${cls}/${sk}/topics`));
       const existing=existSnap.exists()?existSnap.val():{};
-      const existByLesson={}, existByTitle={};
-      const norm = s => String(s||'').replace(/\s+/g,' ').trim().toLowerCase();
-      for(let id in existing){
-        const t=existing[id]||{};
-        const hu=t.hoursUsed||0;
-        existByLesson[t.lessonNum]={id,hoursUsed:hu};
-        const key=norm(t.title);
-        // Якщо назва повторюється, за нею зіставляти не можна — лишаємо
-        // мітку, щоб такі теми пішли запасним шляхом, за номером.
-        if(key) existByTitle[key] = (key in existByTitle) ? null : {id,hoursUsed:hu};
-      }
       // Останній рубіж: навіть якщо крізь розбір пройшло щось нечислове,
       // до бази воно не потрапить. Firebase відхиляє NaN цілим записом,
       // тож один зіпсований рядок інакше губить увесь план.
-      const safeTopics = repairTopics(topicsToSave);
-      const newTopics={};
-      // Назву використали — більше нікому її не віддаємо: інакше дві теми
-      // з однаковим текстом забрали б ті самі години двічі.
-      const takenTitles=new Set();
-      safeTopics.forEach((t,idx)=>{
-        const id=`t_${t.lessonNum}_${idx}`;
-        const key=norm(t.title);
-        const byTitle=(key && !takenTitles.has(key)) ? existByTitle[key] : null;
-        if(byTitle) takenTitles.add(key);
-        const prevHU=(byTitle || existByLesson[t.lessonNum])?.hoursUsed||0;
-        newTopics[id]={...t,hoursUsed:Math.min(prevHU,t.plannedHours)};
+      const merged = mergePlanTopics(existing, repairTopics(topicsToSave));
+      archivedTotal += merged.archived;
+      // Метадані й теми — ОДНИМ записом: раніше meta писалося окремо, і
+      // збій на темах лишав план із новою датою завантаження, але старими темами.
+      await update(ref(db), {
+        [`curriculum_plans/${cls}/${sk}/meta`]: { ...s.meta, uploadedBy: auth.currentUser.uid, uploadedAt: localDateString },
+        [`curriculum_plans/${cls}/${sk}/topics`]: merged.topics
       });
-      await set(ref(db,`curriculum_plans/${cls}/${sk}/topics`),newTopics);
     }
     let repaired = 0;
     Object.values(parsedCurriculum.sheets || {}).forEach(sh => { repaired += badTopics(sh.topics).length; });
     showToast(trimmedWarnings.length>0
       ?`✅ План збережено! ⚠️ Перевищено ліміт ${MAX_TOPICS} тем на предмет — не поміщено: ${trimmedWarnings.join(', ')}`
       :(repaired ? `✅ План збережено. ${repaired} рядків мали нечислові клітинки — номери проставлено за порядком.`
-                 : "✅ Календарне планування збережено!"));
+                 : (archivedTotal ? `✅ План замінено. ${archivedTotal} пройдених тем, яких немає в новому файлі, збережено в архіві — старі уроки показують їх як і раніше.`
+                                  : "✅ Календарне планування збережено!")));
     parsedCurriculum=null;
     document.getElementById('curr-preview-section').style.display='none';
     document.getElementById('curr-file-input').value='';
@@ -651,7 +697,7 @@ const YEARKEY = /^\d{4}-\d{4}$/;
 
 function planStats(node){
   const topics = (node && node.topics) || {};
-  const ids = Object.keys(topics);
+  const ids = Object.keys(topics).filter(id => isLiveTopic(topics[id]));
   let covered = 0, hours = 0;
   ids.forEach(id => {
     const t = topics[id] || {};
@@ -1039,7 +1085,7 @@ function renderTopicOptionsList(slot,topicsObj){
   const list=document.getElementById(`t-topic-list-${slot}`);
   if(!list)return;
   let html=`<div class="topic-opt topic-opt-custom" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" onclick="selectTopicOption(${slot},'__custom__')">✏️ Власна тема (ввести вручну)</div>`;
-  const sorted=Object.entries(topicsObj).sort((a,b)=>(a[1].lessonNum||0)-(b[1].lessonNum||0));
+  const sorted=Object.entries(topicsObj).filter(([,t])=>isLiveTopic(t)).sort((a,b)=>(a[1].lessonNum||0)-(b[1].lessonNum||0));
   sorted.forEach(([id,t])=>{
     const hu=t.hoursUsed||0;
     const planned=t.plannedHours||0;
@@ -1092,7 +1138,9 @@ export async function populateTopicSelector(){
     const topics=snap.val();
     const sorted=Object.entries(topics).sort((a,b)=>(a[1].lessonNum||0)-(b[1].lessonNum||0));
     sorted.forEach(([id,t])=>{
-      availableTopicsCache[id]=t;totalTopics++;
+      availableTopicsCache[id]=t;                 // архівні теж: за ними старі уроки показують назву
+      if(!isLiveTopic(t)) return;
+      totalTopics++;
       if((t.hoursUsed||0)>=t.plannedHours)coveredTopics++;
     });
   }
@@ -1502,7 +1550,7 @@ window.cancelCurrAlias = function(){ renderAliasBox(chosenSubject()); };
 async function ownTopicCount(cls, subj){
   try{
     const snap = await get(ref(db, `curriculum_plans/${cls}/${subjKey(subj)}/topics`));
-    return snap.exists() ? Object.keys(snap.val() || {}).length : 0;
+    return snap.exists() ? Object.values(snap.val() || {}).filter(isLiveTopic).length : 0;
   }catch(e){ console.warn('curriculum_plans (перевірка):', e.message); return 0; }
 }
 
@@ -1781,7 +1829,7 @@ export async function renderPlanEditor(){
   try{
     const snap = await get(ref(db, `curriculum_plans/${p.cls}/${p.sk}/topics`));
     const topics = snap.exists() ? (snap.val() || {}) : {};
-    const rows = Object.entries(topics)
+    const rows = Object.entries(topics).filter(([,t]) => isLiveTopic(t))
       .sort((a,b) => (a[1].lessonNum||0) - (b[1].lessonNum||0));
 
     box.innerHTML = `
@@ -2173,13 +2221,17 @@ window.deletePlanTopic = async function(id, title, hoursUsed){
   // Тема з відпрацьованими годинами — це вже частина історії уроків.
   // Попереджаємо окремо: після видалення теми уроки, де вона стояла,
   // лишаться без назви теми.
+  // Пройдену тему не стираємо, а переносимо в архів: зі списку вона
+  // зникає, а проведені уроки й далі показують її назву (як і при заміні
+  // плану файлом — див. mergePlanTopics).
   const warn = hoursUsed > 0
-    ? `\n\nУВАГА: за цією темою вже відпрацьовано ${hoursUsed} год. Уроки, `
-      + `де вона вказана, лишаться без теми.`
+    ? `\n\nЗа цією темою вже проведено ${hoursUsed} год. Зі списку вона зникне, `
+      + `але в уже проведених уроках назва лишиться.`
     : '';
   if(!confirm(`Видалити тему «${title}»?${warn}`)) return;
   try{
-    await remove(ref(db, `curriculum_plans/${p.cls}/${p.sk}/topics/${id}`));
+    if(hoursUsed > 0) await update(ref(db, `curriculum_plans/${p.cls}/${p.sk}/topics/${id}`), { archived: true });
+    else await remove(ref(db, `curriculum_plans/${p.cls}/${p.sk}/topics/${id}`));
     logAction('curriculum', { cls:p.cls, subject:p.subj, value:`видалено тему: ${title}` });
     showToast('🗑️ Тему видалено');
     renderPlanEditor();
