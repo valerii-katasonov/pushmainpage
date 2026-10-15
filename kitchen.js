@@ -2507,22 +2507,34 @@ export async function renderParentMenu(cls, studentKey, date){
     const dishes = ['first','second','side','drink','dessert']
       .filter(k => !(ch && k === ch.field))
       .filter(k=>m && m[k]).map(k=>`<div class="pm-dish">${escHtml(m[k])}</div>`).join('');
-    const secondBlock = (!m || !ch || !eff.lunch || noAnswer) ? '' :
-      `<div class="pm-choice">
-         <div class="pm-choice-title">Оберіть ${escHtml(ch.label)}${gate.ok?'':' — вибір закрито'}</div>
+    // ВАРІАНТИ ОБІДУ ВИДНО ЗАВЖДИ. Раніше, якщо дитина цього дня не
+    // обідає (не замовлено, відмовились, ще не відповіли), блок вибору
+    // зникав разом зі стравою, на якій стоїть вибір, — у меню лишався
+    // лише сніданок, і батько не бачив, що пропонують на обід, щоб
+    // вирішити, чи брати. Тепер варіанти показані завжди; обрати можна
+    // лише коли обід узято («🍽 Беру обід цього дня» / «Поверну обід»).
+    const lunchOn = !!eff.lunch && !noAnswer;
+    const lunchHint = gate.ok ? ''
+      : ' — вибір закрито';
+    const offHint = noAnswer ? ' — спершу дайте відповідь про обіди'
+      : (notEating ? ' — натисніть «🍽 Беру обід цього дня», щоб обрати'
+                   : ' — натисніть «Поверну обід», щоб обрати');
+    const secondBlock = (!m || !ch) ? '' :
+      `<div class="pm-choice${lunchOn?'':' pm-choice-off'}">
+         <div class="pm-choice-title">${lunchOn?'Оберіть':'🍽 Обід:'} ${escHtml(ch.label)}${lunchOn?lunchHint:offHint}</div>
          ${['a','b'].map(v=>`
-           <button type="button" class="pm-opt${pick===v?' on':''}"
-                   ${gate.ok?`onclick="setMealDay('${escJs(cur)}','pick','${v}')"`:'disabled'}>
+           <button type="button" class="pm-opt${lunchOn&&pick===v?' on':''}"
+                   ${(gate.ok&&lunchOn)?`onclick="setMealDay('${escJs(cur)}','pick','${v}')"`:'disabled'}>
              <span class="pm-opt-mark">${v.toUpperCase()}</span>
              <span class="pm-opt-name">${escHtml(v==='a'?ch.a:ch.b)}</span>
-             ${pick===v?'<span class="pm-opt-on">обрано</span>':''}
+             ${lunchOn&&pick===v?'<span class="pm-opt-on">обрано</span>':''}
            </button>`).join('')}
        </div>`;
 
     const breakfastBlock = !hasBrk ? '' : (!brkPair
       ? `<div class="pm-snack"><b>🌅 Сніданок:</b> ${escHtml(m.breakfast)}</div>`
-      : `<div class="pm-choice">
-          <div class="pm-choice-title">🌅 Оберіть сніданок${eff.breakfast?'':' — спочатку додайте сніданок'}${bGate.ok?'':' — вибір закрито'}</div>
+      : `<div class="pm-choice${eff.breakfast?'':' pm-choice-off'}">
+          <div class="pm-choice-title">🌅 ${eff.breakfast?'Оберіть сніданок':'Сніданок — натисніть «+ Сніданок», щоб обрати'}${bGate.ok?'':' — вибір закрито'}</div>
           ${['a','b'].map(v=>`<button type="button" class="pm-opt${brkPick===v&&eff.breakfast?' on':''}"
               ${(bGate.ok&&eff.breakfast)?`onclick="setMealDay('${escJs(cur)}','breakfastPick','${v}')"`:'disabled'}>
             <span class="pm-opt-mark">${v.toUpperCase()}</span>

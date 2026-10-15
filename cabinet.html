@@ -3185,6 +3185,12 @@
 .pm-opt{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:var(--surface);border:1.5px solid var(--brand-line);border-radius:10px;padding:10px 12px;margin-bottom:7px;font-size:.88rem;color:var(--ink);}
 .pm-opt.on{border-color:var(--brand-ink);background:var(--brand-soft);}
 .pm-opt:disabled{opacity:.6;}
+/* Вибір видно, але поки обід/сніданок не взято — лише для перегляду:
+   страви читаються повністю (не «вимкнені»), рамка пунктирна, без натискань */
+.pm-choice.pm-choice-off{border-style:dashed;background:var(--surface);}
+.pm-choice-off .pm-opt:disabled{opacity:1;cursor:default;background:var(--surface-2);}
+.pm-choice-off .pm-opt-mark{background:var(--line-soft);color:var(--ink-3);}
+.pm-choice-off .pm-choice-title{color:var(--ink-2);}
 .pm-opt-mark{flex:0 0 24px;height:24px;border-radius:7px;background:var(--line-soft);color:var(--ink-2);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.76rem;}
 .pm-opt.on .pm-opt-mark{background:var(--brand-ink);color:var(--on-fill);}
 .pm-opt-name{flex:1;min-width:0;overflow-wrap:anywhere;}
