@@ -3736,6 +3736,24 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
   .t-lesson .qa-btn.ls-save{width:100%;min-width:0;}
   .t-lesson .ls-foot{justify-content:stretch;}
 }
+/* «Клас»: поля з підписами над ними, сітки 2/3 колонки */
+.t-class .ls-step > b.ls-ib{background:var(--brand-soft);color:inherit;font-size:1.05rem;width:38px;height:38px;border-radius:12px;}
+.t-class .ls-link{font-weight:800;color:var(--brand-deep);text-decoration:none;white-space:nowrap;margin-left:4px;}
+.t-class .ls-grid2{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:10px;}
+.t-class .ls-grid3{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1.3fr) minmax(0,1fr);gap:10px;}
+.t-class .ls-grid-beh{grid-template-columns:minmax(0,2fr) 110px;}
+.t-class .ls-fld{display:flex;flex-direction:column;gap:4px;margin:0;font-size:.72rem;font-weight:800;color:var(--ink-2);text-transform:uppercase;letter-spacing:.04em;}
+.t-class .ls-fld small{text-transform:none;letter-spacing:0;font-weight:600;color:var(--ink-3);}
+.t-class .ls-fld select,.t-class .ls-fld input{margin:0;min-height:44px;border-radius:10px;font-size:.92rem;text-transform:none;letter-spacing:0;font-weight:600;color:var(--ink);}
+.t-class .ls-num input{text-align:center;font-weight:900;}
+.t-class textarea#t-comment{border-radius:12px;font-size:.95rem;}
+.t-class .ls-hint{margin:0 0 8px;font-size:.76rem;color:var(--ink-3);}
+.t-class .qa-btn.ls-save.ls-warm{background:var(--warn-soft);color:var(--warn);border:1px solid var(--warn-line);}
+@media (max-width:560px){
+  .t-class .ls-grid2,.t-class .ls-grid3{grid-template-columns:minmax(0,1fr);}
+  .t-class .ls-grid-beh{grid-template-columns:minmax(0,1fr) 96px;}
+  .t-class .ls-grid3 .ls-num{max-width:120px;}
+}
 .t-now-acts{margin:-4px 0 12px;}
 .t-now-acts .ui-btn{flex:1;max-width:none;}
 .d-today .qa-grid{grid-template-columns:repeat(auto-fit,minmax(190px,1fr));}
@@ -5376,56 +5394,28 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
       </div>
     </section>
 
-    <section class="screen-section half" data-dtab="class">
-      <h3>📝 Оцінювання учня</h3>
-      <!-- Оцінка поведінки -->
-      <div style="background:var(--brand-soft);padding:14px;border-radius:12px;border:1px solid var(--line);">
-        <h4 style="margin:0 0 9px 0;color:var(--brand-deep);font-size:.9rem;">🤝 Оцінка поведінки (Класний урок)</h4>
-        <div style="display:flex;gap:8px;align-items:flex-end;">
-          <select id="t-behavior-student" style="flex:2;margin-top:0;border-color:var(--brand-deep);"><option value="">Учень...</option></select>
-          <div style="flex:1;display:flex;flex-direction:column;gap:4px;">
-            <label style="margin-top:0;font-size:.75rem;color:var(--brand-deep);">Оцінка (1-6):</label>
-            <input type="text" id="t-behavior-grade" placeholder="1-6" style="margin-top:0;border:2px solid var(--brand-deep);text-align:center;font-weight:800;color:var(--brand-deep);">
-          </div>
-          <button onclick="saveBehaviorGrade()" style="flex:1;margin-top:0;background:var(--brand-deep);color:var(--on-fill);padding:11px 8px;font-size:.82rem;border-radius:10px;border:none;cursor:pointer;font-weight:700;">💾 Зберегти</button>
+    <section class="screen-section t-lesson t-class" data-dtab="class">
+      <!-- «Клас» на картках, як «Урок»: зверху те, що вчитель робить щодня
+           (коментар, наліпка, поведінка), нижче — рідше потрібне згорнутими
+           картками. Ідентифікатори й обробники ті самі. -->
+      <div class="ls-head">
+        <div class="ls-head-t">
+          <h3 class="ls-title">👥 Клас</h3>
+          <p class="ls-sub">Учні класу, вибраного вгорі сторінки. Усе, що ви тут даєте чи пишете, батьки бачать у кабінеті дитини.</p>
         </div>
       </div>
-      <!-- Наліпка -->
-      <div style="margin-top:13px;background:var(--surface-2);padding:14px;border-radius:12px;border:1px solid var(--warn-line);">
-        <h4 style="margin:0 0 8px 0;color:var(--warn);font-size:.88rem;">🌟 Видати наліпку учню</h4>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
-          <label style="flex:2;min-width:170px;font-size:.75rem;color:var(--warn);font-weight:600;">Учень
-            <select id="t-sticker-student" style="margin-top:3px;"></select>
-          </label>
-          <label style="flex:1;min-width:140px;font-size:.75rem;color:var(--warn);font-weight:600;">Предмет
-            <select id="t-sticker-subject" style="margin-top:3px;" onchange="toggleStickerOther()"></select>
-          </label>
-          <!-- Скільки наліпок. Порожнє поле = одна: щоденна дія не має
-               вимагати зайвого набору, а «назбиралося чотири» пишеться
-               одним символом замість чотирьох натискань «Дати». -->
-          <label style="flex:none;width:74px;font-size:.75rem;color:var(--warn);font-weight:600;">Скільки
-            <input id="t-sticker-count" type="number" min="1" max="20" step="1" inputmode="numeric"
-              placeholder="1" title="Скільки наліпок видати за раз (до 20)"
-              style="margin-top:3px;border-color:var(--warn-line);text-align:center;font-weight:800;">
-          </label>
-          <button id="btn-give-sticker" onclick="giveStickerToStudent()" style="flex:none;margin-top:0;background:var(--warn-line);color:var(--ink);padding:11px 16px;border-radius:10px;border:none;cursor:pointer;font-weight:800;font-size:.88rem;">🌟 Дати</button>
-        </div>
-        <label id="t-sticker-other-wrap" style="display:none;margin-top:9px;font-size:.75rem;color:var(--warn);font-weight:600;">За що наліпка?
-          <input type="text" id="t-sticker-other" maxlength="160" placeholder="Наприклад, допоміг однокласнику" style="margin-top:3px;border-color:var(--warn-line);">
-        </label>
-      </div>
+
       <!-- Коментар -->
-      <div id="t-comment-card" style="margin-top:13px;background:var(--brand-soft);padding:14px;border-radius:12px;border:1px solid var(--brand-deep);">
-        <h4 style="margin:0 0 8px 0;color:var(--brand-deep);font-size:.88rem;">💬 Коментар учню</h4>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
-          <label style="flex:2;min-width:180px;font-size:.75rem;color:var(--brand-deep);font-weight:600;">Учень
-            <select id="t-student" style="margin-top:3px;border-color:var(--ink-3);"><option value="">Учень...</option></select>
-          </label>
-          <label style="flex:1;min-width:150px;font-size:.75rem;color:var(--brand-deep);font-weight:600;">Предмет
-            <select id="t-subject-for-comment" style="margin-top:3px;border-color:var(--ink-3);"></select>
-          </label>
+      <div id="t-comment-card" class="ls-card">
+        <div class="ls-step"><b class="ls-ib">💬</b><div><h4>Коментар учню</h4>
+          <p>Батьки отримають сповіщення й побачать коментар під предметом; можуть відповісти реакцією.
+            <a href="#" class="ls-link" onclick="event.preventDefault();openCommentsView()">Усі коментарі →</a></p></div></div>
+        <div class="ls-grid2">
+          <label class="ls-fld">Учень<select id="t-student"><option value="">Учень...</option></select></label>
+          <label class="ls-fld">Предмет<select id="t-subject-for-comment"></select></label>
         </div>
-        <textarea id="t-comment" rows="2" placeholder="Напишіть своїми словами — напр. «не готовий до уроку, заважає»..." style="margin-top:7px;border-color:var(--ink-3);font-size:.88rem;"></textarea>
+        <label for="t-comment" class="ls-lbl">Текст</label>
+        <textarea id="t-comment" rows="3" placeholder="Напишіть своїми словами — напр. «не готовий до уроку, заважає»..."></textarea>
         <!-- AI переформулює чернетку вчителя в коректне повідомлення батькам.
              Ім'я учня в сервіс не передається — див. teacher.js -->
         <div class="ai-hw-row">
@@ -5433,45 +5423,74 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
           <span class="ai-hw-note">перепишу ввічливо й конструктивно</span>
         </div>
         <p id="ai-comment-msg" class="ai-hw-msg" style="display:none;"></p>
-        <button id="btn-save-comment" onclick="saveComment()" style="background:var(--brand-deep);color:var(--on-fill);padding:9px;margin-top:7px;border-radius:9px;font-size:.85rem;border:none;cursor:pointer;width:100%;font-weight:700;">💬 Зберегти коментар</button>
+        <div class="ls-foot"><button id="btn-save-comment" class="qa-btn ls-save" onclick="saveComment()">💬 Зберегти коментар</button></div>
       </div>
-    </section>
 
-    <!-- Освоєння тем за тренажерами. Рахується з результатів ігор, які
-         діти й так проходять удома. Панель важка на читання (весь вузол
-         класу), тому лежить у details і рахується лише коли її відкрили. -->
-    <section class="screen-section half" data-dtab="class">
-      <h3>📊 Освоєння тем</h3>
-      <details style="background:var(--surface);padding:14px;border-radius:12px;border:1px solid var(--line);"
-               ontoggle="if(this.open&&window.renderMastery)renderMastery('tm-mastery')">
-        <summary style="font-weight:700;cursor:pointer;color:var(--brand-ink);">📊 Що клас відпрацював у тренажерах</summary>
+      <!-- Наліпка -->
+      <div class="ls-card ls-sticker">
+        <div class="ls-step"><b class="ls-ib">🌟</b><div><h4>Наліпка</h4>
+          <p>Заохочення: наліпки збираються до нагороди, батьки бачать їх у кабінеті дитини.
+            <a href="#" class="ls-link" onclick="event.preventDefault();openStickerStatsModal()">Статистика наліпок →</a></p></div></div>
+        <div class="ls-grid3">
+          <label class="ls-fld">Учень<select id="t-sticker-student"></select></label>
+          <label class="ls-fld">Предмет<select id="t-sticker-subject" onchange="toggleStickerOther()"></select></label>
+          <!-- Скільки наліпок. Порожнє поле = одна: щоденна дія не має
+               вимагати зайвого набору, а «назбиралося чотири» пишеться
+               одним символом замість чотирьох натискань «Дати». -->
+          <label class="ls-fld ls-num">Скільки
+            <input id="t-sticker-count" type="number" min="1" max="20" step="1" inputmode="numeric"
+              placeholder="1" title="Скільки наліпок видати за раз (до 20)"></label>
+        </div>
+        <label id="t-sticker-other-wrap" class="ls-fld" style="display:none;margin-top:9px;">За що наліпка?
+          <input type="text" id="t-sticker-other" maxlength="160" placeholder="Наприклад, допоміг однокласнику">
+        </label>
+        <div class="ls-foot"><button id="btn-give-sticker" class="qa-btn ls-save ls-warm" onclick="giveStickerToStudent()">🌟 Дати</button></div>
+      </div>
+
+      <!-- Оцінка поведінки -->
+      <div class="ls-card">
+        <div class="ls-step"><b class="ls-ib">🤝</b><div><h4>Оцінка поведінки</h4>
+          <p>За класний урок, від 1 до 6. Лягає в журнал і видно батькам.</p></div></div>
+        <div class="ls-grid2 ls-grid-beh">
+          <label class="ls-fld">Учень<select id="t-behavior-student"><option value="">Учень...</option></select></label>
+          <label class="ls-fld ls-num">Оцінка<input type="text" id="t-behavior-grade" placeholder="1–6" inputmode="numeric"></label>
+        </div>
+        <div class="ls-foot"><button class="qa-btn ls-save" onclick="saveBehaviorGrade()">💾 Зберегти оцінку</button></div>
+      </div>
+
+      <h3 class="ui-h ls-tools-h">Аналітика й керування класом</h3>
+      <p class="ls-tools-sub">Потрібні не щодня — відкриваються натиском.</p>
+      <!-- Освоєння тем за тренажерами. Рахується з результатів ігор, які
+           діти й так проходять удома. Панель важка на читання (весь вузол
+           класу), тому лежить у details і рахується лише коли її відкрили. -->
+      <details class="ls-tool" ontoggle="if(this.open&&window.renderMastery)renderMastery('tm-mastery')">
+        <summary><span class="ls-ic" aria-hidden="true">📊</span><span class="ls-tt"><b>Освоєння тем</b><small>Що клас відпрацював у тренажерах — за темами плану</small></span></summary>
         <div id="tm-mastery" style="margin-top:11px;"><p class="empty-msg">Натисніть, щоб порахувати.</p></div>
       </details>
-    </section>
-
-    <section class="screen-section half" data-dtab="class">
-      <h3>⚙️ Клас і батьки</h3>
-      <!-- Управління класом -->
-      <details style="background:var(--surface);padding:14px;border-radius:12px;border:1px solid var(--line);">
-        <summary style="font-weight:700;cursor:pointer;color:var(--ink-3);">⚙️ Управління класом</summary>
-        <div style="margin-top:13px;">
-          <input type="text" id="new-student-name" placeholder="Прізвище та Ім'я учня">
-          <input type="email" id="new-student-email" placeholder="Email учня (для входу)" style="margin-top:5px;border-color:var(--warn-line);">
-          <button style="background:var(--warn-line);padding:8px;margin-top:5px;margin-bottom:13px;" onclick="addStudent()">Додати учня</button>
-          <hr>
-          <!-- Список батьків свого класу: контакти можна дивитись і редагувати -->
-          <details style="margin-top:13px;background:var(--surface-2);padding:12px;border-radius:12px;border:1px solid var(--brand-deep);"
-                   ontoggle="if(this.open)renderParentsBlock('t-parents-list',getActiveClass())">
-            <summary style="font-weight:700;cursor:pointer;color:var(--brand-deep);font-size:.88rem;">👪 Батьки мого класу</summary>
-            <div id="t-parents-list" style="margin-top:9px;"><p class="empty-msg is-loading">Завантаження...</p></div>
-          </details>
-          <p style="font-size:.83rem;color:var(--ink-2);margin-top:13px;font-weight:700;">Прив'язка батьків:</p>
-          <select id="t-parent-role" style="margin-top:4px;border-color:var(--brand-deep);">
-            <option value="mother">👩‍👧 Мати</option><option value="father">👨‍👦 Батько</option><option value="guardian">🛡️ Опекун</option>
-          </select>
-          <input type="email" id="parent-email" placeholder="Email батьків" style="margin-top:4px;">
-          <select id="t-student-for-parent" style="margin-top:4px;"><option value="">Учень...</option></select>
-          <button style="background:var(--brand-deep);padding:8px;margin-top:9px;color:var(--on-fill);" onclick="linkParent()">Прив'язати Email</button>
+      <!-- Список батьків свого класу: контакти можна дивитись і редагувати -->
+      <details class="ls-tool" ontoggle="if(this.open)renderParentsBlock('t-parents-list',getActiveClass())">
+        <summary><span class="ls-ic" aria-hidden="true">👪</span><span class="ls-tt"><b>Батьки мого класу</b><small>Контакти батьків — переглянути й виправити</small></span></summary>
+        <div id="t-parents-list" style="margin-top:9px;"><p class="empty-msg is-loading">Завантаження...</p></div>
+      </details>
+      <details class="ls-tool">
+        <summary><span class="ls-ic" aria-hidden="true">⚙️</span><span class="ls-tt"><b>Учні й доступ батьків</b><small>Додати учня в клас, прив'язати пошту батьків до дитини</small></span></summary>
+        <div style="margin-top:12px;">
+          <div class="ls-subh" style="margin-top:0;padding-top:0;border:none;">➕ Додати учня</div>
+          <div class="ls-grid2">
+            <label class="ls-fld">Прізвище та імʼя<input type="text" id="new-student-name" placeholder="Прізвище та Ім'я учня"></label>
+            <label class="ls-fld">Пошта учня <small>(для входу)</small><input type="email" id="new-student-email" placeholder="email@…"></label>
+          </div>
+          <div class="ls-foot"><button class="qa-btn ls-save" onclick="addStudent()">Додати учня</button></div>
+          <div class="ls-subh">🔗 Прив'язати батьків</div>
+          <p class="ls-hint">Після прив'язки батьки входять зі своєю поштою й бачать кабінет дитини.</p>
+          <div class="ls-grid3">
+            <label class="ls-fld">Хто<select id="t-parent-role">
+              <option value="mother">👩‍👧 Мати</option><option value="father">👨‍👦 Батько</option><option value="guardian">🛡️ Опекун</option>
+            </select></label>
+            <label class="ls-fld">Пошта батьків<input type="email" id="parent-email" placeholder="email@…"></label>
+            <label class="ls-fld">Дитина<select id="t-student-for-parent"><option value="">Учень...</option></select></label>
+          </div>
+          <div class="ls-foot"><button class="qa-btn ls-save" onclick="linkParent()">🔗 Прив'язати пошту</button></div>
         </div>
       </details>
     </section>
