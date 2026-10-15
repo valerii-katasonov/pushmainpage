@@ -3191,6 +3191,21 @@
 .pm-choice-off .pm-opt:disabled{opacity:1;cursor:default;background:var(--surface-2);}
 .pm-choice-off .pm-opt-mark{background:var(--line-soft);color:var(--ink-3);}
 .pm-choice-off .pm-choice-title{color:var(--ink-2);}
+/* Картки прийомів їжі: сніданок / обід / підвечірок — однакові рамки */
+.pm-meal{margin:10px 0;padding:12px 14px;background:var(--surface);border:1px solid var(--brand-line);border-radius:14px;}
+.pm-meal.is-off{border-style:dashed;border-color:var(--line);}
+.pm-meal-h{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px 8px;margin-bottom:6px;}
+.pm-meal-h b{font-size:.92rem;color:var(--ink);white-space:nowrap;}
+.pm-tag{font-size:.7rem;font-weight:800;padding:2px 9px;border-radius:999px;background:var(--line-soft);color:var(--ink-3);white-space:nowrap;}
+.pm-tag.on{background:var(--ok-soft);color:var(--ok);}
+.pm-row{display:flex;align-items:baseline;gap:10px;padding:6px 0;border-top:1px dashed var(--line-soft);}
+.pm-meal-h + .pm-row{border-top:none;}
+.pm-row small{flex:0 0 74px;font-size:.72rem;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.03em;}
+.pm-row span{flex:1;min-width:0;font-size:.88rem;color:var(--ink);overflow-wrap:anywhere;}
+.pm-choice.pm-in{margin:8px 0 0;padding:0;background:none;border:none;border-top:1px dashed var(--line-soft);padding-top:8px;border-radius:0;}
+.pm-meal-h + .pm-choice.pm-in{border-top:none;padding-top:0;}
+.pm-choice.pm-in.pm-choice-off{border:none;border-top:1px dashed var(--line-soft);background:none;}
+.pm-meal-h + .pm-choice.pm-in.pm-choice-off{border-top:none;}
 .pm-opt-mark{flex:0 0 24px;height:24px;border-radius:7px;background:var(--line-soft);color:var(--ink-2);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.76rem;}
 .pm-opt.on .pm-opt-mark{background:var(--brand-ink);color:var(--on-fill);}
 .pm-opt-name{flex:1;min-width:0;overflow-wrap:anywhere;}

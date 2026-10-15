@@ -2504,9 +2504,13 @@ export async function renderParentMenu(cls, studentKey, date){
     // Страву, на якій цього дня стоїть вибір, зі звичайного переліку
     // прибираємо — інакше гарнір показався б двічі: рядком і кнопкою
     const ch = choicePair(m);
+    // Кожна страва — рядок із підписом («Перше», «Напій»…): раніше суп і
+    // компот висіли над рамкою двома голими рядками без пояснень.
+    const DISH_LBL = { first:'Перше', second:'Друге', side:'Гарнір', drink:'Напій', dessert:'Десерт' };
+    const row = (lbl, val) => `<div class="pm-row">${lbl ? `<small>${escHtml(lbl)}</small>` : ''}<span>${escHtml(val)}</span></div>`;
     const dishes = ['first','second','side','drink','dessert']
       .filter(k => !(ch && k === ch.field))
-      .filter(k=>m && m[k]).map(k=>`<div class="pm-dish">${escHtml(m[k])}</div>`).join('');
+      .filter(k=>m && m[k]).map(k=>row(DISH_LBL[k], m[k])).join('');
     // ВАРІАНТИ ОБІДУ ВИДНО ЗАВЖДИ. Раніше, якщо дитина цього дня не
     // обідає (не замовлено, відмовились, ще не відповіли), блок вибору
     // зникав разом зі стравою, на якій стоїть вибір, — у меню лишався
@@ -2520,8 +2524,8 @@ export async function renderParentMenu(cls, studentKey, date){
       : (notEating ? ' — натисніть «🍽 Беру обід цього дня», щоб обрати'
                    : ' — натисніть «Поверну обід», щоб обрати');
     const secondBlock = (!m || !ch) ? '' :
-      `<div class="pm-choice${lunchOn?'':' pm-choice-off'}">
-         <div class="pm-choice-title">${lunchOn?'Оберіть':'🍽 Обід:'} ${escHtml(ch.label)}${lunchOn?lunchHint:offHint}</div>
+      `<div class="pm-choice pm-in${lunchOn?'':' pm-choice-off'}">
+         <div class="pm-choice-title">${lunchOn?'Оберіть':'Варіанти:'} ${escHtml(ch.label)}${lunchOn?lunchHint:offHint}</div>
          ${['a','b'].map(v=>`
            <button type="button" class="pm-opt${lunchOn&&pick===v?' on':''}"
                    ${(gate.ok&&lunchOn)?`onclick="setMealDay('${escJs(cur)}','pick','${v}')"`:'disabled'}>
@@ -2531,10 +2535,10 @@ export async function renderParentMenu(cls, studentKey, date){
            </button>`).join('')}
        </div>`;
 
-    const breakfastBlock = !hasBrk ? '' : (!brkPair
-      ? `<div class="pm-snack"><b>🌅 Сніданок:</b> ${escHtml(m.breakfast)}</div>`
-      : `<div class="pm-choice${eff.breakfast?'':' pm-choice-off'}">
-          <div class="pm-choice-title">🌅 ${eff.breakfast?'Оберіть сніданок':'Сніданок — натисніть «+ Сніданок», щоб обрати'}${bGate.ok?'':' — вибір закрито'}</div>
+    const breakfastInner = !hasBrk ? '' : (!brkPair
+      ? row('', m.breakfast)
+      : `<div class="pm-choice pm-in${eff.breakfast?'':' pm-choice-off'}">
+          <div class="pm-choice-title">${eff.breakfast?'Оберіть варіант':'Варіанти — натисніть «+ Сніданок», щоб обрати'}${bGate.ok?'':' — вибір закрито'}</div>
           ${['a','b'].map(v=>`<button type="button" class="pm-opt${brkPick===v&&eff.breakfast?' on':''}"
               ${(bGate.ok&&eff.breakfast)?`onclick="setMealDay('${escJs(cur)}','breakfastPick','${v}')"`:'disabled'}>
             <span class="pm-opt-mark">${v.toUpperCase()}</span>
@@ -2542,6 +2546,16 @@ export async function renderParentMenu(cls, studentKey, date){
             ${brkPick===v&&eff.breakfast?'<span class="pm-opt-on">обрано</span>':''}
           </button>`).join('')}
         </div>`);
+
+    // ── КАРТКИ: сніданок → обід → підвечірок, кожна у своїй рамці ──
+    // Однаковий вигляд для всіх трьох: заголовок із позначкою «замовлено /
+    // не замовлено», під ним страви рядками, вибір А/Б — усередині картки.
+    const tag = on => `<span class="pm-tag${on?' on':''}">${on?'✓ замовлено':'не замовлено'}</span>`;
+    const card = (cls, title, on, inner) => inner
+      ? `<section class="pm-meal ${cls}${on?'':' is-off'}"><div class="pm-meal-h"><b>${title}</b>${isAbsent?'':tag(on)}</div>${inner}</section>` : '';
+    const breakfastCard = card('brk', '🌅 Сніданок', !!eff.breakfast, breakfastInner);
+    const lunchCard = card('lunch', '🍽 Обід', lunchOn, (dishes || secondBlock) ? dishes + secondBlock : '');
+    const snackCard = card('snack', '🥪 Підвечірок', !!eff.snack, m && m.snack ? row('', m.snack) : '');
 
     // Збираємо рядок стану й кнопки заздалегідь: три рівні вкладених
     // шаблонів у розмітці нечитабельні й ламаються при першій же правці.
@@ -2609,9 +2623,7 @@ export async function renderParentMenu(cls, studentKey, date){
       ${askLunch}
       <div class="pm-tabs">${strip}</div>
       <div class="pm-title">${escHtml(DOW[ci])}, ${escHtml(human(cur))}${cur===localDateString?' — сьогодні':''}</div>
-      ${(dishes || secondBlock) ? dishes + secondBlock : '<div class="pm-none">Меню на цей день ще не опубліковане</div>'}
-      ${breakfastBlock}
-      ${m && m.snack ? `<div class="pm-snack"><b>🥪 Підвечірок:</b> ${escHtml(m.snack)}</div>` : ''}
+      ${(breakfastCard || lunchCard || snackCard) ? breakfastCard + lunchCard + snackCard : '<div class="pm-none">Меню на цей день ще не опубліковане</div>'}
       ${m && m.allergens ? `<div class="pm-allerg">⚠️ ${escHtml(m.allergens)}</div>` : ''}
       ${m && m.note ? `<div class="pm-note">${escHtml(m.note)}</div>` : ''}
 
