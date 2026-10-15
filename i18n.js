@@ -451,6 +451,8 @@
       window.addEventListener('resize', close);
       (m.querySelector('.is-on') || items[0]).focus();
     }
+    // Меню мови для інших кнопок (⋯ у шапці на телефоні — pb-more.js)
+    api.menu = toggleMenu;
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', paint);
     else paint();
   }

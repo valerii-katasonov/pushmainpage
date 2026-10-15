@@ -3436,9 +3436,21 @@ html.i18n-pending body{visibility:hidden}
 .lang-caret{font-size:.7rem;opacity:.75;transition:transform .15s;}
 .lang-pick[aria-expanded="true"] .lang-caret{transform:rotate(180deg);}
 .lang-menu .lang-tick{margin-left:auto;font-weight:800;}
-/* Телефон: шапка й так тісна (⟳ 🌐 🔔 🔍 ⚙️) — без глобуса й з меншими
-   проміжками, щоб імʼя не стискалося до «В..» */
-@media (max-width:480px){#profile-bar > #pb-lang{padding:7px 8px !important;}#pb-lang > span[aria-hidden]{display:none;}#profile-bar{gap:8px !important;}}
+/* Телефон: у шапці лише 🔔 і ⋯ (pb-more.js) — решта кнопок у меню ⋯,
+   інакше імʼя стискалося до «Вал…». Аватарка й імʼя відкривають профіль. */
+#pb-more{display:none;width:auto;min-width:40px;padding:5px 10px;margin:0;background:var(--surface-2);color:var(--ink-2);border:1px solid var(--line);border-radius:8px;font-size:1.25rem;font-weight:900;line-height:1;align-items:center;justify-content:center;}
+#pb-more:hover,#pb-more[aria-expanded="true"]{border-color:var(--brand-line);color:var(--brand-deep);}
+.pb-more-menu{min-width:220px;}
+.pb-more-menu .pm-ic{width:22px;text-align:center;}
+.pb-more-menu .pm-val{margin-left:auto;font-size:.8rem;font-weight:800;color:var(--brand-deep);}
+@media (max-width:640px){
+  #profile-bar > #pb-lang,#profile-bar > #pb-reload,#profile-bar > #pb-search,#profile-bar > .pb-profile-btn{display:none !important;}
+  #pb-more{display:inline-flex;}
+  #profile-bar .pb-who{cursor:pointer;}
+  #profile-bar > div[style*="flex:1"]{min-width:0;}
+  /* Раніше імʼя обрізалося на 130px, щоб влізли кнопки; тепер місця досить */
+  #profile-bar #pb-name{max-width:none;}
+}
 body.auth-mode .lang-pick{background:rgba(255,255,255,.055);color:var(--auth-sub);border-color:rgba(160,230,240,.18);}
 body.auth-mode .lang-pick:hover,body.auth-mode .lang-pick[aria-expanded="true"]{color:var(--auth-fg);border-color:rgba(160,230,240,.45);}
 body.auth-mode .lang-menu{background:rgba(9,32,40,.97);border-color:rgba(160,230,240,.22);box-shadow:0 14px 34px rgba(0,0,0,.45);}
@@ -4009,7 +4021,9 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
     <button type="button" id="pb-lang" aria-label="Мова / Język / Language"></button>
     <button type="button" id="pb-bell" onclick="openNotifs()" aria-label="Сповіщення" title="Сповіщення">🔔<span class="pb-bell-n" hidden></span></button>
     <button type="button" id="pb-search" onclick="openSearch()" aria-label="Пошук (Ctrl+K)" title="Пошук · Ctrl+K">🔍</button>
-    <button onclick="openProfileModal()" style="width:auto;padding:7px 13px;margin:0;background:var(--brand-ink);color:var(--on-fill);border-radius:8px;font-size:.85rem;" aria-label="Профіль">⚙️<span class="pb-lbl"> Профіль</span></button>
+    <button class="pb-profile-btn" onclick="openProfileModal()" style="width:auto;padding:7px 13px;margin:0;background:var(--brand-ink);color:var(--on-fill);border-radius:8px;font-size:.85rem;" aria-label="Профіль">⚙️<span class="pb-lbl"> Профіль</span></button>
+    <!-- Телефон: замість 🌐 ⟳ 🔍 ⚙️ — одна ⋯ з меню (pb-more.js) -->
+    <button type="button" id="pb-more" aria-label="Ще" aria-haspopup="menu" aria-expanded="false" title="Ще">⋯</button>
     <!-- Перемикачі — окремим рядком на всю ширину. У рядку з імʼям вони
          стискалися до «👶..» (4 кнопки шапки забирали місце), і прочитати,
          яка дитина зараз вибрана, було неможливо. -->
@@ -6620,6 +6634,7 @@ document.addEventListener('DOMContentLoaded', function(){
 <script src="theme.js"></script>
 <script type="module" src="chat.js"></script>
 <script type="module" src="reload.js"></script>
+<script type="module" src="pb-more.js"></script>
 <script type="module" src="child-photo.js"></script>
 <script type="module" src="breaks.js"></script>
 <script type="module" src="subjects.js"></script>
