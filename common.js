@@ -3103,7 +3103,7 @@ function scrollToAttendance(screenId, attempt = 0){
   const card = head && head.closest ? (head.closest('.data-card') || head) : head;
   const list = document.getElementById({ 't-att-header':'t-attendance-list', 'd-att-header':'d-unified-att-list',
                                          'a-att-header':'a-unified-att-list' }[id]);
-  const loading = list && /Завантаження/.test(list.textContent || '');
+  const loading = list && /Завантаження|Ładowanie|Loading/.test(list.textContent || '');
   if((!card || loading) && attempt < 15) return setTimeout(() => scrollToAttendance(screenId, attempt + 1), 200);
   if(!card) return;
   try{ card.scrollIntoView({ behavior:'smooth', block:'start' }); }catch(e){ card.scrollIntoView(); }

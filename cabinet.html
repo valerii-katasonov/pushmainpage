@@ -9,6 +9,10 @@
   <meta name="color-scheme" content="light dark">
   <!-- Тема — ДО стилів: інакше на мить блимне світла сторінка (theme.js керує далі) -->
   <script>(function(){try{var t=localStorage.getItem('push_theme');document.documentElement.dataset.theme=(t==='light'||t==='dark')?t:'auto';}catch(e){document.documentElement.dataset.theme='auto';}})();</script>
+  <!-- Мова інтерфейсу UA / PL / EN (i18n.js). Поки не прийшов словник,
+       сторінку не показуємо (html.i18n-pending у стилях нижче) —
+       інакше на мить мигне українська. -->
+  <script src="i18n.js"></script>
   <meta name="apple-mobile-web-app-capable" content="yes">
   <!-- iOS не бере іконку з маніфесту: для екрана «Домів» потрібен саме
        apple-touch-icon у розмітці. Раніше тут стояло чуже посилання на
@@ -3417,6 +3421,30 @@ body.ui-sheet-lock{overflow:hidden;}
 .ui-cmd-opt[aria-selected="true"],.ui-cmd-opt:hover{background:var(--brand-soft);color:var(--brand-deep);}
 .ui-cmd-empty{padding:18px;text-align:center;color:var(--ink-3);font-size:.88rem;}
 .ui-cmd-foot{padding:8px 12px;border-top:1px solid var(--line-soft);font-size:.72rem;color:var(--ink-3);}
+/* 🌐 Мова (i18n.js): кнопка в шапці, меню, пігулки на екрані входу */
+html.i18n-pending body{visibility:hidden}
+#pb-lang{width:auto;padding:7px 10px;margin:0;background:var(--surface-2);color:var(--ink-2);border:1px solid var(--line);border-radius:8px;font-size:.8rem;font-weight:800;line-height:1;display:inline-flex;align-items:center;gap:5px;}
+#pb-lang:hover{border-color:var(--brand-line);color:var(--brand-deep);}
+.lang-menu{position:absolute;z-index:9000;min-width:180px;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 28px rgba(0,0,0,.16);padding:6px;display:flex;flex-direction:column;gap:2px;}
+.lang-menu button{width:100%;margin:0;text-align:left;background:transparent;color:var(--ink);border:0;border-radius:8px;padding:9px 11px;font-size:.92rem;font-weight:600;display:flex;gap:9px;align-items:center;}
+.lang-menu button b{display:inline-block;min-width:26px;color:var(--brand-deep);}
+.lang-menu button:hover,.lang-menu button:focus-visible{background:var(--brand-soft);outline:none;}
+.lang-menu button.is-on{background:var(--brand-soft);color:var(--brand-deep);}
+.lang-pills{display:flex;justify-content:flex-end;margin:-4px 0 6px;}
+.lang-pick{width:auto;margin:0;padding:6px 10px;border-radius:999px;font-size:.8rem;font-weight:800;letter-spacing:.03em;background:var(--surface-2);color:var(--ink-2);border:1px solid var(--line);display:inline-flex;align-items:center;gap:6px;line-height:1;}
+.lang-pick:hover,.lang-pick[aria-expanded="true"]{border-color:var(--brand-line);color:var(--brand-deep);}
+.lang-caret{font-size:.7rem;opacity:.75;transition:transform .15s;}
+.lang-pick[aria-expanded="true"] .lang-caret{transform:rotate(180deg);}
+.lang-menu .lang-tick{margin-left:auto;font-weight:800;}
+/* Телефон: шапка й так тісна (⟳ 🌐 🔔 🔍 ⚙️) — без глобуса й з меншими
+   проміжками, щоб імʼя не стискалося до «В..» */
+@media (max-width:480px){#profile-bar > #pb-lang{padding:7px 8px !important;}#pb-lang > span[aria-hidden]{display:none;}#profile-bar{gap:8px !important;}}
+body.auth-mode .lang-pick{background:rgba(255,255,255,.055);color:var(--auth-sub);border-color:rgba(160,230,240,.18);}
+body.auth-mode .lang-pick:hover,body.auth-mode .lang-pick[aria-expanded="true"]{color:var(--auth-fg);border-color:rgba(160,230,240,.45);}
+body.auth-mode .lang-menu{background:rgba(9,32,40,.97);border-color:rgba(160,230,240,.22);box-shadow:0 14px 34px rgba(0,0,0,.45);}
+body.auth-mode .lang-menu button{color:var(--auth-fg);}
+body.auth-mode .lang-menu button b{color:var(--auth-sub);}
+body.auth-mode .lang-menu button:hover,body.auth-mode .lang-menu button.is-on{background:rgba(0,188,212,.18);color:var(--auth-fg);}
 #pb-search{width:auto;padding:7px 11px;margin:0;background:var(--surface-2);color:var(--ink-2);border:1px solid var(--line);border-radius:8px;font-size:.85rem;}
 @media (max-width:767px){.ui-cmd-wrap{padding:8px;}.ui-cmd{max-height:85dvh;}.ui-cmd-foot{display:none;}}
 @media (prefers-reduced-motion:reduce){.toast-undo-bar{animation:none;}}
@@ -3887,6 +3915,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
        відкривається одне з двох. Про випадок «Firebase не відповів
        узагалі» подбає запобіжник у common.js. -->
   <div id="login-screen" class="panel" style="display:none;">
+    <div class="lang-pills"></div>
     <div class="auth-brand"><img src="logo.png" alt="Push School Warsaw" class="auth-logo"></div>
     <h2>Вхід до порталу</h2>
     <p class="auth-sub">Для учнів, батьків та вчителів</p>
@@ -3920,6 +3949,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
   </div>
   <!-- ═══ ЕКРАН 2: ПЕРШИЙ ВХІД (окремий екран, не режим) ═══ -->
   <div id="first-login-screen" class="panel">
+    <div class="lang-pills"></div>
     <div class="auth-brand"><img src="logo.png" alt="Push School Warsaw" class="auth-logo"></div>
     <h2>Перший вхід</h2>
     <p class="fl-intro">
@@ -3947,6 +3977,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
        відновлення. Працює лише якщо у Firebase Console → Authentication →
        Templates задано "Customize action URL" на адресу цієї сторінки. -->
   <div id="reset-password-screen" class="panel">
+    <div class="lang-pills"></div>
     <div class="auth-brand"><img src="logo.png" alt="Push School Warsaw" class="auth-logo"></div>
     <h2>Новий пароль</h2>
     <p id="rp-email" class="fl-intro">Встановлення нового пароля</p>
@@ -3975,6 +4006,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
     </div>
     <!-- Пошук по порталу (ui-search.js): Ctrl+K, ⌘K або «/» -->
     <!-- Центр сповіщень (notif-center.js) -->
+    <button type="button" id="pb-lang" aria-label="Мова / Język / Language"></button>
     <button type="button" id="pb-bell" onclick="openNotifs()" aria-label="Сповіщення" title="Сповіщення">🔔<span class="pb-bell-n" hidden></span></button>
     <button type="button" id="pb-search" onclick="openSearch()" aria-label="Пошук (Ctrl+K)" title="Пошук · Ctrl+K">🔍</button>
     <button onclick="openProfileModal()" style="width:auto;padding:7px 13px;margin:0;background:var(--brand-ink);color:var(--on-fill);border-radius:8px;font-size:.85rem;" aria-label="Профіль">⚙️<span class="pb-lbl"> Профіль</span></button>

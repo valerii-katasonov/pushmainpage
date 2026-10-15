@@ -24,7 +24,7 @@
 
 const SKIP = new Set(['journal-modal', 'inbox-modal']);
 // \b у JS не бачить меж кириличних слів — тому (?!\p{L}) з прапорцем u
-const CLOSE_RE = /^\s*(✕|×|❌)?\s*(закрити|скасувати|назад|дякую|відмінити|не зараз|готово)(?!\p{L})/iu;
+const CLOSE_RE = /^\s*(✕|×|❌)?\s*(закрити|скасувати|назад|дякую|відмінити|не зараз|готово|zamknij|anuluj|wstecz|dziękuję|nie teraz|gotowe|close|cancel|back|thanks|thank you|not now|done)(?!\p{L})/iu;
 const label = el => (el.textContent || '').replace(/\s+/g, ' ').trim();
 const isBtn = el => el && el.tagName === 'BUTTON';
 // «Ряд кнопок»: div, у якому лише кнопки (і порожні вузли)
@@ -33,10 +33,12 @@ const isBtnRow = el => el && el.tagName === 'DIV' && el.children.length > 0
 export const isCloseBtn = b => isBtn(b) && CLOSE_RE.test(label(b));
 
 // Чи вже є у вікні власна кнопка закриття згори (✕ / aria-label)
+const OWN_X = '[aria-label="Закрити"], [aria-label="Zamknij"], [aria-label="Close"], .cv-close, .ui-sheet-x, .s3-close, .mc-x';
 function hasOwnTopClose(mc){
   const head = [...mc.children].slice(0, 3);
-  return head.some(el => el.matches && (el.matches('[aria-label="Закрити"], .cv-close, .ui-sheet-x, .s3-close')
-    || el.querySelector?.('[aria-label="Закрити"], .cv-close, .ui-sheet-x, .s3-close')));
+  // aria-label — і в перекладі (i18n.js): інакше в польській/англійській
+  // вікно з власним ✕ отримало б другий
+  return head.some(el => el.matches && (el.matches(OWN_X) || el.querySelector?.(OWN_X)));
 }
 
 // Хвіст вікна: останні кнопки / ряди кнопок поспіль
