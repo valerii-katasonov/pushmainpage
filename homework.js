@@ -60,7 +60,8 @@ function getNextSchoolDay(todayStr, skipSet) {
 
 // Невчальні дні: свята й канікули з чинного навчального року. Потрібні,
 // щоб «зробити до» не показувало дату, коли школа не працює.
-async function loadSkipDates(){
+// Експорт — для серії ДЗ (streaks.js): вона теж рахує «на коли» завдання
+export async function loadSkipDates(){
   if(hwSkipDates) return hwSkipDates;
   const skip = new Set();
   try{
