@@ -195,7 +195,11 @@
     return (any && !bad) ? out : null;
   }
 
-  var SEP = /(\s*(?::|—|–|·|\||•|\/)\s+|\.\s+|\s+\(|\)\s*)/;
+  // Роздільники — від найкрупнішого: спершу речення, потім «—» і «:»,
+  // потім дрібні. Кожну частину перекладаємо так само (рекурсивно), тож
+  // «Речення один. Частина — частина» розбирається поверхово, а не
+  // на шматки одразу.
+  var SEPS = [/(\.\s+|[!?]\s+)/, /(\s*[—–]\s+|:\s+)/, /(\s*(?:·|\||•|\/)\s+|\s+\(|\)\s*)/];
 
   // Переклад будь-якого рядка з інтерфейсу. Невідоме лишається як є.
   function text(raw, depth){
@@ -213,12 +217,14 @@
       // «{0} учнів» і подібні — іноді на початку стоїть емодзі чи знак
       if (lead) { r = core(s, depth); if (r != null) return lw + r + tw; }
     }
-    if (depth < 3 && SEP.test(s)) {
-      // Складений напис «Оцінки · Зберегти» ділимо на частини. Але якщо
-      // після цього лишається неперекладене речення (понад 3 слова) — це,
-      // найпевніше, текст людини: не чіпаємо його зовсім, щоб не вийшла
-      // мішанина мов.
-      var bits = s.split(SEP), changed = false, prose = false;
+    // Складений напис «Оцінки · Зберегти» ділимо на частини. Але якщо
+    // після цього лишається неперекладене речення (понад 3 слова) — це,
+    // найпевніше, текст людини: не чіпаємо його зовсім, щоб не вийшла
+    // мішанина мов.
+    if (depth < 4) for (var q = 0; q < SEPS.length; q++) {
+      if (!SEPS[q].test(s)) continue;
+      var bits = s.split(SEPS[q]), changed = false, prose = false;
+      if (bits.length < 3) continue;
       for (var i = 0; i < bits.length; i += 2) {
         var t = text(bits[i], depth + 1);
         if (t !== bits[i]) { bits[i] = t; changed = true; }
@@ -263,7 +269,10 @@
       var tv = text(el.value); if (tv !== el.value) el.value = tv;
     }
   }
+  // Поле вводу: те, що в ньому написано, не чіпаємо, а підказку — так
+  function fieldAttrs(el){ if (el.nodeName === 'TEXTAREA' && !(el.parentElement && inSkip(el.parentElement)) && !el.matches(SKIP_SEL)) doAttrs(el); }
   var FILTER = { acceptNode: function(n){
+    if (n.nodeType === 1 && n.nodeName === 'TEXTAREA') { fieldAttrs(n); return NodeFilter.FILTER_REJECT; }
     if (n.nodeType === 1) return skipEl(n) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT;
     return NodeFilter.FILTER_ACCEPT;
   } };
@@ -275,6 +284,7 @@
       return;
     }
     if (root.nodeType !== 1 && root.nodeType !== 9 && root.nodeType !== 11) return;
+    if (root.nodeType === 1 && root.nodeName === 'TEXTAREA') { fieldAttrs(root); return; }
     if (root.nodeType === 1 && inSkip(root)) return;
     if (root.nodeType === 1) doAttrs(root);
     var w = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, FILTER), n;
@@ -289,7 +299,7 @@
       var r = recs[i];
       if (r.type === 'childList') { for (var j = 0; j < r.addedNodes.length; j++) walk(r.addedNodes[j]); }
       else if (r.type === 'characterData') walk(r.target);
-      else if (r.type === 'attributes') { if (!inSkip(r.target)) doAttrs(r.target); }
+      else if (r.type === 'attributes') { if (r.target.nodeName === 'TEXTAREA') fieldAttrs(r.target); else if (!inSkip(r.target)) doAttrs(r.target); }
     }
   });
 

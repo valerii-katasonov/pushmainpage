@@ -3421,6 +3421,58 @@ body.ui-sheet-lock{overflow:hidden;}
 .ui-cmd-opt[aria-selected="true"],.ui-cmd-opt:hover{background:var(--brand-soft);color:var(--brand-deep);}
 .ui-cmd-empty{padding:18px;text-align:center;color:var(--ink-3);font-size:.88rem;}
 .ui-cmd-foot{padding:8px 12px;border-top:1px solid var(--line-soft);font-size:.72rem;color:var(--ink-3);}
+/* 💡 Банк ідей (ideas.js) */
+.ib-card p{margin:0 0 10px;font-size:.9rem;color:var(--ink-2);}
+.ib-open{width:100%;margin:0;background:var(--brand-deep);color:var(--on-fill);border:0;border-radius:11px;padding:11px;font-weight:800;}
+.ib-modal{text-align:left;max-width:520px;}
+.ib-modal.ib-wide{max-width:760px;}
+.ib-h{margin:0 0 4px;color:var(--brand-deep);text-align:center;}
+.ib-sub{margin:0 0 12px;font-size:.85rem;color:var(--ink-2);text-align:center;}
+.ib-anon{background:var(--ok-soft);border:1px solid var(--ok-line);border-radius:12px;padding:11px 13px;margin:0 0 12px;}
+.ib-anon b{color:var(--ok);font-size:.92rem;}
+.ib-anon p{margin:5px 0 0;font-size:.82rem;color:var(--ink);line-height:1.45;}
+.ib-anon .ib-anon-tip{color:var(--ink-2);}
+.ib-kinds{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px;}
+.ib-kind{flex:1;min-width:96px;margin:0;}
+.ib-kind input{position:absolute;opacity:0;pointer-events:none;}
+.ib-kind span{display:block;text-align:center;padding:9px 6px;border-radius:10px;border:1px solid var(--line);background:var(--surface-2);font-weight:700;font-size:.88rem;cursor:pointer;color:var(--ink);}
+.ib-kind input:checked + span{background:var(--brand-soft);border-color:var(--brand-line);color:var(--brand-deep);}
+.ib-kind input:focus-visible + span{outline:2px solid var(--brand);outline-offset:2px;}
+.ib-row{display:flex;gap:10px;flex-wrap:wrap;}
+.ib-row label{flex:1;min-width:150px;margin-top:0;font-size:.82rem;}
+.ib-row select{margin-top:4px;}
+.ib-count{text-align:right;font-size:.75rem;color:var(--ink-3);margin-top:3px;}
+.ib-msg{min-height:1em;margin:6px 0 0;font-size:.85rem;font-weight:700;color:var(--ok);}
+.ib-msg.bad{color:var(--danger);}
+.ib-send{width:100%;background:var(--brand-deep);color:var(--on-fill);font-weight:800;margin-top:8px;}
+.ib-cancel{width:100%;background:var(--surface-2);color:var(--ink);border:1px solid var(--line);margin-top:7px;}
+.ib-mine-h{margin:16px 0 8px;font-size:.92rem;}
+.ib-mine-h small{font-weight:600;color:var(--ink-3);}
+.ib-mine-it,.ib-item{border:1px solid var(--line-soft);border-radius:12px;padding:10px 12px;margin-bottom:8px;background:var(--surface);}
+.ib-meta{display:flex;flex-wrap:wrap;gap:6px 10px;font-size:.78rem;color:var(--ink-2);align-items:center;}
+.ib-meta b{color:var(--ink);}
+.ib-text{margin:6px 0 0;white-space:pre-wrap;word-break:break-word;font-size:.9rem;color:var(--ink);}
+.ib-st{margin-left:auto;font-weight:800;padding:2px 8px;border-radius:999px;background:var(--surface-2);color:var(--ink-2);}
+.ib-st-new{background:var(--brand-soft);color:var(--brand-deep);}
+.ib-st-planned,.ib-st-seen{background:var(--warn-soft);color:var(--warn);}
+.ib-st-done{background:var(--ok-soft);color:var(--ok);}
+.ib-reply{margin-top:8px;padding:8px 10px;border-radius:10px;background:var(--ok-soft);font-size:.85rem;}
+.ib-reply p{margin:3px 0 0;white-space:pre-wrap;}
+.ib-filters{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px;}
+.ib-filters button{width:auto;margin:0;padding:6px 11px;border-radius:999px;background:var(--surface-2);color:var(--ink-2);border:1px solid var(--line);font-size:.8rem;font-weight:700;}
+.ib-filters button.on{background:var(--brand-soft);color:var(--brand-deep);border-color:var(--brand-line);}
+.ib-k-complaint{border-left:4px solid var(--warn-line);}
+.ib-k-thanks{border-left:4px solid var(--ok-line);}
+.ib-k-idea{border-left:4px solid var(--brand-line);}
+.ib-ctl{display:flex;gap:8px;margin-top:8px;align-items:center;}
+.ib-ctl select{flex:1;margin:0;}
+.ib-del{width:auto;margin:0;padding:8px 11px;background:var(--surface-2);border:1px solid var(--line);color:var(--ink-2);}
+.ib-ans{margin-top:8px;}
+.ib-ans summary{cursor:pointer;font-size:.83rem;font-weight:700;color:var(--brand-deep);}
+.ib-ans textarea{margin-top:6px;}
+.ib-ans button{width:auto;margin-top:6px;padding:8px 14px;background:var(--brand-deep);color:var(--on-fill);}
+.ib-badge{display:inline-block;min-width:20px;padding:1px 6px;border-radius:999px;background:var(--accent);color:var(--on-fill);font-size:.72rem;font-weight:800;line-height:1.5;text-align:center;}
+.ib-badge[hidden]{display:none;}
 /* 🌐 Мова (i18n.js): кнопка в шапці, меню, пігулки на екрані входу */
 html.i18n-pending body{visibility:hidden}
 #pb-lang{width:auto;padding:7px 10px;margin:0;background:var(--surface-2);color:var(--ink-2);border:1px solid var(--line);border-radius:8px;font-size:.8rem;font-weight:800;line-height:1;display:inline-flex;align-items:center;gap:5px;}
@@ -4065,6 +4117,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
         <button onclick="openVisualMatrixModal('live')" style="flex:1;min-width:160px;background:var(--brand-deep);color:var(--on-fill);margin-top:0;font-size:.95rem;padding:11px;">🗓️ Розклад</button>
         <button onclick="openJournalModal('administrator')" style="flex:1;min-width:160px;background:linear-gradient(135deg,var(--brand-deep),var(--brand-deep));color:var(--on-fill);margin-top:0;font-size:.95rem;padding:11px;">📖 Журнал</button>
         <button onclick="openChatModal('administrator')" data-chatbtn="1" style="flex:1;min-width:160px;background:linear-gradient(135deg,var(--brand-deep),var(--brand-deep));color:var(--on-fill);margin-top:0;font-size:.95rem;padding:11px;">💬 Чат з батьками</button>
+        <button onclick="openIdeaInbox()" class="ib-qa" style="flex:1;min-width:160px;background:var(--brand-deep);color:var(--on-fill);margin-top:0;font-size:.95rem;padding:11px;">💡 Банк ідей <span class="ib-badge" hidden></span></button>
       </div>
     </section>
 
@@ -4441,6 +4494,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
         <button onclick="openVisualMatrixModal('live')" class="qa-btn"><span class="qa-ic" aria-hidden="true">🗓️</span><span class="qa-l">Розклад</span></button>
         <button onclick="openCommentsView()" class="qa-btn"><span class="qa-ic" aria-hidden="true">💬</span><span class="qa-l">Коментарі учням</span></button>
         <button onclick="openChatModal('director')" data-chatbtn="1" class="qa-btn"><span class="qa-ic" aria-hidden="true">✉️</span><span class="qa-l">Чат з батьками</span></button>
+        <button onclick="openIdeaInbox()" class="qa-btn ib-qa"><span class="qa-ic" aria-hidden="true">💡</span><span class="qa-l">Банк ідей</span><span class="ib-badge" hidden></span></button>
       </div></div></div>
       <h3 class="ui-h">Звіти</h3>
       <details id="d-overview-averages" class="ui-card d-fold">
@@ -5107,6 +5161,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
         </div></div>
         <div class="qa-group"><div class="qa-gt">Батьки й розклад</div><div class="qa-grid">
           <button onclick="openConsultTeacher()" class="qa-btn qa-cards"><span class="qa-ic" aria-hidden="true">🗓</span><span class="qa-l">Консультації</span></button>
+          <button onclick="openIdeaBank()" class="qa-btn"><span class="qa-ic" aria-hidden="true">💡</span><span class="qa-l">Банк ідей</span></button>
           <button onclick="openClassBroadcast()" class="qa-btn qa-broadcast"><span class="qa-ic" aria-hidden="true">✉️</span><span class="qa-l">Повідомлення класу</span></button>
           <button onclick="printClassSchedule()" class="qa-btn qa-print"><span class="qa-ic" aria-hidden="true">🖨️</span><span class="qa-l">Друк розкладу</span></button>
           <button id="t-matrix-btn-wrapper" onclick="openVisualMatrixModal('live')" class="qa-btn qa-matrix" style="display:none;"><span class="qa-ic" aria-hidden="true">🗓️</span><span class="qa-l">Матриця розкладу</span></button>
@@ -5757,6 +5812,11 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
       <!-- 🗓 Запис на консультацію (consult.js): блок зʼявляється, лише коли вчителі відкрили час -->
       <h3 class="ui-h" id="p-consult-h" hidden>Консультації</h3>
       <div id="p-consult" class="ui-card" hidden></div>
+      <h3 class="ui-h">Банк ідей</h3>
+      <div class="ui-card ib-card">
+        <p>💡 Є ідея, скарга чи подяка? Напишіть школі — <b>анонімно</b>: портал не записує, хто надіслав.</p>
+        <button type="button" class="ib-open" onclick="openIdeaBank()">💡 Написати анонімно</button>
+      </div>
       <h3 class="ui-h">Підручники</h3>
       <div class="ui-card"><div id="p-textbooks-list"><p class="empty-msg is-loading">Завантаження...</p></div></div>
       <h3 class="ui-h">Оплата за навчання</h3>
@@ -5896,6 +5956,11 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
     <section class="screen-section ui-today" data-dtab="news">
       <h3 class="ui-h">Новини школи</h3>
       <div id="s-news-feed" class="nw-feed"><p class="empty-msg is-loading">Завантаження...</p></div>
+      <h3 class="ui-h">Банк ідей</h3>
+      <div class="ui-card ib-card">
+        <p>💡 Є ідея, скарга чи подяка? Напиши школі — <b>анонімно</b>: портал не записує, хто надіслав.</p>
+        <button type="button" class="ib-open" onclick="openIdeaBank()">💡 Написати анонімно</button>
+      </div>
     </section>
 
         <!-- ВКЛАДКА «ДОМАШНІ». Своя навігація по тижнях: загальна дата вгорі
@@ -6635,6 +6700,7 @@ document.addEventListener('DOMContentLoaded', function(){
 <script type="module" src="chat.js"></script>
 <script type="module" src="reload.js"></script>
 <script type="module" src="pb-more.js"></script>
+<script type="module" src="ideas.js"></script>
 <script type="module" src="child-photo.js"></script>
 <script type="module" src="breaks.js"></script>
 <script type="module" src="subjects.js"></script>

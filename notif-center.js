@@ -20,6 +20,8 @@
 // ═══════════════════════════════════════════════════════════════
 import { ref, get, set, child, query, orderByKey, startAt, limitToLast } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { db, auth, currentUserData, getActiveClass, isTeacherRole, stuId, displayGrade, emailKey, escHtml, openTabByKey, screenIdForRole } from './common.js';
+// 💡 Банк ідей: автору — відповіді школи, адміністрації — нові звернення
+import { loadIdeaItems, markIdeasSeen } from './ideas.js';
 
 export const WINDOW_DAYS = 14;
 const DAY = 86400000;
@@ -148,7 +150,10 @@ export function staffItems(d, o){
 }
 
 export const sortItems = list => list.sort((a, b) => b.ts - a.ts || a.id.localeCompare(b.id));
-export const countNew = (items, seen) => items.filter(x => x.ts > seen).length;
+// fresh — «нове» не за часом: звернення в банку ідей мають лише дату
+// (анонімність), тож для них новизну визначає «ще не бачили»
+export const isNewItem = (x, seen) => x.ts > seen || !!x.fresh;
+export const countNew = (items, seen) => items.filter(x => isNewItem(x, seen)).length;
 
 // ── ЧИТАННЯ ДАНИХ ────────────────────────────────────────────────
 const val = p => get(child(ref(db), p)).then(s => s.exists() ? s.val() : null).catch(() => null);
@@ -248,9 +253,10 @@ export async function refreshNotifs(){
   const ctxKey = ctxOf();
   loading = (async () => {
     try{
-      const [list, s] = await Promise.all([isFamily(role) ? loadFamily(from) : loadStaff(from), readSeen()]);
+      const [list, s, ideas] = await Promise.all([isFamily(role) ? loadFamily(from) : loadStaff(from), readSeen(),
+        loadIdeaItems(role, from).catch(() => [])]);
       if(ctxKey !== ctxOf()) return items;
-      items = list; seen = s;
+      items = sortItems(list.concat(ideas)); seen = s;
       badge();
       if(wrap && !wrap.hidden) paint();
       return items;
@@ -287,10 +293,11 @@ export function itemsHtml(list, seenTs, now = Date.now()){
   if(!list.length) return `<div class="ui-empty"><b>Нічого нового за два тижні</b>Коли зʼявляться оцінки, коментарі чи оголошення — вони будуть тут.</div>`;
   let html = '', grp = '';
   list.forEach((it, i) => {
-    const g = it.ts > seenTs ? 'Нове' : 'Раніше';
+    const isNew = isNewItem(it, seenTs);
+    const g = isNew ? 'Нове' : 'Раніше';
     if(g !== grp){ html += `<div class="nc-group" role="presentation">${g}</div>`; grp = g; }
     // role=listitem — на обгортці: на самій кнопці він стер би роль «кнопка»
-    html += `<div role="listitem"><button type="button" class="nc-item${it.ts > seenTs ? ' is-new' : ''}" data-i="${i}">`
+    html += `<div role="listitem"><button type="button" class="nc-item${isNew ? ' is-new' : ''}" data-i="${i}">`
       + `<span class="nc-ic" aria-hidden="true">${escHtml(it.icon)}</span>`
       + `<span class="nc-body"><b>${escHtml(it.title)}</b>${it.sub ? `<small>${escHtml(it.sub)}</small>` : ''}</span>`
       + `<span class="nc-meta"><time>${escHtml(relTime(it.ts, now))}</time>${it.flag ? `<em>${escHtml(it.flag)}</em>` : ''}</span></button></div>`;
@@ -312,7 +319,12 @@ export async function openNotifs(){
   seenShown = Math.min(seenShown, seen);
   paint();
   const top = items.length ? items[0].ts : 0;
-  if(top > seen){ seen = Date.now(); badge(); await writeSeen(seen); }
+  const fresh = items.some(x => x.fresh);
+  if(fresh){ markIdeasSeen(items); items = items.map(x => x.fresh ? { ...x, fresh: false } : x); }
+  const later = top > seen;
+  if(later) seen = Date.now();
+  if(later || fresh) badge();
+  if(later) await writeSeen(seen);
 }
 
 function goTo(go){
@@ -321,6 +333,7 @@ function goTo(go){
   const screen = screenIdForRole(role);
   if(go.comments){ if(window.openCommentsView) window.openCommentsView({ cls: go.comments }); return; }
   if(go.consult){ if(window.openConsultTeacher) window.openConsultTeacher(); return; }
+  if(go.ideas){ const f = go.ideas === 'inbox' ? window.openIdeaInbox : window.openIdeaBank; if(f) f(); return; }
   openTabByKey(screen, go.key || go.tab);
   // Оцінки й коментарі — у панелі «Тиждень» (ui-today.js)
   if(go.tab === 'grades' && window.grPane) window.grPane(role === 'student' ? 's' : 'p', 'week');
