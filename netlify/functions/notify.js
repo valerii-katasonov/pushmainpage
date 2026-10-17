@@ -84,6 +84,21 @@ async function readDb(token, path) {
   return d;
 }
 
+// Поставити позначку РІВНО ОДИН раз, навіть якщо два запити прийшли
+// одночасно: читаємо з ETag і пишемо лише за незмінного значення
+// (умовний запис бази, if-match). Друга спроба отримає 412 → false.
+async function claimFlag(token, path) {
+  const url = `${DB}/${path}.json?access_token=${encodeURIComponent(token)}`;
+  const r = await fetch(url, { headers: { 'X-Firebase-ETag': 'true' } });
+  if (!r.ok) throw new Error(`база недоступна (${path}): ${r.status}`);
+  const cur = await r.json().catch(() => null);
+  if (cur) return false;
+  const etag = r.headers && r.headers.get ? r.headers.get('ETag') : null;
+  const w = await fetch(url, { method: 'PUT', body: 'true', headers: etag ? { 'if-match': etag } : {} });
+  if (w.status === 412) return false;
+  if (!w.ok) throw new Error(`не вдалося записати ${path}: ${w.status}`);
+  return true;
+}
 async function patchDb(token, path, value) {
   const r = await fetch(`${DB}/${path}.json?access_token=${encodeURIComponent(token)}`, { method: 'PATCH', body: JSON.stringify(value) });
   if (!r.ok) throw new Error(`не вдалося записати ${path}: ${r.status}`);
@@ -96,14 +111,32 @@ async function patchDb(token, path, value) {
 // Позначка notified / replyNotified робить повторний виклик порожнім.
 const TALK_REASONS = { grades: 'оцінки знизились', topic: 'не розуміє тему', hw: 'забагато чи заскладне ДЗ',
                        behavior: 'поведінка чи стосунки в класі', other: 'інше' };
-const normSubj = s => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+// КОПІЯ sameSubj з access.js — змінюєте тут, змініть і там.
+// Чи це той самий предмет. Назви приходять із різних місць — матриця
+// доступу, розклад із файлу, каталог — і пишуться по-різному: «Укр. мова» і
+// «Українська мова», «Англ. мова» і «Англійська мова», чергування «Музика /
+// Фізкультура». Точне порівняння тихо відрізало вчителя від сповіщень.
+// Правило: однакові після нормалізації; або є спільна частина чергування;
+// або слова попарно збігаються, де скорочення (від 3 літер) — початок слова.
+function sameSubj(a, b){
+  const nz = s => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  const A = nz(a), B = nz(b);
+  if(!A || !B) return false;
+  if(A === B) return true;
+  const pa = A.split(/\s*\/\s*/).filter(x => x.length >= 3), pb = B.split(/\s*\/\s*/).filter(x => x.length >= 3);
+  if(pa.length > 1 || pb.length > 1) return pa.some(x => pb.some(y => sameSubj(x, y)));
+  const ta = A.split(/[\s.,()\-]+/).filter(Boolean), tb = B.split(/[\s.,()\-]+/).filter(Boolean);
+  if(!ta.length || ta.length !== tb.length) return false;
+  return ta.every((x, i) => { const y = tb[i]; if(x === y) return true; const s = x.length < y.length ? x : y, l = x.length < y.length ? y : x; return s.length >= 3 && l.startsWith(s); });
+}
+
 // Учителі предмета в класі за матрицею доступу; немає — класний керівник
 function subjectTeachers(access, heads, cls, subject) {
-  const want = normSubj(subject), out = [];
+  const out = [];
   for (const [key, row] of Object.entries(access || {})) {
     const raw = row && row[cls];
     const list = (Array.isArray(raw) ? raw : Object.values(raw || {})).filter(v => typeof v === 'string');
-    if (list.some(v => v.trim() === 'Всі предмети' || normSubj(v) === want)) out.push(key);
+    if (list.some(v => v.trim() === 'Всі предмети' || sameSubj(v, subject))) out.push(key);
   }
   if (!out.length && heads && heads[cls] && heads[cls].teacherEmail) out.push(emailKey(heads[cls].teacherEmail));
   return [...new Set(out)];
@@ -122,12 +155,12 @@ async function talkPlan(token, type, cls, who, id) {
     const mine = await readDb(token, `talk_requests/${cls}/${who}`).catch(() => null) || {};
     if (Object.values(mine).filter(r => r && r.notified && Date.now() - Number(r.ts || 0) < 24 * 3600e3).length >= 5)
       return { note: 'Забагато запитів за добу' };
-    await patchDb(token, base, { notified: true });
+    if (!(await claimFlag(token, `${base}/notified`))) return { note: 'Уже надіслано' };
     const [text, access, heads] = await Promise.all([
       readDb(token, `talk_text/${cls}/${who}/${id}`).catch(() => null), readDb(token, 'teacher_access'), readDb(token, 'class_teachers')]);
     return { emails: subjectTeachers(access, heads, cls, subject), params: { subject, ref: id, reason: TALK_REASONS[text && text.reason] || '' } };
   }
-  await patchDb(token, base, { replyNotified: true });
+  if (!(await claimFlag(token, `${base}/replyNotified`))) return { note: 'Уже надіслано' };
   return { emails: [meta.byEmail].filter(Boolean), params: { subject, ref: id } };
 }
 
@@ -242,6 +275,27 @@ const emailKey = (e) => String(e || '').trim().toLowerCase().replace(/\./g, '_')
 // Сьогодні за Варшавою (сервер Netlify живе в UTC)
 function warsawToday(){
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Warsaw', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+}
+// Пристрої директора й адміністрації (банк ідей)
+async function findAdminTargets(token) {
+  const all = await readDb(token, 'push_tokens') || {};
+  const out = [];
+  for (const uid in all) {
+    const t = all[uid];
+    if (tokenHasRole(t, 'director') || tokenHasRole(t, 'administrator')) out.push(...tokensOf(t));
+  }
+  return [...new Set(out)];
+}
+// Звернення має існувати, бути новим і ще не оголошеним. Позначка
+// ideas_notice/{id} ставиться рівно один раз — повторний чи чужий виклик
+// з тим самим id нікому нічого не надішле. Анонімного запиту без запису
+// в базі (а писати туди можна лише після входу) сервер не прийме.
+async function ideaPlan(token, id) {
+  const rec = await readDb(token, `ideas/${id}`);
+  if (!rec || typeof rec !== 'object') return { note: 'Звернення немає' };
+  if (rec.status && rec.status !== 'new') return { note: 'Уже розглянуто' };
+  if (!(await claimFlag(token, `ideas_notice/${id}`))) return { note: 'Уже надіслано' };
+  return { kind: String(rec.kind || '') };
 }
 async function findByEmails(token, emails) {
   const all = await readDb(token, 'push_tokens');
@@ -358,7 +412,7 @@ function lessonTeachersOn({ lessons, access, heads, subs, cls, weekday, keyOf })
   const nm = s => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
   const holders = name => Object.entries(access || {}).filter(([, row]) => {
     const l = row && row[cls];
-    return (Array.isArray(l) ? l : Object.values(l || {})).some(v => typeof v === 'string' && (v.trim() === ALL_SUBJECTS || nm(v) === nm(name)));
+    return (Array.isArray(l) ? l : Object.values(l || {})).some(v => typeof v === 'string' && (v.trim() === ALL_SUBJECTS || sameSubj(v, name)));
   }).map(([k]) => k);
   for(const [idx, slot] of slots){
     const items = Array.isArray(slot) ? slot : (slot && typeof slot === 'object' && Object.keys(slot).length ? [slot] : []);
@@ -367,7 +421,7 @@ function lessonTeachersOn({ lessons, access, heads, subs, cls, weekday, keyOf })
       for(const name of itemNames(it)){
         if(NO_NOTIFY_RE.test(name)) continue;
         const s = subs || {};
-        const cover = (s[idx] && nm(s[idx].subject) === nm(name)) ? s[idx] : (s.any && nm(s.any.subject) === nm(name)) ? s.any : null;
+        const cover = (s[idx] && sameSubj(s[idx].subject, name)) ? s[idx] : (s.any && sameSubj(s.any.subject, name)) ? s.any : null;
         if(cover && cover.subEmail){ out.add(keyOf(cover.subEmail)); continue; }
         if(it.teacherEmail){ out.add(keyOf(it.teacherEmail)); continue; }
         holders(name).forEach(k => out.add(k));
@@ -448,6 +502,12 @@ const EVENTS = {
                                                    p.grades && `класів без оцінок — ${p.grades}`].filter(Boolean).join(', ') || 'записи')
                               + '. Відкрийте портал і допишіть.',
                         tag: 'reminder' }),
+  // 💡 Банк ідей: нове анонімне звернення — директору й адміністрації.
+  // Текст складаємо ТУТ лише з виду звернення (бере сервер із бази):
+  // жодного тексту від клієнта, жодного слова про автора.
+  idea:       (p) => ({ title: '💡 Банк ідей',
+                        body: ({ idea: 'Нова ідея', complaint: 'Нова скарга', thanks: 'Нова подяка' }[p.kind] || 'Нове звернення') + ' — відкрийте портал',
+                        tag: 'idea' + (p.ref ? '-' + p.ref : '') }),
   // Імені дитини немає: сповіщення видно на заблокованому екрані
   talk:       (p) => ({ title: '💬 Батьки просять звʼязатися',
                         body: `${p.clsLabel ? p.clsLabel + ' · ' : ''}${p.subject || 'Предмет'}${p.reason ? ': ' + p.reason : ''}`,
@@ -461,7 +521,7 @@ const EVENTS = {
                         tag: 'menu' })
 };
 
-exports._test = { lessonTeachersOn };
+exports._test = { lessonTeachersOn, sameSubj };
 
 exports.handler = async (event) => {
   const origin = event.headers.origin || event.headers.Origin || '';
@@ -493,12 +553,14 @@ exports.handler = async (event) => {
   // Запит батька вчителю / відповідь: лише адреса запису в базі
   const isTalk = body.type === 'talk' || body.type === 'talk_reply';
   const talkWho = String(body.who || ''), talkId = String(body.ref || '');
+  const isIdea = body.type === 'idea';
+  if (isIdea && !/^[a-z0-9]{20,32}$/.test(String(body.ref || ''))) return fail(400, 'Некоректне звернення', origin);
   const cls = String(body.class || '').slice(0, 20);
   const studentName = String(body.studentName || '').slice(0, 120);
   if (isClassWide && !cls) return fail(400, 'Не вказано клас', origin);
   if (isTalk && !(/^class_\d{1,2}$/.test(cls) && /^[^.#$\[\]\/]{3,200}$/.test(talkWho) && /^[-_A-Za-z0-9]{1,40}$/.test(talkId)))
     return fail(400, 'Некоректна адреса запиту', origin);
-  if (!isBroadcast && !isClassWide && !isTalk && (!cls || !studentName))
+  if (!isBroadcast && !isClassWide && !isTalk && !isIdea && (!cls || !studentName))
     return fail(400, 'Не вказано клас або учня', origin);
   if ((body.type === 'chat' || body.type === 'reminder') && !(Array.isArray(body.to) && body.to.length))
     return fail(400, 'Не вказано, кому надсилати', origin);
@@ -543,13 +605,19 @@ exports.handler = async (event) => {
         ok: true, project: sa.project_id, tokens: list.length, eligible: eligible.length
       }) };
     }
+    if (isIdea) {
+      const plan = await ideaPlan(token, String(body.ref));
+      if (!plan.kind && plan.note) return { statusCode: 200, headers: cors(origin), body: JSON.stringify({ sent: 0, note: plan.note }) };
+      msg = build({ kind: plan.kind, ref: String(body.ref) });
+    }
     let talk = null;
     if (isTalk) {
       talk = await talkPlan(token, body.type, cls, talkWho, talkId);
       if (!talk.emails) return { statusCode: 200, headers: cors(origin), body: JSON.stringify({ sent: 0, note: talk.note }) };
       msg = build({ ...talk.params, clsLabel: cls.replace('class_', '') + ' клас' });
     }
-    const targets = isTalk ? await findByEmails(token, talk.emails)
+    const targets = isIdea ? await findAdminTargets(token)
+      : isTalk ? await findByEmails(token, talk.emails)
       : body.type === 'attendance_report'
       ? await findTeacherTargets(token, cls, reportDate)
       : body.type === 'chat'
@@ -588,7 +656,8 @@ exports.handler = async (event) => {
       chat:     'chat',     // особливий випадок: відкриваємо саме листування
       reminder: 'lesson',   // учитель — одразу на вкладку уроку
       talk:       'talk',   // «Сьогодні» і прокрутка до блоку запитів
-      talk_reply: 'talk'
+      talk_reply: 'talk',
+      idea:       'ideas'   // кабінет директора одразу відкриє скриньку (ideas.js)
     };
     const tab = TAB_BY_TYPE[body.type] || 'day';
     // Адреса кабінету — з lib/site.js, а не з першого елемента списку
