@@ -164,6 +164,73 @@ async function talkPlan(token, type, cls, who, id) {
   return { emails: [meta.byEmail].filter(Boolean), params: { subject, ref: id } };
 }
 
+// ── 🔄 Перездачі (parent-student.js → teacher.js) ────────────────
+// Як і з «Хочу обговорити»: клієнт передає лише АДРЕСУ заявки
+// retake_requests/{клас}/{предмет}/{дата}/{учень}, а що й кому писати —
+// сервер бере з бази. Позначка retake_notice/… (клієнтам закрита) робить
+// повторний виклик порожнім: один push на заявку і один — на рішення.
+//   retake       — учителям предмета в класі (немає — класному керівнику);
+//   retake_reply — родині учня: дозволено чи ні.
+// Підробити заявку без оцінки не вийде: сервер перевіряє, що оцінка за
+// цю дату справді є в дзеркалі учня.
+const RETAKE_SUBJ_RE = /^[^.#$\[\]\/]{1,80}$/;
+const RETAKE_DATE_RE = /^\d{4}-\d{2}-\d{2}(__\d{1,2})?$/;
+const RETAKE_WHO_RE  = /^[^.#$\[\]\/]{1,120}$/;
+const DAY_MS = 24 * 3600e3;
+const retakeDay = date => date.slice(8, 10) + '.' + date.slice(5, 7);
+// «24.10 о 10:00 (каб. 12)» — з полів, які ставить лише персонал (правила бази)
+function retakeWhen(rec) {
+  const d = String(rec.retakeDate || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return '';
+  const t = /^\d{2}:\d{2}$/.test(String(rec.retakeTime || '')) ? ` о ${rec.retakeTime}` : '';
+  const n = String(rec.retakeNote || '').replace(/[\r\n]+/g, ' ').trim().slice(0, 60);
+  return retakeDay(d) + t + (n ? ` (${n})` : '');
+}
+async function retakePlan(token, type, cls, subj, date, who) {
+  // Кожну частину адреси кодуємо: у назві предмета бувають пробіли, а
+  // «?» чи «%» у ключі зламали б адресу запиту до бази
+  const enc = (...p) => p.map(encodeURIComponent).join('/');
+  const path = enc(cls, subj, date, who);
+  const rec = await readDb(token, `retake_requests/${path}`);
+  if (!rec || typeof rec !== 'object') return { note: 'Заявки немає' };
+  // Оцінку для тексту беремо з дзеркала учня (нижче), а не з заявки:
+  // заявку пише родина, і число в ній могло б бути будь-яким
+  const params = { subject: subj.slice(0, 80), day: retakeDay(date), value: String(rec.grade ?? '').slice(0, 4), when: retakeWhen(rec) };
+  if (type === 'retake') {
+    if (rec.status !== 'pending') return { note: 'Заявку вже розглянуто' };
+    // Свіжа: за позначкою часу, а в старих заявках — за датою подання
+    const fresh = rec.ts ? Date.now() - Number(rec.ts) < DAY_MS
+      : String(rec.requestDate || '') >= new Date(Date.now() - DAY_MS).toISOString().slice(0, 10);
+    if (!fresh) return { note: 'Заявка застара' };
+    const g = await readDb(token, `student_grades/${enc(cls, who, date.slice(0, 7), subj, date)}`).catch(() => null);
+    if (g == null) return { note: 'Оцінки немає' };
+    // Ті самі межі, що й кнопка «🔄 Покращити» (grades-view.js): перездача —
+    // для низької оцінки. Ліміт 10% теж рахує лише браузер, тож сповіщень
+    // від однієї дитини з предмета — не більше трьох за добу
+    const real = String((g && typeof g === 'object' ? g.v : g) ?? '');
+    if (parseInt(real, 10) > 3) return { note: 'Оцінка не для перездачі' };
+    params.value = real.slice(0, 4);
+    const all = await readDb(token, `retake_requests/${enc(cls, subj)}`).catch(() => null) || {};
+    const recent = Object.values(all).filter(day => day && day[who] && Date.now() - Number(day[who].ts || 0) < DAY_MS).length;
+    if (recent > 3) return { note: 'Забагато заявок за добу' };
+    if (!(await claimFlag(token, `retake_notice/${path}/req`))) return { note: 'Уже надіслано' };
+    const [access, heads] = await Promise.all([readDb(token, 'teacher_access'), readDb(token, 'class_teachers').catch(() => null)]);
+    return { emails: subjectTeachers(access, heads, cls, subj), params };
+  }
+  if (type === 'retake_date') {
+    // Дату призначили чи змінили ПІСЛЯ рішення. Позначка — на кожну зміну
+    // (за часом зміни), тож нова дата знову дійде, а повтор того самого — ні
+    if (rec.status !== 'approved' || !params.when) return { note: 'Дати немає' };
+    if (!rec.dateTs || Date.now() - Number(rec.dateTs) > DAY_MS) return { note: 'Зміна застара' };
+    if (!(await claimFlag(token, `retake_notice/${path}/date${Math.floor(Number(rec.dateTs))}`))) return { note: 'Уже надіслано' };
+    return { family: who, params };
+  }
+  if (rec.status !== 'approved' && rec.status !== 'rejected') return { note: 'Рішення ще немає' };
+  if (!rec.decidedTs || Date.now() - Number(rec.decidedTs) > DAY_MS) return { note: 'Рішення застаре' };
+  if (!(await claimFlag(token, `retake_notice/${path}/reply`))) return { note: 'Уже надіслано' };
+  return { family: who, params: { ...params, approved: rec.status === 'approved' } };
+}
+
 // Старі токени мають одну role/дитину, нові — весь набір. Обидва
 // формати читаються одночасно, тому оновлення не вимагає від усіх
 // користувачів негайно перевмикати сповіщення.
@@ -546,6 +613,17 @@ const EVENTS = {
   talk:       (p) => ({ title: '💬 Батьки просять звʼязатися',
                         body: `${p.clsLabel ? p.clsLabel + ' · ' : ''}${p.subject || 'Предмет'}${p.reason ? ': ' + p.reason : ''}`,
                         tag: 'talk' + (p.ref ? '-' + p.ref : '') }),
+  // Імені дитини в сповіщенні вчителю немає: видно на заблокованому екрані
+  retake:     (p) => ({ title: '🔄 Заявка на перездачу',
+                        body: `${p.clsLabel ? p.clsLabel + ' · ' : ''}${p.subject || 'Предмет'}${p.value ? `: оцінка ${p.value}` : ''}${p.day ? ` від ${p.day}` : ''}`,
+                        tag: 'retake' + (p.tagKey ? '-' + p.tagKey : '') }),
+  retake_reply: (p) => ({ title: p.approved ? '✅ Перездачу дозволено' : '❌ Перездачу не дозволено',
+                        body: `${p.subject || 'Предмет'}${p.value ? `: оцінка ${p.value}` : ''}${p.day ? ` від ${p.day}` : ''}`
+                              + (p.approved ? (p.when ? ` — перездача ${p.when}` : ' — дату вчитель повідомить') : ''),
+                        tag: 'retake-reply' + (p.tagKey ? '-' + p.tagKey : '') }),
+  retake_date: (p) => ({ title: '📅 Перездачу призначено',
+                        body: `${p.subject || 'Предмет'}${p.value ? ` (оцінка ${p.value} від ${p.day})` : ''}: ${p.when || 'дата в кабінеті'}`,
+                        tag: 'retake-date' + (p.tagKey ? '-' + p.tagKey : '') }),
   talk_reply: (p) => ({ title: '💬 Учитель відповів',
                         body: `${p.subject || 'Предмет'}: відповідь на ваш запит — у кабінеті`,
                         tag: 'talk-reply' + (p.ref ? '-' + p.ref : '') }),
@@ -555,7 +633,7 @@ const EVENTS = {
                         tag: 'menu' })
 };
 
-exports._test = { lessonTeachersOn, sameSubj, newsClassesFromRecord };
+exports._test = { lessonTeachersOn, sameSubj, newsClassesFromRecord, retakePlan };
 
 exports.handler = async (event) => {
   const origin = event.headers.origin || event.headers.Origin || '';
@@ -588,13 +666,17 @@ exports.handler = async (event) => {
   const isTalk = body.type === 'talk' || body.type === 'talk_reply';
   const talkWho = String(body.who || ''), talkId = String(body.ref || '');
   const isIdea = body.type === 'idea';
+  const isRetake = body.type === 'retake' || body.type === 'retake_reply' || body.type === 'retake_date';
+  const rSubj = String(body.subject || ''), rDate = String(body.date || ''), rWho = String(body.who || '');
   if (isIdea && !/^[a-z0-9]{20,32}$/.test(String(body.ref || ''))) return fail(400, 'Некоректне звернення', origin);
   const cls = String(body.class || '').slice(0, 20);
   const studentName = String(body.studentName || '').slice(0, 120);
   if (isClassWide && !cls) return fail(400, 'Не вказано клас', origin);
   if (isTalk && !(/^class_\d{1,2}$/.test(cls) && /^[^.#$\[\]\/]{3,200}$/.test(talkWho) && /^[-_A-Za-z0-9]{1,40}$/.test(talkId)))
     return fail(400, 'Некоректна адреса запиту', origin);
-  if (!isBroadcast && !isClassWide && !isTalk && !isIdea && (!cls || !studentName))
+  if (isRetake && !(/^class_\d{1,2}$/.test(cls) && RETAKE_SUBJ_RE.test(rSubj) && RETAKE_DATE_RE.test(rDate) && RETAKE_WHO_RE.test(rWho)))
+    return fail(400, 'Некоректна адреса заявки', origin);
+  if (!isBroadcast && !isClassWide && !isTalk && !isIdea && !isRetake && (!cls || !studentName))
     return fail(400, 'Не вказано клас або учня', origin);
   if ((body.type === 'chat' || body.type === 'reminder') && !(Array.isArray(body.to) && body.to.length))
     return fail(400, 'Не вказано, кому надсилати', origin);
@@ -645,6 +727,13 @@ exports.handler = async (event) => {
       msg = build({ kind: plan.kind, ref: String(body.ref) });
     }
     const msgRef = /^[-_A-Za-z0-9]{1,40}$/.test(String(body.ref || '')) ? String(body.ref) : '';
+    let retake = null;
+    if (isRetake) {
+      retake = await retakePlan(token, body.type, cls, rSubj, rDate, rWho);
+      if (!retake.emails && !retake.family) return { statusCode: 200, headers: cors(origin), body: JSON.stringify({ sent: 0, note: retake.note }) };
+      msg = build({ ...retake.params, clsLabel: cls.replace('class_', '') + ' клас',
+                    tagKey: crypto.createHash('sha1').update(cls + '|' + rSubj + '|' + rDate + '|' + rWho).digest('hex').slice(0, 12) });
+    }
     let talk = null;
     if (isTalk) {
       talk = await talkPlan(token, body.type, cls, talkWho, talkId);
@@ -652,6 +741,7 @@ exports.handler = async (event) => {
       msg = build({ ...talk.params, clsLabel: cls.replace('class_', '') + ' клас' });
     }
     const targets = isIdea ? await findAdminTargets(token)
+      : isRetake ? (retake.family ? await findTargets(token, cls, retake.family) : await findByEmails(token, retake.emails))
       : isTalk ? await findByEmails(token, talk.emails)
       : body.type === 'attendance_report'
       ? await findTeacherTargets(token, cls, reportDate)
@@ -692,6 +782,9 @@ exports.handler = async (event) => {
       reminder: 'lesson',   // учитель — одразу на вкладку уроку
       talk:       'talk',   // «Сьогодні» і прокрутка до блоку запитів
       talk_reply: 'talk',
+      retake:       'retake', // учитель — одразу список заявок цього класу
+      retake_reply: 'grades',
+      retake_date:  'grades',
       idea:       'ideas'   // кабінет директора одразу відкриє скриньку (ideas.js)
     };
     const tab = TAB_BY_TYPE[body.type] || 'day';
@@ -703,6 +796,7 @@ exports.handler = async (event) => {
     // інший свій клас або інший день, а відмітка стоїть саме тут.
     const extra = body.type === 'attendance_report'
       ? (/^class_\d{1,2}$/.test(cls) ? `&cls=${cls}` : '') + (reportDate ? `&date=${reportDate}` : '')
+      : body.type === 'retake' ? `&cls=${cls}`
       : '';
     const url = `${CABINET_URL}?open=${tab}${extra}`;
     const URGENT = new Set(['attendance_report', 'chat']);
