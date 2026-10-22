@@ -139,6 +139,19 @@ export function staffItems(d, o){
       title: `${x.child || 'Учень'}: реакція на ваш коментар`, sub: [x.subj, x.label].filter(Boolean).join(' · '),
       go: { comments: x.cls } });
   });
+  // Заявки на перездачу з моїх предметів, що чекають рішення. Показуємо,
+  // доки не вирішено, хоч би й давні — як запити школи в батьків.
+  (d.retakes || []).forEach(x => {
+    const r = x.rec || {};
+    // «👁 Бачу» — учитель знає про заявку, дзвіночок її більше не тримає
+    if(r.status !== 'pending' || r.seenTs) return;
+    const day = String(x.date || '').slice(0, 10);
+    const ts = Number(r.ts) || noonOf(r.requestDate || day);
+    out.push({ id: `p:${x.cls}:${x.subj}:${x.date}:${x.student}`, kind: 'retake', icon: '🔄', ts,
+      title: `Заявка на перездачу: ${x.child || 'учень'}`,
+      sub: [x.subj, r.grade != null && r.grade !== '' ? `оцінка ${r.grade}` : '', day ? day.split('-').reverse().slice(0, 2).join('.') : '', x.label].filter(Boolean).join(' · '),
+      flag: 'чекає рішення', go: { retake: x.cls } });
+  });
   // Записи батьків на консультацію до мене (consult.js)
   (d.bookings || []).forEach(x => {
     const b = x.b || {}, s = x.s || {};
@@ -193,13 +206,17 @@ async function loadStaff(from){
   const se = emailKey((auth.currentUser && auth.currentUser.email) || '');
   const [news, cBook, cSlots, ...per] = await Promise.all([recentNews(),
     se ? val(`consult_bookings/${se}`) : null, se ? val(`consult_slots/${se}`) : null, ...classes.map(async c => {
-    const [talks, meta, seen, names] = await Promise.all([
+    const [talks, meta, seen, names, rets] = await Promise.all([
       val(`talk_requests/${c.cls}`), range(`comment_meta/${c.cls}`, fd), range(`comment_seen/${c.cls}`, fd),
-      val(`students_list/${c.cls}`)]);
-    return { c, talks, meta, seen, names: names || {} };
+      val(`students_list/${c.cls}`), val(`retake_requests/${c.cls}`)]);
+    return { c, talks, meta, seen, names: names || {}, rets };
   })]);
-  const talks = [], reacts = [];
-  per.forEach(({ c, talks: t, meta, seen, names }) => {
+  const talks = [], reacts = [], retakes = [];
+  // Лише мої предмети (teacher.js → isMyRetakeSubject; немає — усі)
+  const mine = (cls, subj) => window.isMyRetakeSubject ? window.isMyRetakeSubject(cls, subj) : true;
+  per.forEach(({ c, talks: t, meta, seen, names, rets }) => {
+    for(const subj in (rets || {})) for(const date in (rets[subj] || {})) for(const sid in (rets[subj][date] || {}))
+      if(mine(c.cls, subj)) retakes.push({ cls: c.cls, label: c.label, subj, date, student: sid, rec: rets[subj][date][sid], child: names[sid] || sid });
     for(const se in (t || {})) for(const id in (t[se] || {})) talks.push({ cls: c.cls, label: c.label, se, id, rec: t[se][id] });
     for(const date in (seen || {})) for(const subj in (seen[date] || {})) for(const sid in (seen[date][subj] || {})){
       const m = meta && meta[date] && meta[date][subj] && meta[date][subj][sid];
@@ -211,7 +228,7 @@ async function loadStaff(from){
     }
   });
   const bookings = Object.keys(cBook || {}).map(id => ({ id, b: cBook[id], s: (cSlots || {})[id] || {} }));
-  return staffItems({ news, talks, reacts, bookings }, { from });
+  return staffItems({ news, talks, reacts, bookings, retakes }, { from });
 }
 
 // ── «ПЕРЕГЛЯНУТО» ────────────────────────────────────────────────
@@ -334,6 +351,7 @@ function goTo(go){
   const role = currentUserData && currentUserData.role;
   const screen = screenIdForRole(role);
   if(go.comments){ if(window.openCommentsView) window.openCommentsView({ cls: go.comments }); return; }
+  if(go.retake){ if(window.openRetakeFor) window.openRetakeFor(go.retake); return; }
   if(go.consult){ if(window.openConsultTeacher) window.openConsultTeacher(); return; }
   if(go.ideas){ const f = go.ideas === 'inbox' ? window.openIdeaInbox : window.openIdeaBank; if(f) f(); return; }
   openTabByKey(screen, go.key || go.tab);

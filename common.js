@@ -3064,7 +3064,8 @@ export function tabFromUrl(search){
   // att — «Сьогодні» і прокрутка до відвідуваності (сповіщення вчителю
   // про відсутність чи запізнення учня)
   // talk — «Сьогодні» і прокрутка до запитів «💬 Хочу обговорити»
-  return ['att','talk','day','hw','meals','games','grades','school','profile','chat',
+  // retake — учителю: список заявок на перездачу (клас — у &cls=)
+  return ['att','talk','retake','day','hw','meals','games','grades','school','profile','chat',
           'lesson','class','news',
           'ogl','uchni','study','rozklad','staff','stat','nalash'].includes(v) ? v : null;
 }
@@ -3136,6 +3137,15 @@ export function openTabByKey(screenId, want){
     // Батьки — вкладка «Школа», учитель — «Сьогодні»
     if(dir || !openTabByKey(screenId, screenId === 'parent-screen' ? 'school' : 'day')) return false;
     scrollToBox(screenId === 'parent-screen' ? 'p-talk' : 't-talk');
+    return true;
+  }
+  if(want === 'retake'){
+    // Лише вчителю (у директора такого списку немає). Клас уже вибрано
+    // з адреси (applyNotificationContext) — відкриваємо список заявок
+    if(screenId !== 'teacher-screen' || !window.openRetakeRequestsModal) return false;
+    openTabByKey(screenId, 'day');
+    const qcls = new URLSearchParams(String(location.search || '').replace(/^\?/, '')).get('cls');
+    setTimeout(() => window.openRetakeFor ? window.openRetakeFor(qcls || '') : window.openRetakeRequestsModal(), 300);
     return true;
   }
   if(want === 'chat'){

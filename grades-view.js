@@ -321,9 +321,36 @@ function retakeBtn(cls, subj, date, v, numericScale){
   const n = parseInt(v, 10);
   if(isNaN(n) || n > 3) return '';
   const who = currentUserData?.studentId || currentUserData?.studentName || '';
-  return `<button class="retake-btn" style="margin-left:6px;"
-     onclick="sendRetakeRequest('${escJs(cls)}','${escJs(subj)}','${escJs(date)}','${escJs(who)}',${n})">🔄 Покращити</button>`;
+  // Обгортка: після показу hydrateRetakes підмінить кнопку станом заявки,
+  // якщо її вже подавали («⏳ подано», «✅ перездача 24.10», «❌ відхилено»)
+  return `<span class="rt-slot" data-c="${escHtml(cls)}" data-s="${escHtml(subj)}" data-d="${escHtml(date)}" data-w="${escHtml(who)}"><button class="retake-btn" style="margin-left:6px;"
+     onclick="sendRetakeRequest('${escJs(cls)}','${escJs(subj)}','${escJs(date)}','${escJs(who)}',${n})">🔄 Покращити</button></span>`;
 }
+// Стан своєї заявки на перездачу — замість кнопки. Читаємо ЛИСТКИ (лише
+// свої заявки: увесь вузол класу родині закритий) і лише для оцінок із
+// кнопкою — це одиниці на тиждень.
+export function retakeChip(req){
+  if(!req || typeof req !== 'object') return '';
+  if(req.status === 'approved'){
+    const d = /^\d{4}-\d{2}-\d{2}$/.test(String(req.retakeDate || '')) ? req.retakeDate.split('-').reverse().slice(0, 2).join('.') : '';
+    const when = d ? d + (req.retakeTime ? ` о ${req.retakeTime}` : '') + (req.retakeNote ? ` (${req.retakeNote})` : '') : '';
+    return `<span class="rt-chip ok">✅ ${when ? `Перездача ${escHtml(when)}` : 'Перездачу дозволено — дату повідомить учитель'}</span>`;
+  }
+  if(req.status === 'rejected') return '<span class="rt-chip no">❌ Перездачу не дозволено</span>';
+  return '<span class="rt-chip">⏳ Заявку подано — чекає вчителя</span>';
+}
+export async function hydrateRetakes(box){
+  const slots = [...((box && box.querySelectorAll) ? box.querySelectorAll('.rt-slot') : [])];
+  await Promise.all(slots.map(async el => {
+    const { c, s, d, w } = el.dataset;
+    if(!c || !s || !d || !w) return;
+    try{
+      const snap = await get(child(ref(db), `retake_requests/${c}/${s}/${d}/${w}`));
+      if(snap.exists()) el.innerHTML = retakeChip(snap.val());
+    }catch(e){ /* немає доступу чи мережі — лишаємо кнопку */ }
+  }));
+}
+window.hydrateRetakes = hydrateRetakes;
 
 // Реакція на коментар: одна, повторне натискання знімає. Обрана — з
 // підписом, щоб учитель і батьки однаково розуміли, що вона означає.
@@ -384,6 +411,7 @@ function paintWeek(){
   // «коментарів немає» там, де вони просто ще в дорозі.
   if(gvMirror===null || gvComments===null || gvReactions===null){
     box.innerHTML = gvLastWeekHtml || '<p class="empty-msg is-loading">Завантаження...</p>';
+    hydrateRetakes(box);
     return;
   }
   const days = weekDays(gvWeek), cls = gvCls;
@@ -427,6 +455,7 @@ function paintWeek(){
 
   gvLastWeekHtml = nav + (blocks || `<div class="ui-empty"><b>Цього тижня оцінок і коментарів немає</b>Щойно вчитель поставить оцінку чи напише коментар — вони зʼявляться тут.<br><button type="button" class="ui-btn ui-btn-q" onclick="gvShiftWeek(-1)">← Попередній тиждень</button></div>`);
   box.innerHTML = gvLastWeekHtml;
+  hydrateRetakes(box);
   // Коментар, що побув на екрані, — «переглянуто» для вчителя (comments-view.js)
   window.observeCommentsSeen?.(box);
 }

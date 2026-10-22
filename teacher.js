@@ -8,6 +8,7 @@
 import { ref, set, get, child, push, remove, update, onValue } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { renderNewsFeed } from './news.js';
 import { db, auth, attendanceAuthor, canClearDayAbsence, clearDayAbsence, CLOUDINARY_URL, UPLOAD_PRESET, uploadToCloudinary, HW_FILE_EXT, HW_FILE_MAX_MB, fileExt, isImageUrl, isAudioUrl, cldImage, safeHttpUrl, getActiveClass, currentUserData, showToast, displayGrade, validDailyGrade, getClassNum, LEVEL_MAX_CLASS, LEVEL_LETTERS, renderHwItem, renderHwList, dayKeys, formatAttendanceSlotLabel, STICKER_GOAL, stickerGoal, escJs, escHtml, safeUrl, normalizeChildren, notifyEvent, logAction, renderBirthdays, teacherAccessMatrix, getUsersSnap, getStudentDir, stuName, gradeWritePaths, journalBaseDate, journalSlot, localDateString, isMasterTeacher, gradeTypesCache, subjKey, emailKey, subjectsForClassWeek, COMMENT_REACTS, commentReactLabel } from './common.js';
+import { sameSubj } from './access.js';
 import { populateTopicSelector, availableTopicsCache, planKey, loadAliases, isDoubleLesson, doubleLessonNumbers } from './curriculum.js';
 
 let currentHwImages=[];
@@ -1249,37 +1250,178 @@ window.toggleTopicCovered=async function(cls,subj,key,val){
   loadCurriculumTopics();
 };
 // ══════════ RETAKE REQUESTS (teacher review side) ══════════
-window.openRetakeRequestsModal=async function(){
-  document.getElementById('retake-modal').style.display='flex';
-  const cls=getActiveClass();const snap=await get(ref(db,`retake_requests/${cls}`));
-  const list=document.getElementById('retake-list');list.innerHTML='';
-  if(!snap.exists()){list.innerHTML='<p class="empty-msg">Запитів немає.</p>';return;}
-  const data=snap.val();let html='';
-  for(let subj in data){
-    for(let date in data[subj]){
-      for(let student in data[subj][date]){
-        const req=data[subj][date][student];
-        const statusColor=req.status==='approved'?'var(--ok)':req.status==='rejected'?'var(--danger)':'var(--warn)';
-        const statusLabel=req.status==='approved'?'✅ Схвалено':req.status==='rejected'?'❌ Відхилено':'⏳ Очікує';
-        html+=`<div style="background:var(--surface-2);border:1px solid var(--line-soft);border-radius:9px;padding:11px;margin-bottom:9px;">
-          <div style="display:flex;justify-content:space-between;align-items:center;">
-            <div><b>${escHtml(stuName(cls,student))}</b> | ${escHtml(subj)} | ${escHtml(journalBaseDate(date).split('-').reverse().join('.'))}${journalSlot(date)>1?` · оцінка ${journalSlot(date)}`:''}</div>
-            <span style="color:${statusColor};font-size:.8rem;font-weight:700;">${statusLabel}</span>
-          </div>
-          <div style="font-size:.8rem;color:var(--ink-3);margin-top:5px;">Поточна оцінка: <b>${escHtml(String(req.grade||'—'))}</b></div>
-          ${req.status==='pending'?`<div style="display:flex;gap:7px;margin-top:8px;">
-            <button onclick="processRetake('${escJs(cls)}','${escJs(subj)}','${escJs(date)}','${escJs(student)}','approved')" style="flex:1;background:var(--ok);color:var(--on-fill);padding:7px;border-radius:8px;border:none;cursor:pointer;font-weight:700;font-size:.82rem;margin:0;">✅ Дозволити</button>
-            <button onclick="processRetake('${escJs(cls)}','${escJs(subj)}','${escJs(date)}','${escJs(student)}','rejected')" style="flex:1;background:var(--danger);color:var(--on-fill);padding:7px;border-radius:8px;border:none;cursor:pointer;font-weight:700;font-size:.82rem;margin:0;">❌ Відхилити</button>
-          </div>`:''}
-        </div>`;
-      }
-    }
+// ЛИШЕ МОЇ ПРЕДМЕТИ. Заявки лежать по класу, а в класі вчать різні люди:
+// раніше лічильник і список показували вчителю математики й заявки з
+// англійської. Свої — за матрицею доступу (teacher_access); «Всі
+// предмети» або порожній рядок (майстер-роль) — усі заявки класу. Решту
+// можна відкрити кнопкою «Показати всі заявки класу».
+export function isMyRetakeSubject(cls, subj, matrix = teacherAccessMatrix){
+  const raw = matrix && matrix[cls];
+  const list = (Array.isArray(raw) ? raw : Object.values(raw || {})).filter(v => typeof v === 'string');
+  if(!list.length) return true;
+  return list.some(v => v.trim() === 'Всі предмети' || sameSubj(v, subj));
+}
+window.isMyRetakeSubject = isMyRetakeSubject;
+// [{subj, date, student, req}] заявок класу; pendingOnly — лише ті, що чекають
+export function retakeRows(data, cls, { all = false, matrix } = {}){
+  const out = [];
+  for(const subj in (data || {})) for(const date in (data[subj] || {})) for(const student in (data[subj][date] || {})){
+    const req = data[subj][date][student];
+    if(!req || typeof req !== 'object') continue;
+    if(!all && !isMyRetakeSubject(cls, subj, matrix)) continue;
+    out.push({ subj, date, student, req });
   }
-  list.innerHTML=html||'<p class="empty-msg">Запитів немає.</p>';
+  // Спершу ті, що чекають, далі — новіші
+  return out.sort((a, b) => (a.req.status === 'pending' ? 0 : 1) - (b.req.status === 'pending' ? 0 : 1)
+    || (Number(b.req.ts) || 0) - (Number(a.req.ts) || 0) || b.date.localeCompare(a.date));
+}
+// Коли й де перездача: «24.10 о 10:00 (каб. 12)»
+export function retakeWhen(req){
+  if(!req || !/^\d{4}-\d{2}-\d{2}$/.test(String(req.retakeDate || ''))) return '';
+  const d = req.retakeDate.split('-').reverse().slice(0, 2).join('.');
+  return d + (req.retakeTime ? ` о ${req.retakeTime}` : '') + (req.retakeNote ? ` (${req.retakeNote})` : '');
+}
+let retakeAll = false, retakeView = [];
+window.toggleRetakeAll = function(){ retakeAll = !retakeAll; window.openRetakeRequestsModal(true); };
+window.openRetakeRequestsModal=async function(keep){
+  if(keep !== true) retakeAll = false;
+  document.getElementById('retake-modal').style.display='flex';
+  const cls=getActiveClass();
+  const list=document.getElementById('retake-list');
+  list.innerHTML='<p class="empty-msg is-loading">Завантаження...</p>';
+  let data={};
+  // Довідник учнів — до показу: зі сповіщення клас щойно перемкнули, і без
+  // нього в списку стояли б ідентифікатори замість імен
+  try{ const [snap]=await Promise.all([get(ref(db,`retake_requests/${cls}`)), getStudentDir(cls).catch(()=>null)]); data=snap.exists()?snap.val():{}; }
+  catch(e){ list.innerHTML=`<p class="empty-msg">Не вдалося завантажити: ${escHtml(e.message||'')}</p>`; return; }
+  const mine=retakeRows(data,cls), all=retakeRows(data,cls,{all:true});
+  const rows=retakeAll?all:mine;
+  retakeView=rows.map(r=>({cls,...r}));
+  const others=all.length-mine.length;
+  // «Бачу» — лише для своїх предметів: у режимі «усі заявки класу» інакше
+  // можна було б заглушити нагадування вчителю іншого предмета
+  const unseen=rows.filter(r=>r.req.status==='pending'&&!r.req.seenTs&&isMyRetakeSubject(cls,r.subj)).length;
+  const btn=(i,act,label,cls2)=>`<button type="button" class="rt-btn ${cls2}" onclick="retakeAct(${i},'${act}')">${label}</button>`;
+  let html=unseen>1?`<button type="button" class="rt-btn rt-seen rt-seen-all" onclick="retakeSeenAll()">👁 Бачу всі (${unseen}) — більше не нагадувати</button>`:'';
+  rows.forEach(({subj,date,student,req},i)=>{
+    const st=req.status==='approved'?['var(--ok)','✅ Дозволено']:req.status==='rejected'?['var(--danger)','❌ Відхилено']
+      :req.seenTs?['var(--warn)','👁 Переглянуто, чекає рішення']:['var(--warn)','⏳ Очікує'];
+    const when=retakeWhen(req);
+    html+=`<div class="rt-card" data-i="${i}">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+        <div><b>${escHtml(stuName(cls,student))}</b> | ${escHtml(subj)} | ${escHtml(journalBaseDate(date).split('-').reverse().join('.'))}${journalSlot(date)>1?` · оцінка ${journalSlot(date)}`:''}</div>
+        <span style="color:${st[0]};font-size:.8rem;font-weight:700;text-align:right;">${st[1]}</span>
+      </div>
+      <div style="font-size:.8rem;color:var(--ink-3);margin-top:5px;">Поточна оцінка: <b>${escHtml(String(req.grade||'—'))}</b>${when?` · 📅 Перездача: <b>${escHtml(when)}</b>`:''}</div>
+      ${req.status==='pending'?`<div class="rt-acts">${btn(i,'approve','✅ Дозволити','rt-ok')}${btn(i,'reject','❌ Відхилити','rt-no')}${req.seenTs||!isMyRetakeSubject(cls,subj)?'':btn(i,'seen','👁 Бачу','rt-seen')}</div>`
+        :req.status==='approved'?`<div class="rt-acts">${btn(i,'date',when?'📅 Змінити дату':'📅 Призначити дату','rt-seen')}</div>`:''}
+      <div class="rt-form" hidden>
+        <label>Дата перездачі <small>необовʼязково — можна призначити пізніше</small>
+          <input type="date" class="rt-d" min="${localDateString}" value="${escHtml(req.retakeDate||'')}"></label>
+        <div class="rt-row"><label>Час <input type="time" class="rt-t" value="${escHtml(req.retakeTime||'')}"></label>
+          <label>Де / примітка <input type="text" class="rt-n" maxlength="60" placeholder="напр. каб. 12" value="${escHtml(req.retakeNote||'')}"></label></div>
+        <div class="rt-acts">${btn(i,req.status==='pending'?'approve-go':'date-go',req.status==='pending'?'✅ Дозволити':'💾 Зберегти дату','rt-ok')}${btn(i,'cancel','Скасувати','rt-seen')}</div>
+      </div>
+    </div>`;
+  });
+  const toggle=(others>0||retakeAll)?`<button type="button" class="retake-all" onclick="toggleRetakeAll()">${retakeAll?'Лише мої предмети':`Показати всі заявки класу (ще ${others})`}</button>`:'';
+  list.innerHTML=(rows.length?html:`<p class="empty-msg">${retakeAll?'Запитів немає.':'Запитів з ваших предметів немає.'}</p>`)+toggle;
 };
-window.processRetake=async function(cls,subj,date,student,status){
-  await set(ref(db,`retake_requests/${cls}/${subj}/${date}/${student}/status`),status);
-  showToast(status==='approved'?`✅ Перездачу дозволено: ${stuName(cls,student)}`:`❌ Перездачу відхилено`);
+// Дата з форми картки: {retakeDate, retakeTime, retakeNote} або null (кривий ввід)
+function retakeFormVal(card){
+  const d=(card.querySelector('.rt-d')||{}).value||'', t=(card.querySelector('.rt-t')||{}).value||'', n=((card.querySelector('.rt-n')||{}).value||'').trim().slice(0,60);
+  if(d&&!/^\d{4}-\d{2}-\d{2}$/.test(d)) return null;
+  if(d&&d<localDateString){ showToast('⚠️ Дата перездачі вже минула'); return null; }
+  if(!d&&(t||n)){ showToast('⚠️ Спершу оберіть дату'); return null; }
+  return { retakeDate:d||null, retakeTime:d&&/^\d{2}:\d{2}$/.test(t)?t:null, retakeNote:d&&n?n:null };
+}
+let retakeBusy=false;
+async function retakeSave(r,patch,event){
+  if(retakeBusy) return false;
+  retakeBusy=true;
+  try{ await update(ref(db,`retake_requests/${r.cls}/${r.subj}/${r.date}/${r.student}`),patch); }
+  catch(e){
+    retakeBusy=false;
+    // Найчастіше — заявку вже розглянув інший учитель (правила не дають
+    // переписати рішення): кажемо про це й показуємо свіжий стан
+    if(/permission/i.test(e.message||'')&&patch.status){ showToast('ℹ️ Заявку вже розглянули — список оновлено'); retakeRedraw(); }
+    else showToast('❌ Не збережено: '+(e.message||''));
+    return false;
+  }
+  retakeBusy=false;
+  // Родині — push (текст складає сервер із бази; лише адреса заявки)
+  if(event){ try{ notifyEvent(event,{class:r.cls,subject:r.subj,date:r.date,who:r.student}).catch(()=>{}); }catch(e){} }
+  retakeRedraw();
+  window.refreshRetakeCounter?.();
+  return true;
+}
+// Перемалювати, лише якщо список ще відкритий (інакше закритий список
+// вискакував би знову, коли збереження завершиться)
+function retakeRedraw(){
+  const m=document.getElementById('retake-modal');
+  if(m&&m.style.display!=='none') window.openRetakeRequestsModal(true);
+}
+// Лише час: хто саме натиснув, родині (вона читає свою заявку) знати не треба
+const seenPatch=()=>({ seenTs:Date.now() });
+window.retakeAct=async function(i,act){
+  const r=retakeView[i]; if(!r) return;
+  const card=document.querySelector(`#retake-list .rt-card[data-i="${i}"]`);
+  const form=card&&card.querySelector('.rt-form');
+  if(act==='approve'||act==='date'){ if(form){ form.hidden=false; const d=form.querySelector('.rt-d'); d&&d.focus(); } return; }
+  if(act==='cancel'){ if(form) form.hidden=true; return; }
+  if(act==='reject'){
+    // Рішення не скасувати (правила бази) — тож перепитуємо
+    if(!confirm(`Відхилити заявку: ${stuName(r.cls,r.student)}, ${r.subj}? Родина отримає сповіщення, змінити рішення потім не вийде.`)) return;
+    return window.processRetake(r.cls,r.subj,r.date,r.student,'rejected');
+  }
+  if(act==='seen'){ if(await retakeSave(r,seenPatch())) showToast('👁 Позначено — нагадувань про цю заявку більше не буде'); return; }
+  if(act==='approve-go') return window.processRetake(r.cls,r.subj,r.date,r.student,'approved',card);
+  if(act==='date-go'){
+    const v=card&&retakeFormVal(card); if(!v) return;
+    if(!v.retakeDate) return showToast('⚠️ Оберіть дату');
+    if(await retakeSave(r,{...v,dateTs:Date.now()},'retake_date')) showToast(`📅 Перездачу призначено: ${retakeWhen(v)}`);
+  }
+};
+window.retakeSeenAll=async function(){
+  const todo=retakeView.filter(r=>r.req.status==='pending'&&!r.req.seenTs&&isMyRetakeSubject(r.cls,r.subj));
+  if(!todo.length) return;
+  const p=seenPatch(), upd={};
+  todo.forEach(r=>{ upd[`retake_requests/${r.cls}/${r.subj}/${r.date}/${r.student}/seenTs`]=p.seenTs; });
+  try{ await update(ref(db),upd); showToast(`👁 Позначено: ${todo.length} — нагадувань про них більше не буде`); }
+  catch(e){ return showToast('❌ Не збережено: '+(e.message||'')); }
+  retakeRedraw();
+};
+window.processRetake=async function(cls,subj,date,student,status,card){
+  const patch={status,decidedTs:Date.now()};
+  if(status==='approved'&&card){
+    const v=retakeFormVal(card); if(!v) return;
+    Object.assign(patch,v); if(v.retakeDate) patch.dateTs=Date.now();
+  }
+  const ok=await retakeSave({cls,subj,date,student},patch,'retake_reply');
+  if(ok) showToast(status==='approved'?`✅ Перездачу дозволено: ${stuName(cls,student)}${patch.retakeDate?` · ${retakeWhen(patch)}`:''}`:`❌ Перездачу відхилено`);
+};
+// Лічильник на плитці «Перездачі» — лише заявки, що чекають, з моїх предметів
+window.refreshRetakeCounter=function(){
+  const cls=getActiveClass(), el=document.getElementById('t-retake-counter');
+  if(!el||!cls) return;
+  get(ref(db,`retake_requests/${cls}`)).then(snap=>{
+    el.textContent=retakeRows(snap.exists()?snap.val():{},cls).filter(r=>r.req.status==='pending').length;
+  }).catch(()=>{});
+};
+// Зі сповіщення чи дзвіночка: потрібний клас — і одразу список заявок
+window.openRetakeFor=function(cls){
+  const cs=document.getElementById('t-class-selector');
+  // Класу вже немає серед моїх (доступ зняли, заміна скінчилася) — не
+  // показуємо мовчки список іншого класу
+  if(cls&&cs&&![...cs.options].some(o=>o.value===cls)){
+    showToast(`ℹ️ ${String(cls).replace('class_','')} клас уже не серед ваших — заявки там розглядає інший учитель`);
+    return;
+  }
+  if(cls&&cs&&cs.value!==cls&&[...cs.options].some(o=>o.value===cls)){
+    cs.value=cls;
+    try{ localStorage.setItem('push_school_class',cls); }catch(e){}
+    if(window.handleClassChange) window.handleClassChange();
+  }
   window.openRetakeRequestsModal();
 };
 window.closeRetakeModal=function(){document.getElementById('retake-modal').style.display='none';};
@@ -1758,7 +1900,7 @@ export function loadTeacherDashboard(){
   renderNewsFeed('t-news-feed');
   const cls=getActiveClass();const uid=auth.currentUser.uid;
   // Retake counter
-  get(ref(db,`retake_requests/${cls}`)).then(snap=>{if(snap.exists()){const d=snap.val();let cnt=0;for(let s in d)for(let dt in d[s])for(let st in d[s][dt])if(d[s][dt][st].status==='pending')cnt++;document.getElementById('t-retake-counter').innerText=cnt;}else document.getElementById('t-retake-counter').innerText=0;});
+  window.refreshRetakeCounter();
   Promise.all([get(child(ref(db),`reactions/${cls}`)),get(child(ref(db),`authors/${cls}`)),get(child(ref(db),`comments/${cls}`)),get(child(ref(db),`comment_meta/${cls}`)).catch(()=>null)]).then(([rs,as,cs,ms])=>{
     let cnt=0;window.myDetailedReactions=[];
     // Мій коментар: автор записаний у comment_meta; для старих — за тим, хто вносив ДЗ уроку

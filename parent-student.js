@@ -788,12 +788,18 @@ async function sendRetakeRequest(cls,subj,date,student,grade){
   const existing=got.filter(Boolean).length;
   if(existing>=limit){showToast(`🚫 Ви вже використали всі можливості для покращення оцінок з ${subj} (ліміт ${limit})`);return;}
   try{
-    await set(ref(db,`retake_requests/${cls}/${subj}/${date}/${student}`),{status:'pending',grade,requestDate:localDateString});
+    await set(ref(db,`retake_requests/${cls}/${subj}/${date}/${student}`),{status:'pending',grade,requestDate:localDateString,ts:Date.now()});
   }catch(e){
     // Правила приймають лише нову заявку: на цю оцінку її вже подавали
     return showToast(/permission/i.test(e.message||'')?'ℹ️ Заявку на цю оцінку вже подано — рішення за вчителем':'❌ Не надіслано: '+(e.message||''));
   }
   showToast(`🔄 Запит на перездачу надіслано вчителю!`);
+  // Кнопка біля оцінки → «⏳ Заявку подано»
+  document.querySelectorAll('.rt-slot').forEach(el=>{ if(el.dataset.c===cls&&el.dataset.s===subj&&el.dataset.d===date&&el.dataset.w===student) el.innerHTML='<span class="rt-chip">⏳ Заявку подано — чекає вчителя</span>'; });
+  // Push учителю предмета. Лише адреса заявки — текст складає сервер із
+  // бази (netlify/functions/notify.js → retakePlan). Не дійшов — заявка
+  // однаково в кабінеті вчителя, тож родину не лякаємо.
+  try{ notifyEvent('retake',{class:cls,subject:subj,date,who:student}).catch(()=>{}); }catch(e){}
 }
 window.sendRetakeRequest=sendRetakeRequest;
 // ══════════ PARENT DASHBOARD ══════════
