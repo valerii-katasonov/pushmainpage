@@ -204,11 +204,10 @@ async function retakePlan(token, type, cls, subj, date, who) {
     if (!fresh) return { note: 'Заявка застара' };
     const g = await readDb(token, `student_grades/${enc(cls, who, date.slice(0, 7), subj, date)}`).catch(() => null);
     if (g == null) return { note: 'Оцінки немає' };
-    // Ті самі межі, що й кнопка «🔄 Покращити» (grades-view.js): перездача —
-    // для низької оцінки. Ліміт 10% теж рахує лише браузер, тож сповіщень
-    // від однієї дитини з предмета — не більше трьох за добу
+    // Перездати можна будь-яку оцінку (і рівні П/С/Д/В). Ліміт 10% рахує
+    // лише браузер, тож сповіщень від однієї дитини з предмета — не
+    // більше трьох за добу
     const real = String((g && typeof g === 'object' ? g.v : g) ?? '');
-    if (parseInt(real, 10) > 3) return { note: 'Оцінка не для перездачі' };
     params.value = real.slice(0, 4);
     const all = await readDb(token, `retake_requests/${enc(cls, subj)}`).catch(() => null) || {};
     const recent = Object.values(all).filter(day => day && day[who] && Date.now() - Number(day[who].ts || 0) < DAY_MS).length;
