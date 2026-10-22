@@ -312,19 +312,17 @@ function gradeChip(v, t, cls, numericScale){
     + (t ? `<span class="g-type">${escHtml(t)}</span>` : '') + `</span>`;
 }
 
-// Кнопка перездачі — лише там, де вона доречна: оцінка низька й це
-// цифра. Для літер (1–4 класи) перездача не пропонується: у рівнях її
-// сенс інший, і вчителі про неї не просили.
+// Кнопка перездачі — біля БУДЬ-ЯКОЇ оцінки (рішення школи, 22.10.2026):
+// і біля рівнів П/С/Д/В у 1–4 класах, і на будь-якій шкалі. Раніше була
+// лише біля 1–3 за шестибальною шкалою з 5-го класу. Чи дозволити —
+// вирішує вчитель; ліміт заявок з предмета — у sendRetakeRequest.
 function retakeBtn(cls, subj, date, v, numericScale){
-  if(getClassNum(cls)<=LEVEL_MAX_CLASS)return '';
-  if(numericScale&&numericScale!==6)return '';
-  const n = parseInt(v, 10);
-  if(isNaN(n) || n > 3) return '';
+  if(v == null || String(v).trim() === '') return '';
   const who = currentUserData?.studentId || currentUserData?.studentName || '';
   // Обгортка: після показу hydrateRetakes підмінить кнопку станом заявки,
   // якщо її вже подавали («⏳ подано», «✅ перездача 24.10», «❌ відхилено»)
   return `<span class="rt-slot" data-c="${escHtml(cls)}" data-s="${escHtml(subj)}" data-d="${escHtml(date)}" data-w="${escHtml(who)}"><button class="retake-btn" style="margin-left:6px;"
-     onclick="sendRetakeRequest('${escJs(cls)}','${escJs(subj)}','${escJs(date)}','${escJs(who)}',${n})">🔄 Покращити</button></span>`;
+     onclick="sendRetakeRequest('${escJs(cls)}','${escJs(subj)}','${escJs(date)}','${escJs(who)}','${escJs(String(v).trim().slice(0, 4))}')">🔄 Покращити</button></span>`;
 }
 // Стан своєї заявки на перездачу — замість кнопки. Читаємо ЛИСТКИ (лише
 // свої заявки: увесь вузол класу родині закритий) і лише для оцінок із
@@ -507,6 +505,7 @@ function paintSubject(){
   }
   if(gvMirror===null){
     box.innerHTML = gvLastSubjHtml || '<p class="empty-msg is-loading">Завантаження...</p>';
+    hydrateRetakes(box);
     return;
   }
   // 📊 Підсумок (class-stats.js): пропуски, запізнення, предмети з низьким балом
@@ -543,7 +542,7 @@ function paintSubject(){
     ? `<ul class="list-dash" style="margin:0;">` + rows.slice().reverse().map(r =>
         `<li style="display:flex;align-items:center;gap:9px;padding:5px 0;flex-wrap:wrap;">
            <span style="color:var(--ink-3);font-size:.82rem;min-width:52px;">${escHtml(human(r.day))}${r.slot>1?` · ${r.slot}`:''}</span>
-           ${gradeChip(r.v, r.t, cls, scaleMax)}${renderWorkPhotos(r.workPhotos)}
+           ${gradeChip(r.v, r.t, cls, scaleMax)}${retakeBtn(cls, gvSubject, r.date, r.v, scaleMax)}${renderWorkPhotos(r.workPhotos)}
            <span style="font-size:.75rem;color:var(--ink-3);">${r.t===THEMATIC ? '📘 тематична' : r.t ? `вага ×${escHtml(String(getGradeWeight(r.t)))}` : ''}</span>
          </li>`).join('') + `</ul>`
     : '<p class="empty-msg">З цього предмета оцінок ще немає.</p>';
@@ -558,6 +557,7 @@ function paintSubject(){
       <div class="gt-legend"><span><i class="gt-k-line"></i>середній за місяць</span><span><i class="gt-k-dot"></i>оцінка</span><span><i class="gt-k-th"></i>тематична</span><span><i class="gt-k-thr"></i>поріг низького балу</span></div></div>`:'';
   gvLastSubjHtml = sel + head + chartHtml + `<ul class="list-dash" style="margin:0 0 9px 0;">${renderGradeFormulaInfo()}</ul>` + list;
   box.innerHTML = gvLastSubjHtml;
+  hydrateRetakes(box);
 }
 window.renderGradesSubject = renderGradesSubject;
 
