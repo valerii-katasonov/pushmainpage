@@ -144,6 +144,87 @@ async function pruneAuditLog(token) {
   return removed;
 }
 
+// ── ДНІ НАРОДЖЕННЯ ПРАЦІВНИКІВ (staff-bdays.js) ─────────────────
+// staff_birthdays/{пошта} = 'ММ-ДД'. Нагадування — за STAFF_DAYS_BEFORE
+// днів і в сам день. Кому: директору й адміністрації (поки самі не
+// вимкнули: staff_bday_subs/{пошта} = false) і кожному працівнику, який
+// увімкнув їх собі (= true). Іменинник про себе нагадування не отримує.
+// Позначка staff_birthday_notices/{пошта} = {soon, day} (дата свята)
+// робить повторний запуск того ж дня тихим.
+const STAFF_DAYS_BEFORE = 3;
+const emailKeyOf = e => String(e || '').trim().toLowerCase().replace(/\./g, '_');
+// Роль беремо з pre_approved_roles (її веде директор), а не з токена
+// пристрою: токен оновлюється лише при вході, і звільнений працівник
+// інакше ще довго отримував би дні народження колег.
+function staffRecipients(tokens, subs, exclude, pre) {
+  const out = [];
+  for (const uid in (tokens || {})) {
+    const t = tokens[uid];
+    if (!t || !t.email) continue;
+    const se = emailKeyOf(t.email);
+    if (se === exclude) continue;
+    const p = pre ? pre[se] : undefined;
+    if (pre && p == null) continue;                    // уже не працівник
+    const src = pre ? p : t.roles;
+    const roles = (Array.isArray(src) ? [...src] : (src && typeof src === 'object' ? Object.values(src) : (typeof src === 'string' ? [src] : [])));
+    if (!pre && t.role) roles.push(t.role);
+    const admin = roles.some(r => r === 'director' || r === 'administrator');
+    const staff = roles.some(r => r && r !== 'parent' && r !== 'student');
+    const sub = subs && subs[se];
+    if (!(sub === true && staff) && !(admin && sub !== false)) continue;
+    const toks = (t.devices && typeof t.devices === 'object')
+      ? Object.values(t.devices).map(d => d && d.token).filter(Boolean) : [];
+    if (!toks.length && t.token) toks.push(t.token);
+    out.push(...toks);
+  }
+  return [...new Set(out)];
+}
+async function staffBirthdayReminders(token, sa, today) {
+  const [bdays, dir, tokens, subs, notices, pre] = await Promise.all([
+    readDb(token, 'staff_birthdays').catch(() => null),
+    readDb(token, 'staff_directory').catch(() => null),
+    readDb(token, 'push_tokens'),
+    readDb(token, 'staff_bday_subs').catch(() => null),
+    readDb(token, 'staff_birthday_notices').catch(() => null),
+    readDb(token, 'pre_approved_roles').catch(() => null)
+  ]);
+  if (!bdays) return 0;
+  const year = +today.slice(0, 4);
+  const plan = [{ kind: 'day', target: targetDay(today, 0) }, { kind: 'soon', target: targetDay(today, STAFF_DAYS_BEFORE) }];
+  let sent = 0;
+  for (const se in bdays) {
+    const md = String(bdays[se] || '');
+    if (!/^\d{2}-\d{2}$/.test(md)) continue;
+    // Немає в довіднику персоналу — звільнився: не нагадуємо (як і в календарі)
+    if (dir && Object.keys(dir).length && !dir[se]) continue;
+    for (const { kind, target } of plan) {
+      if (!matchesBirthday(md, target, year)) continue;
+      const done = notices && notices[se] && notices[se][kind];
+      if (done === target.iso) continue;
+      const name = (dir && dir[se] && dir[se].name) || 'колега';
+      const dd = +target.iso.slice(8), mm = target.iso.slice(5, 7);
+      const body = kind === 'day'
+        ? `Сьогодні день народження: ${name}`
+        : `Через ${STAFF_DAYS_BEFORE} дні, ${dd}.${mm}, — день народження: ${name}`;
+      const url = `${SITE}/cabinet?open=day`;
+      const targets = staffRecipients(tokens, subs, se, pre);
+      if (targets.length) {
+        const results = await Promise.allSettled(targets.map(t =>
+          fetch(`https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: { token: t,
+              data: { title: '🎂 День народження колеги', body, tag: `staff-bday-${se}-${kind}`, url },
+              webpush: { headers: { Urgency: 'normal' }, fcmOptions: { link: url } } } })
+          })));
+        sent += results.filter(r => r.status === 'fulfilled' && r.value.ok).length;
+      }
+      await writeDb(token, `staff_birthday_notices/${se}/${kind}`, target.iso);
+    }
+  }
+  return sent;
+}
+
 exports.handler = async () => {
   const raw = process.env.FIREBASE_SERVICE_ACCOUNT;
   if (!raw) {
@@ -166,7 +247,13 @@ exports.handler = async () => {
       readDb(token, 'push_tokens'),
       readDb(token, 'birthday_notices').catch(() => null)
     ]);
-    if (!teachers || !bdays) return { statusCode: 200, body: 'нічого перевіряти' };
+    if (!teachers || !bdays) {
+      // Учнів перевіряти нема що — але працівників усе одно перевіряємо
+      let staffOnly = 0;
+      try { staffOnly = await staffBirthdayReminders(token, sa, today); }
+      catch (e) { console.log('Дні народження працівників — помилка: ' + e.message); }
+      return { statusCode: 200, body: `нічого перевіряти${staffOnly ? `, працівники: надіслано ${staffOnly}` : ''}` };
+    }
 
     let sent = 0, skipped = 0;
     for (const cls in bdays) {
@@ -233,6 +320,12 @@ exports.handler = async () => {
       for (const key of due) await writeDb(token, `birthday_notices/${cls}/${key}`, target.iso);
     }
 
+    // Дні народження працівників — теж окремо: збій тут не має
+    // виглядати як «не надіслалися нагадування про учнів»
+    let staffSent = 0;
+    try { staffSent = await staffBirthdayReminders(token, sa, today); }
+    catch (e) { console.log('Дні народження працівників — помилка: ' + e.message); }
+
     // Прибирання журналу — окремою справою і під власним try: воно не
     // має жодного стосунку до нагадувань, і його збій не повинен
     // виглядати як «нагадування не надіслалися».
@@ -241,6 +334,7 @@ exports.handler = async () => {
     catch (e) { console.log('Прибирання журналу — помилка: ' + e.message); }
 
     const note = `дата ${target.iso}, надіслано ${sent}, вже було ${skipped}`
+      + (staffSent ? `, працівники: надіслано ${staffSent}` : '')
       + (pruned ? `, журнал: видалено місяців ${pruned}` : '');
     console.log('Нагадування про дні народження: ' + note);
     return { statusCode: 200, body: note };
@@ -249,3 +343,5 @@ exports.handler = async () => {
     return { statusCode: 200, body: 'error: ' + e.message };
   }
 };
+
+exports._test = { staffRecipients, daysBefore: STAFF_DAYS_BEFORE };

@@ -290,11 +290,19 @@ async function findAdminTargets(token) {
 // ideas_notice/{id} ставиться рівно один раз — повторний чи чужий виклик
 // з тим самим id нікому нічого не надішле. Анонімного запиту без запису
 // в базі (а писати туди можна лише після входу) сервер не прийме.
+const IDEA_GAP_MS = 2 * 60 * 1000;
 async function ideaPlan(token, id) {
   const rec = await readDb(token, `ideas/${id}`);
   if (!rec || typeof rec !== 'object') return { note: 'Звернення немає' };
   if (rec.status && rec.status !== 'new') return { note: 'Уже розглянуто' };
   if (!(await claimFlag(token, `ideas_notice/${id}`))) return { note: 'Уже надіслано' };
+  // Захист від флуду: звернення анонімні, тож обмежити «одного автора»
+  // неможливо. Обмежуємо самі сповіщення: не частіше раз на IDEA_GAP_MS.
+  // Звернення все одно в скриньці й у дзвіночку директора — губиться
+  // лише зайвий push.
+  const last = Number(await readDb(token, 'ideas_last_push').catch(() => 0)) || 0;
+  if (Date.now() - last < IDEA_GAP_MS) return { note: 'Сповіщення надіслано нещодавно' };
+  await fetch(`${DB}/ideas_last_push.json?access_token=${encodeURIComponent(token)}`, { method: 'PUT', body: String(Date.now()) }).catch(() => {});
   return { kind: String(rec.kind || '') };
 }
 async function findByEmails(token, emails) {
@@ -322,20 +330,46 @@ async function findByEmails(token, emails) {
 // турбуємо». Для меню це доречно, для оголошень — ні. Родини, які
 // відмовилися від обідів, не отримували шкільних оголошень узагалі, і
 // побачити цей звʼязок ззовні було неможливо.
-async function findNewsTargets(token, cls) {
+// КІЛЬКА КЛАСІВ. Оголошення може йти кільком класам одразу («Молодша
+// школа» 1–5, «Старша» 6–11 або вибрані галочками). Кому саме — беремо з
+// САМОГО оголошення в базі (за ref), а не з запиту: функція приймає
+// запити без входу, і довіряти списку класів від браузера не варто.
+// Запит — лише запасний шлях, коли оголошення ще не прочиталося.
+// null — уся школа; [] — нікому (невідомий адресат не стає «усім»).
+const NEWS_CLS_RE = /^class_([1-9]|1[01])$/;
+function newsClassesFromRecord(a) {
+  if (!a || typeof a !== 'object') return undefined;
+  if (a.scope === 'school') return null;
+  if (a.scope === 'classes') return Object.keys(a.classes && typeof a.classes === 'object' ? a.classes : {})
+    .filter(c => a.classes[c] === true && NEWS_CLS_RE.test(c));
+  return NEWS_CLS_RE.test(String(a.class || '')) ? [a.class] : [];
+}
+async function newsAudience(token, ref, body) {
+  if (ref) {
+    const rec = await readDb(token, `announcements/${ref}`).catch(() => undefined);
+    const fromRec = newsClassesFromRecord(rec);
+    if (fromRec !== undefined) return fromRec;
+  }
+  const cls = String(body.class || '');
+  if (cls === 'ALL') return null;
+  if (cls === 'MULTI') return String(body.classes || '').split(',').filter(c => NEWS_CLS_RE.test(c)).slice(0, 11);
+  return cls ? [cls] : null;
+}
+async function findNewsTargets(token, classes) {
   const [all,parents,students] = await Promise.all([
     readDb(token,'push_tokens'),readDb(token,'parent_links'),readDb(token,'student_links')
   ]);
   if (!all || typeof all !== 'object') return [];
-  // 'ALL' шле news.js, коли оголошення на всю школу
-  const one = cls && cls !== 'ALL' ? cls : '';
+  // Старий виклик рядком: 'ALL' — уся школа, інакше один клас
+  if (typeof classes === 'string') classes = classes && classes !== 'ALL' ? [classes] : null;
+  const want = Array.isArray(classes) ? new Set(classes) : null;
   const out = [];
   for (const uid in all) {
     const t = all[uid];
     if (!tokensOf(t).length) continue;
     const kids=effectiveChildren(t,parents,students);
     if (!kids.length) continue;
-    if (one&&!kids.some(k=>k.class===one)) continue;
+    if (want&&!kids.some(k=>want.has(k.class))) continue;
     out.push(...tokensOf(t));
   }
   return [...new Set(out)];
@@ -521,7 +555,7 @@ const EVENTS = {
                         tag: 'menu' })
 };
 
-exports._test = { lessonTeachersOn, sameSubj };
+exports._test = { lessonTeachersOn, sameSubj, newsClassesFromRecord };
 
 exports.handler = async (event) => {
   const origin = event.headers.origin || event.headers.Origin || '';
@@ -610,6 +644,7 @@ exports.handler = async (event) => {
       if (!plan.kind && plan.note) return { statusCode: 200, headers: cors(origin), body: JSON.stringify({ sent: 0, note: plan.note }) };
       msg = build({ kind: plan.kind, ref: String(body.ref) });
     }
+    const msgRef = /^[-_A-Za-z0-9]{1,40}$/.test(String(body.ref || '')) ? String(body.ref) : '';
     let talk = null;
     if (isTalk) {
       talk = await talkPlan(token, body.type, cls, talkWho, talkId);
@@ -625,7 +660,7 @@ exports.handler = async (event) => {
       // Нагадування — лише одному вчителю за раз
       : body.type === 'reminder'
       ? await findByEmails(token, Array.isArray(body.to) ? body.to.slice(0, 1) : [])
-      : (body.type === 'news' ? await findNewsTargets(token, cls)
+      : (body.type === 'news' ? await findNewsTargets(token, await newsAudience(token, msgRef, body))
       : (isClassWide ? await findClassTargets(token, cls)
       : (isBroadcast ? await findMealTargets(token)
                      : await findTargets(token, cls, studentName))));
