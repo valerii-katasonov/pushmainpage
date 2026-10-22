@@ -11,7 +11,7 @@
 // ── ДВА ПОГЛЯДИ НА ТІ САМІ ДАНІ ────────────────────────────────
 //
 // ЗА ТИЖДЕНЬ — «що сталося останнім часом»: по днях, разом із
-// коментарями вчителя, реакціями й кнопкою «Покращити».
+// коментарями вчителя, реакціями й кнопкою «Перездати».
 // ЗА ПРЕДМЕТОМ — «як справи з математикою взагалі»: усі оцінки за рік
 // і середній бал.
 //
@@ -321,8 +321,8 @@ function retakeBtn(cls, subj, date, v, numericScale){
   const who = currentUserData?.studentId || currentUserData?.studentName || '';
   // Обгортка: після показу hydrateRetakes підмінить кнопку станом заявки,
   // якщо її вже подавали («⏳ подано», «✅ перездача 24.10», «❌ відхилено»)
-  return `<span class="rt-slot" data-c="${escHtml(cls)}" data-s="${escHtml(subj)}" data-d="${escHtml(date)}" data-w="${escHtml(who)}"><button class="retake-btn" style="margin-left:6px;"
-     onclick="sendRetakeRequest('${escJs(cls)}','${escJs(subj)}','${escJs(date)}','${escJs(who)}','${escJs(String(v).trim().slice(0, 4))}')">🔄 Покращити</button></span>`;
+  return `<span class="rt-slot" data-c="${escHtml(cls)}" data-s="${escHtml(subj)}" data-d="${escHtml(date)}" data-w="${escHtml(who)}"><button type="button" class="retake-btn" title="Попросити вчителя про перездачу"
+     onclick="sendRetakeRequest('${escJs(cls)}','${escJs(subj)}','${escJs(date)}','${escJs(who)}','${escJs(String(v).trim().slice(0, 4))}')"><span class="rt-pill"><span class="rt-ic" aria-hidden="true">↻</span>Перездати</span></button></span>`;
 }
 // Стан своєї заявки на перездачу — замість кнопки. Читаємо ЛИСТКИ (лише
 // свої заявки: увесь вузол класу родині закритий) і лише для оцінок із
@@ -332,10 +332,13 @@ export function retakeChip(req){
   if(req.status === 'approved'){
     const d = /^\d{4}-\d{2}-\d{2}$/.test(String(req.retakeDate || '')) ? req.retakeDate.split('-').reverse().slice(0, 2).join('.') : '';
     const when = d ? d + (req.retakeTime ? ` о ${req.retakeTime}` : '') + (req.retakeNote ? ` (${req.retakeNote})` : '') : '';
-    return `<span class="rt-chip ok">✅ ${when ? `Перездача ${escHtml(when)}` : 'Перездачу дозволено — дату повідомить учитель'}</span>`;
+    // Місце (примітку вчителя) — у підказці: мітка має лишатися короткою
+    const dt = d + (req.retakeTime ? ` о ${req.retakeTime}` : '');
+    return when ? `<span class="rt-chip ok" title="${escHtml('Перездача ' + when)}">✓ Перездача ${escHtml(dt)}</span>`
+      : '<span class="rt-chip ok" title="Дату перездачі повідомить учитель">✓ Перездачу дозволено</span>';
   }
-  if(req.status === 'rejected') return '<span class="rt-chip no">❌ Перездачу не дозволено</span>';
-  return '<span class="rt-chip">⏳ Заявку подано — чекає вчителя</span>';
+  if(req.status === 'rejected') return '<span class="rt-chip no">Перездачу не дозволено</span>';
+  return '<span class="rt-chip wait" title="Заявка чекає рішення вчителя">⏳ Заявку подано</span>';
 }
 export async function hydrateRetakes(box){
   const slots = [...((box && box.querySelectorAll) ? box.querySelectorAll('.rt-slot') : [])];
@@ -441,8 +444,10 @@ function paintWeek(){
       const tName = gvTeachers[subjKey(s)] || gvTeachers[s.trim()];
       const tHtml = tName ? ` <span style="font-size:0.8rem;color:var(--brand-deep);font-weight:normal;">👩‍🏫 ${escHtml(tName)}</span>` : '';
       return `<li style="margin-bottom:9px;"><button type="button" class="gv-subj-link" data-subj="${escHtml(s)}" onclick="gvOpenSubject(this.dataset.subj)" title="Усі оцінки й графік з предмета">${escHtml(s)}</button>${tHtml}<br>`
-        + grades.map(g=>gradeChip(g.v,g.t,cls,gvScales?.[s]?.max)
-          +retakeBtn(cls,s,g.date,g.v,gvScales?.[s]?.max)+renderWorkPhotos(g.workPhotos)).join(' ')
+        // Оцінка й її «Перездати» — одна група: інакше при кількох оцінках
+        // за день кнопка переносилась на рядок нижче, під чужу оцінку
+        + grades.map(g=>`<span class="g-pair">${gradeChip(g.v,g.t,cls,gvScales?.[s]?.max)
+          +retakeBtn(cls,s,g.date,g.v,gvScales?.[s]?.max)}</span>`+renderWorkPhotos(g.workPhotos)).join(' ')
         + (cm ? `<div data-cm-cls="${escHtml(cls)}" data-cm-date="${escHtml(ds)}" data-cm-subj="${escHtml(s)}" data-cm-sid="${escHtml(cmKey)}" style="background:var(--surface-2);padding:5px 9px;border-radius:6px;font-style:italic;font-size:.88rem;margin-top:4px;">${escHtml(cm)}</div>`
                 + reactionRow(ds, s, rx, cmKey) : '')
         + `</li>`;
