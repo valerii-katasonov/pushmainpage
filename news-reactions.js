@@ -282,11 +282,18 @@ window.openNewsWho = async function(id){
         <ul>${byCls[c].map(p => `<li>${escHtml(p.label)}${p.react ? ` ${NEWS_REACTS.find(x => x.k === p.react).e}` : ''} <span>${escHtml(fmt(p.ts))}</span></li>`).join('')}</ul></details>`).join('')
       : '<p class="empty-msg">Ще ніхто не переглянув.</p>'}</div>`;
     let notBlock = '';
-    if(ann.scope === 'class' && ann.class){
+    // Хто ще не бачив — по кожному класу, якому адресоване оголошення
+    const annCls = ann.scope === 'class' && ann.class ? [ann.class]
+      : ann.scope === 'classes' && ann.classes ? Object.keys(ann.classes).filter(c => ann.classes[c] === true && /^class_\d{1,2}$/.test(c))
+          .sort((x, y) => Number(x.slice(6)) - Number(y.slice(6))) : [];
+    if(annCls.length){
       const seenSe = new Set(seenP.map(p => p.se).filter(Boolean));
-      const not = notSeenInClass(links, ann.class, seenSe);
-      notBlock = `<div class="nwho-sec"><b>Ще не переглянули (${escHtml(String(ann.class).replace('class_', ''))} клас): ${not.length}</b>${
-        not.length ? `<ul>${not.map(n => `<li>${escHtml(n)}</li>`).join('')}</ul>` : '<p class="nwho-ok">✅ Переглянули всі родини класу.</p>'}</div>`;
+      const per = annCls.map(c => ({ c, not: notSeenInClass(links, c, seenSe) }));
+      const list = n => n.length ? `<ul>${n.map(x => `<li>${escHtml(x)}</li>`).join('')}</ul>` : '<p class="nwho-ok">✅ Переглянули всі родини класу.</p>';
+      notBlock = annCls.length === 1
+        ? `<div class="nwho-sec"><b>Ще не переглянули (${escHtml(annCls[0].replace('class_', ''))} клас): ${per[0].not.length}</b>${list(per[0].not)}</div>`
+        : `<div class="nwho-sec"><b>Ще не переглянули: ${per.reduce((n, x) => n + x.not.length, 0)}</b>${per.map(x =>
+            `<details class="nwho-cls"><summary>${escHtml(x.c.replace('class_', ''))} клас — ${x.not.length}</summary>${list(x.not)}</details>`).join('')}</div>`;
     }
     body.innerHTML = reactBlock + seenBlock + notBlock
       + '<p class="nwho-note">«Переглянули» — оголошення було на екрані родини хоча б секунду. Хто читав лише сповіщення на телефоні, тут не з’явиться, доки не відкриє портал.</p>';

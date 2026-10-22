@@ -79,7 +79,9 @@ export function familyItems(d, o){
     out.push({ id: `h:${date}:${subj}`, kind: 'hw', icon: '📚', ts, title: `ДЗ: ${subj}`, sub: cut(text, 90) || 'з вкладенням', go: { tab: 'hw' } });
   }
   // Оголошення школи й свого класу, ще чинні
-  newsItems(d.news, a => a.scope === 'school' || a.class === o.cls, from)
+  // Кільком класам одразу (молодша/старша школа чи вибрані) — мапа classes
+  newsItems(d.news, a => a.scope === 'school' || a.class === o.cls
+    || (a.scope === 'classes' && !!a.classes && a.classes[o.cls] === true), from)
     .forEach(x => out.push({ ...x, go: { tab: o.role === 'student' ? 'news' : 'school' } }));
   // Запити школи без відповіді (лише батьки)
   if(o.role === 'parent'){

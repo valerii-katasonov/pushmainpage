@@ -144,6 +144,11 @@ export async function renderStaffMeals(){
       m.drink  ? `<div class="stm-dish"><span>Напій</span><b>${escHtml(m.drink)}</b></div>` : ''
     ].join('') : '';
 
+    // 🌅 Меню сніданку й підвечірку ДЛЯ ДІТЕЙ — лише перегляд. Персонал
+    // їх не замовляє, але адміністрація й учителі часто відповідають
+    // новим батькам «що ви даєте на сніданок», а побачити це не було де.
+    const kidsMenu = m ? kidsMenuHtml(m) : '';
+
     // Кнопка одна, з двома станами: «беру» і «не беру». Два окремі
     // перемикачі тут зайві — у персоналу немає постійного плану за
     // замовчуванням, є рішення на день.
@@ -192,6 +197,7 @@ export async function renderStaffMeals(){
           : '<div class="pm-none">Меню на цей день ще не опубліковане</div>'}
       ${m && m.allergens ? `<div class="pm-allerg">⚠️ ${escHtml(m.allergens)}</div>` : ''}
       <div class="stm-act">${btn}</div>
+      ${kidsMenu}
       ${plan && plan.lunch
         ? `<div class="stm-plan">Ви обідаєте щодня. <a href="#" onclick="event.preventDefault();smSetPlan(0)">Скасувати постійне замовлення</a></div>`
         : `<div class="stm-plan">Обідаєте щодня? <a href="#" onclick="event.preventDefault();smSetPlan(1)">Замовляти автоматично</a></div>`}
@@ -206,6 +212,18 @@ export async function renderStaffMeals(){
   }
 }
 window.renderStaffMeals = renderStaffMeals;
+
+// Сніданок (варіанти А/Б) і підвечірок цього дня — як їх бачать батьки
+export function kidsMenuHtml(m){
+  const a = String(m.breakfast || '').trim(), b = String(m.breakfast2 || '').trim();
+  const snack = String(m.snack || '').trim(), sNote = String(m.snackNote || '').trim();
+  if(!a && !b && !snack) return '';
+  const bk = a && b
+    ? `<div class="stm-dish"><span>Сніданок А</span><b>${escHtml(a)}</b></div><div class="stm-dish"><span>Сніданок Б</span><b>${escHtml(b)}</b></div>`
+    : (a || b) ? `<div class="stm-dish"><span>Сніданок</span><b>${escHtml(a || b)}</b></div>` : '';
+  const sn = snack ? `<div class="stm-dish"><span>Підвечірок</span><b>${escHtml(snack)}${sNote ? ` <small>· ${escHtml(sNote)}</small>` : ''}</b></div>` : '';
+  return `<div class="stm-kids"><div class="stm-kids-h">🌅 Для дітей <span>лише перегляд</span></div>${bk}${sn}</div>`;
+}
 
 // День, який показуємо першим. Якщо на сьогодні замовлення вже закрито
 // (після MEAL_CUTOFF_HOUR), — одразу найближчий робочий день: інакше людина

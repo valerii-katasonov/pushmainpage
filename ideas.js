@@ -194,6 +194,8 @@ export function filterIdeas(list, f){
 export async function openIdeaInbox(){
   if(!isAdmin(currentUserData && currentUserData.role)) return;
   const o = overlay('idea-inbox-modal');
+  // Кабінет директора поки не перекладається (i18n.js) — скринька теж
+  o.setAttribute('data-no-i18n', '');
   const mc = o.querySelector('.modal-content');
   mc.classList.add('ib-wide');
   mc.innerHTML = `<h2 class="ib-h">💡 Банк ідей</h2>

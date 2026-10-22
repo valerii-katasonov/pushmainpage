@@ -4,8 +4,10 @@
 // МОДЕЛЬ ДАНИХ
 //   announcements/{id} = {
 //     title, text,
-//     scope: 'school' | 'class',
-//     class: 'class_2' | null,     // лише для scope==='class'
+//     scope: 'school' | 'class' | 'classes',
+//     class: 'class_2' | null,     // лише для scope==='class' (один клас)
+//     classes: {class_1:true, …},  // лише для scope==='classes' (кілька класів,
+//                                  //   «Молодша школа» = 1–5, «Старша» = 6–11)
 //     important: bool,             // true → червоне виділення і «❗ Важливе»
 //     color: '' | 'blue' | ...,    // колір картки (NEWS_COLORS), обирає автор
 //     author, authorName, role,
@@ -45,13 +47,60 @@ export function newsColorClass(a){
   return c && Object.prototype.hasOwnProperty.call(NEWS_COLORS, c) ? ' nw-c-' + c : '';
 }
 const IMP_TAG = '<span class="nw-tag imp">❗ Важливе</span>';
-const scopeLabel = a => a.scope === 'school' ? 'Вся школа' : String(a.class || '').replace('class_', '') + ' клас';
+
+// ── КОМУ АДРЕСОВАНО ──
+// Один клас пишемо по-старому (scope 'class' + class) — так оголошення
+// однаково читають і нові, і ще не оновлені сторінки. Кілька класів —
+// scope 'classes' і мапа classes. Стара сторінка такого оголошення
+// родині просто не покаже (а не покаже чуже) — безпечний бік.
+export const ALL_CLASSES = Array.from({ length: 11 }, (_, i) => `class_${i + 1}`);
+export const CLASS_GROUPS = {
+  junior: { label: 'Молодша школа', range: '1–5', classes: ALL_CLASSES.slice(0, 5) },
+  senior: { label: 'Старша школа',  range: '6–11', classes: ALL_CLASSES.slice(5) }
+};
+const CLS_RE = /^class_([1-9]|1[01])$/;
+const clsNum = c => Number(String(c).replace('class_', ''));
+const byNum = (x, y) => clsNum(x) - clsNum(y);
+export function annClasses(a){
+  if(!a || a.scope === 'school') return [];
+  if(a.scope === 'classes') return Object.keys(a.classes && typeof a.classes === 'object' ? a.classes : {})
+    .filter(c => a.classes[c] === true && CLS_RE.test(c)).sort(byNum);
+  return a.class ? [a.class] : [];
+}
+export const annForClass = (a, cls) => !!a && (a.scope === 'school' || (!!cls && annClasses(a).includes(cls)));
+const sameSet = (l, m) => l.length === m.length && l.every((x, i) => x === m[i]);
+const groupOf = l => Object.keys(CLASS_GROUPS).find(g => sameSet(l, CLASS_GROUPS[g].classes)) || '';
+export function scopeLabel(a){
+  if(a.scope === 'school') return 'Вся школа';
+  const l = annClasses(a), g = groupOf(l);
+  if(g) return CLASS_GROUPS[g].label;
+  if(sameSet(l, ALL_CLASSES)) return 'Усі класи';
+  if(l.length <= 1) return `${clsNum(l[0] || '')} клас`;
+  return 'Класи: ' + l.map(clsNum).join(', ');
+}
+// «Надіслати … родинам 3 класу?»
+function whoLabel(a){
+  if(a.scope === 'school') return 'усім родинам школи';
+  const l = annClasses(a), g = groupOf(l);
+  if(g === 'junior') return 'родинам молодшої школи (1–5 класи)';
+  if(g === 'senior') return 'родинам старшої школи (6–11 класи)';
+  if(l.length === 1) return `родинам ${clsNum(l[0])} класу`;
+  return `родинам ${l.map(clsNum).join(', ')} класів`;
+}
+const badgeHtml = a => a.scope === 'school'
+  ? '<span class="nw-tag school">Вся школа</span>'
+  : `<span class="nw-tag cls">${escHtml(scopeLabel(a))}</span>`;
 
 // Одне місце, звідки йде сповіщення про оголошення — і при публікації,
 // і з кнопки «Нагадати». Повертає відповідь notifyEvent.
 export function sendNewsPush(a, id, remind){
+  // Кільком класам: class 'MULTI' + список. Сервер усе одно бере адресатів
+  // із самого оголошення (за ref), а 'MULTI' без списку нікому не дійде —
+  // помилка тут не має перетворитися на розсилку всій школі.
+  const l = annClasses(a);
   return notifyEvent('news', {
-    class: a.scope === 'school' ? 'ALL' : (a.class || 'ALL'), studentName: 'ALL',
+    class: a.scope === 'school' ? 'ALL' : (l.length === 1 ? l[0] : 'MULTI'),
+    ...(l.length > 1 ? { classes: l.join(',') } : {}), studentName: 'ALL',
     subject: scopeLabel(a), value: a.title || String(a.text || '').slice(0, 60),
     important: !!a.important, remind: !!remind, ref: id || ''
   });
@@ -90,7 +139,7 @@ export function canRemind(a, role, uid){
   if(!a) return false;
   if(a.author && a.author === uid) return true;
   if(canPostSchoolWide()) return true;
-  return isTeacherRole(role) && a.scope === 'class' && hasClassAccess(a.class);
+  return isTeacherRole(role) && a.scope !== 'school' && annClasses(a).some(hasClassAccess);
 }
 
 const lastSeen = () => { try{ return Number(localStorage.getItem(SEEN_KEY)) || 0; }catch(e){ return 0; } };
@@ -140,7 +189,7 @@ function visibleTo(a, role, cls){
   if(role === 'director' || role === 'administrator' || canPostSchoolWide()) return true;
   // Інші ролі з конструктора класу не мають — бачать шкільні оголошення
   if(window.isCustomRole && window.isCustomRole(role)) return false;
-  return a.class === cls;
+  return annForClass(a, cls);
 }
 
 export async function renderNewsFeed(containerId){
@@ -165,9 +214,7 @@ export async function renderNewsFeed(containerId){
       const isClassTeacher = (role === 'teacher' && a.class && window.__isClassTeacherOf === a.class);
       const remindOk = canRemind(a, role, auth.currentUser?.uid || '');
       const canDel = mine || isSchoolAdmin() || isClassTeacher;
-      const badge  = a.scope === 'school'
-        ? '<span class="nw-tag school">Вся школа</span>'
-        : `<span class="nw-tag cls">${escHtml(String(a.class||'').replace('class_',''))} клас</span>`;
+      const badge  = badgeHtml(a);
       const isExpired = a.expTs && Date.now() > a.expTs;
       const expiredTag = isExpired ? '<span class="nw-tag" style="background:var(--danger-soft);color:var(--danger);font-weight:bold;">Термін минув</span>' : '';
       const expDateTxt = a.expTs
@@ -263,9 +310,7 @@ export async function renderFreshNews(containerId){
 
     box.innerHTML = `<div class="fn-head">📣 Оголошення школи</div>` + list.map(a => {
       const left = daysLeft(a, now);
-      const badge = a.scope === 'school'
-        ? '<span class="nw-tag school">Вся школа</span>'
-        : `<span class="nw-tag cls">${escHtml(String(a.class||'').replace('class_',''))} клас</span>`;
+      const badge = badgeHtml(a);
       const folded = isFolded(a);
       return `<article class="fn-item${a.important?' imp':''}${newsColorClass(a)}${folded?' is-collapsed':''}">
         <div class="nw-head">
@@ -319,17 +364,35 @@ export async function countUnreadNews(){
 window.countUnreadNews = countUnreadNews;
 
 // ── СТВОРЕННЯ ──
+// Кому: уся школа, молодша (1–5), старша (6–11) або вибрані класи
+// галочками. Учитель обирає лише серед класів, до яких має доступ;
+// якщо такий клас один — вибору немає, як і раніше.
+const teacherClasses = () => Object.keys(teacherAccessMatrix || {}).filter(c => CLS_RE.test(c)).sort(byNum);
+function fillClassGrid(allowed, checked){
+  const box = document.getElementById('nw-classes');
+  if(!box) return;
+  box.innerHTML = allowed.map(c => `<label class="nw-cls"><input type="checkbox" value="${c}"${checked.includes(c) ? ' checked' : ''}><span>${clsNum(c)}</span></label>`).join('');
+}
+const pickedClasses = () => [...document.querySelectorAll('#nw-classes input:checked')].map(i => i.value).filter(c => CLS_RE.test(c)).sort(byNum);
+window.nwPickClasses = function(which){
+  const want = which === 'none' ? [] : (CLASS_GROUPS[which] ? CLASS_GROUPS[which].classes : []);
+  document.querySelectorAll('#nw-classes input').forEach(i => { i.checked = want.includes(i.value); });
+};
 window.openNewsComposer = function(){
   if(!canPostAtAll()) return;
   const modal = document.getElementById('news-modal');
   const scope = document.getElementById('nw-scope');
   if(!modal || !scope) return;
-  // Учитель пише лише своєму класу — вибір адресата йому не потрібен
   const schoolWide = canPostSchoolWide();
+  const presets = document.getElementById('nw-cls-presets');
   document.getElementById('nw-scope-row').style.display = schoolWide ? 'block' : 'none';
-  document.getElementById('nw-scope-note').textContent = schoolWide
-    ? '' : `Оголошення побачать батьки та учні ${String(getActiveClass()||'').replace('class_','')} класу.`;
+  if(presets) presets.style.display = schoolWide ? '' : 'none';
   scope.value = schoolWide ? 'school' : 'class';
+  if(schoolWide) fillClassGrid(ALL_CLASSES, []);
+  else {
+    const mine = teacherClasses(), act = getActiveClass();
+    fillClassGrid(mine.length > 1 ? mine : [], act ? [act] : []);
+  }
   window.nwScopeChanged();
   document.getElementById('nw-title').value = '';
   document.getElementById('nw-text').value  = '';
@@ -351,23 +414,40 @@ window.pickNewsColor = function(c){
 };
 window.nwImportantChanged = () => window.pickNewsColor(document.getElementById('nw-colors')?.dataset.color || '');
 window.nwScopeChanged = function(){
-  const v = document.getElementById('nw-scope').value;
+  const schoolWide = canPostSchoolWide();
+  const v = schoolWide ? document.getElementById('nw-scope').value : 'class';
+  const grid = !!document.querySelector('#nw-classes input');
   const row = document.getElementById('nw-class-row');
-  if(row) row.style.display = v === 'class' ? 'block' : 'none';
+  if(row) row.style.display = v === 'class' && grid ? 'block' : 'none';
+  const note = document.getElementById('nw-scope-note');
+  if(note) note.textContent = CLASS_GROUPS[v]
+    ? `Оголошення побачать батьки та учні ${CLASS_GROUPS[v].range} класів.`
+    : schoolWide ? ''
+    : grid ? 'Оголошення побачать батьки та учні вибраних класів.'
+    : getActiveClass() ? `Оголошення побачать батьки та учні ${clsNum(getActiveClass())} класу.` : '';
 };
+// Що обрано в модалці → поля запису {scope, class, classes}
+function pickedTarget(){
+  const schoolWide = canPostSchoolWide();
+  const v = schoolWide ? document.getElementById('nw-scope').value : 'class';
+  if(v === 'school') return { scope: 'school', class: null };
+  let list = CLASS_GROUPS[v] ? CLASS_GROUPS[v].classes.slice()
+    : document.querySelector('#nw-classes input') ? pickedClasses()
+    : [getActiveClass()].filter(Boolean);
+  // Учитель — лише свої класи (правила бази однаково не пустять чужий)
+  if(!schoolWide && !CLASS_GROUPS[v] && document.querySelector('#nw-classes input')){ const mine = teacherClasses(); list = list.filter(c => mine.includes(c)); }
+  if(!list.length) return null;
+  if(list.length === 1) return { scope: 'class', class: list[0] };
+  return { scope: 'classes', class: null, classes: Object.fromEntries(list.map(c => [c, true])) };
+}
 
 window.publishNews = async function(){
   const title = document.getElementById('nw-title').value.trim();
   const text  = document.getElementById('nw-text').value.trim();
   if(!text) return alert('Напишіть текст оголошення.');
 
-  const schoolWide = canPostSchoolWide();
-  const scope = schoolWide ? document.getElementById('nw-scope').value : 'class';
-  let cls = null;
-  if(scope === 'class'){
-    cls = schoolWide ? document.getElementById('nw-class').value : getActiveClass();
-    if(!cls) return alert('Оберіть клас.');
-  }
+  const target = pickedTarget();
+  if(!target) return alert('Оберіть хоча б один клас.');
   const expVal = document.getElementById('nw-exp')?.value;
   const expTs = expVal ? new Date(expVal).getTime() : null;
   const important = document.getElementById('nw-important').checked;
@@ -376,7 +456,7 @@ window.publishNews = async function(){
   btn.disabled = true; btn.textContent = '⏳ Публікую...';
   try{
     const rec = {
-      title, text, scope, class: cls, important,
+      title, text, ...target, important,
       author: auth.currentUser?.uid || '',
       authorName: [currentUserData?.firstName, currentUserData?.lastName].filter(Boolean).join(' ')
                   || currentUserData?.email || 'Школа',
@@ -386,7 +466,7 @@ window.publishNews = async function(){
     if(expTs) rec.expTs = expTs;
     if(color && NEWS_COLORS[color]) rec.color = color;
     const newRef = await push(ref(db,'announcements'), rec);
-    logAction('announcement', { value: `${scope === 'school' ? 'вся школа' : cls} · ${title || text.slice(0,40)}` });
+    logAction('announcement', { value: `${scopeLabel(rec).toLowerCase()} · ${title || text.slice(0,40)}` });
 
     // Сповіщення — на кожне оголошення (див. шапку файлу)
     pushToast('✅ Опубліковано', await sendNewsPush(rec, newRef.key, false));
@@ -433,7 +513,7 @@ window.remindNews = async function(id){
     if(!snap.exists()) return alert('Оголошення вже видалено.');
     const a = snap.val();
     if(a.expTs && Date.now() > a.expTs) return alert('Термін цього оголошення минув — нагадувати про нього не варто.');
-    const who = a.scope === 'school' ? 'усім родинам школи' : `родинам ${scopeLabel(a)}у`;
+    const who = whoLabel(a);
     const recent = a.remindedAt && Date.now() - a.remindedAt < REMIND_GAP
       ? `\n\n⚠️ Нагадування вже надсилали о ${new Date(a.remindedAt).toLocaleTimeString('uk-UA',{hour:'2-digit',minute:'2-digit'})}. Надіслати ще раз?` : '';
     if(!confirm(`Надіслати сповіщення про «${a.title || String(a.text||'').slice(0,40)}» ${who}?${recent}`)) return;

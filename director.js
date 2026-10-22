@@ -816,7 +816,10 @@ window.removeStaffMember=async function(safeEmail){
       remove(ref(db,`teacher_skills/${safeEmail}`)),
       // З довідника теж: інакше звільнена людина лишалася б у списку
       // контактів чату, і їй можна було б написати.
-      remove(ref(db,`staff_directory/${safeEmail}`))
+      remove(ref(db,`staff_directory/${safeEmail}`)),
+      // 🎂 День народження й підписку на нагадування — теж (staff-bdays.js)
+      remove(ref(db,`staff_birthdays/${safeEmail}`)).catch(()=>{}),
+      remove(ref(db,`staff_bday_subs/${safeEmail}`)).catch(()=>{})
     ]);
     if(window.invalidateContactDir) window.invalidateContactDir();
     // 2. Прибираємо службові ролі з профілю. Якщо це також мама/тато,

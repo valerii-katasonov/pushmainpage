@@ -585,6 +585,10 @@
     .pms-presets{display:flex;gap:7px;margin-top:8px;flex-wrap:wrap;}
     .pms-presets button{width:auto;margin:0;padding:7px 13px;font-size:.78rem;font-weight:600;background:var(--brand-soft);color:var(--brand-ink);border:1px solid var(--brand-line);border-radius:9px;cursor:pointer;}
     /* ── Оплата за навчання ── */
+    .pay-dev{background:var(--warn-soft);border:1px solid var(--warn-line);color:var(--ink);border-radius:10px;padding:9px 11px;font-size:.82rem;line-height:1.45;margin:0 0 10px;}
+    .pay-h{margin:4px 0 4px;font-size:.92rem;color:var(--ink);}
+    .pay-qr-on{display:flex;gap:8px;align-items:center;font-size:.85rem;margin:8px 0;}
+    .pay-qr-on input{width:auto;margin:0;}
     .pay-qr{text-align:center;margin-bottom:13px;}
     .pay-qr svg{max-width:220px;height:auto;background:var(--surface);border-radius:10px;padding:6px;border:1px solid var(--ok-line);}
     .pay-qr span{display:block;font-size:.76rem;color:var(--ok);margin-top:6px;}
@@ -614,6 +618,9 @@
     .stm-day b{display:block;font-size:.95rem;color:var(--ink);}
     .stm-day span{font-size:.75rem;color:var(--brand-ink);font-weight:700;}
     .stm-dish{display:flex;gap:9px;align-items:baseline;padding:5px 0;border-bottom:1px dashed var(--brand-line);}
+    .stm-kids{margin-top:12px;padding:10px 12px;border-radius:12px;background:var(--surface-2);border:1px solid var(--line-soft);}
+    .stm-kids-h{font-weight:800;font-size:.88rem;margin-bottom:4px;color:var(--ink);}
+    .stm-kids-h span{font-weight:600;font-size:.75rem;color:var(--ink-3);margin-left:6px;}
     .stm-dish span{flex:0 0 62px;font-size:.75rem;color:var(--ink-3);text-transform:uppercase;letter-spacing:.03em;}
     .stm-dish b{flex:1;min-width:0;font-size:.88rem;color:var(--ink);overflow-wrap:anywhere;}
     .stm-choice{display:flex;gap:8px;margin:9px 0;flex-wrap:wrap;}
@@ -3421,6 +3428,68 @@ body.ui-sheet-lock{overflow:hidden;}
 .ui-cmd-opt[aria-selected="true"],.ui-cmd-opt:hover{background:var(--brand-soft);color:var(--brand-deep);}
 .ui-cmd-empty{padding:18px;text-align:center;color:var(--ink-3);font-size:.88rem;}
 .ui-cmd-foot{padding:8px 12px;border-top:1px solid var(--line-soft);font-size:.72rem;color:var(--ink-3);}
+/* 📝 Оцінки за роботу (group-grades.js) */
+.gg-modal{text-align:left;max-width:560px;}
+.gg-h,.hwc-h,.sb-h{margin:0 0 4px;color:var(--brand-deep);text-align:center;}
+.gg-sub,.sb-sub{margin:0 0 10px;font-size:.82rem;color:var(--ink-2);text-align:center;}
+.gg-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 10px;margin-bottom:8px;}
+.gg-grid label{margin:0;font-size:.8rem;}
+.gg-grid select,.gg-grid input{margin-top:3px;}
+.gg-list{max-height:52vh;overflow-y:auto;border:1px solid var(--line-soft);border-radius:12px;}
+.gg-row{display:grid;grid-template-columns:28px 1fr 96px;gap:8px;align-items:center;padding:6px 10px;border-bottom:1px solid var(--line-soft);}
+.gg-row:last-child{border-bottom:0;}
+.gg-n{color:var(--ink-3);font-size:.78rem;text-align:right;}
+.gg-name{font-size:.9rem;color:var(--ink);}
+.gg-row .gg-g{margin:0;text-align:center;font-weight:800;}
+.gg-abs,.gg-late{font-style:normal;font-size:.72rem;font-weight:800;padding:1px 6px;border-radius:999px;margin-left:4px;}
+.gg-abs{background:var(--danger-soft);color:var(--danger);}
+.gg-late{background:var(--warn-soft);color:var(--warn);}
+.gg-msg{min-height:1em;margin:6px 0 0;font-size:.85rem;font-weight:700;color:var(--ok);}
+.gg-msg.bad{color:var(--danger);}
+.gg-save{width:100%;background:var(--brand-deep);color:var(--on-fill);font-weight:800;margin-top:8px;}
+.gg-cancel,.hwc-close,.sb-close{width:100%;background:var(--surface-2);color:var(--ink);border:1px solid var(--line);margin-top:7px;}
+@media (max-width:480px){.gg-grid{grid-template-columns:1fr;}.gg-row{grid-template-columns:24px 1fr 80px;}}
+/* 📚 ДЗ класу (hw-classes.js) */
+.hwc-modal{text-align:left;max-width:640px;}
+.hwc-bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0;}
+.hwc-bar select{width:auto;flex:0 0 auto;margin:0;}
+.hwc-week{display:flex;align-items:center;gap:8px;margin-left:auto;}
+.hwc-week button{width:auto;margin:0;padding:6px 12px;background:var(--surface-2);color:var(--ink);border:1px solid var(--line);}
+.hwc-now{width:100%;margin:0 0 8px;background:var(--brand-soft);color:var(--brand-deep);border:1px solid var(--brand-line);}
+.hwc-sum{font-size:.85rem;color:var(--ink-2);margin:4px 0 8px;}
+.hwc-day{border:1px solid var(--line-soft);border-radius:12px;padding:8px 12px;margin-bottom:8px;background:var(--surface);}
+.hwc-day.is-today{border-color:var(--brand-line);}
+.hwc-day h4{margin:0 0 6px;font-size:.92rem;color:var(--ink);}
+.hwc-day h4 span{font-size:.72rem;color:var(--brand-deep);background:var(--brand-soft);border-radius:999px;padding:1px 7px;margin-left:4px;}
+.hwc-item{padding:6px 0;border-top:1px dashed var(--line-soft);}
+.hwc-item:first-of-type{border-top:0;}
+.hwc-ul{margin:0;padding-left:0;list-style:none;font-size:.9rem;}
+.hwc-meta{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:.76rem;color:var(--ink-2);margin-top:3px;}
+.hwc-due{color:var(--brand-deep);font-weight:700;}
+.hwc-none{margin:0;font-size:.82rem;color:var(--ink-3);}
+/* 🎂 Дні народження колег (staff-bdays.js) */
+.sb-entry{width:auto;margin:0 0 12px;padding:8px 14px;background:var(--surface-2);color:var(--ink);border:1px solid var(--line);border-radius:10px;font-weight:700;}
+.sb-modal{text-align:left;max-width:520px;}
+.sb-me{background:var(--brand-soft);border:1px solid var(--brand-line);border-radius:12px;padding:10px 12px;margin-bottom:10px;}
+.sb-pick{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;}
+.sb-pick select{width:auto;margin:0;}
+.sb-pick button,.sb-edit button{width:auto;margin:0;padding:7px 12px;background:var(--brand-deep);color:var(--on-fill);}
+.sb-pick .sb-ghost{background:var(--surface);color:var(--ink-2);border:1px solid var(--line);}
+.sb-sub-on{display:flex;gap:8px;align-items:center;font-size:.82rem;margin:8px 0 0;}
+.sb-sub-on input{width:auto;margin:0;}
+.sb-h4{margin:12px 0 6px;font-size:.9rem;}
+.sb-row{display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px dashed var(--line-soft);font-size:.88rem;}
+.sb-row.is-today{background:var(--accent-soft);border-radius:8px;padding:6px 8px;}
+.sb-name small{color:var(--ink-3);font-size:.72rem;margin-left:4px;}
+.sb-date{color:var(--ink-2);white-space:nowrap;}
+.sb-month{margin-bottom:6px;}
+.sb-mh{font-weight:800;font-size:.8rem;color:var(--brand-deep);margin-top:6px;}
+.sb-none{font-size:.82rem;color:var(--ink-3);margin:0;}
+.sb-all{margin-top:12px;}
+.sb-all summary{cursor:pointer;font-weight:700;color:var(--brand-deep);}
+.sb-edit{display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:5px 0;border-bottom:1px dashed var(--line-soft);}
+.sb-edit span{flex:1;min-width:140px;font-size:.86rem;}
+.sb-edit select{width:auto;margin:0;}
 /* 💡 Банк ідей (ideas.js) */
 .ib-card p{margin:0 0 10px;font-size:.9rem;color:var(--ink-2);}
 .ib-open{width:100%;margin:0;background:var(--brand-deep);color:var(--on-fill);border:0;border-radius:11px;padding:11px;font-weight:800;}
@@ -3850,6 +3919,15 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
 .t-now-acts .ui-btn{flex:1;max-width:none;}
 .d-today .qa-grid{grid-template-columns:repeat(auto-fit,minmax(190px,1fr));}
 @media (max-width:560px){.d-today .qa-grid{grid-template-columns:1fr 1fr;}}
+
+/* Оголошення: вибір класів галочками (news.js) */
+.nw-cls-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin:10px 0 6px;font-weight:600;font-size:.85rem;color:var(--ink)}
+.nw-cls-presets{display:flex;gap:6px;flex-wrap:wrap}
+.nw-cls-presets button{width:auto;margin:0;padding:4px 10px;font-size:.78rem;border-radius:999px;background:var(--brand-soft);color:var(--brand-ink);border:1px solid var(--brand-line)}
+.nw-cls-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(52px,1fr));gap:6px}
+.nw-cls{display:flex;align-items:center;justify-content:center;gap:4px;margin:0;padding:6px 4px;border:1px solid var(--line);border-radius:10px;cursor:pointer;font-weight:600;font-size:.9rem;background:var(--surface)}
+.nw-cls input{width:auto;margin:0}
+.nw-cls:has(input:checked){background:var(--brand-soft);border-color:var(--brand-deep);color:var(--brand-ink)}
 </style>
 </head>
 <!-- auth-mode СТОЇТЬ ТУТ ОДРАЗУ, а не чекає на скрипт.
@@ -4103,8 +4181,8 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
          (додайте клас "half" для пів-ширини на десктопі) — grid підхопить їх автоматично. -->
 
     <section class="screen-section half">
-      <!-- Власне харчування співробітника. Той самий вибір, що й у родин,
-           але без сніданків і підвечірків: кухня їх персоналу не пропонує. -->
+      <!-- Власне харчування співробітника: обід і винос. Сніданок і
+           підвечірок дітей — тут же, лише для перегляду (staff-meals.js). -->
       <div class="data-card" style="border-left-color:var(--brand-ink);background:var(--brand-soft);margin-top:0;">
         <h4 style="margin-top:0;color:var(--brand-ink);">🍽 Моє харчування</h4>
         <div class="stm-box"><p class="empty-msg is-loading">Завантаження...</p></div>
@@ -4118,6 +4196,8 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
         <button onclick="openJournalModal('administrator')" style="flex:1;min-width:160px;background:linear-gradient(135deg,var(--brand-deep),var(--brand-deep));color:var(--on-fill);margin-top:0;font-size:.95rem;padding:11px;">📖 Журнал</button>
         <button onclick="openChatModal('administrator')" data-chatbtn="1" style="flex:1;min-width:160px;background:linear-gradient(135deg,var(--brand-deep),var(--brand-deep));color:var(--on-fill);margin-top:0;font-size:.95rem;padding:11px;">💬 Чат з батьками</button>
         <button onclick="openIdeaInbox()" class="ib-qa" style="flex:1;min-width:160px;background:var(--brand-deep);color:var(--on-fill);margin-top:0;font-size:.95rem;padding:11px;">💡 Банк ідей <span class="ib-badge" hidden></span></button>
+        <button onclick="openHwClasses()" style="flex:1;min-width:160px;background:var(--brand-deep);color:var(--on-fill);margin-top:0;font-size:.95rem;padding:11px;">📚 ДЗ класу</button>
+        <button onclick="openStaffBirthdays()" style="flex:1;min-width:160px;background:var(--brand-deep);color:var(--on-fill);margin-top:0;font-size:.95rem;padding:11px;">🎂 Дні народження колег</button>
       </div>
     </section>
 
@@ -4197,6 +4277,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
        класів (перегляд), свята й культурно-виховні заходи, оголошення. -->
   <div id="organizer-screen" class="panel">
     <h2 id="o-title" style="color:var(--ink);">🎭 Педагог-організатор</h2>
+    <button type="button" class="sb-entry" onclick="openStaffBirthdays()">🎂 Дні народження колег</button>
     <div id="o-push-invite" style="display:none;"></div>
     <div id="o-no-perms" class="data-card" style="display:none;border-left-color:var(--warn);background:var(--warn-soft);">
       <p style="margin:0;font-size:.88rem;color:var(--ink-2);">Для вашої ролі ще не відмічено жодного права. Зверніться до директора: права ролі задаються в «🧩 Конструктор ролей».</p>
@@ -4233,6 +4314,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
 
   <div id="kitchen-screen" class="panel">
     <h2 style="color:var(--brand-ink);">🍽️ Кухня</h2>
+    <button type="button" class="sb-entry" onclick="openStaffBirthdays()">🎂 Дні народження колег</button>
 
     <section class="screen-section">
       <h3>📅 Тиждень</h3>
@@ -4462,8 +4544,8 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
     </section>
 
     <section class="screen-section" data-dtab="meals">
-      <!-- Власне харчування співробітника. Той самий вибір, що й у родин,
-           але без сніданків і підвечірків: кухня їх персоналу не пропонує. -->
+      <!-- Власне харчування співробітника: обід і винос. Сніданок і
+           підвечірок дітей — тут же, лише для перегляду (staff-meals.js). -->
       <div class="data-card" style="border-left-color:var(--brand-ink);background:var(--brand-soft);margin-top:0;">
         <h4 style="margin-top:0;color:var(--brand-ink);">🍽 Моє харчування</h4>
         <div class="stm-box"><p class="empty-msg is-loading">Завантаження...</p></div>
@@ -4495,6 +4577,8 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
         <button onclick="openCommentsView()" class="qa-btn"><span class="qa-ic" aria-hidden="true">💬</span><span class="qa-l">Коментарі учням</span></button>
         <button onclick="openChatModal('director')" data-chatbtn="1" class="qa-btn"><span class="qa-ic" aria-hidden="true">✉️</span><span class="qa-l">Чат з батьками</span></button>
         <button onclick="openIdeaInbox()" class="qa-btn ib-qa"><span class="qa-ic" aria-hidden="true">💡</span><span class="qa-l">Банк ідей</span><span class="ib-badge" hidden></span></button>
+        <button onclick="openHwClasses()" class="qa-btn"><span class="qa-ic" aria-hidden="true">📚</span><span class="qa-l">ДЗ класу</span></button>
+        <button onclick="openStaffBirthdays()" class="qa-btn"><span class="qa-ic" aria-hidden="true">🎂</span><span class="qa-l">Дні народження колег</span></button>
       </div></div></div>
       <h3 class="ui-h">Звіти</h3>
       <details id="d-overview-averages" class="ui-card d-fold">
@@ -5148,6 +5232,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
         <div class="qa-group"><div class="qa-gt">Журнал і оцінки</div><div class="qa-grid">
           <button onclick="openJournalModal('teacher')" class="qa-btn qa-journal"><span class="qa-ic" aria-hidden="true">📖</span><span class="qa-l">Журнал</span></button>
           <button onclick="openQuickJournal()" class="qa-btn qa-quick"><span class="qa-ic" aria-hidden="true">⚡</span><span class="qa-l">Швидкий журнал</span></button>
+          <button onclick="openGroupGrades()" class="qa-btn qa-group-grades"><span class="qa-ic" aria-hidden="true">📝</span><span class="qa-l">Оцінки за роботу</span></button>
           <button onclick="showUngraded()" class="qa-btn qa-ungraded"><span class="qa-ic" aria-hidden="true">🔍</span><span class="qa-l">Без оцінок</span></button>
           <button onclick="openExamsCalendar()" class="qa-btn qa-exams"><span class="qa-ic" aria-hidden="true">📅</span><span class="qa-l">Контрольні</span></button>
         </div></div>
@@ -5161,10 +5246,13 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
         </div></div>
         <div class="qa-group"><div class="qa-gt">Батьки й розклад</div><div class="qa-grid">
           <button onclick="openConsultTeacher()" class="qa-btn qa-cards"><span class="qa-ic" aria-hidden="true">🗓</span><span class="qa-l">Консультації</span></button>
-          <button onclick="openIdeaBank()" class="qa-btn"><span class="qa-ic" aria-hidden="true">💡</span><span class="qa-l">Банк ідей</span></button>
           <button onclick="openClassBroadcast()" class="qa-btn qa-broadcast"><span class="qa-ic" aria-hidden="true">✉️</span><span class="qa-l">Повідомлення класу</span></button>
           <button onclick="printClassSchedule()" class="qa-btn qa-print"><span class="qa-ic" aria-hidden="true">🖨️</span><span class="qa-l">Друк розкладу</span></button>
           <button id="t-matrix-btn-wrapper" onclick="openVisualMatrixModal('live')" class="qa-btn qa-matrix" style="display:none;"><span class="qa-ic" aria-hidden="true">🗓️</span><span class="qa-l">Матриця розкладу</span></button>
+        </div></div>
+        <div class="qa-group"><div class="qa-gt">Школа</div><div class="qa-grid">
+          <button onclick="openIdeaBank()" class="qa-btn"><span class="qa-ic" aria-hidden="true">💡</span><span class="qa-l">Банк ідей</span></button>
+          <button onclick="openStaffBirthdays()" class="qa-btn"><span class="qa-ic" aria-hidden="true">🎂</span><span class="qa-l">Дні народження колег</span></button>
         </div></div>
       </div>
       <div id="t-hw-list-wrapper" class="ui-card">
@@ -5487,8 +5575,8 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
     </section>
 
     <section class="screen-section" data-dtab="meals">
-      <!-- Власне харчування співробітника. Той самий вибір, що й у родин,
-           але без сніданків і підвечірків: кухня їх персоналу не пропонує. -->
+      <!-- Власне харчування співробітника: обід і винос. Сніданок і
+           підвечірок дітей — тут же, лише для перегляду (staff-meals.js). -->
       <div class="data-card" style="border-left-color:var(--brand-ink);background:var(--brand-soft);margin-top:0;">
         <h4 style="margin-top:0;color:var(--brand-ink);">🍽 Моє харчування</h4>
         <div class="stm-box"><p class="empty-msg is-loading">Завантаження...</p></div>
@@ -5819,7 +5907,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
       </div>
       <h3 class="ui-h">Підручники</h3>
       <div class="ui-card"><div id="p-textbooks-list"><p class="empty-msg is-loading">Завантаження...</p></div></div>
-      <h3 class="ui-h">Оплата за навчання</h3>
+      <h3 class="ui-h">Реквізити й оплата</h3>
       <div class="ui-card"><div class="pay-box"></div></div>
     </section>
 
@@ -6564,12 +6652,19 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
       <label for="nw-scope">Кому</label>
       <select id="nw-scope" onchange="nwScopeChanged()">
         <option value="school">Усій школі</option>
-        <option value="class">Окремому класу</option>
+        <option value="junior">Молодшій школі (1–5 класи)</option>
+        <option value="senior">Старшій школі (6–11 класи)</option>
+        <option value="class">Вибраним класам</option>
       </select>
     </div>
     <div id="nw-class-row" style="display:none;">
-      <label for="nw-class">Клас</label>
-      <select id="nw-class"><option value="">Оберіть...</option><option value="class_1">1 клас</option><option value="class_2">2 клас</option><option value="class_3">3 клас</option><option value="class_4">4 клас</option><option value="class_5">5 клас</option><option value="class_6">6 клас</option><option value="class_7">7 клас</option><option value="class_8">8 клас</option><option value="class_9">9 клас</option><option value="class_10">10 клас</option><option value="class_11">11 клас</option></select>
+      <div class="nw-cls-head"><span>Класи</span>
+        <span id="nw-cls-presets" class="nw-cls-presets">
+          <button type="button" onclick="nwPickClasses('junior')">1–5</button>
+          <button type="button" onclick="nwPickClasses('senior')">6–11</button>
+          <button type="button" onclick="nwPickClasses('none')">Зняти всі</button>
+        </span></div>
+      <div id="nw-classes" class="nw-cls-grid" role="group" aria-label="Класи"></div>
     </div>
     <p id="nw-scope-note" style="font-size:.78rem;color:var(--ink-3);margin:6px 0 0 0;"></p>
     <label for="nw-title">Заголовок <span style="color:var(--ink-3);font-weight:400;">(необовʼязково)</span></label>
@@ -6701,6 +6796,9 @@ document.addEventListener('DOMContentLoaded', function(){
 <script type="module" src="reload.js"></script>
 <script type="module" src="pb-more.js"></script>
 <script type="module" src="ideas.js"></script>
+<script type="module" src="group-grades.js"></script>
+<script type="module" src="hw-classes.js"></script>
+<script type="module" src="staff-bdays.js"></script>
 <script type="module" src="child-photo.js"></script>
 <script type="module" src="breaks.js"></script>
 <script type="module" src="subjects.js"></script>
