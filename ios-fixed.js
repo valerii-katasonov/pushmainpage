@@ -14,6 +14,13 @@
 // з'їхало — зсуваємо його назад transform'ом на рівно ту різницю. Коли
 // браузер знову рахує правильно, поправка сама сходить до нуля.
 //
+// «ПРУЖИНА» НА КРАЯХ (25.10.2026). Коли сторінку тягнуть за самий верх
+// чи низ, iOS відтягує її пружиною, і на ці частки секунди виміри вікна
+// «брешуть». Перша версія слухалась їх — і меню підскакувало вгору саме
+// там, де раніше було на місці. Тепер: (1) під час пружини нічого не
+// змінюємо; (2) виправляємо лише стійкий зсув — однаковий два кадри
+// поспіль; короткі стрибки пружини такими не бувають.
+//
 // БЕЗПЕЧНІСТЬ. Лише iPhone/iPad. Нічого не робимо, поки відкрита
 // клавіатура (фокус у полі вводу) чи сторінку збільшено пальцями — там
 // «нижній край видимого» не той, до якого меню має прилипати. На справних
@@ -42,17 +49,29 @@ export function nextShift(cur, bottom, target){
   return Math.abs(d) <= TOL ? 0 : d;
 }
 
+// Сторінку відтягнуто пружиною за верх чи низ
+export function overscrolled(win, doc){
+  const y = win.scrollY || win.pageYOffset || 0;
+  const se = doc.scrollingElement || doc.documentElement;
+  const max = Math.max(0, (se ? se.scrollHeight : 0) - win.innerHeight);
+  return y < 0 || y > max + 1;
+}
 export function fixOnce(win = window, doc = document){
   const vv = win.visualViewport;
   if(vv && Math.abs((vv.scale || 1) - 1) > 0.01) return;      // збільшено пальцями
   if(editing(doc)) return;                                      // відкрита клавіатура
+  if(overscrolled(win, doc)) return;                            // пружина на краю
   const target = targetBottom(win);
   doc.querySelectorAll(SEL).forEach(el => {
     const r = el.getBoundingClientRect();
     if(!r.height) return;
     const cur = Number(el.dataset.iosShift || 0);
     const next = nextShift(cur, r.bottom, target);
-    if(next === cur) return;
+    if(next === cur){ delete el.dataset.iosPend; return; }
+    // Лише стійкий зсув: той самий результат два виміри поспіль
+    const pend = el.dataset.iosPend;
+    if(pend === undefined || Math.abs(Number(pend) - next) > TOL){ el.dataset.iosPend = String(next); return; }
+    delete el.dataset.iosPend;
     el.dataset.iosShift = String(next);
     el.style.transform = next ? `translate3d(0,${next}px,0)` : '';
   });
