@@ -820,8 +820,19 @@
       #profile-bar > button{padding:6px 8px !important;}
     }
     /* Підстраховка: у порталі багато блоків, що генеруються з даних, і будь-який
-       довгий рядок не має ламати сторінку цілком */
-    html,body{max-width:100%;overflow-x:hidden;}
+       довгий рядок не має ламати сторінку цілком.
+       ЧОМУ НЕ «html,body{overflow-x:hidden}», ЯК БУЛО (25.10.2026). Коли
+       overflow-x:hidden стоїть І на html, І на body, body стає окремим
+       контейнером прокрутки. На iPhone (Safari і встановлений застосунок)
+       після цього position:fixed поводиться як звичайний блок: нижнє меню
+       їхало вгору разом зі сторінкою й зависало посеред екрана.
+       • clip обрізає так само, але контейнера прокрутки не створює
+         (iOS 16+, усі сучасні браузери);
+       • для старіших — лише body: його overflow переходить на вікно
+         (html лишається visible), і зайвого контейнера знову немає. */
+    html,body{max-width:100%;}
+    body{overflow-x:hidden;}
+    @supports (overflow-x:clip){ body{overflow-x:clip;} }
     /* ── РОЗКЛАД ДЗВІНКІВ ПО КЛАСАХ ── */
     .bell-missing{background:var(--danger-soft);border:1px solid var(--danger-line);color:var(--danger);border-radius:9px;padding:8px 11px;font-size:.8rem;font-weight:700;margin-bottom:8px;}
     .bell-row{display:flex;gap:9px;align-items:baseline;padding:6px 0;border-bottom:1px dashed var(--line);font-size:.8rem;}
@@ -1342,7 +1353,7 @@
     .k-table tr.k-now td{background:var(--warn-soft);}
 
     /* ДОСТУПНІСТЬ ТАБЛИЦЬ КУХНІ ПРИ ЗБІЛЬШЕНОМУ ШРИФТІ.
-       У html,body стоїть overflow-x:hidden — це рятує сторінку від з'їзду
+       На body стоїть overflow-x:clip/hidden — це рятує сторінку від з'їзду
        вбік, але водночас ОБРІЗАЄ широку таблицю: вона йде за екран, і
        дотягнутися до неї неможливо. Людині зі слабким зором, у якої в
        телефоні збільшений шрифт, просто не видно колонки «Варіант».
@@ -2719,7 +2730,7 @@
     /* ПЕРЕНОС ОБОВ'ЯЗКОВИЙ.
        Рядку потрібно щонайменше 371px, а на телефоні картці лишається
        300–370px. Без переносу останні елементи — саме кнопки збереження
-       й видалення — виїжджали за екран, а html,body{overflow-x:hidden}
+       й видалення — виїжджали за екран, а body{overflow-x:clip/hidden}
        їх обрізав: натиснути неможливо. Та сама вада, що колись була в
        таблицях кухні; тут вона з'явилася знову, бо рядок будувався
        «в один рядок» за звичкою. */
@@ -3485,7 +3496,33 @@ body.ui-sheet-lock{overflow:hidden;}
 .gg-msg{min-height:1em;margin:6px 0 0;font-size:.85rem;font-weight:700;color:var(--ok);}
 .gg-msg.bad{color:var(--danger);}
 .gg-save{width:100%;background:var(--brand-deep);color:var(--on-fill);font-weight:800;margin-top:8px;}
-.gg-cancel,.hwc-close,.sb-close{width:100%;background:var(--surface-2);color:var(--ink);border:1px solid var(--line);margin-top:7px;}
+.gg-cancel,.hwc-close,.sb-close,.ar-close{width:100%;background:var(--surface-2);color:var(--ink);border:1px solid var(--line);margin-top:7px;}
+/* 📱 Хто отримує сповіщення (app-reach.js) */
+.ar-modal{max-width:560px;text-align:left;}
+.ar-h{color:var(--brand-deep);margin:0 0 10px;text-align:center;font-size:1.15rem;}
+.ar-tabs{display:flex;gap:6px;margin:0 0 10px;}
+.ar-tabs button{flex:1;margin:0;padding:9px;font-size:.85rem;background:var(--surface-2);color:var(--ink);border:1px solid var(--line);border-radius:10px;}
+.ar-tabs button[aria-selected="true"]{background:var(--brand-soft);color:var(--brand-ink);border-color:var(--brand-deep);}
+#ar-cls{margin:0 0 10px;}
+.ar-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:10px;}
+.ar-stat{margin:0;padding:9px 6px;display:flex;flex-direction:column;align-items:center;gap:3px;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:12px;font-weight:600;}
+.ar-stat b{font-size:1.35rem;line-height:1;}
+.ar-stat span{font-size:.72rem;line-height:1.25;text-align:center;color:var(--ink-3);}
+.ar-stat.on{border-color:var(--brand-deep);background:var(--brand-soft);}
+.ar-note{font-size:.78rem;color:var(--ink-3);line-height:1.45;margin:0 0 10px;}
+.ar-note.small{font-size:.72rem;margin-top:10px;}
+.ar-copy{width:auto;margin:0 0 8px;padding:7px 12px;font-size:.8rem;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:9px;}
+.ar-list{max-height:52vh;overflow-y:auto;}
+.ar-row{display:flex;gap:10px;align-items:flex-start;padding:9px 2px;border-bottom:1px solid var(--line-soft);}
+.ar-ic{font-size:1.1rem;line-height:1.4;}
+.ar-main{min-width:0;flex:1;}
+.ar-main b{display:block;font-size:.88rem;color:var(--ink);overflow-wrap:anywhere;}
+.ar-main small{display:block;font-size:.78rem;color:var(--ink-3);overflow-wrap:anywhere;margin-top:1px;}
+.ar-noname{font-weight:600;color:var(--ink-3);font-style:italic;}
+.ar-tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px;}
+.ar-tag{font-size:.7rem;font-weight:600;padding:2px 8px;border-radius:999px;background:var(--surface-2);color:var(--ink-3);border:1px solid var(--line);}
+.ar-tag.good{background:var(--ok-soft);color:var(--ok);border-color:var(--ok-line);}
+.ar-tag.warn{background:var(--warn-soft);color:var(--warn);border-color:var(--warn-line);}
 @media (max-width:480px){.gg-grid{grid-template-columns:1fr;}.gg-row{grid-template-columns:24px 1fr 80px;}}
 /* 📚 ДЗ класу (hw-classes.js) */
 .hwc-modal{text-align:left;max-width:640px;}
@@ -4236,6 +4273,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
         <button onclick="openIdeaInbox()" class="ib-qa" style="flex:1;min-width:160px;background:var(--brand-deep);color:var(--on-fill);margin-top:0;font-size:.95rem;padding:11px;">💡 Банк ідей <span class="ib-badge" hidden></span></button>
         <button onclick="openHwClasses()" style="flex:1;min-width:160px;background:var(--brand-deep);color:var(--on-fill);margin-top:0;font-size:.95rem;padding:11px;">📚 ДЗ класу</button>
         <button onclick="openStaffBirthdays()" style="flex:1;min-width:160px;background:var(--brand-deep);color:var(--on-fill);margin-top:0;font-size:.95rem;padding:11px;">🎂 Дні народження колег</button>
+        <button onclick="openAppReach()" style="flex:1;min-width:160px;background:var(--brand-deep);color:var(--on-fill);margin-top:0;font-size:.95rem;padding:11px;">📱 Хто зі сповіщеннями</button>
       </div>
     </section>
 
@@ -4616,6 +4654,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
         <button onclick="openChatModal('director')" data-chatbtn="1" class="qa-btn"><span class="qa-ic" aria-hidden="true">✉️</span><span class="qa-l">Чат з батьками</span></button>
         <button onclick="openIdeaInbox()" class="qa-btn ib-qa"><span class="qa-ic" aria-hidden="true">💡</span><span class="qa-l">Банк ідей</span><span class="ib-badge" hidden></span></button>
         <button onclick="openHwClasses()" class="qa-btn"><span class="qa-ic" aria-hidden="true">📚</span><span class="qa-l">ДЗ класу</span></button>
+        <button onclick="openAppReach()" class="qa-btn"><span class="qa-ic" aria-hidden="true">📱</span><span class="qa-l">Хто зі сповіщеннями</span></button>
         <button onclick="openStaffBirthdays()" class="qa-btn"><span class="qa-ic" aria-hidden="true">🎂</span><span class="qa-l">Дні народження колег</span></button>
       </div></div></div>
       <h3 class="ui-h">Звіти</h3>
@@ -5285,6 +5324,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
         <div class="qa-group"><div class="qa-gt">Батьки й розклад</div><div class="qa-grid">
           <button onclick="openConsultTeacher()" class="qa-btn qa-cards"><span class="qa-ic" aria-hidden="true">🗓</span><span class="qa-l">Консультації</span></button>
           <button onclick="openClassBroadcast()" class="qa-btn qa-broadcast"><span class="qa-ic" aria-hidden="true">✉️</span><span class="qa-l">Повідомлення класу</span></button>
+          <button onclick="openAppReach()" class="qa-btn"><span class="qa-ic" aria-hidden="true">📱</span><span class="qa-l">Хто зі сповіщеннями</span></button>
           <button onclick="printClassSchedule()" class="qa-btn qa-print"><span class="qa-ic" aria-hidden="true">🖨️</span><span class="qa-l">Друк розкладу</span></button>
           <button id="t-matrix-btn-wrapper" onclick="openVisualMatrixModal('live')" class="qa-btn qa-matrix" style="display:none;"><span class="qa-ic" aria-hidden="true">🗓️</span><span class="qa-l">Матриця розкладу</span></button>
         </div></div>
@@ -6837,6 +6877,8 @@ document.addEventListener('DOMContentLoaded', function(){
 <script type="module" src="group-grades.js"></script>
 <script type="module" src="hw-classes.js"></script>
 <script type="module" src="staff-bdays.js"></script>
+<script type="module" src="app-reach.js"></script>
+<script type="module" src="ios-fixed.js"></script>
 <script type="module" src="child-photo.js"></script>
 <script type="module" src="breaks.js"></script>
 <script type="module" src="subjects.js"></script>
