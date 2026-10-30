@@ -605,6 +605,33 @@
     .pay-form button{width:auto;margin:4px 0 0;padding:9px 16px;font-size:.83rem;font-weight:700;background:var(--ok);color:var(--on-fill);border:none;border-radius:9px;cursor:pointer;}
     .pay-preview{margin-top:11px;font-size:.8rem;color:var(--ink);background:var(--surface);border:1px solid var(--ok-line);border-radius:9px;padding:9px 11px;}
     .pay-warn{color:var(--warn);font-size:.76rem;}
+    /* 💳 Оплата: кожен рахунок — картка свого кольору (payment.js) */
+    .pay-card{--k:var(--ink-3);--k-soft:var(--surface-2);--k-line:var(--line);background:var(--surface);border:1px solid var(--k-line);border-left:5px solid var(--k);border-radius:14px;padding:12px 13px 10px;margin:0 0 14px;}
+    .pay-k-tuition{--k:var(--brand-deep);--k-soft:var(--brand-soft);--k-line:var(--brand-line);}
+    .pay-k-meals{--k:var(--ok);--k-soft:var(--ok-soft);--k-line:var(--ok-line);}
+    .pay-k-bus{--k:var(--warn);--k-soft:var(--warn-soft);--k-line:var(--warn-line);}
+    .pay-card-h{display:flex;align-items:center;gap:8px;margin:0 0 8px;padding:7px 10px;border-radius:10px;background:var(--k-soft);color:var(--k);font-size:.98rem;}
+    .pay-card-ic{font-size:1.15rem;line-height:1;}
+    .pay-text{font-size:.84rem;line-height:1.5;color:var(--ink);margin:0 0 8px;}
+    .pay-sub{font-size:.75rem;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.03em;margin:4px 0 4px;}
+    .pay-chips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px;}
+    .pay-chip{width:auto;margin:0;padding:7px 12px;min-height:38px;border-radius:999px;background:var(--surface);color:var(--ink);border:1px solid var(--line);font-size:.82rem;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;}
+    .pay-chip small{font-weight:500;color:var(--ink-3);}
+    .pay-chip.on{background:var(--k-soft);border-color:var(--k);color:var(--k);}
+    .pay-chip.on small{color:inherit;}
+    .pay-card .pay-row{border-bottom-color:var(--line-soft);}
+    .pay-card .pay-value{color:var(--ink);}
+    .pay-card .pay-copy{background:var(--k);}
+    .pay-card .pay-qr svg{border-color:var(--k-line);}
+    .pay-card .pay-qr span{color:var(--k);}
+    .pay-acc-edit.pay-k-tuition,.pay-acc-edit.pay-k-meals,.pay-acc-edit.pay-k-bus{border-left:5px solid var(--k);}
+    .pay-amts{margin:0 0 9px;font-size:.78rem;}
+    .pay-amts small{color:var(--ink-3);font-weight:400;}
+    .pay-amt-row{display:grid;grid-template-columns:90px 1fr;gap:6px;margin-top:5px;}
+    .pay-amt-row input{margin:0;}
+    .pay-form textarea{margin:3px 0 0;font-size:.88rem;}
+    .pay-add-row{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px;}
+    .pay-form .pay-add-row .pay-add{margin:0;}
     /* Кілька рахунків за класами (payment.js) */
     .pay-acc + .pay-acc{margin-top:12px;padding-top:10px;border-top:2px solid var(--ok-line);}
     .pay-range{display:inline-block;font-size:.75rem;font-weight:700;color:var(--ok);background:var(--surface);border:1px solid var(--ok-line);border-radius:999px;padding:2px 10px;margin:2px 0 4px;}
@@ -5776,6 +5803,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
       <button class="dtab" data-t="games" onclick="switchTab('parent-screen','games',this);openGamesTab()"><span class="dtab-icon" aria-hidden="true">🎮</span>Ігри</button>
       <button class="dtab" data-t="grades" onclick="switchTab('parent-screen','grades',this)"><span class="dtab-icon" aria-hidden="true">📊</span>Оцінки</button>
       <button class="dtab" data-t="school" onclick="switchTab('parent-screen','school',this)"><span class="dtab-icon" aria-hidden="true">🏫</span>Школа</button>
+      <button class="dtab" data-t="pay" onclick="switchTab('parent-screen','pay',this)"><span class="dtab-icon" aria-hidden="true">💳</span>Оплата</button>
       <button class="dtab" data-t="profile" onclick="switchTab('parent-screen','profile',this)"><span class="dtab-icon" aria-hidden="true">👤</span>Профіль</button>
     </div>
     <!-- Повідомлення поза вкладками: до листування має бути доступ звідусіль,
@@ -5985,8 +6013,12 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
       </div>
       <h3 class="ui-h">Підручники</h3>
       <div class="ui-card"><div id="p-textbooks-list"><p class="empty-msg is-loading">Завантаження...</p></div></div>
-      <h3 class="ui-h">Реквізити й оплата</h3>
-      <div class="ui-card"><div class="pay-box"></div></div>
+    </section>
+    <!-- 💳 Оплата: навчання, харчування, автобус — кожен рахунок окремою
+         кольоровою карткою зі своїм QR (payment.js) -->
+    <section class="screen-section" data-dtab="pay">
+      <h3 class="ui-h">💳 Оплата</h3>
+      <div class="pay-box"></div>
     </section>
 
     <!-- ═══════════ ПРОФІЛЬ ═══════════ -->

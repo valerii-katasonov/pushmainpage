@@ -3065,7 +3065,7 @@ export function tabFromUrl(search){
   // про відсутність чи запізнення учня)
   // talk — «Сьогодні» і прокрутка до запитів «💬 Хочу обговорити»
   // retake — учителю: список заявок на перездачу (клас — у &cls=)
-  return ['att','talk','retake','day','hw','meals','games','grades','school','profile','chat',
+  return ['att','talk','retake','day','hw','meals','games','grades','school','pay','profile','chat',
           'lesson','class','news',
           'ogl','uchni','study','rozklad','staff','stat','nalash'].includes(v) ? v : null;
 }
@@ -3249,6 +3249,9 @@ async function initUserSession(){
   // Клас і дитина в підписці на сповіщення застигали в мить вмикання —
   // після переходу в наступний клас пуші йшли за старою адресою
   refreshPushReg();
+  // Чи відкрито як встановлений застосунок — для звіту «📱 Хто зі
+  // сповіщеннями» (директор, учитель). Раз на день або коли щось змінилось.
+  reportAppSeen();
   // Власне харчування співробітника — блок є в кабінетах учителя,
   // директора й адміністрації; модуль сам вирішує, чи показувати.
   if(window.renderStaffMeals) window.renderStaffMeals();
@@ -3746,6 +3749,27 @@ export async function refreshPushReg(){
   }catch(e){ console.warn('Підписку на сповіщення не освіжено:', e.message); }
 }
 window.refreshPushReg = refreshPushReg;
+
+// ══════════ «ЯК ЗАХОДИТЬ» — ДЛЯ ЗВІТУ «📱 ХТО ЗІ СПОВІЩЕННЯМИ» ══════════
+// app_seen/{uid} = {lastAt, platform, notif, standaloneAt?, browserAt?}.
+// Без токенів і без пошти — лише чи відкривали портал як встановлений
+// застосунок і чи дав браузер дозвіл на сповіщення. Читає тільки сервер
+// (netlify/functions/app-reach.js) — правила закривають вузол для всіх.
+// Пишемо раз на день або коли щось змінилося (встановили, дали дозвіл).
+export async function reportAppSeen(){
+  try{
+    const uid = auth.currentUser?.uid;
+    if(!uid) return;
+    const st = isStandalone();
+    const notif = typeof Notification === 'undefined' ? 'na' : String(Notification.permission || 'default');
+    const platform = isIOS() ? 'ios' : /android/i.test(navigator.userAgent) ? 'android' : 'desktop';
+    const sig = `${localDateString}|${st ? 1 : 0}|${notif}`, key = 'push_school_seen_' + uid;
+    if(lsGet(key) === sig) return;
+    const now = Date.now();
+    await update(ref(db, `app_seen/${uid}`), { lastAt: now, platform, notif, [st ? 'standaloneAt' : 'browserAt']: now });
+    lsSet(key, sig);
+  }catch(e){ /* не головне — звіт просто покаже «невідомо» */ }
+}
 
 // ══════════ ЗАПРОШЕННЯ УВІМКНУТИ СПОВІЩЕННЯ ══════════
 // Кнопка вмикання жила лише всередині модалки «Профіль» — туди майже
