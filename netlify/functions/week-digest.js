@@ -115,6 +115,16 @@ function childDigest({ mirror, attDays, exams, key, name, from, to, nextFrom, ne
   upcoming.sort((a, b) => a.date.localeCompare(b.date));
   return { grades, absent, late, exams: upcoming };
 }
+// ІМʼЯ ДИТИНИ, А НЕ ПРІЗВИЩЕ. У списках класу записано «Прізвище Імʼя»
+// (так само читає common.js → childDisplayName), тож перше слово — прізвище:
+// батьки отримували «Падалко: оцінок 4…». Беремо друге слово; одне слово —
+// його й лишаємо. ВЕЛИКИМИ («DANYLO») — переводимо в «Danylo».
+function firstNameOf(name) {
+  const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+  const w = parts.length >= 2 ? parts[1] : (parts[0] || '');
+  return w.length > 1 && w === w.toUpperCase() && w !== w.toLowerCase()
+    ? w.split('-').map(p => p.charAt(0) + p.slice(1).toLowerCase()).join('-') : w;
+}
 function digestLine(name, dg) {
   const parts = [];
   if (dg.grades) parts.push(`оцінок ${dg.grades}`);
@@ -122,7 +132,7 @@ function digestLine(name, dg) {
   if (dg.late) parts.push(`запізнень ${dg.late}`);
   if (dg.exams.length) parts.push('контрольні: ' + dg.exams.slice(0, 3).map(e => `${e.subject} (${wdOf(e.date)})`).join(', ') + (dg.exams.length > 3 ? '…' : ''));
   if (!parts.length) return '';
-  const first = String(name || '').trim().split(/\s+/)[0];
+  const first = firstNameOf(name);
   return (first ? first + ': ' : '') + parts.join(', ');
 }
 function digestMessage(lines) {
@@ -205,4 +215,4 @@ exports.handler = async () => {
   }
 };
 // Для тестів
-exports._test = { childDigest, digestLine, digestMessage, keyOf, childrenOf, mondayOf, addDays };
+exports._test = { childDigest, digestLine, digestMessage, keyOf, childrenOf, mondayOf, addDays, firstNameOf };
