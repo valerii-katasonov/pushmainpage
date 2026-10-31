@@ -1426,7 +1426,37 @@ window.openRetakeFor=function(cls){
 };
 window.closeRetakeModal=function(){document.getElementById('retake-modal').style.display='none';};
 // ══════════ ATTENDANCE / CLASS MANAGEMENT ══════════
-window.loadStudentsList=function(){get(child(ref(db),`students_list/${getActiveClass()}`)).then(snap=>{const els=['t-student','t-mark-absent-student','t-sticker-student','t-behavior-student','t-student-for-parent'];els.forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML='<option value="">Учень...</option>';});if(snap.exists())Object.entries(snap.val()).sort((a,b)=>String(a[1]).localeCompare(String(b[1]),'uk')).forEach(([sid,nm])=>{els.forEach(id=>{const el=document.getElementById(id);if(el){const o=document.createElement('option');o.value=sid;o.innerText=nm;el.appendChild(o.cloneNode(true));}});});});};
+// ВІДМІТКА В СПИСКУ «УЧЕНЬ…» блоку відвідуваності: біля імені — що вже
+// відмічено на обраний день («⛔ увесь день», «⛔ урок 2», «⏰ запізнення»),
+// щоб не відмічати вдруге й одразу бачити, хто вже є в списку.
+// day — attendance/{клас}/{дата}: {учень: {слот: {status}}}.
+export function absentSuffix(slots){
+  const parts = [];
+  for(const sk in (slots || {})){
+    const r = slots[sk];
+    if(!r || !r.status) continue;
+    const where = sk === 'all' ? 'увесь день' : (/^\d+$/.test(sk) ? `урок ${sk}` : sk);
+    parts.push(r.status === 'late' ? `⏰ запізнення (${where})` : `⛔ ${where}`);
+  }
+  if(!parts.length) return '';
+  const all = parts.find(p => p === '⛔ увесь день');
+  return ' — ' + (all || parts.slice(0, 2).join(', ') + (parts.length > 2 ? '…' : ''));
+}
+let attDayMarks = {};
+export function annotateAbsentSelect(day){
+  if(day !== undefined) attDayMarks = day || {};
+  const el = document.getElementById('t-mark-absent-student');
+  if(!el) return;
+  [...el.options].forEach(o => {
+    if(!o.value) return;
+    if(o.dataset.base === undefined) o.dataset.base = o.textContent;
+    const suf = absentSuffix(attDayMarks[o.value]);
+    o.textContent = o.dataset.base + suf;
+    o.classList.toggle('is-marked', !!suf);
+  });
+}
+window.annotateAbsentSelect = annotateAbsentSelect;
+window.loadStudentsList=function(){get(child(ref(db),`students_list/${getActiveClass()}`)).then(snap=>{const els=['t-student','t-mark-absent-student','t-sticker-student','t-behavior-student','t-student-for-parent'];els.forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML='<option value="">Учень...</option>';});if(snap.exists())Object.entries(snap.val()).sort((a,b)=>String(a[1]).localeCompare(String(b[1]),'uk')).forEach(([sid,nm])=>{els.forEach(id=>{const el=document.getElementById(id);if(el){const o=document.createElement('option');o.value=sid;o.innerText=nm;el.appendChild(o.cloneNode(true));}});});annotateAbsentSelect();});};
 // Populates #t-mark-absent-lesson with this day's lessons (position in
 // getTodayLessonsFlattened is the slotKey), so the teacher marks absence
 // for their own lesson instead of the whole day. Falls back to the
@@ -1871,7 +1901,8 @@ export async function listenTeacherAttendance(){
     const cls=getActiveClass();
     const mine=myAttendanceSlots(cls);
     setAttHeader(!!mine);
-    teacherAttendanceListener=onValue(ref(db,`attendance/${cls}/${date}`),snap=>{list.innerHTML='';if(snap.exists()){const d=snap.val();let h='';for(let st in d){const slots=d[st];for(let sk in slots){const r=slots[sk];if(!r?.status)continue;
+    annotateAbsentSelect({});   // інший клас чи день — старі позначки прибираємо
+    teacherAttendanceListener=onValue(ref(db,`attendance/${cls}/${date}`),snap=>{annotateAbsentSelect(snap.exists()?snap.val():{});list.innerHTML='';if(snap.exists()){const d=snap.val();let h='';for(let st in d){const slots=d[st];for(let sk in slots){const r=slots[sk];if(!r?.status)continue;
       // Чужий урок ховаємо. «all» лишаємо всім: це заявка батьків на цілий
       // день — дитини не буде і на вашому уроці теж.
       if(mine&&sk!=='all'&&!mine.has(String(sk)))continue;const bc=r.status==='late'?'badge-late':'badge-absent';const lb=r.status==='late'?'Запізнення':'Відсутність';const markerIcon=r.markedBy==='teacher'?'👨‍🏫':(r.markedBy==='student'?'🎒':'👪');
