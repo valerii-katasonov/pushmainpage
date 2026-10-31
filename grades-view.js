@@ -312,17 +312,24 @@ function gradeChip(v, t, cls, numericScale){
     + (t ? `<span class="g-type">${escHtml(t)}</span>` : '') + `</span>`;
 }
 
-// Кнопка перездачі — біля БУДЬ-ЯКОЇ оцінки (рішення школи, 22.10.2026):
-// і біля рівнів П/С/Д/В у 1–4 класах, і на будь-якій шкалі. Раніше була
-// лише біля 1–3 за шестибальною шкалою з 5-го класу. Чи дозволити —
-// вирішує вчитель; ліміт заявок з предмета — у sendRetakeRequest.
+// ПЕРЕЗДАЧА — ЛИШЕ СЕМЕСТРОВОЇ ОЦІНКИ (рішення школи, 31.10.2026).
+// Кнопка «↻ Перездати» тепер біля підсумкових («Огляд» → parent-student.js
+// renderFinalGrades). Біля поточних оцінок кнопки немає; лишається тільки
+// порожнє місце для СТАНУ заявки, якщо її подали раніше (до цього рішення),
+// — hydrateRetakes підставить «⏳ подано» / «✓ перездача 24.10».
+export const RETAKE_SEM_NOTE = 'Перездати можна лише семестрову оцінку — кнопка «↻ Перездати» біля неї в «Огляді».';
 function retakeBtn(cls, subj, date, v, numericScale){
   if(v == null || String(v).trim() === '') return '';
   const who = currentUserData?.studentId || currentUserData?.studentName || '';
+  return `<span class="rt-slot" data-c="${escHtml(cls)}" data-s="${escHtml(subj)}" data-d="${escHtml(date)}" data-w="${escHtml(who)}"></span>`;
+}
+export function retakeSemBtn(cls, subj, key, v, sid){
+  if(v == null || String(v).trim() === '') return '';
+  const who = sid || currentUserData?.studentId || currentUserData?.studentName || '';
   // Обгортка: після показу hydrateRetakes підмінить кнопку станом заявки,
-  // якщо її вже подавали («⏳ подано», «✅ перездача 24.10», «❌ відхилено»)
-  return `<span class="rt-slot" data-c="${escHtml(cls)}" data-s="${escHtml(subj)}" data-d="${escHtml(date)}" data-w="${escHtml(who)}"><button type="button" class="retake-btn" title="Попросити вчителя про перездачу"
-     onclick="sendRetakeRequest('${escJs(cls)}','${escJs(subj)}','${escJs(date)}','${escJs(who)}','${escJs(String(v).trim().slice(0, 4))}')"><span class="rt-pill"><span class="rt-ic" aria-hidden="true">↻</span>Перездати</span></button></span>`;
+  // якщо її вже подавали («⏳ подано», «✓ перездача 24.10», «не дозволено»)
+  return `<span class="rt-slot" data-c="${escHtml(cls)}" data-s="${escHtml(subj)}" data-d="${escHtml(key)}" data-w="${escHtml(who)}"><button type="button" class="retake-btn" title="Попросити вчителя про перездачу семестрової оцінки"
+     onclick="sendRetakeRequest('${escJs(cls)}','${escJs(subj)}','${escJs(key)}','${escJs(who)}','${escJs(String(v).trim().slice(0, 4))}')"><span class="rt-pill"><span class="rt-ic" aria-hidden="true">↻</span>Перездати</span></button></span>`;
 }
 // Стан своєї заявки на перездачу — замість кнопки. Читаємо ЛИСТКИ (лише
 // свої заявки: увесь вузол класу родині закритий) і лише для оцінок із
@@ -352,6 +359,7 @@ export async function hydrateRetakes(box){
   }));
 }
 window.hydrateRetakes = hydrateRetakes;
+window.retakeSemBtn = retakeSemBtn;
 
 // Реакція на коментар: одна, повторне натискання знімає. Обрана — з
 // підписом, щоб учитель і батьки однаково розуміли, що вона означає.
@@ -457,6 +465,7 @@ function paintWeek(){
   }).join('');
 
   gvLastWeekHtml = nav + (blocks || `<div class="ui-empty"><b>Цього тижня оцінок і коментарів немає</b>Щойно вчитель поставить оцінку чи напише коментар — вони зʼявляться тут.<br><button type="button" class="ui-btn ui-btn-q" onclick="gvShiftWeek(-1)">← Попередній тиждень</button></div>`);
+  gvLastWeekHtml += `<p class="rt-sem-note">ℹ️ ${escHtml(RETAKE_SEM_NOTE)}</p>`;
   box.innerHTML = gvLastWeekHtml;
   hydrateRetakes(box);
   // Коментар, що побув на екрані, — «переглянуто» для вчителя (comments-view.js)
@@ -561,6 +570,7 @@ function paintSubject(){
   const chartHtml=chart?`<div class="gt-card"><div class="gt-head"><b>📈 Як змінюється середній бал</b>${trendBadge(tinfo,mx)}</div>${chart}
       <div class="gt-legend"><span><i class="gt-k-line"></i>середній за місяць</span><span><i class="gt-k-dot"></i>оцінка</span><span><i class="gt-k-th"></i>тематична</span><span><i class="gt-k-thr"></i>поріг низького балу</span></div></div>`:'';
   gvLastSubjHtml = sel + head + chartHtml + `<ul class="list-dash" style="margin:0 0 9px 0;">${renderGradeFormulaInfo()}</ul>` + list;
+  gvLastSubjHtml += `<p class="rt-sem-note">ℹ️ ${escHtml(RETAKE_SEM_NOTE)}</p>`;
   box.innerHTML = gvLastSubjHtml;
   hydrateRetakes(box);
 }

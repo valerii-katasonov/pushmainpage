@@ -773,20 +773,10 @@ function mySid(){ return stuId(getActiveClass(),currentUserData?.studentName)
 
 // ══════════ RETAKE REQUEST (parent/student submit side) ══════════
 async function sendRetakeRequest(cls,subj,date,student,grade){
-  // Рахуємо по дзеркалу своєї дитини, а не по всьому класу.
-  // Зміна сенсу: раніше це були всі уроки предмета в класі, тепер — ті,
-  // де оцінку має саме ця дитина. Число виходить не більшим, тож ліміт
-  // на перездачі стає не м'якшим, а трохи суворішим.
-  const yearSnap=await get(ref(db,`student_grades/${cls}/${mySid()}`));
-  let totalLessons=0;let subjLessons=0;
-  if(yearSnap.exists()){const d=yearSnap.val();for(let m in d)if(d[m][subj])for(let dt in d[m][subj])subjLessons++;}
-  const limit=Math.max(1,Math.floor(subjLessons*0.1));
-  // Свої заявки — по датах, де в дитини є оцінка з предмета (заявки всього
-  // класу родині закриті). Заявка без оцінки неможлива, тож нічого не губимо.
-  const dates=[];if(yearSnap.exists()){const d=yearSnap.val();for(let m in d)if(d[m][subj])dates.push(...Object.keys(d[m][subj]));}
-  const got=await Promise.all(dates.map(dt=>get(ref(db,`retake_requests/${cls}/${subj}/${dt}/${student}`)).then(x=>x.exists()).catch(()=>false)));
-  const existing=got.filter(Boolean).length;
-  if(existing>=limit){showToast(`🚫 Ви вже використали всі можливості для покращення оцінок з ${subj} (ліміт ${limit})`);return;}
+  // ЛИШЕ СЕМЕСТРОВА (рішення школи, 31.10.2026): ключ sem_{семестр}.
+  // Ліміт «10% оцінок предмета» прибрано — на кожну семестрову одна
+  // заявка (правила бази приймають лише нову).
+  if(!String(date).startsWith('sem_')) return showToast('ℹ️ Перездати можна лише семестрову оцінку.');
   try{
     await set(ref(db,`retake_requests/${cls}/${subj}/${date}/${student}`),{status:'pending',grade,requestDate:localDateString,ts:Date.now()});
   }catch(e){
@@ -795,7 +785,7 @@ async function sendRetakeRequest(cls,subj,date,student,grade){
   }
   showToast(`🔄 Запит на перездачу надіслано вчителю!`);
   // Кнопка біля оцінки → «⏳ Заявку подано»
-  document.querySelectorAll('.rt-slot').forEach(el=>{ if(el.dataset.c===cls&&el.dataset.s===subj&&el.dataset.d===date&&el.dataset.w===student) el.innerHTML='<span class="rt-chip">⏳ Заявку подано — чекає вчителя</span>'; });
+  document.querySelectorAll('.rt-slot').forEach(el=>{ if(el.dataset.c===cls&&el.dataset.s===subj&&el.dataset.d===date&&el.dataset.w===student) el.innerHTML='<span class="rt-chip wait" title="Заявка чекає рішення вчителя">⏳ Заявку подано</span>'; });
   // Push учителю предмета. Лише адреса заявки — текст складає сервер із
   // бази (netlify/functions/notify.js → retakePlan). Не дійшов — заявка
   // однаково в кабінеті вчителя, тож родину не лякаємо.
@@ -980,18 +970,22 @@ export async function renderFinalGrades(containerId,cls,studentName){
       for(const subj in all[semId]){
         const byStudent=all[semId][subj]||{};
         const rec=(sid&&byStudent[sid])||byStudent[studentName];
-        if(rec&&rec.value)rows.push({subj,v:rec.value});
+        if(rec&&rec.value)rows.push({subj,v:rec.value,key:(sid&&byStudent[sid])?sid:studentName});
       }
       if(rows.length===0)continue;
       rows.sort((a,b)=>a.subj.localeCompare(b.subj,'uk'));
+      // ↻ Перездати — лише семестрову (рішення школи, 31.10.2026).
+      // Заявка: retake_requests/{клас}/{предмет}/sem_{семестр}/{учень}
       html+=`<div class="fin-title">🎓 ${escHtml(sems[semId]?.name||semId)}</div>`+
         rows.map(r=>`<div class="fin-row">
           <span>${escHtml(r.subj)}</span>
-          <span class="g-cell ${scales[r.subj]?.max?'g-scale':gradeClass6(r.v)}" style="padding:3px 9px;">${escHtml(displayGrade(r.v,cls,!!scales[r.subj]?.max))}</span>
+          <span class="fin-grade"><span class="g-cell ${scales[r.subj]?.max?'g-scale':gradeClass6(r.v)}" style="padding:3px 9px;">${escHtml(displayGrade(r.v,cls,!!scales[r.subj]?.max))}</span>${window.retakeSemBtn?window.retakeSemBtn(cls,r.subj,`sem_${semId}`,r.v,r.key):''}</span>
         </div>`).join('');
     }
     if(!html){box.style.display='none';return;}
-    box.style.display='block';box.innerHTML=html;
+    box.style.display='block';box.innerHTML=html
+      +'<p class="rt-sem-note">ℹ️ Перездати можна лише семестрову оцінку. Учитель отримає вашу заявку й повідомить рішення та дату.</p>';
+    window.hydrateRetakes?.(box);
   }catch(e){
     // Раніше тут писалося «згоди» (скопійовано з іншого блоку), а сам блок
     // лишався схованим — помилку ніхто не бачив.

@@ -1309,7 +1309,7 @@ window.openRetakeRequestsModal=async function(keep){
     const when=retakeWhen(req);
     html+=`<div class="rt-card" data-i="${i}">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
-        <div><b>${escHtml(stuName(cls,student))}</b> | ${escHtml(subj)} | ${escHtml(journalBaseDate(date).split('-').reverse().join('.'))}${journalSlot(date)>1?` · оцінка ${journalSlot(date)}`:''}</div>
+        <div><b>${escHtml(stuName(cls,student))}</b> | ${escHtml(subj)} | ${String(date).startsWith('sem_')?'🎓 семестрова':escHtml(journalBaseDate(date).split('-').reverse().join('.'))+(journalSlot(date)>1?` · оцінка ${journalSlot(date)}`:'')}</div>
         <span style="color:${st[0]};font-size:.8rem;font-weight:700;text-align:right;">${st[1]}</span>
       </div>
       <div style="font-size:.8rem;color:var(--ink-3);margin-top:5px;">Поточна оцінка: <b>${escHtml(String(req.grade||'—'))}</b>${when?` · 📅 Перездача: <b>${escHtml(when)}</b>`:''}</div>

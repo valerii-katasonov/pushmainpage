@@ -149,11 +149,12 @@ export function staffItems(d, o){
     const r = x.rec || {};
     // «👁 Бачу» — учитель знає про заявку, дзвіночок її більше не тримає
     if(r.status !== 'pending' || r.seenTs) return;
-    const day = String(x.date || '').slice(0, 10);
+    const sem = String(x.date || '').startsWith('sem_');
+    const day = sem ? '' : String(x.date || '').slice(0, 10);
     const ts = Number(r.ts) || noonOf(r.requestDate || day);
     out.push({ id: `p:${x.cls}:${x.subj}:${x.date}:${x.student}`, kind: 'retake', icon: '🔄', ts,
       title: `Заявка на перездачу: ${x.child || 'учень'}`,
-      sub: [x.subj, r.grade != null && r.grade !== '' ? `оцінка ${r.grade}` : '', day ? day.split('-').reverse().slice(0, 2).join('.') : '', x.label].filter(Boolean).join(' · '),
+      sub: [x.subj, r.grade != null && r.grade !== '' ? `${sem ? 'семестрова ' : ''}оцінка ${r.grade}` : '', day ? day.split('-').reverse().slice(0, 2).join('.') : '', x.label].filter(Boolean).join(' · '),
       flag: 'чекає рішення', go: { retake: x.cls } });
   });
   // Записи батьків на консультацію до мене (consult.js)
