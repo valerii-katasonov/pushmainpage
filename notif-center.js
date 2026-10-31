@@ -124,8 +124,12 @@ export function newsItems(news, visible, from){
 
 // ── ПЕРСОНАЛ ─────────────────────────────────────────────────────
 // d = {news, talks: [{cls, label, se, id, rec}], reacts: [{cls, label, date, subj, sid, child, r, rts}]}
+// Оголошення в дзвіночку персоналу: директор, адміністрація й ті, хто
+// пише оголошення на всю школу, — усі; учитель — шкільні, свої й класів,
+// де він працює (o.newsVisible). Раніше вчителю йшли ВСІ оголошення школи:
+// учителька 3 класу бачила, що пише пані Валентина батькам свого класу.
 export function staffItems(d, o){
-  const out = newsItems(d.news, () => true, o.from).map(x => ({ ...x, go: { tab: 'news' } }));
+  const out = newsItems(d.news, o.newsVisible || (() => true), o.from).map(x => ({ ...x, go: { tab: 'news' } }));
   (d.talks || []).forEach(t => {
     const r = t.rec || {};
     if(r.status !== 'open' || !r.ts) return;
@@ -228,7 +232,12 @@ async function loadStaff(from){
     }
   });
   const bookings = Object.keys(cBook || {}).map(id => ({ id, b: cBook[id], s: (cSlots || {})[id] || {} }));
-  return staffItems({ news, talks, reacts, bookings, retakes }, { from });
+  const role = currentUserData && currentUserData.role;
+  const all = role === 'director' || role === 'administrator' || !!(window.hasPerm && window.hasPerm('news'));
+  const mineCls = new Set(classes.map(c => c.cls));
+  const newsVisible = all ? null : (a => a.scope === 'school' || (uid && a.author === uid) || mineCls.has(a.class)
+    || (a.scope === 'classes' && !!a.classes && Object.keys(a.classes).some(c => a.classes[c] === true && mineCls.has(c))));
+  return staffItems({ news, talks, reacts, bookings, retakes }, { from, newsVisible });
 }
 
 // ── «ПЕРЕГЛЯНУТО» ────────────────────────────────────────────────

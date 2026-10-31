@@ -351,7 +351,7 @@ export function accountHtml(a, student, today = localDateString){
   return `<section class="pay-card pay-k-${escHtml(a.kind)}" data-acc="${escHtml(a.id)}">
     <header class="pay-card-h"><span class="pay-card-ic" aria-hidden="true">${k.icon}</span><b${a.label && String(a.label).trim() ? ' data-no-i18n' : ''}>${escHtml(kindLabel(a))}</b></header>
     ${a.note ? `<div class="pay-text" data-no-i18n>${escHtml(String(a.note)).replace(/\n/g, '<br>')}</div>` : ''}
-    ${a.amounts.length > 1 ? chips('amt', a.amounts.map(x => `<b>${escHtml(x.sum.toFixed(0))} zł</b>${x.label ? ` <small data-no-i18n>${escHtml(x.label)}</small>` : ''}`), pk.amt) : ''}
+    ${a.amounts.length > 1 ? chips('amt', a.amounts.map(x => `<b>${escHtml(Number.isInteger(x.sum) ? String(x.sum) : x.sum.toFixed(2))} zł</b>${x.label ? ` <small data-no-i18n>${escHtml(x.label)}</small>` : ''}`), pk.amt) : ''}
     ${withWeek ? `<div class="pay-sub">За який тиждень</div>${chips('week', [`Цей · ${escHtml(weekRange(today, 0))}`, `Наступний · ${escHtml(weekRange(today, 1))}`], pk.week)}` : ''}
     ${row('Отримувач', who)}
     ${row('Адреса', a.address || '')}
@@ -409,7 +409,7 @@ if(typeof document !== 'undefined') document.addEventListener('click', e => {
 // ── НАЛАШТУВАННЯ (директор) ─────────────────────────────────────
 // Кожен рахунок — картка: вид, назва, для яких класів, отримувач,
 // рахунок, призначення з підстановками, варіанти суми, пояснення, QR.
-let draft = [];
+let draft = [], remindOn = true;
 const SAMPLE = 'Волошко Микола';
 const AMT_ROWS = 3;
 const clsOpts = sel => Array.from({ length: CLASS_MAX - CLASS_MIN + 1 }, (_, i) => i + CLASS_MIN)
@@ -461,8 +461,9 @@ function paintSettings(){
     </fieldset>`; }).join('')}
     <div class="pay-add-row">${Object.entries(KINDS).map(([k, x]) => `<button type="button" class="pay-add" onclick="addPayAccount('${k}')">➕ ${x.icon} ${x.label}</button>`).join('')}</div>
     <div id="pay-cover" class="pay-cover"></div>
+    <label class="pay-qr-on"><input type="checkbox" id="pay-remind"${remindOn ? ' checked' : ''}> 🔔 Нагадувати батькам про оплату за навчання — 1-го і 10-го числа, з вересня по червень (сповіщення відкриває «💳 Оплата»)</label>
     <button type="button" onclick="savePaymentDetails()">Зберегти реквізити</button>`;
-  box.querySelectorAll('.pay-acc-edit select').forEach(s => s.addEventListener('change', () => { readDraft(); if(s.dataset.k === 'kind') paintSettings(); else window.previewPaymentTitle(); }));
+  box.querySelectorAll('.pay-acc-edit select').forEach(s => s.addEventListener('change', () => { readDraft(); if(s.dataset.k === 'kind'){ keepRemind(); paintSettings(); } else window.previewPaymentTitle(); }));
   box.querySelectorAll('.pay-acc-edit [data-k="qr"]').forEach(c => c.addEventListener('change', () => window.previewPaymentTitle()));
   window.previewPaymentTitle();
 }
@@ -471,6 +472,7 @@ window.renderPaymentSettings = async function(){
   if(!box) return;
   const d = await loadPaymentDetails(true);
   const accs = accountsOf(d);
+  remindOn = d.remind !== false;
   draft = (accs.length ? accs : [blankAcc('tuition')]).map(a => ({
     kind: a.kind, label: a.label || '', from: a.from, to: a.to, fullName: a.fullName || '', iban: a.iban ? ibanPretty(a.iban) : '',
     title: a.title || '', name: a.name || '', nip: a.nip || '', regon: a.regon || '', bank: a.bank || '', address: a.address || '',
@@ -478,13 +480,17 @@ window.renderPaymentSettings = async function(){
   }));
   paintSettings();
 };
+function keepRemind(){ const c = document.getElementById('pay-remind'); if(c) remindOn = c.checked; }
+// Правила бази приймають рахунки a1…a20
+export const MAX_ACCOUNTS = 20;
 window.addPayAccount = function(kind){
-  readDraft();
+  readDraft(); keepRemind();
+  if(draft.length >= MAX_ACCOUNTS) return alert(`Щонайбільше ${MAX_ACCOUNTS} рахунків.`);
   draft.push(blankAcc(KINDS[kind] ? kind : 'other'));
   paintSettings();
 };
 window.removePayAccount = function(i){
-  readDraft();
+  readDraft(); keepRemind();
   draft.splice(i, 1);
   paintSettings();
 };
@@ -517,6 +523,7 @@ window.previewPaymentTitle = function(){
 window.savePaymentDetails = async function(){
   readDraft();
   const accounts = {};
+  if(draft.length > MAX_ACCOUNTS) return alert(`Щонайбільше ${MAX_ACCOUNTS} рахунків.`);
   for(let i = 0; i < draft.length; i++){
     const a = draft[i], n = i + 1;
     const iban = String(a.iban || '').trim();
@@ -525,7 +532,10 @@ window.savePaymentDetails = async function(){
     const amounts = [];
     for(const x of (a.amounts || [])){
       const raw = String(x.sum || '').trim().replace(',', '.');
-      if(!raw) continue;
+      if(!raw){
+        if(String(x.label || '').trim()) return alert(`Рахунок ${n}: біля «${String(x.label).trim()}» не вказано суму.`);
+        continue;
+      }
       const sum = Number(raw);
       if(isNaN(sum) || sum <= 0) return alert(`Рахунок ${n}: сума «${x.sum}» — не число.`);
       if(zbpAmount(sum) === null) return alert(`Рахунок ${n}: стандарт QR вміщає щонайбільше 9999,99 zł.`);
@@ -544,7 +554,8 @@ window.savePaymentDetails = async function(){
   }
   try{
     // Цілим вузлом: старі поля (titlePrefix, amount, загальний qr) зникають
-    await set(ref(db, 'payment_details'), { accounts, ts: Date.now() });
+    keepRemind();
+    await set(ref(db, 'payment_details'), { accounts, remind: remindOn, ts: Date.now() });
     window.invalidatePaymentDetails();
     logAction('payment_details', { value: `реквізити оплати оновлено (${Object.values(accounts).map(x => `${kindLabel(x)} ${rangeLabel(x)}`).join('; ')})` });
     showToast('✅ Реквізити збережено');

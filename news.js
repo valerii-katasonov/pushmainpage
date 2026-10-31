@@ -186,6 +186,8 @@ export async function loadNews(){
 // Персоналу — усе: директор має бачити, що пишуть учителі.
 function visibleTo(a, role, cls){
   if(a.scope === 'school') return true;
+  // Своє оголошення автор бачить завжди — навіть коли зараз вибрано інший клас
+  if(a.author && a.author === (auth.currentUser?.uid || '')) return true;
   if(role === 'director' || role === 'administrator' || canPostSchoolWide()) return true;
   // Інші ролі з конструктора класу не мають — бачать шкільні оголошення
   if(window.isCustomRole && window.isCustomRole(role)) return false;

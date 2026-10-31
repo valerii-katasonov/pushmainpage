@@ -56,10 +56,14 @@ export function overscrolled(win, doc){
   const max = Math.max(0, (se ? se.scrollHeight : 0) - win.innerHeight);
   return y < 0 || y > max + 1;
 }
+const reset = el => { delete el.dataset.iosShift; delete el.dataset.iosPend; el.style.transform = ''; };
 export function fixOnce(win = window, doc = document){
+  // Сховане меню не тримає старої поправки — інакше з'явиться зсунутим
+  doc.querySelectorAll('.ui-bnav[hidden][data-ios-shift]').forEach(reset);
   const vv = win.visualViewport;
-  if(vv && Math.abs((vv.scale || 1) - 1) > 0.01) return;      // збільшено пальцями
-  if(editing(doc)) return;                                      // відкрита клавіатура
+  // Збільшено пальцями або відкрита клавіатура: поправку знімаємо (там
+  // «низ видимого» інший) і нічого не міряємо, доки не повернеться норма
+  if((vv && Math.abs((vv.scale || 1) - 1) > 0.01) || editing(doc)){ doc.querySelectorAll(SEL).forEach(el => { if(Number(el.dataset.iosShift || 0)) reset(el); }); return; }
   if(overscrolled(win, doc)) return;                            // пружина на краю
   const target = targetBottom(win);
   doc.querySelectorAll(SEL).forEach(el => {
