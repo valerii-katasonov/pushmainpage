@@ -174,10 +174,13 @@ async function talkPlan(token, type, cls, who, id) {
 // Підробити заявку без оцінки не вийде: сервер перевіряє, що оцінка за
 // цю дату справді є в дзеркалі учня.
 const RETAKE_SUBJ_RE = /^[^.#$\[\]\/]{1,80}$/;
-const RETAKE_DATE_RE = /^\d{4}-\d{2}-\d{2}(__\d{1,2})?$/;
+// Ключ оцінки: дата уроку (старі заявки) або sem_{семестр} — ПЕРЕЗДАЧА ЛИШЕ
+// СЕМЕСТРОВОЇ (рішення школи, 31.10.2026)
+const RETAKE_DATE_RE = /^(\d{4}-\d{2}-\d{2}(__\d{1,2})?|sem_[-_A-Za-z0-9]{1,30})$/;
+const isSemKey = k => String(k).startsWith('sem_');
 const RETAKE_WHO_RE  = /^[^.#$\[\]\/]{1,120}$/;
 const DAY_MS = 24 * 3600e3;
-const retakeDay = date => date.slice(8, 10) + '.' + date.slice(5, 7);
+const retakeDay = date => isSemKey(date) ? '' : date.slice(8, 10) + '.' + date.slice(5, 7);
 // «24.10 о 10:00 (каб. 12)» — з полів, які ставить лише персонал (правила бази)
 function retakeWhen(rec) {
   const d = String(rec.retakeDate || '');
@@ -195,19 +198,21 @@ async function retakePlan(token, type, cls, subj, date, who) {
   if (!rec || typeof rec !== 'object') return { note: 'Заявки немає' };
   // Оцінку для тексту беремо з дзеркала учня (нижче), а не з заявки:
   // заявку пише родина, і число в ній могло б бути будь-яким
-  const params = { subject: subj.slice(0, 80), day: retakeDay(date), value: String(rec.grade ?? '').slice(0, 4), when: retakeWhen(rec) };
+  const params = { subject: subj.slice(0, 80), day: retakeDay(date), value: String(rec.grade ?? '').slice(0, 4), when: retakeWhen(rec), sem: isSemKey(date) };
   if (type === 'retake') {
     if (rec.status !== 'pending') return { note: 'Заявку вже розглянуто' };
     // Свіжа: за позначкою часу, а в старих заявках — за датою подання
     const fresh = rec.ts ? Date.now() - Number(rec.ts) < DAY_MS
       : String(rec.requestDate || '') >= new Date(Date.now() - DAY_MS).toISOString().slice(0, 10);
     if (!fresh) return { note: 'Заявка застара' };
-    const g = await readDb(token, `student_grades/${enc(cls, who, date.slice(0, 7), subj, date)}`).catch(() => null);
+    const g = isSemKey(date)
+      ? await readDb(token, `student_semester/${enc(cls, who, date.slice(4), subj)}`).catch(() => null)
+      : await readDb(token, `student_grades/${enc(cls, who, date.slice(0, 7), subj, date)}`).catch(() => null);
     if (g == null) return { note: 'Оцінки немає' };
     // Перездати можна будь-яку оцінку (і рівні П/С/Д/В). Ліміт 10% рахує
     // лише браузер, тож сповіщень від однієї дитини з предмета — не
     // більше трьох за добу
-    const real = String((g && typeof g === 'object' ? g.v : g) ?? '');
+    const real = String((g && typeof g === 'object' ? (g.v ?? g.value) : g) ?? '');
     params.value = real.slice(0, 4);
     const all = await readDb(token, `retake_requests/${enc(cls, subj)}`).catch(() => null) || {};
     const recent = Object.values(all).filter(day => day && day[who] && Date.now() - Number(day[who].ts || 0) < DAY_MS).length;
@@ -614,14 +619,14 @@ const EVENTS = {
                         tag: 'talk' + (p.ref ? '-' + p.ref : '') }),
   // Імені дитини в сповіщенні вчителю немає: видно на заблокованому екрані
   retake:     (p) => ({ title: '🔄 Заявка на перездачу',
-                        body: `${p.clsLabel ? p.clsLabel + ' · ' : ''}${p.subject || 'Предмет'}${p.value ? `: оцінка ${p.value}` : ''}${p.day ? ` від ${p.day}` : ''}`,
+                        body: `${p.clsLabel ? p.clsLabel + ' · ' : ''}${p.subject || 'Предмет'}${p.value ? `: ${p.sem ? 'семестрова ' : ''}оцінка ${p.value}` : ''}${p.day ? ` від ${p.day}` : ''}`,
                         tag: 'retake' + (p.tagKey ? '-' + p.tagKey : '') }),
   retake_reply: (p) => ({ title: p.approved ? '✅ Перездачу дозволено' : '❌ Перездачу не дозволено',
-                        body: `${p.subject || 'Предмет'}${p.value ? `: оцінка ${p.value}` : ''}${p.day ? ` від ${p.day}` : ''}`
+                        body: `${p.subject || 'Предмет'}${p.value ? `: ${p.sem ? 'семестрова ' : ''}оцінка ${p.value}` : ''}${p.day ? ` від ${p.day}` : ''}`
                               + (p.approved ? (p.when ? ` — перездача ${p.when}` : ' — дату вчитель повідомить') : ''),
                         tag: 'retake-reply' + (p.tagKey ? '-' + p.tagKey : '') }),
   retake_date: (p) => ({ title: '📅 Перездачу призначено',
-                        body: `${p.subject || 'Предмет'}${p.value ? ` (оцінка ${p.value} від ${p.day})` : ''}: ${p.when || 'дата в кабінеті'}`,
+                        body: `${p.subject || 'Предмет'}${p.value ? ` (${p.sem ? 'семестрова ' : ''}оцінка ${p.value}${p.day ? ` від ${p.day}` : ''})` : ''}: ${p.when || 'дата в кабінеті'}`,
                         tag: 'retake-date' + (p.tagKey ? '-' + p.tagKey : '') }),
   talk_reply: (p) => ({ title: '💬 Учитель відповів',
                         body: `${p.subject || 'Предмет'}: відповідь на ваш запит — у кабінеті`,
