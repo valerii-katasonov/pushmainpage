@@ -696,7 +696,7 @@ export const ROLE_LABELS={
   teacher:'👨‍🏫 Вчитель', class_teacher:'🎓 Класний керівник',
   art_school_teacher:'🎨 Вчитель школи мистецтв', music_teacher:'🎵 Вчитель музики',
   master_class_teacher:'🔧 Майстер-класний керівник (налагодження)',
-  parent:'👪 Батьки', student:'🎒 Учень', kitchen:'🍽️ Кухня',
+  parent:'👪 Батьки', student:'🎒 Учень', kitchen:'🍽️ Кухня', kitchen_admin:'🧑‍🍳 Адміністратор кухні',
   organizer:'🎭 Педагог-організатор'
 };
 // ══════════ КОНСТРУКТОР РОЛЕЙ ══════════
@@ -2259,7 +2259,7 @@ function updateProfileBar(){
   const src=currentUserData.photoURL||"https://cdn-icons-png.flaticon.com/512/149/149071.png";
   document.getElementById('pb-avatar').src=src;document.getElementById('modal-avatar-preview').src=src;
   let n="Користувач";if(currentUserData.firstName||currentUserData.lastName)n=`${currentUserData.firstName||''} ${currentUserData.lastName||''}`.trim();else if(currentUserData.studentName)n=`Батьки (${childDisplayName(currentUserData.studentName)})`;else if(currentUserData.email)n=currentUserData.email;
-  let r="";if(currentUserData.role==='teacher')r="Вчитель";if(currentUserData.role==='class_teacher')r="🎓 Класний керівник";if(currentUserData.role==='art_school_teacher'||currentUserData.role==='music_teacher')r="Вчитель школи мистецтв";if(currentUserData.role==='director')r="Директор";if(currentUserData.role==='administrator')r="🛡️ Секретар (Адміністратор)";if(currentUserData.role==='student')r="🎒 Учень";if(currentUserData.role==='parent'){if(currentUserData.parentRole==='mother')r="Мати";else if(currentUserData.parentRole==='father')r="Батько";else r="Опекун";}
+  let r="";if(currentUserData.role==='teacher')r="Вчитель";if(currentUserData.role==='class_teacher')r="🎓 Класний керівник";if(currentUserData.role==='art_school_teacher'||currentUserData.role==='music_teacher')r="Вчитель школи мистецтв";if(currentUserData.role==='director')r="Директор";if(currentUserData.role==='administrator')r="🛡️ Секретар (Адміністратор)";if(currentUserData.role==='student')r="🎒 Учень";if(!r&&currentUserData.role!=='parent')r=ROLE_LABELS[currentUserData.role]||'';if(currentUserData.role==='parent'){if(currentUserData.parentRole==='mother')r="Мати";else if(currentUserData.parentRole==='father')r="Батько";else r="Опекун";}
   document.getElementById('pb-name').innerText=n;document.getElementById('pb-role').innerText=r;
   renderRoleSwitcher();
   renderChildSwitcher();
@@ -2513,7 +2513,7 @@ window.handleDateChange=function(){
   if(window.refreshHwTabIfOpen) window.refreshHwTabIfOpen();
   if(isTeacherRole(currentUserData.role)){updateSubjectList();loadTeacherDashboard();loadCurrentTopicAndHW();listenTeacherAttendance();}
   else if(currentUserData.role==='director'){loadDirectorDashboard();document.getElementById('d-detail-hw-class')&&(document.getElementById('d-detail-hw-class').value='');}
-  else if(currentUserData.role==='kitchen'){/* кухня працює тижнями — має власну навігацію */}
+  else if(currentUserData.role==='kitchen'||currentUserData.role==='kitchen_admin'){/* кухня працює тижнями — має власну навігацію */}
   else if(isCustomRole(currentUserData.role)){/* роль із конструктора: без журналу й дашборда дня */}
   else if(currentUserData.role==='administrator'){loadAdminDashboard();}
   else if(currentUserData.role==='student'){loadStudentDashboard();}
@@ -3286,7 +3286,10 @@ async function initUserSession(){
     // У директора такого селектора немає (він прихований), тож функція не
     // запускалася жодного разу, і картка не переїжджала до його кабінету.
     checkCurriculumUploadAccess();}
-  else if(r==='kitchen'){document.getElementById('kitchen-screen').style.display='block';document.getElementById('teacher-class-selector-box').style.display='none';const gd=document.getElementById('global-date'),gl=document.getElementById('global-date-label');if(gd)gd.style.display='none';if(gl)gl.style.display='none';callWhenReady('refreshKitchen');}
+  // Адміністратор кухні — той самий екран кухні, але без фінансової частини
+  // (ціни, суми, баланси). Клас k-no-money ховає ці блоки, kitchen.js не
+  // рахує гроші, а правила бази не пускають роль до журналу списань.
+  else if(r==='kitchen'||r==='kitchen_admin'){const ks=document.getElementById('kitchen-screen');ks.style.display='block';ks.classList.toggle('k-no-money',r==='kitchen_admin');document.getElementById('teacher-class-selector-box').style.display='none';const gd=document.getElementById('global-date'),gl=document.getElementById('global-date-label');if(gd)gd.style.display='none';if(gl)gl.style.display='none';callWhenReady('refreshKitchen');}
   // Педагог-організатор — не вчитель: розклад, календар подій, оголошення.
   // Гілка стоїть до isTeacherRole і до загального else, який відкрив би
   // людині кабінет батьків.
@@ -3411,7 +3414,7 @@ export const AUDIT_LABELS={
   homework:'📚 Домашнє завдання', behavior:'🤝 Оцінка поведінки',
   student_add:'👨‍🎓 Учня додано', student_rename:'✏️ Учня перейменовано',
   student_del:'🗑 Учня прибрано', student_transfer:'↔️ Учня переведено',
-  card_edit:'📋 Картку учня змінено', data_export:'📦 Вивантаження даних дитини', staff_absent:'🧑‍🏫 Відсутність вчителя', consent_create:'✍️ Запит на згоду', quick_journal:'⚡ Швидкий журнал', group_grades:'📝 Оцінки за роботу', payment_details:'💳 Реквізити оплати', menu:'🍽️ Меню оновлено', announcement:'📣 Оголошення', meal_plan:'🥪 Харчування учня', migration:'🆔 Перехід на ідентифікатори', broadcast:'✉️ Повідомлення класу', substitute:'🔄 Призначено заміну', semester_grade:'🎓 Підсумкові оцінки',
+  card_edit:'📋 Картку учня змінено', data_export:'📦 Вивантаження даних дитини', staff_absent:'🧑‍🏫 Відсутність вчителя', consent_create:'✍️ Запит на згоду', quick_journal:'⚡ Швидкий журнал', group_grades:'📝 Оцінки за роботу', payment_details:'💳 Реквізити оплати', grades_mirror:'📒 Оцінки для батьків відновлено', menu:'🍽️ Меню оновлено', announcement:'📣 Оголошення', meal_plan:'🥪 Харчування учня', migration:'🆔 Перехід на ідентифікатори', broadcast:'✉️ Повідомлення класу', substitute:'🔄 Призначено заміну', semester_grade:'🎓 Підсумкові оцінки',
   student_login:'🔑 Вхід учня створено', student_email:'✉️ Email учня змінено',
   student_login_del:'🔒 Вхід учня прибрано',
   parent_link:'🔗 Батьків прив\'язано', parent_unlink:'🔓 Батьків відв\'язано',
@@ -3803,7 +3806,7 @@ export async function renderPushInvite(containerId){
     // після переїзду на новий домен дозвіл треба давати заново, і банер
     // зʼявляється в усіх одразу, у найневдаліший момент.
     const staff = isTeacherRole(currentUserData?.role)
-      || ['director','administrator','kitchen'].includes(currentUserData?.role) || isCustomRole(currentUserData?.role);
+      || ['director','administrator','kitchen','kitchen_admin'].includes(currentUserData?.role) || isCustomRole(currentUserData?.role);
     if(Date.now() - snoozed < (staff ? 24*3600*1000 : 7*24*3600*1000)) return;
     box.style.display = 'block';
     box.className = 'push-invite';

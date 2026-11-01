@@ -4038,6 +4038,9 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
 .nw-cls{display:flex;align-items:center;justify-content:center;gap:4px;margin:0;padding:6px 4px;border:1px solid var(--line);border-radius:10px;cursor:pointer;font-weight:600;font-size:.9rem;background:var(--surface)}
 .nw-cls input{width:auto;margin:0}
 .nw-cls:has(input:checked){background:var(--brand-soft);border-color:var(--brand-deep);color:var(--brand-ink)}
+
+/* Адміністратор кухні: кабінет кухні без цін, сум і балансів */
+#kitchen-screen.k-no-money .k-money{display:none !important;}
 </style>
 </head>
 <!-- auth-mode СТОЇТЬ ТУТ ОДРАЗУ, а не чекає на скрипт.
@@ -4475,7 +4478,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
              «зберегти» біля кожного поля дали б чотири нагоди зберегти
              половину. Порожнє поле означає «ціни немає» — тоді суми не
              показуються нікому. -->
-        <details class="k-prices">
+        <details class="k-prices k-money">
           <summary>💰 Ціни на харчування</summary>
           <div class="k-prices-grid">
             <label>Обід<input type="text" id="k-price-lunch" inputmode="decimal" placeholder="—"></label>
@@ -4505,7 +4508,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
         Асортимент поза меню: випічка, салати, супи в контейнері. Батьки замовляють
         на конкретний день, оплата — у школі, як завжди.</p>
 
-      <details style="background:var(--surface-2);border:1px solid var(--warn-line);border-radius:12px;padding:14px;margin-bottom:12px;">
+      <details class="k-money" style="background:var(--surface-2);border:1px solid var(--warn-line);border-radius:12px;padding:14px;margin-bottom:12px;">
         <summary style="font-weight:700;cursor:pointer;color:var(--warn);font-size:.9rem;">➕ Додати позицію</summary>
         <div style="margin-top:11px;">
           <label for="k-ta-title">Назва</label>
@@ -4525,7 +4528,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
       <div id="k-ta-orders" style="margin-top:10px;"><p class="empty-msg">Оберіть дату.</p></div>
     </section>
 
-    <section class="screen-section">
+    <section class="screen-section k-money">
       <h3>💳 Баланс харчування</h3>
       <div class="data-card" style="border-left-color:var(--ok);margin-top:0;">
         <p style="font-size:.76rem;color:var(--ink-2);margin-top:0;">Внесіть надходження з банківського рахунку. Перша дата «рахувати від» відкриває особовий рахунок.</p>
@@ -4818,10 +4821,10 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
         <div style="margin-top:13px;">
           <input type="email" id="new-staff-email" placeholder="Email співробітника">
           <label style="font-size:.8rem;color:var(--ink-2);margin-top:8px;">Ролі (можна обрати кілька — Ctrl/Cmd + клік):</label>
-          <select id="new-staff-role" multiple size="7" style="margin-top:4px;">
+          <select id="new-staff-role" multiple size="8" style="margin-top:4px;">
             <option value="teacher">👨‍🏫 Вчитель</option><option value="art_school_teacher">🎨 Вчитель школи мистецтв</option>
             <option value="class_teacher">🎓 Класний керівник</option>
-            <option value="director">👔 Директор</option><option value="administrator">🛡️ Секретар (Адміністратор)</option><option value="kitchen">🍽️ Кухня</option>
+            <option value="director">👔 Директор</option><option value="administrator">🛡️ Секретар (Адміністратор)</option><option value="kitchen">🍽️ Кухня</option><option value="kitchen_admin">🧑‍🍳 Адміністратор кухні</option>
             <option value="master_class_teacher">🔧 Майстер-класний керівник (налагодження)</option>
           </select>
           <div style="font-size:.75rem;color:var(--danger);margin-top:5px;line-height:1.4;">

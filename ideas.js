@@ -61,7 +61,7 @@ export function randomId(n = 24){
 export function whoGroup(role){
   if(role === 'parent') return 'parent';
   if(role === 'student') return 'student';
-  if(role && (isTeacherRole(role) || ['director', 'administrator', 'kitchen', 'organizer'].includes(role) || /^cr_/.test(role))) return 'staff';
+  if(role && (isTeacherRole(role) || ['director', 'administrator', 'kitchen', 'kitchen_admin', 'organizer'].includes(role) || /^cr_/.test(role))) return 'staff';
   return '';
 }
 export const isAdmin = role => role === 'director' || role === 'administrator';

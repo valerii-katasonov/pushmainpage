@@ -1001,7 +1001,7 @@ window.refreshKitchen = function(){
   loadWeekMenu(); loadWeekCounts();
   loadTakeawayItems();
   // Персонал: ціна обіду й список на обрану дату
-  if(window.loadMealPricesForm) window.loadMealPricesForm();
+  if(window.loadMealPricesForm && !kitchenNoMoney()) window.loadMealPricesForm();
   if(window.loadStaffOrders) window.loadStaffOrders();
 };
 
@@ -1290,7 +1290,8 @@ window.loadStaffOrders = async function(){
     ]);
     const plans  = planSnap.exists()?planSnap.val():{};
     const days   = daySnap.exists()?daySnap.val():{};
-    const price  = Number(mealPriceAt(date,priceSnap,historySnap.exists()?historySnap.val():{}).staff) || 0;
+    const noMoney = kitchenNoMoney();
+    const price  = noMoney ? 0 : (Number(mealPriceAt(date,priceSnap,historySnap.exists()?historySnap.val():{}).staff) || 0);
     const dir    = (dirSnap && dirSnap.exists())?dirSnap.val():{};
     const menuDay= menuSnap.exists()?menuSnap.val():{};
     const choice = choicePair(menuDay);
@@ -1323,7 +1324,7 @@ window.loadStaffOrders = async function(){
       <div class="k-ord-sum"><b>${rows.length}</b> обідів для персоналу${
         choice?` <span class="k-ord-ab">А ${pa} / Б ${pb}</span>`:''}
         <span>${escHtml(human(date))}${price?` · на суму ${taMoney(sum)} zł`:''}</span></div>
-      ${price ? '' : '<p class="k-ord-hint">Ціну обіду для персоналу ще не задано — сума не рахується.</p>'}
+      ${price || noMoney ? '' : '<p class="k-ord-hint">Ціну обіду для персоналу ще не задано — сума не рахується.</p>'}
       <div class="k-scroll">
       <table class="k-table k-ord"><thead><tr>
         <th>Співробітник</th>${choice?'<th>Варіант</th>':''}<th>Замовлення</th>${price?'<th>Сума</th>':''}
@@ -1415,14 +1416,24 @@ function askConfirm(msg){
 // ЗАПИС ІДЕ В ТУ САМУ ГІЛКУ, що й у батьків: meal_day/{дата}/{клас}/{ID}.
 // Друге джерело правди тут завело б облік у безвихідь. Позначка manual
 // лише каже, звідки взялася порція, а не міняє її суть.
+// Чи закрито день у журналі списань. Кухня й адміністрація читають запис
+// дня цілком, як і раніше: так закритий день видно, навіть якщо в старому
+// записі немає поля date. Адміністратору кухні суми закриті — йому правило
+// meal_ledger відкриває лише поле date (сервер пише його в кожен запис).
+export async function ledgerDayClosed(cls, sid, date){
+  const path = `meal_ledger/${cls}/${sid}/${date}` + (kitchenNoMoney() ? '/date' : '');
+  return (await get(child(ref(db),path))).exists();
+}
+
 window.kitchenSetMeal = async function(cls, sid, date, field, value){
   if(!cls || !sid || !date) return;
   const LABEL = { lunch:'обід', breakfast:'сніданок', snack:'підвечірок' };
   let name=stuName(cls,sid);
   if(!askConfirm(`${value ? 'Додати' : 'Зняти'} ${LABEL[field] || field}: ${name}, ${human(date)}?`)) return;
   try{
-    const closed=await get(child(ref(db),`meal_ledger/${cls}/${sid}/${date}`));
-    if(closed.exists())return alert('Цей день уже зафіксований у журналі списань. Змініть суму через «Корекція списання» в балансі харчування — інакше замовлення та гроші розійдуться.');
+    if(await ledgerDayClosed(cls,sid,date))return alert(kitchenNoMoney()
+      ? 'Цей день уже зафіксований у журналі списань. Змінити порцію заднім числом може кухня або адміністрація — через корекцію в балансі харчування.'
+      : 'Цей день уже зафіксований у журналі списань. Змініть суму через «Корекція списання» в балансі харчування — інакше замовлення та гроші розійдуться.');
     const dir=await getStudentDir(cls);name=dir.byId[sid]||name;
     const plan = await readMealCopies(`meal_plan/${cls}`,sid,name)||{};
     const path = `meal_day/${date}/${cls}/${sid}`;
@@ -1543,7 +1554,7 @@ window.kitchenSetPick = async function(cls, sid, date, value){
   const v = value === 'b' ? 'b' : 'a';
   if(!askConfirm(`Варіант ${v.toUpperCase()} для ${name}, ${human(date)}?`)) return;
   try{
-    if((await get(child(ref(db),`meal_ledger/${cls}/${sid}/${date}`))).exists())
+    if(await ledgerDayClosed(cls,sid,date))
       return alert('День уже зафіксовано. Вибір у журналі змінити не можна.');
     const dir=await getStudentDir(cls);name=dir.byId[sid]||name;
     const path = `meal_day/${date}/${cls}/${sid}`;
@@ -1567,7 +1578,7 @@ window.kitchenSetBreakfastPick = async function(cls, sid, date, value){
   const v = value === 'b' ? 'b' : 'a';
   if(!askConfirm(`Сніданок ${v.toUpperCase()} для ${name}, ${human(date)}?`)) return;
   try{
-    if((await get(child(ref(db),`meal_ledger/${cls}/${sid}/${date}`))).exists())
+    if(await ledgerDayClosed(cls,sid,date))
       return alert('День уже зафіксовано. Вибір у журналі змінити не можна.');
     const dir=await getStudentDir(cls);name=dir.byId[sid]||name;
     const path = `meal_day/${date}/${cls}/${sid}`;
@@ -1587,8 +1598,15 @@ window.kitchenSetBreakfastPick = async function(cls, sid, date, value){
 
 function canEditMeals(){
   const r = currentUserData?.role;
-  return r === 'kitchen' || r === 'director' || r === 'administrator';
+  return r === 'kitchen' || r === 'kitchen_admin' || r === 'director' || r === 'administrator';
 }
+
+// АДМІНІСТРАТОР КУХНІ — той самий кабінет кухні, але без грошей: цін,
+// сум, балансів і особових рахунків. Ховати лише в інтерфейсі мало:
+// правила бази не дають цій ролі ні читати журнал списань, ні змінювати
+// ціни. Тому й рахунок тут не запускаємо — він упав би на читанні.
+export function kitchenNoMoney(role = currentUserData?.role){ return role === 'kitchen_admin'; }
+window.kitchenNoMoney = kitchenNoMoney;
 
 // Клітинка обліку: для кухні це кнопка, для решти — просто позначка
 function mealCell(cls, sid, date, field, on){
@@ -1818,14 +1836,15 @@ window.loadMealStats = async function(){
   if(!box) return;
   if(!from || !to || from > to) return alert('Оберіть коректний період.');
   box.innerHTML = '<p class="empty-msg">Рахуємо...</p>';
+  const noMoney = kitchenNoMoney();
   try{
     const [rows, itSnap, histSnap] = await Promise.all([
-      computeMealStats(from, to, selectedCls, null, true),
+      computeMealStats(from, to, selectedCls, null, !noMoney, true),
       get(child(ref(db), 'takeaway_items')),
-      get(child(ref(db), 'takeaway_price_history'))
+      noMoney ? null : get(child(ref(db), 'takeaway_price_history'))
     ]);
     const items = itSnap.exists() ? itSnap.val() : {};
-    const priceHistory = histSnap.exists() ? histSnap.val() : {};
+    const priceHistory = histSnap && histSnap.exists() ? histSnap.val() : {};
     if(!rows.length){ box.innerHTML = '<p class="empty-msg">За цей період даних немає.</p>'; return; }
     const tot = rows.reduce((a,r)=>({lunch:a.lunch+r.lunch, snack:a.snack+r.snack, brk:a.brk+(r.brk||0)}),{lunch:0,snack:0,brk:0});
     const byClass = {};
@@ -1843,7 +1862,7 @@ window.loadMealStats = async function(){
       for(const k of ['lunch','brk','snack','takeaway','adjustments','total']) a[k]=Math.round((a[k]+r.cost[k])*100)/100;
       return a;
     },{lunch:0,brk:0,snack:0,takeaway:0,adjustments:0,total:0});
-    const money$ = hasPrices(prices) || sumAll.total !== 0;
+    const money$ = !noMoney && (hasPrices(prices) || sumAll.total !== 0);
     const warnings=rows.flatMap(r=>r.flags||[]);
     // Збір замовлень на винос по всій школі за період
     const allTakeaways = [];
@@ -1869,7 +1888,7 @@ window.loadMealStats = async function(){
           const price = takeawayPriceAt(id, ta.date, items, priceHistory);
           const itemCost = price * qty;
           orderCost += itemCost;
-          return `${escHtml(title)}${qty > 1 ? ` ×${qty}` : ''} (${price} zł)`;
+          return `${escHtml(title)}${qty > 1 ? ` ×${qty}` : ''}${noMoney ? '' : ` (${price} zł)`}`;
         }).join(', ');
         grandTotalTaCost += orderCost;
         return `<tr>
@@ -1877,16 +1896,16 @@ window.loadMealStats = async function(){
           <td>${escHtml(ta.name)}</td>
           <td>${ta.cls}</td>
           <td>${list}</td>
-          <td style="text-align:right;font-weight:bold;white-space:nowrap;">${orderCost} zł</td>
+          ${noMoney ? '' : `<td style="text-align:right;font-weight:bold;white-space:nowrap;">${orderCost} zł</td>`}
         </tr>`;
       }).join('');
 
       taHistoryBlock = `
-        <div class="k-skip-title">📑 Історія замовлень на винос (разом за період: ${grandTotalTaCost} zł)</div>
+        <div class="k-skip-title">📑 Історія замовлень на винос${noMoney ? '' : ` (разом за період: ${grandTotalTaCost} zł)`}</div>
         <div class="k-scroll">
           <table class="k-table">
             <thead>
-              <tr><th>Дата</th><th>Учень</th><th>Кл.</th><th>Замовлення</th><th style="text-align:right;">Сума</th></tr>
+              <tr><th>Дата</th><th>Учень</th><th>Кл.</th><th>Замовлення</th>${noMoney ? '' : '<th style="text-align:right;">Сума</th>'}</tr>
             </thead>
             <tbody>
               ${taRowsHtml}
@@ -1921,7 +1940,7 @@ window.loadMealStats = async function(){
         <button onclick="exportMealStatsPdf()" style="background:linear-gradient(135deg,var(--danger),var(--danger));color:var(--on-fill);border:none;border-radius:8px;padding:9px 16px;font-weight:700;cursor:pointer;">📕 Зберегти PDF</button>
         <button onclick="exportMealStats()" style="background:var(--brand-soft);color:var(--brand-ink);border:1px solid var(--brand-line);padding:9px 16px;border-radius:8px;font-weight:700;cursor:pointer;">📄 Вивантажити CSV</button>
       </div>`;
-    window.__mealStats = { from, to, cls: selectedCls, rows };
+    window.__mealStats = { from, to, cls: selectedCls, rows, noMoney };
   }catch(e){
     box.innerHTML = `<p style="color:red;font-size:.8rem;">Помилка: ${escHtml(e.message)}</p>`;
   }
@@ -1995,7 +2014,7 @@ export function servedMeals(e, menuDay){
 }
 
 // Спільний рахунок для кухні і для батьків. onlyCls/onlyName звужують вибірку.
-export async function computeMealStats(from, to, onlyCls, onlyName, withCost=false){
+export async function computeMealStats(from, to, onlyCls, onlyName, withCost=false, withTakeaway=withCost){
   // Обидва вузли ключуються датою, тож просимо лише обраний період.
   // Раніше статистика за тиждень качала весь навчальний рік.
   const [stSnap, planSnap, att, days] = await Promise.all([
@@ -2014,7 +2033,11 @@ export async function computeMealStats(from, to, onlyCls, onlyName, withCost=fal
     get(child(ref(db),'takeaway_items')).then(s=>s.exists()?s.val():{}),
     get(child(ref(db),'takeaway_price_history')).then(s=>s.exists()?s.val():{}),
     get(child(ref(db),'meal_ledger_adjustments')).then(s=>s.exists()?s.val():{})
-  ]) : [{},{},{},{},{},{},{}];
+  ]) : [{},{},{},
+    // Без грошей (адміністратор кухні) замовлення на винос усе одно
+    // потрібні — у кількостях. Журнал списань і ціни не читаємо.
+    withTakeaway ? await getDateRange('takeaway_orders',from,to,true) : {},
+    {},{},{}];
 
   const dateList = [];
   const d = new Date(from+'T12:00:00'), end = new Date(to+'T12:00:00');
@@ -2131,7 +2154,7 @@ export async function computeMealStats(from, to, onlyCls, onlyName, withCost=fal
           cost.total=Math.round((cost.total+amount)*100)/100;
         }
       }
-      if(lunch || snack || brk || absent || (withCost && (cost.takeaway || cost.adjustments || flags.length)))
+      if(lunch || snack || brk || absent || studentTakeaways.length || (withCost && (cost.takeaway || cost.adjustments || flags.length)))
         out.push({ cls:i, name, lunch, snack, brk, absent, lateAbsent, absentDates: [...new Set(absentDates)].sort(), days:serviceDays, cost, flags, takeaways: studentTakeaways });
     }
   }
@@ -2141,8 +2164,12 @@ export async function computeMealStats(from, to, onlyCls, onlyName, withCost=fal
 window.exportMealStats = function(){
   const s = window.__mealStats;
   if(!s) return;
-  const csv = ['Учень;Клас;Сніданки;Обіди;Підвечірки;Відсутність (днів);Дати відсутності;Страви zł;На винос zł;Корекції zł;Разом zł',
-    ...s.rows.map(r=>`${r.name};${r.cls};${r.brk||0};${r.lunch};${r.snack};${r.absent||0};${(r.absentDates||[]).map(d=>human(d)).join(', ')};${taMoney(r.cost.lunch+r.cost.brk+r.cost.snack)};${taMoney(r.cost.takeaway)};${taMoney(r.cost.adjustments)};${taMoney(r.cost.total)}`)].join('\n');
+  const head = 'Учень;Клас;Сніданки;Обіди;Підвечірки;Відсутність (днів);Дати відсутності';
+  const base = r=>`${r.name};${r.cls};${r.brk||0};${r.lunch};${r.snack};${r.absent||0};${(r.absentDates||[]).map(d=>human(d)).join(', ')}`;
+  const csv = s.noMoney
+    ? [head, ...s.rows.map(base)].join('\n')
+    : [head+';Страви zł;На винос zł;Корекції zł;Разом zł',
+       ...s.rows.map(r=>`${base(r)};${taMoney(r.cost.lunch+r.cost.brk+r.cost.snack)};${taMoney(r.cost.takeaway)};${taMoney(r.cost.adjustments)};${taMoney(r.cost.total)}`)].join('\n');
   const blob = new Blob(['﻿'+csv], {type:'text/csv;charset=utf-8'});   // BOM — щоб Excel не ламав кирилицю
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
@@ -2156,7 +2183,7 @@ window.exportMealStatsPdf = function(){
   const s = window.__mealStats;
   const holder = document.getElementById('print-area');
   if(!s || !holder) return;
-  const { from, to, cls, rows } = s;
+  const { from, to, cls, rows, noMoney } = s;
   const clsTitle = cls ? `${cls.replace('class_','')} клас` : 'Усі класи';
   const periodTitle = `${human(from)} — ${human(to)}`;
 
@@ -2177,7 +2204,7 @@ window.exportMealStatsPdf = function(){
         <td><b>${r.lunch || '—'}</b></td>
         <td>${r.snack || '—'}</td>
         <td style="text-align:left;">${absText}</td>
-        <td style="text-align:right;font-weight:bold;">${taMoney(r.cost?.total||0)} zł</td>
+        ${noMoney ? '' : `<td style="text-align:right;font-weight:bold;">${taMoney(r.cost?.total||0)} zł</td>`}
       </tr>
     `;
   }).join('');
@@ -2201,7 +2228,7 @@ window.exportMealStatsPdf = function(){
           ${tot.brk ? `<span>Сніданки: <b>${tot.brk}</b></span>` : ''}
           ${tot.snack ? `<span>Підвечірки: <b>${tot.snack}</b></span>` : ''}
           ${tot.absent ? `<span>Пропуски: <b>${tot.absent}</b> дн.</span>` : ''}
-          ${sumTotal ? `<span class="ko-warn">Разом: <b>${taMoney(sumTotal)} zł</b></span>` : ''}
+          ${sumTotal && !noMoney ? `<span class="ko-warn">Разом: <b>${taMoney(sumTotal)} zł</b></span>` : ''}
         </div>
 
         <table class="ko-table">
@@ -2214,7 +2241,7 @@ window.exportMealStatsPdf = function(){
               <th>Обіди</th>
               <th>Підвеч.</th>
               <th style="text-align:left;">Відсутність (дати)</th>
-              <th style="text-align:right;">Сума</th>
+              ${noMoney ? '' : '<th style="text-align:right;">Сума</th>'}
             </tr>
           </thead>
           <tbody>
@@ -3434,6 +3461,9 @@ export async function loadTakeawayItems(){
     const snap = await get(child(ref(db),'takeaway_items'));
     const items = snap.exists() ? snap.val() : {};
     const ids = Object.keys(items);
+    // Асортимент разом із цінами веде кухня; адміністратор кухні бачить
+    // лише перелік (правило бази на запис його й не пустить).
+    const noMoney = kitchenNoMoney();
     box.innerHTML = ids.length ? ids.map(id=>{
       const it = items[id] || {};
       return `<div class="ta-item${it.active===false?' off':''}">
@@ -3441,12 +3471,12 @@ export async function loadTakeawayItems(){
           <b>${escHtml(it.title||'')}</b>
           ${it.note?`<span class="ta-item-note">${escHtml(it.note)}</span>`:''}
         </div>
-        <span class="ta-price">${taMoney(it.price)} zł</span>
+        ${noMoney ? (it.active===false ? '<span class="ta-item-note">вимкнено</span>' : '') : `<span class="ta-price">${taMoney(it.price)} zł</span>
         <button class="ta-mini" aria-label="Редагувати позицію" onclick="editTakeawayItem('${escJs(id)}')">✏️</button>
         <button class="ta-mini" onclick="toggleTakeawayItem('${escJs(id)}',${it.active===false})">
           ${it.active===false?'Увімкнути':'Вимкнути'}</button>
-        ${it.active===false?'':`<button class="ta-mini del" onclick="removeTakeawayItem('${escJs(id)}')">Архів</button>`}
-      </div>
+        ${it.active===false?'':`<button class="ta-mini del" onclick="removeTakeawayItem('${escJs(id)}')">Архів</button>`}`}
+      </div>${noMoney ? '' : `
       <div class="ta-edit" id="ta-edit-${escHtml(id)}" style="display:none;">
         <input type="text" id="ta-e-title-${escHtml(id)}" value="${escHtml(it.title||'')}" placeholder="Назва" maxlength="80">
         <input type="text" id="ta-e-price-${escHtml(id)}" value="${taMoney(it.price)}" placeholder="Ціна" inputmode="decimal">
@@ -3455,7 +3485,7 @@ export async function loadTakeawayItems(){
           <button class="ta-mini save" onclick="saveTakeawayItem('${escJs(id)}')">Зберегти</button>
           <button class="ta-mini" onclick="editTakeawayItem('${escJs(id)}')">Скасувати</button>
         </div>
-      </div>`;
+      </div>`}`;
     }).join('') : '<p class="empty-msg">Позицій ще немає.</p>';
   }catch(e){
     box.innerHTML = `<p class="empty-msg" style="color:var(--danger);">Не вдалося завантажити: ${escHtml(e.message)}</p>`;
@@ -3553,6 +3583,7 @@ window.loadTakeawayOrders = async function(){
   const date = document.getElementById('k-ta-date')?.value || localDateString;
   const box  = document.getElementById('k-ta-orders');
   if(!box) return;
+  const noMoney = kitchenNoMoney();
   box.innerHTML = '<p class="empty-msg is-loading">Завантаження...</p>';
   try{
     const [itSnap, ordSnap, stSnap, histSnap] = await Promise.all([
@@ -3622,7 +3653,7 @@ window.loadTakeawayOrders = async function(){
           </select>
           <select id="k-ta-stu"><option value="">Спершу оберіть клас</option></select>
           <select id="k-ta-item">
-            ${activeIds.map(id=>`<option value="${escHtml(id)}">${escHtml(items[id].title||id)} · ${taMoney(items[id].price)} zł</option>`).join('')}
+            ${activeIds.map(id=>`<option value="${escHtml(id)}">${escHtml(items[id].title||id)}${noMoney?'':` · ${taMoney(items[id].price)} zł`}</option>`).join('')}
           </select>
           <button class="k-ta-add-btn" onclick="kitchenAddTakeaway()">Додати</button>
         </div>
@@ -3631,11 +3662,11 @@ window.loadTakeawayOrders = async function(){
 
     box.innerHTML = (!tKeys.length
       ? '<p class="empty-msg">На цей день замовлень немає.</p>'
-      : `<div class="k-ord-sum"><b>${tKeys.reduce((a,k)=>a+totals[k],0)}</b> позицій · ${taMoney(sum)} zł
+      : `<div class="k-ord-sum"><b>${tKeys.reduce((a,k)=>a+totals[k],0)}</b> позицій${noMoney?'':` · ${taMoney(sum)} zł`}
            <span>${escHtml(human(date))}</span></div>
-         <div class="k-scroll"><table class="k-table"><thead><tr><th>Позиція</th><th>К-сть</th><th>Сума</th></tr></thead><tbody>
-           ${tKeys.map(k=>`<tr><td>${escHtml((items[k]||{}).title||k)}</td><td><b>${totals[k]}</b></td>
-             <td>${taMoney(totals[k]*Number((items[k]||{}).price||0))} zł</td></tr>`).join('')}
+         <div class="k-scroll"><table class="k-table"><thead><tr><th>Позиція</th><th>К-сть</th>${noMoney?'':'<th>Сума</th>'}</tr></thead><tbody>
+           ${tKeys.map(k=>`<tr><td>${escHtml((items[k]||{}).title||k)}</td><td><b>${totals[k]}</b></td>${noMoney?'':`
+             <td>${taMoney(totals[k]*Number((items[k]||{}).price||0))} zł</td>`}</tr>`).join('')}
          </tbody></table></div>
          <div class="k-skip-title">Хто замовив</div>
          <div class="k-scroll"><table class="k-table"><thead><tr><th>Учень</th><th>Кл.</th><th>Замовлення</th></tr></thead><tbody>
