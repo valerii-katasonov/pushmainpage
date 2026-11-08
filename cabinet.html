@@ -6932,6 +6932,16 @@ document.addEventListener('DOMContentLoaded', function(){
 <script type="module" src="group-grades.js"></script>
 <script type="module" src="hw-classes.js"></script>
 <script type="module" src="staff-bdays.js"></script>
+<script>
+/* Запасна «Хто зі сповіщеннями». Кнопка викликає openAppReach() напряму.
+   Якщо модуль app-reach.js не завантажився (файл не викладено, старий кеш,
+   помилка в імпорті), без цього натискання не робило б НІЧОГО — і причину
+   не видно. Модуль, завантажившись, замінює цю функцію справжньою. */
+function openAppReach(){
+  var m='Розділ «Хто зі сповіщеннями» не завантажився. Оновіть сторінку. Якщо не допоможе — на сайті немає файлу app-reach.js.';
+  if(typeof window.showToast==='function') window.showToast(m); else alert(m);
+}
+</script>
 <script type="module" src="app-reach.js"></script>
 <script type="module" src="ios-fixed.js"></script>
 <script type="module" src="mirror-audit.js"></script>
