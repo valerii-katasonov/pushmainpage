@@ -8,6 +8,9 @@
   <meta name="theme-color" content="#F4F8F9">
   <meta name="color-scheme" content="light dark">
   <!-- Тема — ДО стилів: інакше на мить блимне світла сторінка (theme.js керує далі) -->
+  <!-- Зимове оформлення (season.js): клас — до першого кадру, щоб і
+       заставка запуску була зимова. Значення — останнє, що підтвердила база. -->
+  <script>(function(){try{if(localStorage.getItem('push_season')==='winter')document.documentElement.classList.add('season-winter');}catch(e){}})();</script>
   <script>(function(){try{var t=localStorage.getItem('push_theme');document.documentElement.dataset.theme=(t==='light'||t==='dark')?t:'auto';}catch(e){document.documentElement.dataset.theme='auto';}})();</script>
   <!-- Мова інтерфейсу UA / PL / EN (i18n.js). Поки не прийшов словник,
        сторінку не показуємо (html.i18n-pending у стилях нижче) —
@@ -718,6 +721,9 @@
       --splash-bg:#063443; --auth-fg:#f2fbfc; --auth-sub:#9fc4cb;
       /* Зимова заставка: краї кадру ролика (див. #boot-splash) */
       --splash-winter-top:#0f192d; --splash-winter-bottom:#132843;
+      /* Зимове оформлення (season.js): сніг, гірлянда */
+      --snow:#ffffff; --snow-shadow:rgba(70,120,160,.55); --snow-fall:#7fb8d4;
+      --garl-wire:#3b5d50; --garl-1:#ff5a5f; --garl-2:#ffd54f; --garl-3:#4fc3f7; --garl-4:#7ee08a;
     }
     #auth-bg{display:none;}
     body.auth-mode{background:var(--auth-bg);align-items:center;}
@@ -1851,14 +1857,18 @@
        автозапуск заборонено (режим енергозбереження на iPhone). Тому це
        саме ПЕРШИЙ кадр: із нього ролик і продовжиться, без стрибка. */
     #boot-splash::before{content:"";position:absolute;inset:0;
-      background:center/contain no-repeat url(pushyk-splash-winter-wide.jpg);}
+      background:center/contain no-repeat url(pushyk-splash-wide.jpg);}
     @media (orientation:portrait){
-      #boot-splash::before{background-image:url(pushyk-splash-winter-phone.jpg);}
+      #boot-splash::before{background-image:url(pushyk-splash-phone.jpg);}
     }
-    /* Зимовий ролик — на темно-синьому градієнті, а не на тлі сторінки.
-       Поля навколо (contain) мають бути того самого кольору, що краї кадру,
-       інакше на телефонах, вищих за 9:16, видно смуги. */
-    #boot-splash{background:linear-gradient(var(--splash-winter-top),var(--splash-winter-bottom));}
+    /* Зимова заставка (season.js): свої постери й темно-синій градієнт —
+       поля навколо ролика (contain) мають бути кольору країв кадру, інакше
+       на телефонах, вищих за 9:16, видно смуги. */
+    html.season-winter #boot-splash{background:linear-gradient(var(--splash-winter-top),var(--splash-winter-bottom));}
+    html.season-winter #boot-splash::before{background-image:url(pushyk-splash-winter-wide.jpg);}
+    @media (orientation:portrait){
+      html.season-winter #boot-splash::before{background-image:url(pushyk-splash-winter-phone.jpg);}
+    }
     #bs-video{position:relative;width:100%;height:100%;object-fit:contain;
       background:transparent;pointer-events:none;}
 
@@ -4063,6 +4073,53 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
 .hw-nav button:disabled{opacity:.35;cursor:default;background:var(--surface-2);}
 .pj-table td .g-cell{margin:1px;cursor:default;}
 .pj-table td .g-cell:hover{transform:none;box-shadow:none;}
+
+/* ═══ ❄️ ЗИМОВЕ ОФОРМЛЕННЯ (season.js) ═══
+   Усе — лише під html.season-winter: зняв клас — і від зими нічого не
+   лишилось. Нічого не перехоплює натискання (pointer-events:none). */
+#season-snow{display:none;}
+html.season-winter #season-snow{display:block;position:fixed;inset:0;z-index:900;pointer-events:none;overflow:hidden;}
+#season-snow i{position:absolute;top:-24px;color:var(--snow-fall);opacity:.85;font-style:normal;line-height:1;
+  text-shadow:0 0 3px var(--snow-shadow);animation:snowFall 12s linear infinite;will-change:transform;}
+@keyframes snowFall{
+  0%{transform:translate3d(0,-5vh,0) rotate(0);}
+  50%{transform:translate3d(var(--sway,10px),50vh,0) rotate(180deg);}
+  100%{transform:translate3d(0,108vh,0) rotate(360deg);}
+}
+/* Гірлянда над рядком профілю: дріт і чотири кольори лампочок, що
+   по черзі тихо мерехтять */
+html.season-winter #profile-bar{position:relative;}
+html.season-winter #profile-bar::before,html.season-winter #profile-bar::after{content:"";position:absolute;left:12px;right:12px;top:-6px;height:14px;pointer-events:none;
+  background:
+    radial-gradient(circle at 6px 9px,var(--garl-1) 0 3.6px,transparent 4.2px) 0 0/48px 14px repeat-x,
+    radial-gradient(circle at 18px 10px,var(--garl-2) 0 3.6px,transparent 4.2px) 0 0/48px 14px repeat-x,
+    radial-gradient(circle at 30px 9px,var(--garl-3) 0 3.6px,transparent 4.2px) 0 0/48px 14px repeat-x,
+    radial-gradient(circle at 42px 10px,var(--garl-4) 0 3.6px,transparent 4.2px) 0 0/48px 14px repeat-x,
+    linear-gradient(var(--garl-wire),var(--garl-wire)) 0 4px/100% 1.5px no-repeat;}
+html.season-winter #profile-bar::after{filter:blur(4px);opacity:.0;animation:garlGlow 2.4s ease-in-out infinite alternate;}
+@keyframes garlGlow{to{opacity:.85;}}
+/* Снігові шапки на картках */
+html.season-winter .ui-card{position:relative;}
+html.season-winter .ui-card::after{content:"";position:absolute;left:16px;right:16px;top:-5px;height:11px;pointer-events:none;border-radius:8px 8px 3px 3px;
+  background:
+    radial-gradient(ellipse 22px 8px at 18% 100%,var(--snow) 96%,transparent 100%),
+    radial-gradient(ellipse 30px 10px at 52% 100%,var(--snow) 96%,transparent 100%),
+    radial-gradient(ellipse 20px 7px at 84% 100%,var(--snow) 96%,transparent 100%),
+    linear-gradient(var(--snow),var(--snow)) 0 100%/100% 4px no-repeat;
+  filter:drop-shadow(0 1px 2px var(--snow-shadow));}
+/* Сніжинка на активній вкладці нижнього меню */
+html.season-winter .ui-bnav-i[aria-current="page"] .ui-bnav-ic{position:relative;}
+html.season-winter .ui-bnav-i[aria-current="page"] .ui-bnav-ic::after{content:"❄";position:absolute;top:-5px;right:4px;font-size:.62rem;color:var(--brand-deep);}
+/* Святкове привітання вгорі «Сьогодні» */
+.season-hi{display:flex;align-items:center;gap:8px;margin:0 0 12px;padding:9px 12px;border-radius:12px;font-weight:700;font-size:.9rem;
+  background:var(--brand-soft);color:var(--brand-deep);border:1px solid var(--brand-line);}
+.season-hi span{flex:1;min-width:0;}
+.season-hi button{width:auto;min-height:0;margin:0;padding:2px 8px;background:none;border:none;color:var(--ink-3);font-size:.9rem;cursor:pointer;}
+@media (prefers-reduced-motion: reduce){
+  html.season-winter #season-snow{display:none;}
+  html.season-winter #profile-bar::after{animation:none;}
+}
+@media print{ #season-snow,.season-hi{display:none !important;} }
 </style>
 </head>
 <!-- auth-mode СТОЇТЬ ТУТ ОДРАЗУ, а не чекає на скрипт.
@@ -4097,12 +4154,12 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
      показує нічого, і заставка виглядає як звичайна. -->
 <div id="boot-splash" aria-hidden="true">
   <video id="bs-video" muted playsinline autoplay preload="auto" disablepictureinpicture>
-    <!-- ЗИМОВА ЗАСТАВКА (з 10.11.2026; джерело — _splash-src/push2.mp4,
-         прискорене в 1,67 раза до 6 с, без звуку). Повернути звичайну —
-         прибрати «-winter» тут, у скрипті нижче й у CSS #boot-splash
-         (постери та тло), і BOOT_SPLASH_MAX_MS у common.js — назад 3700. -->
-    <source src="pushyk-splash-winter-phone.mp4" media="(orientation: portrait)" type="video/mp4">
-    <source src="pushyk-splash-winter-wide.mp4" type="video/mp4">
+    <!-- Зимова заставка (pushyk-splash-winter-*: джерело _splash-src/push2.mp4,
+         прискорене в 1,67 раза до 6 с, без звуку) вмикається разом із
+         зимовим оформленням — клас html.season-winter, див. season.js.
+         Скрипт нижче сам підставляє потрібний файл. -->
+    <source src="pushyk-splash-phone.mp4" media="(orientation: portrait)" type="video/mp4">
+    <source src="pushyk-splash-wide.mp4" type="video/mp4">
   </video>
 </div>
 <script>
@@ -4134,8 +4191,9 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
       if(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches){
         v.removeAttribute('autoplay'); v.pause(); v.hidden = true; return;
       }
-      var want = (innerHeight >= innerWidth) ? 'pushyk-splash-winter-phone.mp4'
-                                             : 'pushyk-splash-winter-wide.mp4';
+      var winter = document.documentElement.classList.contains('season-winter') ? '-winter' : '';
+      var want = (innerHeight >= innerWidth) ? 'pushyk-splash' + winter + '-phone.mp4'
+                                             : 'pushyk-splash' + winter + '-wide.mp4';
       if((v.currentSrc || '').indexOf(want) === -1){ v.src = want; v.load(); }
     }catch(e){}
   })();
@@ -4674,6 +4732,17 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
       <p id="d-workload-summary" style="font-size:.83rem;font-weight:700;"></p>
       <div id="d-workload-results"><p class="empty-msg">Відкрийте вкладку для перевірки.</p></div>
       <div id="d-workload-issues"></div>
+    </section>
+
+    <section class="screen-section" data-dtab="nalash">
+      <h3>❄️ Зимове оформлення</h3>
+      <div class="data-card" style="border-left-color:var(--brand);background:var(--surface-2);margin-top:0;">
+        <label style="display:flex;gap:10px;align-items:flex-start;font-weight:700;cursor:pointer;">
+          <input type="checkbox" id="d-season-winter" onchange="setWinterSeason(this.checked)" style="width:auto;margin:3px 0 0;">
+          <span>Увімкнути для всіх: зимова заставка, сніг, гірлянда, снігові шапки на картках і святкове привітання.</span>
+        </label>
+        <p style="font-size:.78rem;color:var(--ink-3);margin:8px 0 0;">З'являється в усіх одразу, без оновлення сайту. Навесні — зніміть галочку. Хто вмикав «зменшити рух» у налаштуваннях телефона, сніг не побачить.</p>
+      </div>
     </section>
 
     <section class="screen-section" data-dtab="nalash">
@@ -6977,6 +7046,7 @@ function openAppReach(){
 }
 </script>
 <script type="module" src="app-reach.js"></script>
+<script type="module" src="season.js"></script>
 <script type="module" src="ios-fixed.js"></script>
 <script type="module" src="mirror-audit.js"></script>
 <script type="module" src="child-photo.js"></script>

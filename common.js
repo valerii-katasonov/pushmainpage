@@ -2716,7 +2716,8 @@ window.subjectsForClassWeek = subjectsForClassWeek;
 // На практиці межа майже не спрацьовує: відкриття кабінету — це кілька
 // читань бази поспіль, і вони довші за три секунди рідко, але бувають.
 const BOOT_SPLASH_MIN_MS = 1100;   // менше — ролик не встигає прочитатися
-const BOOT_SPLASH_MAX_MS = 6400;   // трохи більше за сам ролик (зимовий — 6 с; звичайний 3,33 с → було 3700)
+// Трохи більше за сам ролик: звичайний 3,33 с, зимовий (season.js) — 6 с
+const BOOT_SPLASH_MAX_MS = document.documentElement.classList.contains('season-winter') ? 6400 : 3700;
 const BOOT_EXIT_MS = 950;          // два такти виходу з перекриттям (див. CSS)
 const bootSplashAt = Date.now();
 let bootSplashDone = false, bootAppReady = false, bootVideoDone = false, bootTimer = null;
@@ -3255,6 +3256,8 @@ async function initUserSession(){
   // Чи відкрито як встановлений застосунок — для звіту «📱 Хто зі
   // сповіщеннями» (директор, учитель). Раз на день або коли щось змінилось.
   reportAppSeen();
+  // ❄️ Зимове оформлення — галочка директора в базі (season.js)
+  if(window.watchSeason) window.watchSeason();
   // Власне харчування співробітника — блок є в кабінетах учителя,
   // директора й адміністрації; модуль сам вирішує, чи показувати.
   if(window.renderStaffMeals) window.renderStaffMeals();
@@ -5608,6 +5611,7 @@ function stopAllListeners(){
     // інакше при вході блок лишався порожнім. Знімати обовʼязково:
     // після виходу база сипле permission_denied на кожну з них.
     () => window.stopGradesListeners && window.stopGradesListeners(),
+    () => window.stopSeason && window.stopSeason(),
   ];
   // Кожну окремо: якщо один модуль не завантажився, решту це не має
   // зупиняти — інакше вихід лишить по собі половину підписок.
