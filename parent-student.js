@@ -60,7 +60,7 @@ async function checkTeacherAttendanceAlert(role='parent'){
   const hasSelfAll=selfSlotKeys.has(SELF_REPORT_SLOT);
   const uncovered=Object.entries(slots).filter(([k,r])=>r&&r.markedBy==='teacher'&&!hasSelfAll&&!selfSlotKeys.has(k));
   if(uncovered.length>0){
-    const list=uncovered.map(([k,r])=>`${formatAttendanceSlotLabel(k)} — ${r.status==='absent'?'відсутність':'запізнення'}`).join(', ');
+    const list=uncovered.map(([k,r])=>`${formatAttendanceSlotLabel(k,r.status)} — ${r.status==='absent'?'відсутність':'запізнення'}`).join(', ');
     banner.innerHTML=`🚨 <b>Вчитель відмітив:</b> ${list}. Якщо це помилка або вам відомі причини — повідомте вчителя.`;
     banner.style.display='block';
   } else banner.style.display='none';

@@ -1436,7 +1436,9 @@ export function absentSuffix(slots){
     const r = slots[sk];
     if(!r || !r.status) continue;
     const where = sk === 'all' ? 'увесь день' : (/^\d+$/.test(sk) ? `урок ${sk}` : sk);
-    parts.push(r.status === 'late' ? `⏰ запізнення (${where})` : `⛔ ${where}`);
+    // Запізнення під ключем «all» — це батьки повідомили «запізниться на 20
+    // хвилин»: «запізнення (увесь день)» читалося б як відсутність.
+    parts.push(r.status === 'late' ? `⏰ запізнення (${sk === 'all' ? 'зранку' : where})` : `⛔ ${where}`);
   }
   if(!parts.length) return '';
   const all = parts.find(p => p === '⛔ увесь день');
@@ -1881,7 +1883,7 @@ export async function listenTeacherAttendance(){
             const bc = r.status==='late'?'badge-late':'badge-absent';
             const lb = r.status==='late'?'Запізнення':'Відсутність';
             const mi = r.markedBy==='teacher'?'👨‍🏫':(r.markedBy==='student'?'🎒':'👪');
-            h += `<li style="margin-bottom:7px;border-bottom:1px dashed var(--line-soft);padding-bottom:4px;"><span style="font-size:.75rem;background:var(--brand-ink);color:var(--on-fill);padding:2px 5px;border-radius:4px;margin-right:4px;">${i} Кл</span> <b>${escHtml(stuName(`class_${i}`, st))}</b> <span class="badge ${bc}">${lb}</span> <span style="font-size:.75rem;color:var(--ink-3);">${escHtml(formatAttendanceSlotLabel(sk))} ${mi}</span></li>`;
+            h += `<li style="margin-bottom:7px;border-bottom:1px dashed var(--line-soft);padding-bottom:4px;"><span style="font-size:.75rem;background:var(--brand-ink);color:var(--on-fill);padding:2px 5px;border-radius:4px;margin-right:4px;">${i} Кл</span> <b>${escHtml(stuName(`class_${i}`, st))}</b> <span class="badge ${bc}">${lb}</span> <span style="font-size:.75rem;color:var(--ink-3);">${escHtml(formatAttendanceSlotLabel(sk,r.status))} ${mi}</span></li>`;
           }
         }
       }
@@ -1917,7 +1919,7 @@ export async function listenTeacherAttendance(){
       h+=`<li class="att-item">
         <div class="att-item-main">
           <div class="att-item-head"><b>${escHtml(stuName(cls, st))}</b> <span class="badge ${bc}">${lb}</span></div>
-          <div class="att-item-sub">${escHtml(formatAttendanceSlotLabel(sk))} ${markerIcon}${r.reason?` · ${escHtml(r.reason)}`:''}</div>
+          <div class="att-item-sub">${escHtml(formatAttendanceSlotLabel(sk,r.status))} ${markerIcon}${r.reason?` · ${escHtml(r.reason)}`:''}</div>
           ${attendanceAuthor(r)?`<div class="att-item-who">поставив: ${escHtml(attendanceAuthor(r))}</div>`:''}
         </div>${undo}</li>`;}}list.innerHTML=h||'<li class="empty-msg">Усі на місці.</li>';}else list.innerHTML='<li class="empty-msg">Усі на місці.</li>';}, err=>{list.innerHTML=`<li class="empty-msg" style="color:var(--danger);">Не вдалося прочитати відвідуваність: ${escHtml(err.message||'')}</li>`;});
   }

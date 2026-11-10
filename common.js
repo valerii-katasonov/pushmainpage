@@ -2209,8 +2209,11 @@ export async function renderHwList(cls,date,listId){
 // teacher live list, parent/student dashboards).
 // "all" is the reserved slotKey parent/student self-reports are written under
 // (submitAttendance() in parent-student.js) — it represents "the whole day".
-export function formatAttendanceSlotLabel(slotKey){
-  if(slotKey==='all')return 'Увесь день';
+// status потрібен для «all»: батьки повідомляють про запізнення теж під
+// ключем усього дня, але «Увесь день · на 20 хвилин» читається як «не
+// буде весь день». Запізнення за весь день — це запізнення зранку.
+export function formatAttendanceSlotLabel(slotKey,status){
+  if(slotKey==='all')return status==='late'?'Зранку':'Увесь день';
   if(/^\d+$/.test(String(slotKey)))return `Урок ${slotKey}`;
   return slotKey;
 }
@@ -5644,7 +5647,7 @@ window.logoutUser=async function(){
   signOut(auth);
 };
 // ══════════ ADMIN DASHBOARD ══════════
-window.loadAdminDashboard=async function(){try{const date=document.getElementById('global-date').value;document.getElementById('a-att-header').innerText=`🚨 Відсутні (${date.split('-').reverse().slice(0,2).join('.')})`;const wd=getWeekDates(date);let wl=0,wa=0,hw=0,com=0;const _lo=wd[0]<date?wd[0]:date, _hi=wd[wd.length-1]>date?wd[wd.length-1]:date;const[_ad,_hd,_cd]=await Promise.all([getSchoolRange('attendance',_lo,_hi),getSchoolRange('homeworks',_lo,_hi),getSchoolRange('comments',_lo,_hi)]);const s={exists:()=>true,val:()=>_ad},hwS={exists:()=>true,val:()=>_hd},comS={exists:()=>true,val:()=>_cd};let h='';if(s.exists()){const d=s.val();for(let i=1;i<=11;i++){const c=`class_${i}`;if(d[c]&&d[c][date])for(let st in d[c][date]){const slots=d[c][date][st];for(let sk in slots){const r=slots[sk];if(r?.status){const bc=r.status==='late'?'badge-late':'badge-absent';const markerIcon=r.markedBy==='teacher'?'👨‍🏫':(r.markedBy==='student'?'🎒':(r.markedBy==='administrator'?'🛡️':'👪'));h+=`<li style="margin-bottom:9px;border-bottom:1px solid var(--line-soft);padding-bottom:4px;"><span style="font-size:.75rem;background:var(--brand-ink);color:var(--on-fill);padding:2px 5px;border-radius:4px;margin-right:4px;">${i} Кл</span> <b>${escHtml(stuName(c, st))}</b> <span class="badge ${bc}">${r.status==='late'?'Запізнення':'Відсутність'}</span> <span style="font-size:.75rem;color:var(--ink-3);">${escHtml(formatAttendanceSlotLabel(sk))} ${markerIcon}</span></li>`;}}}
+window.loadAdminDashboard=async function(){try{const date=document.getElementById('global-date').value;document.getElementById('a-att-header').innerText=`🚨 Відсутні (${date.split('-').reverse().slice(0,2).join('.')})`;const wd=getWeekDates(date);let wl=0,wa=0,hw=0,com=0;const _lo=wd[0]<date?wd[0]:date, _hi=wd[wd.length-1]>date?wd[wd.length-1]:date;const[_ad,_hd,_cd]=await Promise.all([getSchoolRange('attendance',_lo,_hi),getSchoolRange('homeworks',_lo,_hi),getSchoolRange('comments',_lo,_hi)]);const s={exists:()=>true,val:()=>_ad},hwS={exists:()=>true,val:()=>_hd},comS={exists:()=>true,val:()=>_cd};let h='';if(s.exists()){const d=s.val();for(let i=1;i<=11;i++){const c=`class_${i}`;if(d[c]&&d[c][date])for(let st in d[c][date]){const slots=d[c][date][st];for(let sk in slots){const r=slots[sk];if(r?.status){const bc=r.status==='late'?'badge-late':'badge-absent';const markerIcon=r.markedBy==='teacher'?'👨‍🏫':(r.markedBy==='student'?'🎒':(r.markedBy==='administrator'?'🛡️':'👪'));h+=`<li style="margin-bottom:9px;border-bottom:1px solid var(--line-soft);padding-bottom:4px;"><span style="font-size:.75rem;background:var(--brand-ink);color:var(--on-fill);padding:2px 5px;border-radius:4px;margin-right:4px;">${i} Кл</span> <b>${escHtml(stuName(c, st))}</b> <span class="badge ${bc}">${r.status==='late'?'Запізнення':'Відсутність'}</span> <span style="font-size:.75rem;color:var(--ink-3);">${escHtml(formatAttendanceSlotLabel(sk,r.status))} ${markerIcon}</span></li>`;}}}
     // Week counters (same aggregation the director dashboard does)
     // Учень × день, а не кожен урок (див. countAttendanceDays)
     if(d[c]){const k=countAttendanceDays({[c]:d[c]},wd);wl+=k.late;wa+=k.absent;}

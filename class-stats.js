@@ -391,12 +391,46 @@ export function trendRows(perSubj, scaleOf, junior){
     return { subj, series, max, info: trendInfo(series, max) };
   }).filter(r => r.series.length).sort((a, b) => order[a.info.dir] - order[b.info.dir] || a.subj.localeCompare(b.subj, 'uk'));
 }
+// ЧИСЛО Й СТРІЛКА — ЗА ОБРАНИЙ ПЕРІОД, ЛІНІЯ — ЗА ВЕСЬ РІК.
+// Раніше біля кожного предмета стояв середній ОСТАННЬОГО місяця з оцінками,
+// хоч би що було обрано в «Місяць / Семестр / Рік». Батьки обирали «Рік» —
+// і нічого не змінювалося; а на сторінці предмета той самий предмет мав
+// інше число (середній за весь час), і це виглядало як помилка рахунку.
+//   • місяць — середній саме цього місяця; стрілка — проти попереднього
+//     місяця з оцінками; без оцінок у місяці — «—»;
+//   • семестр і рік — середньозважений усіх оцінок періоду (як на сторінці
+//     предмета); стрілка — останній місяць періоду проти попереднього.
+// periodSubj — оцінки, уже відфільтровані за періодом: {предмет: {g, t}}.
+export function trendForPeriod(rows, period, kind, periodSubj, junior){
+  const order = { down: 0, flat: 1, up: 2, null: 3 };
+  const none = { dir: null, delta: 0, last: null };
+  const startYm = String(period.start).slice(0, 7), endYm = String(period.end).slice(0, 7);
+  return rows.map(r => {
+    const upTo = r.series.filter(x => x.ym <= endYm);
+    const inP = upTo.filter(x => x.ym >= startYm);
+    let value = null, info = none;
+    if(kind === 'month'){
+      const cur = inP[inP.length - 1];
+      if(cur){
+        const prev = upTo[upTo.indexOf(cur) - 1];
+        value = cur.avg;
+        info = prev ? trendInfo([prev, cur], r.max) : { dir: null, delta: 0, last: cur.avg };
+      }
+    }else if(inP.length){
+      const ps = (periodSubj || {})[r.subj] || { g: {}, t: {} };
+      const g = junior ? Object.fromEntries(Object.entries(ps.g).filter(([, v]) => !(Number(v) > 6))) : ps.g;
+      value = calculateStudentWeightedAvg(g, ps.t);
+      info = trendInfo(upTo, r.max);
+    }
+    return { ...r, value, info };
+  }).sort((a, b) => order[a.info.dir] - order[b.info.dir] || a.subj.localeCompare(b.subj, 'uk'));
+}
 export function trendListHtml(rows, cls, junior){
   if(!rows.length) return '<p class="cst-none">Оцінок ще немає.</p>';
   return `<ul class="gt-list">${rows.map(r => {
-    const last = r.info.last;
+    const last = 'value' in r ? r.value : r.info.last;
     const shown = last === null ? '—' : junior ? displayGrade(String(Math.max(2, Math.round(last))), cls) : last.toFixed(1);
-    return `<li><button type="button" class="gt-subj gv-subj-link" data-subj="${escHtml(r.subj)}" onclick="gvOpenSubject(this.dataset.subj)" title="Детальний графік">${escHtml(r.subj)}</button>${sparkSVG(r.series, junior ? 5 : r.max, junior ? 2 : 1)}<span class="gt-last" title="Середній за останній місяць з оцінками">${escHtml(shown)}</span>${trendBadge(r.info, r.max)}</li>`;
+    return `<li><button type="button" class="gt-subj gv-subj-link" data-subj="${escHtml(r.subj)}" onclick="gvOpenSubject(this.dataset.subj)" title="Детальний графік">${escHtml(r.subj)}</button>${sparkSVG(r.series, junior ? 5 : r.max, junior ? 2 : 1)}<span class="gt-last" title="${'value' in r ? 'Середній за обраний період' : 'Середній за останній місяць з оцінками'}">${escHtml(shown)}</span>${trendBadge(r.info, r.max)}</li>`;
   }).join('')}</ul>`;
 }
 
@@ -428,7 +462,8 @@ window.renderFamilyStats = async function(prefix, cls, sid, name, mirror, scales
     const c = mirror[ym][subj][key] || {}; if(c.v === '' || c.v == null) continue;
     const s = (allSubj[subj] ||= { g: {}, t: {} }); s.g[key] = c.v; s.t[key] = c.t || 'П';
   }
-  const trends = trendRows(allSubj, subj => Number(scales && scales[subj] && (scales[subj].max || scales[subj])) || 6, junior);
+  const trends = trendForPeriod(trendRows(allSubj, subj => Number(scales && scales[subj] && (scales[subj].max || scales[subj])) || 6, junior),
+    p, fsSel.kind, perSubj, junior);
   const worse = trends.filter(r => r.info.dir === 'down').length;
   const attKey = `${cls}|${sid}|${p.id}|${end}`;
   const paint = a => {
@@ -448,7 +483,7 @@ window.renderFamilyStats = async function(prefix, cls, sid, name, mirror, scales
       <details class="fst-low"${trends.length ? ' open' : ''}>
         <summary>📈 Динаміка за предметами${worse ? ` · <b>гірше: ${worse}</b>` : ''}</summary>
         ${trendListHtml(trends, cls, junior)}
-        <p class="cst-note">Лінія — середній бал по місяцях; стрілка — останній місяць проти попереднього. Натисніть на предмет — відкриється детальний графік.</p>
+        <p class="cst-note"><span>Число — середній бал за обраний період.</span> <span>Лінія — середній по місяцях за весь рік; стрілка — останній місяць періоду проти попереднього.</span> <span>Натисніть на предмет — відкриється детальний графік.</span></p>
       </details>
       ${a && a.days.length && a.inDays ? `<p class="cst-note" style="margin:0 0 4px;">У т.ч. ${a.inDays} ${plural(a.inDays, ['урок', 'уроки', 'уроків'])} у пропущені дні (за розкладом) і ${a.lessonCount - a.inDays} окремо.</p>` : ''}
       ${a && a.subjects && a.subjects.length ? `<details class="fst-low"><summary>Пропущені уроки за предметами</summary>${subjAbsHtml(a)}</details>` : ''}

@@ -120,7 +120,7 @@ async function attendance(body, date){
     const abs = rows.filter(r => r.status === 'absent').length, late = rows.length - abs;
     out.innerHTML = `<p class="rbk-sum">🚨 Відсутні: <b>${abs}</b> · ⏰ Запізнення: <b>${late}</b></p>` + (rows.length
       ? `<div class="os-wrap"><table class="os-table"><thead><tr><th>Клас</th><th>Учень</th><th>Що</th><th>Коли</th><th>Причина</th><th>Повідомила</th></tr></thead><tbody>${rows.map(r =>
-        `<tr><td class="os-num">${clsNum(r.cls)}</td><td>${escHtml(r.name)}</td><td>${r.status === 'absent' ? '🚨 відсутній' : '⏰ запізнення'}</td><td>${escHtml(formatAttendanceSlotLabel(r.slot))}</td><td>${escHtml(r.reason)}</td><td>${r.by}</td></tr>`).join('')}</tbody></table></div>`
+        `<tr><td class="os-num">${clsNum(r.cls)}</td><td>${escHtml(r.name)}</td><td>${r.status === 'absent' ? '🚨 відсутній' : '⏰ запізнення'}</td><td>${escHtml(formatAttendanceSlotLabel(r.slot, r.status))}</td><td>${escHtml(r.reason)}</td><td>${r.by}</td></tr>`).join('')}</tbody></table></div>`
       : '<p class="empty-msg">Цього дня відміток немає.</p>');
   }catch(e){ out.innerHTML = err(e); }
 }
