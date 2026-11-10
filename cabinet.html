@@ -716,6 +716,8 @@
       /* Тло заставки запуску — колір самого ролика; те саме число стоїть
          у manifest-cabinet.json, щоб системна заставка й наша збігалися. */
       --splash-bg:#063443; --auth-fg:#f2fbfc; --auth-sub:#9fc4cb;
+      /* Зимова заставка: краї кадру ролика (див. #boot-splash) */
+      --splash-winter-top:#0f192d; --splash-winter-bottom:#132843;
     }
     #auth-bg{display:none;}
     body.auth-mode{background:var(--auth-bg);align-items:center;}
@@ -1849,10 +1851,14 @@
        автозапуск заборонено (режим енергозбереження на iPhone). Тому це
        саме ПЕРШИЙ кадр: із нього ролик і продовжиться, без стрибка. */
     #boot-splash::before{content:"";position:absolute;inset:0;
-      background:center/contain no-repeat url(pushyk-splash-wide.jpg);}
+      background:center/contain no-repeat url(pushyk-splash-winter-wide.jpg);}
     @media (orientation:portrait){
-      #boot-splash::before{background-image:url(pushyk-splash-phone.jpg);}
+      #boot-splash::before{background-image:url(pushyk-splash-winter-phone.jpg);}
     }
+    /* Зимовий ролик — на темно-синьому градієнті, а не на тлі сторінки.
+       Поля навколо (contain) мають бути того самого кольору, що краї кадру,
+       інакше на телефонах, вищих за 9:16, видно смуги. */
+    #boot-splash{background:linear-gradient(var(--splash-winter-top),var(--splash-winter-bottom));}
     #bs-video{position:relative;width:100%;height:100%;object-fit:contain;
       background:transparent;pointer-events:none;}
 
@@ -4091,8 +4097,12 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
      показує нічого, і заставка виглядає як звичайна. -->
 <div id="boot-splash" aria-hidden="true">
   <video id="bs-video" muted playsinline autoplay preload="auto" disablepictureinpicture>
-    <source src="pushyk-splash-phone.mp4" media="(orientation: portrait)" type="video/mp4">
-    <source src="pushyk-splash-wide.mp4" type="video/mp4">
+    <!-- ЗИМОВА ЗАСТАВКА (з 10.11.2026; джерело — _splash-src/push2.mp4,
+         прискорене в 2,5 раза до 4 с, без звуку). Повернути звичайну —
+         прибрати «-winter» тут, у скрипті нижче й у CSS #boot-splash
+         (постери та тло), і BOOT_SPLASH_MAX_MS у common.js — назад 3700. -->
+    <source src="pushyk-splash-winter-phone.mp4" media="(orientation: portrait)" type="video/mp4">
+    <source src="pushyk-splash-winter-wide.mp4" type="video/mp4">
   </video>
 </div>
 <script>
@@ -4124,8 +4134,8 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
       if(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches){
         v.removeAttribute('autoplay'); v.pause(); v.hidden = true; return;
       }
-      var want = (innerHeight >= innerWidth) ? 'pushyk-splash-phone.mp4'
-                                             : 'pushyk-splash-wide.mp4';
+      var want = (innerHeight >= innerWidth) ? 'pushyk-splash-winter-phone.mp4'
+                                             : 'pushyk-splash-winter-wide.mp4';
       if((v.currentSrc || '').indexOf(want) === -1){ v.src = want; v.load(); }
     }catch(e){}
   })();

@@ -2716,7 +2716,7 @@ window.subjectsForClassWeek = subjectsForClassWeek;
 // На практиці межа майже не спрацьовує: відкриття кабінету — це кілька
 // читань бази поспіль, і вони довші за три секунди рідко, але бувають.
 const BOOT_SPLASH_MIN_MS = 1100;   // менше — ролик не встигає прочитатися
-const BOOT_SPLASH_MAX_MS = 3700;   // трохи більше за сам ролик (3,33 с)
+const BOOT_SPLASH_MAX_MS = 4400;   // трохи більше за сам ролик (зимовий — 4 с; звичайний 3,33 с → було 3700)
 const BOOT_EXIT_MS = 950;          // два такти виходу з перекриттям (див. CSS)
 const bootSplashAt = Date.now();
 let bootSplashDone = false, bootAppReady = false, bootVideoDone = false, bootTimer = null;
