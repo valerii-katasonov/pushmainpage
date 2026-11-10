@@ -2,6 +2,7 @@
 import { ref, get } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { db, CLOUDINARY_URL, UPLOAD_PRESET, uploadToCloudinary, escHtml, safeHttpUrl } from './common.js';
 let photos=[],generation=0,loading=false,readError='',busy=false,changed=false;
+export const READ_TIMEOUT_MS=8000;
 export function renderWorkPhotos(urls){
   const valid=(Array.isArray(urls)?urls:[]).map(safeHttpUrl).filter(Boolean);
   if(!valid.length)return '';
@@ -9,8 +10,8 @@ export function renderWorkPhotos(urls){
 }
 function renderEditorWork(){
   const box=document.getElementById('gep-work-existing');if(!box)return;
-  if(loading){box.textContent='Завантаження фото...';return;}
-  if(readError){box.textContent='Не вдалося прочитати фото. Закрийте й відкрийте оцінку повторно.';return;}
+  if(loading){box.textContent='Перевіряємо фото… Оцінку можна зберегти й не чекаючи.';return;}
+  if(readError){box.textContent='Не вдалося перевірити фото. Оцінку зберегти можна; щоб додати фото — відкрийте оцінку ще раз.';return;}
   box.innerHTML=photos.map((url,i)=>`<div style="display:flex;gap:8px;align-items:center;font-size:.8rem;">${renderWorkPhotos([url])}<button type="button" onclick="removeGradeWorkPhoto(${i})" style="width:auto;padding:4px;color:var(--danger);" ${busy?'disabled':''}>✖</button></div>`).join('');
 }
 export async function loadGradeWork(cls,sid,ym,subj,date){
@@ -18,7 +19,14 @@ export async function loadGradeWork(cls,sid,ym,subj,date){
   const input=document.getElementById('gep-work-files');if(input)input.value='';
   renderEditorWork();
   try{
-    const snap=await get(ref(db,`student_grades/${cls}/${sid}/${ym}/${subj}/${date}/workPhotos`));
+    // ЧИТАННЯ МОЖЕ ЗАВИСНУТИ. Firebase get() без зв'язку із сервером (ноутбук
+    // прокинувся після сну, мережа «є», а з'єднання з базою ще ні) чекає
+    // безкінечно. Без межі вікно назавжди лишалося у стані «Завантаження
+    // фото...», і зберегти НАВІТЬ ОЦІНКУ без фото було неможливо.
+    const snap=await Promise.race([
+      get(ref(db,`student_grades/${cls}/${sid}/${ym}/${subj}/${date}/workPhotos`)),
+      new Promise((_,reject)=>setTimeout(()=>reject(Error('немає відповіді від бази')),READ_TIMEOUT_MS))
+    ]);
     if(gen!==generation)return;
     photos=(snap.exists()&&Array.isArray(snap.val())?snap.val():[]).map(safeHttpUrl).filter(Boolean);
   }catch(e){if(gen===generation)readError=e.message||'Помилка читання';}
@@ -30,10 +38,15 @@ export function setGradeWorkBusy(value){busy=value;
   document.querySelectorAll('#grade-editor-popup .type-btn, #grade-editor-popup .level-btn, #grade-editor-popup .gep-modifiers button').forEach(button=>button.disabled=value);
   const input=document.getElementById('gep-work-files');if(input)input.disabled=value;renderEditorWork();}
 export async function prepareGradeWork(){
-  if(loading)throw Error('Фото ще завантажуються. Спробуйте за мить.');
-  if(readError)throw Error('Не вдалося прочитати вкладення. Відкрийте оцінку повторно.');
   const input=document.getElementById('gep-work-files');
   const files=pendingFiles?pendingFiles.slice():Array.from(input?.files||[]);
+  // Фото не чіпали — оцінку зберігаємо, не чекаючи списку вкладень:
+  // undefined означає «workPhotos не змінювати», наявні фото лишаються.
+  // Блокуємо лише додавання: без поточного списку не знати, чи не
+  // перевищено ліміт і що саме дописувати.
+  if((loading||readError)&&!files.length&&!changed)return undefined;
+  if(loading)throw Error('Фото ще перевіряються. Спробуйте за мить.');
+  if(readError)throw Error('Не вдалося прочитати вкладення. Відкрийте оцінку повторно.');
   if(photos.length+files.length>3)throw Error('До оцінки можна додати не більше 3 фото');
   for(const file of files){
     if(!['image/jpeg','image/png','image/webp'].includes(file.type)&&!( !file.type&&/\.(jpe?g|png|webp)$/i.test(file.name||'')))throw Error('Фото має бути у форматі JPG, PNG або WEBP');
