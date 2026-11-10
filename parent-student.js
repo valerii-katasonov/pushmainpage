@@ -896,6 +896,7 @@ export function loadParentDashboard(){
   // запит, а при наступному відкритті вкладки перечитують зміни з бази.
   if(window.renderGradesWeek) window.renderGradesWeek();
   if(window.renderGradesSubject) window.renderGradesSubject();
+  if(window.renderGradesJournal) window.renderGradesJournal();
   Promise.all([loadTodaySubstitutions(cls,date),loadDayTopics(cls,date)])
     .then(()=>{renderDynamicSchedule('parent');});
   renderConsents();
@@ -1318,6 +1319,7 @@ export function loadStudentDashboard(){
   renderFinalGrades('s-final-grades',cls,currentUserData.studentName);
   if(window.renderGradesWeek) window.renderGradesWeek();
   if(window.renderGradesSubject) window.renderGradesSubject();
+  if(window.renderGradesJournal) window.renderGradesJournal();
   Promise.all([loadTodaySubstitutions(cls,date),loadDayTopics(cls,date)])
     .then(()=>{renderDynamicSchedule('student');renderDayTopics('s',date);});
   renderDashboardBehavior('s',cls,date);

@@ -275,6 +275,10 @@ export function grPane(prefix, pane){
   panes.forEach(p => { p.hidden = p.dataset.pane !== pane; });
   seg.querySelectorAll('[data-pane]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.pane === pane)));
   try{ localStorage.setItem(GR_KEY, pane); }catch(e){}
+  // Журнал, намальований у прихованій вкладці, не міг прокрутитися до
+  // свіжих днів — перемальовуємо, коли вкладка стала видимою.
+  const fam = currentUserData && (currentUserData.role === 'parent' || currentUserData.role === 'student');
+  if(pane === 'journal' && fam && window.renderGradesJournal) window.renderGradesJournal();
   return true;
 }
 window.grPane = grPane;

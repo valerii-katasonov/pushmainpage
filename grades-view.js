@@ -44,7 +44,7 @@
 // змінитися на іншому пристрої, поки кабінет був відкритий.
 // ═══════════════════════════════════════════════════════════════
 import { renderWorkPhotos } from './grade-work.js';
-import { trendChartSVG, monthlySeries, trendInfo, trendBadge } from './grade-trend.js';
+import { trendChartSVG, monthlySeries, trendInfo, trendBadge, monthLabel } from './grade-trend.js';
 import { ref, get, child, query, orderByKey, startAt, endAt, onValue }
   from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { db, currentUserData, getActiveClass, getClassNum, LEVEL_MAX_CLASS, escHtml, escJs, mondayOf,
@@ -62,6 +62,7 @@ const mySid   = cls => stuId(cls,currentUserData?.studentName)
   || currentUserData?.studentId || currentUserData?.studentName || '';
 const boxWeek = () => isPupil() ? 's-grades-week' : 'p-grades-week';
 const boxSubj = () => isPupil() ? 's-grades-subject' : 'p-grades-subject';
+const boxJournal = () => isPupil() ? 's-grades-journal' : 'p-grades-journal';
 
 // ═══════════════════════════════════════════════════════════════
 //  ЧОМУ ТУТ ПІДПИСКА, А НЕ ЧИТАННЯ
@@ -122,8 +123,8 @@ function subscribeMirror(cls,sid){
   if(subKeyMirror===key && offMirror) return;
   offMirror=drop(offMirror); subKeyMirror=key; gvMirror=null;
   offMirror=onValue(ref(db,`student_grades/${cls}/${sid}`),
-    snap=>{ gvMirror=snap.exists()?(snap.val()||{}):{}; gvError=''; paintWeek(); paintSubject(); },
-    err=>{ gvError=err&&err.message||'база відмовила'; paintWeek(); paintSubject(); });
+    snap=>{ gvMirror=snap.exists()?(snap.val()||{}):{}; gvError=''; paintWeek(); paintSubject(); paintJournal(); },
+    err=>{ gvError=err&&err.message||'база відмовила'; paintWeek(); paintSubject(); paintJournal(); });
 }
 
 // КОМЕНТАРІ — З ДЗЕРКАЛА ДИТИНИ (09.10.2026).
@@ -157,8 +158,8 @@ function subscribeScales(cls){
   offScales=drop(offScales); subKeyScales=cls; gvScales=null;
   const junior=getClassNum(cls)<=LEVEL_MAX_CLASS;
   offScales=onValue(ref(db,`grade_scales/${cls}`),
-    snap=>{ gvScales=junior?{}:(snap.exists()?(snap.val()||{}):{}); paintWeek(); paintSubject(); },
-    ()=>{ gvScales={}; paintWeek(); paintSubject(); });
+    snap=>{ gvScales=junior?{}:(snap.exists()?(snap.val()||{}):{}); paintWeek(); paintSubject(); paintJournal(); },
+    ()=>{ gvScales={}; paintWeek(); paintSubject(); paintJournal(); });
 }
 
 // ПРОФІЛЬ ГОТОВИЙ НЕ ОДРАЗУ. При вході кабінет малює все підряд, а клас і
@@ -576,6 +577,133 @@ function paintSubject(){
 }
 window.renderGradesSubject = renderGradesSubject;
 
+// ── ЖУРНАЛ: ЯК У ВЧИТЕЛЯ ───────────────────────────────────────
+// Таблиця за місяць: рядки — предмети, стовпці — дні, у клітинці оцінка з
+// типом роботи (тематична — в рамці). Праворуч — середній за місяць тією
+// самою формулою, що й усюди (calculateStudentWeightedAvg).
+//
+// СТОВПЦІ — ЛИШЕ ДНІ З ОЦІНКАМИ. У вчителя стовпець — кожен урок, бо він
+// ставить оцінки. Батькові 22 робочі дні, з яких 15 порожні, на телефоні
+// означали б горизонтальну прокрутку заради пустоти.
+//
+// Дані — те саме дзеркало дитини, що й для «Тижня» і «Предмета»: нових
+// читань і нових правил немає.
+let gvJMonth = '', gvJScrolled = '', gvJScrollX = 0;
+const DAY_SHORT = ['Нд', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+const hasGrades = (mirror, ym) => flatGrades({ [ym]: (mirror || {})[ym] || {} }).length > 0;
+// Місяці з оцінками + поточний, по порядку
+export function journalMonths(mirror, today){
+  const set = new Set(Object.keys(mirror || {}).filter(ym => hasGrades(mirror, ym)));
+  set.add(String(today).slice(0, 7));
+  return [...set].filter(ym => /^\d{4}-\d{2}$/.test(ym)).sort();
+}
+// {subjects, days, cells: {предмет: {день: [оцінки]}}, avg: {предмет: число|null}}
+export function journalGrid(mirror, ym, cls){
+  const junior = cls && getClassNum(cls) <= LEVEL_MAX_CLASS;
+  const rows = flatGrades({ [ym]: (mirror || {})[ym] || {} });
+  const cells = {}, vals = {}, types = {};
+  rows.forEach(g => {
+    ((cells[g.subj] ||= {})[g.day] ||= []).push(g);
+    if(junior && Number(g.v) > 6) return;
+    (vals[g.subj] ||= {})[g.date] = g.v; (types[g.subj] ||= {})[g.date] = g.t || 'П';
+  });
+  for(const subj in cells) for(const d in cells[subj]) cells[subj][d].sort((a, b) => a.slot - b.slot);
+  const subjects = Object.keys(cells).sort((a, b) => a.localeCompare(b, 'uk'));
+  const days = [...new Set(rows.map(g => g.day))].sort();
+  const avg = {};
+  subjects.forEach(subj => {
+    avg[subj] = vals[subj] ? calculateStudentWeightedAvg(vals[subj], types[subj]) : null;
+    // За місяць лише тематична: поточних немає, і «—» поруч із оцінкою
+    // виглядало б як помилка. Показуємо саму тематичну (середнє, якщо їх кілька).
+    if(avg[subj] === null && vals[subj]){
+      const th = Object.keys(vals[subj]).filter(k => types[subj][k] === THEMATIC).map(k => levelNum(vals[subj][k])).filter(n => n !== null);
+      if(th.length) avg[subj] = th.reduce((a, b) => a + b, 0) / th.length;
+    }
+  });
+  return { subjects, days, cells, avg };
+}
+export function renderGradesJournal(attempt=0){
+  const box = document.getElementById(boxJournal());
+  if(!box) return;
+  const cls = getActiveClass();
+  const sid = cls ? mySid(cls) : '';
+  if(!cls || !sid){
+    if(planRetry(attempt, n=>renderGradesJournal(n))){
+      if(!(box.innerHTML||'').trim()) box.innerHTML='<p class="empty-msg is-loading">Завантаження...</p>';
+      return;
+    }
+    box.innerHTML = '<p class="empty-msg">Дитину не визначено.</p>'; return;
+  }
+  if(!waitForDir(cls, attempt, n=>renderGradesJournal(n))){
+    if(!(box.innerHTML||'').trim()) box.innerHTML='<p class="empty-msg is-loading">Завантаження...</p>';
+    return;
+  }
+  stopRetry();
+  gvCls=cls; gvSid=mySid(cls); gvName=currentUserData?.studentName||'';
+  gvProfileSid=currentUserData?.studentId||'';
+  subscribeScales(cls);
+  subscribeMirror(cls,gvSid);
+  paintJournal();
+}
+function paintJournal(){
+  const box = document.getElementById(boxJournal());
+  if(!box || !gvCls) return;
+  if(gvError){ box.innerHTML = `<p class="empty-msg" style="color:var(--danger);">Не вдалося завантажити оцінки: ${escHtml(gvError)}</p>`; return; }
+  if(gvMirror === null){ if(!(box.innerHTML||'').trim()) box.innerHTML = '<p class="empty-msg is-loading">Завантаження...</p>'; return; }
+  const cls = gvCls, months = journalMonths(gvMirror, localDateString);
+  if(!gvJMonth || !months.includes(gvJMonth)){
+    // Поточний місяць; якщо в ньому ще порожньо (1-ше число) — останній з оцінками
+    const cur = String(localDateString).slice(0, 7);
+    const withGrades = months.filter(ym => hasGrades(gvMirror, ym));
+    gvJMonth = withGrades.includes(cur) || !withGrades.length ? cur : withGrades[withGrades.length - 1];
+  }
+  const i = months.indexOf(gvJMonth);
+  const { subjects, days, cells, avg } = journalGrid(gvMirror, gvJMonth, cls);
+  const nav = `<div class="hw-nav">
+      <button type="button" aria-label="Попередній місяць" onclick="gvShiftJournal(-1)" ${i <= 0 ? 'disabled' : ''}>←</button>
+      <div class="hw-nav-mid"><b>${escHtml(monthLabel(gvJMonth))} ${escHtml(gvJMonth.slice(0, 4))}</b><span>${days.length ? `днів з оцінками: ${days.length}` : 'оцінок немає'}</span></div>
+      <button type="button" aria-label="Наступний місяць" onclick="gvShiftJournal(1)" ${i >= months.length - 1 ? 'disabled' : ''}>→</button>
+    </div>`;
+  if(!subjects.length){
+    box.innerHTML = nav + '<div class="ui-empty"><b>Цього місяця оцінок ще немає</b>Щойно вчитель поставить оцінку, вона з’явиться в журналі.</div>';
+    return;
+  }
+  const junior = getClassNum(cls) <= LEVEL_MAX_CLASS;
+  const head = `<tr><th class="sn">Предмет</th>${days.map(d =>
+      `<th title="${escHtml(dayName(d))}, ${escHtml(human(d))}">${escHtml(d.slice(8))}<br><small>${DAY_SHORT[new Date(d + 'T12:00:00').getDay()]}</small></th>`
+    ).join('')}<th class="avg-col" title="Середній за місяць: Σ(оцінка × коефіцієнт) / Σ(коефіцієнт)">Сер.</th></tr>`;
+  const body = subjects.map(subj => {
+    const scale = gvScales?.[subj]?.max;
+    const a = avg[subj];
+    const aTxt = a === null ? '—' : junior ? displayGrade(String(Math.max(2, Math.round(a))), cls) : a.toFixed(1);
+    return `<tr><td class="sn"><button type="button" class="gv-subj-link" data-subj="${escHtml(subj)}" onclick="gvOpenSubject(this.dataset.subj)" title="Усі оцінки й графік з предмета">${escHtml(subj)}</button></td>${
+      days.map(d => `<td>${((cells[subj] || {})[d] || []).map(g => {
+        const shown = displayGrade(g.v, cls, scale);
+        return `<span class="g-cell ${scale ? 'g-scale' : gradeClass6(g.v)}${g.t === THEMATIC ? ' g-thematic' : ''}" title="${escHtml(human(d))} · ${escHtml(shown)}${g.t ? ` · ${escHtml(g.t)}` : ''}${g.workPhotos?.length ? ' · є фото роботи' : ''}"><span class="g-val">${escHtml(shown)}</span>${g.t ? `<span class="g-type">${escHtml(g.t)}</span>` : ''}</span>`;
+      }).join('')}</td>`).join('')}<td class="avg-col">${escHtml(aTxt)}</td></tr>`;
+  }).join('');
+  box.innerHTML = nav + `<div class="journal-wrap pj-wrap"><table class="journal-table pj-table" lang="uk"><thead>${head}</thead><tbody>${body}</tbody></table></div>
+    <p class="cst-note"><span>Під оцінкою — тип роботи; у рамці — тематична.</span> <span>Натисніть на предмет — усі оцінки, фото робіт і графік.</span></p>`;
+  // Свіжі дні — праворуч: на телефоні одразу показуємо кінець місяця.
+  // Лише при першому показі місяця: таблиця перемальовується на кожну
+  // нову оцінку, і людину, що гортає назад, не можна відкидати в кінець.
+  const wrap = box.querySelector('.pj-wrap');
+  // Прихована вкладка має нульову ширину — прокрутка там нічого не дасть.
+  // Тоді не позначаємо місяць прокрученим: grPane перемалює журнал, щойно
+  // вкладку відкриють (ui-today.js).
+  if(wrap && gvJScrolled !== gvJMonth && wrap.clientWidth){ wrap.scrollLeft = wrap.scrollWidth; gvJScrolled = gvJMonth; }
+  else if(wrap) wrap.scrollLeft = gvJScrollX;
+  if(wrap) wrap.addEventListener('scroll', () => { gvJScrollX = wrap.scrollLeft; }, { passive: true });
+}
+window.renderGradesJournal = renderGradesJournal;
+window.gvShiftJournal = function(delta){
+  if(!gvMirror) return;
+  const months = journalMonths(gvMirror, localDateString);
+  const i = months.indexOf(gvJMonth) + delta;
+  if(i < 0 || i >= months.length) return;
+  gvJMonth = months[i]; paintJournal();
+};
+
 // Завершення старих запитів після перемикання дитини не має перемалювати
 // екран нової дитини, навіть якщо відповідь із бази прийшла пізніше.
 // Перемкнули дитину — підписки вели до попередньої. Знімаємо всі, чистимо
@@ -583,7 +711,7 @@ window.renderGradesSubject = renderGradesSubject;
 export function resetGradesCache(){
   stopRetry();
   stopGradesListeners();
-  gvSubject=''; gvWeek=null; gvError='';
+  gvSubject=''; gvWeek=null; gvError=''; gvJMonth=''; gvJScrolled=''; gvJScrollX=0;
   gvLastWeekHtml=''; gvLastSubjHtml='';
   gvCls=gvSid=gvName=gvProfileSid='';
 }

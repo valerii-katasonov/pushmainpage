@@ -3456,6 +3456,10 @@ body.ui-sheet-lock{overflow:hidden;}
 .ui-seg button{flex:1;width:auto;max-width:none;min-height:40px;margin:0;padding:0 6px;border-radius:9px;background:transparent;color:var(--ink-2);font:inherit;font-weight:800;font-size:.85rem;border:none;cursor:pointer;}
 .ui-seg button[aria-selected="true"]{background:var(--surface);color:var(--brand-deep);box-shadow:var(--card-shadow);}
 .ui-seg button:focus-visible{outline:3px solid var(--brand-deep);outline-offset:1px;}
+/* Четверта вкладка («Журнал») не влазила на 360px: «Огляд» обрізався.
+   Кнопки можуть стискатися нижче ширини тексту, на вузькому екрані — дрібніший шрифт. */
+.ui-seg button{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+@media (max-width:420px){.ui-seg button{padding:0 2px;font-size:.78rem;letter-spacing:-.01em;}}
 .ui-pane[hidden]{display:none;}
 .ui-note{margin:0;font-size:.82rem;color:var(--ink-3);}
 .fin-box:not([style*="none"]) + .ui-note{display:none;}
@@ -4041,6 +4045,18 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
 
 /* Адміністратор кухні: кабінет кухні без цін, сум і балансів */
 #kitchen-screen.k-no-money .k-money{display:none !important;}
+
+/* 📒 Журнал у кабінеті родини (grades-view.js → paintJournal): та сама
+   таблиця, що в учителя, але вужча колонка предмета — під телефон */
+.pj-wrap{max-height:none;margin-top:8px;}
+.pj-table{font-size:.74rem;}
+.pj-table td.sn{min-width:7.2em;max-width:8.5em;font-size:1em;overflow-wrap:normal;word-break:normal;hyphens:auto;}
+.pj-table td{min-width:2.3em;height:auto;padding:.2em .12em;}
+.pj-table td.avg-col{background:var(--brand-soft)!important;}
+.pj-table th small{font-weight:600;opacity:.75;}
+.hw-nav button:disabled{opacity:.35;cursor:default;background:var(--surface-2);}
+.pj-table td .g-cell{margin:1px;cursor:default;}
+.pj-table td .g-cell:hover{transform:none;box-shadow:none;}
 </style>
 </head>
 <!-- auth-mode СТОЇТЬ ТУТ ОДРАЗУ, а не чекає на скрипт.
@@ -5979,11 +5995,15 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
     <section class="screen-section ui-today" data-dtab="grades">
       <div class="ui-seg" id="p-gr-seg" role="tablist" aria-label="Що показати">
         <button type="button" role="tab" data-pane="week" aria-selected="true" onclick="grPane('p','week')">Тиждень</button>
+        <button type="button" role="tab" data-pane="journal" aria-selected="false" onclick="grPane('p','journal')">Журнал</button>
         <button type="button" role="tab" data-pane="subject" aria-selected="false" onclick="grPane('p','subject')">Предмет</button>
         <button type="button" role="tab" data-pane="overview" aria-selected="false" onclick="grPane('p','overview')">Огляд</button>
       </div>
       <div class="ui-pane" data-pane="week" role="tabpanel">
         <div class="ui-card" id="p-grades-week"><p class="empty-msg is-loading">Завантаження...</p></div>
+      </div>
+      <div class="ui-pane" data-pane="journal" role="tabpanel" hidden>
+        <div class="ui-card" id="p-grades-journal"><p class="empty-msg is-loading">Завантаження...</p></div>
       </div>
       <div class="ui-pane" data-pane="subject" role="tabpanel" hidden>
         <div class="ui-card" id="p-grades-subject"><p class="empty-msg is-loading">Завантаження...</p></div>
@@ -6238,11 +6258,15 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
     <section class="screen-section ui-today" data-dtab="grades">
       <div class="ui-seg" id="s-gr-seg" role="tablist" aria-label="Що показати">
         <button type="button" role="tab" data-pane="week" aria-selected="true" onclick="grPane('s','week')">Тиждень</button>
+        <button type="button" role="tab" data-pane="journal" aria-selected="false" onclick="grPane('s','journal')">Журнал</button>
         <button type="button" role="tab" data-pane="subject" aria-selected="false" onclick="grPane('s','subject')">Предмет</button>
         <button type="button" role="tab" data-pane="overview" aria-selected="false" onclick="grPane('s','overview')">Огляд</button>
       </div>
       <div class="ui-pane" data-pane="week" role="tabpanel">
         <div class="ui-card" id="s-grades-week"><p class="empty-msg is-loading">Завантаження...</p></div>
+      </div>
+      <div class="ui-pane" data-pane="journal" role="tabpanel" hidden>
+        <div class="ui-card" id="s-grades-journal"><p class="empty-msg is-loading">Завантаження...</p></div>
       </div>
       <div class="ui-pane" data-pane="subject" role="tabpanel" hidden>
         <div class="ui-card" id="s-grades-subject"><p class="empty-msg is-loading">Завантаження...</p></div>
