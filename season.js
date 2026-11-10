@@ -28,12 +28,16 @@ let off = null, current = null;
 
 export function isWinter(){ return document.documentElement.classList.contains('season-winter'); }
 
-// Привітання за датою: перед святами, Новий рік і решта зими
+// Привітання за датою. Оформлення вмикають і раніше (у листопаді), тож
+// «зимовий день» — лише в зимові місяці; до того — «зима вже близько».
+// Поза листопадом–лютим привітання немає зовсім ('').
 export function seasonGreeting(today){
-  const md = String(today).slice(5, 10);
+  const md = String(today).slice(5, 10), m = md.slice(0, 2);
+  if(m === '11') return '❄️ Зима вже близько!';
   if(md >= '12-19' && md <= '12-31') return '🎄 Затишних свят і гарного кінця року!';
   if(md >= '01-01' && md <= '01-14') return '🎉 З Новим роком!';
-  return '❄️ Гарного зимового дня!';
+  if(m === '12' || m === '01' || m === '02') return '❄️ Гарного зимового дня!';
+  return '';
 }
 
 // ── СНІГ ──────────────────────────────────────────────────────────
@@ -64,6 +68,7 @@ function paintGreeting(){
   document.querySelectorAll('.season-hi').forEach(x => x.remove());
   if(!isWinter() || hiHidden()) return;
   const text = seasonGreeting(localDateString);
+  if(!text) return;
   document.querySelectorAll('section.ui-today[data-dtab="day"]').forEach(sec => {
     const d = document.createElement('div');
     d.className = 'season-hi';
