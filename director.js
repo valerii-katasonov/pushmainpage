@@ -11,6 +11,9 @@ import { auth, db, countAttendanceDays, attendanceAuthor, canClearDayAbsence, cl
 import { loadCustomRoles, customRoles, ROLE_PERMS, PERM_GROUPS, ORGANIZER_DEFAULT, roleDef } from './common.js';
 import { setAccess, revokeAllPaths, revokeAccess, accessList, accessBasis, judgeSubject, refineJudge, subHistory, subDatesFor, notifyWeekdays, grantTempAccess, recomputeTempAccess, ACCESS_SRC, ALL_SUBJECTS } from './access.js';
 import { subjKey } from './common.js';
+import { pickedDate } from './date-pick.js';
+// День огляду школи — своя сфера 'school' (date-pick.js), а не поле в шапці
+const schoolDate = () => pickedDate('school');
 
 let directorSkillsTemp=[];
 
@@ -882,6 +885,7 @@ window.renderDirectorStats=async function(){const cls=document.getElementById('d
   stList.forEach(st=>{const g=stats[st].grades;const count=Object.keys(g).length;const eligible=getClassNum(cls)<=LEVEL_MAX_CLASS?Object.fromEntries(Object.entries(g).filter(([,value])=>!(Number(value)>6))):g;const avg=calculateStudentWeightedAvg(eligible,stats[st].types);const rounded=avg!==null?Math.min(scaleMax,Math.max(1,Math.round(avg))):null;const disp=rounded!==null?displayGrade(String(rounded),cls,numericScale)+' ('+avg.toFixed(2)+')':'-';if(avg!==null){totalAvg+=avg;cnt++;}const gc=rounded!==null?(numericScale?'g-scale':gradeClass6(rounded)):'';h+=`<tr><td style="padding:5px;border-bottom:1px solid var(--line-soft);"><b>${escHtml(stuName(cls, st))}</b></td><td style="text-align:center;"><span class="g-cell ${gc}" style="display:inline-block;padding:3px 8px;">${disp}</span></td><td style="text-align:center;">${count}</td></tr>`;});
   const ca=cnt>0?(totalAvg/cnt).toFixed(2):'-';const classRounded=cnt>0?Math.min(scaleMax,Math.max(1,Math.round(Number(ca)))):'-';h+=`</tbody></table><div style="background:var(--brand-soft);border:1px solid var(--line);padding:12px;border-radius:8px;text-align:center;margin-top:10px;"><b style="color:var(--brand-deep);">🏆 Середній бал класу (${getClassNum(cls)<=LEVEL_MAX_CLASS?'рівні П/С/Д/В':`шкала 1–${scaleMax}`}):</b><br><span style="font-size:1.5rem;font-weight:800;color:var(--brand-deep);">${cnt?displayGrade(String(classRounded),cls,numericScale):'—'} (${ca})</span></div>`;rd.innerHTML=h;}catch(e){rd.innerHTML=`<p style="color:red;">Помилка: ${e.message}</p>`;}};
 // ══════════ DIRECTOR DASHBOARD ══════════
+function mountSchoolPick(){ if(window.mountDatePicks) window.mountDatePicks(); }
 export async function loadDirectorDashboard(){
   ensurePrivacyMirrors();   // разово: дзеркала родини з наявних даних (не чекаємо)
   // Басейн і автобус — ПЕРШИМ ділом і під власним try. Виклик стояв у кінці
@@ -890,7 +894,7 @@ export async function loadDirectorDashboard(){
   // сталося в кабінеті батьків — і з тієї ж причини.
   try{ if(window.renderActivitySummary) window.renderActivitySummary('d-activities','school'); }
   catch(e){ console.error('Басейн/автобус (директор):', e); }
-  try{const date=document.getElementById('global-date').value;const dp=date.split('-');document.getElementById('d-att-header').innerText=`🚨 Відсутні (${dp[2]}.${dp[1]}, вся школа)`;const wd=getWeekDates(date);let hw=0,com=0,wl=0,wa=0,attHtml='';const _lo=wd[0]<date?wd[0]:date, _hi=wd[wd.length-1]>date?wd[wd.length-1]:date;const[hd,cd,ad]=await Promise.all([getSchoolRange('homeworks',_lo,_hi),getSchoolRange('comments',_lo,_hi),getSchoolRange('attendance',_lo,_hi)]);for(let i=1;i<=11;i++){const c=`class_${i}`;if(hd[c]&&hd[c][date])hw+=Object.keys(hd[c][date]).length;if(cd[c]&&cd[c][date]){for(let s in cd[c][date])if(typeof cd[c][date][s]==='object')com+=Object.keys(cd[c][date][s]).length;}if(ad[c]&&ad[c][date])for(let st in ad[c][date]){const slots=ad[c][date][st];for(let sk in slots){const r=slots[sk];if(r?.status){const bc=r.status==='late'?'badge-late':'badge-absent';const lb=r.status==='late'?'Запізнення':'Відсутність';const markerIcon=r.markedBy==='teacher'?'👨‍🏫':(r.markedBy==='student'?'🎒':'👪');const undo=(sk==='all'&&canClearDayAbsence(currentUserData&&currentUserData.role))?` <button type="button" class="att-undo" onclick="clearDayAbsence('${escJs(c)}','${escJs(st)}','${escJs(date)}',loadDirectorDashboard)">Зняти</button>`:'';attHtml+=`<li class="att-item"><div class="att-item-main"><div class="att-item-head"><span class="att-cls">${i} Кл</span> <b>${escHtml(stuName(c, st))}</b> <span class="badge ${bc}">${lb}</span></div><div class="att-item-sub">${escHtml(formatAttendanceSlotLabel(sk,r.status))} ${markerIcon}${r.reason?` · ${escHtml(r.reason)}`:''}</div>${attendanceAuthor(r)?`<div class="att-item-who">поставив: ${escHtml(attendanceAuthor(r))}</div>`:''}</div>${undo}</li>`;}}}/* Учень × день, а не кожен урок — див. countAttendanceDays у common.js */if(ad[c]){const k=countAttendanceDays({[c]:ad[c]},wd);wl+=k.late;wa+=k.absent;}}// Підпис «сьогодні» був неправдою: лічильники рахують ОБРАНУ дату в
+  try{mountSchoolPick();const date=schoolDate();const dp=date.split('-');document.getElementById('d-att-header').innerText=`🚨 Відсутні (${dp[2]}.${dp[1]}, вся школа)`;const wd=getWeekDates(date);let hw=0,com=0,wl=0,wa=0,attHtml='';const _lo=wd[0]<date?wd[0]:date, _hi=wd[wd.length-1]>date?wd[wd.length-1]:date;const[hd,cd,ad]=await Promise.all([getSchoolRange('homeworks',_lo,_hi),getSchoolRange('comments',_lo,_hi),getSchoolRange('attendance',_lo,_hi)]);for(let i=1;i<=11;i++){const c=`class_${i}`;if(hd[c]&&hd[c][date])hw+=Object.keys(hd[c][date]).length;if(cd[c]&&cd[c][date]){for(let s in cd[c][date])if(typeof cd[c][date][s]==='object')com+=Object.keys(cd[c][date][s]).length;}if(ad[c]&&ad[c][date])for(let st in ad[c][date]){const slots=ad[c][date][st];for(let sk in slots){const r=slots[sk];if(r?.status){const bc=r.status==='late'?'badge-late':'badge-absent';const lb=r.status==='late'?'Запізнення':'Відсутність';const markerIcon=r.markedBy==='teacher'?'👨‍🏫':(r.markedBy==='student'?'🎒':'👪');const undo=(sk==='all'&&canClearDayAbsence(currentUserData&&currentUserData.role))?` <button type="button" class="att-undo" onclick="clearDayAbsence('${escJs(c)}','${escJs(st)}','${escJs(date)}',loadDirectorDashboard)">Зняти</button>`:'';attHtml+=`<li class="att-item"><div class="att-item-main"><div class="att-item-head"><span class="att-cls">${i} Кл</span> <b>${escHtml(stuName(c, st))}</b> <span class="badge ${bc}">${lb}</span></div><div class="att-item-sub">${escHtml(formatAttendanceSlotLabel(sk,r.status))} ${markerIcon}${r.reason?` · ${escHtml(r.reason)}`:''}</div>${attendanceAuthor(r)?`<div class="att-item-who">поставив: ${escHtml(attendanceAuthor(r))}</div>`:''}</div>${undo}</li>`;}}}/* Учень × день, а не кожен урок — див. countAttendanceDays у common.js */if(ad[c]){const k=countAttendanceDays({[c]:ad[c]},wd);wl+=k.late;wa+=k.absent;}}// Підпис «сьогодні» був неправдою: лічильники рахують ОБРАНУ дату в
 // шапці кабінету, а не поточний день. Через це старе ДЗ виглядало як
 // сьогоднішнє. Тепер дата написана прямо на картці.
 const dLabel=date.split('-').reverse().slice(0,2).join('.');
@@ -1994,7 +1998,9 @@ window.runYearRollover=async function(){
   try{
     const snap=await get(ref(db,'students_list'));
     const lists=snap.exists()?snap.val():{};
-    const year=(document.getElementById('global-date').value||localDateString).split('-')[0];
+    // Рік випуску — календарний рік ЗАРАЗ, а не дата з поля вгорі:
+    // інакше випадково обраний день у шапці записав би випускників не в той рік.
+    const year=String(localDateString).split('-')[0];
     let moved=0,graduated=0;
     // 1) Graduate class 11 FIRST — otherwise the 10→11 step would merge into it.
     if(lists['class_11']){
@@ -2616,7 +2622,7 @@ window.toggleHomeworkBreakdown = async function(){
   box.style.display = opening ? 'block' : 'none';
   if(!opening) return;
 
-  const date = document.getElementById('global-date').value;
+  const date = schoolDate();
   box.innerHTML = '<p class="empty-msg is-loading">Завантаження...</p>';
   try{
     const [hw, au, usersSnap] = await Promise.all([
@@ -2678,7 +2684,7 @@ window.toggleCommentsBreakdown = async function(){
   box.style.display = opening ? 'block' : 'none';
   if(!opening) return;
 
-  const date = document.getElementById('global-date').value;
+  const date = schoolDate();
   box.innerHTML = '<p class="empty-msg is-loading">Завантаження...</p>';
   try{
     const cd = await getSchoolRange('comments', date, date);
@@ -2725,7 +2731,7 @@ window.toggleWeekBreakdown = async function(){
   box.style.display = opening ? 'block' : 'none';
   if(!opening) return;
 
-  const date = document.getElementById('global-date').value;
+  const date = schoolDate();
   const wd = getWeekDates(date);
   box.innerHTML = '<p class="empty-msg is-loading">Завантаження...</p>';
   try{

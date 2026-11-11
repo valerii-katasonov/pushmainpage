@@ -491,7 +491,7 @@ window.openJournalModal=function(role){
   document.getElementById('journal-modal').style.display='flex';
   journalZoomIsAuto=true;journalZoomLevel=100;applyJournalZoom();
   renderGradeTypesLegend();
-  const dp=document.getElementById('global-date').value.split('-');const curYM=`${dp[0]}-${dp[1]}`;
+  const dp=localDateString.split('-');const curYM=`${dp[0]}-${dp[1]}`;   // журнал листається своїми місяцями
   const firstYM=`${ACTIVE_YEAR.split('-')[0]}-09`;
   document.getElementById('j-month-from').value=firstYM<=curYM?firstYM:curYM;
   document.getElementById('j-month-to').value=curYM;
@@ -713,8 +713,8 @@ window.jumpToJournalDay = function(ds){
   const pop = document.getElementById('jt-note-pop');
   if(pop) pop.style.display = 'none';
   if(window.closeJournalModal) window.closeJournalModal();
-  const dateEl = document.getElementById('global-date');
-  if(dateEl && ds){ dateEl.value = ds; if(window.handleDateChange) window.handleDateChange(); }
+  // День ставимо вкладці «Урок» (сфера 'lesson'), а не всьому кабінету
+  if(ds && window.setPickedDate) window.setPickedDate('lesson', ds);
   openTabByKey('teacher-screen', 'lesson');
 };
 

@@ -3429,6 +3429,16 @@
 .ui-btns .ui-btn,.ui-sheet .ui-wide{width:100%;max-width:none;}
 .ui-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;}
 .ui-row .ui-btn-2{flex:1;}
+/* Своя дата місця (date-pick.js): ‹ Сьогодні › */
+.dp-bar{display:flex;align-items:center;gap:6px;margin:0 0 12px;}
+.dp-bar>button,.dp-bar>label{width:auto;margin:0;box-shadow:none;min-width:0;white-space:nowrap;}
+.dp-bar>.dp-mid{flex:1 1 auto;}
+.dp-bar>.dp-arrow{flex:0 0 38px;width:38px;height:38px;padding:0;}
+.dp-arrow{flex:0 0 auto;width:38px;height:38px;border-radius:12px;border:1px solid var(--line);background:var(--surface);color:var(--brand-ink);font-size:1.25rem;font-weight:800;line-height:1;cursor:pointer;padding:0;}
+.dp-mid{position:relative;flex:1 1 auto;margin:0;display:flex;align-items:center;justify-content:center;gap:6px;height:38px;border-radius:12px;border:1px solid var(--line);background:var(--surface);color:var(--brand-ink);font-weight:800;font-size:.92rem;cursor:pointer;}
+.dp-in{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;margin:0;padding:0;border:0;}
+.dp-bar.dp-other .dp-mid{background:var(--warn-soft);border-color:var(--warn-line);color:var(--warn);}
+.dp-today{flex:0 0 auto;height:38px;border-radius:12px;border:0;background:var(--brand-soft);color:var(--brand-ink);font-weight:700;font-size:.8rem;padding:0 10px;cursor:pointer;}
 .ui-att-status{background:var(--ok-soft);color:var(--ok);border-radius:12px;padding:10px 12px;font-size:.85rem;font-weight:700;margin:0 0 12px;}
 .ui-tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:14px;}
 .ui-tiles .ui-tile{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;width:100%;max-width:none;min-height:78px;margin:0;padding:10px 6px;background:var(--surface);color:var(--ink);border:1px solid var(--line-soft);border-radius:14px;box-shadow:var(--card-shadow);font:inherit;text-align:center;cursor:pointer;}
@@ -3988,6 +3998,8 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
 .t-lesson .ls-head-t{flex:1 1 260px;min-width:0;}
 .t-lesson h3.ls-title{margin:0;padding:0;border:none;font-size:1.2rem;color:var(--ink);}
 .t-lesson .ls-sub{margin:4px 0 0;font-size:.8rem;color:var(--ink-3);line-height:1.4;}
+.t-lesson .ls-day{flex:1 1 100%;}
+.t-lesson .ls-day .dp-bar{margin:0;}
 .t-lesson .ls-subj{flex:1 1 240px;margin:0;display:flex;flex-direction:column;gap:4px;font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-3);}
 .t-lesson .ls-subj select{margin:0;min-height:48px;font-size:1rem;font-weight:800;color:var(--brand-deep);border:2px solid var(--brand-line);border-radius:12px;background:var(--surface);}
 .t-lesson .ls-card{background:var(--surface) !important;border:1px solid var(--line) !important;border-radius:18px !important;padding:16px 18px !important;margin:0 0 14px !important;box-shadow:var(--ls-shadow);}
@@ -4453,12 +4465,12 @@ body:has(.modal-overlay[style*="flex"]) #profile-bar::after{animation:none !impo
   <div id="moved-notice" class="moved-notice" style="display:none;"></div>
   <!-- DATE PICKER -->
   <div id="calendar-block" style="display:none;" class="date-picker-box">
-    <div id="teacher-class-selector-box" style="display:none;margin-bottom:13px;border-bottom:1px dashed var(--brand-ink);padding-bottom:13px;">
+    <!-- Загального поля «Оберіть дату» більше немає (11.11.2026): кожне місце
+         має свою дату (date-pick.js). Тут лишився тільки клас учителя. -->
+    <div id="teacher-class-selector-box" style="display:none;">
       <label style="margin-top:0;color:var(--warn);font-size:.95rem;">🏫 Оберіть клас:</label>
       <select id="t-class-selector" onchange="handleClassChange()" style="margin-top:4px;border:2px solid var(--warn);color:var(--warn);font-weight:700;text-align:center;"></select>
     </div>
-    <label id="global-date-label" style="margin-top:0;color:var(--brand-ink);font-size:.95rem;">📅 Оберіть дату:</label>
-    <input type="date" id="global-date" onchange="handleDateChange()" style="border:2px solid var(--brand-ink);color:var(--brand-ink);font-weight:700;text-align:center;">
   </div>
   <!-- ADMIN -->
   <div id="admin-screen" class="panel">
@@ -4490,6 +4502,7 @@ body:has(.modal-overlay[style*="flex"]) #profile-bar::after{animation:none !impo
 
     <section class="screen-section">
       <h3>📋 Відвідуваність</h3>
+      <div data-dp-mount="school" data-dp-aria="День відвідуваності"></div>
       <div class="data-card" style="border-left-color:var(--danger);background:var(--surface-2);margin-top:0;">
         <h4 id="a-att-header" style="margin-top:0;color:var(--danger);">🚨 Відсутні та Запізнення</h4>
         <ul id="a-unified-att-list" class="list-dash" style="padding-left:0;list-style:none;"><li class="empty-msg is-loading">Завантаження...</li></ul>
@@ -4855,6 +4868,7 @@ body:has(.modal-overlay[style*="flex"]) #profile-bar::after{animation:none !impo
            спершу числа дня (плитки), під ними хто відсутній, далі дії,
            аналітика й басейн/автобус. Ідентифікатори ті самі — director.js
            не змінювався. -->
+      <div data-dp-mount="school" data-dp-aria="День огляду школи"></div>
       <div class="ui-tiles d-tiles st-tiles" role="group" aria-label="Школа сьогодні">
         <div role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" class="ui-tile st-tile st-brand" onclick="toggleHomeworkBreakdown()" title="Показати, хто що задав"><i class="st-ic" aria-hidden="true">📚</i><b id="d-hw-counter">0</b><span id="d-hw-title">ДЗ</span></div>
         <div role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" class="ui-tile st-tile st-ok" onclick="toggleCommentsBreakdown()" title="Показати, хто що написав"><i class="st-ic" aria-hidden="true">💬</i><b id="d-com-counter">0</b><span id="d-com-title">Коментарі</span></div>
@@ -5602,8 +5616,9 @@ body:has(.modal-overlay[style*="flex"]) #profile-bar::after{animation:none !impo
       <div class="ls-head">
         <div class="ls-head-t">
           <h3 class="ls-title">✏️ Урок</h3>
-          <p class="ls-sub">Для дати й класу, вибраних угорі сторінки. Кожен блок нижче зберігається окремо — своєю кнопкою.</p>
+          <p class="ls-sub">Для класу вгорі сторінки й дня, обраного тут. Кожен блок нижче зберігається окремо — своєю кнопкою.</p>
         </div>
+        <div class="ls-day" data-dp-mount="lesson" data-dp-aria="День уроку"></div>
         <label class="ls-subj"><span>Предмет уроку</span>
           <select id="t-subject" onchange="handleSubjectChange()"></select></label>
       </div>
@@ -5902,8 +5917,8 @@ body:has(.modal-overlay[style*="flex"]) #profile-bar::after{animation:none !impo
     </section>
     <section class="screen-section" data-dtab="gradebook">
       <h3>📚 Домашні завдання на день</h3>
-      <p class="hwd-cap">Показано ваші уроки в цьому класі на обрану дату.
-         Дата й клас — угорі сторінки.</p>
+      <p class="hwd-cap">Ваші уроки в цьому класі на обраний день. Клас — угорі сторінки.</p>
+      <div data-dp-mount="hwday" data-dp-aria="День для ДЗ"></div>
       <div id="t-hw-day"><p class="empty-msg is-loading">Завантаження...</p></div>
     </section>
 
@@ -6034,6 +6049,7 @@ body:has(.modal-overlay[style*="flex"]) #profile-bar::after{animation:none !impo
          відправка й скасування працюють як раніше. -->
     <section class="screen-section ui-today" data-dtab="day">
       <!-- 🎂 Свято своєї дитини (ui-today.js) -->
+      <div data-dp-mount="day" data-dp-aria="Дата, яку показує екран"></div>
       <div id="p-bday" hidden></div>
       <div id="p-now" style="display:none;"></div>
       <div id="p-teacher-att-alert" style="display:none;background:var(--warn-soft);border:1px solid var(--warn-line);color:var(--warn);padding:11px 14px;border-radius:12px;margin-bottom:12px;font-size:.85rem;"></div>
@@ -6083,6 +6099,8 @@ body:has(.modal-overlay[style*="flex"]) #profile-bar::after{animation:none !impo
           <div class="ui-sheet-grab" aria-hidden="true"></div>
           <button type="button" class="ui-sheet-x" onclick="closeSheet('p-att-sheet')" aria-label="Закрити">✕</button>
           <h4 id="p-att-sheet-title">Повідомити школу</h4>
+          <label class="ui-field"><span>Коли</span>
+            <input type="date" id="p-att-date"></label>
           <label class="ui-field"><span>Що сталося</span>
             <select id="p-att-type" onchange="updateAttOptions()"><option value="late">Запізнюється</option><option value="absent">Відсутній (весь день)</option></select></label>
           <label class="ui-field"><span>Деталі</span>
@@ -6312,6 +6330,7 @@ body:has(.modal-overlay[style*="flex"]) #profile-bar::after{animation:none !impo
          далі оголошення, розклад, календар. Поля s-att-* ті самі. -->
     <section class="screen-section ui-today" data-dtab="day">
       <!-- 🎂 Свято своєї дитини (ui-today.js) -->
+      <div data-dp-mount="day" data-dp-aria="Дата, яку показує екран"></div>
       <div id="s-bday" hidden></div>
       <div id="s-now" style="display:none;"></div>
       <div id="s-teacher-att-alert" style="display:none;background:var(--warn-soft);border:1px solid var(--warn-line);color:var(--warn);padding:11px 14px;border-radius:12px;margin-bottom:12px;font-size:.85rem;"></div>
@@ -6365,6 +6384,8 @@ body:has(.modal-overlay[style*="flex"]) #profile-bar::after{animation:none !impo
           <div class="ui-sheet-grab" aria-hidden="true"></div>
           <button type="button" class="ui-sheet-x" onclick="closeSheet('s-att-sheet')" aria-label="Закрити">✕</button>
           <h4 id="s-att-sheet-title">Повідомити вчителя</h4>
+          <label class="ui-field"><span>Коли</span>
+            <input type="date" id="s-att-date"></label>
           <label class="ui-field"><span>Що сталося</span>
             <select id="s-att-type" onchange="updateAttOptionsStudent()"><option value="late">Запізнююсь</option><option value="absent">Буду відсутній</option></select></label>
           <label class="ui-field"><span>Деталі</span>
@@ -6514,6 +6535,7 @@ body:has(.modal-overlay[style*="flex"]) #profile-bar::after{animation:none !impo
       <div class="ts-who"><h2 id="ts-name">—</h2><small id="ts-sub"></small></div>
       <button type="button" class="ts-x" onclick="closeStudentSheet()" aria-label="Закрити">✕</button>
     </div>
+    <div data-dp-mount="stu" data-dp-aria="Дата запису"></div>
     <button type="button" class="ts-360" onclick="tsOpen360()">👤 Усе про учня <small>оцінки, пропуски, коментарі, батьки</small></button>
     <div class="ui-seg ts-seg" role="tablist" aria-label="Дія">
       <button type="button" role="tab" data-ts="comment" onclick="tsTab('comment')">💬 Коментар</button>
@@ -6591,8 +6613,9 @@ body:has(.modal-overlay[style*="flex"]) #profile-bar::after{animation:none !impo
     </div>
     <p class="qj-hint">Присутність і оцінки за урок — у перший стовпець дня.</p>
     <p style="text-align:center;font-size:.85rem;color:var(--ink-2);margin:0 0 8px 0;">
-      <select id="qj-subject" class="act-subj" onchange="openQuickJournal()"></select> · <b id="qj-date">—</b>
+      <select id="qj-subject" class="act-subj" onchange="openQuickJournal()"></select>
     </p>
+    <div id="qj-date" data-dp-mount="qj" data-dp-aria="Дата уроку"></div>
     <label for="qj-type" style="margin-top:0;">Тип оцінок на цьому уроці</label>
     <select id="qj-type" style="margin-top:3px;"></select>
     <div class="qj-legend"><span><b>✓</b> присутній</span><span><b>З</b> запізнення</span><span><b>Н</b> відсутній</span></div>

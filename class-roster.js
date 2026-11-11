@@ -17,6 +17,7 @@
 // (annotateAbsentSelect: «⛔ увесь день», «⏰ запізнення…»).
 // ═══════════════════════════════════════════════════════════════
 import { getActiveClass } from './common.js';
+import { setPickedDate, mountDatePicks } from './date-pick.js';
 
 let cur = { sid: '', name: '' };
 let tab = 'comment';
@@ -78,7 +79,11 @@ window.openStudentSheet = function(sid, which){
   // Предмети для коментаря й наліпки — з каталогу класу. Обране раніше
   // зберігається (refreshClassTabPickers тримає поточне значення)
   if(window.refreshClassTabPickers) window.refreshClassTabPickers();
-  document.getElementById('t-stu-sheet').style.display = 'flex';
+  // Дата запису — своя у вікна учня; кожне відкриття починає з сьогодні
+  const sheet = document.getElementById('t-stu-sheet');
+  setPickedDate('stu', '', {silent:true});
+  mountDatePicks(sheet);
+  sheet.style.display = 'flex';
   window.tsTab(which || tab);
 };
 window.closeStudentSheet = function(){ const m = document.getElementById('t-stu-sheet'); if(m) m.style.display = 'none'; };

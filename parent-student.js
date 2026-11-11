@@ -8,6 +8,7 @@ import { ref, set, get, child, remove, update } from "https://www.gstatic.com/fi
 import { db, getActiveClass, currentUserData, getClassNum, LEVEL_MAX_CLASS, STICKER_GOAL, stickerGoal, getWeekDates, displayGrade, gradeClass6, showToast, renderHwItem, renderHwList, dayKeys, dayNamesUA, isBreakItem, parseTimeRange, fmtTimeRange, localDateString, formatAttendanceSlotLabel, renderGradeFormulaInfo, escJs, escHtml, safeUrl, renderBirthdays, stuName, stuId, auth, normalizeChildren, gradesFromMirror, mondayOf, altChoiceFor, resolveAlt, classHourItem, insertAtTime, minsOf, subjKey, planKeyWith, notifyEvent, getStudentDir, resolveStudentKey } from './common.js';
 import { ACTIVE_YEAR } from './director.js';
 import { offDaysMap, addDays, offTitle, ddmm } from './offdays.js';
+import { pickedDate, setPickedDate, onDatePick, mountDatePicks } from './date-pick.js';
 export { offDaysMap, addDays, offTitle };
 import { renderParentMenu } from './kitchen.js';
 import { renderNewsFeed } from './news.js';
@@ -53,7 +54,7 @@ async function checkTeacherAttendanceAlert(role='parent'){
   // жодного разу: getElementById повертав null, і функція виходила.
   const banner=document.getElementById(`${prefix}-teacher-att-alert`);
   if(!banner||!currentUserData)return;
-  const date=document.getElementById('global-date').value;
+  const date=famDate();
   const cls=getActiveClass();
   const snap=await get(child(ref(db),`attendance/${cls}/${date}/${currentUserData.studentId||currentUserData.studentName}`));
   if(!snap.exists()){banner.style.display='none';return;}
@@ -84,7 +85,7 @@ export async function renderSelfAttStatus(role='parent'){
   const prefix=role==='student'?'s':'p';
   const el=document.getElementById(`${prefix}-att-status`);
   if(!el||!currentUserData)return;
-  const cls=getActiveClass(), date=document.getElementById('global-date').value;
+  const cls=getActiveClass(), date=famDate();
   let rec=null;
   try{
     const dir=await getStudentDir(cls).catch(()=>null);
@@ -96,7 +97,8 @@ export async function renderSelfAttStatus(role='parent'){
   if(!rec||!rec.status){ el.style.display='none'; return; }
   const mine=rec.markedBy==='parent'||rec.markedBy==='student';
   const label=rec.status==='late'?'Запізнення':'Відсутність';
-  const today=date===localDateString;
+  // Скасувати можна сьогоднішнє й майбутнє, минуле — ні
+  const today=date>=localDateString;
   el.style.display='block';
   el.innerHTML=`${mine?'✅ Ви повідомили':'🚨 Відмітила школа'}: ${escHtml(label)}`
     +(rec.reason?` (${escHtml(rec.reason)})`:'')
@@ -107,8 +109,8 @@ export async function renderSelfAttStatus(role='parent'){
 window.renderSelfAttStatus=renderSelfAttStatus;
 
 window.cancelSelfAttendance=async function(role='parent'){
-  const cls=getActiveClass(), date=document.getElementById('global-date').value;
-  if(date!==localDateString)
+  const cls=getActiveClass(), date=famDate();
+  if(date<localDateString)
     return alert('Скасувати повідомлення можна лише того самого дня. Зверніться до класного керівника.');
   let key='', rec=null;
   try{
@@ -225,6 +227,13 @@ function realLessons(list){ return (list||[]).filter(l=>!l._break).length; }
 // Заміни на обрану дату: {індекс слота → дані}. Тримаємо окремо, щоб
 // renderDynamicSchedule лишався синхронним — він викликається щохвилини
 // з таймера, і читати базу звідти не можна.
+// Дата екрана «Сьогодні» в родини (date-pick.js, сфера 'day').
+// Змінили її — перемальовуємо лише свій дашборд.
+function famDate(){ return pickedDate('day'); }
+onDatePick('day', () => {
+  if(!currentUserData) return;
+  if(currentUserData.role==='student') loadStudentDashboard(); else loadParentDashboard();
+});
 let todaySubs={};
 export async function loadTodaySubstitutions(cls,date){
   try{
@@ -507,10 +516,10 @@ function renderDynamicSchedule(role='parent'){
   }
   const lessons=buildDynamicSchedule(window.schedule,targetDayName,!showTomorrow,
                                     showTomorrow?nextDay.date:todayStr)||[];
-  // Заміни завантажені на дату з поля вгорі (global-date). На уроках
+  // Заміни завантажені на дату, обрану на екрані «Сьогодні». На уроках
   // іншого дня (завтрашній список, або в полі обрано іншу дату) їх
   // показувати не можна — «заміна» потрапила б на чужий урок.
-  const subsOk = !showTomorrow && (document.getElementById('global-date')||{}).value === todayStr;
+  const subsOk = !showTomorrow && famDate() === todayStr;
   // Блок «Зараз» нагорі вкладки «Сьогодні» (ui-today.js). Той самий
   // список уроків, що й нижче, — лише перерахований у прості числа.
   if(window.renderNowCard){
@@ -859,7 +868,7 @@ async function sendRetakeRequest(cls,subj,date,student,grade){
 window.sendRetakeRequest=sendRetakeRequest;
 // ══════════ PARENT DASHBOARD ══════════
 export function loadParentDashboard(){
-  if(!currentUserData)return;const date=document.getElementById('global-date').value;const cls=getActiveClass();
+  if(!currentUserData)return;mountDatePicks();const date=famDate();const cls=getActiveClass();
   // Басейн і автобус — ПЕРШИМ ділом і під власним try. Спершу цей виклик
   // стояв у кінці функції, і будь-яка помилка вище (розклад, наліпки,
   // підручники) забирала його з собою: блок просто не з'являвся, мовчки.
@@ -1139,7 +1148,7 @@ window.exportMyChildData=function(){
 let aiDayContext={};
 async function loadAiDayContext(prefix){
   const cls=getActiveClass();
-  const date=document.getElementById('global-date').value;
+  const date=famDate();
   const sel=document.getElementById(`${prefix}-help-subject`);
   if(!sel)return;
   aiDayContext={};
@@ -1249,9 +1258,13 @@ window.fillAttReasons = fillAttReasons;
 
 window.updateAttOptions=function(){ fillAttReasons('p'); };
 window.submitAttendance=async function(role='parent'){
-  const date=document.getElementById('global-date').value;
   const cls=getActiveClass(), profile=currentUserData;
   const prefix=role==='student'?'s':'p';
+  // Своя дата у формі: повідомити можна й про завтра, не гортаючи
+  // для цього весь екран. Минуле — не можна.
+  const dIn=document.getElementById(`${prefix}-att-date`);
+  const date=(dIn&&/^\d{4}-\d{2}-\d{2}$/.test(dIn.value))?dIn.value:localDateString;
+  if(date<localDateString){ alert('Повідомити можна лише про сьогодні або наступні дні.'); return false; }
   const type=document.getElementById(`${prefix}-att-type`).value;
   const reason=document.getElementById(`${prefix}-att-reason`).value;
   const markedBy=role==='student'?'student':'parent';
@@ -1265,6 +1278,9 @@ window.submitAttendance=async function(role='parent'){
     return false;   // шторка (ui-today.js) не має закриватися з «✅»
   }
   const el=document.getElementById(`${prefix}-att-status`);
+  // Повідомили не про той день, що на екрані, — переходимо на нього,
+  // інакше батько не побачив би свого ж повідомлення й кнопки «Скасувати».
+  if(date!==famDate()) setPickedDate('day', date);
   await renderSelfAttStatus(role);
   checkTeacherAttendanceAlert(role);
   // Дата й хвилини запізнення — щоб учитель зі сповіщення одразу бачив
@@ -1314,7 +1330,7 @@ window.sendReaction=function(date,subject,emoji,cur,key){if(!currentUserData)ret
 // ══════════ STUDENT DASHBOARD ══════════
 export function loadStudentDashboard(){
   renderNewsFeed('s-news-feed');
-  if(!currentUserData)return;const date=document.getElementById('global-date').value;const cls=getActiveClass();
+  if(!currentUserData)return;mountDatePicks();const date=famDate();const cls=getActiveClass();
   fillAttReasons('s');
   if(window.schedule){renderDynamicSchedule('student');if(parentLessonInterval)clearInterval(parentLessonInterval);parentLessonInterval=setInterval(()=>renderDynamicSchedule('student'),30000);}
   (async () => {

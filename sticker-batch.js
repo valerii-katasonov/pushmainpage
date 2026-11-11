@@ -12,7 +12,7 @@
 // Усе — ОДНИМ записом у базу: обірветься зв'язок — не буде половини класу.
 // ═══════════════════════════════════════════════════════════════
 import { ref, child, push, update } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, auth, currentUserData, getActiveClass, showToast, escHtml, stuName } from './common.js';
+import { db, auth, currentUserData, getActiveClass, showToast, escHtml, stuName, localDateString } from './common.js';
 import { fillActionSubject, actionSubject, stickerRecord, stickerWord, STICKER_BATCH_MAX } from './teacher.js';
 
 // ── ЧИСТА ЧАСТИНА ───────────────────────────────────────────────
@@ -41,6 +41,7 @@ function overlay(){
   o.innerHTML = `<div class="modal-content sb2-modal">
     <h2 class="sb2-h">🌟 Наліпки класу</h2>
     <p class="sb2-sub">Кому скільки — плюсом. Предмет один на всіх. Видається одним натиском.</p>
+    <label class="sb2-fld">Дата<input type="date" id="sb2-date"></label>
     <label class="sb2-fld">За що<select id="sb2-subject"></select></label>
     <label class="sb2-fld" id="sb2-other-wrap" hidden>Причина<input type="text" id="sb2-other" maxlength="160" placeholder="Наприклад, допомогли прибрати клас"></label>
     <div class="sb2-tools"><button type="button" data-sb2="all">+1 усім</button><button type="button" data-sb2="clear">Скинути</button></div>
@@ -100,6 +101,9 @@ export async function openStickerBatch(){
   counts = {};
   document.getElementById('sb2-msg').textContent = '';
   document.getElementById('sb2-other').value = '';
+  // Своя дата вікна: сьогодні, майбутнього не можна
+  const dIn = document.getElementById('sb2-date');
+  dIn.value = localDateString; dIn.max = localDateString;
   // Предмети — як у наліпки учня: каталог класу + «Інше»
   const sel = document.getElementById('sb2-subject');
   await fillActionSubject('sb2-subject', actionSubject('t-sticker-subject'));
@@ -113,7 +117,8 @@ window.openStickerBatch = openStickerBatch;
 async function save(){
   if(saving) return;
   const cls = getActiveClass(), msg = document.getElementById('sb2-msg');
-  const date = (document.getElementById('global-date') || {}).value;
+  const date = document.getElementById('sb2-date').value || localDateString;
+  if(date > localDateString){ msg.textContent = '⚠️ Наліпки за майбутній день не видаються.'; return; }
   let base;
   try{
     base = stickerRecord(document.getElementById('sb2-subject').value, document.getElementById('sb2-other').value, date, auth.currentUser?.uid || '');

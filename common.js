@@ -22,6 +22,7 @@ import { loadDirectorDashboard, loadTeachersListForDirector, loadDirectorTeacher
 import { loadParentDashboard, loadStudentDashboard, loadTextbooksForParent, renderPaymentsMockup, parentLessonInterval } from './parent-student.js';
 import { globalTeacherAccess } from './journal.js';
 import { checkCurriculumUploadAccess } from './curriculum.js';
+import { pickedDate, setPickedDate, onDatePick, mountDatePicks } from './date-pick.js';
 
 // ══════════════════════════════════════════════════════════════════
 //  ХТО ЗРОБИВ ПОРТАЛ
@@ -1157,22 +1158,18 @@ function todayString(){
         +'-'+String(d.getDate()).padStart(2,'0');
 }
 export let localDateString=todayString();
-document.getElementById('global-date').value=localDateString;
 
 // Перевіряємо раз на хвилину й щоразу, коли вкладку повертають на екран
 // (телефон із засинанням таймерів інакше пропустив би зміну доби).
 function refreshToday(){
   const now=todayString();
   if(now===localDateString) return;
-  const wasShowing=localDateString;
   localDateString=now;
-  // Поле дати переводимо на нову добу ЛИШЕ якщо людина його не чіпала:
-  // інакше ми б висмикнули з-під неї день, який вона сама обрала.
-  const el=document.getElementById('global-date');
-  if(el && el.value===wasShowing){
-    el.value=now;
-    if(window.handleDateChange) window.handleDateChange();
-  }
+  // Загального поля дати більше немає. Кожне місце має свою дату
+  // (date-pick.js): не чіпали — вона сама вже показує нову добу, обрали
+  // свій день — він лишається. Тож просто перемальовуємо кабінет.
+  mountDatePicks();   // підписи «Сьогодні / Вчора» на всіх смужках
+  if(window.handleDateChange) window.handleDateChange();
 }
 setInterval(refreshToday, 60000);
 document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) refreshToday(); });
@@ -2513,7 +2510,8 @@ window.handleDateChange=function(){
   // дашборда й самі не оновлюються. Оновлюємо їх лише коли вони відкриті:
   // інакше кожна зміна дати тягла б зайве читання у фоні.
   if(window.refreshHwDayIfOpen) window.refreshHwDayIfOpen();
-  if(window.refreshHwTabIfOpen) window.refreshHwTabIfOpen();
+  // Вкладку ДЗ родини тут більше не чіпаємо: у неї власна навігація
+  // тижнями, від дати не залежить — перемальовування було зайвим читанням.
   if(isTeacherRole(currentUserData.role)){updateSubjectList();loadTeacherDashboard();loadCurrentTopicAndHW();listenTeacherAttendance();}
   else if(currentUserData.role==='director'){loadDirectorDashboard();document.getElementById('d-detail-hw-class')&&(document.getElementById('d-detail-hw-class').value='');}
   else if(currentUserData.role==='kitchen'||currentUserData.role==='kitchen_admin'){/* кухня працює тижнями — має власну навігацію */}
@@ -2522,6 +2520,16 @@ window.handleDateChange=function(){
   else if(currentUserData.role==='student'){loadStudentDashboard();}
   else{loadParentDashboard();}
 };
+// Огляд школи (директор, адміністратор) — свій день, сфера 'school'
+onDatePick('school', () => {
+  const r = currentUserData && currentUserData.role;
+  if(r === 'director'){
+    // Розгорнуті зведення були за попередній день — згортаємо
+    ['d-hw-breakdown','d-com-breakdown','d-week-breakdown'].forEach(id => { const b = document.getElementById(id); if(b) b.style.display = 'none'; });
+    const dc = document.getElementById('d-detail-hw-class'); if(dc) dc.value = '';
+    loadDirectorDashboard();
+  }else if(r === 'administrator') loadAdminDashboard();
+});
 window.handleClassChange=function(){
   const ac=getActiveClass();if(!ac)return;
   // Запам'ятовуємо саме тут, а не в обробнику select: клас міняється і
@@ -2648,7 +2656,8 @@ export function expandAltSubjects(item){
 window.expandAltSubjects = expandAltSubjects;
 
 function updateSubjectList(){
-  const cls=getActiveClass();const dateStr=document.getElementById('global-date').value;
+  // День — вкладки «Урок» (сфера 'lesson', teacher.js), не поле в шапці
+  const cls=getActiveClass();const dateStr=(window.lessonDate&&window.lessonDate())||localDateString;
   const [y,m,d]=dateStr.split('-');const dv=new Date(y,m-1,d);const dn=dayKeys[dv.getDay()];
   const flat=window.getTodayLessonsFlattened(dn);
   const allSubjs=[...new Set(flat.flatMap(expandAltSubjects))];
@@ -2668,6 +2677,7 @@ function updateSubjectList(){
     sel.innerHTML=`<option value="" disabled>${msg}</option>`;
   }
 }
+window.updateSubjectList = updateSubjectList;
 
 // Предмети класу за ВЕСЬ тиждень, дозволені цьому вчителю.
 //
@@ -3186,10 +3196,14 @@ function applyNotificationContext(search){
     try{ localStorage.setItem('push_school_class', cls); }catch(e){}
     changed = 'class';
   }
-  const gd = document.getElementById('global-date');
-  if(date && /^\d{4}-\d{2}-\d{2}$/.test(date) && gd && gd.value !== date){
-    gd.value = date;
-    changed = changed || 'date';
+  // Родина: дата живе на екрані «Сьогодні» (date-pick.js), не в шапці
+  if(date && /^\d{4}-\d{2}-\d{2}$/.test(date) && isFamilyRole()){
+    if(pickedDate('day') !== date){ setPickedDate('day', date, {silent:true}); changed = changed || 'date'; }
+  }
+  // Персонал: сповіщення відкриває блок відміток (сфера 'att') і огляд
+  // школи (сфера 'school') на дні події
+  if(date && /^\d{4}-\d{2}-\d{2}$/.test(date) && !isFamilyRole()){
+    for(const sc of ['att','school']) if(pickedDate(sc) !== date){ setPickedDate(sc, date, {silent:true}); changed = changed || 'date'; }
   }
   if(changed === 'class' && window.handleClassChange) window.handleClassChange();
   else if(changed && window.handleDateChange) window.handleDateChange();
@@ -3281,7 +3295,8 @@ async function initUserSession(){
   // Приховуємо всі кабінети перед відкриттям потрібного — обов'язково для
   // switchRole(), інакше попередній кабінет залишиться на екрані поверх нового.
   document.querySelectorAll('.panel').forEach(p=>p.style.display='none');
-  document.getElementById('calendar-block').style.display='block';updateProfileBar();
+  // У шапці лишився тільки вибір класу вчителя — блок показує лише маршрут учителя
+  document.getElementById('calendar-block').style.display='none';updateProfileBar();
   // Ролі з конструктора — до маршруту: від них залежать підписи й кабінет
   await loadCustomRoles();
   hideBootSplash();
@@ -3295,14 +3310,16 @@ async function initUserSession(){
   // Адміністратор кухні — той самий екран кухні, але без фінансової частини
   // (ціни, суми, баланси). Клас k-no-money ховає ці блоки, kitchen.js не
   // рахує гроші, а правила бази не пускають роль до журналу списань.
-  else if(r==='kitchen'||r==='kitchen_admin'){const ks=document.getElementById('kitchen-screen');ks.style.display='block';ks.classList.toggle('k-no-money',r==='kitchen_admin');document.getElementById('teacher-class-selector-box').style.display='none';const gd=document.getElementById('global-date'),gl=document.getElementById('global-date-label');if(gd)gd.style.display='none';if(gl)gl.style.display='none';callWhenReady('refreshKitchen');}
+  else if(r==='kitchen'||r==='kitchen_admin'){const ks=document.getElementById('kitchen-screen');ks.style.display='block';ks.classList.toggle('k-no-money',r==='kitchen_admin');document.getElementById('teacher-class-selector-box').style.display='none';callWhenReady('refreshKitchen');}
   // Педагог-організатор — не вчитель: розклад, календар подій, оголошення.
   // Гілка стоїть до isTeacherRole і до загального else, який відкрив би
   // людині кабінет батьків.
-  else if(isCustomRole(r)){document.getElementById('organizer-screen').style.display='block';document.getElementById('teacher-class-selector-box').style.display='none';const gd=document.getElementById('global-date'),gl=document.getElementById('global-date-label');if(gd)gd.style.display='none';if(gl)gl.style.display='none';callWhenReady('initOrganizerScreen');callWhenReady('renderPushInvite', 600, ['o-push-invite']);}
+  else if(isCustomRole(r)){document.getElementById('organizer-screen').style.display='block';document.getElementById('teacher-class-selector-box').style.display='none';callWhenReady('initOrganizerScreen');callWhenReady('renderPushInvite', 600, ['o-push-invite']);}
   else if(r==='administrator'){document.getElementById('admin-screen').style.display='block';document.getElementById('teacher-class-selector-box').style.display='none';handleDateChange();}
   else if(isTeacherRole(r)){
     document.getElementById('teacher-screen').style.display='block';document.getElementById('teacher-class-selector-box').style.display='block';
+    // Шапка вчителя — лише клас; дні — у своїх місцях (date-pick.js)
+    document.getElementById('calendar-block').style.display='block';
     const isArt=r==='art_school_teacher';
     // Майстер-ролі показуємо матрицю розкладу — вона потрібна для налагодження
     document.getElementById('t-matrix-btn-wrapper').style.display=(isArt||isMasterTeacher(r))?'':'none';
@@ -3367,6 +3384,8 @@ async function initUserSession(){
     callWhenReady('openFromNotification', 500, ['teacher-screen']);
   }
   else if(r==='student'){
+    // Дата в родини — своя, на екрані «Сьогодні» (date-pick.js)
+    document.getElementById('calendar-block').style.display='none';
     callWhenReady('initTabs', 0, ['student-screen']);
     callWhenReady('renderPushInvite', 600, ['s-push-invite']);
     callWhenReady('openFromNotification', 500, ['student-screen']);
@@ -3378,6 +3397,8 @@ async function initUserSession(){
   }
   else{
     callWhenReady('initTabs', 0, ['parent-screen']);
+    // Дата в родини — своя, на екрані «Сьогодні» (date-pick.js)
+    document.getElementById('calendar-block').style.display='none';
     callWhenReady('renderPushInvite', 600, ['p-push-invite']);
     document.getElementById('parent-screen').style.display='block';
     
@@ -5653,7 +5674,7 @@ window.logoutUser=async function(){
   signOut(auth);
 };
 // ══════════ ADMIN DASHBOARD ══════════
-window.loadAdminDashboard=async function(){try{const date=document.getElementById('global-date').value;document.getElementById('a-att-header').innerText=`🚨 Відсутні (${date.split('-').reverse().slice(0,2).join('.')})`;const wd=getWeekDates(date);let wl=0,wa=0,hw=0,com=0;const _lo=wd[0]<date?wd[0]:date, _hi=wd[wd.length-1]>date?wd[wd.length-1]:date;const[_ad,_hd,_cd]=await Promise.all([getSchoolRange('attendance',_lo,_hi),getSchoolRange('homeworks',_lo,_hi),getSchoolRange('comments',_lo,_hi)]);const s={exists:()=>true,val:()=>_ad},hwS={exists:()=>true,val:()=>_hd},comS={exists:()=>true,val:()=>_cd};let h='';if(s.exists()){const d=s.val();for(let i=1;i<=11;i++){const c=`class_${i}`;if(d[c]&&d[c][date])for(let st in d[c][date]){const slots=d[c][date][st];for(let sk in slots){const r=slots[sk];if(r?.status){const bc=r.status==='late'?'badge-late':'badge-absent';const markerIcon=r.markedBy==='teacher'?'👨‍🏫':(r.markedBy==='student'?'🎒':(r.markedBy==='administrator'?'🛡️':'👪'));h+=`<li style="margin-bottom:9px;border-bottom:1px solid var(--line-soft);padding-bottom:4px;"><span style="font-size:.75rem;background:var(--brand-ink);color:var(--on-fill);padding:2px 5px;border-radius:4px;margin-right:4px;">${i} Кл</span> <b>${escHtml(stuName(c, st))}</b> <span class="badge ${bc}">${r.status==='late'?'Запізнення':'Відсутність'}</span> <span style="font-size:.75rem;color:var(--ink-3);">${escHtml(formatAttendanceSlotLabel(sk,r.status))} ${markerIcon}</span></li>`;}}}
+window.loadAdminDashboard=async function(){try{mountDatePicks();const date=pickedDate('school');document.getElementById('a-att-header').innerText=`🚨 Відсутні (${date.split('-').reverse().slice(0,2).join('.')})`;const wd=getWeekDates(date);let wl=0,wa=0,hw=0,com=0;const _lo=wd[0]<date?wd[0]:date, _hi=wd[wd.length-1]>date?wd[wd.length-1]:date;const[_ad,_hd,_cd]=await Promise.all([getSchoolRange('attendance',_lo,_hi),getSchoolRange('homeworks',_lo,_hi),getSchoolRange('comments',_lo,_hi)]);const s={exists:()=>true,val:()=>_ad},hwS={exists:()=>true,val:()=>_hd},comS={exists:()=>true,val:()=>_cd};let h='';if(s.exists()){const d=s.val();for(let i=1;i<=11;i++){const c=`class_${i}`;if(d[c]&&d[c][date])for(let st in d[c][date]){const slots=d[c][date][st];for(let sk in slots){const r=slots[sk];if(r?.status){const bc=r.status==='late'?'badge-late':'badge-absent';const markerIcon=r.markedBy==='teacher'?'👨‍🏫':(r.markedBy==='student'?'🎒':(r.markedBy==='administrator'?'🛡️':'👪'));h+=`<li style="margin-bottom:9px;border-bottom:1px solid var(--line-soft);padding-bottom:4px;"><span style="font-size:.75rem;background:var(--brand-ink);color:var(--on-fill);padding:2px 5px;border-radius:4px;margin-right:4px;">${i} Кл</span> <b>${escHtml(stuName(c, st))}</b> <span class="badge ${bc}">${r.status==='late'?'Запізнення':'Відсутність'}</span> <span style="font-size:.75rem;color:var(--ink-3);">${escHtml(formatAttendanceSlotLabel(sk,r.status))} ${markerIcon}</span></li>`;}}}
     // Week counters (same aggregation the director dashboard does)
     // Учень × день, а не кожен урок (див. countAttendanceDays)
     if(d[c]){const k=countAttendanceDays({[c]:d[c]},wd);wl+=k.late;wa+=k.absent;}
@@ -5691,7 +5712,9 @@ window.adminMarkAbsent=async function(){
   const st=document.getElementById('a-mark-student').value;
   const reason=document.getElementById('a-mark-reason').value;
   if(!cls||!st)return alert('Оберіть клас та учня!');
-  const date=document.getElementById('global-date').value;
+  // Той самий день, що й у списку над формою; не сьогодні — питаємо
+  const date=pickedDate('school');
+  if(window.confirmAttendanceDate&&!window.confirmAttendanceDate(date))return;
   const status=reason==='запізнення'?'late':'absent';
   await set(ref(db,`attendance/${cls}/${date}/${st}/all`),{status,reason,markedBy:'administrator',by:(currentUserData&&currentUserData.email)||'',ts:Date.now()});
   showToast(`✅ ${stuName(cls, st)}: ${status==='late'?'запізнення':'відсутність'} (${reason})`);

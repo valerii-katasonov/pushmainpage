@@ -25,6 +25,7 @@ import { db, getActiveClass, gradeTypesCache, gradeWritePaths, journalGradeKey, 
          escHtml, showToast, THEMATIC, dayKeys, mondayOf, localDateString } from './common.js';
 import { fillActionSubject, actionSubject } from './teacher.js';
 import { scheduledSubjectCount } from './journal.js';
+import { pickedDate } from './date-pick.js';
 
 export const MAX_SLOTS = 30;
 const DEFAULT_TYPES = ['СР', 'К', 'ДК', 'ПР', 'ПЗ', 'У', 'ДЗ', 'П'];
@@ -144,7 +145,8 @@ export async function openGroupGrades(subjHint){
   const o = overlay();
   const subj = await fillActionSubject('gg-subject', (typeof subjHint === 'string' && subjHint) || actionSubject('gg-subject'));
   if(!subj){ showToast('⚠️ Предметів класу не задано. Директор заповнює їх у «📗 Предмети класу й учителі»'); return; }
-  o.querySelector('#gg-date').value = document.getElementById('global-date')?.value || new Date().toISOString().slice(0, 10);
+  // День — той, що був у «Уроці» (сфера 'qj'); свіже відкриття — сьогодні
+  o.querySelector('#gg-date').value = pickedDate('qj');
   const codes = [...new Set([...(Object.keys(gradeTypesCache).length ? Object.keys(gradeTypesCache) : DEFAULT_TYPES).filter(c => c !== THEMATIC), THEMATIC])];
   const sel = o.querySelector('#gg-type');
   sel.innerHTML = codes.map(c => `<option value="${escHtml(c)}">${escHtml(typeLabel(c))}</option>`).join('');

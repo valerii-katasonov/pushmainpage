@@ -209,7 +209,7 @@ window.openConsultTeacher = async function(){
   const m = ensureTeacherModal();
   m.style.display = 'flex';
   const d = document.getElementById('kn-date');
-  if(!d.value) d.value = (document.getElementById('global-date') || {}).value || localDateString;
+  if(!d.value) d.value = localDateString;   // своя дата вікна, не поле в шапці
   const sel = document.getElementById('t-class-selector');
   const cur = getActiveClass();
   document.getElementById('kn-classes').innerHTML = (sel ? [...sel.options] : []).filter(o => o.value).map(o =>

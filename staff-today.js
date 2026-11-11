@@ -128,12 +128,10 @@ async function loadLessons(date){
 export async function renderTeacherNow(){
   const box = document.getElementById('t-now');
   if(!box || !window.renderNowCard) return;
-  const date = (document.getElementById('global-date') || {}).value;
-  if(date !== localDateString){ box.style.display = 'none'; box.innerHTML = ''; return; }
+  // «Зараз» — завжди сьогодні: від обраних деінде днів не залежить
+  const date = localDateString;
   let items = [];
   try{ items = await loadLessons(date); }catch(e){ items = []; }
-  // Поки читали, дату могли змінити
-  if((document.getElementById('global-date') || {}).value !== date) return;
   const now = new Date();
   window.renderNowCard('t', items, now.getHours() * 60 + now.getMinutes());
   // Уроків немає або вже скінчилися — спокійна картка з датою, а не порожнеча:

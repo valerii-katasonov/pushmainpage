@@ -9,6 +9,7 @@ import { ref, set, get, child, push, remove, update, onValue } from "https://www
 import { renderNewsFeed } from './news.js';
 import { db, auth, attendanceAuthor, canClearDayAbsence, clearDayAbsence, CLOUDINARY_URL, UPLOAD_PRESET, uploadToCloudinary, HW_FILE_EXT, HW_FILE_MAX_MB, fileExt, isImageUrl, isAudioUrl, cldImage, safeHttpUrl, getActiveClass, currentUserData, showToast, displayGrade, validDailyGrade, getClassNum, LEVEL_MAX_CLASS, LEVEL_LETTERS, renderHwItem, renderHwList, dayKeys, formatAttendanceSlotLabel, STICKER_GOAL, stickerGoal, escJs, escHtml, safeUrl, normalizeChildren, notifyEvent, logAction, renderBirthdays, teacherAccessMatrix, getUsersSnap, getStudentDir, stuName, gradeWritePaths, journalBaseDate, journalSlot, localDateString, isMasterTeacher, gradeTypesCache, subjKey, emailKey, subjectsForClassWeek, COMMENT_REACTS, commentReactLabel } from './common.js';
 import { sameSubj } from './access.js';
+import { pickedDate, setPickedDate, mountDatePicks, onDatePick } from './date-pick.js';
 import { populateTopicSelector, availableTopicsCache, planKey, loadAliases, isDoubleLesson, doubleLessonNumbers } from './curriculum.js';
 
 let currentHwImages=[];
@@ -181,8 +182,9 @@ window.handleSubjectChange=function(){
 };
 export function loadCurrentTopicAndHW(){
   const gen=++hwLoadGeneration;
+  mountDatePicks();   // смужка дня на вкладці «Урок»
   loadTextbooksForTeacher();
-  const date=document.getElementById('global-date').value;const subject=document.getElementById('t-subject').value;const cls=getActiveClass();
+  const date=lessonDate();const subject=document.getElementById('t-subject').value;const cls=getActiveClass();
   // Підручники прив'язані до пари «клас + предмет», тож після зміни класу
   // список теж застаріває
   if(document.getElementById('hw-textbook')) fillHwTextbooks();
@@ -208,7 +210,7 @@ export function loadCurrentTopicAndHW(){
   window.setHwTrainers?.('main',[]);
   /* Topic loading is now handled by populateTopicSelector() → loadSavedTopicForLesson() */
   get(ref(db,`homeworks/${cls}/${date}/${subject}`)).then(snap=>{
-    if(gen!==hwLoadGeneration||getActiveClass()!==cls||document.getElementById('global-date')?.value!==date||document.getElementById('t-subject')?.value!==subject)return;
+    if(gen!==hwLoadGeneration||getActiveClass()!==cls||lessonDate()!==date||document.getElementById('t-subject')?.value!==subject)return;
     if(!snap.exists())return;
     const val=snap.val();
     const hwEl=document.getElementById('t-hw');
@@ -472,12 +474,17 @@ window.generateHomeworkAI=async function(){
 // ⚡ Швидкий журнал має два режими: «Урок» (тут) і «Робота» (group-grades.js).
 // Відкривається завжди в «Уроці» — це те, що потрібно на уроці; «Робота» —
 // один дотик у перемикачі. subjHint — предмет із другого режиму.
-window.openQuickJournal=async function(subjHint){
+window.openQuickJournal=async function(subjHint, opts){
   const cls=getActiveClass();
+  // Свіже відкриття — на сьогодні. Перемикання предмета, дати чи режиму
+  // «Робота → Урок» день не скидає.
+  const qjm=document.getElementById('quick-journal-modal');
+  if(!(opts&&opts.keepDate) && !(qjm&&qjm.style.display==='flex')) setPickedDate('qj','',{silent:true});
+  mountDatePicks(qjm||undefined);
   const subj=await fillActionSubject('qj-subject', (typeof subjHint==='string'&&subjHint)||actionSubject('qj-subject'));
-  const date=document.getElementById('global-date').value;
+  const date=pickedDate('qj');
+  qjShown=date;
   if(!subj)return showToast('⚠️ Предметів класу не задано. Директор заповнює їх у «📗 Предмети класу й учителі»');
-  document.getElementById('qj-date').textContent=date.split('-').reverse().join('.');
   const box=document.getElementById('qj-body');
   box.innerHTML='<p class="empty-msg is-loading">Завантаження...</p>';
   document.getElementById('quick-journal-modal').style.display='flex';
@@ -580,6 +587,31 @@ export function quickJournalDirty(root=document){
   });
 }
 // Перемикач «Урок · Робота» в обох вікнах швидкого журналу
+// Вкладка «Урок» — свій день (сфера 'lesson'): предмети цього дня, тема, ДЗ.
+onDatePick('lesson', () => {
+  if(window.updateSubjectList) window.updateSubjectList();
+  loadCurrentTopicAndHW();
+});
+// «ДЗ на день» у Журналі — свій день (сфера 'hwday'). Незбережене — з питанням.
+let hwDayShown='';
+onDatePick('hwday', v => {
+  if(Object.values(hwDayState).some(x=>x&&x.dirty)
+     && !confirm('Є незбережені зміни в ДЗ — вони пропадуть. Перейти на інший день?')){
+    setPickedDate('hwday', hwDayShown, {silent:true}); return;
+  }
+  renderTeacherHwDay();
+});
+// Учитель гортає день у швидкому журналі — перечитуємо журнал на нього.
+// Незбережене не губимо мовчки: питаємо, а на «ні» повертаємо попередній день.
+let qjShown='';
+onDatePick('qj', () => {
+  const m=document.getElementById('quick-journal-modal');
+  if(!(m&&m.style.display==='flex')) return;
+  if(quickJournalDirty()&&!confirm('Є незбережені оцінки чи відмітки — вони пропадуть. Перейти на інший день?')){
+    setPickedDate('qj', qjShown, {silent:true}); return;
+  }
+  window.openQuickJournal(actionSubject('qj-subject'), {keepDate:true});
+});
 window.qjSwitch=function(mode){
   const qj=document.getElementById('quick-journal-modal');
   const inWork=!!(window.isGroupGradesOpen&&window.isGroupGradesOpen());
@@ -591,15 +623,18 @@ window.qjSwitch=function(mode){
     if(window.openGroupGrades) window.openGroupGrades(subj);
   }else{
     const subj=actionSubject('gg-subject');
+    // День із «Роботи» переносимо в «Урок» — учитель його вже обрав
+    const gd=document.querySelector('#gg-date');   // вікно створюється динамічно
+    if(gd&&gd.value) setPickedDate('qj', gd.value, {silent:true});
     if(window.closeGroupGrades) window.closeGroupGrades();
-    window.openQuickJournal(subj);
+    window.openQuickJournal(subj, {keepDate:true});
   }
 };
 window.saveQuickJournal=async function(){
   const cls=getActiveClass();
   // Саме той предмет, який видно у вікні, а не той, що лишився в журналі
   const subj=actionSubject('qj-subject');
-  const date=document.getElementById('global-date').value;
+  const date=pickedDate('qj');
   const ym=date.slice(0,7);
   const gtype=document.getElementById('qj-type').value;
   const slotKey=document.getElementById('qj-body').dataset.slot||'all';
@@ -776,13 +811,13 @@ window.openHwCopy=async function(){
   // Дата тут справді впливає на результат — копіюється ДЗ саме за цей день.
   // Тому вона має бути видна у вікні, а не лише в тексті підтвердження.
   const hd=document.getElementById('hw-copy-date');
-  if(hd)hd.textContent=(document.getElementById('global-date').value||'').split('-').reverse().join('.');
+  if(hd)hd.textContent=lessonDate().split('-').reverse().join('.');
   document.getElementById('hw-copy-modal').style.display='flex';
 };
 window.closeHwCopy=function(){document.getElementById('hw-copy-modal').style.display='none';};
 window.doHwCopy=async function(){
   const subject=actionSubject('hw-copy-subject');
-  const date=document.getElementById('global-date').value;
+  const date=lessonDate();
   const targets=Array.from(document.querySelectorAll('#hw-copy-classes input:checked')).map(i=>i.value);
   if(targets.length===0)return alert('Оберіть хоча б один клас.');
   const text=document.getElementById('t-hw').value.trim();
@@ -898,7 +933,7 @@ function lessonCtx(){
   const subject=document.getElementById('t-subject').value;
   if(!subject){ alert('Оберіть предмет!'); return null; }
   const cls=getActiveClass();
-  return { date:document.getElementById('global-date').value,
+  return { date:lessonDate(),
            subject, sk:subjKey(subject), pk:planKey(cls, subject), cls,
            uid:auth.currentUser.uid, sm:document.getElementById('status-msg') };
 }
@@ -1125,7 +1160,7 @@ window.saveHomework=function(){
 window.saveBehaviorGrade=async function(){
   const student=document.getElementById('t-behavior-student').value;
   const val=document.getElementById('t-behavior-grade').value.trim();
-  const date=document.getElementById('global-date').value;const cls=getActiveClass();
+  const date=pickedDate('stu');const cls=getActiveClass();
   const yMonth=date.substring(0,7);
   if(!student||!val){showToast("⚠️ Оберіть учня та введіть оцінку (1-6)!");return;}
   const n=parseInt(val);if(isNaN(n)||n<1||n>6){showToast("⚠️ Оцінка поведінки: від 1 до 6!");return;}
@@ -1533,10 +1568,20 @@ function daySlotPairs(dayName){
 //
 // mine=false у результаті означає «веде хтось інший»: класному керівнику
 // показуємо всі уроки, але позначаємо, які з них його власні.
-export function myLessonsForDay(cls){
+// СВОЇ ДАТИ МІСЦЬ (date-pick.js). Кожне вікно запису має власний день:
+//   'att' — блок відвідуваності; 'qj' — швидкий журнал; 'stu' — вікно учня.
+// Поле в шапці кабінету на них більше не впливає.
+export const attDate = () => pickedDate('att');
+// Дата уроку на вкладці «Урок» (тема, ДЗ, копіювання ДЗ). Поки що — поле в шапці.
+export const lessonDate = () => pickedDate('lesson');
+export const hwDayDate = () => pickedDate('hwday');
+window.lessonDate = lessonDate;
+window.attDate = attDate;
+
+export function myLessonsForDay(cls, dateArg){
   const role=currentUserData&&currentUserData.role;
   const seesAll=(role==='class_teacher'||isMasterTeacher(role));
-  const dateStr=document.getElementById('global-date').value;
+  const dateStr=dateArg||lessonDate();
   const [y,m,d]=String(dateStr||'').split('-');
   if(!y) return [];
   const dn=dayKeys[new Date(y,m-1,d).getDay()];
@@ -1587,16 +1632,16 @@ export function myLessonsForDay(cls){
 window.myLessonsForDay=myLessonsForDay;
 
 // Набір ключів уроків цього вчителя. null — обмежувати не треба.
-function myAttendanceSlots(cls){
+function myAttendanceSlots(cls, date=attDate()){
   const role=currentUserData&&currentUserData.role;
   if(role==='class_teacher'||isMasterTeacher(role))return null;
-  return new Set(myLessonsForDay(cls).filter(l=>l.mine).map(l=>l.key));
+  return new Set(myLessonsForDay(cls, date).filter(l=>l.mine).map(l=>l.key));
 }
 
 // Який з уроків іде просто зараз (або найближчий попереду). Час у розкладі
 // лежить рядком «08:00-08:45»; на інший день, ніж сьогодні, не гадаємо.
 function currentLessonKey(shown){
-  const dateStr=document.getElementById('global-date').value;
+  const dateStr=attDate();
   if(dateStr!==localDateString) return '';
   const now=new Date().getHours()*60+new Date().getMinutes();
   const parsed=shown.map(l=>{
@@ -1615,7 +1660,7 @@ function currentLessonKey(shown){
 function buildMarkAbsentLessonOptions(){
   const sel=document.getElementById('t-mark-absent-lesson');
   if(!sel)return;
-  const dateStr=document.getElementById('global-date').value;
+  const dateStr=attDate();
   const [y,m,d]=dateStr.split('-');const dv=new Date(y,m-1,d);const dn=dayKeys[dv.getDay()];
   const flat=window.getTodayLessonsFlattened(dn);
   const mine=myAttendanceSlots(getActiveClass());
@@ -1676,7 +1721,7 @@ window.teacherMarkAbsent=function(){
   const st=document.getElementById('t-mark-absent-student').value;
   const rs=document.getElementById('t-mark-absent-reason').value;
   const slotKey=document.getElementById('t-mark-absent-lesson')?.value||'all';
-  const date=document.getElementById('global-date').value;
+  const date=attDate();
   if(!st)return alert('Оберіть учня!');
   if(!confirmAttendanceDate(date))return;
   const status=rs==='запізнення'?'late':'absent';
@@ -1812,14 +1857,10 @@ window.linkParent=async function(){
 // Дата в блоці відвідуваності й дата вгорі сторінки — одна й та сама.
 // Порожнє значення означає «поверни на сьогодні»: так кнопка повернення
 // не мусить знати, яка сьогодні дата.
+// Тепер це власна дата блоку (сфера 'att'), поле в шапці її не змінює.
 window.setAttDate = function(value){
   const want = value || localDateString;
-  const top = document.getElementById('global-date');
-  if(top && top.value !== want){
-    top.value = want;
-    if(window.handleDateChange) window.handleDateChange();
-    return;                     // handleDateChange перемалює блок і поле
-  }
+  setPickedDate('att', want, {silent:true});
   const el = document.getElementById('t-att-date');
   if(el) el.value = want;
   if(window.listenTeacherAttendance) window.listenTeacherAttendance();
@@ -1831,17 +1872,17 @@ export function confirmAttendanceDate(date, today = localDateString){
   if(!date || date === today) return true;
   const human = String(date).split('-').reverse().join('.');
   if(date > today)
-    return confirm(`Дата вгорі сторінки — ${human}, це МАЙБУТНІЙ день, а не сьогодні.\n\n`
+    return confirm(`Обрана дата — ${human}, це МАЙБУТНІЙ день, а не сьогодні.\n\n`
       + 'Відмітка за нього виглядатиме як справжня: батькам піде сповіщення, '
       + 'а кухня зніме харчування на той день.\n\nВсе одно відмітити на ' + human + '?');
-  return confirm(`Дата вгорі сторінки — ${human}, а не сьогодні.\n\nВідмітити за ${human}?`);
+  return confirm(`Обрана дата — ${human}, а не сьогодні.\n\nВідмітити за ${human}?`);
 }
 window.confirmAttendanceDate = confirmAttendanceDate;
 
 function setAttHeader(limited){
   const h=document.getElementById('t-att-header');
   const hint=document.getElementById('t-att-hint');
-  const d=document.getElementById('global-date').value;
+  const d=attDate();
   const human=d?d.split('-').reverse().join('.'):'';
   const isToday=d===localDateString;   // це рядок дати, а не функція
   if(h)h.innerText=`🚨 Відвідуваність ${limited?'на ваших уроках':'класу'} — `
@@ -1889,7 +1930,7 @@ function setAttHeader(limited){
 let attGen = 0;
 export async function listenTeacherAttendance(){
   const gen = ++attGen;
-  const date=document.getElementById('global-date').value;const list=document.getElementById('t-attendance-list');
+  const date=attDate();const list=document.getElementById('t-attendance-list');
   if(teacherAttendanceListener){teacherAttendanceListener();teacherAttendanceListener=null;}
   // Заміни читаємо ДО побудови списків: без них учитель, поставлений на
   // заміну, не побачив би уроку, який сьогодні веде саме він.
@@ -1976,7 +2017,7 @@ export function loadTeacherDashboard(){
     document.getElementById('t-karma-counter').innerText=cnt;
   });
   if(currentUserData.role!=='art_school_teacher'){
-    const date=document.getElementById('global-date').value;
+    const date=localDateString;   // блок так і підписаний: «ДЗ класу сьогодні»
     renderHwList(cls,date,'t-daily-hw-list');
     loadDailyHomeworkSubmissions(cls,date);
   }
@@ -2051,7 +2092,7 @@ window.giveStickerToStudent=async function(){
   // на вкладці «Урок»: це різні екрани, і людина не бачить того селектора.
   const subj=actionSubject('t-sticker-subject');
   const reason=document.getElementById('t-sticker-other')?.value||'';
-  const date=document.getElementById('global-date').value;const cls=getActiveClass();
+  const date=pickedDate('stu');const cls=getActiveClass();
   if(!st){showToast('⚠️ Оберіть учня');return;}
   const countEl=document.getElementById('t-sticker-count');
   const btn=document.getElementById('btn-give-sticker');
@@ -2092,7 +2133,7 @@ window.saveComment=async function(){
   const st=document.getElementById('t-student').value;
   const subj=document.getElementById('t-subject-for-comment').value;
   const area=document.getElementById('t-comment');
-  const cm=area.value.trim(),date=document.getElementById('global-date').value,cls=getActiveClass();
+  const cm=area.value.trim(),date=pickedDate('stu'),cls=getActiveClass();
   if(!st||!subj){showToast('⚠️ Оберіть учня та предмет!');return;}
   if(!cm){showToast('⚠️ Введіть коментар!');return;}
   const btn=document.getElementById('btn-save-comment');
@@ -2129,7 +2170,7 @@ window.saveComment=async function(){
   logAction('comment',{cls,target:stuName(cls,st),subject:subj,date});
 };
 // ══════════ EXAMS ══════════
-window.openExamsCalendar=function(){document.getElementById('exams-modal').style.display='flex';document.getElementById('exam-class-label').innerText=document.getElementById('t-class-selector').options[document.getElementById('t-class-selector').selectedIndex].text;document.getElementById('exams-day-details').style.display='none';const mi=document.getElementById('exam-month-select');const dp=document.getElementById('global-date').value.split('-');mi.value=`${dp[0]}-${dp[1]}`;renderExamsCalendar();};
+window.openExamsCalendar=function(){document.getElementById('exams-modal').style.display='flex';document.getElementById('exam-class-label').innerText=document.getElementById('t-class-selector').options[document.getElementById('t-class-selector').selectedIndex].text;document.getElementById('exams-day-details').style.display='none';const mi=document.getElementById('exam-month-select');const dp=localDateString.split('-');mi.value=`${dp[0]}-${dp[1]}`;renderExamsCalendar();};
 window.closeExamsModal=function(){document.getElementById('exams-modal').style.display='none';};
 window.renderExamsCalendar=function(){const cls=getActiveClass();const ym=document.getElementById('exam-month-select').value;if(!ym)return;const[y,m]=ym.split('-');get(child(ref(db),`exams/${cls}/${y}-${m}`)).then(snap=>{const d=snap.exists()?snap.val():{};let h='<div class="cal-grid">';['Пн','Вт','Ср','Чт','Пт','Сб','Нд'].forEach(d2=>h+=`<div class="cal-header">${d2}</div>`);const dim=new Date(y,parseInt(m),0).getDate();let fd=new Date(y,parseInt(m)-1,1).getDay();if(fd===0)fd=7;for(let i=1;i<fd;i++)h+=`<div></div>`;for(let i=1;i<=dim;i++){const cd=`${y}-${m}-${String(i).padStart(2,'0')}`;const cnt=d[cd]?Object.keys(d[cd]).length:0;const cc=cnt===1?'has-1':cnt>=2?'has-2':'';h+=`<div class="cal-day ${cc}" role="button" tabindex="0" aria-label="Контрольні ${i}.${m}.${y}: ${cnt}" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" onclick="manageDayExams('${cd}')">${i}<br><small style="font-size:.75rem;">${cnt>0?cnt+' к.р.':''}</small></div>`;}h+='</div>';document.getElementById('exams-cal-container').innerHTML=h;});};
 window.manageDayExams=function(ds){const cls=getActiveClass();const dd=document.getElementById('exams-day-details');dd.style.display='block';get(child(ref(db),`exams/${cls}/${ds.substring(0,7)}/${ds}`)).then(snap=>{let ex=snap.exists()?snap.val():{};let lh='';for(let s in ex){const me=ex[s]===auth.currentUser.uid;const db2=me?`<button aria-label="Видалити контрольну з ${escHtml(s)}" onclick="deleteExam('${ds}','${escJs(s)}')" style="background:none;border:none;color:var(--danger);cursor:pointer;font-weight:700;padding:0 4px;width:auto;margin:0;font-size:1.1rem;">✖</button>`:'';lh+=`<li style="margin-bottom:7px;display:flex;justify-content:space-between;align-items:center;background:var(--surface);padding:7px 11px;border-radius:8px;border:1px solid var(--line-soft);"><span><b>${escHtml(s)}</b></span>${db2}</li>`;}let h=`<h4 style="margin-top:0;color:var(--warn);border-bottom:1px dashed var(--warn);padding-bottom:9px;">Контрольні: ${ds.split('-').reverse().join('.')}</h4>`;h+=`<ul style="padding-left:0;list-style:none;margin-bottom:13px;">${lh||'<li class="empty-msg">Жодної</li>'}</ul>`;const[yy,mm,dd2]=ds.split('-');const dn=dayKeys[new Date(yy,mm-1,dd2).getDay()];let ds2=new Set();window.getTodayLessonsFlattened(dn).forEach(item=>{const sn=window.getValidSubjectName(item);if(sn)ds2.add(sn);});let fe=currentUserData.role==='teacher'?[...ds2].filter(s=>window.isSubjectAllowed(cls,s)).sort():[...ds2].sort();let so=fe.map(s=>`<option value="${escHtml(s)}">${escHtml(s)}</option>`).join('');if(!so){so='<option disabled>Немає предметів</option>';}h+=`<div style="display:flex;gap:9px;"><select id="exam-add-subj" style="flex:1;margin:0;">${so}</select><button style="background:var(--ok);color:var(--on-fill);width:auto;padding:9px 13px;margin:0;" onclick="addExam('${ds}')">Додати</button></div>`;dd.innerHTML=h;});};
@@ -2448,7 +2489,9 @@ export async function renderTeacherHwDay(){
   const box=document.getElementById('t-hw-day');
   if(!box) return;
   const cls=getActiveClass();
-  const date=document.getElementById('global-date').value;
+  mountDatePicks(box.parentElement||undefined);
+  const date=hwDayDate();
+  hwDayShown=date;
   if(!cls||!date){ box.innerHTML='<p class="empty-msg">Оберіть клас і дату.</p>'; return; }
   box.innerHTML='<p class="empty-msg is-loading">Завантаження...</p>';
 
@@ -2465,7 +2508,7 @@ export async function renderTeacherHwDay(){
     // розумів, чому зникає введене. Тому зводимо в один рядок і показуємо
     // обидва номери уроків.
     const byName=new Map();
-    myLessonsForDay(cls).filter(l=>l.mine).forEach(l=>{
+    myLessonsForDay(cls, date).filter(l=>l.mine).forEach(l=>{   // уроки дня «ДЗ на день», не вкладки «Урок»
       const prev=byName.get(l.subject);
       if(prev){ prev.numbers.push(l.number); prev.viaSub=prev.viaSub||l.viaSub; }
       else byName.set(l.subject, {...l, numbers:[l.number]});
@@ -2559,7 +2602,7 @@ export async function renderTeacherHwDay(){
     // Без очікування: рядки вже на екрані, число дописується, коли прийде.
     Promise.all([get(child(ref(db),`hw_done/${cls}/${date}`)).catch(()=>null),getStudentDir(cls).catch(()=>null)]).then(([ds,dir])=>{
       // Поки читали, учитель перейшов на інший день чи клас — числа чужі
-      if((document.getElementById('global-date')||{}).value!==date||getActiveClass()!==cls)return;
+      if(hwDayDate()!==date||getActiveClass()!==cls)return;
       const v=ds&&ds.exists()?(ds.val()||{}):{}, total=dir?Object.keys(dir.byId||{}).length:0;
       lessons.forEach((l,i)=>{
         const el=document.getElementById(`hwd-${i}-donecnt`);
@@ -2654,7 +2697,7 @@ window.hwdSave=function(id){
   if(!row) return;
   const subject=row.dataset.subject;
   const cls=getActiveClass();
-  const date=document.getElementById('global-date').value;
+  const date=hwDayDate();
   const text=(document.getElementById(id+'-text')?.value||'').trim();
   const pages=(document.getElementById(id+'-pages')?.value||'').trim();
   const sel=document.getElementById(id+'-book');

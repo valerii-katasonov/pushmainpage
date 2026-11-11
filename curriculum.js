@@ -1193,7 +1193,7 @@ function applyTopicToSlot(slot,entry){
 async function loadSavedTopicForLesson(){
   const cls=getActiveClass();
   const subj=document.getElementById('t-subject')?document.getElementById('t-subject').value:'';
-  const date=document.getElementById('global-date').value;
+  const date=(window.lessonDate&&window.lessonDate())||localDateString;
   if(!subj)return;
   const sk=subjKey(subj);
   const snap=await get(ref(db,`lesson_topics/${cls}/${sk}/${date}`));

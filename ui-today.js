@@ -236,6 +236,17 @@ document.addEventListener('keydown', e => { if(e.key === 'Escape' && document.qu
 // Запізнення / відсутність: та сама форма, лише відкривається шторкою.
 // prefix 'p' — батьки (про дитину), 's' — учень (про себе).
 window.openAttSheet = function(type, prefix = 'p'){
+  // Дата форми: та, що на екрані, але не раніше сьогодні (про минуле
+  // не повідомляють). Найпізніше — за місяць.
+  const dIn = document.getElementById(`${prefix}-att-date`);
+  if(dIn){
+    const d = new Date(), p2 = n => String(n).padStart(2, '0');
+    const iso = x => `${x.getFullYear()}-${p2(x.getMonth() + 1)}-${p2(x.getDate())}`;
+    const today = iso(d); d.setDate(d.getDate() + 31);
+    const seen = (window.pickedDate && window.pickedDate('day')) || today;
+    dIn.min = today; dIn.max = iso(d);
+    dIn.value = seen > dIn.max ? dIn.max : (seen > today ? seen : today);
+  }
   const t = document.getElementById(`${prefix}-att-type`);
   if(t){ t.value = type === 'absent' ? 'absent' : 'late'; if(window.fillAttReasons) window.fillAttReasons(prefix); }
   const h = document.getElementById(`${prefix}-att-sheet-title`);
