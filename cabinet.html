@@ -4126,6 +4126,13 @@ html.season-winter .ui-bnav-i[aria-current="page"] .ui-bnav-ic::after{content:"�
   html.season-winter #profile-bar::before,html.season-winter #profile-bar::after{animation:none;}
 }
 @media print{ #season-snow,.season-hi{display:none !important;} }
+/* Поки відкрите будь-яке вікно, сніг і гірлянда завмирають. Під
+   напівпрозорим тлом вікна з розмиттям (backdrop-filter) рухомий сніг
+   змушував браузер щокадру перемальовувати розмиття — на телефонах це
+   виглядало як мерехтіння за вікном (11.11.2026, вікно учня). */
+body:has(.modal-overlay[style*="flex"]) #season-snow{display:none !important;}
+body:has(.modal-overlay[style*="flex"]) #profile-bar::before,
+body:has(.modal-overlay[style*="flex"]) #profile-bar::after{animation:none !important;}
 
 /* ── Учитель: «Потребує уваги» й перенесені кнопки (11.11.2026) ── */
 .t-attn .st-tiles{margin-bottom:0;}
@@ -6494,7 +6501,7 @@ html.season-winter .ui-bnav-i[aria-current="page"] .ui-bnav-ic::after{content:"�
       <div id="t-comment-card" class="ls-card">
         <div class="ls-step"><b class="ls-ib">💬</b><div><h4>Коментар учню</h4>
           <p>Батьки отримають сповіщення й побачать коментар під предметом; можуть відповісти реакцією.
-            <a href="#" class="ls-link" onclick="event.preventDefault();openCommentsView()">Усі коментарі →</a></p></div></div>
+            <a href="#" class="ls-link" onclick="event.preventDefault();tsOpenComments()">Усі коментарі учня →</a></p></div></div>
         <div class="ls-grid2">
           <label class="ls-fld ts-stu-fld">Учень<select id="t-student"><option value="">Учень...</option></select></label>
           <label class="ls-fld">Предмет<select id="t-subject-for-comment"></select></label>
@@ -6516,7 +6523,7 @@ html.season-winter .ui-bnav-i[aria-current="page"] .ui-bnav-ic::after{content:"�
       <div class="ls-card ls-sticker">
         <div class="ls-step"><b class="ls-ib">🌟</b><div><h4>Наліпка</h4>
           <p>Заохочення: наліпки збираються до нагороди, батьки бачать їх у кабінеті дитини.
-            <a href="#" class="ls-link" onclick="event.preventDefault();openStickerStatsModal()">Статистика наліпок →</a></p></div></div>
+            <a href="#" class="ls-link" onclick="event.preventDefault();closeStudentSheet();openStickerStatsModal()">Статистика наліпок →</a></p></div></div>
         <div class="ls-grid3">
           <label class="ls-fld ts-stu-fld">Учень<select id="t-sticker-student"></select></label>
           <label class="ls-fld">Предмет<select id="t-sticker-subject" onchange="toggleStickerOther()"></select></label>

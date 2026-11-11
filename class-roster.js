@@ -82,6 +82,13 @@ window.openStudentSheet = function(sid, which){
   window.tsTab(which || tab);
 };
 window.closeStudentSheet = function(){ const m = document.getElementById('t-stu-sheet'); if(m) m.style.display = 'none'; };
+// «Усі коментарі учня» — вікно коментарів, відфільтроване на цього учня.
+// Вікно учня спершу закриваємо: інакше коментарі відкривалися ПІД ним.
+window.tsOpenComments = function(){
+  const cls = getActiveClass();
+  window.closeStudentSheet();
+  if(window.openCommentsView) window.openCommentsView({ cls, sid: cur.sid });
+};
 window.tsOpen360 = function(){
   const cls = getActiveClass();
   if(!cur.sid || !cls || !window.openStudent360) return;
