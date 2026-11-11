@@ -657,6 +657,25 @@ export function stickerGoal(cls){
   return (Number.isFinite(v) && v > 0) ? v : STICKER_GOAL;
 }
 window.stickerGoal = stickerGoal;
+// СТРІЧКИ-АЧИВКИ. Кожні goal наліпок — одна зібрана стрічка, і відлік
+// починається заново: 30 із 30 — це «🎗️ 1 · 0/30 до 2-ї», а не вічні
+// 100% на смужці. Рахуємо з загальної кількості, нічого окремо не
+// зберігаючи: наліпку скасували — стрічка так само чесно «розпалася».
+// Якщо класний керівник змінить мету, стрічки перерахуються за новою.
+export function ribbonState(cnt, goal){
+  const g = goal > 0 ? goal : STICKER_GOAL;
+  const n = Math.max(0, Math.floor(Number(cnt) || 0));
+  const rem = n % g;
+  return { ribbons: Math.floor(n / g), rem, goal: g, pct: rem / g * 100, total: n };
+}
+// 🎗️🎗️🎗️ — до п'яти штук значками, далі «🎗️ ×7», щоб не розлазилося
+export function ribbonsHtml(k){
+  if(!k) return '';
+  const icons = k <= 5 ? '🎗️'.repeat(k) : `🎗️ ×${k}`;
+  return `<span class="rb-badges" title="Зібрано стрічок: ${k}" aria-label="Зібрано стрічок: ${k}">${icons}</span>`;
+}
+window.ribbonState = ribbonState;
+window.ribbonsHtml = ribbonsHtml;
 // Читають усі: батькам і учням треба показати ту саму мету, що й учителю
 //
 // ПІДПИСКУ ТРЕБА ВМІТИ ЗНІМАТИ. Функція викликається з initUserSession, а

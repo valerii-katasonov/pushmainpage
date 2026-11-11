@@ -3430,6 +3430,10 @@
 .ui-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;}
 .ui-row .ui-btn-2{flex:1;}
 /* Своя дата місця (date-pick.js): ‹ Сьогодні › */
+.rb-row{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:6px 8px;margin:0 0 10px;}
+.rb-badges{font-size:1.5rem;letter-spacing:2px;line-height:1;}
+.rb-cap{font-size:.85rem;font-weight:800;color:var(--warn);}
+.sg-rb{font-size:.95rem;margin-left:4px;}
 .dp-bar{display:flex;align-items:center;gap:6px;margin:0 0 12px;}
 .dp-bar>button,.dp-bar>label{width:auto;margin:0;box-shadow:none;min-width:0;white-space:nowrap;}
 .dp-bar>.dp-mid{flex:1 1 auto;}
@@ -6215,6 +6219,7 @@ body:has(.modal-overlay[style*="flex"]) #profile-bar::after{animation:none !impo
         </div>
       <div class="ui-card ui-center">
         <h4 class="ui-card-h">Наліпки</h4>
+        <div id="p-ribbons" class="rb-row" hidden></div>
         <div class="progress-bar-container"><div id="p-ribbon-progress" class="progress-bar"></div></div>
         <p id="p-ribbon-count" style="font-size:1.1rem;font-weight:700;color:var(--warn);margin:13px 0 4px 0;">Завантаження...</p>
         <p id="p-ribbon-msg" style="color:var(--ok);font-weight:800;margin:0;font-size:.95rem;"></p>
@@ -6444,8 +6449,10 @@ body:has(.modal-overlay[style*="flex"]) #profile-bar::after{animation:none !impo
       </div>
       <div class="ui-card ui-center">
         <h4 class="ui-card-h">Мої наліпки</h4>
+        <div id="s-ribbons" class="rb-row" hidden></div>
         <div class="progress-bar-container"><div id="s-ribbon-progress" class="progress-bar"></div></div>
         <p id="s-ribbon-count" style="font-size:1.1rem;font-weight:700;color:var(--warn);margin:13px 0 4px 0;">Завантаження...</p>
+        <p id="s-ribbon-msg" style="color:var(--ok);font-weight:800;margin:0;font-size:.95rem;"></p>
         <div style="margin-top:10px;">
           <button type="button" class="ui-btn ui-btn-2" onclick="openStickerStatsModal()">🌟 Статистика наліпок</button>
         </div>

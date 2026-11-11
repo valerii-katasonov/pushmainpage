@@ -5,7 +5,7 @@
 // lives in teacher.js).
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, remove, update } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
-import { db, getActiveClass, currentUserData, getClassNum, LEVEL_MAX_CLASS, STICKER_GOAL, stickerGoal, getWeekDates, displayGrade, gradeClass6, showToast, renderHwItem, renderHwList, dayKeys, dayNamesUA, isBreakItem, parseTimeRange, fmtTimeRange, localDateString, formatAttendanceSlotLabel, renderGradeFormulaInfo, escJs, escHtml, safeUrl, renderBirthdays, stuName, stuId, auth, normalizeChildren, gradesFromMirror, mondayOf, altChoiceFor, resolveAlt, classHourItem, insertAtTime, minsOf, subjKey, planKeyWith, notifyEvent, getStudentDir, resolveStudentKey } from './common.js';
+import { db, getActiveClass, currentUserData, getClassNum, LEVEL_MAX_CLASS, STICKER_GOAL, stickerGoal, ribbonState, ribbonsHtml, getWeekDates, displayGrade, gradeClass6, showToast, renderHwItem, renderHwList, dayKeys, dayNamesUA, isBreakItem, parseTimeRange, fmtTimeRange, localDateString, formatAttendanceSlotLabel, renderGradeFormulaInfo, escJs, escHtml, safeUrl, renderBirthdays, stuName, stuId, auth, normalizeChildren, gradesFromMirror, mondayOf, altChoiceFor, resolveAlt, classHourItem, insertAtTime, minsOf, subjKey, planKeyWith, notifyEvent, getStudentDir, resolveStudentKey } from './common.js';
 import { ACTIVE_YEAR } from './director.js';
 import { offDaysMap, addDays, offTitle, ddmm } from './offdays.js';
 import { pickedDate, setPickedDate, onDatePick, mountDatePicks } from './date-pick.js';
@@ -37,6 +37,35 @@ export function stickerEntries(data){
   }
   return merged.sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5);
 }
+// Стрічка наліпок у кабінеті родини й учня: зібрані стрічки значками,
+// смужка — лише поточна, і святкуємо НОВУ стрічку один раз (на цьому
+// пристрої), а не щоразу при відкритті кабінету, як було з «Ура!».
+export function paintRibbon(prefix, cls, who, cnt, goal){
+  const st = ribbonState(cnt, goal);
+  const rb = document.getElementById(`${prefix}-ribbons`);
+  if(rb){
+    rb.hidden = !st.ribbons;
+    rb.innerHTML = st.ribbons ? `${ribbonsHtml(st.ribbons)} <span class="rb-cap">Зібрано стрічок: ${st.ribbons}</span>` : '';
+  }
+  const progEl = document.getElementById(`${prefix}-ribbon-progress`);
+  if(progEl) progEl.style.width = st.pct + '%';
+  const countEl = document.getElementById(`${prefix}-ribbon-count`);
+  if(countEl) countEl.textContent = `${st.rem} / ${st.goal} до ${st.ribbons + 1}-ї стрічки`;
+  const me = document.getElementById(`${prefix}-ribbon-msg`);
+  const key = `push_rb_${cls}_${who}`;
+  let seen = null;
+  try{ const v = localStorage.getItem(key); seen = v === null ? null : parseInt(v, 10) || 0; }catch(e){}
+  const fresh = st.ribbons > (seen || 0);
+  if(me){
+    me.textContent = fresh
+      ? (st.ribbons === 1 ? '🎉 Першу стрічку зібрано! Відлік почався заново.' : `🎉 Нова стрічка! Уже ${st.ribbons}. Відлік почався заново.`)
+      : (st.ribbons && st.rem === 0 ? '🎗️ Стрічку зібрано — збираємо наступну!' : '');
+  }
+  if(fresh && typeof confetti === 'function') confetti({ particleCount: 150, spread: 80, origin: { y: 0.5 } });
+  try{ localStorage.setItem(key, String(st.ribbons)); }catch(e){}
+  return st;
+}
+
 export function renderStickerHistory(data){
   const rows=stickerEntries(data);if(!rows.length)return '';
   return `<div style="font-size:.76rem;color:var(--warn);"><b>Останні наліпки</b>${rows.map(x=>`<div style="padding:7px 0;border-bottom:1px solid var(--warn-line);"><span style="color:var(--warn);">${escHtml(x.date.split('-').reverse().join('.'))}</span> · <b>${escHtml(x.subject)}</b>${x.count>1?` <b>×${x.count}</b>`:''}${x.reason?`<br><span>${escHtml(x.reason)}</span>`:''}</div>`).join('')}</div>`;
@@ -917,22 +946,9 @@ export function loadParentDashboard(){
       }
 
       const cnt = Object.keys(data).length;
-      const pct = Math.min((cnt / goal) * 100, 100);
-      const progEl = document.getElementById('p-ribbon-progress');
-      if (progEl) progEl.style.width = pct + '%';
       const history = document.getElementById('p-sticker-history');
       if (history) history.innerHTML = renderStickerHistory(data);
-      const countEl = document.getElementById('p-ribbon-count');
-      if (countEl) countEl.innerText = `${cnt} / ${goal} наліпок до призу`;
-      const me = document.getElementById('p-ribbon-msg');
-      if (me) {
-        if (cnt >= goal) {
-          me.innerText = "🎉 Ура! Ти досяг мети!";
-          if (typeof confetti === 'function') confetti({ particleCount: 150, spread: 80, origin: { y: 0.5 } });
-        } else {
-          me.innerText = '';
-        }
-      }
+      paintRibbon('p', cls, sId || resolvedSid || sName, cnt, goal);
     } catch(e) {
       console.warn('loadParentStickers:', e.message);
       const countEl = document.getElementById('p-ribbon-count');
@@ -1369,13 +1385,9 @@ export function loadStudentDashboard(){
       }
 
       const cnt = Object.keys(data).length;
-      const pct = Math.min((cnt / goal) * 100, 100);
-      const progEl = document.getElementById('s-ribbon-progress');
-      if (progEl) progEl.style.width = pct + '%';
       const history = document.getElementById('s-sticker-history');
       if (history) history.innerHTML = renderStickerHistory(data);
-      const countEl = document.getElementById('s-ribbon-count');
-      if (countEl) countEl.innerText = `${cnt} / ${goal} наліпок до призу`;
+      paintRibbon('s', cls, sId || resolvedSid || sName, cnt, goal);
     } catch(e) {
       console.warn('loadStudentStickers:', e.message);
     }

@@ -7,7 +7,7 @@
 // ═══════════════════════════════════════════════════════════════
 import { ref, set, get, child, push, remove, update, onValue } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { renderNewsFeed } from './news.js';
-import { db, auth, attendanceAuthor, canClearDayAbsence, clearDayAbsence, CLOUDINARY_URL, UPLOAD_PRESET, uploadToCloudinary, HW_FILE_EXT, HW_FILE_MAX_MB, fileExt, isImageUrl, isAudioUrl, cldImage, safeHttpUrl, getActiveClass, currentUserData, showToast, displayGrade, validDailyGrade, getClassNum, LEVEL_MAX_CLASS, LEVEL_LETTERS, renderHwItem, renderHwList, dayKeys, formatAttendanceSlotLabel, STICKER_GOAL, stickerGoal, escJs, escHtml, safeUrl, normalizeChildren, notifyEvent, logAction, renderBirthdays, teacherAccessMatrix, getUsersSnap, getStudentDir, stuName, gradeWritePaths, journalBaseDate, journalSlot, localDateString, isMasterTeacher, gradeTypesCache, subjKey, emailKey, subjectsForClassWeek, COMMENT_REACTS, commentReactLabel } from './common.js';
+import { db, auth, attendanceAuthor, canClearDayAbsence, clearDayAbsence, CLOUDINARY_URL, UPLOAD_PRESET, uploadToCloudinary, HW_FILE_EXT, HW_FILE_MAX_MB, fileExt, isImageUrl, isAudioUrl, cldImage, safeHttpUrl, getActiveClass, currentUserData, showToast, displayGrade, validDailyGrade, getClassNum, LEVEL_MAX_CLASS, LEVEL_LETTERS, renderHwItem, renderHwList, dayKeys, formatAttendanceSlotLabel, STICKER_GOAL, stickerGoal, ribbonState, ribbonsHtml, escJs, escHtml, safeUrl, normalizeChildren, notifyEvent, logAction, renderBirthdays, teacherAccessMatrix, getUsersSnap, getStudentDir, stuName, gradeWritePaths, journalBaseDate, journalSlot, localDateString, isMasterTeacher, gradeTypesCache, subjKey, emailKey, subjectsForClassWeek, COMMENT_REACTS, commentReactLabel } from './common.js';
 import { sameSubj } from './access.js';
 import { pickedDate, setPickedDate, mountDatePicks, onDatePick } from './date-pick.js';
 import { populateTopicSelector, availableTopicsCache, planKey, loadAliases, isDoubleLesson, doubleLessonNumbers } from './curriculum.js';
@@ -2085,6 +2085,26 @@ export function stickerWord(n){
   return 'наліпок';
 }
 let stickerSaving=false;
+// Хтось щойно добрав стрічку — кажемо вчителю окремим тостом, щоб приз
+// не пройшов повз. added: {sid: скільки щойно видали}. Читаємо клас один
+// раз ПІСЛЯ запису; наліпки під старим ключем-імʼям теж рахуємо.
+export async function ribbonToasts(cls, added){
+  try{
+    const snap=await get(child(ref(db),`stickers/${cls}`));
+    const all=snap.exists()?snap.val():{};
+    const goal=stickerGoal(cls);
+    const done=[];
+    for(const [sid,n] of Object.entries(added)){
+      if(!n) continue;
+      const nm=stuName(cls,sid);
+      const keys=new Set([...Object.keys(all[sid]||{}),...(nm&&nm!==sid?Object.keys(all[nm]||{}):[])]);
+      const after=ribbonState(keys.size,goal).ribbons, before=ribbonState(keys.size-n,goal).ribbons;
+      if(after>before) done.push(`${nm} — ${after}-а`);
+    }
+    if(done.length) setTimeout(()=>showToast(`🎗️ Зібрано стрічку: ${done.join(', ')}!`),1200);
+  }catch(e){ /* тост — приємність, не обовʼязок */ }
+}
+window.ribbonToasts=ribbonToasts;
 window.giveStickerToStudent=async function(){
   if(stickerSaving)return;
   const st=document.getElementById('t-sticker-student').value;
@@ -2123,6 +2143,7 @@ window.giveStickerToStudent=async function(){
     const other=document.getElementById('t-sticker-other');if(other)other.value='';
     if(countEl)countEl.value='';
     showToast(n>1?`🌟 ${n} ${stickerWord(n)}: ${stuName(cls,st)}!`:`🌟 Наліпка: ${stuName(cls,st)}!`);
+    ribbonToasts(cls,{[st]:n});
   }
   catch(e){showToast('⚠️ '+e.message);}
   finally{stickerSaving=false;if(btn){btn.disabled=false;btn.textContent='🌟 Дати';}}
@@ -2319,12 +2340,14 @@ window.openStickerStatsModal=async function(reopenSid=''){
   stickerStatsCache={cls,students:Object.fromEntries(stats.map(s=>[s.sid,s]))};
   let h='<ul class="sg-stats-list">';
   stats.forEach((s,i)=>{
-    const pct=Math.min((s.count/goal)*100,100);
+    // Стрічки: смужка — лише поточна, зібрані — значками біля лічильника
+    const rbs=ribbonState(s.count,goal);
+    const pct=rbs.pct;
     const medal=family?'':i===0?'🥇 ':i===1?'🥈 ':i===2?'🥉 ':'';
-    const header=`<span class="sg-student-name">${medal}${escHtml(s.name)}</span><span class="sg-count">🌟 ${s.count}</span>`;
+    const header=`<span class="sg-student-name">${medal}${escHtml(s.name)}</span><span class="sg-count">🌟 ${s.count}${rbs.ribbons?` <span class="sg-rb">${ribbonsHtml(rbs.ribbons)}</span>`:''}</span>`;
     h+=`<li class="sg-student">${canSeeHistory?`<details class="sg-student-details" data-student-sid="${escHtml(s.sid)}"><summary aria-label="Історія наліпок: ${escHtml(s.name)}">${header}</summary>${renderStickerStatsHistory(s.records,issuerNames,auth.currentUser?.uid||'',selfName,s.sid,canManageHistory)}</details>`:`<div class="sg-student-heading">${header}</div>`}
       <div class="sg-progress"><div style="width:${pct}%;"></div></div>
-      <div class="sg-target">${s.count}/${goal} до призу</div>
+      <div class="sg-target">${rbs.rem}/${goal} до ${rbs.ribbons+1}-ї стрічки</div>
     </li>`;
   });
   h+='</ul>';

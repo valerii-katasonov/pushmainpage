@@ -134,6 +134,7 @@ async function save(){
   try{
     await update(ref(db), paths);
     showToast(`🌟 Видано ${total} ${stickerWord(total)} · учнів: ${who}`);
+    if(window.ribbonToasts) window.ribbonToasts(cls, { ...counts });
     close();
   }catch(e){
     msg.textContent = /permission[_ ]denied/i.test(e.message || '') ? '⛔ Немає прав видавати наліпки в цьому класі' : '❌ Не видано: ' + (e.message || '');
