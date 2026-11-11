@@ -60,9 +60,15 @@ export function screenItems(scr){
   });
   scr.querySelectorAll('.qa-btn').forEach(b => {
     if(b.offsetParent === null && b.style.display === 'none') return;
-    if(b.closest('[style*="display: none"],[style*="display:none"]')) return;
+    // Кнопка в іншій вкладці (секція сховала switchTab) — знаходимо все одно:
+    // дії вчителя з 11.11.2026 розкладено по вкладках «Журнал», «Клас»,
+    // «Розклад». Ховаємо лише те, що сховане саме по собі (роль, клас).
+    const hidden = b.closest('[style*="display: none"],[style*="display:none"]');
+    if(hidden && !(hidden.matches('section[data-dtab]') && !hidden.parentElement.closest('[style*="display: none"],[style*="display:none"]'))) return;
     const label = cleanLabel(b);
-    if(label && !out.some(x => x.text === label)) out.push({ kind: 'act', text: label, sub: 'дія', run: () => b.click() });
+    // Вкладка «Журнал» і дія «Журнал» — різне (розділ і журнал-таблиця), тож
+    // повтор шукаємо лише серед дій
+    if(label && !out.some(x => x.kind === 'act' && x.text === label)) out.push({ kind: 'act', text: label, sub: 'дія', run: () => b.click() });
   });
   return out;
 }

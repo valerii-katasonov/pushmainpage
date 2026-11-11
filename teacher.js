@@ -294,6 +294,10 @@ async function loadDailyHomeworkSubmissions(cls, date){
   if(!wrapper || !listEl) return;
   wrapper.style.display = 'none';
   listEl.innerHTML = '';
+  // Лічильник для «Потребує уваги» (teacher-attention.js): спершу нуль,
+  // нижче — скільки здали насправді
+  const subsCounter = document.getElementById('t-subs-counter');
+  if(subsCounter) subsCounter.textContent = '0';
   if(!cls || !date) return;
 
   try {
@@ -349,6 +353,7 @@ async function loadDailyHomeworkSubmissions(cls, date){
       `;
     }).join('');
 
+    if(subsCounter) subsCounter.textContent = String(totalSubmissions);
     if(totalSubmissions > 0){
       listEl.innerHTML = itemsHtml;
       wrapper.style.display = 'block';

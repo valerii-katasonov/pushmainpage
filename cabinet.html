@@ -4126,6 +4126,18 @@ html.season-winter .ui-bnav-i[aria-current="page"] .ui-bnav-ic::after{content:"�
   html.season-winter #profile-bar::before,html.season-winter #profile-bar::after{animation:none;}
 }
 @media print{ #season-snow,.season-hi{display:none !important;} }
+
+/* ── Учитель: «Потребує уваги» й перенесені кнопки (11.11.2026) ── */
+.t-attn .st-tiles{margin-bottom:0;}
+.t-attn-ok{margin:0;font-weight:700;color:var(--ok);font-size:.9rem;}
+.t-attn-ok[hidden],.t-attn-tile[hidden]{display:none !important;}
+.t-qa{margin:0 0 16px;}
+.t-class-qa{margin:12px 0 16px;}
+.t-lesson details.ls-tools-group{margin:22px 0 10px;border:1px dashed var(--line);border-radius:16px;padding:0 10px 2px;background:var(--surface-2);}
+.t-lesson details.ls-tools-group > summary.ls-tools-sum{list-style:none;cursor:pointer;display:flex;gap:10px;align-items:center;padding:12px 4px;}
+.t-lesson details.ls-tools-group > summary.ls-tools-sum::-webkit-details-marker{display:none;}
+.t-lesson details.ls-tools-group > summary .ls-tt small{display:block;font-weight:500;color:var(--ink-3);font-size:.76rem;}
+.t-lesson details.ls-tools-group[open] > summary{border-bottom:1px solid var(--line-soft);margin-bottom:10px;}
 </style>
 </head>
 <!-- auth-mode СТОЇТЬ ТУТ ОДРАЗУ, а не чекає на скрипт.
@@ -5412,10 +5424,11 @@ html.season-winter .ui-bnav-i[aria-current="page"] .ui-bnav-ic::after{content:"�
     <div class="dtab-bar" id="teacher-screen-tabs">
       <button class="dtab on" data-t="day" onclick="switchTab('teacher-screen','day',this)"><span class="dtab-icon" aria-hidden="true">☀️</span>Сьогодні</button>
       <button class="dtab" data-t="lesson" onclick="switchTab('teacher-screen','lesson',this)"><span class="dtab-icon" aria-hidden="true">📝</span>Урок</button>
-      <button class="dtab" data-t="hwday" onclick="switchTab('teacher-screen','hwday',this);renderTeacherHwDay()"><span class="dtab-icon" aria-hidden="true">📚</span>ДЗ на день</button>
+      <button class="dtab" data-t="gradebook" onclick="switchTab('teacher-screen','gradebook',this);renderTeacherHwDay()"><span class="dtab-icon" aria-hidden="true">📖</span>Журнал</button>
       <button class="dtab" data-t="class" onclick="switchTab('teacher-screen','class',this)"><span class="dtab-icon" aria-hidden="true">👥</span>Клас</button>
-      <button class="dtab" data-t="meals" onclick="switchTab('teacher-screen','meals',this);renderStaffMeals()"><span class="dtab-icon" aria-hidden="true">🍽️</span>Їжа</button>
       <button class="dtab" data-t="news" onclick="switchTab('teacher-screen','news',this)"><span class="dtab-icon" aria-hidden="true">📰</span>Новини<span class="chat-dot"></span></button>
+      <button class="dtab" data-t="meals" onclick="switchTab('teacher-screen','meals',this);renderStaffMeals()"><span class="dtab-icon" aria-hidden="true">🍽️</span>Їжа</button>
+      <button class="dtab" data-t="sched" onclick="switchTab('teacher-screen','sched',this)"><span class="dtab-icon" aria-hidden="true">🗓️</span>Розклад</button>
     </div>
     <div id="t-push-invite" style="display:none;"></div>
 
@@ -5426,11 +5439,23 @@ html.season-winter .ui-bnav-i[aria-current="page"] .ui-bnav-ic::after{content:"�
          сіткою; ДЗ класу; запити батьків, дні народження, басейн. -->
     <section class="screen-section ui-today t-today" data-dtab="day">
       <div id="t-now" style="display:none;"></div>
+      <!-- ПОТРЕБУЄ УВАГИ (teacher-attention.js): лише те, де є що робити,
+           з лічильником; нулі сховано. Нічого не чекає — «✅ Усе гаразд».
+           Замість сітки з 18 кнопок, яка була тут до 11.11.2026: кнопки
+           переїхали у вкладки «Журнал», «Клас», «Розклад» і «Новини». -->
+      <div class="ui-card t-attn" id="t-attn">
+        <h4 class="ui-card-h">Потребує уваги</h4>
+        <div class="ui-tiles st-tiles" role="group" aria-label="Потребує уваги">
+        <div role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" id="t-retake-btn" class="ui-tile st-tile st-warn t-attn-tile" hidden onclick="openRetakeRequestsModal()" title="Запити на перездачу"><i class="st-ic" aria-hidden="true">🔄</i><b id="t-retake-counter">0</b><span>перездачі</span></div>
+        <div role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" id="t-subs-btn" class="ui-tile st-tile st-brand t-attn-tile" onclick="attnGo('t-hw-list-wrapper')" title="Здані домашні роботи за обраний день" hidden><i class="st-ic" aria-hidden="true">📥</i><b id="t-subs-counter">0</b><span>здані роботи за день</span></div>
+        <div role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" id="t-talkreq-btn" class="ui-tile st-tile st-accent t-attn-tile" onclick="attnGo('t-talk')" title="Запити батьків «Хочу обговорити»" hidden><i class="st-ic" aria-hidden="true">💬</i><b id="t-talk-counter">0</b><span>запити батьків</span></div>
+        </div>
+        <p class="t-attn-ok" id="t-attn-ok">✅ Усе гаразд — нічого не чекає</p>
+      </div>
       <!-- Запити батьків «💬 Хочу обговорити» (talk-requests.js). Лише коли є. -->
       <div id="t-talk" class="fw-box tk-box" style="display:none;"></div>
-      <div class="ui-tiles st-tiles" role="group" aria-label="Що чекає">
+      <div class="ui-tiles st-tiles" role="group" aria-label="Швидкі переходи">
         <div role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" class="ui-tile st-tile st-accent" onclick="showReactionsDetails()" title="Реакції батьків на ваші коментарі"><i class="st-ic" aria-hidden="true">❤️</i><b id="t-karma-counter">0</b><span>реакції батьків</span></div>
-        <div role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" id="t-retake-btn" class="ui-tile st-tile st-warn" onclick="openRetakeRequestsModal()" title="Запити на перездачу"><i class="st-ic" aria-hidden="true">🔄</i><b id="t-retake-counter">0</b><span>перездачі</span></div>
         <div role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" id="t-chat-btn" class="ui-tile st-tile st-brand" onclick="openChatModal('teacher')" data-chatbtn="1" title="Листування з батьками"><i class="st-ic" aria-hidden="true">✉️</i><b class="st-txt">Чат</b><span>з батьками</span></div>
       </div>
       <div class="ui-card t-att-card st-card">
@@ -5455,35 +5480,6 @@ html.season-winter .ui-bnav-i[aria-current="page"] .ui-bnav-ic::after{content:"�
           <button onclick="teacherMarkAbsent()" style="flex:0 0 auto;margin-top:0;background:var(--brand-deep);color:var(--on-fill);width:auto;padding:9px 15px;font-size:.85rem;">Відмітити</button>
         </div>
       </div>
-      <h3 class="ui-h" id="t-actions-h">Дії</h3>
-      <div class="qa-groups" id="t-exams-journal-btns">
-        <div class="qa-group"><div class="qa-gt">Журнал і оцінки</div><div class="qa-grid">
-          <button onclick="openJournalModal('teacher')" class="qa-btn qa-journal"><span class="qa-ic" aria-hidden="true">📖</span><span class="qa-l">Журнал</span></button>
-          <button onclick="openQuickJournal()" class="qa-btn qa-quick"><span class="qa-ic" aria-hidden="true">⚡</span><span class="qa-l">Швидкий журнал</span></button>
-          <button onclick="openGroupGrades()" class="qa-btn qa-group-grades"><span class="qa-ic" aria-hidden="true">📝</span><span class="qa-l">Оцінки за роботу</span></button>
-          <button onclick="showUngraded()" class="qa-btn qa-ungraded"><span class="qa-ic" aria-hidden="true">🔍</span><span class="qa-l">Без оцінок</span></button>
-          <button onclick="openExamsCalendar()" class="qa-btn qa-exams"><span class="qa-ic" aria-hidden="true">📅</span><span class="qa-l">Контрольні</span></button>
-        </div></div>
-        <div class="qa-group"><div class="qa-gt">Клас</div><div class="qa-grid">
-          <button id="t-cards-btn" onclick="openClassCards()" class="qa-btn qa-cards" style="display:none;"><span class="qa-ic" aria-hidden="true">🗂</span><span class="qa-l">Картки учнів</span></button>
-          <button id="t-stats-btn" onclick="openClassStats()" class="qa-btn qa-cards" style="display:none;"><span class="qa-ic" aria-hidden="true">📊</span><span class="qa-l">Статистика класу</span></button>
-          <button onclick="openCommentsView()" class="qa-btn qa-cards"><span class="qa-ic" aria-hidden="true">💬</span><span class="qa-l">Коментарі учням</span></button>
-          <button onclick="openHwDoneView()" class="qa-btn qa-cards"><span class="qa-ic" aria-hidden="true">✓</span><span class="qa-l">Виконання ДЗ</span></button>
-          <button onclick="openStickerStatsModal()" class="qa-btn"><span class="qa-ic" aria-hidden="true">🌟</span><span class="qa-l">Статистика наліпок</span></button>
-          <button id="t-wrapped-btn" onclick="showWeeklyWrapped()" class="qa-btn"><span class="qa-ic" aria-hidden="true">🎁</span><span class="qa-l">Підсумки тижня</span></button>
-        </div></div>
-        <div class="qa-group"><div class="qa-gt">Батьки й розклад</div><div class="qa-grid">
-          <button onclick="openConsultTeacher()" class="qa-btn qa-cards"><span class="qa-ic" aria-hidden="true">🗓</span><span class="qa-l">Консультації</span></button>
-          <button onclick="openClassBroadcast()" class="qa-btn qa-broadcast"><span class="qa-ic" aria-hidden="true">✉️</span><span class="qa-l">Повідомлення класу</span></button>
-          <button onclick="openAppReach()" class="qa-btn"><span class="qa-ic" aria-hidden="true">📱</span><span class="qa-l">Хто зі сповіщеннями</span></button>
-          <button onclick="printClassSchedule()" class="qa-btn qa-print"><span class="qa-ic" aria-hidden="true">🖨️</span><span class="qa-l">Друк розкладу</span></button>
-          <button id="t-matrix-btn-wrapper" onclick="openVisualMatrixModal('live')" class="qa-btn qa-matrix" style="display:none;"><span class="qa-ic" aria-hidden="true">🗓️</span><span class="qa-l">Матриця розкладу</span></button>
-        </div></div>
-        <div class="qa-group"><div class="qa-gt">Школа</div><div class="qa-grid">
-          <button onclick="openIdeaBank()" class="qa-btn"><span class="qa-ic" aria-hidden="true">💡</span><span class="qa-l">Банк ідей</span></button>
-          <button onclick="openStaffBirthdays()" class="qa-btn"><span class="qa-ic" aria-hidden="true">🎂</span><span class="qa-l">Дні народження колег</span></button>
-        </div></div>
-      </div>
       <div id="t-hw-list-wrapper" class="ui-card">
         <h4 class="ui-card-h">ДЗ класу сьогодні</h4>
         <ul id="t-daily-hw-list" class="list-dash"></ul>
@@ -5506,6 +5502,19 @@ html.season-winter .ui-bnav-i[aria-current="page"] .ui-bnav-ic::after{content:"�
       <h3>📣 Новини школи</h3>
       <button onclick="openNewsComposer()" style="background:var(--brand-ink);color:var(--on-fill);margin-bottom:10px;">➕ Нове оголошення</button>
       <div id="t-news-feed" class="nw-feed"><p class="empty-msg is-loading">Завантаження...</p></div>
+      <h3 class="ui-h">Школа</h3>
+      <div class="t-today t-qa"><div class="qa-grid">
+          <button onclick="openIdeaBank()" class="qa-btn"><span class="qa-ic" aria-hidden="true">💡</span><span class="qa-l">Банк ідей</span></button>
+          <button onclick="openStaffBirthdays()" class="qa-btn"><span class="qa-ic" aria-hidden="true">🎂</span><span class="qa-l">Дні народження колег</span></button>
+      </div></div>
+    </section>
+    <!-- 🗓️ РОЗКЛАД (11.11.2026): друк і матриця — потрібні рідко, тож не на «Сьогодні» -->
+    <section class="screen-section" data-dtab="sched">
+      <h3>🗓️ Розклад</h3>
+      <div class="t-today t-qa"><div class="qa-grid">
+          <button onclick="printClassSchedule()" class="qa-btn qa-print"><span class="qa-ic" aria-hidden="true">🖨️</span><span class="qa-l">Друк розкладу</span></button>
+          <button id="t-matrix-btn-wrapper" onclick="openVisualMatrixModal('live')" class="qa-btn qa-matrix" style="display:none;"><span class="qa-ic" aria-hidden="true">🗓️</span><span class="qa-l">Матриця розкладу</span></button>
+      </div></div>
     </section>
 
     <section class="screen-section t-lesson" data-dtab="lesson">
@@ -5669,8 +5678,11 @@ html.season-winter .ui-bnav-i[aria-current="page"] .ui-bnav-ic::after{content:"�
         <div class="ls-foot"><button class="qa-btn qa-grades ls-save" onclick="openJournalForGrading()">📊 Виставити оцінки</button></div>
       </div>
       <div id="status-msg"></div>
-      <h3 class="ui-h ls-tools-h">Інструменти предмета й класу</h3>
-      <p class="ls-tools-sub">Потрібні не щодня — відкриваються натиском.</p>
+      <!-- Налаштування предмета (11.11.2026): планування, теми, чергування,
+           класна година, підручники, тренажери — раз на чверть, тож згорнуто
+           одним блоком, щоб під уроком лишався сам урок. -->
+      <details class="ls-tools-group" id="t-subject-tools">
+      <summary class="ls-tools-sum"><span class="ls-ic" aria-hidden="true">⚙️</span><span class="ls-tt"><b>Налаштування предмета й класу</b><small>Планування, теми, чергування, класна година, підручники, тренажери</small></span></summary>
       <details class="ls-tool" ontoggle="if(this.open)openAltCard()">
         <summary><span class="ls-ic" aria-hidden="true">🔁</span><span class="ls-tt"><b>Чергування уроків</b><small>Що саме буде цього й наступного тижня, коли предмети чергуються</small></span></summary>
         <div style="margin-top:12px;">
@@ -5791,12 +5803,28 @@ html.season-winter .ui-bnav-i[aria-current="page"] .ui-bnav-ic::after{content:"�
         <button type="button" onclick="openTrainers()" style="margin-top:0;background:var(--brand-deep);color:var(--on-fill);font-size:.85rem;">Відкрити базу тренажерів</button>
         </div>
       </details>
+      </details>
     </section>
 
         <!-- ДЗ НА ДЕНЬ. Усі уроки вчителя цього дня одним екраном: він
          заповнює не «урок», а кінець дня. Тема лишається на вкладці
          «Урок» — вона тягне облік годин, і це обережна операція. -->
-    <section class="screen-section" data-dtab="hwday">
+    <!-- 📖 ЖУРНАЛ (11.11.2026): усе про оцінки в одному місці — журнал,
+         швидкий журнал, оцінки за роботу, без оцінок, контрольні, перездачі,
+         виконання ДЗ — і нижче «ДЗ на день» (була окрема вкладка). -->
+    <section class="screen-section" data-dtab="gradebook">
+      <h3>📖 Журнал і оцінки</h3>
+      <div class="t-today t-qa"><div class="qa-grid" id="t-exams-journal-btns">
+          <button onclick="openJournalModal('teacher')" class="qa-btn qa-journal"><span class="qa-ic" aria-hidden="true">📖</span><span class="qa-l">Журнал</span></button>
+          <button onclick="openQuickJournal()" class="qa-btn qa-quick"><span class="qa-ic" aria-hidden="true">⚡</span><span class="qa-l">Швидкий журнал</span></button>
+          <button onclick="openGroupGrades()" class="qa-btn qa-group-grades"><span class="qa-ic" aria-hidden="true">📝</span><span class="qa-l">Оцінки за роботу</span></button>
+          <button onclick="showUngraded()" class="qa-btn qa-ungraded"><span class="qa-ic" aria-hidden="true">🔍</span><span class="qa-l">Без оцінок</span></button>
+          <button onclick="openExamsCalendar()" class="qa-btn qa-exams"><span class="qa-ic" aria-hidden="true">📅</span><span class="qa-l">Контрольні</span></button>
+          <button onclick="openRetakeRequestsModal()" class="qa-btn"><span class="qa-ic" aria-hidden="true">🔄</span><span class="qa-l">Заявки на перездачу</span></button>
+          <button onclick="openHwDoneView()" class="qa-btn qa-cards"><span class="qa-ic" aria-hidden="true">✓</span><span class="qa-l">Виконання ДЗ</span></button>
+      </div></div>
+    </section>
+    <section class="screen-section" data-dtab="gradebook">
       <h3>📚 Домашні завдання на день</h3>
       <p class="hwd-cap">Показано ваші уроки в цьому класі на обрану дату.
          Дата й клас — угорі сторінки.</p>
@@ -5822,6 +5850,16 @@ html.season-winter .ui-bnav-i[aria-current="page"] .ui-bnav-ic::after{content:"�
           <p class="ls-sub">Учні класу, вибраного вгорі сторінки. Усе, що ви тут даєте чи пишете, батьки бачать у кабінеті дитини.</p>
         </div>
       </div>
+      <div class="t-today t-qa t-class-qa"><div class="qa-grid">
+          <button id="t-cards-btn" onclick="openClassCards()" class="qa-btn qa-cards" style="display:none;"><span class="qa-ic" aria-hidden="true">🗂</span><span class="qa-l">Картки учнів</span></button>
+          <button id="t-stats-btn" onclick="openClassStats()" class="qa-btn qa-cards" style="display:none;"><span class="qa-ic" aria-hidden="true">📊</span><span class="qa-l">Статистика класу</span></button>
+          <button onclick="openCommentsView()" class="qa-btn qa-cards"><span class="qa-ic" aria-hidden="true">💬</span><span class="qa-l">Коментарі учням</span></button>
+          <button onclick="openStickerStatsModal()" class="qa-btn"><span class="qa-ic" aria-hidden="true">🌟</span><span class="qa-l">Статистика наліпок</span></button>
+          <button id="t-wrapped-btn" onclick="showWeeklyWrapped()" class="qa-btn"><span class="qa-ic" aria-hidden="true">🎁</span><span class="qa-l">Підсумки тижня</span></button>
+          <button onclick="openClassBroadcast()" class="qa-btn qa-broadcast"><span class="qa-ic" aria-hidden="true">✉️</span><span class="qa-l">Повідомлення класу</span></button>
+          <button onclick="openConsultTeacher()" class="qa-btn qa-cards"><span class="qa-ic" aria-hidden="true">🗓</span><span class="qa-l">Консультації</span></button>
+          <button onclick="openAppReach()" class="qa-btn"><span class="qa-ic" aria-hidden="true">📱</span><span class="qa-l">Хто зі сповіщеннями</span></button>
+      </div></div>
 
       <!-- Коментар -->
       <div id="t-comment-card" class="ls-card">
@@ -7064,6 +7102,7 @@ function openAppReach(){
 </script>
 <script type="module" src="app-reach.js"></script>
 <script type="module" src="season.js"></script>
+<script type="module" src="teacher-attention.js"></script>
 <script type="module" src="ios-fixed.js"></script>
 <script type="module" src="mirror-audit.js"></script>
 <script type="module" src="child-photo.js"></script>

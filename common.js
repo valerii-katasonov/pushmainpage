@@ -3069,7 +3069,7 @@ export function tabFromUrl(search){
   // про відсутність чи запізнення учня)
   // talk — «Сьогодні» і прокрутка до запитів «💬 Хочу обговорити»
   // retake — учителю: список заявок на перездачу (клас — у &cls=)
-  return ['att','talk','retake','day','hw','meals','games','grades','school','pay','profile','chat',
+  return ['att','talk','retake','day','hw','meals','games','grades','school','pay','profile','chat','gradebook','sched',
           'lesson','class','news',
           'ogl','uchni','study','rozklad','staff','stat','nalash'].includes(v) ? v : null;
 }
@@ -3098,7 +3098,7 @@ export function screenIdForRole(role){
 }
 window.screenIdForRole = screenIdForRole;
 
-const TAB_OPEN_HOOKS = { hw:'openHwTab', games:'openGamesTab' };
+const TAB_OPEN_HOOKS = { hw:'openHwTab', games:'openGamesTab', gradebook:'renderTeacherHwDay' };
 // Прокрутити до блоку відвідуваності й коротко підсвітити його. Чекаємо,
 // поки список дочитається: інакше блок поїде вниз, коли зʼявляться рядки.
 function scrollToAttendance(screenId, attempt = 0){
@@ -3308,7 +3308,6 @@ async function initUserSession(){
     document.getElementById('t-matrix-btn-wrapper').style.display=(isArt||isMasterTeacher(r))?'':'none';
     document.getElementById('t-mark-absent-block').style.display=isArt?'none':'flex';
     document.getElementById('t-exams-journal-btns').style.display=isArt?'none':'grid';
-    {const ah=document.getElementById('t-actions-h');if(ah)ah.style.display=isArt?'none':'';}
     document.getElementById('t-wrapped-btn').style.display=isArt?'none':'';
     document.getElementById('t-hw-list-wrapper').style.display=isArt?'none':'block';
     document.getElementById('t-hw-input-wrapper').style.display=isArt?'none':'block';

@@ -22,7 +22,8 @@
 // огляд, новини, учні, контроль. Решта — у «Ще».
 export const BARS = { 'director-screen': 'dtab-bar' };
 export const MAIN = {
-  'teacher-screen':  ['day', 'lesson', 'hwday', 'class'],
+  // «Журнал» (11.11.2026) замість «ДЗ на день» — ДЗ на день тепер усередині нього
+  'teacher-screen':  ['day', 'lesson', 'gradebook', 'class'],
   'director-screen': ['ogl', 'news', 'uchni', 'control'],
   // «Їжа» — щоденна (замовлення обідів), «Школа» — рідше: вона в «Ще»
   'parent-screen':  ['day', 'hw', 'grades', 'meals'],
