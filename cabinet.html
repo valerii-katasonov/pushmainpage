@@ -4147,6 +4147,13 @@ html.season-winter .ui-bnav-i[aria-current="page"] .ui-bnav-ic::after{content:"�
 .t-qj-btn{flex:2;flex-direction:column;gap:2px;background:var(--brand-deep);color:var(--on-fill);border:none;box-shadow:var(--card-shadow);font-size:1rem;}
 .t-qj-btn small{font-weight:600;font-size:.72rem;opacity:.85;}
 .t-jr-btn{flex:1;}
+
+/* 🎓 Блок класного керівника у вкладці «Клас» */
+.t-head-block{margin:18px 0 20px;padding:14px 12px 4px;border-radius:18px;background:var(--brand-soft);border:1px solid var(--brand-line);}
+.t-head-block[hidden]{display:none !important;}
+.t-head-h{margin:0 2px 2px;color:var(--brand-deep);font-size:1.05rem;}
+.t-head-sub{margin:0 2px 12px;font-size:.78rem;color:var(--ink-2);}
+.t-head-block details.ls-tool{background:var(--surface);}
 </style>
 </head>
 <!-- auth-mode СТОЇТЬ ТУТ ОДРАЗУ, а не чекає на скрипт.
@@ -5865,8 +5872,6 @@ html.season-winter .ui-bnav-i[aria-current="page"] .ui-bnav-ic::after{content:"�
         </div>
       </div>
       <div class="t-today t-qa t-class-qa"><div class="qa-grid">
-          <button id="t-cards-btn" onclick="openClassCards()" class="qa-btn qa-cards" style="display:none;"><span class="qa-ic" aria-hidden="true">🗂</span><span class="qa-l">Картки учнів</span></button>
-          <button id="t-stats-btn" onclick="openClassStats()" class="qa-btn qa-cards" style="display:none;"><span class="qa-ic" aria-hidden="true">📊</span><span class="qa-l">Статистика класу</span></button>
           <button onclick="openCommentsView()" class="qa-btn qa-cards"><span class="qa-ic" aria-hidden="true">💬</span><span class="qa-l">Коментарі учням</span></button>
           <button onclick="openStickerStatsModal()" class="qa-btn"><span class="qa-ic" aria-hidden="true">🌟</span><span class="qa-l">Статистика наліпок</span></button>
           <button id="t-wrapped-btn" onclick="showWeeklyWrapped()" class="qa-btn"><span class="qa-ic" aria-hidden="true">🎁</span><span class="qa-l">Підсумки тижня</span></button>
@@ -5928,15 +5933,17 @@ html.season-winter .ui-bnav-i[aria-current="page"] .ui-bnav-ic::after{content:"�
         <div class="ls-foot"><button class="qa-btn ls-save" onclick="saveBehaviorGrade()">💾 Зберегти оцінку</button></div>
       </div>
 
-      <h3 class="ui-h ls-tools-h">Аналітика й керування класом</h3>
-      <p class="ls-tools-sub">Потрібні не щодня — відкриваються натиском.</p>
-      <!-- Освоєння тем за тренажерами. Рахується з результатів ігор, які
-           діти й так проходять удома. Панель важка на читання (весь вузол
-           класу), тому лежить у details і рахується лише коли її відкрили. -->
-      <details class="ls-tool" ontoggle="if(this.open&&window.renderMastery)renderMastery('tm-mastery')">
-        <summary><span class="ls-ic" aria-hidden="true">📊</span><span class="ls-tt"><b>Освоєння тем</b><small>Що клас відпрацював у тренажерах — за темами плану</small></span></summary>
-        <div id="tm-mastery" style="margin-top:11px;"><p class="empty-msg">Натисніть, щоб порахувати.</p></div>
-      </details>
+      <!-- 🎓 КЛАСНИЙ КЕРІВНИК (11.11.2026): усе, що стосується лише свого
+           класу, — окремим блоком. Предметник його не бачить; класний
+           керівник одразу бачить, де його особливі задачі.
+           Показ — refreshClassCardsBtn (common.js → isHeadOf). -->
+      <div class="t-head-block" id="t-head-block" hidden>
+        <h3 class="t-head-h">🎓 Мій клас <span id="t-head-cls"></span></h3>
+        <p class="t-head-sub">Ви класний керівник: картки учнів, статистика, батьки й доступ — лише тут.</p>
+        <div class="t-today t-qa"><div class="qa-grid">
+          <button id="t-cards-btn" onclick="openClassCards()" class="qa-btn qa-cards"><span class="qa-ic" aria-hidden="true">🗂</span><span class="qa-l">Картки учнів</span></button>
+          <button id="t-stats-btn" onclick="openClassStats()" class="qa-btn qa-cards"><span class="qa-ic" aria-hidden="true">📊</span><span class="qa-l">Статистика класу</span></button>
+        </div></div>
       <!-- Список батьків свого класу: контакти можна дивитись і редагувати -->
       <details class="ls-tool" ontoggle="if(this.open)renderParentsBlock('t-parents-list',getActiveClass())">
         <summary><span class="ls-ic" aria-hidden="true">👪</span><span class="ls-tt"><b>Батьки мого класу</b><small>Контакти батьків — переглянути й виправити</small></span></summary>
@@ -5962,6 +5969,16 @@ html.season-winter .ui-bnav-i[aria-current="page"] .ui-bnav-ic::after{content:"�
           </div>
           <div class="ls-foot"><button class="qa-btn ls-save" onclick="linkParent()">🔗 Прив'язати пошту</button></div>
         </div>
+      </details>
+      </div>
+      <h3 class="ui-h ls-tools-h">Аналітика</h3>
+      <p class="ls-tools-sub">Потрібні не щодня — відкриваються натиском.</p>
+      <!-- Освоєння тем за тренажерами. Рахується з результатів ігор, які
+           діти й так проходять удома. Панель важка на читання (весь вузол
+           класу), тому лежить у details і рахується лише коли її відкрили. -->
+      <details class="ls-tool" ontoggle="if(this.open&&window.renderMastery)renderMastery('tm-mastery')">
+        <summary><span class="ls-ic" aria-hidden="true">📊</span><span class="ls-tt"><b>Освоєння тем</b><small>Що клас відпрацював у тренажерах — за темами плану</small></span></summary>
+        <div id="tm-mastery" style="margin-top:11px;"><p class="empty-msg">Натисніть, щоб порахувати.</p></div>
       </details>
     </section>
 

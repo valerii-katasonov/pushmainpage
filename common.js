@@ -4260,10 +4260,12 @@ export async function isHeadOf(cls){
 }
 window.refreshClassCardsBtn = async function(cls){
   const head = await isHeadOf(cls);
-  const b = document.getElementById('t-cards-btn');
-  if(b) b.style.display = head ? '' : 'none';
-  const s = document.getElementById('t-stats-btn');
-  if(s) s.style.display = head ? '' : 'none';
+  // Кнопки карток і статистики тепер у блоці «🎓 Мій клас» — показуємо/
+  // ховаємо блок цілком (разом із батьками класу й доступом учнів)
+  const block = document.getElementById('t-head-block');
+  if(block) block.hidden = !head;
+  const lbl = document.getElementById('t-head-cls');
+  if(lbl) lbl.textContent = cls ? `· ${String(cls).replace('class_', '')} клас` : '';
 };
 window.openClassCards = async function(){
   const cls = getActiveClass();
