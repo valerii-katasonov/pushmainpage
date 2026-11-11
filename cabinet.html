@@ -4186,6 +4186,29 @@ body:has(.modal-overlay[style*="flex"]) #profile-bar::after{animation:none !impo
 .ts-sheet .ls-card{margin:0;box-shadow:none !important;}
 .ts-sheet .ls-grid2,.ts-sheet .ls-grid3{grid-template-columns:1fr;}
 .ts-pane[hidden]{display:none;}
+
+/* 🌟 Наліпки класу (sticker-batch.js) */
+.sb2-modal{max-width:520px;text-align:left;}
+.sb2-h{margin:0;text-align:center;color:var(--brand-deep);}
+.sb2-sub{text-align:center;font-size:.8rem;color:var(--ink-3);margin:4px 0 10px;}
+.sb2-fld{display:block;font-size:.75rem;font-weight:800;color:var(--ink-2);margin:0 0 8px;}
+.sb2-fld[hidden]{display:none;}
+.sb2-fld select,.sb2-fld input{margin-top:3px;}
+.sb2-tools{display:flex;gap:8px;margin:2px 0 8px;}
+.sb2-tools button{width:auto;flex:1;margin:0;padding:8px;border-radius:10px;background:var(--surface-2);color:var(--brand-deep);border:1px solid var(--brand-line);font-weight:800;}
+.sb2-list{display:grid;gap:5px;max-height:48vh;overflow-y:auto;}
+.sb2-row{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:12px;background:var(--surface-2);border:1px solid var(--line-soft);}
+.sb2-row.on{background:var(--warn-soft);border-color:var(--warn-line);}
+.sb2-n{width:22px;color:var(--ink-3);font-size:.8rem;}
+.sb2-name{flex:1;min-width:0;font-weight:700;}
+.sb2-b{width:40px;height:40px;min-height:0;margin:0;padding:0;border-radius:10px;font-size:1.2rem;font-weight:900;background:var(--surface);color:var(--ink-2);border:1px solid var(--line);}
+.sb2-b.plus{background:var(--warn);color:var(--on-fill);border:none;}
+.sb2-b:disabled{opacity:.35;}
+.sb2-c{width:26px;text-align:center;font-size:1.1rem;}
+.sb2-msg{min-height:1em;font-size:.82rem;color:var(--danger);margin:6px 0 0;}
+.sb2-save{margin-top:10px;background:var(--warn);color:var(--on-fill);font-weight:800;}
+.sb2-save:disabled{opacity:.5;}
+.sb2-cancel{width:100%;background:var(--surface-2);color:var(--ink);border:1px solid var(--line);margin-top:7px;}
 </style>
 </head>
 <!-- auth-mode СТОЇТЬ ТУТ ОДРАЗУ, а не чекає на скрипт.
@@ -5905,7 +5928,8 @@ body:has(.modal-overlay[style*="flex"]) #profile-bar::after{animation:none !impo
       </div>
       <div class="t-today t-qa t-class-qa"><div class="qa-grid">
           <button onclick="openCommentsView()" class="qa-btn qa-cards"><span class="qa-ic" aria-hidden="true">💬</span><span class="qa-l">Коментарі учням</span></button>
-          <button onclick="openStickerStatsModal()" class="qa-btn"><span class="qa-ic" aria-hidden="true">🌟</span><span class="qa-l">Статистика наліпок</span></button>
+          <button onclick="openStickerBatch()" class="qa-btn qa-stickers"><span class="qa-ic" aria-hidden="true">🌟</span><span class="qa-l">Наліпки класу</span></button>
+          <button onclick="openStickerStatsModal()" class="qa-btn"><span class="qa-ic" aria-hidden="true">📈</span><span class="qa-l">Статистика наліпок</span></button>
           <button id="t-wrapped-btn" onclick="showWeeklyWrapped()" class="qa-btn"><span class="qa-ic" aria-hidden="true">🎁</span><span class="qa-l">Підсумки тижня</span></button>
           <button onclick="openClassBroadcast()" class="qa-btn qa-broadcast"><span class="qa-ic" aria-hidden="true">✉️</span><span class="qa-l">Повідомлення класу</span></button>
           <button onclick="openConsultTeacher()" class="qa-btn qa-cards"><span class="qa-ic" aria-hidden="true">🗓</span><span class="qa-l">Консультації</span></button>
@@ -6523,7 +6547,7 @@ body:has(.modal-overlay[style*="flex"]) #profile-bar::after{animation:none !impo
       <div class="ls-card ls-sticker">
         <div class="ls-step"><b class="ls-ib">🌟</b><div><h4>Наліпка</h4>
           <p>Заохочення: наліпки збираються до нагороди, батьки бачать їх у кабінеті дитини.
-            <a href="#" class="ls-link" onclick="event.preventDefault();closeStudentSheet();openStickerStatsModal()">Статистика наліпок →</a></p></div></div>
+            <a href="#" class="ls-link" onclick="event.preventDefault();closeStudentSheet();openStickerStatsModal()">Статистика наліпок →</a> · <a href="#" class="ls-link" onclick="event.preventDefault();closeStudentSheet();openStickerBatch()">Кільком учням одразу →</a></p></div></div>
         <div class="ls-grid3">
           <label class="ls-fld ts-stu-fld">Учень<select id="t-sticker-student"></select></label>
           <label class="ls-fld">Предмет<select id="t-sticker-subject" onchange="toggleStickerOther()"></select></label>
@@ -7209,6 +7233,7 @@ function openAppReach(){
 <script type="module" src="season.js"></script>
 <script type="module" src="teacher-attention.js"></script>
 <script type="module" src="class-roster.js"></script>
+<script type="module" src="sticker-batch.js"></script>
 <script type="module" src="ios-fixed.js"></script>
 <script type="module" src="mirror-audit.js"></script>
 <script type="module" src="child-photo.js"></script>
