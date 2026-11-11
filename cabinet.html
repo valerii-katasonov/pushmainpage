@@ -4138,6 +4138,15 @@ html.season-winter .ui-bnav-i[aria-current="page"] .ui-bnav-ic::after{content:"�
 .t-lesson details.ls-tools-group > summary.ls-tools-sum::-webkit-details-marker{display:none;}
 .t-lesson details.ls-tools-group > summary .ls-tt small{display:block;font-weight:500;color:var(--ink-3);font-size:.76rem;}
 .t-lesson details.ls-tools-group[open] > summary{border-bottom:1px solid var(--line-soft);margin-bottom:10px;}
+
+/* ⚡ Швидкий журнал: перемикач «Урок · Робота» і головні кнопки «Сьогодні» */
+.qj-seg{margin:0 0 6px;}
+.qj-hint{text-align:center;font-size:.8rem;color:var(--ink-3);margin:0 0 10px;}
+.t-primary{display:flex;gap:10px;margin:0 0 14px;}
+.t-primary .ui-btn{min-height:58px;}
+.t-qj-btn{flex:2;flex-direction:column;gap:2px;background:var(--brand-deep);color:var(--on-fill);border:none;box-shadow:var(--card-shadow);font-size:1rem;}
+.t-qj-btn small{font-weight:600;font-size:.72rem;opacity:.85;}
+.t-jr-btn{flex:1;}
 </style>
 </head>
 <!-- auth-mode СТОЇТЬ ТУТ ОДРАЗУ, а не чекає на скрипт.
@@ -5439,6 +5448,12 @@ html.season-winter .ui-bnav-i[aria-current="page"] .ui-bnav-ic::after{content:"�
          сіткою; ДЗ класу; запити батьків, дні народження, басейн. -->
     <section class="screen-section ui-today t-today" data-dtab="day">
       <div id="t-now" style="display:none;"></div>
+      <!-- Завжди під рукою (11.11.2026): швидкий журнал (урок або робота) і
+           повний журнал. Не лише в «Зараз», бо та картка є тільки сьогодні. -->
+      <div class="t-primary" id="t-primary">
+        <button type="button" class="ui-btn t-qj-btn" onclick="openQuickJournal()"><span>⚡ Швидкий журнал</span><small>присутність і оцінки — за урок або роботу</small></button>
+        <button type="button" class="ui-btn ui-btn-2 t-jr-btn" onclick="openJournalModal('teacher')">📖 Журнал</button>
+      </div>
       <!-- ПОТРЕБУЄ УВАГИ (teacher-attention.js): лише те, де є що робити,
            з лічильником; нулі сховано. Нічого не чекає — «✅ Усе гаразд».
            Замість сітки з 18 кнопок, яка була тут до 11.11.2026: кнопки
@@ -5817,7 +5832,6 @@ html.season-winter .ui-bnav-i[aria-current="page"] .ui-bnav-ic::after{content:"�
       <div class="t-today t-qa"><div class="qa-grid" id="t-exams-journal-btns">
           <button onclick="openJournalModal('teacher')" class="qa-btn qa-journal"><span class="qa-ic" aria-hidden="true">📖</span><span class="qa-l">Журнал</span></button>
           <button onclick="openQuickJournal()" class="qa-btn qa-quick"><span class="qa-ic" aria-hidden="true">⚡</span><span class="qa-l">Швидкий журнал</span></button>
-          <button onclick="openGroupGrades()" class="qa-btn qa-group-grades"><span class="qa-ic" aria-hidden="true">📝</span><span class="qa-l">Оцінки за роботу</span></button>
           <button onclick="showUngraded()" class="qa-btn qa-ungraded"><span class="qa-ic" aria-hidden="true">🔍</span><span class="qa-l">Без оцінок</span></button>
           <button onclick="openExamsCalendar()" class="qa-btn qa-exams"><span class="qa-ic" aria-hidden="true">📅</span><span class="qa-l">Контрольні</span></button>
           <button onclick="openRetakeRequestsModal()" class="qa-btn"><span class="qa-ic" aria-hidden="true">🔄</span><span class="qa-l">Заявки на перездачу</span></button>
@@ -6461,6 +6475,15 @@ html.season-winter .ui-bnav-i[aria-current="page"] .ui-bnav-ic::after{content:"�
 <div id="quick-journal-modal" class="modal-overlay" style="z-index:1010;">
   <div class="modal-content" style="max-width:520px;text-align:left;">
     <h2 style="color:var(--brand-deep);margin-top:0;text-align:center;">⚡ Швидкий журнал</h2>
+    <!-- ОДИН ІНСТРУМЕНТ, ДВА РЕЖИМИ (11.11.2026). «Урок» — присутність і
+         оцінки в перший стовпець дня; «Робота» — контрольна чи самостійна
+         окремим стовпцем (group-grades.js). Раніше це були дві кнопки
+         «⚡ Швидкий журнал» і «📝 Оцінки за роботу», і вчителі плутали, куди йти. -->
+    <div class="ui-seg qj-seg" role="tablist" aria-label="Що виставляємо">
+      <button type="button" role="tab" aria-selected="true" onclick="qjSwitch('lesson')">🧑‍🏫 Урок</button>
+      <button type="button" role="tab" aria-selected="false" onclick="qjSwitch('work')">📝 Робота</button>
+    </div>
+    <p class="qj-hint">Присутність і оцінки за урок — у перший стовпець дня.</p>
     <p style="text-align:center;font-size:.85rem;color:var(--ink-2);margin:0 0 8px 0;">
       <select id="qj-subject" class="act-subj" onchange="openQuickJournal()"></select> · <b id="qj-date">—</b>
     </p>

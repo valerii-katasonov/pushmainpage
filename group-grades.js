@@ -100,8 +100,12 @@ function overlay(){
   o = document.createElement('div');
   o.id = 'group-grades-modal'; o.className = 'modal-overlay'; o.style.zIndex = '1012';
   o.innerHTML = `<div class="modal-content gg-modal">
-    <h2 class="gg-h">📝 Оцінки за роботу</h2>
-    <p class="gg-sub">Одна робота — оцінки всьому класу. Кожна робота лягає в окремий стовпець журналу, уже виставлене не зникне.</p>
+    <h2 class="gg-h">⚡ Швидкий журнал</h2>
+    <div class="ui-seg qj-seg" role="tablist" aria-label="Що виставляємо">
+      <button type="button" role="tab" aria-selected="false" onclick="qjSwitch('lesson')">🧑‍🏫 Урок</button>
+      <button type="button" role="tab" aria-selected="true" onclick="qjSwitch('work')">📝 Робота</button>
+    </div>
+    <p class="gg-sub">Контрольна, самостійна чи інша робота — оцінки всьому класу окремим стовпцем журналу. Уже виставлене не зникне.</p>
     <div class="gg-grid">
       <label>Предмет<select id="gg-subject" class="act-subj"></select></label>
       <label>Дата<input type="date" id="gg-date"></label>
@@ -135,9 +139,10 @@ function overlay(){
 }
 const typeLabel = c => c === THEMATIC ? '📘 Тематична (ТО)' : ((gradeTypesCache[c] && gradeTypesCache[c].label) || c);
 
-export async function openGroupGrades(){
+// subjHint — предмет, з яким прийшли з режиму «Урок» швидкого журналу
+export async function openGroupGrades(subjHint){
   const o = overlay();
-  const subj = await fillActionSubject('gg-subject', actionSubject('gg-subject'));
+  const subj = await fillActionSubject('gg-subject', (typeof subjHint === 'string' && subjHint) || actionSubject('gg-subject'));
   if(!subj){ showToast('⚠️ Предметів класу не задано. Директор заповнює їх у «📗 Предмети класу й учителі»'); return; }
   o.querySelector('#gg-date').value = document.getElementById('global-date')?.value || new Date().toISOString().slice(0, 10);
   const codes = [...new Set([...(Object.keys(gradeTypesCache).length ? Object.keys(gradeTypesCache) : DEFAULT_TYPES).filter(c => c !== THEMATIC), THEMATIC])];
@@ -149,6 +154,7 @@ export async function openGroupGrades(){
   load();
 }
 window.closeGroupGrades = function(){ const o = document.getElementById('group-grades-modal'); if(o) o.style.display = 'none'; };
+window.isGroupGradesOpen = function(){ const o = document.getElementById('group-grades-modal'); return !!o && o.style.display === 'flex'; };
 
 let seq = 0;
 async function load(){

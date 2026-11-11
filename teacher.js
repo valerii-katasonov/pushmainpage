@@ -469,9 +469,12 @@ window.generateHomeworkAI=async function(){
 // Повний журнал зручний за комп'ютером, але на уроці вчитель стоїть із
 // телефоном. Тут один екран: увесь клас списком, у кожного — присутність
 // і поле оцінки. Зберігається все разом, одним натисканням.
-window.openQuickJournal=async function(){
+// ⚡ Швидкий журнал має два режими: «Урок» (тут) і «Робота» (group-grades.js).
+// Відкривається завжди в «Уроці» — це те, що потрібно на уроці; «Робота» —
+// один дотик у перемикачі. subjHint — предмет із другого режиму.
+window.openQuickJournal=async function(subjHint){
   const cls=getActiveClass();
-  const subj=await fillActionSubject('qj-subject', actionSubject('qj-subject'));
+  const subj=await fillActionSubject('qj-subject', (typeof subjHint==='string'&&subjHint)||actionSubject('qj-subject'));
   const date=document.getElementById('global-date').value;
   if(!subj)return showToast('⚠️ Предметів класу не задано. Директор заповнює їх у «📗 Предмети класу й учителі»');
   document.getElementById('qj-date').textContent=date.split('-').reverse().join('.');
@@ -567,6 +570,31 @@ window.qjSet=function(btn,val){
   row.dataset.status=val;
 };
 window.closeQuickJournal=function(){document.getElementById('quick-journal-modal').style.display='none';};
+// Чи є у вікні незбережене: змінена оцінка або позначена присутність
+export function quickJournalDirty(root=document){
+  if([...root.querySelectorAll('#qj-body .qj-row')].some(r=>r.dataset.status!==undefined
+     ||String(r.querySelector('.qj-g')?.value||'').trim()!==String(r.querySelector('.qj-g')?.dataset.orig||'').trim())) return true;
+  return [...root.querySelectorAll('#gg-body .gg-row')].some(r=>{
+    const v=String(r.querySelector('.gg-g')?.value||'').trim();
+    return v!==String(r.dataset.orig||'').trim();
+  });
+}
+// Перемикач «Урок · Робота» в обох вікнах швидкого журналу
+window.qjSwitch=function(mode){
+  const qj=document.getElementById('quick-journal-modal');
+  const inWork=!!(window.isGroupGradesOpen&&window.isGroupGradesOpen());
+  if((mode==='work')===inWork) return;
+  if(quickJournalDirty()&&!confirm('Є незбережені оцінки чи відмітки — вони пропадуть. Перейти?')) return;
+  if(mode==='work'){
+    const subj=actionSubject('qj-subject');
+    if(qj) qj.style.display='none';
+    if(window.openGroupGrades) window.openGroupGrades(subj);
+  }else{
+    const subj=actionSubject('gg-subject');
+    if(window.closeGroupGrades) window.closeGroupGrades();
+    window.openQuickJournal(subj);
+  }
+};
 window.saveQuickJournal=async function(){
   const cls=getActiveClass();
   // Саме той предмет, який видно у вікні, а не той, що лишився в журналі

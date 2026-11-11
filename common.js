@@ -3309,6 +3309,7 @@ async function initUserSession(){
     document.getElementById('t-mark-absent-block').style.display=isArt?'none':'flex';
     document.getElementById('t-exams-journal-btns').style.display=isArt?'none':'grid';
     document.getElementById('t-wrapped-btn').style.display=isArt?'none':'';
+    {const tp=document.getElementById('t-primary');if(tp)tp.style.display=isArt?'none':'';}
     document.getElementById('t-hw-list-wrapper').style.display=isArt?'none':'block';
     document.getElementById('t-hw-input-wrapper').style.display=isArt?'none':'block';
     document.getElementById('t-topic-card').style.display=isArt?'none':'block';
