@@ -62,7 +62,7 @@ export function nowCardHtml(st, opts = {}){
   const nd = opts.nextDay;
   if((!st || st.kind === 'over') && nd && nd.first){
     return `<div class="ui-now ui-now-calm">
-      <small>${escHtml(st && st.kind === 'over' ? 'Уроки на сьогодні закінчилися' : 'Сьогодні уроків немає')}</small>
+      <small>${escHtml(opts.note || (st && st.kind === 'over' ? 'Уроки на сьогодні закінчилися' : 'Сьогодні уроків немає'))}</small>
       <div class="ui-now-l">${escHtml(nd.label)}: ${escHtml(lessonName(nd.first))}</div>
       <div class="ui-now-m">перший урок о ${hhmm(nd.first.start)}${nd.count ? ` · усього ${nd.count}` : ''}</div>
     </div>`;

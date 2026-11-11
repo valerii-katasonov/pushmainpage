@@ -399,6 +399,87 @@ export function nextSchoolDay(dayKeysList, fromDow, hasLessons){
   return null;
 }
 
+// ── ВИХІДНІ ЗА КАЛЕНДАРЕМ ШКОЛИ ──────────────────────────────────
+// Розклад знає лише дні тижня: у середу — п'ять уроків, і все. Свято чи
+// канікули в календарі (директор → «Навчальний рік») він не бачив, тож у
+// вівторок увечері перед святом писав «Розклад на завтра», а в саме свято —
+// розклад, ніби день навчальний.
+//
+// Тут календар перетворюється на мапу {дата: {title, until}} для класу
+// дитини (свята мають classes і тип календаря, як і в «Календарі»).
+export function offDaysMap(holidays, breaks, cls, calType){
+  const fits = cs => !cs || cs === 'all' || (Array.isArray(cs) && cs.includes(cls))
+    || (cs && typeof cs === 'object' && Object.values(cs).includes(cls));
+  const out = {};
+  Object.values(breaks || {}).forEach(b => {
+    if(!b || !b.startDate || !b.endDate || !fits(b.classes)) return;
+    for(let d = b.startDate; d <= b.endDate; d = addDays(d, 1))
+      out[d] = { title: b.title || 'Канікули', until: b.endDate };
+  });
+  // Свято сильніше за канікули: «Різдво» точніше, ніж «Зимові канікули»
+  Object.values(holidays || {}).forEach(h => {
+    if(!h || !h.date || !fits(h.classes)) return;
+    if(h.calendarType && h.calendarType !== calType) return;
+    out[h.date] = { title: h.title || 'Свято', until: (out[h.date] && out[h.date].until) || h.date };
+  });
+  return out;
+}
+export function addDays(date, n){
+  const [y, m, d] = String(date).split('-').map(Number);
+  const t = new Date(y, m - 1, d + n);
+  return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+}
+// Найближчий навчальний день ПІСЛЯ today: день тижня з уроками і не
+// вихідний за календарем. → {dayName, offset (днів від сьогодні), date} | null
+export function nextSchoolDate(today, hasLessons, off, maxDays = 60){
+  for(let i = 1; i <= maxDays; i++){
+    const date = addDays(today, i);
+    const [y, m, d] = date.split('-').map(Number);
+    const dayName = dayKeys[new Date(y, m - 1, d).getDay()];
+    if(!(off && off[date]) && hasLessons(dayName)) return { dayName, offset: i, date };
+  }
+  return null;
+}
+const ddmm = date => `${date.slice(8, 10)}.${date.slice(5, 7)}`;
+// Підпис вихідного: «Осінні канікули (до 16.11)» — «до» лише для кількох днів
+export function offTitle(o, date){
+  if(!o) return '';
+  return o.until && o.until > date ? `${o.title} (до ${ddmm(o.until)})` : o.title;
+}
+// Що сказати людині над розкладом:
+//   сьогодні вихідний → «Сьогодні вихідний — День незалежності»;
+//   уроки скінчилися, а завтра не навчальний → «Завтра вихідний — …».
+export function offNotice({ today, noToday, over, offToday, offTomorrow, next }){
+  if(noToday){
+    if(offToday) return `🎉 Сьогодні вихідний — ${offTitle(offToday, today)}`;
+    return '🎉 Сьогодні вихідний';
+  }
+  if(over && next && next.offset > 1){
+    const tomorrow = addDays(today, 1);
+    return offTomorrow ? `🎉 Завтра вихідний — ${offTitle(offTomorrow, tomorrow)}` : '🎉 Завтра вихідний';
+  }
+  return '';
+}
+const OFF_TTL = 10 * 60 * 1000;
+let offCache = { key: '', map: null, at: 0, loading: false };
+function offDaysFor(cls, role){
+  const calType = currentUserData?.isArtSchool ? 'art_school' : 'general';
+  const key = `${ACTIVE_YEAR}|${cls}|${calType}`;
+  const fresh = offCache.key === key && offCache.map && Date.now() - offCache.at < OFF_TTL;
+  if(!fresh && !(offCache.loading && offCache.key === key)){
+    offCache = { key, map: offCache.key === key ? offCache.map : null, at: 0, loading: true };
+    Promise.all([
+      get(ref(db, `academic_year/${ACTIVE_YEAR}/holidays`)),
+      get(ref(db, `academic_year/${ACTIVE_YEAR}/breaks`))
+    ]).then(([h, b]) => {
+      if(offCache.key !== key) return;
+      offCache = { key, map: offDaysMap(h.exists() ? h.val() : {}, b.exists() ? b.val() : {}, cls, calType), at: Date.now(), loading: false };
+      try{ renderDynamicSchedule(role); }catch(e){}
+    }).catch(() => { if(offCache.key === key){ offCache.loading = false; offCache.at = Date.now(); offCache.map = offCache.map || {}; } });
+  }
+  return offCache.map || {};
+}
+
 function renderDynamicSchedule(role='parent'){
   if(!window.schedule)return;
   const prefix = role==='student'?'s':'p';
@@ -409,7 +490,11 @@ function renderDynamicSchedule(role='parent'){
   const todayStr=dateWithOffset(0);
   const todayLessons=buildDynamicSchedule(window.schedule,todayDayName,true,todayStr)||[];
   const hasLessons=(dn)=>realLessons(buildDynamicSchedule(window.schedule,dn,false))>0;
-  const noToday   = realLessons(todayLessons)===0;
+  const off       = offDaysFor(getActiveClass(), role);
+  const offToday  = off[todayStr] || null;
+  // Свято чи канікули за календарем — сьогодні уроків немає, хоч би що
+  // стояло в розкладі на цей день тижня
+  const noToday   = !!offToday || realLessons(todayLessons)===0;
   const over      = !noToday && dayIsOver(todayLessons,currentMins);
   const todayDone = noToday || over;
 
@@ -418,13 +503,16 @@ function renderDynamicSchedule(role='parent'){
   // він додавався, щоб розібратися з розкладом старших класів, і своє
   // відпрацював.
 
-  // Шукаємо з завтрашнього дня — сьогоднішній уже або порожній, або минув
-  const nextDay = todayDone ? nextSchoolDay(dayKeys, (todayDow+1)%7, hasLessons) : null;
+  // Шукаємо з завтрашнього дня — сьогоднішній уже або порожній, або минув.
+  // Вихідні за календарем школи пропускаємо (offset — днів від сьогодні).
+  const nextDay = todayDone ? nextSchoolDate(todayStr, hasLessons, off) : null;
   const showTomorrow = !!nextDay;
   const targetDayName = showTomorrow ? nextDay.dayName : todayDayName;
   const label = !showTomorrow ? '📅 Розклад на сьогодні'
-    : (nextDay.offset===0 ? `📅 Розклад на завтра (${dayNamesUA[targetDayName]||''})`
-                          : `📅 Розклад на ${dayNamesUA[targetDayName]||'наступний день'}`);
+    : (nextDay.offset===1 ? `📅 Розклад на завтра (${dayNamesUA[targetDayName]||''})`
+                          : `📅 Розклад на ${dayNamesUA[targetDayName]||'наступний день'}, ${ddmm(nextDay.date)}`);
+  const notice = offNotice({ today: todayStr, noToday, over, offToday,
+    offTomorrow: off[addDays(todayStr, 1)] || null, next: nextDay });
   // Коли показуємо не сьогодні — кажемо, чому. Батько, у якого дитина
   // зараз на уроці, має побачити не мовчазне «розклад на завтра», а
   // причину: тоді видно, що саме в школі заповнено не так.
@@ -439,9 +527,12 @@ function renderDynamicSchedule(role='parent'){
     const hintId = `${prefix}-schedule-why`;
     const hint = document.getElementById(hintId);
     if(hint) hint.remove();
+    // «Сьогодні / завтра вихідний» — над розкладом наступного навчального дня
+    const offEl = document.getElementById(`${prefix}-schedule-off`);
+    if(offEl){ offEl.textContent = notice; offEl.hidden = !notice; }
   }
   const lessons=buildDynamicSchedule(window.schedule,targetDayName,!showTomorrow,
-                                    dateWithOffset(showTomorrow?nextDay.offset+1:0))||[];
+                                    showTomorrow?nextDay.date:todayStr)||[];
   // Заміни завантажені на дату з поля вгорі (global-date). На уроках
   // іншого дня (завтрашній список, або в полі обрано іншу дату) їх
   // показувати не можна — «заміна» потрапила б на чужий урок.
@@ -459,8 +550,8 @@ function renderDynamicSchedule(role='parent'){
       }).filter(x=>x.start!=null&&x.end!=null); };
       if(showTomorrow){
         const it=toItems(lessons);
-        window.renderNowCard(prefix,[],currentMins,{ over:!noToday,
-          nextDay:{ label: nextDay.offset===0?'Завтра':(dayNamesUA[targetDayName]||'Наступний день'), first:it[0], count:it.length } });
+        window.renderNowCard(prefix,[],currentMins,{ over:!noToday, note: notice.replace(/^🎉 /,''),
+          nextDay:{ label: nextDay.offset===1?'Завтра':`${dayNamesUA[targetDayName]||'Наступний день'}, ${ddmm(nextDay.date)}`, first:it[0], count:it.length } });
       } else window.renderNowCard(prefix,toItems(todayLessons),currentMins);
     }catch(e){ console.warn('Блок «Зараз»:', e); }
   }
