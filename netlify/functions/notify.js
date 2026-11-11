@@ -772,7 +772,7 @@ exports.handler = async (event) => {
     // Тепер у посиланні є підказка, яку вкладку відкрити. Кабінет її читає
     // й перемикається (див. openFromNotification у common.js).
     const TAB_BY_TYPE = {
-      news:     'school',   // оголошення — вкладка «Школа»
+      news:     'news',     // оголошення — вкладка «Новини» (і в батьків, і в учня)
       grade:    'grades',
       absence:  'day',
       late:     'day',
