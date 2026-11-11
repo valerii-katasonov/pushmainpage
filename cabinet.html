@@ -724,7 +724,7 @@
       /* Зимова заставка: краї кадру ролика (див. #boot-splash) */
       --splash-winter-top:#0f192d; --splash-winter-bottom:#132843;
       /* Зимове оформлення (season.js): сніг, гірлянда */
-      --snow:#ffffff; --snow-shadow:rgba(70,120,160,.55); --snow-fall:#7fb8d4;
+      --snow:#ffffff; --snow-shadow:rgba(60,100,140,.45); --snow-fall:#7fb8d4;
       --garl-wire:#3b5d50; --garl-1:#ff5a5f; --garl-2:#ffd54f; --garl-3:#4fc3f7; --garl-4:#7ee08a;
     }
     #auth-bg{display:none;}
@@ -3885,8 +3885,9 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
   .t-today:not(.d-today) .st-tile span{margin-top:0;}
 }
 /* Картки зі смугою зліва — присутність */
-.t-today .st-card{position:relative;overflow:hidden;}
-.t-today .st-card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--danger);}
+/* Смуга — внутрішньою тінню, а не ::before з overflow:hidden: обрізання
+   зрізало снігову шапку зверху (11.11.2026) */
+.t-today .st-card{position:relative;box-shadow:inset 4px 0 0 var(--danger),var(--st-shadow);}
 .t-today .st-card .ui-card-h{font-size:1rem;}
 /* Форма відмітки: нейтральні поля, на компʼютері — один рядок */
 .t-today .t-att-card #t-mark-absent-block{border-top:1px solid var(--line-soft) !important;}
@@ -4106,11 +4107,12 @@ html.season-winter #profile-bar::after{filter:blur(4px);opacity:0;animation:garl
 @keyframes garlGlow{to{opacity:.85;}}
 /* Снігові шапки на картках */
 html.season-winter .ui-card{position:relative;}
-/* Снігова шапка — «замет» на верхньому краї картки ліворуч, а не смуга на
-   всю ширину: на широких картках смуга виглядала як сіра лінія (11.11.2026) */
-html.season-winter .ui-card::after{content:"";position:absolute;left:14px;top:-10px;width:min(132px,40%);height:18px;pointer-events:none;
-  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 18' preserveAspectRatio='none'%3E%3Cpath d='M0 18 C1 11 7 8 13 10 C17 4 28 2 35 7 C41 2 53 0 61 5 C68 1 80 1 86 7 C93 4 104 5 108 10 C113 9 119 12 120 18 Z' fill='white' stroke='rgb(196,214,228)' stroke-width='0.9' vector-effect='non-scaling-stroke'/%3E%3Cpath d='M6 16 C20 13 40 14 60 12.5 C80 14 100 13 114 16' fill='none' stroke='rgb(226,238,246)' stroke-width='1.6' vector-effect='non-scaling-stroke'/%3E%3C/svg%3E") no-repeat center/100% 100%;
-  filter:drop-shadow(0 1px 1.5px var(--snow-shadow));}
+/* Снігова шапка — замет на верхньому краї картки ліворуч: горбки над краєм,
+   нижче краю — звисання з бурульками. Без обводки (обводка давала
+   «пігулку»), лише м'яка тінь по контуру; не розтягується (11.11.2026) */
+html.season-winter .ui-card::after{content:"";position:absolute;left:18px;top:-10px;width:150px;max-width:45%;height:16px;pointer-events:none;
+  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 150 16'%3E%3Cpath d='M0 9 C4 4 10 3 16 5 C22 0 34 0 40 4 C48 1 58 1 64 5 C72 2 84 2 90 6 C98 3 110 3 116 6 C124 4 134 4 140 7 C145 6 149 8 150 10 L150 11 C146 12 142 11 138 12 C135 13 134 16 132 16 C130 16 130 13 127 12 L100 12 C96 12 95 15 93 15 C91 15 91 12 88 12 L52 12 C48 12 47 16 45 16 C43 16 43 12 40 12 L10 12 C6 12 3 11 0 11 Z' fill='white'/%3E%3C/svg%3E") no-repeat left top/150px 16px;
+  filter:drop-shadow(0 1px 1px var(--snow-shadow));}
 /* Сніжинка на активній вкладці нижнього меню */
 html.season-winter .ui-bnav-i[aria-current="page"] .ui-bnav-ic{position:relative;}
 html.season-winter .ui-bnav-i[aria-current="page"] .ui-bnav-ic::after{content:"❄";position:absolute;top:-5px;right:4px;font-size:.62rem;color:var(--brand-deep);}
