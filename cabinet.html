@@ -4091,24 +4091,19 @@ html.season-winter #season-snow{display:block;position:fixed;inset:0;z-index:900
 /* Гірлянда над рядком профілю: дріт і чотири кольори лампочок, що
    по черзі тихо мерехтять */
 html.season-winter #profile-bar{position:relative;}
-/* Дві «нитки» лампочок: ::before — червоні й сині (з дротом), ::after —
-   жовті й зелені. Блимають по черзі, як справжня гірлянда: поки одна
-   нитка горить, інша пригасає. */
-html.season-winter #profile-bar::before,html.season-winter #profile-bar::after{content:"";position:absolute;left:12px;right:12px;top:-6px;height:14px;pointer-events:none;}
-html.season-winter #profile-bar::before{
+/* Гірлянда: усі чотири кольори на місці, лампочки плавно мерехтять —
+   м'яко розгоряються й пригасають (2,4 с), а ::after дає світіння навколо. */
+html.season-winter #profile-bar::before,html.season-winter #profile-bar::after{content:"";position:absolute;left:12px;right:12px;top:-6px;height:14px;pointer-events:none;
   background:
     radial-gradient(circle at 6px 9px,var(--garl-1) 0 3.6px,transparent 4.2px) 0 0/48px 14px repeat-x,
-    radial-gradient(circle at 30px 9px,var(--garl-3) 0 3.6px,transparent 4.2px) 0 0/48px 14px repeat-x,
-    linear-gradient(var(--garl-wire),var(--garl-wire)) 0 4px/100% 1.5px no-repeat;
-  animation:garlBlinkA 1.6s steps(1,end) infinite;}
-html.season-winter #profile-bar::after{
-  background:
     radial-gradient(circle at 18px 10px,var(--garl-2) 0 3.6px,transparent 4.2px) 0 0/48px 14px repeat-x,
-    radial-gradient(circle at 42px 10px,var(--garl-4) 0 3.6px,transparent 4.2px) 0 0/48px 14px repeat-x;
-  animation:garlBlinkB 1.6s steps(1,end) infinite;}
-/* Горить — ще й світиться (drop-shadow), пригасла — тьмяна, але видна */
-@keyframes garlBlinkA{0%{filter:brightness(1.15) drop-shadow(0 0 3px var(--garl-2));}50%{filter:brightness(.45) saturate(.6);}}
-@keyframes garlBlinkB{0%{filter:brightness(.45) saturate(.6);}50%{filter:brightness(1.15) drop-shadow(0 0 3px var(--garl-2));}}
+    radial-gradient(circle at 30px 9px,var(--garl-3) 0 3.6px,transparent 4.2px) 0 0/48px 14px repeat-x,
+    radial-gradient(circle at 42px 10px,var(--garl-4) 0 3.6px,transparent 4.2px) 0 0/48px 14px repeat-x,
+    linear-gradient(var(--garl-wire),var(--garl-wire)) 0 4px/100% 1.5px no-repeat;}
+html.season-winter #profile-bar::before{animation:garlTwinkle 2.4s ease-in-out infinite alternate;}
+html.season-winter #profile-bar::after{filter:blur(4px);opacity:0;animation:garlGlow 2.4s ease-in-out infinite alternate;}
+@keyframes garlTwinkle{from{filter:brightness(.8);}to{filter:brightness(1.15);}}
+@keyframes garlGlow{to{opacity:.85;}}
 /* Снігові шапки на картках */
 html.season-winter .ui-card{position:relative;}
 html.season-winter .ui-card::after{content:"";position:absolute;left:16px;right:16px;top:-5px;height:11px;pointer-events:none;border-radius:8px 8px 3px 3px;
