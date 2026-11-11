@@ -5926,6 +5926,7 @@ html.season-winter .ui-bnav-i[aria-current="page"] .ui-bnav-ic::after{content:"�
       <button class="dtab" data-t="meals" onclick="switchTab('parent-screen','meals',this)"><span class="dtab-icon" aria-hidden="true">🍽️</span>Їжа</button>
       <button class="dtab" data-t="games" onclick="switchTab('parent-screen','games',this);openGamesTab()"><span class="dtab-icon" aria-hidden="true">🎮</span>Ігри</button>
       <button class="dtab" data-t="grades" onclick="switchTab('parent-screen','grades',this)"><span class="dtab-icon" aria-hidden="true">📊</span>Оцінки</button>
+      <button class="dtab" data-t="news" onclick="switchTab('parent-screen','news',this)"><span class="dtab-icon" aria-hidden="true">📰</span>Новини</button>
       <button class="dtab" data-t="school" onclick="switchTab('parent-screen','school',this)"><span class="dtab-icon" aria-hidden="true">🏫</span>Школа</button>
       <button class="dtab" data-t="pay" onclick="switchTab('parent-screen','pay',this)"><span class="dtab-icon" aria-hidden="true">💳</span>Оплата</button>
       <button class="dtab" data-t="profile" onclick="switchTab('parent-screen','profile',this)"><span class="dtab-icon" aria-hidden="true">👤</span>Профіль</button>
@@ -6061,6 +6062,12 @@ html.season-winter .ui-bnav-i[aria-current="page"] .ui-bnav-ic::after{content:"�
     <section class="screen-section" data-dtab="hw">
       <h3>📚 Домашні завдання</h3>
       <div id="p-hw-week"><p class="empty-msg is-loading">Завантаження...</p></div>
+      <!-- Підручники — у самому низу ДЗ, згорнуто (11.11.2026; були у «Школі»):
+           потрібні рідко, але саме тоді, коли робиш домашнє. -->
+      <details class="ui-card tb-fold" style="margin-top:14px;">
+        <summary><b>📗 Підручники</b></summary>
+        <div id="p-textbooks-list" style="margin-top:10px;"><p class="empty-msg is-loading">Завантаження...</p></div>
+      </details>
     </section>
 
     <!-- ВКЛАДКА «ІГРИ». Та сама, що в дитини, і це навмисно: батько має
@@ -6123,13 +6130,17 @@ html.season-winter .ui-bnav-i[aria-current="page"] .ui-bnav-ic::after{content:"�
     <!-- ВКЛАДКА «ШКОЛА» (підхід 5). Спершу те, що чекає відповіді
          (запити школи — блок зʼявляється, лише коли вони є), далі новини,
          «хочу обговорити з учителем», підручники й оплата. -->
+    <!-- 📰 НОВИНИ — окрема вкладка (11.11.2026). Раніше стрічка жила у
+         «Школі» разом із запитами, консультаціями й банком ідей і губилася. -->
+    <section class="screen-section ui-today" data-dtab="news">
+      <h3 class="ui-h">Новини школи</h3>
+      <div id="p-news-feed" class="nw-feed"><p class="empty-msg is-loading">Завантаження...</p></div>
+    </section>
     <section class="screen-section ui-today" data-dtab="school">
       <div id="p-consents-block" style="display:none;">
         <h3 class="ui-h">Запити школи</h3>
         <div id="p-consents"></div>
       </div>
-      <h3 class="ui-h">Новини школи</h3>
-      <div id="p-news-feed" class="nw-feed"><p class="empty-msg is-loading">Завантаження...</p></div>
       <!-- «💬 Хочу обговорити з учителем» (talk-requests.js) -->
       <div id="p-talk" class="fw-box tk-box" style="display:none;margin-top:12px;"></div>
       <!-- 🗓 Запис на консультацію (consult.js): блок зʼявляється, лише коли вчителі відкрили час -->
@@ -6140,8 +6151,6 @@ html.season-winter .ui-bnav-i[aria-current="page"] .ui-bnav-ic::after{content:"�
         <p>💡 Є ідея, скарга чи подяка? Напишіть школі — <b>анонімно</b>: портал не записує, хто надіслав.</p>
         <button type="button" class="ib-open" onclick="openIdeaBank()">💡 Написати анонімно</button>
       </div>
-      <h3 class="ui-h">Підручники</h3>
-      <div class="ui-card"><div id="p-textbooks-list"><p class="empty-msg is-loading">Завантаження...</p></div></div>
     </section>
     <!-- 💳 Оплата: навчання, харчування, автобус — кожен рахунок окремою
          кольоровою карткою зі своїм QR (payment.js) -->

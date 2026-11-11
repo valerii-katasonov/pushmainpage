@@ -348,7 +348,10 @@ window.renderFreshNews = renderFreshNews;
 // три різні екрани (батько, учень, персонал), і зашите ім'я тут уже
 // колись відправляло людину не туди.
 window.goToNewsFeed = function(){
-  const btn = document.querySelector('.dtab[data-t="school"]');
+  // Кнопку «Новини» шукаємо у ВИДИМОМУ кабінеті: у розмітці їх кілька
+  // (батьки, учень), і перша за порядком могла належати прихованому.
+  const btn = [...document.querySelectorAll('.dtab[data-t="news"]')]
+    .find(b => { const p = b.closest('.panel'); return p && p.style.display !== 'none' && p.offsetParent !== null; });
   if(btn){ btn.click(); return; }
   const feed = document.getElementById('p-news-feed') || document.getElementById('s-news-feed');
   if(feed) feed.scrollIntoView({ behavior:'smooth', block:'start' });

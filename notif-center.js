@@ -82,7 +82,7 @@ export function familyItems(d, o){
   // Кільком класам одразу (молодша/старша школа чи вибрані) — мапа classes
   newsItems(d.news, a => a.scope === 'school' || a.class === o.cls
     || (a.scope === 'classes' && !!a.classes && a.classes[o.cls] === true), from)
-    .forEach(x => out.push({ ...x, go: { tab: o.role === 'student' ? 'news' : 'school' } }));
+    .forEach(x => out.push({ ...x, go: { tab: 'news' } }));
   // Запити школи без відповіді (лише батьки)
   if(o.role === 'parent'){
     for(const id in (d.consents || {})){
