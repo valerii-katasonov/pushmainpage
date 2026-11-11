@@ -18,9 +18,10 @@
 // ═══════════════════════════════════════════════════════════════
 import { ref, get } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { db, currentUserData, getActiveClass, parseTimeRange, localDateString, escHtml, dayKeys, getClassNum, isMasterTeacher } from './common.js';
+import { offDaysMap, offTitle, loadCalendarRaw } from './offdays.js';
 
 const TTL = 10 * 60 * 1000;            // заміни можуть зʼявитися вдень — перечитуємо раз на 10 хв
-let cache = { key: '', at: 0, items: [] };
+let cache = { key: '', at: 0, items: [], off: '' };
 let loading = null;
 
 const lower = s => String(s || '').trim().toLowerCase();
@@ -75,10 +76,11 @@ export function actionsHtml(){
 
 const WD = ['Неділя', 'Понеділок', 'Вівторок', 'Середа', 'Четвер', 'Пʼятниця', 'Субота'];
 const MON = ['січня', 'лютого', 'березня', 'квітня', 'травня', 'червня', 'липня', 'серпня', 'вересня', 'жовтня', 'листопада', 'грудня'];
-export function calmHtml(items, now){
+export function calmHtml(items, now, off = ''){
   const head = `${WD[now.getDay()]}, ${now.getDate()} ${MON[now.getMonth()]}`;
-  const msg = (items && items.length) ? 'Уроки на сьогодні закінчилися' : 'Сьогодні у вас уроків немає';
-  const sub = (items && items.length) ? `Було уроків: ${items.length}` : 'Гарного дня!';
+  const has = items && items.length;
+  const msg = has ? 'Уроки на сьогодні закінчилися' : off ? '🎉 Сьогодні вихідний' : 'Сьогодні у вас уроків немає';
+  const sub = has ? `Було уроків: ${items.length}` : off || 'Гарного дня!';
   return `<div class="ui-now ui-now-calm" role="status"><small>${escHtml(head)}</small>`
     + `<div class="ui-now-l">${escHtml(msg)}</div><div class="ui-now-m">${escHtml(sub)}</div></div>`;
 }
@@ -105,11 +107,18 @@ async function loadLessons(date){
     // Класи, де я сьогодні на заміні, хоч їх і немає в моєму списку
     const extra = Object.keys(subsAll).filter(c => !classes.includes(c)
       && Object.values(subsAll[c] || {}).some(s => s && lower(s.subEmail) === me));
-    const all = [...classes, ...extra];
+    // СВЯТА Й КАНІКУЛИ. Розклад знає лише дні тижня — у свято картка
+    // казала «іде урок». Клас, у якого за календарем школи вихідний,
+    // сьогодні уроків не має (заміни в нього теж не рахуємо).
+    const cal = await loadCalendarRaw().catch(() => null);
+    const calType = currentUserData && currentUserData.role === 'art_school_teacher' ? 'art_school' : 'general';
+    const offOf = c => cal ? offDaysMap(cal.holidays, cal.breaks, c, calType)[date] : null;
+    let offInfo = null;
+    const all = [...classes, ...extra].filter(c => { const o = offOf(c); if(o && !offInfo) offInfo = o; return !o; });
     const scheds = await Promise.all(all.map(c => read(`schedules/${c}/lessons/${dn}`)));
     const allowed = (c, sn) => extra.includes(c) ? false : (window.isSubjectAllowed ? window.isSubjectAllowed(c, sn) : false);
     const items = teacherNowItems(all.flatMap((c, i) => classLessons(c, scheds[i], subsAll[c], me, allowed)));
-    cache = { key, at: Date.now(), items };
+    cache = { key, at: Date.now(), items, off: offInfo ? offTitle(offInfo, date) : '' };
     return items;
   })();
   loading = { key, p };
@@ -129,7 +138,10 @@ export async function renderTeacherNow(){
   window.renderNowCard('t', items, now.getHours() * 60 + now.getMinutes());
   // Уроків немає або вже скінчилися — спокійна картка з датою, а не порожнеча:
   // верх екрана завжди відповідає на «що в мене сьогодні»
-  if(!box.innerHTML) box.innerHTML = calmHtml(items, now);
+  // Свято: картку «зараз» не будуємо зовсім — навіть якщо в іншому класі,
+  // де не вихідний, уроки є, а в моєму — ні
+  if(!items.length && cache.off) box.innerHTML = '';
+  if(!box.innerHTML) box.innerHTML = calmHtml(items, now, items.length ? '' : cache.off);
   box.style.display = '';
   box.insertAdjacentHTML('beforeend', actionsHtml());
 }
@@ -144,6 +156,6 @@ window.goTeacherAttendance = function(){
 };
 window.renderTeacherNow = renderTeacherNow;
 // Зміна контексту (вихід, інша роль) — кеш чужий
-window.addEventListener('push:context', () => { cache = { key: '', at: 0, items: [] }; });
+window.addEventListener('push:context', () => { cache = { key: '', at: 0, items: [], off: '' }; });
 // Хвилина минула — оновлюємо «ще N хв» (лише коли вкладку видно)
 setInterval(() => { if(document.visibilityState === 'visible' && document.getElementById('t-now')?.offsetParent) renderTeacherNow(); }, 60000);

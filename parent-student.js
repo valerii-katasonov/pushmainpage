@@ -7,6 +7,8 @@
 import { ref, set, get, child, remove, update } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { db, getActiveClass, currentUserData, getClassNum, LEVEL_MAX_CLASS, STICKER_GOAL, stickerGoal, getWeekDates, displayGrade, gradeClass6, showToast, renderHwItem, renderHwList, dayKeys, dayNamesUA, isBreakItem, parseTimeRange, fmtTimeRange, localDateString, formatAttendanceSlotLabel, renderGradeFormulaInfo, escJs, escHtml, safeUrl, renderBirthdays, stuName, stuId, auth, normalizeChildren, gradesFromMirror, mondayOf, altChoiceFor, resolveAlt, classHourItem, insertAtTime, minsOf, subjKey, planKeyWith, notifyEvent, getStudentDir, resolveStudentKey } from './common.js';
 import { ACTIVE_YEAR } from './director.js';
+import { offDaysMap, addDays, offTitle, ddmm } from './offdays.js';
+export { offDaysMap, addDays, offTitle };
 import { renderParentMenu } from './kitchen.js';
 import { renderNewsFeed } from './news.js';
 
@@ -407,28 +409,6 @@ export function nextSchoolDay(dayKeysList, fromDow, hasLessons){
 //
 // Тут календар перетворюється на мапу {дата: {title, until}} для класу
 // дитини (свята мають classes і тип календаря, як і в «Календарі»).
-export function offDaysMap(holidays, breaks, cls, calType){
-  const fits = cs => !cs || cs === 'all' || (Array.isArray(cs) && cs.includes(cls))
-    || (cs && typeof cs === 'object' && Object.values(cs).includes(cls));
-  const out = {};
-  Object.values(breaks || {}).forEach(b => {
-    if(!b || !b.startDate || !b.endDate || !fits(b.classes)) return;
-    for(let d = b.startDate; d <= b.endDate; d = addDays(d, 1))
-      out[d] = { title: b.title || 'Канікули', until: b.endDate };
-  });
-  // Свято сильніше за канікули: «Різдво» точніше, ніж «Зимові канікули»
-  Object.values(holidays || {}).forEach(h => {
-    if(!h || !h.date || !fits(h.classes)) return;
-    if(h.calendarType && h.calendarType !== calType) return;
-    out[h.date] = { title: h.title || 'Свято', until: (out[h.date] && out[h.date].until) || h.date };
-  });
-  return out;
-}
-export function addDays(date, n){
-  const [y, m, d] = String(date).split('-').map(Number);
-  const t = new Date(y, m - 1, d + n);
-  return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
-}
 // Найближчий навчальний день ПІСЛЯ today: день тижня з уроками і не
 // вихідний за календарем. → {dayName, offset (днів від сьогодні), date} | null
 export function nextSchoolDate(today, hasLessons, off, maxDays = 60){
@@ -439,12 +419,6 @@ export function nextSchoolDate(today, hasLessons, off, maxDays = 60){
     if(!(off && off[date]) && hasLessons(dayName)) return { dayName, offset: i, date };
   }
   return null;
-}
-const ddmm = date => `${date.slice(8, 10)}.${date.slice(5, 7)}`;
-// Підпис вихідного: «Осінні канікули (до 16.11)» — «до» лише для кількох днів
-export function offTitle(o, date){
-  if(!o) return '';
-  return o.until && o.until > date ? `${o.title} (до ${ddmm(o.until)})` : o.title;
 }
 // Що сказати людині над розкладом:
 //   сьогодні вихідний → «Сьогодні вихідний — День незалежності»;

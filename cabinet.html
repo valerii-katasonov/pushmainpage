@@ -130,7 +130,7 @@
       /* ── typography scale ── */
       --text-xs:.75rem; --text-sm:.875rem; --text-base:1rem; --text-lg:1.15rem; --text-xl:1.6rem;
       /* ── shared card tokens ── */
-      --card-radius:12px; --card-shadow:0 2px 10px rgba(0,0,0,.07);
+      --card-radius:12px; --card-shadow:0 1px 2px rgba(16,35,47,.07),0 4px 14px rgba(16,35,47,.10);
       /* ── shared badge tokens ── */
       --badge-radius:8px;
       /* ── шрифт ──
@@ -154,7 +154,7 @@
       --ok:#5CCB93; --ok-soft:#12321F; --ok-line:#28603F; --warn:#F2B552; --warn-soft:#3A2A0E; --warn-line:#6E5120;
       --danger:#FF7676; --danger-soft:#3E1818; --danger-line:#702C2C;
       --g6:#8AC6FF; --g5:#6DB8F2; --g4:#64D29A; --g3:#F2B552; --g2:#FF7E7E; --g1:#FFA3A3;
-      --card-shadow:0 2px 10px rgba(0,0,0,.45); color-scheme:dark;
+      --card-shadow:0 1px 2px rgba(0,0,0,.5),0 6px 18px rgba(0,0,0,.45); color-scheme:dark;
     }
     @media (prefers-color-scheme: dark){
       :root[data-theme="auto"]{
@@ -165,7 +165,7 @@
       --ok:#5CCB93; --ok-soft:#12321F; --ok-line:#28603F; --warn:#F2B552; --warn-soft:#3A2A0E; --warn-line:#6E5120;
       --danger:#FF7676; --danger-soft:#3E1818; --danger-line:#702C2C;
       --g6:#8AC6FF; --g5:#6DB8F2; --g4:#64D29A; --g3:#F2B552; --g2:#FF7E7E; --g1:#FFA3A3;
-      --card-shadow:0 2px 10px rgba(0,0,0,.45); color-scheme:dark;
+      --card-shadow:0 1px 2px rgba(0,0,0,.5),0 6px 18px rgba(0,0,0,.45); color-scheme:dark;
       }
     }
     :root .force-light,:root #report-card-render{
@@ -176,7 +176,7 @@
       --ok:#1E7E4A; --ok-soft:#E8F6EF; --ok-line:#A8DCC1; --warn:#9A5B00; --warn-soft:#FFF4E0; --warn-line:#F0CE96;
       --danger:#C62828; --danger-soft:#FDECEA; --danger-line:#F2B8B5;
       --g6:#01579B; --g5:#0277BD; --g4:#1E7E4A; --g3:#A66200; --g2:#C62828; --g1:#8E1F1F;
-      --card-shadow:0 2px 10px rgba(0,0,0,.07); color-scheme:light;
+      --card-shadow:0 1px 2px rgba(16,35,47,.07),0 4px 14px rgba(16,35,47,.10); color-scheme:light;
       color:var(--ink);
     }
 
@@ -188,7 +188,7 @@
       --ok:#1E7E4A; --ok-soft:#E8F6EF; --ok-line:#A8DCC1; --warn:#9A5B00; --warn-soft:#FFF4E0; --warn-line:#F0CE96;
       --danger:#C62828; --danger-soft:#FDECEA; --danger-line:#F2B8B5;
       --g6:#01579B; --g5:#0277BD; --g4:#1E7E4A; --g3:#A66200; --g2:#C62828; --g1:#8E1F1F;
-      --card-shadow:0 2px 10px rgba(0,0,0,.07); color-scheme:light;
+      --card-shadow:0 1px 2px rgba(16,35,47,.07),0 4px 14px rgba(16,35,47,.10); color-scheme:light;
       color:var(--ink);
     } }
     /* ── СКЕЛЕТОНИ замість «Завантаження...» ──
@@ -3860,7 +3860,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
    «Зараз» угорі. Головна дія (Журнал) — фірмовий синій.
    Кожна плитка має свій колір-значення: ❤️ акцент, 🔄/⏰ увага,
    🚨 тривога, ✉️/📚 бренд, 💬 норма. Кольори — лише в значку й числі. */
-.t-today{--st-shadow:0 1px 2px rgba(16,35,47,.05),0 6px 18px rgba(16,35,47,.06);}
+.t-today{--st-shadow:var(--card-shadow);}   /* виразніші тіні — спільний токен теми (11.11.2026) */
 .t-today .ui-card,.t-today .st-tile,.t-today .qa-btn{border:1px solid var(--line);box-shadow:var(--st-shadow);}
 .t-today .ui-card{border-radius:18px;padding:16px 18px;}
 .t-today h3.ui-h{font-size:.78rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);margin:22px 4px 10px;}
@@ -3982,7 +3982,7 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
    Шапка з предметом → три нумеровані блоки (тема, ДЗ, оцінки), кожен у
    своїй картці зі своєю кнопкою «Зберегти» внизу праворуч → інструменти
    згорнутими картками з поясненням. Кольори — токени брендбука. */
-.t-lesson{--ls-shadow:0 1px 2px rgba(16,35,47,.05),0 6px 18px rgba(16,35,47,.06);}
+.t-lesson{--ls-shadow:var(--card-shadow);}
 .t-lesson .ls-head{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px 18px;margin-bottom:14px;}
 .t-lesson .ls-head-t{flex:1 1 260px;min-width:0;}
 .t-lesson h3.ls-title{margin:0;padding:0;border:none;font-size:1.2rem;color:var(--ink);}
@@ -4106,13 +4106,11 @@ html.season-winter #profile-bar::after{filter:blur(4px);opacity:0;animation:garl
 @keyframes garlGlow{to{opacity:.85;}}
 /* Снігові шапки на картках */
 html.season-winter .ui-card{position:relative;}
-html.season-winter .ui-card::after{content:"";position:absolute;left:16px;right:16px;top:-5px;height:11px;pointer-events:none;border-radius:8px 8px 3px 3px;
-  background:
-    radial-gradient(ellipse 22px 8px at 18% 100%,var(--snow) 96%,transparent 100%),
-    radial-gradient(ellipse 30px 10px at 52% 100%,var(--snow) 96%,transparent 100%),
-    radial-gradient(ellipse 20px 7px at 84% 100%,var(--snow) 96%,transparent 100%),
-    linear-gradient(var(--snow),var(--snow)) 0 100%/100% 4px no-repeat;
-  filter:drop-shadow(0 1px 2px var(--snow-shadow));}
+/* Снігова шапка — «замет» на верхньому краї картки ліворуч, а не смуга на
+   всю ширину: на широких картках смуга виглядала як сіра лінія (11.11.2026) */
+html.season-winter .ui-card::after{content:"";position:absolute;left:14px;top:-10px;width:min(132px,40%);height:18px;pointer-events:none;
+  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 18' preserveAspectRatio='none'%3E%3Cpath d='M0 18 C1 11 7 8 13 10 C17 4 28 2 35 7 C41 2 53 0 61 5 C68 1 80 1 86 7 C93 4 104 5 108 10 C113 9 119 12 120 18 Z' fill='white' stroke='rgb(196,214,228)' stroke-width='0.9' vector-effect='non-scaling-stroke'/%3E%3Cpath d='M6 16 C20 13 40 14 60 12.5 C80 14 100 13 114 16' fill='none' stroke='rgb(226,238,246)' stroke-width='1.6' vector-effect='non-scaling-stroke'/%3E%3C/svg%3E") no-repeat center/100% 100%;
+  filter:drop-shadow(0 1px 1.5px var(--snow-shadow));}
 /* Сніжинка на активній вкладці нижнього меню */
 html.season-winter .ui-bnav-i[aria-current="page"] .ui-bnav-ic{position:relative;}
 html.season-winter .ui-bnav-i[aria-current="page"] .ui-bnav-ic::after{content:"❄";position:absolute;top:-5px;right:4px;font-size:.62rem;color:var(--brand-deep);}
