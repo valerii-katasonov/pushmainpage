@@ -4097,7 +4097,14 @@ article.is-collapsed .nw-foot,article.is-collapsed .fn-foot{display:none;}
    Усе — лише під html.season-winter: зняв клас — і від зими нічого не
    лишилось. Нічого не перехоплює натискання (pointer-events:none). */
 #season-snow{display:none;}
-html.season-winter #season-snow{display:block;position:fixed;inset:0;z-index:900;pointer-events:none;overflow:hidden;}
+html.season-winter #season-snow{display:block;position:fixed;inset:0;z-index:900;pointer-events:none;overflow:hidden;contain:strict;}
+/* МЕРЕХТІННЯ ПРИ ЗМІНІ ВКЛАДОК. Головна картка й смуга вкладок мають
+   розмиття фону (backdrop-filter). Коли вкладка міняється, висота сторінки
+   стрибає, і телефон перераховує розмиття на весь кабінет — а поверх
+   летить сніг, і Safari/Chrome на телефонах на цих кадрах блимали.
+   Фон у них і так майже непрозорий (95%), тож узимку розмиття вимикаємо:
+   на вигляд різниці немає, а перераховувати нічого. */
+html.season-winter .container,html.season-winter .dtab-bar{backdrop-filter:none;-webkit-backdrop-filter:none;}
 #season-snow i{position:absolute;top:-24px;color:var(--snow-fall);opacity:.7;font-style:normal;line-height:1;
   text-shadow:0 0 3px var(--snow-shadow);animation:snowFall 12s linear infinite;will-change:transform;}
 @keyframes snowFall{
@@ -4117,9 +4124,12 @@ html.season-winter #profile-bar::before,html.season-winter #profile-bar::after{c
     radial-gradient(circle at 30px 9px,var(--garl-3) 0 3.6px,transparent 4.2px) 0 0/48px 14px repeat-x,
     radial-gradient(circle at 42px 10px,var(--garl-4) 0 3.6px,transparent 4.2px) 0 0/48px 14px repeat-x,
     linear-gradient(var(--garl-wire),var(--garl-wire)) 0 4px/100% 1.5px no-repeat;}
-html.season-winter #profile-bar::before{animation:garlTwinkle 2.4s ease-in-out infinite alternate;}
-html.season-winter #profile-bar::after{filter:blur(4px);opacity:0;animation:garlGlow 2.4s ease-in-out infinite alternate;}
-@keyframes garlTwinkle{from{filter:brightness(.8);}to{filter:brightness(1.15);}}
+/* Мерехтіння — лише opacity з will-change: її браузер анімує на відеокарті,
+   не перемальовуючи сторінку. Було filter:brightness — він перемальовував
+   шапку щокадру, і разом зі снігом це давало мерехтіння при зміні вкладок. */
+html.season-winter #profile-bar::before{animation:garlTwinkle 2.4s ease-in-out infinite alternate;will-change:opacity;}
+html.season-winter #profile-bar::after{filter:blur(4px);opacity:0;animation:garlGlow 2.4s ease-in-out infinite alternate;will-change:opacity;}
+@keyframes garlTwinkle{from{opacity:.72;}to{opacity:1;}}
 @keyframes garlGlow{to{opacity:.85;}}
 /* Снігові шапки на картках */
 html.season-winter .ui-card{position:relative;}
