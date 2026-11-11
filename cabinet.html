@@ -4154,6 +4154,31 @@ html.season-winter .ui-bnav-i[aria-current="page"] .ui-bnav-ic::after{content:"�
 .t-head-h{margin:0 2px 2px;color:var(--brand-deep);font-size:1.05rem;}
 .t-head-sub{margin:0 2px 12px;font-size:.78rem;color:var(--ink-2);}
 .t-head-block details.ls-tool{background:var(--surface);}
+
+/* 👦 Учні у вкладці «Клас» і вікно учня (class-roster.js) */
+.ts-filter{margin:0 0 8px;}
+.ts-list{list-style:none;margin:0;padding:0;display:grid;gap:6px;}
+.ts-row{display:flex;align-items:center;gap:10px;width:100%;max-width:none;min-height:48px;margin:0;padding:8px 12px;border-radius:12px;
+  background:var(--surface-2);border:1px solid var(--line-soft);color:var(--ink);font:inherit;font-weight:700;text-align:left;cursor:pointer;}
+.ts-row:hover{border-color:var(--brand-line);background:var(--brand-soft);}
+.ts-row .ts-n{flex:none;width:24px;color:var(--ink-3);font-weight:600;font-size:.8rem;}
+.ts-row .ts-nm{flex:1;min-width:0;}
+.ts-row .ts-mark{flex:none;font-size:.72rem;font-weight:700;color:var(--danger);}
+.ts-row .ts-go{flex:none;color:var(--ink-3);}
+.ts-sheet{max-width:560px;text-align:left;}
+.ts-head{display:flex;align-items:flex-start;gap:10px;margin-bottom:8px;}
+.ts-who{flex:1;min-width:0;}
+.ts-who h2{margin:0;color:var(--brand-deep);font-size:1.2rem;}
+.ts-who small{color:var(--ink-3);}
+.ts-x{width:auto;min-height:0;margin:0;padding:4px 10px;background:none;border:none;color:var(--ink-3);font-size:1.1rem;cursor:pointer;}
+.ts-360{display:flex;flex-direction:column;align-items:flex-start;gap:1px;width:100%;max-width:none;margin:0 0 10px;padding:10px 14px;border-radius:12px;
+  background:var(--brand-soft);color:var(--brand-deep);border:1px solid var(--brand-line);font:inherit;font-weight:800;text-align:left;cursor:pointer;}
+.ts-360 small{font-weight:600;color:var(--ink-3);font-size:.75rem;}
+.ts-seg{margin:0 0 10px;}
+.ts-sheet .ts-stu-fld{display:none;}
+.ts-sheet .ls-card{margin:0;box-shadow:none !important;}
+.ts-sheet .ls-grid2,.ts-sheet .ls-grid3{grid-template-columns:1fr;}
+.ts-pane[hidden]{display:none;}
 </style>
 </head>
 <!-- auth-mode СТОЇТЬ ТУТ ОДРАЗУ, а не чекає на скрипт.
@@ -5880,58 +5905,19 @@ html.season-winter .ui-bnav-i[aria-current="page"] .ui-bnav-ic::after{content:"�
           <button onclick="openAppReach()" class="qa-btn"><span class="qa-ic" aria-hidden="true">📱</span><span class="qa-l">Хто зі сповіщеннями</span></button>
       </div></div>
 
-      <!-- Коментар -->
-      <div id="t-comment-card" class="ls-card">
-        <div class="ls-step"><b class="ls-ib">💬</b><div><h4>Коментар учню</h4>
-          <p>Батьки отримають сповіщення й побачать коментар під предметом; можуть відповісти реакцією.
-            <a href="#" class="ls-link" onclick="event.preventDefault();openCommentsView()">Усі коментарі →</a></p></div></div>
-        <div class="ls-grid2">
-          <label class="ls-fld">Учень<select id="t-student"><option value="">Учень...</option></select></label>
-          <label class="ls-fld">Предмет<select id="t-subject-for-comment"></select></label>
-        </div>
-        <label for="t-comment" class="ls-lbl">Текст</label>
-        <textarea id="t-comment" rows="3" placeholder="Напишіть своїми словами — напр. «не готовий до уроку, заважає»..."></textarea>
-        <!-- AI переформулює чернетку вчителя в коректне повідомлення батькам.
-             Ім'я учня в сервіс не передається — див. teacher.js -->
-        <div class="ai-hw-row">
-          <button type="button" id="btn-ai-comment" onclick="improveCommentAI()">✨ Допомогти сформулювати</button>
-          <span class="ai-hw-note">перепишу ввічливо й конструктивно</span>
-        </div>
-        <p id="ai-comment-msg" class="ai-hw-msg" style="display:none;"></p>
-        <div class="ls-foot"><button id="btn-save-comment" class="qa-btn ls-save" onclick="saveComment()">💬 Зберегти коментар</button></div>
+      <!-- 👦 УЧНІ (11.11.2026): спершу учень, потім дія. Раніше було три
+           окремі форми (коментар, наліпка, поведінка), і в кожній учня
+           обирали заново. Тепер — список класу; натиснули ім'я → вікно учня
+           з цими трьома діями й переходом до картки «360°» (class-roster.js).
+           Самі форми й їхнє збереження ті самі, лише живуть у вікні. -->
+      <div class="ls-card ts-roster">
+        <div class="ls-step"><b class="ls-ib">👦</b><div><h4>Учні</h4>
+          <p>Натисніть на учня: коментар, наліпка, поведінка — і все про нього.</p></div></div>
+        <input type="search" id="ts-filter" class="ts-filter" placeholder="🔍 Пошук учня…" autocomplete="off" oninput="renderClassRoster()">
+        <ul id="ts-list" class="ts-list"><li class="empty-msg is-loading">Завантаження...</li></ul>
       </div>
 
-      <!-- Наліпка -->
-      <div class="ls-card ls-sticker">
-        <div class="ls-step"><b class="ls-ib">🌟</b><div><h4>Наліпка</h4>
-          <p>Заохочення: наліпки збираються до нагороди, батьки бачать їх у кабінеті дитини.
-            <a href="#" class="ls-link" onclick="event.preventDefault();openStickerStatsModal()">Статистика наліпок →</a></p></div></div>
-        <div class="ls-grid3">
-          <label class="ls-fld">Учень<select id="t-sticker-student"></select></label>
-          <label class="ls-fld">Предмет<select id="t-sticker-subject" onchange="toggleStickerOther()"></select></label>
-          <!-- Скільки наліпок. Порожнє поле = одна: щоденна дія не має
-               вимагати зайвого набору, а «назбиралося чотири» пишеться
-               одним символом замість чотирьох натискань «Дати». -->
-          <label class="ls-fld ls-num">Скільки
-            <input id="t-sticker-count" type="number" min="1" max="20" step="1" inputmode="numeric"
-              placeholder="1" title="Скільки наліпок видати за раз (до 20)"></label>
-        </div>
-        <label id="t-sticker-other-wrap" class="ls-fld" style="display:none;margin-top:9px;">За що наліпка?
-          <input type="text" id="t-sticker-other" maxlength="160" placeholder="Наприклад, допоміг однокласнику">
-        </label>
-        <div class="ls-foot"><button id="btn-give-sticker" class="qa-btn ls-save ls-warm" onclick="giveStickerToStudent()">🌟 Дати</button></div>
-      </div>
 
-      <!-- Оцінка поведінки -->
-      <div class="ls-card">
-        <div class="ls-step"><b class="ls-ib">🤝</b><div><h4>Оцінка поведінки</h4>
-          <p>За класний урок, від 1 до 6. Лягає в журнал і видно батькам.</p></div></div>
-        <div class="ls-grid2 ls-grid-beh">
-          <label class="ls-fld">Учень<select id="t-behavior-student"><option value="">Учень...</option></select></label>
-          <label class="ls-fld ls-num">Оцінка<input type="text" id="t-behavior-grade" placeholder="1–6" inputmode="numeric"></label>
-        </div>
-        <div class="ls-foot"><button class="qa-btn ls-save" onclick="saveBehaviorGrade()">💾 Зберегти оцінку</button></div>
-      </div>
 
       <!-- 🎓 КЛАСНИЙ КЕРІВНИК (11.11.2026): усе, що стосується лише свого
            класу, — окремим блоком. Предметник його не бачить; класний
@@ -6489,6 +6475,78 @@ html.season-winter .ui-bnav-i[aria-current="page"] .ui-bnav-ic::after{content:"�
   </div>
 </div>
 <!-- Швидкий журнал: увесь клас на одному екрані -->
+<!-- 👦 Вікно учня у вкладці «Клас» (class-roster.js). Класи t-lesson t-class —
+     щоб форми всередині мали той самий вигляд, що й у вкладці. -->
+<div id="t-stu-sheet" class="modal-overlay" style="z-index:1008;">
+  <div class="modal-content ts-sheet t-lesson t-class">
+    <div class="ts-head">
+      <div class="ts-who"><h2 id="ts-name">—</h2><small id="ts-sub"></small></div>
+      <button type="button" class="ts-x" onclick="closeStudentSheet()" aria-label="Закрити">✕</button>
+    </div>
+    <button type="button" class="ts-360" onclick="tsOpen360()">👤 Усе про учня <small>оцінки, пропуски, коментарі, батьки</small></button>
+    <div class="ui-seg ts-seg" role="tablist" aria-label="Дія">
+      <button type="button" role="tab" data-ts="comment" onclick="tsTab('comment')">💬 Коментар</button>
+      <button type="button" role="tab" data-ts="sticker" onclick="tsTab('sticker')">🌟 Наліпка</button>
+      <button type="button" role="tab" data-ts="behavior" onclick="tsTab('behavior')">🤝 Поведінка</button>
+    </div>
+    <div class="ts-pane" data-ts-pane="comment">
+      <!-- Коментар -->
+      <div id="t-comment-card" class="ls-card">
+        <div class="ls-step"><b class="ls-ib">💬</b><div><h4>Коментар учню</h4>
+          <p>Батьки отримають сповіщення й побачать коментар під предметом; можуть відповісти реакцією.
+            <a href="#" class="ls-link" onclick="event.preventDefault();openCommentsView()">Усі коментарі →</a></p></div></div>
+        <div class="ls-grid2">
+          <label class="ls-fld ts-stu-fld">Учень<select id="t-student"><option value="">Учень...</option></select></label>
+          <label class="ls-fld">Предмет<select id="t-subject-for-comment"></select></label>
+        </div>
+        <label for="t-comment" class="ls-lbl">Текст</label>
+        <textarea id="t-comment" rows="3" placeholder="Напишіть своїми словами — напр. «не готовий до уроку, заважає»..."></textarea>
+        <!-- AI переформулює чернетку вчителя в коректне повідомлення батькам.
+             Ім'я учня в сервіс не передається — див. teacher.js -->
+        <div class="ai-hw-row">
+          <button type="button" id="btn-ai-comment" onclick="improveCommentAI()">✨ Допомогти сформулювати</button>
+          <span class="ai-hw-note">перепишу ввічливо й конструктивно</span>
+        </div>
+        <p id="ai-comment-msg" class="ai-hw-msg" style="display:none;"></p>
+        <div class="ls-foot"><button id="btn-save-comment" class="qa-btn ls-save" onclick="saveComment()">💬 Зберегти коментар</button></div>
+      </div>
+    </div>
+    <div class="ts-pane" data-ts-pane="sticker" hidden>
+      <!-- Наліпка -->
+      <div class="ls-card ls-sticker">
+        <div class="ls-step"><b class="ls-ib">🌟</b><div><h4>Наліпка</h4>
+          <p>Заохочення: наліпки збираються до нагороди, батьки бачать їх у кабінеті дитини.
+            <a href="#" class="ls-link" onclick="event.preventDefault();openStickerStatsModal()">Статистика наліпок →</a></p></div></div>
+        <div class="ls-grid3">
+          <label class="ls-fld ts-stu-fld">Учень<select id="t-sticker-student"></select></label>
+          <label class="ls-fld">Предмет<select id="t-sticker-subject" onchange="toggleStickerOther()"></select></label>
+          <!-- Скільки наліпок. Порожнє поле = одна: щоденна дія не має
+               вимагати зайвого набору, а «назбиралося чотири» пишеться
+               одним символом замість чотирьох натискань «Дати». -->
+          <label class="ls-fld ls-num">Скільки
+            <input id="t-sticker-count" type="number" min="1" max="20" step="1" inputmode="numeric"
+              placeholder="1" title="Скільки наліпок видати за раз (до 20)"></label>
+        </div>
+        <label id="t-sticker-other-wrap" class="ls-fld" style="display:none;margin-top:9px;">За що наліпка?
+          <input type="text" id="t-sticker-other" maxlength="160" placeholder="Наприклад, допоміг однокласнику">
+        </label>
+        <div class="ls-foot"><button id="btn-give-sticker" class="qa-btn ls-save ls-warm" onclick="giveStickerToStudent()">🌟 Дати</button></div>
+      </div>
+    </div>
+    <div class="ts-pane" data-ts-pane="behavior" hidden>
+      <!-- Оцінка поведінки -->
+      <div class="ls-card">
+        <div class="ls-step"><b class="ls-ib">🤝</b><div><h4>Оцінка поведінки</h4>
+          <p>За класний урок, від 1 до 6. Лягає в журнал і видно батькам.</p></div></div>
+        <div class="ls-grid2 ls-grid-beh">
+          <label class="ls-fld ts-stu-fld">Учень<select id="t-behavior-student"><option value="">Учень...</option></select></label>
+          <label class="ls-fld ls-num">Оцінка<input type="text" id="t-behavior-grade" placeholder="1–6" inputmode="numeric"></label>
+        </div>
+        <div class="ls-foot"><button class="qa-btn ls-save" onclick="saveBehaviorGrade()">💾 Зберегти оцінку</button></div>
+      </div>
+    </div>
+  </div>
+</div>
 <div id="quick-journal-modal" class="modal-overlay" style="z-index:1010;">
   <div class="modal-content" style="max-width:520px;text-align:left;">
     <h2 style="color:var(--brand-deep);margin-top:0;text-align:center;">⚡ Швидкий журнал</h2>
@@ -7143,6 +7201,7 @@ function openAppReach(){
 <script type="module" src="app-reach.js"></script>
 <script type="module" src="season.js"></script>
 <script type="module" src="teacher-attention.js"></script>
+<script type="module" src="class-roster.js"></script>
 <script type="module" src="ios-fixed.js"></script>
 <script type="module" src="mirror-audit.js"></script>
 <script type="module" src="child-photo.js"></script>

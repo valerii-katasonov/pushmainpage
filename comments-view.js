@@ -178,6 +178,11 @@ window.cvWrite = async function(){
     await new Promise(r => setTimeout(r, 150));
   }
   const st = document.getElementById('t-student');
+  // З 11.11.2026 форма коментаря — у вікні учня (class-roster.js)
+  if(st && sid && [...st.options].some(o => o.value === sid) && window.openStudentSheet){
+    window.openStudentSheet(sid, 'comment');
+    return;
+  }
   if(st && sid && [...st.options].some(o => o.value === sid)) st.value = sid;
   const card = document.getElementById('t-comment-card');
   if(card){ try{ card.scrollIntoView({ behavior: 'smooth', block: 'center' }); }catch(e){ card.scrollIntoView(); } }
