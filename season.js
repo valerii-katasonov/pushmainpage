@@ -41,9 +41,10 @@ export function seasonGreeting(today){
 }
 
 // ── СНІГ ──────────────────────────────────────────────────────────
-// Двадцять дві сніжинки на CSS-анімації transform: дешево для батареї.
+// Дванадцять сніжинок на CSS-анімації transform: дешево для батареї.
+// (Спершу було 22 — виглядало як хуртовина; 11.11.2026 зменшили й сповільнили.)
 // Розташування випадкове, щоб не було видно повтору.
-const FLAKES = 22;
+const FLAKES = 12;
 function ensureSnow(){
   if(document.getElementById('season-snow')) return;
   const box = document.createElement('div');
@@ -51,9 +52,9 @@ function ensureSnow(){
   let html = '';
   for(let i = 0; i < FLAKES; i++){
     const left = (Math.random() * 100).toFixed(1);
-    const dur = (9 + Math.random() * 9).toFixed(1);
-    const delay = (-Math.random() * 18).toFixed(1);
-    const size = (7 + Math.random() * 9).toFixed(0);
+    const dur = (16 + Math.random() * 12).toFixed(1);
+    const delay = (-Math.random() * 28).toFixed(1);
+    const size = (6 + Math.random() * 7).toFixed(0);
     const sway = (Math.random() * 40 - 20).toFixed(0);
     html += `<i style="left:${left}%;font-size:${size}px;animation-duration:${dur}s;animation-delay:${delay}s;--sway:${sway}px">${i % 3 ? '•' : '❄'}</i>`;
   }
