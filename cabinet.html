@@ -4145,10 +4145,12 @@ html.season-winter .ui-bnav-i[aria-current="page"] .ui-bnav-ic::after{content:"�
 /* Поки відкрите будь-яке вікно, сніг і гірлянда завмирають. Під
    напівпрозорим тлом вікна з розмиттям (backdrop-filter) рухомий сніг
    змушував браузер щокадру перемальовувати розмиття — на телефонах це
-   виглядало як мерехтіння за вікном (11.11.2026, вікно учня). */
-body:has(.modal-overlay[style*="flex"]) #season-snow{display:none !important;}
-body:has(.modal-overlay[style*="flex"]) #profile-bar::before,
-body:has(.modal-overlay[style*="flex"]) #profile-bar::after{animation:none !important;}
+   виглядало як мерехтіння за вікном (11.11.2026, вікно учня).
+   Шукаємо саме «display: flex», а не будь-яке «flex»: у visual-matrix-modal
+   в розмітці стоїть align-items:flex-start, і сніг зникав назавжди. */
+body:has(.modal-overlay[style*="display: flex"],.modal-overlay[style*="display:flex"]) #season-snow{display:none !important;}
+body:has(.modal-overlay[style*="display: flex"],.modal-overlay[style*="display:flex"]) #profile-bar::before,
+body:has(.modal-overlay[style*="display: flex"],.modal-overlay[style*="display:flex"]) #profile-bar::after{animation:none !important;}
 
 /* ── Учитель: «Потребує уваги» й перенесені кнопки (11.11.2026) ── */
 .t-attn .st-tiles{margin-bottom:0;}
