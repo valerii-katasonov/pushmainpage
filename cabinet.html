@@ -5556,6 +5556,7 @@ body:has(.modal-overlay[style*="display: flex"],.modal-overlay[style*="display:f
         <div role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" id="t-retake-btn" class="ui-tile st-tile st-warn t-attn-tile" hidden onclick="openRetakeRequestsModal()" title="Запити на перездачу"><i class="st-ic" aria-hidden="true">🔄</i><b id="t-retake-counter">0</b><span>перездачі</span></div>
         <div role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" id="t-subs-btn" class="ui-tile st-tile st-brand t-attn-tile" onclick="attnGo('t-hw-list-wrapper')" title="Здані домашні роботи за обраний день" hidden><i class="st-ic" aria-hidden="true">📥</i><b id="t-subs-counter">0</b><span>здані роботи за день</span></div>
         <div role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" id="t-talkreq-btn" class="ui-tile st-tile st-accent t-attn-tile" onclick="attnGo('t-talk')" title="Запити батьків «Хочу обговорити»" hidden><i class="st-ic" aria-hidden="true">💬</i><b id="t-talk-counter">0</b><span>запити батьків</span></div>
+        <div role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" id="t-alt-btn" class="ui-tile st-tile st-warn t-attn-tile" onclick="goAltCard()" title="Чергування уроків не позначене — батьки не знають, що буде" hidden><i class="st-ic" aria-hidden="true">🔁</i><b id="t-alt-counter">0</b><span>чергування не позначено</span></div>
         </div>
         <p class="t-attn-ok" id="t-attn-ok">✅ Усе гаразд — нічого не чекає</p>
       </div>
@@ -5791,7 +5792,7 @@ body:has(.modal-overlay[style*="display: flex"],.modal-overlay[style*="display:f
            одним блоком, щоб під уроком лишався сам урок. -->
       <details class="ls-tools-group" id="t-subject-tools">
       <summary class="ls-tools-sum"><span class="ls-ic" aria-hidden="true">⚙️</span><span class="ls-tt"><b>Налаштування предмета й класу</b><small>Планування, теми, чергування, класна година, підручники, тренажери</small></span></summary>
-      <details class="ls-tool" ontoggle="if(this.open)openAltCard()">
+      <details class="ls-tool" id="t-alt-card" ontoggle="if(this.open)openAltCard()">
         <summary><span class="ls-ic" aria-hidden="true">🔁</span><span class="ls-tt"><b>Чергування уроків</b><small>Що саме буде цього й наступного тижня, коли предмети чергуються</small></span></summary>
         <div style="margin-top:12px;">
           <p style="font-size:.78rem;color:var(--ink-2);">Позначте, що саме буде цього й наступного тижня. Поки не позначено, батьки бачать обидві назви.</p>

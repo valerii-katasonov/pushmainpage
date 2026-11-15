@@ -7,7 +7,8 @@
 // лишилося те, де вчителеві справді є що зробити:
 //   🔄 заявки на перездачу, що чекають (teacher.js → refreshRetakeCounter);
 //   📥 здані домашні роботи за обраний день (teacher.js → loadDailyHomeworkSubmissions);
-//   💬 відкриті запити батьків «Хочу обговорити» (talk-requests.js).
+//   💬 відкриті запити батьків «Хочу обговорити» (talk-requests.js);
+//   🔁 непозначене чергування уроків класу (alternating.js).
 // Плитка з нулем ховається; коли всі нулі — «✅ Усе гаразд».
 //
 // ЛІЧИЛЬНИКИ НЕ РАХУЄМО ВДРУГЕ. Їх уже пишуть свої модулі; тут лише
@@ -16,7 +17,8 @@
 const TILES = [
   { tile: 't-retake-btn',  count: 't-retake-counter' },
   { tile: 't-subs-btn',    count: 't-subs-counter' },
-  { tile: 't-talkreq-btn', count: 't-talk-counter' }
+  { tile: 't-talkreq-btn', count: 't-talk-counter' },
+  { tile: 't-alt-btn',     count: 't-alt-counter' }    // alternating.js → refreshAltAttention
 ];
 const num = id => { const el = document.getElementById(id); return el ? (parseInt(el.textContent, 10) || 0) : 0; };
 

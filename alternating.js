@@ -27,6 +27,7 @@ import { ref, set, get, child, remove, update } from "https://www.gstatic.com/fi
 import { db, currentUserData, getActiveClass, teacherAccessMatrix, showToast,
          escHtml, escJs, mondayOf, altOptions, altPairKey, resolveAlt,
          freeBellSlots, logAction } from './common.js';
+import { offDaysMap, loadCalendarRaw, addDays } from './offdays.js';
 
 const DIR_ROLES  = ['director', 'administrator'];
 const TEACH_ROLES = ['teacher', 'class_teacher', 'art_school_teacher', 'music_teacher', 'master_class_teacher'];
@@ -270,6 +271,82 @@ window.changeAltClass = function(cls){
 };
 
 // Одне натискання — усі уроки цієї пари в цьому тижні
+// ── «Потребує уваги»: чергування, яке ще ніхто не позначив ──────────
+//
+// Поки пару не позначено, батьки бачать «Музичне / Фізичне» й не знають,
+// що класти в рюкзак. Нагадуємо вчителеві на «Сьогодні», а не в згорнутому
+// блоці «Уроку», куди без причини не заходять.
+//
+// ЯКІ ТИЖНІ. Поточний — завжди (у суботу й неділю він уже минув — не
+// рахуємо). Наступний — з четверга: раніше нагадування висіло б щопонеділка
+// про тиждень, до якого ще далеко. Пара, всі уроки якої в цьому тижні
+// припадають на свята чи канікули, — не борг.
+const DAY_IDX = { Monday:0, Tuesday:1, Wednesday:2, Thursday:3, Friday:4, Saturday:5 };
+export function altWeeksToCheck(now = new Date()){
+  const dow = now.getDay();                       // 0 — неділя
+  const thisWeek = mondayOf(now);
+  if(dow === 0 || dow === 6) return [nextMonday(thisWeek)];
+  return dow >= 4 ? [thisWeek, nextMonday(thisWeek)] : [thisWeek];
+}
+// Скільки пар не позначено. canSet(group) — чи може ця людина її позначати.
+export function altPendingCount(groups, chosenByWeek, weeks, off, canSet){
+  let n = 0;
+  weeks.forEach(w => groups.forEach(G => {
+    if(canSet && !canSet(G)) return;
+    if(groupChoice(G, (chosenByWeek || {})[w])) return;
+    const allOff = G.slots.every(sl => (off || {})[addDays(w, DAY_IDX[sl.day] || 0)]);
+    if(!allOff) n++;
+  }));
+  return n;
+}
+let altAttnGen = 0;
+export async function refreshAltAttention(){
+  const counter = document.getElementById('t-alt-counter');
+  if(!counter) return;
+  const role = currentUserData && currentUserData.role;
+  const cls = getActiveClass();
+  const gen = ++altAttnGen;
+  let n = 0;
+  if(TEACH_ROLES.includes(role) || role === 'master_class_teacher'){
+    try{
+      const [schedSnap, ctSnap, cal] = await Promise.all([
+        get(child(ref(db), `schedules/${cls}`)),
+        get(child(ref(db), `class_teachers/${cls}`)),
+        loadCalendarRaw().catch(() => null)
+      ]);
+      const groups = altGroups(schedSnap.exists() ? (schedSnap.val().lessons || {}) : {});
+      if(groups.length){
+        const isCT = role === 'master_class_teacher'
+          || (ctSnap.exists() && ctSnap.val().teacherEmail === (currentUserData && currentUserData.email));
+        const weeks = altWeeksToCheck();
+        const chosen = {};
+        await Promise.all(weeks.map(async w => {
+          try{ const s = await get(child(ref(db), `schedule_alt/${cls}/${w}`)); chosen[w] = s.exists() ? s.val() : {}; }
+          catch(e){ chosen[w] = {}; }
+        }));
+        const calType = role === 'art_school_teacher' ? 'art_school' : 'general';
+        const off = cal ? offDaysMap(cal.holidays, cal.breaks, cls, calType) : {};
+        n = altPendingCount(groups, chosen, weeks, off,
+          G => canSetAlt(G.options, role, teacherAccessMatrix, cls, isCT));
+      }
+    }catch(e){ n = 0; }   // нагадування — не привід показувати помилку
+  }
+  if(gen !== altAttnGen) return;           // поки читали, клас змінили
+  const v = String(n);
+  if(counter.textContent !== v) counter.textContent = v;
+}
+window.refreshAltAttention = refreshAltAttention;
+
+// Плитка веде до картки: вкладка «Урок» → розгорнути налаштування й
+// саму картку (ontoggle сам її завантажить) → прокрутити й підсвітити.
+window.goAltCard = function(){
+  if(window.openTabByKey) window.openTabByKey('teacher-screen', 'lesson');
+  const tools = document.getElementById('t-subject-tools');
+  const card = document.getElementById('t-alt-card');
+  if(tools) tools.open = true;
+  if(card){ card.open = true; setTimeout(() => { if(window.attnGo) window.attnGo('t-alt-card'); }, 150); }
+};
+
 window.setAltGroup = async function(week, groupIdx, name){
   const G = altGroups(altState.lessons)[groupIdx];
   if(!G) return;
@@ -289,6 +366,7 @@ window.setAltGroup = async function(week, groupIdx, name){
     if(name) wk.pairs[key] = name; else delete wk.pairs[key];
     G.slots.forEach(sl => { if(wk[sl.day]) delete wk[sl.day][sl.slot]; });
     renderAltCard();
+    refreshAltAttention();
     showToast(name ? `✅ ${name} — уроків: ${G.slots.length}` : '✅ Вибір прибрано');
     logAction('settings', { value: `чергування ${cls} ${week}: ${G.key} → ${name || 'знято'}` });
   }catch(e){

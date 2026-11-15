@@ -2008,6 +2008,7 @@ export function loadTeacherDashboard(){
   const cls=getActiveClass();const uid=auth.currentUser.uid;
   // Retake counter
   window.refreshRetakeCounter();
+  if(window.refreshAltAttention) window.refreshAltAttention();   // «Потребує уваги»: чергування
   Promise.all([get(child(ref(db),`reactions/${cls}`)),get(child(ref(db),`authors/${cls}`)),get(child(ref(db),`comments/${cls}`)),get(child(ref(db),`comment_meta/${cls}`)).catch(()=>null)]).then(([rs,as,cs,ms])=>{
     let cnt=0;window.myDetailedReactions=[];
     // Мій коментар: автор записаний у comment_meta; для старих — за тим, хто вносив ДЗ уроку
