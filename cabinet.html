@@ -3396,6 +3396,7 @@
 .curr-warn.curr-replace small{color:var(--ink-3);}
 .curr-warn.danger{color:var(--danger);background:var(--danger-soft);border-color:var(--danger-line);}
 .curr-subj-fix{width:100%;margin:4px 0 8px 0;font-size:.84rem;}
+.mb-note{margin:8px 2px 0;font-size:.8rem;line-height:1.45;color:var(--ink-2);}
 .mb-box{background:var(--surface-2);border:1px solid var(--ok-line);border-radius:14px;padding:14px;min-width:0;max-width:100%}.mb-person-pick{display:flex;gap:8px;min-width:0}.mb-person-pick select{min-width:0;margin-top:0;text-overflow:ellipsis}.mb-person-pick #k-balance-class{flex:1}.mb-person-pick #k-balance-student{flex:2}.mb-head{background:var(--ok-soft);border-radius:12px;padding:14px;color:var(--ok);min-width:0;overflow-wrap:anywhere}.mb-head.bad{background:var(--danger-soft);color:var(--danger)}.mb-head.low{background:var(--warn-soft);color:var(--warn)}.mb-head span,.mb-head small{display:block}.mb-head b{display:block;font-size:1.75rem;margin:4px 0}.mb-pending{margin-top:9px;padding:10px;border-radius:9px;background:var(--warn-soft);font-size:.8rem;color:var(--warn)}.mb-note{margin:10px 0;font-size:.76rem;color:var(--ink-2);overflow-wrap:anywhere}.mb-form{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;margin-top:12px;min-width:0}.mb-form>*{min-width:0;max-width:100%}.mb-form label{font-size:.75rem;color:var(--ink-2);font-weight:700;overflow-wrap:anywhere}.mb-form input,.mb-form button{margin:3px 0 0;width:100%}.mb-form button,.mb-form small{grid-column:1/-1}.mb-form small{font-size:.75rem;color:var(--ink-2);overflow-wrap:anywhere}.mb-history{margin-top:12px;min-width:0}.mb-history summary{cursor:pointer;font-weight:700;color:var(--ok);overflow-wrap:anywhere}.mb-history>div{display:grid;grid-template-columns:85px 90px minmax(0,1fr);gap:7px;padding:7px 0;border-bottom:1px solid var(--ok-line);font-size:.76rem}.mb-history>div>*{min-width:0;overflow-wrap:anywhere}.mb-history b{color:var(--ok)}.mb-history b.neg{color:var(--danger)}.mb-history small{color:var(--ink-2)}
 .mb-adjust{margin-top:14px;padding:12px;border:1px solid var(--ok-line);border-radius:10px;background:var(--surface-2)}.mb-adjust>b{color:var(--ok);font-size:.82rem}.mb-adjust p{font-size:.75rem;color:var(--ink-2);margin:6px 0}.mb-adjust>div{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.mb-adjust input,.mb-adjust button{min-width:0;width:100%;margin:0}.mb-adjust #mb-adj-reason,.mb-adjust button{grid-column:1/-1}.mb-ledger small{line-height:1.4}
 @media(max-width:600px){.mb-history>div{grid-template-columns:80px minmax(0,1fr)}.mb-history>div small{grid-column:1/-1}.mb-adjust>div{grid-template-columns:minmax(0,1fr)}.mb-adjust #mb-adj-reason,.mb-adjust button{grid-column:auto}}
@@ -4179,9 +4180,11 @@ body:has(.modal-overlay[style*="display: flex"],.modal-overlay[style*="display:f
 .qj-hint{text-align:center;font-size:.8rem;color:var(--ink-3);margin:0 0 10px;}
 .t-primary{display:flex;gap:10px;margin:0 0 14px;}
 .t-primary .ui-btn{min-height:58px;}
+.t-primary .t-qj-btn{min-height:96px;}
 .t-qj-btn{flex:2;flex-direction:column;gap:2px;background:var(--brand-deep);color:var(--on-fill);border:none;box-shadow:var(--card-shadow);font-size:1rem;}
 .t-qj-btn small{font-weight:600;font-size:.72rem;opacity:.85;}
-.t-jr-btn{flex:1;}
+.t-side{flex:1.4;display:flex;flex-direction:column;gap:8px;min-width:0;}
+.t-primary .t-side .ui-btn{flex:1;min-height:44px;margin:0;white-space:nowrap;}
 
 /* 🎓 Блок класного керівника у вкладці «Клас» */
 .t-head-block{margin:18px 0 20px;padding:14px 12px 4px;border-radius:18px;background:var(--brand-soft);border:1px solid var(--brand-line);}
@@ -5544,7 +5547,12 @@ body:has(.modal-overlay[style*="display: flex"],.modal-overlay[style*="display:f
            повний журнал. Не лише в «Зараз», бо та картка є тільки сьогодні. -->
       <div class="t-primary" id="t-primary">
         <button type="button" class="ui-btn t-qj-btn" onclick="openQuickJournal()"><span>⚡ Швидкий журнал</span><small>присутність і оцінки — за урок або роботу</small></button>
-        <button type="button" class="ui-btn ui-btn-2 t-jr-btn" onclick="openJournalModal('teacher')">📖 Журнал</button>
+        <!-- Поруч із журналами — контрольні (15.11.2026): їх дивляться разом,
+             коли плануєш тиждень. Та сама кнопка лишилася й у вкладці «Журнал». -->
+        <div class="t-side">
+          <button type="button" class="ui-btn ui-btn-2 t-jr-btn" onclick="openJournalModal('teacher')">📖 Журнал</button>
+          <button type="button" class="ui-btn ui-btn-2 t-ex-btn" onclick="openExamsCalendar()">📅 Контрольні</button>
+        </div>
       </div>
       <!-- ПОТРЕБУЄ УВАГИ (teacher-attention.js): лише те, де є що робити,
            з лічильником; нулі сховано. Нічого не чекає — «✅ Усе гаразд».
@@ -6154,6 +6162,10 @@ body:has(.modal-overlay[style*="display: flex"],.modal-overlay[style*="display:f
       <div id="p-takeaway" class="ta-box"></div>
       <h3 style="margin-top:18px;">💳 Баланс харчування</h3>
       <div id="p-meal-balance" class="mb-box"><p class="empty-msg">Рахуємо...</p></div>
+      <!-- Оплати в баланс ще не приходять з банку самі: їх вносить кухня. Без
+           цього рядка батько, що переказав гроші зранку, бачив «борг» і писав
+           у школу (15.11.2026). -->
+      <p class="mb-note">ℹ️ Списання за харчування рахуються автоматично щодня. А от оплати поки що не надходять самі: їх вносить працівник кухні протягом тижня. Тому переказ може з’явитися тут через кілька днів.</p>
     </section>
 
     <!-- ═══════════ КАЛЕНДАР ═══════════
