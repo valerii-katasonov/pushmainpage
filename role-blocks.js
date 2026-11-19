@@ -171,7 +171,7 @@ async function meals_view(body, date){
       ...CLASSES.map(c => val(`attendance/${c}/${date}`))]);
     const m = menuDay || {}, hasChoice = !!choicePair(m), hasBrk = !!breakfastChoicePair(m), wd = weekdayIdx(date);
     const per = CLASSES.filter(c => (students || {})[c]).map((c, i) => {
-      const rows = buildOrderRows(c, students[c], (plans || {})[c] || {}, (days || {})[c] || {}, absentSet(att[CLASSES.indexOf(c)]), wd, m, hasChoice, hasBrk);
+      const rows = buildOrderRows(c, students[c], (plans || {})[c] || {}, (days || {})[c] || {}, absentSet(att[CLASSES.indexOf(c)]), wd, m, hasChoice, hasBrk, date);
       return { cls: c, t: orderTotals(rows) };
     });
     const sum = f => per.reduce((n, x) => n + x.t[f], 0);

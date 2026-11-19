@@ -3329,7 +3329,7 @@ async function initUserSession(){
   // Адміністратор кухні — той самий екран кухні, але без фінансової частини
   // (ціни, суми, баланси). Клас k-no-money ховає ці блоки, kitchen.js не
   // рахує гроші, а правила бази не пускають роль до журналу списань.
-  else if(r==='kitchen'||r==='kitchen_admin'){const ks=document.getElementById('kitchen-screen');ks.style.display='block';ks.classList.toggle('k-no-money',r==='kitchen_admin');document.getElementById('teacher-class-selector-box').style.display='none';callWhenReady('refreshKitchen');}
+  else if(r==='kitchen'||r==='kitchen_admin'){callWhenReady('renderPushInvite', 600, ['k-push-invite']);const ks=document.getElementById('kitchen-screen');ks.style.display='block';ks.classList.toggle('k-no-money',r==='kitchen_admin');document.getElementById('teacher-class-selector-box').style.display='none';callWhenReady('refreshKitchen');}
   // Педагог-організатор — не вчитель: розклад, календар подій, оголошення.
   // Гілка стоїть до isTeacherRole і до загального else, який відкрив би
   // людині кабінет батьків.
@@ -3859,7 +3859,9 @@ export async function renderPushInvite(containerId){
     box.innerHTML = st === 'denied'
       ? `<span>🔕 Сповіщення заблоковані у браузері. Дозвольте їх у налаштуваннях сайту, щоб не пропустити повідомлення від школи.</span>
          <button type="button" class="pi-x" onclick="dismissPushInvite('${containerId}')">Зрозуміло</button>`
-      : `<span>🔔 Увімкніть сповіщення — і не пропустите повідомлення вчителя, оголошення та зміни в меню.</span>
+      : `<span>${containerId === 'k-push-invite'
+          ? '🔔 Увімкніть сповіщення на цьому телефоні — о 09:00 прийде підсумок замовлення, а далі — хто не прийшов без попередження.'
+          : '🔔 Увімкніть сповіщення — і не пропустите повідомлення вчителя, оголошення та зміни в меню.'}</span>
          <button type="button" class="pi-go" onclick="enablePush().then(()=>renderPushInvite('${containerId}'))">Увімкнути</button>
          <button type="button" class="pi-x" onclick="dismissPushInvite('${containerId}')">Пізніше</button>`;
   }catch(e){ /* не критично */ }

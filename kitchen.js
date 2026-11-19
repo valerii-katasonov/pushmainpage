@@ -277,14 +277,17 @@ export function schoolMoment(ts){
 // Саме найраніша, а не остання: якщо вранці написали «не буде», а по обіді
 // вчитель продублював відмітку, попередили все-таки вранці.
 export function absenceAt(slots){
-  let ts = null, found = false;
+  let ts = null, found = false, by = '';
   for(const r of Object.values(slots || {})){
     if(!r || r.status !== 'absent') continue;
+    if(!found) by = r.markedBy || '';
     found = true;
     const t = Number(r.ts) || 0;
-    if(t && (ts === null || t < ts)) ts = t;
+    if(t && (ts === null || t < ts)){ ts = t; by = r.markedBy || ''; }
   }
-  return found ? { ts: ts || 0 } : null;
+  // by — хто відмітив найраніше (teacher/parent/...): кухні важливо бачити,
+  // чи родина попередила сама, чи дитину просто не застав учитель
+  return found ? (by ? { ts: ts || 0, by } : { ts: ts || 0 }) : null;
 }
 
 export function absenceRemovesMeal(meal, date, markedTs){
@@ -350,6 +353,33 @@ export function effectiveMeals(plan, dayOverride, isAbsent, wd){
     if(dayOverride.breakfast !== undefined) breakfast = !!dayOverride.breakfast;
   }
   return { lunch, snack, breakfast, absent:false };
+}
+
+// ТЕ САМЕ, АЛЕ З ДЕДЛАЙНАМИ ВІДСУТНОСТІ — для підрахунку порцій кухні.
+//
+// ЧОМУ (19.11.2026, скарга кухні). Після 07:00 «плавали» сніданки, після
+// 09:00 — обіди, хоча екран писав «кількість зафіксована». Підрахунок
+// знімав дитину, щойно з'являлася БУДЬ-ЯКА відмітка відсутності: учитель
+// відмічав клас на першому уроці о 08:15 — і сніданок зникав із числа вже
+// після того, як його приготували; пропуск третього уроку о 10:40 знімав
+// обід. При цьому журнал списань (absenceRemovesMeal) таку порцію чесно
+// рахує зʼїденою — кухня й облік бачили різні числа.
+//
+// Тепер так само, як у журналі: відсутність знімає страву, лише якщо про
+// неї повідомили до дедлайну САМЕ ЦІЄЇ страви. Пізніше — порція лишається
+// в замовленні (її вже готують), а дитина позначається «пізно».
+//   abs — {ts} з absentSet/absenceAt або null.
+export function effectiveMealsAt(plan, dayOverride, abs, wd, date){
+  const e = effectiveMeals(plan, dayOverride, false, wd);
+  if(!abs) return { ...e, lateAbsent:false };
+  const gone = m => absenceRemovesMeal(m, date, abs.ts);
+  // Які страви лишилися в замовленні лише тому, що про відсутність сказали пізно
+  const keptLate = [['breakfast','сніданок'],['lunch','обід'],['snack','підвечірок']]
+    .filter(([m]) => e[m] && !gone(m)).map(([, l]) => l);
+  return { lunch: e.lunch && !gone('lunch'), snack: e.snack && !gone('snack'),
+           breakfast: e.breakfast && !gone('breakfast'),
+           absent: gone('lunch'),          // «відсутній» для кухні — без обіду
+           lateAbsent: keptLate.length > 0, keptLate };
 }
 
 // Який варіант основної страви їсть дитина цього дня.
@@ -507,6 +537,31 @@ export function absentSet(attClassDay){
     if(rec) out[sid] = rec;
   }
   return out;
+}
+
+// «Не прийшли без попередження» — окремим рядком під підсумком (19.11.2026).
+// Після дедлайну числа фіксовані й включають цих дітей: їхні порції вже
+// готуються. Але кухні треба бачити, скільки з них не прийшло, хто це й
+// з яких класів — і хто відмітив: родина запізно чи вчитель на уроці.
+const BY_LABEL = { teacher:'учитель', class_teacher:'учитель', parent:'батьки', student:'учень',
+                   administrator:'адміністратор', director:'директор' };
+export function lateAbsenceHtml(list){
+  if(!list || !list.length) return '';
+  // Розбивка «хто відмітив» у заголовку: учитель на уроці чи родина запізно
+  const who = {};
+  list.forEach(r => { const l = BY_LABEL[r.by] || 'без позначки'; who[l] = (who[l] || 0) + 1; });
+  const whoTxt = Object.entries(who).map(([l, n]) => `${l}: ${n}`).join(' · ');
+  const groups = {};
+  list.forEach(r => { (groups[r.cls] = groups[r.cls] || []).push(r); });
+  const rows = Object.keys(groups).sort((a, b) => a - b).map(c =>
+    `<div class="k-late-row"><b>${escHtml(String(c))} кл.</b> ${groups[c].map(r =>
+      `${escHtml(r.name)} <span>(${escHtml((r.meals || []).join(', '))}${r.by || r.hm ? ' · ' : ''}${escHtml(BY_LABEL[r.by] || r.by || '')}${r.hm ? ` о ${escHtml(r.hm)}` : ''})</span>`).join(', ')}</div>`).join('');
+  return `<div class="k-late" role="status">
+    <div class="k-late-h">🚨 Не прийшли без попередження: <b>${list.length}</b></div>
+    <div class="k-late-who">Хто відмітив — ${escHtml(whoTxt)}</div>
+    <div class="k-late-note">Про відсутність дізналися вже після дедлайну, тож їхні порції в числах вище й готуються (у журналі списань так само).</div>
+    ${rows}
+  </div>`;
 }
 
 // ═════════ КАБІНЕТ КУХНІ ═════════
@@ -837,7 +892,7 @@ export async function loadWeekCounts(){
     const perDay = dates.map((date,di)=>{
       // Канікули чи свято — школа не годує, рахувати нічого
       if(noSchool[date]) return { date, closed: noSchool[date],
-        lunch:0, snack:0, brk:0, pa:0, pb:0, bpa:0, bpb:0, absent:0, off:0, unset:0, classes:{}, skips:[], extras:[], unanswered:[] };
+        lunch:0, snack:0, brk:0, pa:0, pb:0, bpa:0, bpb:0, absent:0, off:0, unset:0, classes:{}, skips:[], extras:[], unanswered:[], lateAbs:[] };
       const overrides = daySnaps[di].exists()?daySnaps[di].val():{};
       const menuDay = menuSnaps[di].exists()?menuSnaps[di].val():{};
       const choice = choicePair(menuDay);
@@ -847,7 +902,7 @@ export async function loadWeekCounts(){
       const hasBrkChoice = !!brkChoice;
       const wd = weekdayIdx(date);
       let lunch=0, snack=0, brk=0, pa=0, pb=0, bpa=0, bpb=0, absent=0, off=0, unset=0;
-      const classes = {}, skips = [], extras = [], unanswered = [], orphans=[];
+      const classes = {}, skips = [], extras = [], unanswered = [], orphans=[], lateAbs = [];
       for(let i=1;i<=11;i++){
         const cls = `class_${i}`;
         orphans.push(...orphanKeys(overrides[cls],plans[cls],students[cls])
@@ -858,10 +913,13 @@ export async function loadWeekCounts(){
         for(const key in students[cls]){
           const name = students[cls][key];
           const plan = byKeyOrName(plans[cls], key, name);
-          const isAbsent = !!(absentToday[key] || absentToday[name]);
+          const abs = absentToday[key] || absentToday[name] || null;
           const ov = mealDayFresher(overrides[cls]?.[key],overrides[cls]?.[name]);
-          const e = effectiveMeals(plan, ov, isAbsent, wd);
-          if(e.absent){ absent++; continue; }
+          // Відсутність після дедлайну страви порцію не знімає (див. effectiveMealsAt)
+          const e = effectiveMealsAt(plan, ov, abs, wd, date);
+          if(e.lateAbsent) lateAbs.push({cls:i, name, by: abs.by || '', hm: abs.ts ? schoolMoment(abs.ts).hm : '', meals: e.keptLate});
+          if(e.absent) absent++;
+          if(e.absent && !e.lunch && !e.snack && !e.breakfast) continue;
           const permanentlyOff = plan && plan.lunch === false;
           // Дитина «не обідає» — але саме сьогодні батьки взяли обід.
           // Раніше цей рядок обривав підрахунок раніше, ніж доходило до
@@ -876,6 +934,7 @@ export async function loadWeekCounts(){
               if(p === 'b'){ pb++; cbb++; } else { pa++; ca++; }
             }
           }
+          else if(e.absent){ /* без обіду через відсутність — уже пораховано */ }
           else if(permanentlyOff){ off++; }
           // За цю дитину батьки ще не відповіли про обіди. Це не відмова
           // і не разовий пропуск — окремий стан, і кухня має його бачити,
@@ -896,7 +955,7 @@ export async function loadWeekCounts(){
       return { date, lunch, snack, brk, pa, pb, bpa, bpb, hasChoice, hasBrkMenu, hasBrkChoice,
                menuA:choice?choice.a:'', menuB:choice?choice.b:'',
                breakfastA:brkChoice?brkChoice.a:'', breakfastB:brkChoice?brkChoice.b:'',
-               absent, off, unset, classes, skips, extras, unanswered, orphans };
+               absent, off, unset, classes, skips, extras, unanswered, orphans, lateAbs };
     });
 
     const today = perDay.find(d=>d.date===localDateString) || perDay[0];
@@ -916,7 +975,7 @@ export async function loadWeekCounts(){
                   ⚠️ УВАГА: Кількість порцій ще змінюється!
                 </div>
                 <div style="font-size:0.86rem;line-height:1.45;color:var(--danger);">
-                  Батьки мають право змінювати вибір страв та відмічати відсутність <b>до 09:00</b>.<br>
+                  Сніданки фіксуються о <b>0${BREAKFAST_CUTOFF_HOUR}:00</b>, обіди й підвечірки — о <b>0${MEAL_CUTOFF_HOUR}:00</b>. До того батьки ще змінюють вибір, а відмічена відсутність знімає порцію.<br>
                   До остаточної фіксації замовлення залишилося: 
                   <b id="k-counts-timer" style="font-size:1.05rem;font-weight:900;color:var(--danger);background:var(--danger-line);padding:2px 8px;border-radius:6px;display:inline-block;margin-top:4px;">--:--</b>
                 </div>
@@ -927,7 +986,7 @@ export async function loadWeekCounts(){
       } else {
         cutoffWarningHtml = `
           <div style="background:var(--ok-soft);border:1px solid var(--ok);border-radius:8px;padding:8px 12px;margin-bottom:12px;color:var(--ok);font-size:0.84rem;display:flex;align-items:center;gap:8px;">
-            <span>✅</span> <span><b>Вибір батьків на сьогодні закріплено о 09:00</b> — кількість порцій зафіксована.</span>
+            <span>✅</span> <span><b>Замовлення на сьогодні закріплено</b> (сніданки — о 0${BREAKFAST_CUTOFF_HOUR}:00, обіди й підвечірки — о 0${MEAL_CUTOFF_HOUR}:00). Відсутність, про яку повідомили пізніше, порцій не знімає.</span>
           </div>
         `;
       }
@@ -944,6 +1003,7 @@ export async function loadWeekCounts(){
              <div class="k-total-snack">${today.brk} сніданків${today.hasBrkChoice?` (А ${today.bpa} / Б ${today.bpb})`:''}${!today.hasBrkMenu&&today.brk?' (меню ще немає)':''} · ${today.snack} підвечірків</div>`}
       </div>
       <div class="k-sub">відсутні: ${today.absent} · не харчуються: ${today.off} · відмови: ${today.skips.length}${today.extras.length ? ` · <b style="color:var(--ok);">разові обіди: ${today.extras.length}</b>` : ''}${today.unset ? ` · <b style="color:var(--warn);">батьки не відповіли: ${today.unset}</b>` : ''}</div>
+      ${today.closed ? '' : lateAbsenceHtml(today.lateAbs)}
       ${renderMealOrphanList(today.orphans||[],resolutionSnap.val()||{},!resolutionSnap.readError)}
 
       <!-- Сніданок у тижневій таблиці нарівні з обідом: його теж треба
@@ -972,7 +1032,8 @@ export async function loadWeekCounts(){
           'Ці діти не потрапляють у замовлення, доки батьки не натиснуть «Так, обідає» або «Ні, не обідає».', false)}
       ${nameList('extra', `Разові обіди на ${human(today.date)} — діти, які зазвичай не обідають (${today.extras.length})`,
           today.extras, '', true)}
-      ${nameList('', `Відмови на ${human(today.date)} (${today.skips.length})`, today.skips, '', true)}`;
+      ${nameList('', `Відмови на ${human(today.date)} (${today.skips.length})`, today.skips, '', true)}
+`;
     if(box.innerHTML.includes('id="k-counts-timer"')){
       startKitchenCutoffTimer();
     }
@@ -1114,17 +1175,22 @@ export function groupByClass(rows){
 
 // Один рядок = одна дитина. Винесено з loadClassOrders, бо той самий
 // розрахунок потрібен і для одного класу, і для всіх одразу.
-export function buildOrderRows(cls, students, plans, overrides, absent, wd, menuDay, hasChoice, hasBrkChoice){
+// date — день замовлення: з ним відсутність рахується з дедлайнами страв
+// (effectiveMealsAt). Без date — як раніше (будь-яка відсутність знімає все).
+export function buildOrderRows(cls, students, plans, overrides, absent, wd, menuDay, hasChoice, hasBrkChoice, date){
   return Object.entries(students||{})
     .sort((a,b)=>String(a[1]).localeCompare(String(b[1]),'uk'))
     .map(([sid,name])=>{
       const plan = byKeyOrName(plans, sid, name) || {};
       const ov = mealDayFresher(overrides?.[sid],overrides?.[name]);
-      const e = effectiveMeals(plan, ov, !!(absent[sid] || absent[name]), wd);
+      const abs = absent[sid] || absent[name] || null;
+      const e = date ? effectiveMealsAt(plan, ov, abs, wd, date)
+                     : { ...effectiveMeals(plan, ov, !!abs, wd), lateAbsent:false };
       const pick = (e.lunch && hasChoice) ? pickedSecond(menuDay, ov) : null;
       const breakfastPick = (e.breakfast && hasBrkChoice) ? pickedBreakfast(menuDay, ov) : null;
       let note = '';
-      if(e.absent) note = 'відсутній';
+      if(e.lateAbsent) note = 'відсутній — повідомили після дедлайну, порція готується';
+      else if(e.absent) note = 'відсутній';
       else if(plan.lunch === false) note = 'не харчується';
       else if(ov && ov.lunch === 0) note = ov.reason ? `відмова · ${ov.reason}` : 'відмова';
       else if(ov && ov.snack !== undefined) note = ov.snack ? 'підвечірок разово' : 'без підвечірка сьогодні';
@@ -1133,7 +1199,7 @@ export function buildOrderRows(cls, students, plans, overrides, absent, wd, menu
       // «відмова», а окремий стан: дитини просто немає в замовленні, і ніхто
       // цього не вирішував. Кухня має бачити його першим, тому окремо й
       // помітно.
-      const noReply = !e.absent && !lunchChosen(plan);
+      const noReply = !e.absent && !e.lateAbsent && !lunchChosen(plan);
       // ЯВНИЙ ВИБІР І ВИБІР ЗА ЗАМОВЧУВАННЯМ — РІЗНІ РЕЧІ.
       // pickedSecond віддає 'a' і тоді, коли ніхто нічого не натискав: А діє
       // сама собою. Для кухні різниця важлива — саме вона відповідає на
@@ -1193,7 +1259,7 @@ window.loadClassOrders = async function(){
     clsList.forEach(c=>{
       const students = studentsOf(c), plans = plansOf(c), overrides = dayOf(c);
       rows = rows.concat(buildOrderRows(c, students, plans, overrides,
-        absentSet(attOf(c)), wd, menuDay, hasChoice, hasBrkChoice));
+        absentSet(attOf(c)), wd, menuDay, hasChoice, hasBrkChoice, date));
       orphans.push(...orphanKeys(overrides, plans, students)
         .map(o=>({...o, cls:c, kind:o.what==='постійні налаштування'?'plan':'day'})));
     });
@@ -2499,8 +2565,11 @@ export async function renderParentMenu(cls, studentKey, date){
     ]);
     const plan = planV || {};
     const ov   = dayV;
-    const isAbsent = attSnap.exists() && Object.values(attSnap.val()||{}).some(r=>r && r.status==='absent');
-    const eff  = effectiveMeals(plan, ov, isAbsent, weekdayIdx(cur));
+    // Як і кухня та журнал списань: відсутність після дедлайну страви її не
+    // знімає — порцію приготували й спишуть, тож батько бачить те саме.
+    const abs = attSnap.exists() ? absenceAt(attSnap.val()) : null;
+    const isAbsent = !!abs;
+    const eff  = effectiveMealsAt(plan, ov, abs, weekdayIdx(cur), cur);
     const gate = mealsEditable(cur);
     const sGate = snackEditable(cur);
     if (isStudent) {

@@ -1383,6 +1383,12 @@
     .k-total .k-meal-split i{margin:0 3px;font-style:normal;opacity:.6;}
     .k-total-snack{font-size:.85rem;font-weight:700;color:var(--brand-deep);margin-top:5px;}
     .k-sub{text-align:center;font-size:.76rem;color:var(--ink-3);margin-top:6px;}
+    .k-late{margin:12px 0 4px;padding:10px 12px;border-radius:12px;background:var(--warn-soft);border:1px solid var(--warn-line);color:var(--ink);font-size:.84rem;text-align:left;}
+    .k-late-h{font-weight:800;color:var(--warn);font-size:.92rem;}
+    .k-late-who{font-weight:700;font-size:.8rem;margin-top:2px;}
+    .k-late-note{font-size:.74rem;color:var(--ink-2);margin:2px 0 6px;}
+    .k-late-row{margin-top:4px;line-height:1.45;}
+    .k-late-row span{color:var(--ink-3);font-size:.76rem;}
     .k-table{width:100%;border-collapse:collapse;font-size:.83rem;margin-top:10px;}
     .k-table th{background:var(--brand-soft);color:var(--brand-ink);padding:6px;font-size:.75rem;border-bottom:1px solid var(--brand-line);}
     .k-table td{padding:5px 6px;border-bottom:1px solid var(--line-soft);text-align:center;}
@@ -3396,7 +3402,23 @@
 .curr-warn.curr-replace small{color:var(--ink-3);}
 .curr-warn.danger{color:var(--danger);background:var(--danger-soft);border-color:var(--danger-line);}
 .curr-subj-fix{width:100%;margin:4px 0 8px 0;font-size:.84rem;}
-.mb-note{margin:8px 2px 0;font-size:.8rem;line-height:1.45;color:var(--ink-2);}
+/* 📊 Використання порталу (usage.js) */
+.us-sum{margin:6px 0 4px;font-size:.95rem;}
+.us-note{font-size:.78rem;color:var(--ink-2);background:var(--warn-soft);border:1px solid var(--warn-line);border-radius:10px;padding:8px 10px;margin:8px 0;}
+.us-h{margin:16px 0 8px;color:var(--brand-deep);font-size:.95rem;}
+.us-feat,.us-tch{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;}
+.us-feat li{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(60px,1fr) auto;align-items:center;gap:4px 10px;padding:7px 10px;border-radius:10px;background:var(--surface-2);font-size:.85rem;}
+.us-feat li.us-zero{background:var(--danger-soft);}
+.us-feat .us-x{grid-column:1 / -1;color:var(--ink-3);font-size:.72rem;}
+.us-bar{height:8px;border-radius:5px;background:var(--line-soft);overflow:hidden;}
+.us-bar i{display:block;height:100%;background:var(--brand);}
+.us-n{font-weight:800;white-space:nowrap;}
+.us-tch li details{background:var(--surface-2);border-radius:10px;padding:8px 10px;}
+.us-tch summary{display:flex;justify-content:space-between;gap:10px;cursor:pointer;font-size:.88rem;}
+.us-chips-h{margin:8px 0 6px;font-size:.78rem;color:var(--ink-2);}
+.us-chips{display:flex;flex-wrap:wrap;gap:5px;}
+.us-chips span{font-size:.74rem;padding:3px 8px;border-radius:999px;background:var(--surface);border:1px solid var(--line);}
+.mb-paynote{margin:8px 2px 0;font-size:.8rem;line-height:1.45;color:var(--ink-2);}
 .mb-box{background:var(--surface-2);border:1px solid var(--ok-line);border-radius:14px;padding:14px;min-width:0;max-width:100%}.mb-person-pick{display:flex;gap:8px;min-width:0}.mb-person-pick select{min-width:0;margin-top:0;text-overflow:ellipsis}.mb-person-pick #k-balance-class{flex:1}.mb-person-pick #k-balance-student{flex:2}.mb-head{background:var(--ok-soft);border-radius:12px;padding:14px;color:var(--ok);min-width:0;overflow-wrap:anywhere}.mb-head.bad{background:var(--danger-soft);color:var(--danger)}.mb-head.low{background:var(--warn-soft);color:var(--warn)}.mb-head span,.mb-head small{display:block}.mb-head b{display:block;font-size:1.75rem;margin:4px 0}.mb-pending{margin-top:9px;padding:10px;border-radius:9px;background:var(--warn-soft);font-size:.8rem;color:var(--warn)}.mb-note{margin:10px 0;font-size:.76rem;color:var(--ink-2);overflow-wrap:anywhere}.mb-form{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;margin-top:12px;min-width:0}.mb-form>*{min-width:0;max-width:100%}.mb-form label{font-size:.75rem;color:var(--ink-2);font-weight:700;overflow-wrap:anywhere}.mb-form input,.mb-form button{margin:3px 0 0;width:100%}.mb-form button,.mb-form small{grid-column:1/-1}.mb-form small{font-size:.75rem;color:var(--ink-2);overflow-wrap:anywhere}.mb-history{margin-top:12px;min-width:0}.mb-history summary{cursor:pointer;font-weight:700;color:var(--ok);overflow-wrap:anywhere}.mb-history>div{display:grid;grid-template-columns:85px 90px minmax(0,1fr);gap:7px;padding:7px 0;border-bottom:1px solid var(--ok-line);font-size:.76rem}.mb-history>div>*{min-width:0;overflow-wrap:anywhere}.mb-history b{color:var(--ok)}.mb-history b.neg{color:var(--danger)}.mb-history small{color:var(--ink-2)}
 .mb-adjust{margin-top:14px;padding:12px;border:1px solid var(--ok-line);border-radius:10px;background:var(--surface-2)}.mb-adjust>b{color:var(--ok);font-size:.82rem}.mb-adjust p{font-size:.75rem;color:var(--ink-2);margin:6px 0}.mb-adjust>div{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.mb-adjust input,.mb-adjust button{min-width:0;width:100%;margin:0}.mb-adjust #mb-adj-reason,.mb-adjust button{grid-column:1/-1}.mb-ledger small{line-height:1.4}
 @media(max-width:600px){.mb-history>div{grid-template-columns:80px minmax(0,1fr)}.mb-history>div small{grid-column:1/-1}.mb-adjust>div{grid-template-columns:minmax(0,1fr)}.mb-adjust #mb-adj-reason,.mb-adjust button{grid-column:auto}}
@@ -4634,6 +4656,8 @@ body:has(.modal-overlay[style*="display: flex"],.modal-overlay[style*="display:f
   <div id="kitchen-screen" class="panel">
     <h2 style="color:var(--brand-ink);">🍽️ Кухня</h2>
     <button type="button" class="sb-entry" onclick="openStaffBirthdays()">🎂 Дні народження колег</button>
+    <!-- Сповіщення кухні: о 09:00 «замовлення закрито» і хто не прийшов без попередження (kitchen-notify.js) -->
+    <div id="k-push-invite" style="display:none;"></div>
 
     <section class="screen-section">
       <h3>📅 Тиждень</h3>
@@ -4839,6 +4863,17 @@ body:has(.modal-overlay[style*="display: flex"],.modal-overlay[style*="display:f
         </div>
         <button type="button" onclick="saveControlSettings()" style="background:var(--brand-ink);color:var(--on-fill);margin-top:8px;">💾 Зберегти</button>
       </details>
+    </section>
+
+    <!-- Використання порталу вчителями (usage.js) — 15.11.2026 -->
+    <section class="screen-section" data-dtab="control">
+      <h3>📊 Використання порталу</h3>
+      <p style="font-size:.83rem;color:var(--ink-2);">Якими функціями вчителі користуються, а якими ні. Рахується лише факт «користувався цього дня», без змісту.</p>
+      <div class="ma-filters">
+        <select id="usage-month" aria-label="Місяць" onchange="openUsageReport(this.value)" style="width:auto;"></select>
+        <button type="button" onclick="openUsageReport()">📊 Показати</button>
+      </div>
+      <div id="usage-body"><p class="empty-msg">Натисніть «Показати».</p></div>
     </section>
 
     <section class="screen-section" data-dtab="workload">
@@ -6165,7 +6200,7 @@ body:has(.modal-overlay[style*="display: flex"],.modal-overlay[style*="display:f
       <!-- Оплати в баланс ще не приходять з банку самі: їх вносить кухня. Без
            цього рядка батько, що переказав гроші зранку, бачив «борг» і писав
            у школу (15.11.2026). -->
-      <p class="mb-note">ℹ️ Списання за харчування рахуються автоматично щодня. А от оплати поки що не надходять самі: їх вносить працівник кухні протягом тижня. Тому переказ може з’явитися тут через кілька днів.</p>
+      <p class="mb-paynote">ℹ️ Списання за харчування рахуються автоматично щодня. А от оплати поки що не надходять самі: їх вносить працівник кухні протягом тижня. Тому переказ може з’явитися тут через кілька днів.</p>
     </section>
 
     <!-- ═══════════ КАЛЕНДАР ═══════════
@@ -7249,6 +7284,7 @@ document.addEventListener('DOMContentLoaded', function(){
 <script type="module" src="school-events.js"></script>
 <script type="module" src="role-blocks.js"></script>
 <script type="module" src="teacher-control.js"></script>
+<script type="module" src="usage.js"></script>
 <script type="module" src="family-week.js"></script>
 <script type="module" src="talk-requests.js"></script>
 <script type="module" src="trainers.js"></script>
