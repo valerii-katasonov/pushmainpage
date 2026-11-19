@@ -96,6 +96,10 @@ function contiguousRanges(dates){
   return ranges;
 }
 
+const schoolDay=ts=>{
+  try{ return new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Warsaw',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(ts)); }
+  catch(e){ return iso(new Date(ts)); }
+};
 export async function computeMealAccount(cls,sid,entries,now=new Date()){
   const start=accountStart(entries),today=iso(now);
   const prices=await loadMealPrices(true,true);
@@ -106,10 +110,24 @@ export async function computeMealAccount(cls,sid,entries,now=new Date()){
   const priceHistory=priceHistorySnap.exists()?priceHistorySnap.val():{};
   const taHistory=taHistorySnap.exists()?taHistorySnap.val():{};
   if(!start||start>today)return {start,entries,prices,...balanceResult(credited(entries,today),0,0),parts:{}};
-  const [ledgerSnap, adjustmentSnap]=await Promise.all([
+  const [ledgerSnap, adjustmentSnap, listSnap, leftSnap]=await Promise.all([
     get(child(ref(db),`meal_ledger/${cls}/${sid}`)),
-    get(child(ref(db),`meal_ledger_adjustments/${cls}/${sid}`))
+    get(child(ref(db),`meal_ledger_adjustments/${cls}/${sid}`)),
+    get(child(ref(db),`students_list/${cls}`)).catch(()=>null),
+    get(child(ref(db),`students_left/${cls}/${sid}`)).catch(()=>null)
   ]);
+  // Учень уже не навчається — з дня вибуття не рахуємо (так само, як нічний
+  // журнал у meal-ledger-core.js → leftDayOf). Учня немає в списку й немає
+  // запису про вибуття — не рахуємо незакритих днів зовсім.
+  let leftDay='';
+  if(listSnap&&listSnap.exists()){
+    const list=listSnap.val()||{};
+    if(!Object.hasOwn(list,sid)&&!Object.values(list).includes(sid)){
+      const at=Number(leftSnap&&leftSnap.exists()&&leftSnap.val()?.at)||0;
+      leftDay=at?schoolDay(at):'0000-00-00';
+    }
+  }
+  const enrolledOn=d=>!leftDay||d<leftDay;
   const ledger=ledgerSnap.exists()?ledgerSnap.val():{};
   const adjustments=adjustmentSnap.exists()?adjustmentSnap.val():{};
   const pastEnd=dayBefore(today);
@@ -117,18 +135,19 @@ export async function computeMealAccount(cls,sid,entries,now=new Date()){
   const pastMeals={lunch:sealed.parts.lunch,brk:sealed.parts.brk,snack:sealed.parts.snack,
     total:money(sealed.parts.lunch+sealed.parts.brk+sealed.parts.snack)};
   let pastTa=sealed.parts.takeaway;
-  for(const range of contiguousRanges(sealed.missing)){
+  for(const range of contiguousRanges(sealed.missing.filter(enrolledOn))){
     const dynamic=await pricedMeals(range.from,range.to,cls,sid,prices,priceHistory);
     for(const k of Object.keys(pastMeals))pastMeals[k]=money(pastMeals[k]+dynamic[k]);
     pastTa=money(pastTa+await takeawayCostHistoric(range.from,range.to,cls,sid,items,taHistory));
   }
   const todaySealed=ledger[today]&&Number.isFinite(Number(ledger[today].total));
-  const todayCounts=todaySealed?{lunch:0,brk:0,snack:0}:await mealCounts(today,today,cls,sid);
+  const todayGone=!todaySealed&&!enrolledOn(today);
+  const todayCounts=(todaySealed||todayGone)?{lunch:0,brk:0,snack:0}:await mealCounts(today,today,cls,sid);
   const todayPrices=priceAt(today,prices,priceHistory);
   const brkCost=todaySealed?money(ledger[today].breakfast):money(todayCounts.brk*todayPrices.breakfast);
   const lunchCost=todaySealed?money(ledger[today].lunch):money(todayCounts.lunch*todayPrices.lunch);
   const snackCost=todaySealed?money(ledger[today].snack):money(todayCounts.snack*todayPrices.snack);
-  const todayTa=todaySealed?money(ledger[today].takeaway):await takeawayCostHistoric(today,today,cls,sid,items,taHistory);
+  const todayTa=todaySealed?money(ledger[today].takeaway):todayGone?0:await takeawayCostHistoric(today,today,cls,sid,items,taHistory);
   const brkClosed=todaySealed||cutoffState(today,BREAKFAST_CUTOFF_HOUR,now,today);
   const mealClosed=todaySealed||cutoffState(today,MEAL_CUTOFF_HOUR,now,today);
   // У підвечірка власна межа (SNACK_CUTOFF_HOUR). Поки вона не минула,

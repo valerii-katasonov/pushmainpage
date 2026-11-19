@@ -1,6 +1,6 @@
 import {ref,get,child,push,set,runTransaction} from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import {db,currentUserData,escHtml,escJs,showToast} from './common.js';
-import {computeMealAccount} from './meal-balance.js';
+import {computeMealAccount,accountStart} from './meal-balance.js';
 
 const canRepair=()=>['kitchen','director','administrator'].includes(currentUserData?.role);
 const read=async path=>{const s=await get(child(ref(db),path));return s.exists()?s.val():null;};
@@ -144,8 +144,19 @@ window.previewMealOrphanRepair=async function(mode){
         const a=await computeMealAccount(s.cls,s.key,account);
         if(state!==s||s.reviewVersion!==reviewVersion)return;
         money=`Внесено ${escHtml(a.income.toFixed(2))} zł, списано ${escHtml(a.charged.toFixed(2))} zł, залишок <b>${escHtml(a.balance.toFixed(2))} zł</b>.`;
-      }catch(e){ money='Залишок порахувати не вдалося.'; }
-      accountHtml=`<p>💰 За цим записом є рахунок харчування. ${money} Рахунок нікуди не зникне й не зміниться: якщо залишок не нульовий, поверніть його батькам або перенесіть через адміністрацію.</p>`;
+        s.balance=a.balance; s.accountStart=accountStart(account);
+      }catch(e){ money='Залишок порахувати не вдалося.'; s.balance=null; }
+      // Розрахувалися поза порталом (вибуття): одним натиском записати це в
+      // рахунок, щоб залишок став нульовим. Журнал лише доповнюється — усе
+      // попереднє лишається видно.
+      const b=s.balance;
+      const settle=(mode==='archived'&&Number.isFinite(b)&&Math.abs(b)>=0.01)
+        ? `<button type="button" onclick="settleMealOrphanAccount()" style="width:auto;max-width:100%">${b<0
+            ? `💳 Батьки розрахувалися — записати оплату ${escHtml((-b).toFixed(2))} zł`
+            : `↩️ Залишок повернули батькам — записати ${escHtml(b.toFixed(2))} zł`}</button>` : '';
+      accountHtml=`<p>💰 За цим записом є рахунок харчування. ${money} ${Number.isFinite(b)&&Math.abs(b)<0.01
+        ? 'Рахунок закрито, залишок нульовий.'
+        : 'Якщо з родиною вже розрахувалися, запишіть це кнопкою нижче — залишок стане нульовим. Історія рахунку зберігається.'}</p>${settle}`;
     }
     if(mode==='linked'){
       const value=document.getElementById('meal-orphan-target').value;
@@ -161,6 +172,24 @@ window.previewMealOrphanRepair=async function(mode){
     s.review={mode,target};
     box.innerHTML=`<p>${escHtml(text)}</p>${accountHtml}<p>Денні вибори А/Б, рахунок і списання не змінюються. Оригінал запису зберігається.</p>${target&&target.cls!==s.cls?'<p>Після переведення директору також потрібно звірити клас дитини в прив’язці батьків.</p>':''}<button id="meal-orphan-apply" type="button" onclick="saveMealOrphanRepair()">Підтвердити цю дію</button>`;
   }catch(e){box.textContent=e.message;}
+};
+window.settleMealOrphanAccount=async function(){
+  if(!state||busy||!canRepair())return;
+  const s=state,b=Number(s.balance);
+  if(!Number.isFinite(b)||Math.abs(b)<0.01||!s.accountStart)return;
+  const amount=Math.round(-b*100)/100;
+  if(!confirm(b<0
+    ? `Записати оплату ${(-b).toFixed(2)} zł — батьки розрахувалися при вибутті?\n\nЗалишок стане 0. Запис додається до історії рахунку, нічого не видаляється.`
+    : `Записати повернення ${b.toFixed(2)} zł батькам?\n\nЗалишок стане 0. Запис додається до історії рахунку, нічого не видаляється.`))return;
+  busy=true;
+  try{
+    const d=new Date(),p2=n=>String(n).padStart(2,'0'),today=`${d.getFullYear()}-${p2(d.getMonth()+1)}-${p2(d.getDate())}`;
+    await set(push(ref(db,`meal_accounts/${s.cls}/${s.key}`)),{amount,date:today,startDate:s.accountStart,
+      note:b<0?'Розрахунок при вибутті':'Повернення залишку при вибутті',by:currentUserData?.email||'',ts:Date.now()});
+    showToast('✅ Розрахунок записано');
+  }catch(e){ busy=false; return alert('Не вдалося записати: '+e.message); }
+  busy=false;
+  window.previewMealOrphanRepair('archived');
 };
 window.saveMealOrphanRepair=async function(){
   if(!state?.review||busy||!canRepair())return;
