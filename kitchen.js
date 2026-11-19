@@ -539,14 +539,17 @@ export function absentSet(attClassDay){
   return out;
 }
 
-// ЧИ ДИТИНА ВЗАГАЛІ НЕ ПРИЙШЛА, ЧИ ПІШЛА ПІСЛЯ ОБІДУ (19.11.2026).
-// «Не прийшли без попередження» — лише ті, кого немає з самого ранку:
-// відмітка «увесь день» або пропуск уроку ДО обіду. Пропуск 6-го уроку —
-// дитина була, поїла й пішла; для кухні це не новина.
-// Уроки до обіду: перед перервою «Обід» у розкладі класу; якщо такої
-// перерви немає — ті, що починаються до 12:00; без часу — перші чотири.
-// Ключ уроку той самий, що пише вчитель: number або позиція в дні.
-export function morningLessons(dayLessons){
+// КОЛИ ДИТИНА ЇСТЬ — З РОЗКЛАДУ КЛАСУ (19.11.2026).
+// «Не було без попередження» має сенс лише для їжі, яку дитина пропустила.
+// Сніданок і обід — перерви в розкладі («Сніданок» о 09:40, «Обід» о 12:40):
+//   • сніданок пропущено, якщо дитини не було на уроках ДО перерви «Сніданок»;
+//   • обід (і підвечірок) — якщо не було на ОСТАННЬОМУ уроці перед «Обідом»:
+//     або не прийшла, або пішла раніше. Пропуск 5-го чи 6-го уроку — дитина
+//     поїла й пішла; запізнилася на 1-й урок, але була на 4-му — теж поїла.
+// Немає перерви «Сніданок» — рахуємо перший урок; немає «Обіду» — останній
+// урок, що починається до 12:00 (без часу — 4-й). Ключ уроку той самий, що
+// пише вчитель: number або позиція в дні.
+export function mealLessons(dayLessons){
   if(!dayLessons) return null;
   const flat = [];
   (Array.isArray(dayLessons) ? dayLessons : Object.values(dayLessons)).forEach(slot => {
@@ -554,26 +557,56 @@ export function morningLessons(dayLessons){
     else if(slot && typeof slot === 'object' && Object.keys(slot).length) flat.push(slot);
   });
   const txt = it => String((it && it.subject && it.subject.ua !== undefined ? it.subject.ua : it && it.subject) || (it && it.name) || '').toLowerCase();
-  const lunchAt = flat.findIndex(it => /обід|обед/.test(txt(it)));
-  const out = new Set();
+  const lessons = [];
   flat.forEach((it, i) => {
-    if(!it || it.type === 'break' || /перерва|обід|обед/.test(txt(it))) return;
+    if(!it || it.type === 'break' || /перерва|обід|обед|сніданок/.test(txt(it))) return;
     const key = String(it.number || (i + 1)).trim();
     if(!key) return;
     const m = String(it.time || '').match(/(\d{1,2})[:.](\d{2})/);
-    const before = lunchAt >= 0 ? i < lunchAt : m ? (+m[1] * 60 + +m[2]) < 12 * 60 : Number(key) <= 4;
-    if(before) out.add(key);
+    lessons.push({ i, key, start: m ? (+m[1] * 60 + +m[2]) : null });
   });
-  return out;
+  const brkAt = flat.findIndex(it => it && /сніданок/.test(txt(it)));
+  const lunchAt = flat.findIndex(it => it && /обід|обед/.test(txt(it)));
+  // Сніданок стоїть перед першим уроком — тоді його пропускає той, хто не був
+  // на першому уроці (прийшов пізніше). Так само, якщо перерви немає зовсім.
+  let breakfast = brkAt >= 0 ? lessons.filter(l => l.i < brkAt) : [];
+  if(!breakfast.length) breakfast = lessons.slice(0, 1);
+  const beforeLunch = lunchAt >= 0 ? lessons.filter(l => l.i < lunchAt)
+    : lessons.filter(l => l.start !== null ? l.start < 12 * 60 : Number(l.key) <= 4);
+  return { breakfast: new Set(breakfast.map(l => l.key)),
+           lunch: new Set(beforeLunch.length ? [beforeLunch[beforeLunch.length - 1].key] : []) };
 }
-// slots — відмітки дитини за день {слот: {status}}; morning — з morningLessons
-// (null — розкладу немає: тоді будь-яка відсутність, як і раніше).
-export function noShow(slots, morning){
+// Які з порцій, що лишилися в замовленні, дитина справді пропустила.
+// kept — підписи ('сніданок','обід','підвечірок'); ml — з mealLessons
+// (null — розкладу немає: будь-яка відмітка, як раніше).
+export function missedMeals(slots, kept, ml){
+  const keys = Object.entries(slots || {}).filter(([, r]) => r && r.status === 'absent').map(([k]) => String(k));
+  if(!keys.length) return [];
+  if(keys.includes('all') || !ml) return (kept || []).slice();
+  return (kept || []).filter(l => {
+    const set = l === 'сніданок' ? ml.breakfast : ml.lunch;
+    return keys.some(k => set.has(k));
+  });
+}
+// Що саме відмічено: «увесь день» або перший пропущений урок
+export function noShowWhat(slots){
+  let all = false, first = null;
   for(const [k, r] of Object.entries(slots || {})){
     if(!r || r.status !== 'absent') continue;
-    if(k === 'all' || !morning || morning.has(String(k))) return true;
+    if(k === 'all'){ all = true; continue; }
+    const n = Number(k);
+    if(Number.isFinite(n) && (first === null || n < first)) first = n;
   }
-  return false;
+  return all ? 'увесь день' : first !== null ? `${first}-й урок` : '';
+}
+// «учитель відмітив о 14:40», «батьки повідомили о 09:20»
+const BY_VERB = { teacher:'учитель відмітив', class_teacher:'учитель відмітив', parent:'батьки повідомили',
+                  student:'учень повідомив', administrator:'адміністратор відмітив', director:'директор відмітив' };
+export function lateDetail(r){
+  const who = BY_VERB[r.by] || (r.hm ? 'відмічено' : '');
+  return [ (r.meals || []).length ? `порція: ${(r.meals || []).join(', ')}` : '',
+           r.what ? `не було: ${r.what}` : '',
+           who ? `${who}${r.hm ? ' о ' + r.hm : ''}` : '' ].filter(Boolean).join(' · ');
 }
 
 // «Не прийшли без попередження» — окремим рядком під підсумком (19.11.2026).
@@ -592,11 +625,11 @@ export function lateAbsenceHtml(list){
   list.forEach(r => { (groups[r.cls] = groups[r.cls] || []).push(r); });
   const rows = Object.keys(groups).sort((a, b) => a - b).map(c =>
     `<div class="k-late-row"><b>${escHtml(String(c))} кл.</b> ${groups[c].map(r =>
-      `${escHtml(r.name)} <span>(${escHtml((r.meals || []).join(', '))}${r.by || r.hm ? ' · ' : ''}${escHtml(BY_LABEL[r.by] || r.by || '')}${r.hm ? ` о ${escHtml(r.hm)}` : ''})</span>`).join(', ')}</div>`).join('');
+      `${escHtml(r.name)} <span>(${escHtml(lateDetail(r))})</span>`).join(', ')}</div>`).join('');
   return `<div class="k-late" role="status">
-    <div class="k-late-h">🚨 Не прийшли без попередження: <b>${list.length}</b></div>
+    <div class="k-late-h">🚨 Не було без попередження: <b>${list.length}</b></div>
     <div class="k-late-who">Хто відмітив — ${escHtml(whoTxt)}</div>
-    <div class="k-late-note">Про них сказали вже після того, як замовлення закрилося, тож їхні порції є в числах вище й готуються.</div>
+    <div class="k-late-note">Про них сказали вже після того, як замовлення закрилося, тож їхні порції враховано в числах вище.</div>
     ${rows}
   </div>`;
 }
@@ -950,7 +983,7 @@ export async function loadWeekCounts(){
           .map(o=>({...o,cls,kind:o.what==='постійні налаштування'?'plan':'day'})));
         if(!students[cls]) continue;
         const absentToday = absentSet(att[cls] && att[cls][date]);
-        const morning = schedules ? morningLessons(schedules[cls]?.lessons?.[DAY_EN[wd]]) : null;
+        const ml = schedules ? mealLessons(schedules[cls]?.lessons?.[DAY_EN[wd]]) : null;
         let cl=0, cs=0, cb=0, ca=0, cbb=0, cba=0, cbbb=0;
         for(const key in students[cls]){
           const name = students[cls][key];
@@ -960,8 +993,10 @@ export async function loadWeekCounts(){
           // Відсутність після дедлайну страви порцію не знімає (див. effectiveMealsAt)
           const e = effectiveMealsAt(plan, ov, abs, wd, date);
           const daySlots = {...(att[cls]?.[date]?.[name]||{}), ...(att[cls]?.[date]?.[key]||{})};
-          if(e.lateAbsent && noShow(daySlots, morning))
-            lateAbs.push({cls:i, name, by: abs.by || '', hm: abs.ts ? schoolMoment(abs.ts).hm : '', meals: e.keptLate});
+          const missed = e.lateAbsent ? missedMeals(daySlots, e.keptLate, ml) : [];
+          if(missed.length)
+            lateAbs.push({cls:i, name, by: abs.by || '', hm: abs.ts ? schoolMoment(abs.ts).hm : '', meals: missed,
+                          what: noShowWhat(daySlots)});
           if(e.absent) absent++;
           if(e.absent && !e.lunch && !e.snack && !e.breakfast) continue;
           const permanentlyOff = plan && plan.lunch === false;
