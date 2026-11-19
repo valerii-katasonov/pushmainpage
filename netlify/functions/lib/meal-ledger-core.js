@@ -93,9 +93,27 @@ function absenceRemovesMeal(meal, date, markedTs) {
   return at.hour < (CUTOFF_HOUR[meal] || CUTOFF_HOUR.lunch);
 }
 
+// ДЕНЬ, З ЯКОГО УЧЕНЬ УЖЕ НЕ НАВЧАЄТЬСЯ (19.11.2026). Учня прибрали зі
+// списку, а його план харчування лишився — і журнал щоночі списував обіди
+// дитині, якої вже немає (у кухні набігло −750 zł). Тепер: учня немає в
+// students_list → з дня вибуття (students_left.at, за Варшавою) списань
+// немає. Немає й запису про вибуття (давні видалення) — не списуємо взагалі:
+// краще недорахувати, ніж виставити рахунок за дитину, якої немає.
+function leftDayOf(data, cls, sid, name) {
+  const list = data.students_list?.[cls];
+  if (list && (Object.hasOwn(list, sid) || Object.values(list).includes(name))) return '';
+  if (!data.students_list) return '';                 // без списків — як раніше
+  const at = Number(data.students_left?.[cls]?.[sid]?.at) || 0;
+  return at ? schoolMomentDay(at) : '0000-00-00';
+}
+function schoolMomentDay(ts) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: SCHOOL_TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(ts));
+}
 function buildDayCharge(date, cls, sid, name, data) {
   const weekday = new Date(`${date}T12:00:00Z`).getUTCDay();
-  const schoolDay = weekday >= 1 && weekday <= 5 && !noSchool(date, data.academic_year);
+  const leftDay = leftDayOf(data, cls, sid, name);
+  const enrolled = !leftDay || date < leftDay;
+  const schoolDay = enrolled && weekday >= 1 && weekday <= 5 && !noSchool(date, data.academic_year);
   const menu = data.menu?.[date] || {};
   const plan = byKeyOrName(data.meal_plan?.[cls], sid, name) || {};
   const override = mealDayByKeyOrName(data.meal_day?.[date]?.[cls], sid, name);
@@ -122,7 +140,7 @@ function buildDayCharge(date, cls, sid, name, data) {
     snack: money(snack ? prices.snack : 0),
     takeaway: 0
   };
-  const order = byKeyOrName(data.takeaway_orders?.[date]?.[cls], sid, name) || {};
+  const order = enrolled ? (byKeyOrName(data.takeaway_orders?.[date]?.[cls], sid, name) || {}) : {};
   for (const [itemId, qty] of Object.entries(order)) {
     if (!Number.isFinite(Number(qty)) || Number(qty) <= 0) continue;
     const history = data.takeaway_price_history?.[itemId] || {};
@@ -145,10 +163,11 @@ function buildDayCharge(date, cls, sid, name, data) {
     lunchChoice: lunch ? lunchChoice : '',
     breakfastChoice: breakfast ? breakfastChoice : '',
     absent: !!absent,
-    closed: !schoolDay || !(lunchMenu || menu.breakfast || menu.snack)
+    closed: !schoolDay || !(lunchMenu || menu.breakfast || menu.snack),
+    ...(enrolled ? {} : { left: true })
   };
 }
 
-module.exports = { buildDayCharge, money, priceAt, noSchool,
+module.exports = { buildDayCharge, money, priceAt, noSchool, leftDayOf,
   // для сповіщень кухні (lib/kitchen-day.js) — ті самі правила, що в журналі
   absenceRemovesMeal, optionPlanned, byKeyOrName, mealDayByKeyOrName, CUTOFF_HOUR };
