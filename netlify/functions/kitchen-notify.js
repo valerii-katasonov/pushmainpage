@@ -109,10 +109,11 @@ exports.handler = async () => {
     const targets = kitchenTargets(tokens);
     if (!targets.length) return ok({ skip: 'на кухні ніхто не увімкнув сповіщення' });
     const classes = Object.keys(students || {});
-    const [plans, mealDay, menu, years, ...att] = await Promise.all([
+    const [plans, mealDay, menu, years, schedules, ...att] = await Promise.all([
       readDb(token, 'meal_plan'), readDb(token, `meal_day/${date}`), readDb(token, `menu/${date}`),
-      readDb(token, 'academic_year'), ...classes.map(c => readDb(token, `attendance/${c}/${date}`))]);
-    const day = kitchenDay(date, { students_list: students, meal_plan: plans, meal_day: mealDay, menu,
+      readDb(token, 'academic_year'), readDb(token, 'schedules').catch(() => null),
+      ...classes.map(c => readDb(token, `attendance/${c}/${date}`))]);
+    const day = kitchenDay(date, { students_list: students, meal_plan: plans, meal_day: mealDay, menu, schedules,
       academic_year: years, attendance: Object.fromEntries(classes.map((c, i) => [c, att[i]])) });
     if (day.closed) return ok({ skip: 'школа сьогодні не годує', date });
 
