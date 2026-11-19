@@ -1,5 +1,6 @@
 import {ref,get,child,push,set,runTransaction} from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import {db,currentUserData,escHtml,escJs,showToast} from './common.js';
+import {computeMealAccount} from './meal-balance.js';
 
 const canRepair=()=>['kitchen','director','administrator'].includes(currentUserData?.role);
 const read=async path=>{const s=await get(child(ref(db),path));return s.exists()?s.val():null;};
@@ -39,7 +40,11 @@ export async function applyMealPlanRepair({cls,key,source,mode,targetClass,targe
   const latest=await read(`meal_plan/${cls}/${key}`);
   if(!latest||!sameMealRecord(latest,source))throw new Error('Вихідний запис змінився. Відкрийте розбір знову.');
   const account=await read(`meal_accounts/${cls}/${key}`);
-  if(account&&Object.keys(account).length)
+  // Рахунок за старим ключем блокує лише ПРИВʼЯЗКУ (гроші самі не переїдуть).
+  // Позначити запис зайвим можна завжди: план харчування — не гроші, рахунок
+  // лишається на місці й видно, скільки на ньому (19.11.2026: кухня не мала
+  // що зробити із записом учня, якого вже немає, бо за ним був рахунок).
+  if(mode==='linked'&&account&&Object.keys(account).length)
     throw new Error('За старим ключем є особовий рахунок харчування. Потрібно окремо звірити його з адміністрацією; розбір плану заблоковано, щоб не розділити баланс.');
   const students=await read('students_list')||{};
   if(Object.hasOwn(students[cls]||{},key)||Object.values(students[cls]||{}).includes(key))
@@ -79,7 +84,7 @@ window.openMealOrphanRepair=async function(cls,key){
   const overlay=document.createElement('div');overlay.id='meal-orphan-dialog';
   overlay.setAttribute('role','dialog');overlay.setAttribute('aria-modal','true');
   overlay.style.cssText='position:fixed;inset:0;z-index:10050;background:#0008;display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box';
-  overlay.innerHTML='<div style="background:white;color:var(--ink);border-radius:16px;padding:20px;width:600px;max-width:100%;max-height:90vh;overflow:auto;box-sizing:border-box"><h3>Перевірка налаштувань харчування</h3><div id="meal-orphan-body">Завантаження…</div><button type="button" onclick="closeMealOrphanRepair()">Закрити</button></div>';
+  overlay.innerHTML='<div style="background:var(--surface);color:var(--ink);border-radius:16px;padding:20px;width:600px;max-width:100%;max-height:90vh;overflow:auto;box-sizing:border-box"><h3>Перевірка налаштувань харчування</h3><div id="meal-orphan-body">Завантаження…</div><button type="button" onclick="closeMealOrphanRepair()">Закрити</button></div>';
   document.body.appendChild(overlay);
   const body=document.getElementById('meal-orphan-body');
   try{
@@ -106,7 +111,8 @@ window.openMealOrphanRepair=async function(cls,key){
     state={cls,key,source,choices,seq};
     const when=Number(source.ts)>0?new Date(Number(source.ts)).toLocaleString('uk-UA'):'';
     body.innerHTML=`<p style="overflow-wrap:anywhere"><b>${escHtml(cls.replace('class_',''))} клас · ${escHtml(key)}</b><br>${escHtml(describeMealPlan(source))}<br>Зберіг: ${escHtml(source.by||'невідомо')}${when?`<br>${escHtml(when)}`:''}</p>
-      ${suggestions.length?`<p>${[...new Set(suggestions)].map(escHtml).join('<br>')}</p>`:'<p>За цим ключем ім’я не знайдено. Звірте дитину за автором запису з адміністрацією.</p>'}
+      ${suggestions.length?`<p>${[...new Set(suggestions)].map(escHtml).join('<br>')}</p>`
+        :'<p><b>Такого учня в поточних списках немає.</b> Найчастіше це дитина, яка вже не навчається, або запис, що лишився після видалення учня. Тоді натисніть «Учень більше не навчається / запис зайвий» — запис зникне з попередження, а оригінал збережеться. Якщо знаєте, чия це дитина, оберіть її нижче.</p>'}
       <label for="meal-orphan-target">Кому належать ці налаштування?</label>
       <select id="meal-orphan-target" onchange="resetMealOrphanPreview()" style="width:100%;min-width:0;max-width:100%;box-sizing:border-box"><option value="">Оберіть учня після звірки</option>${choices.map((s,i)=>`<option value="${i}">${escHtml(s.cls.replace('class_',''))} клас · ${escHtml(s.name)}</option>`).join('')}</select>
       <button type="button" onclick="previewMealOrphanRepair('linked')">Переглянути прив’язку</button>
@@ -126,9 +132,21 @@ window.previewMealOrphanRepair=async function(mode){
   try{
     const account=await read(`meal_accounts/${s.cls}/${s.key}`);
     if(state!==s||s.reviewVersion!==reviewVersion)return;
-    if(account&&Object.keys(account).length)
-      throw new Error('За цим ключем є особовий рахунок. Спочатку потрібна звірка рахунку з адміністрацією. Автоматичний розбір плану заблоковано.');
+    const hasAccount=!!(account&&Object.keys(account).length);
+    if(hasAccount&&mode==='linked')
+      throw new Error('За цим записом є рахунок харчування — гроші автоматично до іншого учня не переносяться. Якщо дитина вже не навчається, натисніть «Учень більше не навчається / запис зайвий». Якщо це та сама дитина під новим записом — перенесіть залишок через адміністрацію, а потім поверніться сюди.');
     let target=null,text='Запис буде позначений як архівний і зникне з попередження. Оригінал лишиться збереженим.';
+    let accountHtml='';
+    if(hasAccount){
+      // Скільки грошей на цьому записі — щоб було видно, що з ними робити далі
+      let money='';
+      try{
+        const a=await computeMealAccount(s.cls,s.key,account);
+        if(state!==s||s.reviewVersion!==reviewVersion)return;
+        money=`Внесено ${escHtml(a.income.toFixed(2))} zł, списано ${escHtml(a.charged.toFixed(2))} zł, залишок <b>${escHtml(a.balance.toFixed(2))} zł</b>.`;
+      }catch(e){ money='Залишок порахувати не вдалося.'; }
+      accountHtml=`<p>💰 За цим записом є рахунок харчування. ${money} Рахунок нікуди не зникне й не зміниться: якщо залишок не нульовий, поверніть його батькам або перенесіть через адміністрацію.</p>`;
+    }
     if(mode==='linked'){
       const value=document.getElementById('meal-orphan-target').value;
       target=value!==''?s.choices[Number(value)]:null;
@@ -141,7 +159,7 @@ window.previewMealOrphanRepair=async function(mode){
         :'Учень ще не має налаштувань: буде скопійовано цей постійний план.');
     }
     s.review={mode,target};
-    box.innerHTML=`<p>${escHtml(text)}</p><p>Денні вибори А/Б, рахунок і списання не змінюються. Оригінал запису зберігається.</p>${target&&target.cls!==s.cls?'<p>Після переведення директору також потрібно звірити клас дитини в прив’язці батьків.</p>':''}<button id="meal-orphan-apply" type="button" onclick="saveMealOrphanRepair()">Підтвердити цю дію</button>`;
+    box.innerHTML=`<p>${escHtml(text)}</p>${accountHtml}<p>Денні вибори А/Б, рахунок і списання не змінюються. Оригінал запису зберігається.</p>${target&&target.cls!==s.cls?'<p>Після переведення директору також потрібно звірити клас дитини в прив’язці батьків.</p>':''}<button id="meal-orphan-apply" type="button" onclick="saveMealOrphanRepair()">Підтвердити цю дію</button>`;
   }catch(e){box.textContent=e.message;}
 };
 window.saveMealOrphanRepair=async function(){
