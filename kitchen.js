@@ -559,7 +559,7 @@ export function lateAbsenceHtml(list){
   return `<div class="k-late" role="status">
     <div class="k-late-h">🚨 Не прийшли без попередження: <b>${list.length}</b></div>
     <div class="k-late-who">Хто відмітив — ${escHtml(whoTxt)}</div>
-    <div class="k-late-note">Про відсутність дізналися вже після дедлайну, тож їхні порції в числах вище й готуються (у журналі списань так само).</div>
+    <div class="k-late-note">Про них сказали вже після того, як замовлення закрилося, тож їхні порції є в числах вище й готуються.</div>
     ${rows}
   </div>`;
 }
@@ -1189,7 +1189,7 @@ export function buildOrderRows(cls, students, plans, overrides, absent, wd, menu
       const pick = (e.lunch && hasChoice) ? pickedSecond(menuDay, ov) : null;
       const breakfastPick = (e.breakfast && hasBrkChoice) ? pickedBreakfast(menuDay, ov) : null;
       let note = '';
-      if(e.lateAbsent) note = 'відсутній — повідомили після дедлайну, порція готується';
+      if(e.lateAbsent) note = 'відсутній — сказали запізно, порція готується';
       else if(e.absent) note = 'відсутній';
       else if(plan.lunch === false) note = 'не харчується';
       else if(ov && ov.lunch === 0) note = ov.reason ? `відмова · ${ov.reason}` : 'відмова';
@@ -1320,7 +1320,7 @@ window.loadClassOrders = async function(){
       </div>
       ${renderMealOrphanList(orphans, resolutions, !resolutionSnap.readError)}
       <p class="k-ord-hint">Натисніть ✓ або —, щоб додати чи зняти порцію вручну; кожна колонка А/Б перемикає свій варіант.
-        Це для тих, хто звернувся вже після дедлайну; дію буде записано в журнал.</p>`;
+        Це для тих, хто звернувся вже після закриття замовлення; дію буде записано в журнал.</p>`;
   }catch(e){
     box.innerHTML = `<p style="color:red;font-size:.8rem;">Помилка: ${escHtml(e.message)}</p>`;
   }
@@ -3316,7 +3316,7 @@ export function mealDaysTable(byDay){
       const at = d.absentAt ? schoolMoment(d.absentAt) : null;
       const when = at ? (at.day === d.date ? `о ${at.hm}` : `${at.day.slice(8,10)}.${at.day.slice(5,7)} о ${at.hm}`) : 'час невідомий';
       return `<span class="pms-abs">не було</span> · повідомлено ${escHtml(when)}${
-        d.late ? ' · <span class="pms-warn">після дедлайну, порцію приготували</span>' : ''}${
+        d.late ? ' · <span class="pms-warn">сказали запізно, порцію приготували</span>' : ''}${
         d.note ? ` · ${escHtml(d.note)}` : ''}`;
     }
     return d.note ? escHtml(d.note) : '';
@@ -3445,7 +3445,7 @@ window.reloadMyMealStats = async function(){
     ${moneyBlock}
     <p class="ms-note">Період: ${escHtml(human(from))} — ${escHtml(human(to))}. Рахуються лише робочі дні,
     коли кухня працювала.${r.skipped ? ` Не враховано днів (канікули, свята або меню не публікувалося): ${r.skipped}.` : ''}
-    Відсутність знімає харчування, якщо про неї повідомили до дедлайну: обід і підвечірок —
+    Відсутність знімає харчування, якщо про неї сказали вчасно: обід і підвечірок —
     до ${MEAL_CUTOFF_HOUR}:00, сніданок — до ${BREAKFAST_CUTOFF_HOUR}:00. Пізніше кухня вже
     порахувала продукти й приготувала порцію, тож день зараховується.
     ${r.withOverrides === false
