@@ -758,8 +758,10 @@ exports.handler = async (event) => {
       : (isClassWide ? await findClassTargets(token, cls)
       : (isBroadcast ? await findMealTargets(token)
                      : await findTargets(token, cls, studentName))));
-    if (targets.length === 0)
+    if (targets.length === 0) {
+      console.log(`[notify] ${body.type}: адресатів 0`);
       return { statusCode: 200, headers: cors(origin), body: JSON.stringify({ sent: 0, note: 'Немає підписників' }) };
+    }
 
     // data-only: показ бере на себе Service Worker — так вигляд сповіщення
     // однаковий і у фоні, і при відкритому порталі
@@ -879,10 +881,14 @@ exports.handler = async (event) => {
       const real = problems.find(p => !p.dead);
       firstError = real ? real.msg : '';
     }
+    // Лише тип і лічильники — без імен і токенів: щоб у Netlify → Functions →
+    // notify → Logs було видно, чи пішла розсилка і на чому спіткнулася.
+    console.log(`[notify] ${body.type}: адресатів ${targets.length}, надіслано ${sent}, прибрано ${cleaned}${firstError ? ', помилка: ' + firstError : ''}`);
     return { statusCode: 200, headers: cors(origin),
              body: JSON.stringify({ sent, total: targets.length, firstError,
                                     stale: cleaned || undefined }) };
   } catch (e) {
+    console.error(`[notify] ${body && body.type}: збій — ${e.message}`);
     return fail(500, 'Не вдалося надіслати: ' + e.message, origin);
   }
 };
