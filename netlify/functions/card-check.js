@@ -7,7 +7,7 @@
 // чи звільнили — картка сама стає недійсною.
 const { ALLOWED_HOSTS } = require('./lib/site');
 const { digits, formatNumber, GROUP_LABEL } = require('./lib/partner-card-core');
-const { accessToken, readDb, personOf, dropCard } = require('./lib/partner-person');
+const { accessToken, readDb, writeDb, personOf, dropCard } = require('./lib/partner-person');
 
 const headers = origin => {
   let host = ''; try { host = new URL(origin).hostname; } catch (e) {}
@@ -30,6 +30,11 @@ exports.handler = async (event) => {
     const token = await accessToken(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT));
     const card = await readDb(token, `partner_cards/${no}`);
     if (!card || typeof card !== 'object' || !card.uid) return reply(200, { valid: false, no: formatNumber(no) }, origin);
+    // Облік для адміністрації: скільки разів і коли партнери перевіряли
+    // картку. Не впливає на відповідь — помилка запису не заважає перевірці.
+    await writeDb(token, `partner_cards/${no}`, { checks: (Number(card.checks) || 0) + 1, lastCheck: Date.now() }, 'PATCH').catch(() => {});
+    // Заблокована адміністрацією — недійсна. Причину партнеру не пояснюємо.
+    if (card.blocked === true) return reply(200, { valid: false, no: formatNumber(no) }, origin);
     const p = await personOf(token, card.uid);
     const valid = p.groups.length > 0 && String(card.until || '') >= warsawDate();
     if (!valid) {

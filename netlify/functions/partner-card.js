@@ -37,6 +37,9 @@ exports.handler = async (event) => {
                    until: untilOf(warsawDate()) };
     let no = await readDb(token, `partner_card_of/${me.uid}`);
     if (typeof no === 'string' && /^\d{12}$/.test(no)) {
+      // Заблокована адміністрацією — не оновлюємо й нову не видаємо
+      const blocked = await readDb(token, `partner_cards/${no}/blocked`).catch(() => null);
+      if (blocked === true) return reply(403, { error: 'Картку заблоковано адміністрацією школи. Зверніться до школи.', blocked: true }, origin);
       await writeDb(token, `partner_cards/${no}`, card, 'PATCH');         // імʼя, групи, термін — актуальні
     } else {
       no = '';
