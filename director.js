@@ -2338,7 +2338,12 @@ const RENAMED_TABS = { journal: 'lesson', hwday: 'gradebook' };
 // Тому тут перелік: вкладка → чим її наповнити. Виклик іде ПІСЛЯ
 // switchTab, щоб секція вже була видима (обидві функції дивляться на
 // offsetParent, а в прихованій секції він порожній).
-const TAB_OPENERS = { hw: 'openHwTab', games: 'openGamesTab' };
+// Значення — назва функції або [назва, аргументи від screenId].
+// partners: модуль partners.js може догрузитися пізніше за initTabs, тому
+// відкривач чекаємо (як callWhenReady), а не пропускаємо мовчки.
+const PARTNER_PREFIX = { 'parent-screen': 'p', 'student-screen': 's', 'teacher-screen': 't' };
+const TAB_OPENERS = { hw: 'openHwTab', games: 'openGamesTab', meals: 'openStudentMealsTab',
+  partners: ['openPartnersTab', screenId => [PARTNER_PREFIX[screenId]]] };
 
 export function initTabs(screenId){
   const bar = document.getElementById(screenId + '-tabs');
@@ -2350,13 +2355,24 @@ export function initTabs(screenId){
   const btn = (tab && bar.querySelector(`.dtab[data-t="${tab}"]`)) || bar.querySelector('.dtab');
   if(!btn) return;
   switchTab(screenId, btn.dataset.t, btn);
-  const opener = TAB_OPENERS[btn.dataset.t];
+  const spec = TAB_OPENERS[btn.dataset.t];
+  if(!spec) return;
+  const [name, argsOf] = Array.isArray(spec) ? spec : [spec, null];
+  const args = argsOf ? argsOf(screenId) : [];
   // Помилка в наповненні однієї вкладки не має валити відновлення решти
   // кабінету: без try сюди прилітало б усе, що станеться всередині.
-  if(opener && window[opener]){
-    try{ window[opener](); }
-    catch(e){ console.warn('[Push School] вкладка', btn.dataset.t, ':', e && e.message); }
-  }
+  const run = left => {
+    const fn = window[name];
+    if(typeof fn === 'function'){
+      // Поки чекали модуль, людина могла перейти на іншу вкладку.
+      if(!btn.classList.contains('on')) return;
+      try{ const r = fn(...args); if(r && r.catch) r.catch(e => console.warn('[Push School] вкладка', btn.dataset.t, ':', e && e.message)); }
+      catch(e){ console.warn('[Push School] вкладка', btn.dataset.t, ':', e && e.message); }
+      return;
+    }
+    if(left > 0) setTimeout(() => run(left - 1), 150);
+  };
+  run(40);
 }
 window.initTabs = initTabs;
 
