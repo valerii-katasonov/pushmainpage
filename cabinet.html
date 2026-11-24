@@ -4519,6 +4519,27 @@ body.wn-open{overflow:hidden;}
 @media (prefers-reduced-motion:reduce){.wn-ov,.wn-card,.wn-big,.wn-f{animation:none;}.wn-track{transition:none;}}
 
 /* ═══ 🤝 ПАРТНЕРИ ШКОЛИ (partners.js) ═══ */
+/* 💳 Видані картки (адміністрація) */
+.pt-adm-cards{width:auto;margin:6px 0 4px;}
+.pt-cards .pt-adm-h h3{text-align:left;}
+.pt-cs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:12px 0 6px;}
+.pt-cs div{background:var(--surface-2);border:1px solid var(--line);border-radius:14px;padding:10px 8px;text-align:center;min-width:0;}
+.pt-cs b{display:block;font-size:1.35rem;line-height:1.1;color:var(--ink);}
+.pt-cs small{display:block;font-size:.72rem;color:var(--ink-2);line-height:1.2;margin-top:2px;}
+@media (max-width:480px){.pt-cs{grid-template-columns:repeat(2,minmax(0,1fr));}}
+.pt-cards-q{width:100%;min-height:44px;margin:6px 0 8px;font:inherit;}
+.pt-cards-f{margin-bottom:10px;}
+.pt-cards-f .pt-chip b{margin-left:4px;color:var(--ink-3);font-weight:800;}
+.pt-cards-list{display:flex;flex-direction:column;gap:8px;}
+.pt-crow{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:16px;background:var(--surface);text-align:left;}
+.pt-crow.off{background:var(--surface-2);}
+.pt-crow .nm{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;}
+.pt-crow .nm b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.pt-crow .nm small{color:var(--ink-2);font-size:.8rem;}
+.pt-crow .st{font-style:normal;font-weight:900;}
+.pt-crow .st.ok{color:var(--ok);} .pt-crow .st.exp{color:var(--warn);} .pt-crow .st.bad{color:var(--danger);}
+.pt-crow .ui-btn{flex:none;width:auto;}
+.pt-crow .ui-btn.danger{color:var(--danger);border-color:var(--danger-line);}
 .pt-box{display:flex;flex-direction:column;gap:12px;min-width:0;max-width:100%;}
 .pt-box>*{min-width:0;}
 .pt-mycard{display:flex;align-items:center;gap:12px;width:100%;margin:0;padding:12px 14px;border:none;border-radius:18px;background:linear-gradient(135deg,var(--pt-card-1),var(--pt-card-2));color:var(--pt-card-ink);text-align:left;font:inherit;cursor:pointer;box-shadow:var(--card-shadow);}
@@ -5329,7 +5350,10 @@ body.pt-open{overflow:hidden;}
       <h3>🤝 Партнери школи</h3>
       <div class="data-card" style="border-left-color:var(--brand);background:var(--surface-2);margin-top:0;">
         <p style="margin:0 0 10px;font-size:.88rem;">Знижки партнерів для учнів, батьків і персоналу, категорії та PUSH School Card. Партнери перевіряють картку на push.school/card.</p>
-        <button type="button" class="ui-btn ui-btn-2" onclick="openPartnersAdmin()">🤝 Партнери й категорії</button>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;">
+          <button type="button" class="ui-btn ui-btn-2" onclick="openPartnersAdmin()">🤝 Партнери й категорії</button>
+          <button type="button" class="ui-btn ui-btn-2" onclick="openPartnerCardsAdmin()">💳 Видані картки</button>
+        </div>
       </div>
     </section>
 

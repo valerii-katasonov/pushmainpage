@@ -21,7 +21,7 @@
 // ДИРЕКТОР — «Налаштування» → «🤝 Партнери школи»: партнери, послуги
 // (для кого, до коли), логотип, «рекомендуємо», «сховати», категорії.
 // ═══════════════════════════════════════════════════════════════
-import { ref, get, set, remove } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+import { ref, get, set, remove, update } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { db, auth, currentUserData, showToast, escHtml, uploadToCloudinary, cldImage } from './common.js';
 
 export const DAY = 86400000;
@@ -315,6 +315,7 @@ function admPaint(){
   <div class="pt-adm-h"><h3>🤝 Партнери школи</h3><button type="button" class="pt-adm-x" data-a="close" aria-label="Закрити">✕</button></div>
   <p class="pt-adm-note">Учні бачать знижки «для учнів», батьки — «для батьків» і «для учнів», працівники — «для персоналу». Партнер без чинних знижок для людини їй не показується.</p>
   ${st.edit ? editorHtml(st.edit, cats) : `
+  <button type="button" class="ui-btn ui-btn-2 pt-adm-cards" data-a="cards">💳 Видані картки</button>
   <section class="pt-adm-sec"><div class="pt-adm-sec-h"><h4>Партнери (${list.length})</h4><button type="button" class="ui-btn" data-a="new">+ Партнер</button></div>
     ${list.length ? list.map(p => {
       const all = Object.values(p.offers || {}), live = all.filter(o => !o.until || o.until >= day);
@@ -408,6 +409,7 @@ async function admClick(e){
   const a = b.dataset.a, box = st.ov.querySelector('.pt-adm');
   try{
     if(a === 'close'){ st.ov.remove(); adm = null; return; }
+    if(a === 'cards') return window.openPartnerCardsAdmin();
     if(a === 'new'){ st.edit = { _new: true, id: rid(), cat: catList(st.cats)[0]?.id || 'sport', color: COLORS[Math.floor(Math.random() * 8)], offers: { [rid(8)]: { who: { student: true } } } }; return admPaint(); }
     if(a === 'edit'){ const id = b.closest('[data-pid]').dataset.pid; st.edit = { id, ...JSON.parse(JSON.stringify(st.partners[id])) }; return admPaint(); }
     if(a === 'cancel'){ st.edit = null; return admPaint(); }
@@ -489,4 +491,115 @@ async function admChange(e){
       await saveCats(cats); showToast('Категорію збережено');
     }
   }catch(err){ showToast('Не вдалося: ' + (err.message || '')); }
+}
+
+// ═══════════ ДИРЕКТОР: 💳 ВИДАНІ КАРТКИ ═══════════
+// Список карток, які сервер уже видав (картку видають, коли людина вперше
+// відкриє «Моя картка»). Тут: хто, група, до коли, скільки разів партнери
+// її перевіряли — і кнопка «Заблокувати». Заблокована картка в партнера
+// показується недійсною, а нову власнику сервер не видасть, доки не
+// розблокують. Картки вибулих зникають самі (card-check / partner-card).
+export const CARD_GROUPS = { parent: 'Батьки', student: 'Учні', staff: 'Персонал' };
+export function cardStatus(c, today){
+  if(c && c.blocked) return 'blocked';
+  return String((c && c.until) || '') >= today ? 'active' : 'expired';
+}
+export function cardRows(cards, today){
+  return Object.entries(cards || {})
+    .filter(([no, c]) => /^\d{12}$/.test(no) && c && typeof c === 'object' && c.uid)
+    .map(([no, c]) => ({ no, name: String(c.name || ''), groups: Object.keys(c.groups || {}).filter(g => CARD_GROUPS[g]),
+      until: c.until || '', issuedAt: Number(c.issuedAt) || 0, checks: Number(c.checks) || 0, lastCheck: Number(c.lastCheck) || 0,
+      blocked: !!c.blocked, blockedAt: Number(c.blockedAt) || 0, blockedBy: c.blockedBy || '', status: cardStatus(c, today) }))
+    .sort((a, b) => a.name.localeCompare(b.name, 'uk') || a.no.localeCompare(b.no));
+}
+export function cardStats(rows){
+  const s = { all: rows.length, active: 0, blocked: 0, expired: 0, checks: 0, parent: 0, student: 0, staff: 0 };
+  rows.forEach(r => { s[r.status]++; s.checks += r.checks; r.groups.forEach(g => { s[g]++; }); });
+  return s;
+}
+export function filterCards(rows, q, f){
+  const needle = String(q || '').trim().toLowerCase(), dig = needle.replace(/\D/g, '');
+  return rows.filter(r => {
+    if(f === 'blocked' && !r.blocked) return false;
+    if(f === 'expired' && r.status !== 'expired') return false;
+    if(CARD_GROUPS[f] && !r.groups.includes(f)) return false;
+    if(!needle) return true;
+    return r.name.toLowerCase().includes(needle) || (dig.length >= 3 && r.no.includes(dig));
+  });
+}
+const fmtNo = no => 'PS ' + String(no).replace(/(\d{4})(?=\d)/g, '$1 ');
+const fmtDay = ts => ts ? new Date(ts).toLocaleDateString('uk-UA') : '';
+let cadm = null;
+window.openPartnerCardsAdmin = async function(){
+  document.querySelectorAll('.pt-cards-ov').forEach(x => x.remove());
+  const ov = document.createElement('div');
+  ov.className = 'modal-overlay pt-cards-ov'; ov.style.display = 'flex'; ov.style.zIndex = '1030';
+  ov.innerHTML = '<div class="modal-content pt-adm pt-cards" role="dialog" aria-modal="true" aria-label="Видані картки"><p class="empty-msg is-loading">Завантаження...</p></div>';
+  document.body.appendChild(ov);
+  const box = ov.querySelector('.pt-cards');
+  cadm = { ov, box, rows: [], q: '', f: 'all' };
+  ov.addEventListener('click', e => { if(e.target === ov){ ov.remove(); cadm = null; } });
+  box.addEventListener('click', cardsClick);
+  box.addEventListener('input', e => { if(e.target.dataset.c === 'q' && cadm){ cadm.q = e.target.value; cardsList(); } });
+  await cardsLoad();
+};
+async function cardsLoad(){
+  const st = cadm; if(!st) return;
+  let cards = null;
+  try{ cards = await val('partner_cards'); }
+  catch(e){ st.box.innerHTML = `<p class="empty-msg">Не вдалося завантажити картки: ${escHtml(e.message || e)}</p>`; return; }
+  if(cadm !== st) return;
+  st.rows = cardRows(cards, warsawToday());
+  cardsPaint();
+}
+function cardsPaint(){
+  const st = cadm, s = cardStats(st.rows);
+  const chip = (k, label, n) => `<button type="button" class="pt-chip${st.f === k ? ' on' : ''}" data-c="f" data-k="${k}" aria-pressed="${st.f === k}">${label}${n != null ? ` <b>${n}</b>` : ''}</button>`;
+  st.box.innerHTML = `<div class="pt-adm-h"><h3>💳 Видані картки</h3><button type="button" class="pt-adm-x" data-c="close" aria-label="Закрити">✕</button></div>
+    <div class="pt-cs">
+      <div><b>${s.all}</b><small>видано</small></div><div><b>${s.active}</b><small>діють</small></div>
+      <div><b>${s.blocked}</b><small>заблоковано</small></div><div><b>${s.checks}</b><small>перевірок у партнерів</small></div>
+    </div>
+    <p class="pt-adm-note">Картку видає портал, коли людина вперше відкриє «Моя картка». Хто вибув зі школи — його картка зникає сама. Заблокована картка в партнера показується недійсною, і нову власнику не видадуть, доки не розблокуєте.</p>
+    <input type="search" class="pt-cards-q" data-c="q" value="${escHtml(st.q)}" placeholder="Пошук: імʼя або номер" aria-label="Пошук картки">
+    <div class="pt-chips pt-cards-f">${chip('all', 'Усі', s.all)}${chip('parent', 'Батьки', s.parent)}${chip('student', 'Учні', s.student)}${chip('staff', 'Персонал', s.staff)}${chip('blocked', '⛔ Заблоковані', s.blocked)}${s.expired ? chip('expired', 'Минув термін', s.expired) : ''}</div>
+    <div class="pt-cards-list"></div>`;
+  cardsList();
+}
+function cardsList(){
+  const st = cadm; if(!st) return;
+  const list = st.box.querySelector('.pt-cards-list'); if(!list) return;
+  const rows = filterCards(st.rows, st.q, st.f);
+  const LBL = { active: ['діє', 'ok'], expired: ['минув термін', 'exp'], blocked: ['заблоковано', 'bad'] };
+  list.innerHTML = rows.length ? rows.map(r => `<div class="pt-crow${r.blocked ? ' off' : ''}" data-no="${r.no}">
+      <span class="nm"><b data-no-i18n>${escHtml(r.name || '—')}</b>
+        <small><span data-no-i18n>${fmtNo(r.no)}</span> · ${escHtml(r.groups.map(g => CARD_GROUPS[g]).join(', ') || '—')}</small>
+        <small><i class="st ${LBL[r.status][1]}">${LBL[r.status][0]}</i>${r.until ? ` · до ${escHtml(human(r.until))}` : ''}${r.issuedAt ? ` · видано ${fmtDay(r.issuedAt)}` : ''}</small>
+        <small>${r.checks ? `🔎 перевірок: ${r.checks}${r.lastCheck ? ` · остання ${fmtDay(r.lastCheck)}` : ''}` : 'партнери ще не перевіряли'}${r.blocked && r.blockedAt ? ` · заблоковано ${fmtDay(r.blockedAt)}` : ''}</small></span>
+      <button type="button" class="ui-btn ui-btn-2${r.blocked ? '' : ' danger'}" data-c="${r.blocked ? 'unblock' : 'block'}">${r.blocked ? 'Розблокувати' : 'Заблокувати'}</button>
+    </div>`).join('')
+    : `<p class="pt-adm-note">${st.rows.length ? 'Нічого не знайдено.' : 'Карток ще не видано — вони зʼявляться, коли люди відкриють «Моя картка».'}</p>`;
+}
+async function cardsClick(e){
+  const b = e.target.closest('[data-c]'); if(!b || !cadm) return;
+  const c = b.dataset.c;
+  if(c === 'close'){ cadm.ov.remove(); cadm = null; return; }
+  if(c === 'f'){ cadm.f = b.dataset.k; return cardsPaint(); }
+  if(c === 'block' || c === 'unblock'){
+    const no = b.closest('[data-no]').dataset.no, r = cadm.rows.find(x => x.no === no); if(!r) return;
+    const yes = c === 'block'
+      ? confirm(`Заблокувати картку ${fmtNo(no)} (${r.name})?\n\nУ партнерів вона стане недійсною, а нову власнику не видадуть, доки не розблокуєте.`)
+      : confirm(`Розблокувати картку ${fmtNo(no)} (${r.name})?`);
+    if(!yes) return;
+    b.disabled = true;
+    try{
+      // Одним записом: або всі три поля, або жодного
+      await update(ref(db, `partner_cards/${no}`), c === 'block'
+        ? { blocked: true, blockedAt: Date.now(), blockedBy: (auth.currentUser && auth.currentUser.email) || '' }
+        : { blocked: null, blockedAt: null, blockedBy: null });
+      showToast(c === 'block' ? '⛔ Картку заблоковано' : '✅ Картку розблоковано');
+      Object.assign(r, c === 'block' ? { blocked: true, blockedAt: Date.now(), status: 'blocked' } : { blocked: false, blockedAt: 0, status: cardStatus({ until: r.until }, warsawToday()) });
+      cardsPaint();
+    }catch(err){ b.disabled = false; showToast('Не вдалося: ' + (err && err.message || err)); }
+  }
 }
