@@ -24,6 +24,30 @@ const crypto = require('crypto');
 // означала правку в шести файлах: забути один означає тиху відмову
 // «запит із невідомого джерела» рівно в одній функції.
 const { ALLOWED_HOSTS, CABINET_URL } = require('./lib/site');
+const { verifyIdToken, rolesOf } = require('./lib/auth');
+
+// ── ХТО ЩО МОЖЕ НАДСИЛАТИ ──────────────────────────────────────────
+// Origin підробляється, тож кожен запит несе idToken (lib/auth.js), а
+// тип події звіряємо з ролями людини в users/{uid}.
+//   • меню — кухня й адміністрація (ті ж, кому правила дають писати menu);
+//   • оголошення, оцінки, ДЗ, відмітки, нагадування, відповіді — лише
+//     персонал: родина не повинна мати змоги розіслати «оголошення
+//     школи» зі своїм текстом;
+//   • решта (відсутність від батьків, запит учителю, перездача, ідея,
+//     чат, перевірка) — будь-хто зі школи; запит, перездачу та ідею
+//     сервер і так звіряє з записом у базі.
+const FAMILY_ROLES = new Set(['parent', 'student']);
+const KITCHEN_SENDERS = new Set(['kitchen', 'kitchen_admin', 'director', 'administrator']);
+const STAFF_TYPES = new Set(['news', 'reminder', 'grade', 'absence', 'late', 'comment', 'homework',
+                             'retake_reply', 'retake_date', 'talk_reply']);
+function mayNotify(type, roles, probe) {
+  if (!roles.length) return false;
+  if (probe) return true;
+  if (type === 'menu') return roles.some(r => KITCHEN_SENDERS.has(r));
+  if (type === 'idea_reply') return roles.some(r => r === 'director' || r === 'administrator');
+  if (STAFF_TYPES.has(type)) return roles.some(r => !FAMILY_ROLES.has(r));
+  return true;
+}
 const DB = 'https://test-4eb3e-default-rtdb.europe-west1.firebasedatabase.app';
 
 function cors(origin) {
@@ -376,6 +400,23 @@ async function ideaPlan(token, id) {
   await fetch(`${DB}/ideas_last_push.json?access_token=${encodeURIComponent(token)}`, { method: 'PUT', body: String(Date.now()) }).catch(() => {});
   return { kind: String(rec.kind || '') };
 }
+// ВІДПОВІДЬ ШКОЛИ АВТОРУ (idea_reply). Хто автор, сервер дізнається лише
+// для тих, хто сам поставив галочку «Зберігати в акаунті»
+// (idea_mine/{uid}/{id}, ideas-account.js). Решта авторів анонімні й для
+// сервера — їм відповідь видно лише на пристрої, з якого писали, або за
+// кодом звернення. Звʼязок uid ↔ звернення нікуди не пишемо й не логуємо.
+async function ideaReplyPlan(token, id) {
+  const rec = await readDb(token, `ideas/${id}`);
+  if (!rec || typeof rec !== 'object' || !rec.reply) return { note: 'Відповіді немає' };
+  const ts = Number(rec.replyTs) || 0;
+  if (Date.now() - ts > 24 * 3600e3) return { note: 'Відповідь застара' };
+  if (!(await claimFlag(token, `ideas_notice/${id}_r${Math.floor(ts)}`))) return { note: 'Уже надіслано' };
+  const mine = await readDb(token, 'idea_mine').catch(() => null) || {};
+  const owners = Object.keys(mine).filter(uid => mine[uid] && typeof mine[uid] === 'object' && mine[uid][id]);
+  if (!owners.length) return { targets: [] };
+  const recs = await Promise.all(owners.map(uid => readDb(token, `push_tokens/${uid}`).catch(() => null)));
+  return { targets: [...new Set(recs.flatMap(tokensOf))] };
+}
 async function findByEmails(token, emails) {
   const all = await readDb(token, 'push_tokens');
   if (!all || typeof all !== 'object') return [];
@@ -415,16 +456,17 @@ function newsClassesFromRecord(a) {
     .filter(c => a.classes[c] === true && NEWS_CLS_RE.test(c));
   return NEWS_CLS_RE.test(String(a.class || '')) ? [a.class] : [];
 }
-async function newsAudience(token, ref, body) {
-  if (ref) {
-    const rec = await readDb(token, `announcements/${ref}`).catch(() => undefined);
-    const fromRec = newsClassesFromRecord(rec);
-    if (fromRec !== undefined) return fromRec;
-  }
-  const cls = String(body.class || '');
-  if (cls === 'ALL') return null;
-  if (cls === 'MULTI') return String(body.classes || '').split(',').filter(c => NEWS_CLS_RE.test(c)).slice(0, 11);
-  return cls ? [cls] : null;
+// Підпис оголошення в сповіщенні — як scopeLabel у news.js
+const NEWS_ALL = Array.from({ length: 11 }, (_, i) => `class_${i + 1}`);
+function newsLabel(a, list) {
+  if (a.scope === 'school') return 'Вся школа';
+  const l = [...list].sort((x, y) => parseInt(x.slice(6)) - parseInt(y.slice(6)));
+  const same = m => l.length === m.length && l.every((x, i) => x === m[i]);
+  if (same(NEWS_ALL.slice(0, 5))) return 'Молодша школа';
+  if (same(NEWS_ALL.slice(5))) return 'Старша школа';
+  if (same(NEWS_ALL)) return 'Усі класи';
+  const n = c => c.replace('class_', '');
+  return l.length <= 1 ? `${n(l[0] || '')} клас` : 'Класи: ' + l.map(n).join(', ');
 }
 async function findNewsTargets(token, classes) {
   const [all,parents,students] = await Promise.all([
@@ -610,6 +652,9 @@ const EVENTS = {
   // 💡 Банк ідей: нове анонімне звернення — директору й адміністрації.
   // Текст складаємо ТУТ лише з виду звернення (бере сервер із бази):
   // жодного тексту від клієнта, жодного слова про автора.
+  idea_reply: (p) => ({ title: '💡 Школа відповіла на ваше звернення',
+                        body: 'Відповідь — у «Банку ідей», розділ «Мої звернення»',
+                        tag: 'idea-reply-' + (p.ref || 'x') }),
   idea:       (p) => ({ title: '💡 Банк ідей',
                         body: ({ idea: 'Нова ідея', complaint: 'Нова скарга', thanks: 'Нова подяка' }[p.kind] || 'Нове звернення') + ' — відкрийте портал',
                         tag: 'idea' + (p.ref ? '-' + p.ref : '') }),
@@ -670,9 +715,10 @@ exports.handler = async (event) => {
   const isTalk = body.type === 'talk' || body.type === 'talk_reply';
   const talkWho = String(body.who || ''), talkId = String(body.ref || '');
   const isIdea = body.type === 'idea';
+  const isIdeaReply = body.type === 'idea_reply';
   const isRetake = body.type === 'retake' || body.type === 'retake_reply' || body.type === 'retake_date';
   const rSubj = String(body.subject || ''), rDate = String(body.date || ''), rWho = String(body.who || '');
-  if (isIdea && !/^[a-z0-9]{20,32}$/.test(String(body.ref || ''))) return fail(400, 'Некоректне звернення', origin);
+  if ((isIdea || isIdeaReply) && !/^[a-z0-9]{20,32}$/.test(String(body.ref || ''))) return fail(400, 'Некоректне звернення', origin);
   const cls = String(body.class || '').slice(0, 20);
   const studentName = String(body.studentName || '').slice(0, 120);
   if (isClassWide && !cls) return fail(400, 'Не вказано клас', origin);
@@ -680,7 +726,7 @@ exports.handler = async (event) => {
     return fail(400, 'Некоректна адреса запиту', origin);
   if (isRetake && !(/^class_\d{1,2}$/.test(cls) && RETAKE_SUBJ_RE.test(rSubj) && RETAKE_DATE_RE.test(rDate) && RETAKE_WHO_RE.test(rWho)))
     return fail(400, 'Некоректна адреса заявки', origin);
-  if (!isBroadcast && !isClassWide && !isTalk && !isIdea && !isRetake && (!cls || !studentName))
+  if (!isBroadcast && !isClassWide && !isTalk && !isIdea && !isIdeaReply && !isRetake && (!cls || !studentName))
     return fail(400, 'Не вказано клас або учня', origin);
   if ((body.type === 'chat' || body.type === 'reminder') && !(Array.isArray(body.to) && body.to.length))
     return fail(400, 'Не вказано, кому надсилати', origin);
@@ -713,8 +759,42 @@ exports.handler = async (event) => {
     tagKey: crypto.createHash('sha1').update(cls + '|' + studentName).digest('hex').slice(0, 12)
   });
 
+  if (!body.idToken) return fail(401, 'Немає підтвердження входу — оновіть сторінку й увійдіть знову', origin);
   try {
+    const me = await verifyIdToken(body.idToken);
+    if (!me) return fail(401, 'Вхід не підтверджено — оновіть сторінку й увійдіть знову', origin);
     const token = await getAccessToken(sa);
+    const meRec = await readDb(token, `users/${me.uid}`);
+    const roles = rolesOf(meRec);
+    if (!mayNotify(body.type, roles, !!body.probe)) {
+      console.log(`[notify] ${body.type}: відмовлено (ролі: ${roles.join(',') || 'немає'})`);
+      return fail(403, 'Немає права надсилати такі сповіщення', origin);
+    }
+    // ВІДСУТНІСТЬ ВІД БАТЬКІВ — лише про власну дитину. Імʼя учня стоїть у
+    // заголовку сповіщення вчителю, тож без цієї звірки будь-хто зі школи міг
+    // слати вчителям будь-якого класу push із власним «заголовком».
+    if (body.type === 'attendance_report') {
+      const se = emailKey(me.email);
+      const [pl, sl] = await Promise.all([readDb(token, `parent_links/${se}`).catch(() => null),
+                                          readDb(token, `student_links/${se}`).catch(() => null)]);
+      const kids = effectiveChildren({ email: me.email }, { [se]: pl }, { [se]: sl });
+      if (!kids.some(k => k.class === cls && String(k.studentName || '') === studentName)) {
+        console.log(`[notify] attendance_report: дитина не привʼязана до відправника`);
+        return fail(403, 'Можна повідомляти лише про свою дитину', origin);
+      }
+    }
+    // ЧАТ: лише «Імʼя: нове повідомлення». Імʼя — з профілю відправника,
+    // текст — з короткого переліку. Інакше будь-хто зі школи міг би слати
+    // вчителям і батькам push із власним текстом від чужого імені.
+    if (body.type === 'chat') {
+      const who = [meRec && meRec.firstName, meRec && meRec.lastName]
+        .filter(x => typeof x === 'string' && x.trim()).join(' ').trim().slice(0, 60);
+      const CHAT_TEXTS = ['нове повідомлення', 'тестове сповіщення'];
+      // Без імені в профілі — роль, але не імʼя дитини (воно на екрані блокування)
+      const fallback = meRec && meRec.role === 'parent' ? 'Батьки' : meRec && meRec.role === 'student' ? 'Учень' : 'Школа';
+      msg = build({ subject: who || fallback,
+                    value: CHAT_TEXTS.includes(String(body.value || '')) ? String(body.value) : CHAT_TEXTS[0] });
+    }
     // Діагностика: чи взагалі є кому слати. Без цього «0 надіслано» не
     // відрізнити від зламаних ключів.
     if (body.probe) {
@@ -725,12 +805,33 @@ exports.handler = async (event) => {
         ok: true, project: sa.project_id, tokens: list.length, eligible: eligible.length
       }) };
     }
+    let replyTargets = null;
+    if (isIdeaReply) {
+      const plan = await ideaReplyPlan(token, String(body.ref));
+      if (!plan.targets) return { statusCode: 200, headers: cors(origin), body: JSON.stringify({ sent: 0, note: plan.note }) };
+      replyTargets = plan.targets;
+      msg = build({ ref: String(body.ref) });
+    }
     if (isIdea) {
       const plan = await ideaPlan(token, String(body.ref));
       if (!plan.kind && plan.note) return { statusCode: 200, headers: cors(origin), body: JSON.stringify({ sent: 0, note: plan.note }) };
       msg = build({ kind: plan.kind, ref: String(body.ref) });
     }
     const msgRef = /^[-_A-Za-z0-9]{1,40}$/.test(String(body.ref || '')) ? String(body.ref) : '';
+    // ОГОЛОШЕННЯ — ЛИШЕ ТЕ, ЩО Є В БАЗІ. Кому, який текст і чи «важливе» —
+    // беремо із запису announcements/{ref}, а не з запиту. Запис створено
+    // за правилами бази (учитель — лише своїм класам), тож і push повторює
+    // їх; власного тексту «від школи» в запиті ніхто не підставить.
+    let newsClasses;
+    if (body.type === 'news') {
+      const rec = msgRef ? await readDb(token, `announcements/${msgRef}`).catch(() => null) : null;
+      newsClasses = newsClassesFromRecord(rec);
+      if (newsClasses === undefined)
+        return { statusCode: 200, headers: cors(origin), body: JSON.stringify({ sent: 0, note: 'Оголошення не знайдено' }) };
+      msg = build({ subject: newsLabel(rec, newsClasses || []),
+                    value: String(rec.title || String(rec.text || '').slice(0, 60)).slice(0, 120),
+                    important: rec.important === true, remind: body.remind === true, ref: msgRef });
+    }
     let retake = null;
     if (isRetake) {
       retake = await retakePlan(token, body.type, cls, rSubj, rDate, rWho);
@@ -744,7 +845,8 @@ exports.handler = async (event) => {
       if (!talk.emails) return { statusCode: 200, headers: cors(origin), body: JSON.stringify({ sent: 0, note: talk.note }) };
       msg = build({ ...talk.params, clsLabel: cls.replace('class_', '') + ' клас' });
     }
-    const targets = isIdea ? await findAdminTargets(token)
+    const targets = isIdeaReply ? replyTargets
+      : isIdea ? await findAdminTargets(token)
       : isRetake ? (retake.family ? await findTargets(token, cls, retake.family) : await findByEmails(token, retake.emails))
       : isTalk ? await findByEmails(token, talk.emails)
       : body.type === 'attendance_report'
@@ -754,7 +856,7 @@ exports.handler = async (event) => {
       // Нагадування — лише одному вчителю за раз
       : body.type === 'reminder'
       ? await findByEmails(token, Array.isArray(body.to) ? body.to.slice(0, 1) : [])
-      : (body.type === 'news' ? await findNewsTargets(token, await newsAudience(token, msgRef, body))
+      : (body.type === 'news' ? await findNewsTargets(token, newsClasses)
       : (isClassWide ? await findClassTargets(token, cls)
       : (isBroadcast ? await findMealTargets(token)
                      : await findTargets(token, cls, studentName))));
@@ -791,7 +893,8 @@ exports.handler = async (event) => {
       retake:       'retake', // учитель — одразу список заявок цього класу
       retake_reply: 'grades',
       retake_date:  'grades',
-      idea:       'ideas'   // кабінет директора одразу відкриє скриньку (ideas.js)
+      idea:       'ideas',  // кабінет директора одразу відкриє скриньку (ideas.js)
+      idea_reply: 'ideas'   // автору — «Банк ідей» з його зверненнями
     };
     const tab = TAB_BY_TYPE[body.type] || 'day';
     // Адреса кабінету — з lib/site.js, а не з першого елемента списку

@@ -45,6 +45,8 @@ const API = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:ge
 // означала правку в шести файлах: забути один означає тиху відмову
 // «запит із невідомого джерела» рівно в одній функції.
 const { ALLOWED_HOSTS } = require('./lib/site');
+// Хто питає: лише людина, яка увійшла в портал (див. lib/auth.js)
+const { verifyIdToken } = require('./lib/auth');
 
 const clean = (v, max) => String(v ?? '').trim().slice(0, max);
 
@@ -232,6 +234,12 @@ exports.handler = async (event) => {
 
   const build = PROMPTS[body.task];
   if (!build) return fail(400, 'Невідомий тип запиту', origin);
+
+  // Origin підробляється — без підтвердженого входу квоту Gemini не витрачаємо
+  if (!body.idToken) return fail(401, 'Немає підтвердження входу — оновіть сторінку й увійдіть знову', origin);
+  try {
+    if (!(await verifyIdToken(body.idToken))) return fail(401, 'Вхід не підтверджено — оновіть сторінку й увійдіть знову', origin);
+  } catch (e) { return fail(503, 'Не вдалося перевірити вхід, спробуйте ще раз', origin); }
 
   // Обрізаємо вхідні дані — і від помилок, і від спроб «розкрутити» модель
   const params = {
