@@ -129,7 +129,7 @@ function paintTab(box){
   const catName = id => { const c = state.data.cats[id]; return c ? `${c.icon || ''} ${c.name}`.trim() : ''; };
   box.innerHTML = `
     <button type="button" class="pt-mycard" data-a="card">
-      <img src="icon-192.png" alt="" class="pt-mycard-logo">
+      <img src="/icon-192.png" alt="" class="pt-mycard-logo">
       <span><b>PUSH School Card</b><small>Покажіть партнеру — і отримайте знижку</small></span>
       <em>Показати</em>
     </button>
@@ -222,7 +222,7 @@ export async function openCard(){
       <div class="pt-card-top"><span>Покажіть цей екран партнеру</span><button type="button" class="pt-x" data-a="close" aria-label="Закрити">✕</button></div>
       ${c ? `<div class="pt-card">
         <div class="pt-card-sheen" aria-hidden="true"></div>
-        <div class="pt-card-row"><img src="icon-512.png" alt="PUSH School" class="pt-card-logo"><span class="pt-card-chip" aria-hidden="true"></span></div>
+        <div class="pt-card-row"><img src="/icon-192.png" alt="PUSH School" class="pt-card-logo" onerror="this.onerror=null;this.src='/logo.png'"><span class="pt-card-chip" aria-hidden="true"></span></div>
         <div><small>PARTNER CARD</small><b class="pt-card-no" data-no-i18n>${escHtml(c.display)}</b></div>
         <div><small>ВЛАСНИК</small><b class="pt-card-name" data-no-i18n>${escHtml(c.name)}</b><span>${escHtml((c.labels || []).join(' · '))}</span></div>
         <div class="pt-card-foot"><span class="pt-card-valid">Дійсна до ${escHtml(human(c.until))}</span><span class="pt-card-clock" aria-live="off"></span></div>
