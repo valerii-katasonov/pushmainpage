@@ -3909,7 +3909,7 @@ window.checkPush = async function(){
   try{
     const r = await fetch('/.netlify/functions/notify', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ type:'menu', probe:true })
+      body: JSON.stringify({ type:'menu', probe:true, idToken: await authIdToken() })
     });
     const d = await r.json();
     if(!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
@@ -3955,12 +3955,20 @@ window.renderPushButton=renderPushButton;
 // Надіслати сповіщення про подію. Свідомо «тихий» виклик: якщо сповіщення
 // не налаштовані або впали — основна дія (оцінка, відмітка) вже збережена
 // і не має зриватися через це.
+// idToken для серверних функцій (notify, ai-assist): Origin підробляється,
+// тож сервер питає Google, хто саме надсилає (netlify/functions/lib/auth.js).
+// getIdToken сам оновлює прострочений токен. Порожній рядок — сервер
+// відповість «оновіть сторінку й увійдіть знову».
+export async function authIdToken(){
+  try{ return (await auth.currentUser?.getIdToken()) || ''; }catch(e){ return ''; }
+}
+window.authIdToken=authIdToken;
 export function notifyEvent(type,payload){
   // VAPID потрібен отримувачу для підписки, а не відправнику події.
-  return fetch('/.netlify/functions/notify',{
+  return authIdToken().then(idToken=>fetch('/.netlify/functions/notify',{
     method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({type,...payload})
-  }).then(async r=>{
+    body:JSON.stringify({type,...payload,idToken})
+  })).then(async r=>{
     let d={}; try{ d=await r.json(); }catch(e){}
     if(!r.ok) return {ok:false,error:d.error||`HTTP ${r.status}`};
     // Мертві підписки (старий телефон, почищений браузер) сервер прибирає

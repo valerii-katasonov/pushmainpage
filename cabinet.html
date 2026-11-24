@@ -726,6 +726,18 @@
       /* Зимове оформлення (season.js): сніг, гірлянда */
       --snow:#ffffff; --snow-shadow:rgba(60,100,140,.45); --snow-fall:#7fb8d4;
       --garl-wire:#3b5d50; --garl-1:#ff5a5f; --garl-2:#ffd54f; --garl-3:#4fc3f7; --garl-4:#7ee08a;
+      /* 🎄 Адвент-календар (advent.js): нічна сцена — однакова у світлій і темній темі */
+      --adv-bg:#06343d; --adv-bg-2:#042a31; --adv-ink:#ffffff; --adv-sub:#a9d6dd; --adv-sub-2:#cfe6ea; --adv-dim:#7fa9b0;
+      --adv-gold:#f6c143; --adv-gold-ink:#06343d; --adv-hook:#c9a227; --adv-ginger:#c07a3e;
+      --adv-tree-1:#1f8a5b; --adv-tree-2:#1a7a50; --adv-tree-3:#156b46; --adv-trunk:#7a4a26; --adv-snow:#e8f4f6;
+      --adv-c0:#e0475b; --adv-c1:#02b0cb; --adv-c2:#f6c143; --adv-c3:#f28ba0; --adv-c4:#3a7bd5; --adv-c5:#ffffff;
+      --adv-silver:#c9d6da; --adv-bronze:#c98a4b;
+      --adv-gold-soft:#fff1c9; --adv-gold-text:#7a4a00; --adv-silver-soft:#edf2f4; --adv-silver-text:#3b4b51;
+      --adv-bronze-soft:#f7e6d6; --adv-bronze-text:#6b3a10;
+      /* 🤝 Партнери (partners.js): картка в кольорі логотипа й плитки партнерів */
+      --pt-card-1:#02b0cb; --pt-card-2:#3cc3d9; --pt-card-3:#7fd8e6; --pt-card-ink:#06343d; --pt-chip:#f6c143; --pt-chip-2:#e0b62e;
+      --pt-c0:#0d6b74; --pt-c1:#c2410c; --pt-c2:#7c3aed; --pt-c3:#15803d; --pt-c4:#b91c1c; --pt-c5:#0b5aa8; --pt-c6:#a16207; --pt-c7:#be185d;
+      --pt-h0:#e1f4f6; --pt-h1:#fde7d6; --pt-h2:#ede4fb; --pt-h3:#dcfce7; --pt-h4:#fee2e2; --pt-h5:#dbeafe; --pt-h6:#fef3c7; --pt-h7:#fce7f3;
     }
     #auth-bg{display:none;}
     body.auth-mode{background:var(--auth-bg);align-items:center;}
@@ -3696,6 +3708,21 @@ body.ui-sheet-lock{overflow:hidden;}
 .ib-st-done{background:var(--ok-soft);color:var(--ok);}
 .ib-reply{margin-top:8px;padding:8px 10px;border-radius:10px;background:var(--ok-soft);font-size:.85rem;}
 .ib-reply p{margin:3px 0 0;white-space:pre-wrap;}
+.ib-sync{display:flex;gap:9px;align-items:flex-start;margin:10px 0 0;font-size:.8rem;line-height:1.4;color:var(--ink-2);font-weight:600;cursor:pointer;}
+.ib-sync input{width:20px;height:20px;margin:1px 0 0;flex-shrink:0;}
+.ib-sync b{color:var(--ink);}
+.ib-code-box{margin:8px 0 0;padding:10px 12px;border-radius:12px;background:var(--brand-soft);border:1px solid var(--brand-line);display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;font-size:.85rem;}
+.ib-code-box small{flex-basis:100%;color:var(--ink-2);}
+.ib-code-box[hidden]{display:none;}
+.ib-code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.04em;color:var(--brand-deep);word-break:break-all;}
+.ib-code-box button,.ib-mine-tools button,.ib-find button{width:auto;margin:0;min-height:36px;padding:0 12px;border-radius:10px;background:var(--surface);color:var(--brand-deep);border:1px solid var(--brand-line);font-size:.8rem;font-weight:800;}
+.ib-mine-tools{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;margin-top:8px;font-size:.78rem;color:var(--ink-2);}
+.ib-mine-tools>span{flex:1 1 100%;}
+.ib-find{margin-top:14px;padding-top:12px;border-top:1px dashed var(--line);}
+.ib-find label{font-size:.85rem;font-weight:800;}
+.ib-find-row{display:flex;gap:8px;margin-top:6px;}
+.ib-find-row input{flex:1;min-width:0;margin:0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;text-transform:uppercase;}
+.ib-find-msg{min-height:1em;margin:6px 0 0;font-size:.8rem;color:var(--ink-2);}
 .ib-filters{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px;}
 .ib-filters button{width:auto;margin:0;padding:6px 11px;border-radius:999px;background:var(--surface-2);color:var(--ink-2);border:1px solid var(--line);font-size:.8rem;font-weight:700;}
 .ib-filters button.on{background:var(--brand-soft);color:var(--brand-deep);border-color:var(--brand-line);}
@@ -4262,6 +4289,237 @@ body:has(.modal-overlay[style*="display: flex"],.modal-overlay[style*="display:f
 .sb2-save{margin-top:10px;background:var(--warn);color:var(--on-fill);font-weight:800;}
 .sb2-save:disabled{opacity:.5;}
 .sb2-cancel{width:100%;background:var(--surface-2);color:var(--ink);border:1px solid var(--line);margin-top:7px;}
+
+/* ═══ 🎄 АДВЕНТ-КАЛЕНДАР (advent.js) ═══
+   Нічна сцена з ялинкою; кольори — токени --adv-* у :root. Іграшки —
+   SVG із класами f-* (заливка) і s-* (контур); колір іграшки — --oc. */
+#p-advent,#s-advent,#t-advent{margin-bottom:12px;}
+.adv-card{display:flex;align-items:center;gap:12px;width:100%;margin:0;padding:12px 14px;border:none;border-radius:18px;background:var(--adv-bg);color:var(--adv-ink);text-align:left;font:inherit;cursor:pointer;box-shadow:var(--card-shadow);}
+.adv-card-tree{width:42px;height:48px;flex-shrink:0;}
+.adv-card-txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;}
+.adv-card-txt b{font-size:1rem;font-weight:900;}
+.adv-card-txt small{font-size:.82rem;font-weight:700;color:var(--adv-sub-2);line-height:1.35;}
+.adv-card-btn{flex-shrink:0;min-height:40px;display:inline-flex;align-items:center;padding:0 12px;border-radius:12px;background:var(--adv-gold);color:var(--adv-gold-ink);font-weight:900;font-size:.88rem;}
+.adv-orn{display:block;width:100%;height:100%;overflow:visible;filter:drop-shadow(0 2px 2px rgba(0,0,0,.25));}
+.adv-orn .f-b{fill:var(--oc);} .adv-orn .f-w{fill:var(--adv-c5);} .adv-orn .f-g{fill:var(--adv-gold);} .adv-orn .f-n{fill:var(--adv-ginger);}
+.adv-orn .s-b{fill:none;stroke:var(--oc);} .adv-orn .s-w{fill:none;stroke:var(--adv-c5);} .adv-orn .s-g{fill:none;stroke:var(--adv-gold);} .adv-orn .s-h{fill:none;stroke:var(--adv-hook);}
+.adv-orn .o85{opacity:.85;} .adv-orn .o80{opacity:.8;} .adv-orn .o70{opacity:.7;} .adv-orn .o55{opacity:.55;} .adv-orn .o45{opacity:.45;}
+.adv-orn.oc0{--oc:var(--adv-c0);} .adv-orn.oc1{--oc:var(--adv-c1);} .adv-orn.oc2{--oc:var(--adv-c2);}
+.adv-orn.oc3{--oc:var(--adv-c3);} .adv-orn.oc4{--oc:var(--adv-c4);} .adv-orn.oc5{--oc:var(--adv-c5);}
+body.adv-open{overflow:hidden;}
+.adv-ov{position:fixed;inset:0;z-index:1050;background:var(--adv-bg);color:var(--adv-ink);overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;}
+.adv-wrap{max-width:480px;margin:0 auto;padding:calc(10px + env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:14px;}
+.adv-head{display:flex;align-items:center;gap:12px;}
+.adv-x{min-width:44px;width:44px;height:44px;flex-shrink:0;margin:0;padding:0;border:none;border-radius:22px;background:rgba(255,255,255,.1);color:var(--adv-ink);font-size:1.1rem;font-weight:900;cursor:pointer;}
+.adv-title{flex:1;min-width:0;display:flex;flex-direction:column;}
+.adv-title b{font-size:1.3rem;font-weight:900;line-height:1.15;}
+.adv-title small,.adv-count small{font-size:.78rem;font-weight:700;color:var(--adv-sub);}
+.adv-count{display:flex;flex-direction:column;align-items:flex-end;flex-shrink:0;}
+.adv-count b{font-size:1.4rem;font-weight:900;color:var(--adv-gold);line-height:1;}
+.adv-tree{position:relative;width:100%;max-width:390px;aspect-ratio:390/520;margin:0 auto;}
+.adv-tree-svg{position:absolute;inset:0;width:100%;height:100%;}
+.adv-tree .t-snow{fill:var(--adv-snow);} .adv-tree .t-snow2{fill:var(--adv-c5);} .adv-tree .t-trunk{fill:var(--adv-trunk);}
+.adv-tree .t-1{fill:var(--adv-tree-1);} .adv-tree .t-2{fill:var(--adv-tree-2);} .adv-tree .t-3{fill:var(--adv-tree-3);}
+.adv-tree .t-shade{fill:rgba(0,0,0,.12);}
+.adv-tree .t-garl{fill:none;stroke:var(--adv-c5);stroke-width:6;stroke-linecap:round;opacity:.9;}
+.adv-tree .t-lights{fill:none;stroke:var(--adv-gold);stroke-width:2;stroke-dasharray:1 9;stroke-linecap:round;}
+.adv-hang{position:absolute;width:9.3%;aspect-ratio:40/46;transform:translate(-50%,-56%);animation:advHang .5s ease-out;}
+@keyframes advHang{0%{transform:translate(-50%,-90%) scale(.6);opacity:0;}100%{transform:translate(-50%,-56%) scale(1);opacity:1;}}
+.adv-spot{position:absolute;width:2.6%;aspect-ratio:1;transform:translate(-50%,-50%);border:1.5px dashed rgba(255,255,255,.5);border-radius:50%;}
+.adv-star{position:absolute;left:50%;top:9%;width:13%;transform:translate(-50%,-50%);}
+.adv-star svg{display:block;width:100%;fill:rgba(255,255,255,.06);stroke:var(--adv-sub);stroke-width:1;stroke-dasharray:1.6 1.4;stroke-linejoin:round;}
+.adv-star.on{width:16%;filter:drop-shadow(0 0 14px var(--adv-gold));}
+.adv-star.on svg{fill:var(--adv-gold);stroke:var(--adv-gold-soft);stroke-dasharray:none;}
+.adv-banner{display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:20px;background:var(--adv-gold);color:var(--adv-gold-ink);}
+.adv-banner span{flex:1;display:flex;flex-direction:column;gap:2px;}
+.adv-banner small{font-size:.75rem;font-weight:900;letter-spacing:.06em;}
+.adv-banner b{font-size:1.05rem;font-weight:900;line-height:1.2;}
+.adv-go{flex-shrink:0;width:auto;min-height:46px;margin:0;padding:0 16px;border:none;border-radius:14px;background:var(--adv-bg);color:var(--adv-ink);font:inherit;font-weight:900;cursor:pointer;}
+.adv-late{display:flex;align-items:center;gap:12px;width:100%;margin:0;padding:12px 14px;border:2px dashed var(--adv-gold);border-radius:16px;background:transparent;color:var(--adv-ink);font:inherit;text-align:left;cursor:pointer;}
+.adv-late span{flex:1;font-weight:800;font-size:.9rem;line-height:1.3;} .adv-late b{color:var(--adv-gold);font-weight:900;}
+.adv-doors{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;}
+.adv-door{position:relative;height:62px;margin:0;padding:4px 0;border-radius:14px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.04);color:var(--adv-dim);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font:inherit;box-sizing:border-box;}
+.adv-door b{font-size:1.1rem;font-weight:900;line-height:1;} .adv-door small{font-size:.62rem;font-weight:800;}
+.adv-door .adv-orn{width:28px;height:32px;}
+.adv-door>svg:not(.adv-orn){width:24px;height:24px;fill:none;stroke:var(--adv-gold);stroke-width:1.6;stroke-linejoin:round;}
+.adv-door.opened{background:rgba(255,255,255,.1);border-color:transparent;color:var(--adv-sub);}
+.adv-door.today{background:var(--adv-gold);color:var(--adv-gold-ink);border:none;box-shadow:0 0 0 3px rgba(246,193,67,.35),0 0 22px rgba(246,193,67,.55);cursor:pointer;}
+.adv-door.catchup{border:2px dashed var(--adv-gold);background:rgba(246,193,67,.08);color:var(--adv-gold);cursor:pointer;}
+.adv-door.burned{background:rgba(0,0,0,.18);} .adv-door.burned b.x{text-decoration:line-through;}
+.adv-door.final,.adv-door.star{border:1.5px solid rgba(246,193,67,.6);color:var(--adv-gold);}
+.adv-door.star{cursor:pointer;} .adv-door.star>svg{fill:var(--adv-gold);}
+.adv-tiers{padding:16px;border-radius:18px;background:rgba(255,255,255,.08);}
+.adv-tiers h4{margin:0 0 6px;font-size:1rem;font-weight:900;color:var(--adv-ink);}
+.adv-tiers p{margin:0 0 10px;font-size:.84rem;font-weight:600;color:var(--adv-sub-2);line-height:1.45;}
+.adv-tiers ul{list-style:none;margin:0 0 8px;padding:0;display:flex;flex-direction:column;gap:6px;}
+.adv-tiers li{display:flex;align-items:center;gap:10px;font-weight:800;font-size:.9rem;padding:4px 8px;border-radius:10px;}
+.adv-tiers li.now{background:rgba(255,255,255,.1);}
+.adv-tiers li span{flex:1;} .adv-tiers li em{font-style:normal;color:var(--adv-sub);}
+.adv-dot{display:inline-block;width:14px;height:14px;border-radius:7px;flex-shrink:0;}
+.adv-dot.gold{background:var(--adv-gold);} .adv-dot.silver{background:var(--adv-silver);} .adv-dot.bronze{background:var(--adv-bronze);}
+.adv-tiers .adv-hint{color:var(--adv-gold);font-weight:800;} .adv-tiers .adv-small{margin:0;font-size:.76rem;color:var(--adv-sub);}
+.adv-prize{display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;padding:20px 18px;border-radius:24px;background:var(--adv-c5);color:var(--adv-gold-ink);}
+.adv-prize small{font-size:.78rem;font-weight:900;letter-spacing:.08em;color:var(--brand-deep);}
+.adv-prize b{font-size:1.4rem;font-weight:900;line-height:1.2;}
+.adv-prize span{font-size:.9rem;font-weight:700;line-height:1.4;}
+.adv-prize em{font-style:normal;font-size:.82rem;font-weight:800;padding:5px 10px;border-radius:10px;background:var(--brand-soft);color:var(--brand-deep);}
+.adv-prize.wait,.adv-prize.thanks{background:rgba(255,255,255,.1);color:var(--adv-ink);}
+.adv-tier{display:inline-block;font-size:.75rem;font-weight:900;padding:4px 9px;border-radius:9px;font-style:normal;}
+.adv-tier.gold{background:var(--adv-gold-soft);color:var(--adv-gold-text);} .adv-tier.silver{background:var(--adv-silver-soft);color:var(--adv-silver-text);}
+.adv-tier.bronze{background:var(--adv-bronze-soft);color:var(--adv-bronze-text);} .adv-tier.none{background:var(--surface-2);color:var(--ink-3);}
+.adv-rev{position:fixed;inset:0;z-index:1060;background:var(--adv-bg-2);overflow-y:auto;display:flex;}
+.adv-rev-in{margin:auto;width:100%;max-width:420px;padding:24px 20px calc(24px + env(safe-area-inset-bottom));display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center;}
+.adv-rev-in>small{font-size:.8rem;font-weight:900;letter-spacing:.08em;color:var(--adv-sub);}
+.adv-rev-orn{width:150px;height:172px;padding:20px;border-radius:50%;background:radial-gradient(circle,rgba(246,193,67,.45) 0%,rgba(246,193,67,.08) 55%,rgba(246,193,67,0) 70%);animation:advPop .5s ease-out;}
+@keyframes advPop{0%{transform:scale(.3) rotate(-20deg);opacity:0;}70%{transform:scale(1.08) rotate(4deg);}100%{transform:scale(1);opacity:1;}}
+.adv-rev-new{font-weight:800;color:var(--adv-gold);} .adv-rev-in h3{margin:0;padding:0;border:none;font-size:1.7rem;font-weight:900;color:var(--adv-ink);}
+.adv-deed{align-self:stretch;padding:14px 16px;border-radius:18px;background:rgba(255,255,255,.09);display:flex;flex-direction:column;gap:4px;text-align:left;}
+.adv-deed small{font-size:.74rem;font-weight:900;letter-spacing:.06em;color:var(--adv-sub);} .adv-deed span{font-size:1rem;font-weight:800;line-height:1.4;}
+.adv-prog{align-self:stretch;display:flex;justify-content:space-between;font-size:.86rem;font-weight:800;color:var(--adv-sub-2);}
+.adv-bar{position:relative;align-self:stretch;height:10px;border-radius:5px;background:rgba(255,255,255,.12);}
+.adv-bar>i{display:block;height:100%;border-radius:5px;background:var(--adv-gold);}
+.adv-mark{position:absolute;top:-3px;width:3px;height:16px;border-radius:2px;}
+.adv-mark.bronze{background:var(--adv-bronze);} .adv-mark.silver{background:var(--adv-silver);}
+.adv-hang-btn{align-self:stretch;min-height:54px;margin:8px 0 0;border:none;border-radius:18px;background:var(--adv-gold);color:var(--adv-gold-ink);font:inherit;font-size:1.05rem;font-weight:900;cursor:pointer;}
+.adv-tc{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:12px 14px;box-shadow:var(--card-shadow);}
+.adv-tc-h{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:6px;}
+.adv-tc-h span{font-size:.8rem;font-weight:700;color:var(--ink-3);}
+.adv-tc-row{display:flex;align-items:center;gap:12px;min-height:52px;padding:6px 0;border-top:1px solid var(--line);cursor:pointer;}
+.adv-tc-row input{width:22px;height:22px;margin:0;flex-shrink:0;accent-color:var(--brand-deep);}
+.adv-tc-row span{flex:1;min-width:0;display:flex;flex-direction:column;} .adv-tc-row small{color:var(--ink-3);font-weight:700;}
+.adv-adm{max-width:760px!important;text-align:left!important;}
+.adv-adm-h{display:flex;justify-content:space-between;align-items:center;gap:10px;}
+.adv-adm-h h3{margin:0;}
+.adv-adm-x{width:40px;height:40px;margin:0;padding:0;border:none;border-radius:20px;background:var(--surface-2);color:var(--ink);font-weight:900;cursor:pointer;}
+.adv-adm-sub,.adv-adm-note{font-size:.82rem;color:var(--ink-3);margin:6px 0;}
+.adv-adm-warn{font-size:.84rem;font-weight:700;color:var(--warn);background:var(--warn-soft);border:1px solid var(--warn-line);border-radius:10px;padding:8px 10px;}
+.adv-adm-on{display:flex;gap:10px;align-items:flex-start;margin:10px 0;cursor:pointer;}
+.adv-adm-on input{width:20px;height:20px;margin:2px 0 0;flex-shrink:0;}
+.adv-adm-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin:10px 0;}
+.adv-adm-stats div{background:var(--surface-2);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;}
+.adv-adm-stats b{font-size:1.2rem;} .adv-adm-stats span{font-size:.78rem;color:var(--ink-3);}
+.adv-adm-sec{border-top:1px solid var(--line);padding-top:10px;margin-top:12px;}
+.adv-adm-sec h4{margin:0 0 8px;}
+.adv-adm-tiers{display:flex;flex-wrap:wrap;gap:10px;}
+.adv-adm-tiers label{display:flex;align-items:center;gap:6px;font-weight:700;}
+.adv-adm-tiers input{width:64px;margin:0;}
+.adv-adm-row,.adv-adm-add{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:8px 0;border-top:1px solid var(--line);}
+.adv-adm-row .nm{flex:1 1 200px;min-width:0;display:flex;flex-direction:column;} .adv-adm-row .nm small{color:var(--ink-3);}
+.adv-adm-row select,.adv-adm-row input,.adv-adm-add select,.adv-adm-add input{width:auto;margin:0;min-height:38px;}
+.adv-adm-row input[data-f="qty"],.adv-adm-add input[data-n="qty"]{width:70px;}
+.adv-adm-add input[data-n="name"]{flex:1 1 240px;} .adv-adm-add input[data-n="note"]{flex:1 1 160px;}
+.adv-adm-row .lf{font-size:.8rem;color:var(--ink-3);min-width:56px;}
+.adv-adm-row .del{width:36px;height:36px;margin:0;padding:0;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--danger);cursor:pointer;}
+.adv-adm-tools{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;}
+.adv-adm-win{max-height:360px;overflow:auto;border:1px solid var(--line);border-radius:12px;}
+.adv-adm-w{display:grid;grid-template-columns:minmax(0,1.3fr) 60px 90px minmax(0,1.6fr) 80px;gap:8px;align-items:center;padding:8px 10px;border-top:1px solid var(--line);font-size:.86rem;}
+.adv-adm-w:first-child{border-top:none;}
+@media (max-width:640px){.adv-adm-w{grid-template-columns:1fr auto;}}
+@media (prefers-reduced-motion: reduce){.adv-hang,.adv-rev-orn{animation:none;}}
+
+/* ═══ 🤝 ПАРТНЕРИ ШКОЛИ (partners.js) ═══ */
+.pt-box{display:flex;flex-direction:column;gap:12px;min-width:0;max-width:100%;}
+.pt-box>*{min-width:0;}
+.pt-mycard{display:flex;align-items:center;gap:12px;width:100%;margin:0;padding:12px 14px;border:none;border-radius:18px;background:linear-gradient(135deg,var(--pt-card-1),var(--pt-card-2));color:var(--pt-card-ink);text-align:left;font:inherit;cursor:pointer;box-shadow:var(--card-shadow);}
+.pt-mycard-logo{width:44px;height:44px;border-radius:50%;box-shadow:0 0 0 3px var(--surface);flex-shrink:0;}
+.pt-mycard span{flex:1;display:flex;flex-direction:column;} .pt-mycard b{font-size:1rem;font-weight:900;} .pt-mycard small{font-weight:700;opacity:.85;}
+.pt-mycard em{font-style:normal;font-weight:900;background:var(--surface);color:var(--pt-card-ink);border-radius:12px;padding:8px 12px;}
+.pt-chips{display:flex;gap:6px;overflow-x:auto;max-width:100%;padding-bottom:2px;scrollbar-width:none;}
+.pt-chip{flex-shrink:0;width:auto;margin:0;min-height:44px;padding:0 12px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--ink-2);font:inherit;font-size:.84rem;font-weight:800;white-space:nowrap;cursor:pointer;}
+.pt-chip i{font-style:normal;color:var(--ink-3);font-weight:700;margin-left:2px;}
+.pt-chip.on{background:var(--brand-soft);border-color:var(--brand-line);color:var(--brand-deep);}
+.pt-list{display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden;}
+.pt-row{display:flex;align-items:center;gap:12px;width:100%;margin:0;padding:10px 14px;border:none;border-top:1px solid var(--line-soft);background:transparent;color:var(--ink);font:inherit;text-align:left;cursor:pointer;min-height:64px;}
+.pt-row:first-child{border-top:none;}
+.pt-row-txt{flex:1;min-width:0;display:flex;flex-direction:column;} .pt-row-txt b{font-weight:800;} .pt-row-txt small{color:var(--ink-3);font-weight:700;}
+.pt-deal{font-style:normal;font-weight:900;color:var(--pt-c1);white-space:nowrap;}
+.pt-tile{width:44px;height:44px;border-radius:12px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:1.15rem;color:var(--on-fill);overflow:hidden;background:var(--surface-2);}
+.pt-tile img{width:100%;height:100%;object-fit:cover;}
+.pt-tile.big{width:60px;height:60px;border-radius:16px;font-size:1.5rem;}
+.pt-tile.c0{background:var(--pt-c0);} .pt-tile.c1{background:var(--pt-c1);} .pt-tile.c2{background:var(--pt-c2);} .pt-tile.c3{background:var(--pt-c3);}
+.pt-tile.c4{background:var(--pt-c4);} .pt-tile.c5{background:var(--pt-c5);} .pt-tile.c6{background:var(--pt-c6);} .pt-tile.c7{background:var(--pt-c7);}
+.pt-empty{display:flex;flex-direction:column;gap:4px;padding:18px;border-radius:16px;background:var(--surface);border:1px dashed var(--line);text-align:center;color:var(--ink-2);}
+body.pt-open{overflow:hidden;}
+.pt-ov{position:fixed;inset:0;z-index:1050;background:rgba(0,0,0,.55);display:flex;align-items:flex-end;justify-content:center;}
+.pt-sheet{width:100%;max-width:520px;max-height:94dvh;overflow-y:auto;background:var(--surface);border-radius:24px 24px 0 0;padding-bottom:calc(16px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:10px;color:var(--ink);}
+@media (min-width:768px){.pt-ov{align-items:center;} .pt-sheet{border-radius:24px;}}
+.pt-head{position:relative;padding:16px 18px;display:flex;flex-direction:column;gap:10px;}
+.pt-head.c0{background:var(--pt-h0);} .pt-head.c1{background:var(--pt-h1);} .pt-head.c2{background:var(--pt-h2);} .pt-head.c3{background:var(--pt-h3);}
+.pt-head.c4{background:var(--pt-h4);} .pt-head.c5{background:var(--pt-h5);} .pt-head.c6{background:var(--pt-h6);} .pt-head.c7{background:var(--pt-h7);}
+:root[data-theme="dark"] .pt-head{background:var(--surface-2);}
+@media (prefers-color-scheme: dark){:root[data-theme="auto"] .pt-head{background:var(--surface-2);}}
+.pt-head-row{display:flex;align-items:center;gap:12px;padding-right:48px;}
+.pt-head h3{margin:0;font-size:1.25rem;font-weight:900;padding:0;border:none;} .pt-head small{font-weight:700;color:var(--ink-2);}
+.pt-head p{margin:0;font-size:.9rem;line-height:1.45;}
+.pt-ov-full{align-items:stretch;}
+.pt-sheet-full{max-height:100dvh;height:100dvh;border-radius:0;padding:calc(12px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom));}
+@media (min-width:768px){.pt-ov-full{align-items:center;} .pt-sheet-full{height:auto;max-height:92dvh;border-radius:24px;}}
+.pt-full-h{display:flex;justify-content:space-between;align-items:center;gap:10px;}
+.pt-full-h h3{margin:0;padding:0;border:none;}
+.pt-full-h .pt-x{position:static;}
+.pt-card-err .pt-show{display:block;margin:12px auto 0;padding:0 18px;}
+.pt-x{position:absolute;right:14px;top:12px;width:44px;height:44px;margin:0;padding:0;border:none;border-radius:22px;background:var(--surface);color:var(--ink);font-weight:900;cursor:pointer;}
+.pt-h{margin:6px 18px 0;font-size:.78rem;font-weight:900;letter-spacing:.08em;color:var(--ink-3);}
+.pt-offer{margin:0 18px;padding:12px 14px;border:1px solid var(--line);border-radius:16px;display:flex;flex-direction:column;gap:6px;}
+.pt-offer-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;} .pt-offer-top em{font-style:normal;font-weight:900;font-size:1.05rem;color:var(--pt-c1);white-space:nowrap;}
+.pt-terms{font-size:.86rem;color:var(--ink-2);}
+.pt-offer-meta{display:flex;flex-wrap:wrap;gap:6px;align-items:center;}
+.pt-who{font-size:.75rem;font-weight:800;color:var(--brand-deep);background:var(--brand-soft);border-radius:8px;padding:3px 8px;} .pt-until{font-size:.75rem;color:var(--ink-3);}
+.pt-how{margin:4px 18px 0;padding:12px 14px;border-radius:14px;background:var(--brand-soft);display:flex;flex-direction:column;gap:2px;font-size:.86rem;}
+.pt-contacts{margin:0 18px;display:flex;flex-direction:column;}
+.pt-contacts a{display:flex;align-items:center;gap:10px;min-height:50px;border-bottom:1px solid var(--line-soft);color:var(--ink);text-decoration:none;}
+.pt-contacts a span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;} .pt-contacts a em{font-style:normal;font-weight:800;color:var(--brand-deep);}
+.pt-show{margin:8px 18px 0;width:auto;min-height:52px;border:none;border-radius:16px;background:var(--brand-deep);color:var(--on-fill);font:inherit;font-weight:900;font-size:1rem;cursor:pointer;}
+.pt-card-ov{position:fixed;inset:0;z-index:1060;background:var(--surface-2);overflow-y:auto;display:flex;}
+.pt-card-wrap{margin:auto;width:100%;max-width:420px;padding:calc(14px + env(safe-area-inset-top)) 18px calc(20px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:16px;}
+.pt-card-top{display:flex;justify-content:space-between;align-items:center;font-weight:800;color:var(--ink-2);}
+.pt-card-top .pt-x{position:static;border:1px solid var(--line);}
+.pt-card{position:relative;overflow:hidden;min-height:440px;border-radius:28px;padding:24px 22px;display:flex;flex-direction:column;justify-content:space-between;gap:16px;color:var(--pt-card-ink);
+  background:linear-gradient(120deg,var(--pt-card-1),var(--pt-card-2),var(--pt-card-3),var(--pt-card-1));background-size:300% 300%;animation:ptFlow 6s ease-in-out infinite;box-shadow:0 18px 36px rgba(2,120,140,.34);}
+@keyframes ptFlow{0%{background-position:0% 50%;}50%{background-position:100% 50%;}100%{background-position:0% 50%;}}
+.pt-card-sheen{position:absolute;inset:-40%;background:linear-gradient(105deg,transparent 40%,rgba(255,255,255,.35) 50%,transparent 60%);animation:ptSheen 3.2s linear infinite;pointer-events:none;}
+@keyframes ptSheen{0%{transform:translateX(-60%);}100%{transform:translateX(60%);}}
+.pt-card>*{position:relative;}
+.pt-card-row{display:flex;justify-content:space-between;align-items:flex-start;}
+.pt-card-logo{width:92px;height:92px;border-radius:50%;box-shadow:0 0 0 4px var(--surface),0 8px 18px rgba(0,60,70,.25);}
+.pt-card-chip{width:50px;height:38px;border-radius:8px;background:repeating-linear-gradient(90deg,var(--pt-chip) 0 14px,var(--pt-chip-2) 14px 16px);margin-top:6px;}
+.pt-card small{display:block;font-size:.78rem;font-weight:900;letter-spacing:.2em;}
+.pt-card-no{display:block;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:1.45rem;font-weight:800;letter-spacing:.04em;margin-top:4px;}
+.pt-card-name{display:block;font-size:1.8rem;font-weight:900;line-height:1.1;margin:4px 0;}
+.pt-card span{font-weight:800;}
+.pt-card-foot{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;}
+.pt-card-valid{background:var(--surface);color:var(--pt-card-ink);border-radius:12px;padding:8px 12px;font-weight:900;}
+.pt-card-clock{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-weight:800;font-size:.95rem;}
+.pt-card-err{padding:24px;border-radius:20px;background:var(--surface);border:1px solid var(--line);text-align:center;font-weight:700;}
+.pt-card-note{margin:0;text-align:center;font-size:.82rem;color:var(--ink-2);line-height:1.45;}
+.pt-adm{max-width:780px!important;text-align:left!important;}
+.pt-adm-h{display:flex;justify-content:space-between;align-items:center;gap:10px;} .pt-adm-h h3{margin:0;}
+.pt-adm-x{width:40px;height:40px;margin:0;padding:0;border:none;border-radius:20px;background:var(--surface-2);color:var(--ink);font-weight:900;cursor:pointer;}
+.pt-adm-note{font-size:.82rem;color:var(--ink-3);margin:6px 0;}
+.pt-adm-sec{border-top:1px solid var(--line);padding-top:10px;margin-top:12px;}
+.pt-adm-sec-h{display:flex;justify-content:space-between;align-items:center;gap:10px;} .pt-adm-sec h4{margin:0 0 8px;}
+.pt-adm-row{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line-soft);}
+.pt-adm-row.off{opacity:.6;} .pt-adm-row .nm{flex:1 1 200px;min-width:0;display:flex;flex-direction:column;} .pt-adm-row .nm small{color:var(--ink-3);}
+.pt-adm .vis{display:flex;align-items:center;gap:6px;font-size:.82rem;font-weight:700;color:var(--ink-2);margin:0;cursor:pointer;}
+.pt-adm .vis input{width:20px;height:20px;margin:0;}
+.pt-cat-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:6px 0;border-top:1px solid var(--line-soft);}
+.pt-cat-row input.ic{width:52px;margin:0;text-align:center;} .pt-cat-row input.nm{flex:1 1 180px;margin:0;}
+.pt-cat-row .cnt{min-width:24px;text-align:center;font-size:.8rem;color:var(--ink-3);}
+.pt-cat-row button{width:36px;height:36px;margin:0;padding:0;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);cursor:pointer;}
+.pt-cat-row button:disabled{opacity:.35;cursor:default;}
+.pt-ed label{display:flex;flex-direction:column;gap:4px;font-size:.82rem;font-weight:800;color:var(--ink-2);margin:6px 0;}
+.pt-ed input,.pt-ed select,.pt-ed textarea{margin:0;}
+.pt-ed-2{display:flex;gap:10px;flex-wrap:wrap;} .pt-ed-2>label{flex:1 1 200px;} .pt-ed-2>label.sm{flex:0 1 120px;}
+.pt-ed-logo{display:flex;align-items:center;gap:10px;margin:8px 0;} .pt-ed-logo label{margin:0;flex-direction:row;cursor:pointer;}
+.pt-ed-offer{border:1px solid var(--line);border-radius:14px;padding:10px 12px;margin:8px 0;background:var(--surface-2);}
+.pt-ed-who{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:.84rem;}
+.pt-ed-who label{flex-direction:row;align-items:center;gap:5px;margin:0;font-weight:700;} .pt-ed-who input[type="checkbox"]{width:18px;height:18px;}
+.pt-ed-who label.sm input{width:auto;}
+.pt-ed-who button{width:34px;height:34px;margin:0 0 0 auto;padding:0;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--danger);cursor:pointer;}
+.pt-ed-chk{flex-direction:row!important;align-items:center;gap:8px;font-size:.9rem!important;} .pt-ed-chk input{width:20px;height:20px;}
+.pt-ed-msg{min-height:1em;color:var(--danger);font-weight:700;font-size:.85rem;margin:6px 0;}
+.pt-ed-btns{display:flex;flex-wrap:wrap;gap:8px;} .pt-ed-btns .danger{color:var(--danger);margin-left:auto;}
+@media (prefers-reduced-motion: reduce){.pt-card,.pt-card-sheen{animation:none;}}
 </style>
 </head>
 <!-- auth-mode СТОЇТЬ ТУТ ОДРАЗУ, а не чекає на скрипт.
@@ -4516,6 +4774,7 @@ body:has(.modal-overlay[style*="display: flex"],.modal-overlay[style*="display:f
   <!-- ADMIN -->
   <div id="admin-screen" class="panel">
     <h2 style="color:var(--ink);">🛡️ Панель Адміністратора</h2>
+    <button type="button" class="sb-entry" onclick="openPartnersSheet()">🤝 Партнери й моя картка</button>
     <!-- Нові картки адміністратора додавайте новими <section class="screen-section">
          (додайте клас "half" для пів-ширини на десктопі) — grid підхопить їх автоматично. -->
 
@@ -4619,6 +4878,7 @@ body:has(.modal-overlay[style*="display: flex"],.modal-overlay[style*="display:f
   <div id="organizer-screen" class="panel">
     <h2 id="o-title" style="color:var(--ink);">🎭 Педагог-організатор</h2>
     <button type="button" class="sb-entry" onclick="openStaffBirthdays()">🎂 Дні народження колег</button>
+    <button type="button" class="sb-entry" onclick="openPartnersSheet()">🤝 Партнери й моя картка</button>
     <div id="o-push-invite" style="display:none;"></div>
     <div id="o-no-perms" class="data-card" style="display:none;border-left-color:var(--warn);background:var(--warn-soft);">
       <p style="margin:0;font-size:.88rem;color:var(--ink-2);">Для вашої ролі ще не відмічено жодного права. Зверніться до директора: права ролі задаються в «🧩 Конструктор ролей».</p>
@@ -4656,6 +4916,7 @@ body:has(.modal-overlay[style*="display: flex"],.modal-overlay[style*="display:f
   <div id="kitchen-screen" class="panel">
     <h2 style="color:var(--brand-ink);">🍽️ Кухня</h2>
     <button type="button" class="sb-entry" onclick="openStaffBirthdays()">🎂 Дні народження колег</button>
+    <button type="button" class="sb-entry" onclick="openPartnersSheet()">🤝 Партнери й моя картка</button>
     <!-- Сповіщення кухні: о 09:00 «замовлення закрито» і хто не прийшов без попередження (kitchen-notify.js) -->
     <div id="k-push-invite" style="display:none;"></div>
 
@@ -4822,6 +5083,7 @@ body:has(.modal-overlay[style*="display: flex"],.modal-overlay[style*="display:f
   <!-- DIRECTOR -->
   <div id="director-screen" class="panel">
     <h2 style="color:var(--ink);">👔 Кабінет Директора</h2>
+    <button type="button" class="sb-entry" onclick="openPartnersSheet()">🤝 Партнери й моя картка</button>
 
     <div class="dtab-bar" id="dtab-bar">
       <button class="dtab on" data-t="ogl"    onclick="switchDirTab('ogl',this)"><span class="dtab-icon" aria-hidden="true">🏠</span>Огляд</button>
@@ -4898,6 +5160,22 @@ body:has(.modal-overlay[style*="display: flex"],.modal-overlay[style*="display:f
           <span>Увімкнути для всіх: зимова заставка, сніг, гірлянда, снігові шапки на картках і святкове привітання.</span>
         </label>
         <p style="font-size:.78rem;color:var(--ink-3);margin:8px 0 0;">З'являється в усіх одразу, без оновлення сайту. Навесні — зніміть галочку. Хто вмикав «зменшити рух» у налаштуваннях телефона, сніг не побачить.</p>
+      </div>
+    </section>
+
+    <section class="screen-section" data-dtab="nalash">
+      <h3>🎄 Адвент-календар</h3>
+      <div class="data-card" style="border-left-color:var(--brand);background:var(--surface-2);margin-top:0;">
+        <p style="margin:0 0 10px;font-size:.88rem;">1–22 грудня діти щодня відкривають віконце й збирають ялинку, 22-го — приз за рівнем. Тут: увімкнення, пороги, призи й хто що отримав.</p>
+        <button type="button" class="ui-btn ui-btn-2" onclick="openAdventAdmin()">🎄 Налаштувати адвент</button>
+      </div>
+    </section>
+
+    <section class="screen-section" data-dtab="nalash">
+      <h3>🤝 Партнери школи</h3>
+      <div class="data-card" style="border-left-color:var(--brand);background:var(--surface-2);margin-top:0;">
+        <p style="margin:0 0 10px;font-size:.88rem;">Знижки партнерів для учнів, батьків і персоналу, категорії та PUSH School Card. Партнери перевіряють картку на push.school/card.</p>
+        <button type="button" class="ui-btn ui-btn-2" onclick="openPartnersAdmin()">🤝 Партнери й категорії</button>
       </div>
     </section>
 
@@ -5568,6 +5846,7 @@ body:has(.modal-overlay[style*="display: flex"],.modal-overlay[style*="display:f
       <button class="dtab" data-t="news" onclick="switchTab('teacher-screen','news',this)"><span class="dtab-icon" aria-hidden="true">📰</span>Новини<span class="chat-dot"></span></button>
       <button class="dtab" data-t="meals" onclick="switchTab('teacher-screen','meals',this);renderStaffMeals()"><span class="dtab-icon" aria-hidden="true">🍽️</span>Їжа</button>
       <button class="dtab" data-t="sched" onclick="switchTab('teacher-screen','sched',this)"><span class="dtab-icon" aria-hidden="true">🗓️</span>Розклад</button>
+      <button class="dtab" data-t="partners" onclick="switchTab('teacher-screen','partners',this);openPartnersTab('t')"><span class="dtab-icon" aria-hidden="true">🤝</span>Партнери</button>
     </div>
     <div id="t-push-invite" style="display:none;"></div>
 
@@ -5578,6 +5857,8 @@ body:has(.modal-overlay[style*="display: flex"],.modal-overlay[style*="display:f
          сіткою; ДЗ класу; запити батьків, дні народження, басейн. -->
     <section class="screen-section ui-today t-today" data-dtab="day">
       <div id="t-now" style="display:none;"></div>
+      <!-- 🎄 Призи адвенту класу — класному керівнику з 22 грудня (advent.js) -->
+      <div id="t-advent" hidden></div>
       <!-- Завжди під рукою (11.11.2026): швидкий журнал (урок або робота) і
            повний журнал. Не лише в «Зараз», бо та картка є тільки сьогодні. -->
       <div class="t-primary" id="t-primary">
@@ -5660,6 +5941,8 @@ body:has(.modal-overlay[style*="display: flex"],.modal-overlay[style*="display:f
       </div></div>
     </section>
     <!-- 🗓️ РОЗКЛАД (11.11.2026): друк і матриця — потрібні рідко, тож не на «Сьогодні» -->
+    <!-- 🤝 Партнери школи й PUSH School Card (partners.js) -->
+    <section class="screen-section" data-dtab="partners"><div id="t-partners" class="pt-box"></div></section>
     <section class="screen-section" data-dtab="sched">
       <h3>🗓️ Розклад</h3>
       <div class="t-today t-qa"><div class="qa-grid">
@@ -6089,6 +6372,7 @@ body:has(.modal-overlay[style*="display: flex"],.modal-overlay[style*="display:f
       <button class="dtab" data-t="grades" onclick="switchTab('parent-screen','grades',this)"><span class="dtab-icon" aria-hidden="true">📊</span>Оцінки</button>
       <button class="dtab" data-t="news" onclick="switchTab('parent-screen','news',this)"><span class="dtab-icon" aria-hidden="true">📰</span>Новини</button>
       <button class="dtab" data-t="school" onclick="switchTab('parent-screen','school',this)"><span class="dtab-icon" aria-hidden="true">🏫</span>Школа</button>
+      <button class="dtab" data-t="partners" onclick="switchTab('parent-screen','partners',this);openPartnersTab('p')"><span class="dtab-icon" aria-hidden="true">🤝</span>Партнери</button>
       <button class="dtab" data-t="pay" onclick="switchTab('parent-screen','pay',this)"><span class="dtab-icon" aria-hidden="true">💳</span>Оплата</button>
       <button class="dtab" data-t="profile" onclick="switchTab('parent-screen','profile',this)"><span class="dtab-icon" aria-hidden="true">👤</span>Профіль</button>
     </div>
@@ -6112,6 +6396,8 @@ body:has(.modal-overlay[style*="display: flex"],.modal-overlay[style*="display:f
       <div data-dp-mount="day" data-dp-aria="Дата, яку показує екран"></div>
       <div id="p-bday" hidden></div>
       <div id="p-now" style="display:none;"></div>
+      <!-- 🎄 Адвент-календар (advent.js) -->
+      <div id="p-advent" hidden></div>
       <div id="p-teacher-att-alert" style="display:none;background:var(--warn-soft);border:1px solid var(--warn-line);color:var(--warn);padding:11px 14px;border-radius:12px;margin-bottom:12px;font-size:.85rem;"></div>
       <div class="ui-btns">
         <button type="button" class="ui-btn ui-btn-2" onclick="openAttSheet('late')">🕒 Запізнюється</button>
@@ -6323,6 +6609,8 @@ body:has(.modal-overlay[style*="display: flex"],.modal-overlay[style*="display:f
     </section>
     <!-- 💳 Оплата: навчання, харчування, автобус — кожен рахунок окремою
          кольоровою карткою зі своїм QR (payment.js) -->
+    <!-- 🤝 Партнери школи й PUSH School Card (partners.js) -->
+    <section class="screen-section" data-dtab="partners"><div id="p-partners" class="pt-box"></div></section>
     <section class="screen-section" data-dtab="pay">
       <h3 class="ui-h">💳 Оплата</h3>
       <div class="pay-box"></div>
@@ -6386,6 +6674,7 @@ body:has(.modal-overlay[style*="display: flex"],.modal-overlay[style*="display:f
       <button class="dtab" data-t="grades" onclick="switchTab('student-screen','grades',this)"><span class="dtab-icon" aria-hidden="true">📊</span>Оцінки</button>
       <button class="dtab" data-t="study" onclick="switchTab('student-screen','study',this)"><span class="dtab-icon" aria-hidden="true">🎓</span>Навчання</button>
       <button class="dtab" data-t="meals" onclick="switchTab('student-screen','meals',this);openStudentMealsTab()"><span class="dtab-icon" aria-hidden="true">🍽️</span>Їжа</button>
+      <button class="dtab" data-t="partners" onclick="switchTab('student-screen','partners',this);openPartnersTab('s')"><span class="dtab-icon" aria-hidden="true">🤝</span>Партнери</button>
     </div>
     <div id="s-push-invite" style="display:none;"></div>
 
@@ -6398,6 +6687,8 @@ body:has(.modal-overlay[style*="display: flex"],.modal-overlay[style*="display:f
       <div data-dp-mount="day" data-dp-aria="Дата, яку показує екран"></div>
       <div id="s-bday" hidden></div>
       <div id="s-now" style="display:none;"></div>
+      <!-- 🎄 Адвент-календар (advent.js) -->
+      <div id="s-advent" hidden></div>
       <div id="s-teacher-att-alert" style="display:none;background:var(--warn-soft);border:1px solid var(--warn-line);color:var(--warn);padding:11px 14px;border-radius:12px;margin-bottom:12px;font-size:.85rem;"></div>
       <div class="ui-btns">
         <button type="button" class="ui-btn ui-btn-2" onclick="openAttSheet('late','s')">🕒 Запізнююсь</button>
@@ -6490,6 +6781,8 @@ body:has(.modal-overlay[style*="display: flex"],.modal-overlay[style*="display:f
 
     <!-- УЧЕНЬ · «НАВЧАННЯ»: завдання на сьогодні з самоперевіркою,
          наліпки, підручники. Поведінка й підсумкові — в «Оцінки → Огляд». -->
+    <!-- 🤝 Партнери школи й PUSH School Card (partners.js) -->
+    <section class="screen-section" data-dtab="partners"><div id="s-partners" class="pt-box"></div></section>
     <section class="screen-section ui-today" data-dtab="study">
       <!-- ДЗ -->
       <div class="ui-card">
@@ -7328,6 +7621,8 @@ function openAppReach(){
 <script type="module" src="ios-fixed.js"></script>
 <script type="module" src="mirror-audit.js"></script>
 <script type="module" src="child-photo.js"></script>
+<script type="module" src="advent.js"></script>
+<script type="module" src="partners.js"></script>
 <script type="module" src="breaks.js"></script>
 <script type="module" src="subjects.js"></script>
 <script type="module" src="alternating.js"></script>
