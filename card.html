@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Перевірка PUSH School Card</title>
+<link rel="icon" href="icon-192.png">
+<!-- Сторінка для партнерів школи: перевірити номер PUSH School Card.
+     Без входу. Відповідь — лише «дійсна / ні», імʼя з першою літерою
+     прізвища, група й термін (netlify/functions/card-check.js). -->
+<style>
+  :root{--ink:#1c2a30;--sub:#55666d;--line:#d6e4e7;--bg:#f3f7f8;--brand:#0b5aa8;--teal:#0d6b74;
+        --ok:#15803d;--ok-soft:#dcfce7;--ok-ink:#14532d;--bad:#b91c1c;--bad-soft:#fee2e2;--bad-ink:#7f1d1d;--white:#ffffff;}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;}
+  main{max-width:460px;margin:0 auto;padding:22px 16px 28px;display:flex;flex-direction:column;gap:16px;min-height:100dvh;}
+  header{display:flex;align-items:center;gap:12px}
+  header img{width:52px;height:52px;border-radius:50%}
+  header b{display:block;font-size:1.2rem;color:var(--teal)}
+  header small{color:var(--sub)}
+  form{display:flex;flex-direction:column;gap:8px}
+  label{font-weight:800}
+  .row{display:flex;gap:8px}
+  input{flex:1;min-width:0;height:52px;border:2px solid var(--teal);border-radius:14px;padding:0 14px;font:600 1.05rem ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.04em;color:var(--ink);background:var(--white)}
+  button{height:52px;padding:0 18px;border:0;border-radius:14px;background:var(--brand);color:var(--white);font-family:inherit;font-weight:800;font-size:1rem;cursor:pointer}
+  button:disabled{opacity:.6}
+  .res{border-radius:22px;overflow:hidden;background:var(--white);border:2px solid var(--line)}
+  .res .top{padding:22px 18px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:6px}
+  .res .ic{width:68px;height:68px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--white);font-size:2rem;font-weight:900}
+  .res h1{margin:0;font-size:1.6rem}
+  .ok{border-color:var(--ok)} .ok .top{background:var(--ok-soft);color:var(--ok-ink)} .ok .ic{background:var(--ok)}
+  .bad{border-color:var(--bad)} .bad .top{background:var(--bad-soft);color:var(--bad-ink)} .bad .ic{background:var(--bad)}
+  dl{margin:0;padding:6px 18px 12px}
+  dl div{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}
+  dl div:last-child{border-bottom:0}
+  dt{color:var(--sub)} dd{margin:0;font-weight:800;text-align:right}
+  .msg{color:var(--bad);font-weight:700;min-height:1.2em;margin:0}
+  .info{margin-top:auto;background:var(--white);border:1px solid var(--line);border-radius:16px;padding:14px 16px;font-size:.88rem;color:var(--sub)}
+  .info b{color:var(--ink)}
+  .credit{text-align:center;font-size:.75rem;color:var(--sub)} .credit a{color:var(--sub)}
+</style>
+</head>
+<body>
+<main>
+  <header><img src="icon-192.png" alt=""><div><b>PUSH School</b><small>Перевірка картки партнера</small></div></header>
+  <form id="f" autocomplete="off">
+    <label for="no">Номер картки клієнта</label>
+    <div class="row"><input id="no" inputmode="numeric" placeholder="PS 0000 0000 0000" maxlength="20" required><button id="go" type="submit">Перевірити</button></div>
+    <p class="msg" id="msg" role="status"></p>
+  </form>
+  <section id="out" aria-live="polite"></section>
+  <div class="info"><b>Для партнерів школи.</b> Сторінка показує лише імʼя з першою літерою прізвища, хто це (батьки, учень, персонал) і термін дії — жодних інших даних. На екрані клієнта картка «жива»: іде годинник і переливається фон.</div>
+  <p class="credit">Розробка: <a href="https://www.linkedin.com/in/valeriikatasonov/" target="_blank" rel="noopener">Valerii Katasonov</a></p>
+</main>
+<script>
+(function(){
+  var f = document.getElementById('f'), inp = document.getElementById('no'), out = document.getElementById('out'),
+      msg = document.getElementById('msg'), go = document.getElementById('go');
+  var esc = function(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
+  // Номер із посилання ?no=… (якщо партнеру надіслали лінк)
+  var q = /[?&]no=(\d[\d\s]*)/.exec(location.search); if(q) inp.value = decodeURIComponent(q[1]);
+  f.addEventListener('submit', function(e){
+    e.preventDefault();
+    var d = inp.value.replace(/\D/g, '');
+    msg.textContent = ''; out.innerHTML = '';
+    if(d.length !== 12){ msg.textContent = 'Номер картки — 12 цифр.'; return; }
+    go.disabled = true;
+    fetch('/.netlify/functions/card-check', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ no: d }) })
+      .then(function(r){ return r.json().then(function(j){ if(!r.ok) throw new Error(j.error || ('HTTP ' + r.status)); return j; }); })
+      .then(function(j){
+        var t = new Date().toLocaleString('uk-UA', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+        out.innerHTML = j.valid
+          ? '<div class="res ok"><div class="top"><div class="ic" aria-hidden="true">✓</div><h1>Картка дійсна</h1><span>Можна надати знижку партнера школи</span></div>'
+            + '<dl><div><dt>Власник</dt><dd>' + esc(j.short) + '</dd></div><div><dt>Хто</dt><dd>' + esc((j.labels || []).join(', ')) + '</dd></div>'
+            + '<div><dt>Дійсна до</dt><dd>' + esc(j.until) + '</dd></div><div><dt>Номер</dt><dd>' + esc(j.no) + '</dd></div><div><dt>Перевірено</dt><dd>' + esc(t) + '</dd></div></dl></div>'
+          : '<div class="res bad"><div class="top"><div class="ic" aria-hidden="true">✕</div><h1>Картка недійсна</h1><span>Номер не знайдено, термін минув або власник уже не повʼязаний зі школою. Знижку не надавайте.</span></div>'
+            + '<dl><div><dt>Номер</dt><dd>' + esc(j.no) + '</dd></div><div><dt>Перевірено</dt><dd>' + esc(t) + '</dd></div></dl></div>';
+      })
+      .catch(function(err){ msg.textContent = (err && err.name === 'TypeError') ? 'Немає звʼязку з сервером. Спробуйте ще раз.' : ((err && err.message) || 'Не вдалося перевірити. Спробуйте ще раз.'); })
+      .then(function(){ go.disabled = false; });
+  });
+})();
+</script>
+</body>
+</html>

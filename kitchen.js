@@ -2445,7 +2445,7 @@ window.checkNotifySetup = async function(){
   try{
     const res = await fetch('/.netlify/functions/notify',{
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ type:'menu', probe:true })
+      body: JSON.stringify({ type:'menu', probe:true, idToken: await window.authIdToken() })
     });
     r = await res.json();
     if(!res.ok) throw new Error(r.error || `HTTP ${res.status}`);

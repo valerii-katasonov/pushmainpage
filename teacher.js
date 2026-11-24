@@ -402,7 +402,7 @@ async function callAI(task,payload){
   const r=await fetch('/.netlify/functions/ai-assist',{
     method:'POST',
     headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({task,...payload})
+    body:JSON.stringify({task,...payload,idToken:await window.authIdToken()})
   });
   const data=await r.json().catch(()=>({}));
   if(!r.ok)throw new Error(data.error||`Помилка ${r.status}`);

@@ -545,7 +545,7 @@ window.newsDraftAI = async function(){
   try{
     const r = await fetch('/.netlify/functions/ai-assist', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ task:'announcement', note })
+      body: JSON.stringify({ task:'announcement', note, idToken: await window.authIdToken() })
     });
     const d = await r.json();
     if(!r.ok) throw new Error(d.error || 'Помилка сервера');

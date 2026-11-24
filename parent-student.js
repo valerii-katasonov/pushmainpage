@@ -1221,7 +1221,7 @@ async function runDayAI(task,prefix,btnId,outId){
   try{
     const r=await fetch('/.netlify/functions/ai-assist',{
       method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({task,subject,topic:ctx.topic,homework:ctx.homework,classNum})
+      body:JSON.stringify({task,subject,topic:ctx.topic,homework:ctx.homework,classNum,idToken:await window.authIdToken()})
     });
     const data=await r.json().catch(()=>({}));
     if(!r.ok)throw new Error(data.error||`Помилка ${r.status}`);

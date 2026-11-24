@@ -17,9 +17,15 @@
 //     сервер сам читає з бази вид звернення й шле «💡 Нова скарга».
 //     Ні тексту, ні автора в запиті немає. Наслідок, про який школа
 //     знає: директор бачить, КОЛИ прийшло звернення (момент push).
-// Номер звернення (той самий випадковий ключ) лишається ЛИШЕ на цьому
+// Номер звернення (той самий випадковий ключ) лишається на цьому
 // пристрої (localStorage) — щоб автор бачив статус і відповідь школи.
 // Без номера прочитати запис не може ніхто, крім адміністрації.
+// Номер показуємо й як «код звернення» (XXXX-XXXX-…): з ним відповідь
+// можна перевірити з іншого телефона чи браузера — анонімно.
+// ЗА ЗГОДОЮ (галочка «Зберігати в моєму акаунті», за замовчуванням вимкнена)
+// номер ще й записується в акаунт — див. ideas-account.js: тоді відповідь
+// видно скрізь і приходить push. Це єдиний випадок, коли база знає звʼязок
+// «акаунт — звернення», і автор про це прямо попереджений.
 //
 // ЧЕСНО ПРО МЕЖІ. Портал не знає автора, але текст — знає: якщо людина
 // напише «я мама Марка з 3-А», анонімності не буде (підказку про це у
@@ -37,6 +43,8 @@
 // ═══════════════════════════════════════════════════════════════
 import { ref, get, set, update, remove } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { db, currentUserData, escHtml, showToast, isTeacherRole, notifyEvent } from './common.js';
+// Усе, що знає автора, — лише в ideas-account.js і лише за його згодою
+import { accountReceipts, saveToAccount, removeFromAccount } from './ideas-account.js';
 
 export const KINDS = { idea: '💡 Ідея', complaint: '😟 Скарга', thanks: '💛 Подяка' };
 export const TOPICS = { learning: 'Навчання', food: 'Харчування', safety: 'Безпека', events: 'Заходи й гуртки', portal: 'Портал', other: 'Інше' };
@@ -76,10 +84,29 @@ export function buildIdea({ kind, topic, who, text }, role, day = today()){
   return { kind, topic: TOPICS[topic] ? topic : 'other', who: w, text: t, day, status: 'new' };
 }
 
+// ── Код звернення ──
+// Той самий випадковий ключ, лише зручний для людини: великими літерами
+// по 4 знаки. З кодом звернення можна перевірити з будь-якого пристрою —
+// і нікому, крім автора, він не відомий (≈124 біти, не вгадати).
+export const codeOf = id => String(id || '').toUpperCase().match(/.{1,4}/g)?.join('-') || '';
+export function idFromCode(s){
+  const t = String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  return /^[a-z0-9]{20,32}$/.test(t) ? t : '';
+}
+
 // ── квитанції на пристрої ──
 function receipts(){ try{ return JSON.parse(localStorage.getItem(RKEY) || '[]') || []; }catch(e){ return []; } }
 function saveReceipts(a){ try{ localStorage.setItem(RKEY, JSON.stringify(a.slice(-30))); }catch(e){} }
 export const sentToday = (list = receipts(), day = today()) => list.filter(r => r.day === day).length;
+// Пристрій + акаунт (якщо автор погодився): одне звернення — один рядок
+export function mergeReceipts(local, acc){
+  const by = new Map();
+  for(const r of local || []) if(r && r.id) by.set(r.id, { ...r });
+  for(const r of acc || []) if(r && r.id) by.set(r.id, { ...(by.get(r.id) || {}), ...r, acc: true });
+  return [...by.values()].sort((a, b) => String(a.day || '').localeCompare(String(b.day || '')));
+}
+const myReceipts = async () => mergeReceipts(receipts(), await accountReceipts());
+
 
 // ── вікно надсилання ──
 let ov = null;
@@ -98,7 +125,8 @@ const opts = (obj, sel) => Object.entries(obj).map(([k, v]) => `<option value="$
 export const ANON_NOTE = `<div class="ib-anon" role="note">
   <b>🔒 Повністю анонімно</b>
   <p>Портал не записує, хто надіслав: ні імені, ні пошти, ні класу — лише сам текст.
-  Школа не може дізнатися автора — ні директор, ні адміністратор, ні розробник порталу.</p>
+  Школа не може дізнатися автора — ні директор, ні адміністратор, ні розробник порталу
+  (якщо ви самі не поставите галочку «Зберігати в моєму акаунті» нижче).</p>
 </div>`;
 
 export async function openIdeaBank(){
@@ -120,13 +148,19 @@ export async function openIdeaBank(){
     <label for="ib-text">Текст</label>
     <textarea id="ib-text" rows="5" maxlength="${MAX_TEXT}" placeholder="Напишіть, що варто змінити або що вам сподобалось"></textarea>
     <div class="ib-count"><span id="ib-n">0</span> / ${MAX_TEXT}</div>
+    <label class="ib-sync"><input type="checkbox" id="ib-sync">
+      <span><b>Зберігати в моєму акаунті</b> — відповідь школи буде видно на будь-якому пристрої, і прийде сповіщення.
+      Директор і школа автора не бачать, але номер звернення буде привʼязаний до вашого акаунта. Без галочки — повна анонімність.</span></label>
     <p id="ib-msg" class="ib-msg" role="status"></p>
+    <div id="ib-code" class="ib-code-box" hidden></div>
     <button type="button" id="ib-send" class="ib-send">📨 Надіслати анонімно</button>
     <button type="button" class="ib-cancel" onclick="document.getElementById('idea-bank-modal').style.display='none'">Закрити</button>
     <div id="ib-mine"></div>`;
   const ta = mc.querySelector('#ib-text');
   ta.addEventListener('input', () => { mc.querySelector('#ib-n').textContent = ta.value.length; });
   mc.querySelector('#ib-send').onclick = () => sendIdea(mc, role);
+  mc.querySelector('#ib-mine').onclick = e => onMineClick(e, mc);
+  mc.querySelector('#ib-code').onclick = e => onMineClick(e, mc);
   ov.style.display = 'flex';
   renderMine(mc.querySelector('#ib-mine'));
   setTimeout(() => ta.focus(), 50);
@@ -154,28 +188,89 @@ async function sendIdea(mc, role){
     const list = receipts(); list.push({ id, day: rec.day, kind: rec.kind }); saveReceipts(list);
     // Push директору — лише ключ запису; сервер сам дізнається вид із бази
     Promise.resolve().then(() => notifyEvent('idea', { ref: id })).catch(() => {});
+    const sync = !!(mc.querySelector('#ib-sync') && mc.querySelector('#ib-sync').checked);
+    let synced = false;
+    if(sync){ try{ await saveToAccount(id, rec.day, rec.kind); synced = true; }catch(e){ /* лишається на пристрої й за кодом */ } }
     mc.querySelector('#ib-text').value = ''; mc.querySelector('#ib-n').textContent = '0';
-    say('✓ Надіслано анонімно. Дякуємо! Статус і відповідь школи — нижче, у «Мої звернення».');
+    say(synced ? '✓ Надіслано анонімно. Відповідь школи побачите на будь-якому пристрої — і прийде сповіщення.'
+               : '✓ Надіслано анонімно. Дякуємо! Статус і відповідь школи — нижче, у «Мої звернення».');
+    const cb = mc.querySelector('#ib-code');
+    cb.hidden = false;
+    cb.innerHTML = `<span>Код звернення: <b class="ib-code" data-no-i18n>${escHtml(codeOf(id))}</b></span>
+      <button type="button" data-act="copy" data-code="${escHtml(codeOf(id))}">Скопіювати</button>
+      <small>${synced ? 'Збережено й в акаунті. Код — про запас.' : 'Збережіть код: з ним відповідь можна перевірити з іншого телефона чи браузера.'}</small>`;
     renderMine(mc.querySelector('#ib-mine'));
   }catch(e){
     say('❌ Не надіслано: ' + (e.message || ''), true);
   }finally{ btn.disabled = false; }
 }
 
-// Мої звернення — лише з квитанцій цього пристрою
+// Мої звернення — квитанції цього пристрою + акаунта (якщо автор погодився)
 async function renderMine(box){
   if(!box) return;
-  const list = receipts().slice().reverse();
-  if(!list.length){ box.innerHTML = ''; return; }
+  const list = (await myReceipts()).reverse();
   const rows = await Promise.all(list.slice(0, 10).map(r =>
-    get(ref(db, `ideas/${r.id}`)).then(s => s.exists() ? { ...s.val(), id: r.id } : { ...r, gone: true }).catch(() => ({ ...r, gone: true }))));
-  box.innerHTML = `<h4 class="ib-mine-h">Мої звернення <small>(видно лише на цьому пристрої)</small></h4>` + rows.map(x => `
-    <div class="ib-mine-it">
+    get(ref(db, `ideas/${r.id}`)).then(s => s.exists() ? { ...s.val(), id: r.id, acc: !!r.acc } : { ...r, gone: true }).catch(() => ({ ...r, gone: true }))));
+  const any = rows.some(x => x.acc);
+  box.innerHTML = (rows.length ? `<h4 class="ib-mine-h">Мої звернення <small>(${any ? 'на цьому пристрої й в акаунті' : 'видно лише на цьому пристрої'})</small></h4>` + rows.map(x => `
+    <div class="ib-mine-it" data-id="${escHtml(x.id)}">
       <div class="ib-meta"><span>${escHtml(KINDS[x.kind] || '')}</span><span>${escHtml(human(x.day))}</span>
         <span class="ib-st ib-st-${x.gone ? 'gone' : escHtml(x.status || 'new')}">${x.gone ? 'Закрито' : escHtml(STATUSES[x.status] || STATUSES.new)}</span></div>
       ${x.text ? `<p class="ib-text" data-no-i18n>${escHtml(x.text.length > 160 ? x.text.slice(0, 160) + '…' : x.text)}</p>` : ''}
       ${x.reply ? `<div class="ib-reply"><b>Відповідь школи${x.replyDay ? ` · ${escHtml(human(x.replyDay))}` : ''}:</b><p data-no-i18n>${escHtml(x.reply)}</p></div>` : ''}
-    </div>`).join('');
+      <div class="ib-mine-tools"><span>Код: <b class="ib-code" data-no-i18n>${escHtml(codeOf(x.id))}</b></span>
+        <button type="button" data-act="copy" data-code="${escHtml(codeOf(x.id))}">Скопіювати</button>
+        ${x.gone ? '' : x.acc ? '<button type="button" data-act="unsync">Прибрати з акаунта</button>' : '<button type="button" data-act="sync">Зберігати в акаунті</button>'}</div>
+    </div>`).join('') : '') + `
+    <div class="ib-find">
+      <label for="ib-find-code">Перевірити звернення за кодом</label>
+      <div class="ib-find-row"><input id="ib-find-code" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX-XXXX-XXXX-XXXX-XXXX" data-no-i18n>
+        <button type="button" data-act="find">Знайти</button></div>
+      <p class="ib-find-msg" role="status"></p>
+    </div>`;
+}
+// Кнопки в «Мої звернення» й під щойно надісланим зверненням
+async function onMineClick(e, mc){
+  const b = e.target.closest('button[data-act]'); if(!b) return;
+  const box = mc.querySelector('#ib-mine');
+  const act = b.dataset.act, id = b.closest('[data-id]') && b.closest('[data-id]').dataset.id;
+  if(act === 'copy'){
+    try{ await navigator.clipboard.writeText(b.dataset.code); showToast('Код скопійовано'); }
+    catch(err){ showToast('Код: ' + b.dataset.code); }
+    return;
+  }
+  if(act === 'find'){
+    const msg = box.querySelector('.ib-find-msg');
+    const want = idFromCode(box.querySelector('#ib-find-code').value);
+    if(!want){ msg.textContent = 'Код має 24 знаки — літери й цифри.'; return; }
+    try{
+      const s = await get(ref(db, `ideas/${want}`));
+      if(!s.exists()){ msg.textContent = 'Звернення з таким кодом не знайдено (можливо, школа його закрила).'; return; }
+      const v = s.val(), list = receipts();
+      if(!list.some(r => r.id === want)){ list.push({ id: want, day: v.day, kind: v.kind }); saveReceipts(list); }
+      showToast('Звернення додано в «Мої звернення» на цьому пристрої');
+      renderMine(box);
+    }catch(err){ msg.textContent = 'Не вдалося перевірити: ' + (err.message || ''); }
+    return;
+  }
+  if(!id) return;
+  if(act === 'sync'){
+    const r = (await myReceipts()).find(x => x.id === id);
+    if(!r) return;
+    if(!confirm('Зберегти це звернення у вашому акаунті? Директор і школа автора не побачать, але звʼязок «акаунт — звернення» зʼявиться в базі. Зате відповідь буде видно на будь-якому пристрої й прийде сповіщення.')) return;
+    try{ await saveToAccount(id, r.day, r.kind); showToast('Збережено в акаунті'); renderMine(box); }
+    catch(err){ showToast('Не вдалося: ' + (err.message || '')); }
+  }
+  if(act === 'unsync'){
+    try{
+      await removeFromAccount(id);
+      // Щоб звернення не зникло зовсім — лишаємо його на цьому пристрої
+      const list = receipts();
+      if(!list.some(x => x.id === id)){ const r = (await myReceipts()).find(x => x.id === id) || { id }; list.push({ id, day: r.day, kind: r.kind }); saveReceipts(list); }
+      showToast('Прибрано з акаунта — звернення лишилось лише на цьому пристрої');
+      renderMine(box);
+    }catch(err){ showToast('Не вдалося: ' + (err.message || '')); }
+  }
 }
 
 // ── адміністрація: скринька ──
@@ -258,7 +353,13 @@ async function onInboxClick(e, mc){
     const t = b.parentElement.querySelector('textarea').value.trim();
     const upd = t ? { reply: t, replyDay: today(), replyTs: Date.now(), status: all[id].status === 'new' ? 'seen' : all[id].status, statusTs: Date.now() }
                   : { reply: null, replyDay: null, replyTs: null };
-    try{ await update(ref(db, `ideas/${id}`), upd); Object.assign(all[id], upd); showToast(t ? '✓ Відповідь збережено — її побачить автор' : '✓ Відповідь прибрано'); paintInbox(mc); paintBadge(); }
+    try{
+      await update(ref(db, `ideas/${id}`), upd); Object.assign(all[id], upd);
+      // Push автору — лише ключ; кому слати, сервер знає тільки для тих, хто
+      // сам зберіг звернення в акаунті (ideas-account.js)
+      if(t) Promise.resolve().then(() => notifyEvent('idea_reply', { ref: id })).catch(() => {});
+      showToast(t ? '✓ Відповідь збережено — її побачить автор' : '✓ Відповідь прибрано'); paintInbox(mc); paintBadge();
+    }
     catch(err){ showToast('❌ Не збережено: ' + (err.message || '')); }
   }
 }
@@ -293,7 +394,7 @@ export async function loadIdeaItems(role, from){
     try{ const s = await get(ref(db, 'ideas')); all = s.exists() ? s.val() : {}; paintBadge(); }catch(e){ return []; }
     return adminItems(all, seenSet());
   }
-  const list = receipts();
+  const list = await myReceipts();
   if(!list.length) return [];
   const recs = await Promise.all(list.slice(-15).map(r =>
     get(ref(db, `ideas/${r.id}`)).then(s => s.exists() ? { ...s.val(), id: r.id } : null).catch(() => null)));
@@ -325,8 +426,9 @@ document.addEventListener('visibilitychange', () => { if(document.visibilityStat
 // Директор натиснув push «💡 Банк ідей» (netlify/functions/notify.js,
 // тип 'idea', веде на ?open=ideas) — одразу відкриваємо скриньку
 function openFromPush(){
-  if(!/[?&]open=ideas\b/.test(location.search) || !isAdmin(currentUserData && currentUserData.role)) return;
-  setTimeout(() => openIdeaInbox(), 600);
+  if(!/[?&]open=ideas\b/.test(location.search) || !currentUserData) return;
+  // Директору — скринька; автору (push «Школа відповіла») — його звернення
+  setTimeout(() => isAdmin(currentUserData.role) ? openIdeaInbox() : openIdeaBank(), 600);
   try{ history.replaceState(null, '', location.pathname + location.search.replace(/([?&])open=ideas\b&?/, '$1').replace(/[?&]$/, '') + location.hash); }catch(e){}
 }
 
