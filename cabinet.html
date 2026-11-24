@@ -736,6 +736,10 @@
       --adv-bronze-soft:#f7e6d6; --adv-bronze-text:#6b3a10;
       /* 🤝 Партнери (partners.js): картка в кольорі логотипа й плитки партнерів */
       --pt-card-1:#02b0cb; --pt-card-2:#3cc3d9; --pt-card-3:#7fd8e6; --pt-card-ink:#06343d; --pt-chip:#f6c143; --pt-chip-2:#e0b62e;
+      --pt-card-on:#ffffff; --pt-holo-1:#06142a; --pt-holo-2:#0a2d52; --pt-holo-3:#03617a;
+      --pt-foil-1:#ff6ec7; --pt-foil-2:#ffd36e; --pt-foil-3:#7dffb2; --pt-foil-4:#6ee7ff; --pt-foil-5:#9f7bff;
+      --pt-aur-1:#0293ad; --pt-aur-2:#0a5f98; --pt-glow-1:#5ff2e0; --pt-glow-2:#ffd54a; --pt-glow-3:#ff7aa8; --pt-glow-4:#8f7bff;
+      --pt-sch-1:#02b0cb; --pt-sch-2:#0790b8; --pt-sch-3:#3cc3d9;
       --pt-c0:#0d6b74; --pt-c1:#c2410c; --pt-c2:#7c3aed; --pt-c3:#15803d; --pt-c4:#b91c1c; --pt-c5:#0b5aa8; --pt-c6:#a16207; --pt-c7:#be185d;
       --pt-h0:#e1f4f6; --pt-h1:#fde7d6; --pt-h2:#ede4fb; --pt-h3:#dcfce7; --pt-h4:#fee2e2; --pt-h5:#dbeafe; --pt-h6:#fef3c7; --pt-h7:#fce7f3;
     }
@@ -4474,22 +4478,67 @@ body.pt-open{overflow:hidden;}
 .pt-card-wrap{margin:auto;width:100%;max-width:420px;padding:calc(14px + env(safe-area-inset-top)) 18px calc(20px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:16px;}
 .pt-card-top{display:flex;justify-content:space-between;align-items:center;font-weight:800;color:var(--ink-2);}
 .pt-card-top .pt-x{position:static;border:1px solid var(--line);}
-.pt-card{position:relative;overflow:hidden;min-height:440px;border-radius:28px;padding:24px 22px;display:flex;flex-direction:column;justify-content:space-between;gap:16px;color:var(--pt-card-ink);
-  background:linear-gradient(120deg,var(--pt-card-1),var(--pt-card-3),var(--pt-card-2),var(--pt-card-1),var(--pt-card-3));background-size:400% 400%;animation:ptFlow 5s ease-in-out infinite;box-shadow:0 18px 36px rgba(2,120,140,.34);}
-@keyframes ptFlow{0%{background-position:0% 50%;}50%{background-position:100% 50%;}100%{background-position:0% 50%;}}
-.pt-card-sheen{position:absolute;z-index:0;inset:-40%;background:linear-gradient(105deg,transparent 38%,rgba(255,255,255,.5) 50%,transparent 62%);animation:ptSheen 3.2s linear infinite;pointer-events:none;}
+/* PUSH School Card: три фони за групою (персонал — голограма, батьки — аврора, учні — візерунок).
+   Спільне: перелив (.pt-card-sheen), відблиск і нахил за пальцем, пульс біля годинника. */
+@property --pt-a{syntax:'<angle>';inherits:false;initial-value:0deg;}
+.pt-card-stage{perspective:1000px;border-radius:28px;box-shadow:0 22px 44px rgba(4,40,60,.38);}
+.pt-card{position:relative;overflow:hidden;isolation:isolate;min-height:440px;border-radius:28px;padding:24px 22px;display:flex;flex-direction:column;justify-content:space-between;gap:16px;color:var(--pt-card-on);
+  transform:rotateX(var(--pt-rx,0deg)) rotateY(var(--pt-ry,0deg));transition:transform .25s ease-out;touch-action:none;
+  clip-path:inset(0 round 28px);box-shadow:inset 0 0 0 1px rgba(255,255,255,.18);}
+.pt-card.is-idle{animation:ptFloat 7s ease-in-out infinite;}
+@keyframes ptFloat{0%,100%{transform:rotateX(2deg) rotateY(-4deg);}50%{transform:rotateX(-2deg) rotateY(4deg);}}
+.pt-card-fx{position:absolute;inset:0;pointer-events:none;z-index:0;}
+.pt-card>:not(.pt-card-fx){position:relative;z-index:2;}
+.pt-card-sheen{inset:-40%;z-index:1;background:linear-gradient(105deg,transparent 38%,rgba(255,255,255,.55) 50%,transparent 62%);mix-blend-mode:soft-light;animation:ptSheen 3.4s linear infinite;}
 @keyframes ptSheen{0%{transform:translateX(-60%);}100%{transform:translateX(60%);}}
-.pt-card>*:not(.pt-card-sheen){position:relative;}
+.pt-card-glare{z-index:1;background:radial-gradient(circle at var(--pt-gx,30%) var(--pt-gy,20%),rgba(255,255,255,.35),transparent 45%);mix-blend-mode:overlay;}
 .pt-card-row{display:flex;justify-content:space-between;align-items:flex-start;}
-.pt-card-logo{width:92px;height:92px;border-radius:50%;box-shadow:0 0 0 4px var(--surface),0 8px 18px rgba(0,60,70,.25);}
-.pt-card-chip{width:50px;height:38px;border-radius:8px;background:repeating-linear-gradient(90deg,var(--pt-chip) 0 14px,var(--pt-chip-2) 14px 16px);margin-top:6px;}
-.pt-card small{display:block;font-size:.78rem;font-weight:900;letter-spacing:.2em;}
-.pt-card-no{display:block;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:1.45rem;font-weight:800;letter-spacing:.04em;margin-top:4px;}
-.pt-card-name{display:block;font-size:1.8rem;font-weight:900;line-height:1.1;margin:4px 0;}
-.pt-card span{font-weight:800;}
+.pt-card-logo{width:92px;height:92px;border-radius:50%;box-shadow:0 0 0 4px rgba(255,255,255,.9),0 0 26px 6px rgba(120,240,255,.55);}
+.pt-card-chip{width:50px;height:38px;border-radius:8px;margin-top:6px;background:repeating-linear-gradient(90deg,var(--pt-chip) 0 14px,var(--pt-chip-2) 14px 16px);box-shadow:inset 0 0 0 1px rgba(0,0,0,.15),0 2px 6px rgba(0,0,0,.25);}
+.pt-card small{display:block;font-size:.72rem;font-weight:800;letter-spacing:.22em;opacity:.9;text-shadow:0 1px 6px rgba(0,0,0,.35);}
+.pt-card-no{display:block;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:1.45rem;font-weight:800;letter-spacing:.04em;margin-top:4px;text-shadow:0 1px 0 rgba(255,255,255,.25),0 -1px 0 rgba(0,0,0,.35);}
+.pt-card-name{display:block;font-size:1.8rem;font-weight:900;line-height:1.1;margin:4px 0;text-shadow:0 2px 10px rgba(0,0,0,.25);}
+.pt-card-who{font-weight:700;text-shadow:0 1px 6px rgba(0,0,0,.3);}
 .pt-card-foot{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;}
-.pt-card-valid{background:var(--surface);color:var(--pt-card-ink);border-radius:12px;padding:8px 12px;font-weight:900;}
+.pt-card-valid{background:rgba(255,255,255,.93);color:var(--pt-holo-1);border-radius:12px;padding:8px 12px;font-weight:900;}
+.pt-card-live{display:flex;align-items:center;gap:6px;text-shadow:0 1px 6px rgba(0,0,0,.3);}
 .pt-card-clock{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-weight:800;font-size:.95rem;}
+.pt-card-dot{width:9px;height:9px;border-radius:50%;background:var(--pt-glow-1);animation:ptPulse 1.6s ease-out infinite;}
+@keyframes ptPulse{0%{box-shadow:0 0 0 0 rgba(95,242,224,.8);}100%{box-shadow:0 0 0 10px rgba(95,242,224,0);}}
+
+/* Персонал · голограма */
+.pt-v-holo{background:linear-gradient(135deg,var(--pt-holo-1),var(--pt-holo-2) 55%,var(--pt-holo-3));}
+.pt-v-holo .pt-foil{background:conic-gradient(from var(--pt-a) at 70% 30%,var(--pt-foil-1),var(--pt-foil-2),var(--pt-foil-3),var(--pt-foil-4),var(--pt-foil-5),var(--pt-foil-1));
+  mix-blend-mode:screen;opacity:.3;filter:saturate(1.4) blur(2px);animation:ptSpin 9s linear infinite;
+  -webkit-mask:radial-gradient(120% 90% at 75% 25%,rgba(0,0,0,1) 20%,transparent 75%);mask:radial-gradient(120% 90% at 75% 25%,rgba(0,0,0,1) 20%,transparent 75%);}
+@keyframes ptSpin{to{--pt-a:360deg;}}
+.pt-v-holo .pt-lines{background:repeating-linear-gradient(115deg,rgba(255,255,255,.07) 0 2px,transparent 2px 9px);mix-blend-mode:overlay;}
+.pt-v-holo .pt-ring{inset:auto;width:420px;height:420px;right:-170px;top:-170px;border-radius:50%;
+  background:radial-gradient(circle,transparent 52%,rgba(255,255,255,.12) 53%,transparent 56%,transparent 64%,rgba(255,255,255,.09) 65%,transparent 68%);}
+
+/* Батьки · аврора */
+.pt-v-aurora{background:linear-gradient(160deg,var(--pt-aur-1),var(--pt-aur-2));}
+.pt-v-aurora .pt-blob{inset:auto;border-radius:50%;mix-blend-mode:screen;}
+.pt-v-aurora .b1{width:340px;height:340px;background:radial-gradient(closest-side,var(--pt-glow-1),transparent);left:-160px;top:-140px;opacity:.75;animation:ptD1 11s ease-in-out infinite;}
+.pt-v-aurora .b2{width:320px;height:320px;background:radial-gradient(closest-side,var(--pt-glow-2),transparent);right:-120px;top:70px;opacity:.95;animation:ptD2 13s ease-in-out infinite;}
+.pt-v-aurora .b3{width:340px;height:340px;background:radial-gradient(closest-side,var(--pt-glow-3),transparent);left:-30px;bottom:-160px;opacity:.9;animation:ptD3 12s ease-in-out infinite;}
+.pt-v-aurora .b4{width:300px;height:300px;background:radial-gradient(closest-side,var(--pt-glow-4),transparent);right:-90px;bottom:-110px;opacity:.9;animation:ptD1 15s ease-in-out infinite reverse;}
+@keyframes ptD1{0%,100%{transform:translate(0,0) scale(1);}50%{transform:translate(90px,70px) scale(1.25);}}
+@keyframes ptD2{0%,100%{transform:translate(0,0) scale(1);}50%{transform:translate(-110px,-40px) scale(.85);}}
+@keyframes ptD3{0%,100%{transform:translate(0,0) scale(1);}50%{transform:translate(120px,-60px) scale(1.2);}}
+.pt-v-aurora .pt-grain{background-image:radial-gradient(rgba(255,255,255,.18) 1px,transparent 1.4px);background-size:5px 5px;mix-blend-mode:overlay;opacity:.6;}
+.pt-v-aurora .pt-card-valid{color:var(--pt-aur-2);}
+
+/* Учні · шкільний візерунок */
+.pt-v-school{background:linear-gradient(120deg,var(--pt-sch-1),var(--pt-sch-2),var(--pt-sch-3),var(--pt-sch-1));background-size:400% 400%;animation:ptFlow 6s ease-in-out infinite;}
+.pt-v-school.is-idle{animation:ptFlow 6s ease-in-out infinite,ptFloat 7s ease-in-out infinite;}
+@keyframes ptFlow{0%,100%{background-position:0% 50%;}50%{background-position:100% 50%;}}
+.pt-v-school .pt-doodles{inset:-60px;font-size:30px;line-height:1;display:grid;grid-template-columns:repeat(6,1fr);gap:26px 18px;padding:10px;opacity:.22;filter:grayscale(1) brightness(3);animation:ptDrift 22s linear infinite;transform:rotate(-14deg);}
+.pt-v-school .pt-doodles span{display:block;text-align:center;}
+@keyframes ptDrift{from{transform:rotate(-14deg) translateY(0);}to{transform:rotate(-14deg) translateY(-112px);}}
+.pt-v-school .pt-spark{inset:auto;width:10px;height:10px;background:var(--pt-card-on);opacity:0;clip-path:polygon(50% 0,62% 38%,100% 50%,62% 62%,50% 100%,38% 62%,0 50%,38% 38%);animation:ptTw 2.4s ease-in-out infinite;}
+@keyframes ptTw{0%,100%{opacity:0;transform:scale(.3) rotate(0);}50%{opacity:1;transform:scale(1.4) rotate(45deg);}}
+.pt-v-school .pt-card-valid{color:var(--pt-sch-2);}
 .pt-card-err{padding:24px;border-radius:20px;background:var(--surface);border:1px solid var(--line);text-align:center;font-weight:700;}
 .pt-card-note{margin:0;text-align:center;font-size:.82rem;color:var(--ink-2);line-height:1.45;}
 .pt-adm{max-width:780px!important;text-align:left!important;}
@@ -4519,7 +4568,7 @@ body.pt-open{overflow:hidden;}
 .pt-ed-chk{flex-direction:row!important;align-items:center;gap:8px;font-size:.9rem!important;} .pt-ed-chk input{width:20px;height:20px;}
 .pt-ed-msg{min-height:1em;color:var(--danger);font-weight:700;font-size:.85rem;margin:6px 0;}
 .pt-ed-btns{display:flex;flex-wrap:wrap;gap:8px;} .pt-ed-btns .danger{color:var(--danger);margin-left:auto;}
-@media (prefers-reduced-motion: reduce){.pt-card{animation-duration:12s;}.pt-card-sheen{animation:none;}}
+@media (prefers-reduced-motion: reduce){.pt-card.is-idle,.pt-card-sheen,.pt-card-dot,.pt-v-aurora .pt-blob,.pt-v-school .pt-doodles{animation:none;}.pt-v-holo .pt-foil{animation-duration:30s;}.pt-v-school,.pt-v-school.is-idle{animation:ptFlow 12s ease-in-out infinite;}}
 </style>
 </head>
 <!-- auth-mode СТОЇТЬ ТУТ ОДРАЗУ, а не чекає на скрипт.

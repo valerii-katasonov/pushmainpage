@@ -213,6 +213,36 @@ async function fetchCard(){
   try{ localStorage.setItem(cardKey(), JSON.stringify(d)); }catch(e){}
   return d;
 }
+// Фон картки за групою: персонал — голограма, батьки — аврора, учні — шкільний
+// візерунок. Кілька груп (вчитель із дитиною в школі) — пріоритет у персоналу.
+export function cardTheme(c){
+  const g = (c && Array.isArray(c.groups)) ? c.groups : [];
+  return g.includes('staff') ? 'holo' : g.includes('parent') ? 'aurora' : 'school';
+}
+const DOODLES = ['✏️', '📚', '⭐', '🎨', '🎵', '⚽', '🔬', '🧮', '🌍', '🎒', '📐', '🏆'];
+function cardFx(v){
+  if(v === 'holo') return '<div class="pt-card-fx pt-foil"></div><div class="pt-card-fx pt-lines"></div><div class="pt-card-fx pt-ring"></div>';
+  if(v === 'aurora') return ['b1', 'b2', 'b3', 'b4'].map(b => `<div class="pt-card-fx pt-blob ${b}"></div>`).join('') + '<div class="pt-card-fx pt-grain"></div>';
+  let s = '';
+  for(let i = 0; i < 84; i++) s += `<span>${DOODLES[(i * 5 + Math.floor(i / 6)) % DOODLES.length]}</span>`;
+  const sparks = [[18, 22, 0], [78, 14, .6], [60, 46, 1.2], [28, 70, 1.8], [86, 64, .9], [46, 86, 1.5]]
+    .map(([x, y, d]) => `<div class="pt-card-fx pt-spark" style="left:${x}%;top:${y}%;animation-delay:${d}s"></div>`).join('');
+  return `<div class="pt-card-fx pt-doodles" aria-hidden="true">${s}</div>${sparks}`;
+}
+// Нахил і відблиск за пальцем; за 1,2 с без руху картка знову «плаває» сама.
+function tilt(card){
+  if(!card) return;
+  let t = null;
+  card.addEventListener('pointermove', e => {
+    const r = card.getBoundingClientRect(); if(!r.width) return;
+    const x = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), y = Math.min(1, Math.max(0, (e.clientY - r.top) / r.height));
+    card.classList.remove('is-idle');
+    card.style.setProperty('--pt-ry', ((x - .5) * 16).toFixed(1) + 'deg'); card.style.setProperty('--pt-rx', ((.5 - y) * 12).toFixed(1) + 'deg');
+    card.style.setProperty('--pt-gx', (x * 100).toFixed(0) + '%'); card.style.setProperty('--pt-gy', (y * 100).toFixed(0) + '%');
+    clearTimeout(t);
+    t = setTimeout(() => { card.style.removeProperty('--pt-rx'); card.style.removeProperty('--pt-ry'); card.classList.add('is-idle'); }, 1200);
+  });
+}
 export async function openCard(){
   let cached = null;
   try{ cached = JSON.parse(localStorage.getItem(cardKey()) || 'null'); }catch(e){}
@@ -220,16 +250,17 @@ export async function openCard(){
   const paint = (c, err) => {
     ov.innerHTML = `<div class="pt-card-wrap">
       <div class="pt-card-top"><span>Покажіть цей екран партнеру</span><button type="button" class="pt-x" data-a="close" aria-label="Закрити">✕</button></div>
-      ${c ? `<div class="pt-card">
-        <div class="pt-card-sheen" aria-hidden="true"></div>
+      ${c ? `<div class="pt-card-stage"><div class="pt-card pt-v-${cardTheme(c)} is-idle">
+        ${cardFx(cardTheme(c))}
+        <div class="pt-card-fx pt-card-sheen"></div><div class="pt-card-fx pt-card-glare"></div>
         <div class="pt-card-row"><img src="/icon-192.png" alt="PUSH School" class="pt-card-logo" onerror="this.onerror=null;this.src='/logo.png'"><span class="pt-card-chip" aria-hidden="true"></span></div>
         <div><small>PARTNER CARD</small><b class="pt-card-no" data-no-i18n>${escHtml(c.display)}</b></div>
-        <div><small>ВЛАСНИК</small><b class="pt-card-name" data-no-i18n>${escHtml(c.name)}</b><span>${escHtml((c.labels || []).join(' · '))}</span></div>
-        <div class="pt-card-foot"><span class="pt-card-valid">Дійсна до ${escHtml(human(c.until))}</span><span class="pt-card-clock" aria-live="off"></span></div>
-      </div>` : `<div class="pt-card-err">${err ? escHtml(err) : 'Завантаження картки…'}${err && /імʼя/.test(err) ? profileButton() : ''}</div>`}
+        <div><small>ВЛАСНИК</small><b class="pt-card-name" data-no-i18n>${escHtml(c.name)}</b><span class="pt-card-who">${escHtml((c.labels || []).join(' · '))}</span></div>
+        <div class="pt-card-foot"><span class="pt-card-valid">Дійсна до ${escHtml(human(c.until))}</span><span class="pt-card-live"><i class="pt-card-dot" aria-hidden="true"></i><span class="pt-card-clock" aria-live="off"></span></span></div>
+      </div></div>` : `<div class="pt-card-err">${err ? escHtml(err) : 'Завантаження картки…'}${err && /імʼя/.test(err) ? profileButton() : ''}</div>`}
       <p class="pt-card-note">${c ? 'Годинник іде, а фон переливається — так партнер бачить, що це живий екран, а не знімок. Номер можна перевірити на push.school/card.' : ''}</p>
     </div>`;
-    tick();
+    tick(); tilt(ov.querySelector('.pt-card'));
   };
   const tick = () => {
     const el = ov.querySelector('.pt-card-clock'); if(!el) return;
