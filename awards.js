@@ -60,10 +60,10 @@ export function award(rule, subjs, beh, junior){
   const list = (subjs || []).filter(Boolean);
   if(!list.length) return { st: 'none', why: 'немає оцінок за період' };
   if(rule === 'list'){
-    const low = list.filter(s => s.val < highOf(s.max, junior));
+    const low = list.filter(s => s.val < highOf(s.max, junior)).map(s => ({ ...s, need: highOf(s.max, junior) }));
     if(!low.length) return { st: 'yes', why: 'високий рівень з усіх предметів' };
-    // «На межі»: один предмет, і бракує не більше одного бала
-    if(low.length === 1 && highOf(low[0].max, junior) - low[0].val <= 1) return { st: 'near', why: `бракує: ${low[0].subj}`, low };
+    // «На межі»: до листа бракує одного-двох предметів — їх і показуємо
+    if(low.length <= 2) return { st: 'near', why: `бракує ${low.length === 1 ? 'одного предмета' : 'двох предметів'}: ${low.map(x => x.subj).join(', ')}`, low };
     return { st: 'no', why: `нижче високого: ${low.length} предм.`, low };
   }
   if(rule === 'gram'){
@@ -84,6 +84,43 @@ export function award(rule, subjs, beh, junior){
   return { ...out, st: 'no', why: `średnia ${avg.toFixed(2)}` };
 }
 export const ORDER = { yes: 0, check: 1, near: 2, no: 3, none: 4 };
+
+// ── Хто веде предмет у класі (teacher_access + довідник персоналу) ──
+export const ALL_SUBJ = 'Всі предмети';
+export function sameSubj(a, b){
+  const nz = x => String(x || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  const A = nz(a), B = nz(b);
+  if(!A || !B) return false;
+  if(A === B) return true;
+  const pa = A.split(/\s*\/\s*/).filter(x => x.length >= 3), pb = B.split(/\s*\/\s*/).filter(x => x.length >= 3);
+  return (pa.length > 1 || pb.length > 1) && pa.some(x => pb.some(y => sameSubj(x, y)));
+}
+// access: {пошта_ключ: {клас: [предмети]}}; names: {пошта_ключ: імʼя} → subj → [імена]
+export function teachersOf(access, names, cls){
+  const rows = Object.entries(access || {}).map(([se, byCls]) => {
+    const l = byCls && byCls[cls];
+    return { se, subs: (Array.isArray(l) ? l : Object.values(l || {})).filter(v => typeof v === 'string' && v.trim()) };
+  }).filter(r => r.subs.length);
+  const nm = se => (names && names[se]) || String(se).replace(/_/g, '.');
+  return subj => {
+    const own = rows.filter(r => r.subs.some(x => x !== ALL_SUBJ && sameSubj(x, subj))).map(r => nm(r.se));
+    return own.length ? own : rows.filter(r => r.subs.includes(ALL_SUBJ)).map(r => nm(r.se));
+  };
+}
+let staffCache = null;
+async function staffData(){
+  if(staffCache) return staffCache;
+  const [a, d] = await Promise.all([get(child(ref(db), 'teacher_access')).catch(() => null), get(child(ref(db), 'staff_directory')).catch(() => null)]);
+  const dir = d && d.exists() ? d.val() : {};
+  staffCache = { access: a && a.exists() ? a.val() : {}, names: Object.fromEntries(Object.entries(dir).map(([se, x]) => [se, x && x.name ? String(x.name) : ''])) };
+  return staffCache;
+}
+// «Фізика — 4, потрібно 5 · 👩‍🏫 Олена Петренко»
+function lowHtml(low, junior, cls, who){
+  return `<ul class="aw-low">${low.map(x => { const t = who(x.subj);
+    return `<li><b>${escHtml(x.subj)}</b> — ${escHtml(gradeTxt(x, junior, cls))}${x.final ? '' : ' ✳️'}, потрібно ${escHtml(junior ? 'В' : String(x.need) + (x.max !== 6 ? '/' + x.max : ''))}
+      <span class="aw-t">👩‍🏫 ${t.length ? escHtml(t.join(', ')) : 'учителя не призначено'}</span></li>`; }).join('')}</ul>`;
+}
 
 // ── Відмінник: високий рівень з усіх предметів (як для похвального листа) ──
 export function isHonor(subjs, junior){
@@ -170,8 +207,9 @@ async function renderAwards(){
   if(!ruleFits(rule, n)){ b.innerHTML = head + `<p class="empty-msg">Для ${n} класу ця відзнака не передбачена${rule === 'gram' ? ' — лише випускникам 9 і 11 класів' : rule === 'pl' ? ' — лише klasy IV–VIII' : n === 1 ? ' — у 1 класі відзнак немає' : ''}.</p>`; return; }
   b.innerHTML = head + '<p class="empty-msg is-loading">Рахую...</p>';
   try{
-    const D = await classData(cls, p, aSel, P, { behavior: rule === 'pl' });
+    const [D, staff] = await Promise.all([classData(cls, p, aSel, P, { behavior: rule === 'pl' }), staffData()]);
     if(req !== seq) return;
+    const who = teachersOf(staff.access, staff.names, cls);
     if(!D.students.length){ b.innerHTML = head + '<p class="empty-msg">У класі немає учнів.</p>'; return; }
     const rows = D.students.map(s => { const subjs = D.subjsOf(s); return { s, subjs, r: award(rule, subjs, D.behOf(s), D.junior), forecast: subjs.some(x => !x.final) }; })
       .sort((a, c) => (ORDER[a.r.st] - ORDER[c.r.st]) || a.s.nm.localeCompare(c.s.nm, 'uk'));
@@ -184,6 +222,7 @@ async function renderAwards(){
           const hi = rule === 'gram' ? sj.val >= sj.max : sj.val >= highOf(sj.max, D.junior);
           return `<span class="aw-sj${hi ? ' hi' : ' lo'}">${escHtml(sj.subj)} <b>${escHtml(gradeTxt(sj, D.junior, cls))}</b>${sj.final ? '' : ' <i title="прогноз">✳️</i>'}</span>`; }).join('') || '<span class="aw-sj">немає оцінок</span>'}
           ${rule === 'pl' ? `<span class="aw-sj${x.r.beh >= 5 ? ' hi' : x.r.beh == null ? '' : ' lo'}">Поведінка <b>${x.r.beh == null ? '—' : x.r.beh + ' · ' + behWord(x.r.beh)}</b></span>` : ''}</div>
+        ${x.r.st === 'near' && x.r.low ? lowHtml(x.r.low, D.junior, cls, who) : ''}
       </details>`).join('')}</div>`;
   }catch(e){ if(req === seq) b.innerHTML = head + `<p class="empty-msg" style="color:var(--danger);">Не вдалося порахувати: ${escHtml(e.message || e)}</p>`; }
 }
@@ -254,16 +293,20 @@ async function loadHonors(){
   try{
     // 1 клас — без оцінок (вербальне оцінювання), відзнак немає
     const classes = Array.from({ length: 10 }, (_, i) => `class_${i + 2}`);
-    const res = await Promise.all(classes.map(cls => classData(cls, p, hSel, P).then(D => ({ cls, D })).catch(() => ({ cls, D: null }))));
+    const [res, staff] = await Promise.all([Promise.all(classes.map(cls => classData(cls, p, hSel, P).then(D => ({ cls, D })).catch(() => ({ cls, D: null })))), staffData()]);
     if(req !== hSeq) return;
-    let total = 0, forecast = false;
+    let total = 0, totalNear = 0, forecast = false;
     const blocks = res.map(({ cls, D }) => {
       if(!D || !D.students.length) return '';
-      const honors = D.students.map(s => ({ s, subjs: D.subjsOf(s) })).filter(x => isHonor(x.subjs, D.junior));
-      total += honors.length; if(honors.some(x => x.subjs.some(y => !y.final))) forecast = true;
-      return `<details class="hon-cls${honors.length ? '' : ' zero'}"><summary><b>${D.n} клас</b> <span class="hon-n">${honors.length}</span>${honorAward(D.n) ? `<small>${escHtml(honorAward(D.n))}</small>` : ''}</summary>
-        ${honors.length ? `<ul class="hon-list">${honors.map(x => `<li><b data-no-i18n>${escHtml(x.s.nm)}</b> <span>${x.subjs.length} предм.${x.subjs.some(y => !y.final) ? ' ✳️' : ''}</span></li>`).join('')}</ul>` : '<p class="empty-msg">Відмінників немає.</p>'}</details>`;
+      const all = D.students.map(s => { const subjs = D.subjsOf(s); return { s, subjs, r: award('list', subjs, null, D.junior) }; });
+      const honors = all.filter(x => x.r.st === 'yes'), near = all.filter(x => x.r.st === 'near');
+      total += honors.length; totalNear += near.length; if(honors.some(x => x.subjs.some(y => !y.final))) forecast = true;
+      const who = teachersOf(staff.access, staff.names, cls);
+      const cn = `class_${D.n}`;
+      return `<details class="hon-cls${honors.length || near.length ? '' : ' zero'}"><summary><b>${D.n} клас</b> <span class="hon-n">${honors.length}</span>${near.length ? `<span class="hon-near">⚠️ майже ${near.length}</span>` : ''}${honorAward(D.n) ? `<small>${escHtml(honorAward(D.n))}</small>` : ''}</summary>
+        ${honors.length ? `<ul class="hon-list">${honors.map(x => `<li><b data-no-i18n>${escHtml(x.s.nm)}</b> <span>${x.subjs.length} предм.${x.subjs.some(y => !y.final) ? ' ✳️' : ''}</span></li>`).join('')}</ul>` : '<p class="empty-msg">Відмінників немає.</p>'}
+        ${near.length ? `<div class="hon-nearh">⚠️ Бракує 1–2 предметів</div><ul class="hon-list hon-nl">${near.map(x => `<li><div><b data-no-i18n>${escHtml(x.s.nm)}</b>${lowHtml(x.r.low, D.junior, cn, who)}</div></li>`).join('')}</ul>` : ''}</details>`;
     }).join('');
-    out.innerHTML = ctl + `<p class="hon-total">Усього відмінників: <b>${total}</b></p>${forecast ? '<p class="aw-note">✳️ — частина оцінок ще прогноз (семестрову не виставлено).</p>' : ''}${blocks || '<p class="empty-msg">Даних немає.</p>'}`;
+    out.innerHTML = ctl + `<p class="hon-total">Усього відмінників: <b>${total}</b>${totalNear ? ` · ⚠️ бракує 1–2 предметів: <b>${totalNear}</b>` : ''}</p>${forecast ? '<p class="aw-note">✳️ — частина оцінок ще прогноз (семестрову не виставлено).</p>' : ''}${blocks || '<p class="empty-msg">Даних немає.</p>'}`;
   }catch(e){ if(req === hSeq) out.innerHTML = ctl + `<p class="empty-msg" style="color:var(--danger);">Не вдалося порахувати: ${escHtml(e.message || e)}</p>`; }
 }
