@@ -4552,6 +4552,54 @@ body.wn-open{overflow:hidden;}
 .wn-ed-btns .danger{color:var(--danger);margin-left:auto;}
 @media (prefers-reduced-motion:reduce){.wn-ov,.wn-card,.wn-big,.wn-f{animation:none;}.wn-track{transition:none;}}
 
+/* ═══ 📈 Середні оцінки: режим, 🏅 відзнаки, 🎓 відмінники (awards.js) ═══ */
+.avg-mode{display:flex;gap:6px;margin-top:12px;}
+.avg-mode button{flex:1;width:auto;margin:0;min-height:44px;padding:0 10px;border:1.5px solid var(--line);border-radius:12px;background:var(--surface);color:var(--ink-2);font:inherit;font-weight:800;font-size:.85rem;cursor:pointer;}
+.avg-mode button.on{border-color:var(--brand-ink);background:var(--brand-soft);color:var(--brand-ink);}
+#d-stat-subj[hidden],#d-stat-stu[hidden]{display:none;}
+.avg-stu{width:100%;border-collapse:collapse;font-size:.85rem;margin-top:8px;}
+.avg-stu th{text-align:left;background:var(--brand-soft);padding:6px;font-size:.78rem;}
+.avg-stu td{padding:6px;border-bottom:1px solid var(--line-soft);}
+.avg-stu td.hi{color:var(--ok);font-weight:800;}
+.avg-stu small{color:var(--ink-3);font-weight:600;}
+.avg-stu-sum{margin-top:10px;padding:10px 12px;border-radius:10px;background:var(--brand-soft);font-size:.88rem;}
+.aw-open{width:auto;margin-top:12px;}
+.aw-box{margin-top:10px;}
+.aw-h h4{margin:4px 0 8px;font-size:1rem;}
+.aw-rules{display:flex;flex-wrap:wrap;gap:6px;}
+.aw-rule{width:auto;margin:0;min-height:40px;padding:0 12px;border:1.5px solid var(--line);border-radius:999px;background:var(--surface);color:var(--ink);font:inherit;font-weight:800;font-size:.8rem;cursor:pointer;}
+.aw-rule.on{border-color:var(--brand-ink);background:var(--brand-soft);color:var(--brand-ink);}
+.aw-rule.off{opacity:.55;}
+.aw-sub{margin:6px 0 8px;font-size:.78rem;color:var(--ink-3);}
+.aw-sum{display:flex;gap:8px;margin:10px 0 6px;}
+.aw-sum>div{flex:1;min-width:0;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px;text-align:center;}
+.aw-sum b{display:block;font-size:1.35rem;color:var(--ok);}
+.aw-sum span{font-size:.72rem;color:var(--ink-3);}
+.aw-note{font-size:.78rem;color:var(--ink-2);margin:6px 0 8px;}
+.aw-list{display:flex;flex-direction:column;gap:6px;}
+.aw-row{background:var(--surface);border:1px solid var(--line-soft);border-radius:10px;}
+.aw-row.st-yes{border-color:var(--ok-line);background:var(--ok-soft);}
+.aw-row.st-near,.aw-row.st-check{border-color:var(--warn-line);}
+.aw-row summary{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 8px;padding:8px 10px;cursor:pointer;list-style:none;font-size:.86rem;}
+.aw-row summary::-webkit-details-marker{display:none;}
+.aw-st{width:22px;text-align:center;}
+.aw-why{width:100%;padding-left:30px;font-size:.76rem;color:var(--ink-2);}
+.aw-subjs{display:flex;flex-wrap:wrap;gap:5px;padding:0 10px 10px 40px;}
+.aw-sj{font-size:.75rem;border-radius:999px;padding:3px 9px;background:var(--surface-2);border:1px solid var(--line-soft);}
+.aw-sj.hi{border-color:var(--ok-line);color:var(--ok);}
+.aw-sj.lo{border-color:var(--warn-line);color:var(--warn);}
+.aw-sj i{font-style:normal;}
+.hon-total{font-size:.9rem;margin:8px 0;}
+.hon-cls{border:1px solid var(--line);border-radius:12px;background:var(--surface);margin-bottom:6px;}
+.hon-cls.zero{opacity:.7;}
+.hon-cls summary{display:flex;align-items:center;flex-wrap:wrap;gap:4px 8px;padding:9px 12px;cursor:pointer;font-size:.9rem;}
+.hon-cls summary small{width:100%;font-size:.72rem;color:var(--ink-3);}
+.hon-n{background:var(--ok-soft);color:var(--ok);border:1px solid var(--ok-line);border-radius:999px;padding:1px 9px;font-weight:900;font-size:.8rem;}
+.hon-cls.zero .hon-n{background:var(--surface-2);color:var(--ink-3);border-color:var(--line);}
+.hon-list{list-style:none;margin:0;padding:0 12px 10px;}
+.hon-list li{display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px dashed var(--line-soft);font-size:.86rem;}
+.hon-list li:last-child{border-bottom:none;}
+.hon-list span{color:var(--ink-3);font-size:.78rem;}
 /* ═══ Огляд директора: блок «Відсутні» згортається (att-stats.js) ═══ */
 .d-att-tog{display:flex;align-items:center;gap:8px;width:100%;margin:0;padding:0;min-height:44px;border:0;background:none;color:inherit;text-align:left;cursor:pointer;font:inherit;}
 .d-att-tog .ui-card-h{flex:1;margin:0;}
@@ -5489,8 +5537,12 @@ body.pt-open{overflow:hidden;}
       <h3 class="ui-h">Звіти</h3>
       <details id="d-overview-averages" class="ui-card d-fold">
         <summary>📈 Середні оцінки</summary>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;margin-bottom:9px;">
-          <select id="d-stat-class" onchange="updateDirectorStatSubjects()" style="flex:1;min-width:110px;">
+        <div class="avg-mode" role="group" aria-label="Як дивитися">
+          <button type="button" data-m="subj" class="on" aria-pressed="true" onclick="setAvgMode('subj')">📘 По предмету</button>
+          <button type="button" data-m="stu" aria-pressed="false" onclick="setAvgMode('stu')">🧑‍🎓 По учню</button>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;margin-bottom:9px;">
+          <select id="d-stat-class" onchange="updateDirectorStatSubjects();avgClassChanged()" style="flex:1;min-width:110px;">
             <option value="">Оберіть клас...</option>
             <option value="class_1">1</option><option value="class_2">2</option><option value="class_3">3</option>
             <option value="class_4">4</option><option value="class_5">5</option><option value="class_6">6</option>
@@ -5498,8 +5550,18 @@ body.pt-open{overflow:hidden;}
             <option value="class_10">10</option><option value="class_11">11</option>
           </select>
           <select id="d-stat-subj" onchange="renderDirectorStats()" style="flex:1;min-width:110px;"><option value="">Спочатку клас</option></select>
+          <select id="d-stat-stu" onchange="renderStudentAvgs()" style="flex:1;min-width:140px;" hidden aria-label="Учень"><option value="">Спершу клас</option></select>
         </div>
         <div id="d-stat-results"><p class="empty-msg">Оберіть клас та предмет.</p></div>
+        <!-- 🏅 awards.js: похвальний лист / грамота / świadectwo z wyróżnieniem для обраного класу -->
+        <button type="button" class="ui-btn ui-btn-2 aw-open" onclick="openAwards()">🏅 Хто йде на відзнаку</button>
+        <div id="d-award-results" class="aw-box" hidden></div>
+      </details>
+      <!-- 🎓 Відмінники всієї школи за класами (awards.js) — рахуємо, лише коли відкрили -->
+      <details id="d-honors" class="ui-card d-fold" ontoggle="if(this.open)loadHonors()">
+        <summary>🎓 Відмінники школи (за класами)</summary>
+        <p style="font-size:.8rem;color:var(--ink-2);margin:10px 0 6px;">Високий рівень з усіх предметів (10–12 з 12, 5–6 з 6, «В» у 2–4 класах). Клас розгортається — список учнів.</p>
+        <div id="d-honors-body"></div>
       </details>
       <details id="d-overview-materials" class="ui-card d-fold" ontoggle="if(this.open)loadMaterialsAudit()">
         <summary>📚 Підручники та календарне планування</summary>
@@ -7886,6 +7948,7 @@ function openAppReach(){
 <script type="module" src="whatsnew.js"></script>
 <script type="module" src="student-names.js"></script>
 <script type="module" src="att-stats.js"></script>
+<script type="module" src="awards.js"></script>
 <script type="module" src="breaks.js"></script>
 <script type="module" src="subjects.js"></script>
 <script type="module" src="alternating.js"></script>
