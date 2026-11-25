@@ -32,7 +32,11 @@ exports.handler = async (event) => {
     if (!card || typeof card !== 'object' || !card.uid) return reply(200, { valid: false, no: formatNumber(no) }, origin);
     // Облік для адміністрації: скільки разів і коли партнери перевіряли
     // картку. Не впливає на відповідь — помилка запису не заважає перевірці.
-    await writeDb(token, `partner_cards/${no}`, { checks: (Number(card.checks) || 0) + 1, lastCheck: Date.now() }, 'PATCH').catch(() => {});
+    // Не частіше разу на хвилину: подвійне натискання партнера — одна
+    // перевірка, а сторінка без входу не стає «кнопкою запису» в базу.
+    const now = Date.now();
+    if (!(Number(card.lastCheck) > now - 60000))
+      await writeDb(token, `partner_cards/${no}`, { checks: (Number(card.checks) || 0) + 1, lastCheck: now }, 'PATCH').catch(() => {});
     // Заблокована адміністрацією — недійсна. Причину партнеру не пояснюємо.
     if (card.blocked === true) return reply(200, { valid: false, no: formatNumber(no) }, origin);
     const p = await personOf(token, card.uid);
