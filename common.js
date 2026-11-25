@@ -2277,7 +2277,7 @@ function updateProfileBar(){
   if(!currentUserData)return;document.getElementById('profile-bar').style.display='flex';
   const src=currentUserData.photoURL||"https://cdn-icons-png.flaticon.com/512/149/149071.png";
   document.getElementById('pb-avatar').src=src;document.getElementById('modal-avatar-preview').src=src;
-  let n="Користувач";if(currentUserData.firstName||currentUserData.lastName)n=`${currentUserData.firstName||''} ${currentUserData.lastName||''}`.trim();else if(currentUserData.studentName)n=`Батьки (${childDisplayName(currentUserData.studentName)})`;else if(currentUserData.email)n=currentUserData.email;
+  let n="Користувач";if(currentUserData.role==='student'&&currentUserData.studentName)n=childDisplayName(currentUserData.studentName);else if(currentUserData.firstName||currentUserData.lastName)n=`${currentUserData.firstName||''} ${currentUserData.lastName||''}`.trim();else if(currentUserData.studentName)n=`Батьки (${childDisplayName(currentUserData.studentName)})`;else if(currentUserData.email)n=currentUserData.email;
   let r="";if(currentUserData.role==='teacher')r="Вчитель";if(currentUserData.role==='class_teacher')r="🎓 Класний керівник";if(currentUserData.role==='art_school_teacher'||currentUserData.role==='music_teacher')r="Вчитель школи мистецтв";if(currentUserData.role==='director')r="Директор";if(currentUserData.role==='administrator')r="🛡️ Секретар (Адміністратор)";if(currentUserData.role==='student')r="🎒 Учень";if(!r&&currentUserData.role!=='parent')r=ROLE_LABELS[currentUserData.role]||'';if(currentUserData.role==='parent'){if(currentUserData.parentRole==='mother')r="Мати";else if(currentUserData.parentRole==='father')r="Батько";else r="Опекун";}
   document.getElementById('pb-name').innerText=n;document.getElementById('pb-role').innerText=r;
   renderRoleSwitcher();
@@ -2418,8 +2418,17 @@ window.switchRole=async function(newRole){
 };
 window.openProfileModal=async function(){
   document.getElementById('profile-modal').style.display='flex';
-  document.getElementById('profile-first-name').value=currentUserData.firstName||'';
-  document.getElementById('profile-last-name').value=currentUserData.lastName||'';
+  // Учню імʼя й прізвище веде школа (список класу) — показуємо, але не даємо міняти
+  const isStudentAcc=currentUserData.role==='student';
+  const fnEl=document.getElementById('profile-first-name'), lnEl=document.getElementById('profile-last-name');
+  if(isStudentAcc){
+    const parts=childDisplayName(currentUserData.studentName||'').split(/\s+/).filter(Boolean);
+    fnEl.value=parts[0]||''; lnEl.value=parts.slice(1).join(' ');
+  }else{ fnEl.value=currentUserData.firstName||''; lnEl.value=currentUserData.lastName||''; }
+  [fnEl,lnEl].forEach(el=>{ el.readOnly=isStudentAcc; el.setAttribute('aria-readonly',String(isStudentAcc)); el.style.opacity=isStudentAcc?'.7':''; });
+  let nmHint=document.getElementById('profile-name-hint');
+  if(!nmHint&&lnEl.parentNode){ nmHint=document.createElement('p'); nmHint.id='profile-name-hint'; nmHint.style.cssText='margin:0 0 10px;font-size:.8rem;color:var(--ink-3);'; lnEl.parentNode.insertBefore(nmHint,lnEl.nextSibling); }
+  if(nmHint){ nmHint.textContent=isStudentAcc?'Імʼя та прізвище змінює школа — якщо є помилка, скажіть класному керівнику.':''; nmHint.hidden=!isStudentAcc; }
   document.getElementById('profile-photo').value='';document.getElementById('profile-new-pass').value='';
   const isTeacher=currentUserData.role==='teacher'||currentUserData.role==='art_school_teacher';
   document.getElementById('t-skills-section').style.display=isTeacher?'block':'none';
@@ -2496,8 +2505,14 @@ window.saveProfile=async function(){
       await update(ref(db,`parent_links/${se}`),{profile});
       finalFirst=profile.firstName;finalLast=profile.lastName;
     }
-    await update(ref(db,`users/${auth.currentUser.uid}`),{firstName:finalFirst,lastName:finalLast,photoURL});
-    currentUserData.firstName=finalFirst;currentUserData.lastName=finalLast;currentUserData.photoURL=photoURL;
+    // Учень імʼя не міняє (правила бази теж не дадуть) — зберігаємо лише фото
+    if(currentUserData.role==='student'){
+      await update(ref(db,`users/${auth.currentUser.uid}`),{photoURL});
+      currentUserData.photoURL=photoURL;
+    }else{
+      await update(ref(db,`users/${auth.currentUser.uid}`),{firstName:finalFirst,lastName:finalLast,photoURL});
+      currentUserData.firstName=finalFirst;currentUserData.lastName=finalLast;currentUserData.photoURL=photoURL;
+    }
     // Save skills
     const isTeacher=currentUserData.role==='teacher'||currentUserData.role==='art_school_teacher';
     if(isTeacher){const se=emailKey(currentUserData.email);await set(ref(db,`teacher_skills/${se}/subjects`),mySkillsTemp);}
@@ -3028,7 +3043,9 @@ export async function publishContactCard(){
     const u = currentUserData;
     if(!u || !u.email) return 'немає даних користувача';
     const se = emailKey(u.email);
-    const name = [u.firstName, u.lastName].filter(Boolean).join(' ') || u.email;
+    // Учень — імʼя зі списку класу (його веде школа), не самовписане
+    const name = (u.role === 'student' && u.studentName) ? childDisplayName(u.studentName)
+      : ([u.firstName, u.lastName].filter(Boolean).join(' ') || u.email);
     const roles = getUserRoles(u);
     const staffRole=roles.find(r=>r!=='parent'&&r!=='student')||'';
     let written=false;
