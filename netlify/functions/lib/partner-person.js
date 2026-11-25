@@ -52,7 +52,8 @@ async function personOf(token, uid) {
   ]);
   const studentListed = !!(cls && ((user.studentId && cls[user.studentId]) || Object.values(cls).includes(user.studentName)));
   const groups = groupsOf(user, { parentLink, studentListed, staffRole });
-  const name = fullNameOf(user, { parentProfile: parentLink && parentLink.profile, staffName: staffDir });
+  const rosterName = cls && user.studentId && typeof cls[user.studentId] === 'string' ? cls[user.studentId] : '';
+  const name = fullNameOf(user, { parentProfile: parentLink && parentLink.profile, staffName: staffDir, rosterName });
   return { groups, name };
 }
 // Прибрати картку людини, яка вже не повʼязана зі школою

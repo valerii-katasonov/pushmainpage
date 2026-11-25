@@ -53,8 +53,14 @@ function groupsOf(user, { parentLink, studentListed, staffRole } = {}){
 }
 // Повне імʼя для картки: профіль користувача → профіль батька → довідник
 // персоналу → імʼя учня зі списку класу
-function fullNameOf(user, { parentProfile, staffName } = {}){
+function fullNameOf(user, { parentProfile, staffName, rosterName } = {}){
   const u = user || {};
+  // Учень: імʼя веде школа (список класу). Самовписане в профілі не беремо —
+  // інакше на картці стояло б будь-яке імʼя, яке учень собі придумав.
+  if(u.role === 'student'){
+    const r = typeof rosterName === 'string' && rosterName.trim() ? rosterName : u.studentName;
+    return r ? studentDisplay(r).slice(0, 80) : '';
+  }
   const a = [u.firstName, u.lastName].filter(x => typeof x === 'string' && x.trim()).join(' ').trim();
   if(a) return a.slice(0, 80);
   const p = parentProfile || {};
