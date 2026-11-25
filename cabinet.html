@@ -4518,6 +4518,28 @@ body.wn-open{overflow:hidden;}
 .wn-ed-btns .danger{color:var(--danger);margin-left:auto;}
 @media (prefers-reduced-motion:reduce){.wn-ov,.wn-card,.wn-big,.wn-f{animation:none;}.wn-track{transition:none;}}
 
+/* ═══ 🧹 Самовписані імена учнів (student-names.js) ═══ */
+.sn{max-width:620px;width:100%;text-align:left;}
+.sn-h{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+.sn-h h3{margin:0;border:none;padding:0;text-align:left;}
+.sn-x{width:44px;height:44px;min-height:0;padding:0;margin:0;border:1px solid var(--line);border-radius:50%;background:var(--surface);color:var(--ink);cursor:pointer;flex:none;}
+.sn-note{color:var(--ink-2);font-size:.86rem;margin:10px 0;}
+.sn-ok{margin:10px 0;padding:10px 12px;border-radius:12px;background:var(--ok-soft);color:var(--ok);font-weight:700;font-size:.88rem;}
+.sn-sum{margin:0 0 10px;font-size:.9rem;}
+.sn-list{display:flex;flex-direction:column;gap:8px;max-height:55vh;overflow-y:auto;}
+.sn-row{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:14px;background:var(--surface);cursor:pointer;}
+.sn-row.same{background:var(--surface-2);}
+.sn-row input{width:22px;height:22px;flex:none;margin:0;}
+.sn-cls{flex:none;min-width:58px;font-weight:800;font-size:.8rem;color:var(--ink-2);}
+.sn-names{flex:1;min-width:0;display:flex;align-items:center;flex-wrap:wrap;gap:4px 10px;}
+.sn-names small{display:block;font-size:.7rem;font-weight:800;color:var(--ink-3);text-transform:uppercase;letter-spacing:.04em;}
+.sn-own .sn-v{color:var(--danger);font-weight:700;text-decoration:line-through;text-decoration-thickness:1px;}
+.sn-row.same .sn-own .sn-v{color:var(--ink-2);text-decoration:none;}
+.sn-school{font-weight:800;color:var(--ink);}
+.sn-arrow{color:var(--ink-3);}
+.sn-tag{flex:none;font-size:.72rem;font-weight:900;padding:3px 8px;border-radius:999px;background:var(--ok-soft);color:var(--ok);}
+.sn-btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;}
+.sn-btns .ui-btn{width:auto;}
 /* ═══ 🤝 ПАРТНЕРИ ШКОЛИ (partners.js) ═══ */
 /* 💳 Видані картки (адміністрація) */
 .pt-adm-cards{width:auto;margin:6px 0 4px;}
@@ -5327,6 +5349,14 @@ body.pt-open{overflow:hidden;}
           <span>Увімкнути для всіх: зимова заставка, сніг, гірлянда, снігові шапки на картках і святкове привітання.</span>
         </label>
         <p style="font-size:.78rem;color:var(--ink-3);margin:8px 0 0;">З'являється в усіх одразу, без оновлення сайту. Навесні — зніміть галочку. Хто вмикав «зменшити рух» у налаштуваннях телефона, сніг не побачить.</p>
+      </div>
+    </section>
+
+    <section class="screen-section" data-dtab="nalash">
+      <h3>🧹 Самовписані імена учнів</h3>
+      <div class="data-card" style="border-left-color:var(--brand);background:var(--surface-2);margin-top:0;">
+        <p style="margin:0 0 10px;font-size:.88rem;">Імʼя учня тепер веде лише школа (список класу). Тут — учні, які раніше самі вписали собі імʼя в профілі: спершу список «що вписав → як у списку класу», потім прибрати вибрані.</p>
+        <button type="button" class="ui-btn ui-btn-2" onclick="openStudentNamesClean()">🧹 Перевірити імена учнів</button>
       </div>
     </section>
 
@@ -7802,6 +7832,7 @@ function openAppReach(){
 <script type="module" src="advent.js"></script>
 <script type="module" src="partners.js"></script>
 <script type="module" src="whatsnew.js"></script>
+<script type="module" src="student-names.js"></script>
 <script type="module" src="breaks.js"></script>
 <script type="module" src="subjects.js"></script>
 <script type="module" src="alternating.js"></script>
