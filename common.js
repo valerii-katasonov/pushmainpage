@@ -3148,6 +3148,8 @@ const TAB_OPEN_HOOKS = { hw:'openHwTab', games:'openGamesTab', gradebook:'render
 // Прокрутити до блоку відвідуваності й коротко підсвітити його. Чекаємо,
 // поки список дочитається: інакше блок поїде вниз, коли зʼявляться рядки.
 function scrollToAttendance(screenId, attempt = 0){
+  // Блок у директора міг бути згорнутий — розгортаємо, інакше нічого не видно
+  if(attempt === 0 && window.expandDirAtt) try{ window.expandDirAtt(); }catch(e){}
   const id = { 'teacher-screen':'t-att-header', 'director-screen':'d-att-header', 'admin-screen':'a-att-header' }[screenId]
           || 't-att-header';
   const head = document.getElementById(id);

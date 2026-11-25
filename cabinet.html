@@ -2022,6 +2022,34 @@
     .as-classes{display:flex;flex-wrap:wrap;gap:4px;}
     .as-cls{font-size:.75rem;background:var(--surface);border:1px solid var(--danger-line);border-radius:10px;padding:2px 8px;}
     .as-cls.zero{opacity:.45;border-color:var(--line);}
+    /* 📉 Статистика відсутності (att-stats.js) */
+    button.as-cls{width:auto;margin:0;min-height:36px;padding:2px 10px;color:var(--ink);font:inherit;font-size:.78rem;cursor:pointer;}
+    button.as-cls.on{background:var(--danger);border-color:var(--danger);color:var(--on-fill);opacity:1;}
+    .as-title small{font-weight:600;color:var(--ink-3);}
+    .ast-ctl{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;}
+    .ast-ctl select,.ast-ctl input{flex:1 1 140px;min-width:0;margin:0;min-height:44px;}
+    .ast-ctl input[hidden]{display:none;}
+    .ast-period{margin:0 0 8px;font-weight:800;font-size:.85rem;color:var(--ink-2);}
+    .ast-all{width:auto;margin:0 0 0 6px;padding:2px 8px;min-height:0;border:1px solid var(--line);border-radius:999px;background:var(--surface);color:var(--brand-ink);font-size:.75rem;cursor:pointer;}
+    .ast-reasons{display:flex;flex-wrap:wrap;gap:6px;}
+    .ast-reasons span{font-size:.78rem;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:3px 10px;}
+    .ast-h{display:flex;align-items:center;justify-content:space-between;gap:8px;}
+    .ast-csv{width:auto;min-height:32px;padding:0 10px;font-size:.78rem;}
+    .ast-list{display:flex;flex-direction:column;gap:6px;}
+    .ast-row{background:var(--surface);border:1px solid var(--line-soft);border-radius:10px;}
+    .ast-row summary{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;padding:8px 10px;cursor:pointer;list-style:none;font-size:.85rem;}
+    .ast-row summary::-webkit-details-marker{display:none;}
+    .ast-row summary::after{content:'▾';margin-left:auto;color:var(--ink-3);transition:transform .2s;}
+    .ast-row[open] summary::after{transform:rotate(180deg);}
+    .ast-name{display:flex;align-items:baseline;gap:6px;min-width:0;}
+    .ast-name .as-c{font-size:.72rem;color:var(--ink-3);}
+    .ast-rs{display:flex;flex-wrap:wrap;gap:4px;width:100%;}
+    .ast-rs i{font-style:normal;font-size:.72rem;background:var(--surface-2);border-radius:999px;padding:2px 8px;color:var(--ink-2);}
+    .ast-days{list-style:none;margin:0;padding:4px 10px 10px;border-top:1px solid var(--line-soft);font-size:.8rem;}
+    .ast-days li{padding:5px 0;border-bottom:1px dashed var(--line-soft);line-height:1.6;}
+    .ast-days li:last-child{border-bottom:none;}
+    .ast-days li>b{display:inline-block;min-width:62px;}
+    .ast-who{color:var(--ink-3);}
     .as-row{display:flex;justify-content:space-between;gap:9px;padding:5px 8px;background:var(--surface);border:1px solid var(--line-soft);border-radius:8px;margin-bottom:4px;font-size:.82rem;}
     .as-name{color:var(--ink);}
     .as-c{color:var(--ink-3);font-size:.75rem;}
@@ -2562,6 +2590,12 @@
     /* Розшифровка лічильника ДЗ у директора */
     .hwb-cls{display:flex;justify-content:space-between;align-items:center;background:var(--brand-soft);color:var(--brand-ink);padding:6px 10px;border-radius:8px;margin:10px 0 6px;font-size:.83rem;}
     .hwb-cls span{background:var(--brand-ink);color:var(--on-fill);border-radius:10px;padding:1px 8px;font-size:.75rem;}
+    /* Розшифровка тижня: кожен день — окремий блок зі смугою дати */
+    .hwb-dayblock{border:1px solid var(--line);border-radius:12px;margin:12px 0;overflow:hidden;background:var(--surface);}
+    .hwb-day{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 12px;background:var(--danger-soft);color:var(--danger);border-bottom:1px solid var(--danger-line);font-size:.88rem;}
+    .hwb-day b{font-size:.95rem;}
+    .hwb-day .hwb-dn{display:flex;gap:4px;}
+    .hwb-dayblock .hwb-row{padding:7px 12px;}
     .hwb-row{border-bottom:1px solid var(--line-soft);padding:6px 4px;}
     .hwb-row:last-child{border-bottom:none;}
     .hwb-subj{font-weight:700;font-size:.82rem;color:var(--ink);}
@@ -4518,6 +4552,16 @@ body.wn-open{overflow:hidden;}
 .wn-ed-btns .danger{color:var(--danger);margin-left:auto;}
 @media (prefers-reduced-motion:reduce){.wn-ov,.wn-card,.wn-big,.wn-f{animation:none;}.wn-track{transition:none;}}
 
+/* ═══ Огляд директора: блок «Відсутні» згортається (att-stats.js) ═══ */
+.d-att-tog{display:flex;align-items:center;gap:8px;width:100%;margin:0;padding:0;min-height:44px;border:0;background:none;color:inherit;text-align:left;cursor:pointer;font:inherit;}
+.d-att-tog .ui-card-h{flex:1;margin:0;}
+.d-att-cnt{display:flex;gap:4px;align-items:center;}
+.d-att-ok{color:var(--ok);font-weight:900;}
+.d-att-chev{font-style:normal;color:var(--ink-3);transition:transform .2s;}
+.d-att-card.is-collapsed .d-att-chev{transform:rotate(-90deg);}
+.d-att-card.is-collapsed .d-att-body{display:none;}
+.d-att-body{margin-top:8px;}
+.d-att-stat{width:auto;margin-top:10px;}
 /* ═══ 🧹 Самовписані імена учнів (student-names.js) ═══ */
 .sn{max-width:620px;width:100%;text-align:left;}
 .sn-h{display:flex;align-items:center;justify-content:space-between;gap:10px;}
@@ -5421,8 +5465,15 @@ body.pt-open{overflow:hidden;}
       <div id="d-com-breakdown" class="ui-card d-brk" style="display:none;"></div>
       <div id="d-week-breakdown" class="ui-card d-brk" style="display:none;"></div>
       <div class="ui-card d-att-card st-card">
-        <h4 id="d-att-header" class="ui-card-h">🚨 Відсутні та запізнення</h4>
-        <ul id="d-unified-att-list" class="list-dash" style="padding-left:0;list-style:none;margin:0;"><li class="empty-msg is-loading">Завантаження...</li></ul>
+        <!-- Згортається (att-stats.js, стан — у браузері). У заголовку — лічильник, щоб і згорнутим було видно, скільки. -->
+        <button type="button" id="d-att-tog" class="d-att-tog" aria-expanded="true" aria-controls="d-att-body" onclick="toggleDirAtt()">
+          <span id="d-att-header" class="ui-card-h">🚨 Відсутні та запізнення</span>
+          <span id="d-att-count" class="d-att-cnt"></span><i class="d-att-chev" aria-hidden="true">▾</i>
+        </button>
+        <div id="d-att-body" class="d-att-body">
+          <ul id="d-unified-att-list" class="list-dash" style="padding-left:0;list-style:none;margin:0;"><li class="empty-msg is-loading">Завантаження...</li></ul>
+          <button type="button" class="ui-btn ui-btn-2 d-att-stat" onclick="openAttStats()">📉 Статистика відсутності</button>
+        </div>
       </div>
       <h3 class="ui-h">Дії</h3>
       <div class="qa-groups"><div class="qa-group"><div class="qa-grid">
@@ -5768,12 +5819,11 @@ body.pt-open{overflow:hidden;}
         </div>
       </details>
       <!-- Статистика відвідуваності за місяць -->
-      <details data-dtab="stat" style="margin-bottom:12px;background:var(--surface-2);padding:14px;border-radius:12px;border:1px solid var(--danger-line);" ontoggle="if(this.open){document.getElementById('att-month').value=document.getElementById('att-month').value||new Date().toISOString().slice(0,7);loadAttendanceStats();}">
-        <summary style="font-weight:700;cursor:pointer;color:var(--danger);font-size:.95rem;">📉 Статистика відвідуваності</summary>
+      <details id="att-stats-det" data-dtab="stat" style="margin-bottom:12px;background:var(--surface-2);padding:14px;border-radius:12px;border:1px solid var(--danger-line);" ontoggle="if(this.open)loadAttendanceStats();">
+        <summary style="font-weight:700;cursor:pointer;color:var(--danger);font-size:.95rem;">📉 Статистика відсутності</summary>
         <div style="margin-top:13px;">
-          <input type="month" id="att-month" onchange="loadAttendanceStats()" style="margin-top:0;">
-          <p style="font-size:.76rem;color:var(--ink-3);margin:6px 0 0 0;">
-            Кілька уроків одного дня рахуються як один пропуск дня.
+          <p style="font-size:.76rem;color:var(--ink-3);margin:0 0 6px 0;">
+            Кілька уроків одного дня рахуються як один день. Натисніть клас — побачите кожного учня: скільки відсутній, скільки запізнювався й з яких причин.
           </p>
           <div id="att-stats" style="margin-top:9px;"><p class="empty-msg is-loading">Завантаження...</p></div>
         </div>
@@ -7835,6 +7885,7 @@ function openAppReach(){
 <script type="module" src="partners.js"></script>
 <script type="module" src="whatsnew.js"></script>
 <script type="module" src="student-names.js"></script>
+<script type="module" src="att-stats.js"></script>
 <script type="module" src="breaks.js"></script>
 <script type="module" src="subjects.js"></script>
 <script type="module" src="alternating.js"></script>
