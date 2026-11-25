@@ -6,7 +6,7 @@
 // ні класу, ні дітей. Чи дійсна — рахуємо з бази щоразу: вибув, відвʼязали
 // чи звільнили — картка сама стає недійсною.
 const { ALLOWED_HOSTS } = require('./lib/site');
-const { digits, formatNumber, GROUP_LABEL } = require('./lib/partner-card-core');
+const { digits, formatNumber, shortName, GROUP_LABEL } = require('./lib/partner-card-core');
 const { accessToken, readDb, writeDb, personOf, dropCard } = require('./lib/partner-person');
 
 const headers = origin => {
@@ -48,7 +48,12 @@ exports.handler = async (event) => {
       if (!p.groups.length) await dropCard(token, no, card.uid).catch(() => {});
       return reply(200, { valid: false, no: formatNumber(no) }, origin);
     }
-    return reply(200, { valid: true, no: formatNumber(no), short: card.short || '', labels: p.groups.map(g => GROUP_LABEL[g]),
+    // Імʼя — актуальне з бази, а не те, що записали при видачі (школа могла
+    // виправити імʼя учня, а самовписане — прибрати). Запис теж підтягуємо.
+    const short = p.name ? shortName(p.name) : (card.short || '');
+    if (p.name && (p.name !== card.name || short !== card.short))
+      await writeDb(token, `partner_cards/${no}`, { name: p.name, short }, 'PATCH').catch(() => {});
+    return reply(200, { valid: true, no: formatNumber(no), short, labels: p.groups.map(g => GROUP_LABEL[g]),
                         until: human(card.until) }, origin);
   } catch (e) {
     console.error('[card-check]', e.message);
