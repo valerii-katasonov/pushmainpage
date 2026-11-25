@@ -116,6 +116,13 @@ async function click(e){
       }catch(err){ fail++; console.warn('[student-names]', r.uid, err && err.message); }
     }
     invalidateUsersCache();
+    // PUSH School Card цих учнів — одразу на імʼя зі списку класу (картки
+    // пише лише сервер). Немає модуля партнерів — оновляться при відкритті.
+    if(ok && typeof window.syncPartnerCards === 'function'){
+      b.textContent = 'Оновлюю картки…';
+      const sum = await window.syncPartnerCards(pick.map(r => r.uid)).catch(() => null);
+      if(sum && sum.error) console.warn('[student-names] картки:', sum.msg);
+    }
     logAction('student_names_clean', { value: `прибрано ${ok}${fail ? `, помилок ${fail}` : ''}` });
     const cleaned = new Set(pick.map(r => r.uid));
     st.rows = st.rows.filter(r => !cleaned.has(r.uid));

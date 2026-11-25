@@ -507,7 +507,7 @@ export function cardStatus(c, today){
 export function cardRows(cards, today){
   return Object.entries(cards || {})
     .filter(([no, c]) => /^\d{12}$/.test(no) && c && typeof c === 'object' && c.uid)
-    .map(([no, c]) => ({ no, name: String(c.name || ''), groups: Object.keys(c.groups || {}).filter(g => CARD_GROUPS[g]),
+    .map(([no, c]) => ({ no, uid: String(c.uid), name: String(c.name || ''), groups: Object.keys(c.groups || {}).filter(g => CARD_GROUPS[g]),
       until: c.until || '', issuedAt: Number(c.issuedAt) || 0, checks: Number(c.checks) || 0, lastCheck: Number(c.lastCheck) || 0,
       blocked: !!c.blocked, blockedAt: Number(c.blockedAt) || 0, blockedBy: c.blockedBy || '', status: cardStatus(c, today) }))
     .sort((a, b) => a.name.localeCompare(b.name, 'uk') || a.no.localeCompare(b.no));
@@ -529,6 +529,24 @@ export function filterCards(rows, q, f){
 }
 const fmtNo = no => 'PS ' + String(no).replace(/(\d{4})(?=\d)/g, '$1 ');
 const fmtDay = ts => ts ? new Date(ts).toLocaleDateString('uk-UA') : '';
+// Перерахувати картки на сервері (імʼя й групи з бази; вибулих — прибрати).
+// По 25 людей за запит. Повертає зведення {updated, same, dropped, …, error}.
+export async function syncCards(uids, onProgress){
+  const list = [...new Set((uids || []).filter(Boolean))], sum = {};
+  for(let i = 0; i < list.length; i += 25){
+    const part = list.slice(i, i + 25);
+    try{
+      const idToken = await window.authIdToken();
+      const r = await fetch('/.netlify/functions/partner-cards-sync', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ idToken, uids: part }) });
+      const d = await r.json().catch(() => ({}));
+      if(!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+      Object.values(d.results || {}).forEach(st => { sum[st] = (sum[st] || 0) + 1; });
+    }catch(e){ sum.error = (sum.error || 0) + part.length; sum.msg = e.message || String(e); }
+    if(onProgress) onProgress(Math.min(i + 25, list.length), list.length);
+  }
+  return sum;
+}
+window.syncPartnerCards = syncCards;
 let cadm = null;
 window.openPartnerCardsAdmin = async function(){
   document.querySelectorAll('.pt-cards-ov').forEach(x => x.remove());
@@ -561,6 +579,8 @@ function cardsPaint(){
       <div><b>${s.blocked}</b><small>заблоковано</small></div><div><b>${s.checks}</b><small>перевірок у партнерів</small></div>
     </div>
     <p class="pt-adm-note">Картку видає портал, коли людина вперше відкриє «Моя картка». Хто вибув зі школи — його картка зникає сама. Заблокована картка в партнера показується недійсною, і нову власнику не видадуть, доки не розблокуєте.</p>
+    ${st.synced ? `<p class="pt-adm-note pt-cards-synced">🔄 Оновлено: ${st.synced.updated || 0}${st.synced.dropped ? ` · прибрано вибулих: ${st.synced.dropped}` : ''}${st.synced.error ? ` · не вдалося: ${st.synced.error} (${escHtml(st.synced.msg || '')})` : ''}</p>` : ''}
+    <button type="button" class="ui-btn ui-btn-2 pt-cards-sync" data-c="sync">🔄 Оновити дані карток</button>
     <input type="search" class="pt-cards-q" data-c="q" value="${escHtml(st.q)}" placeholder="Пошук: імʼя або номер" aria-label="Пошук картки">
     <div class="pt-chips pt-cards-f">${chip('all', 'Усі', s.all)}${chip('parent', 'Батьки', s.parent)}${chip('student', 'Учні', s.student)}${chip('staff', 'Персонал', s.staff)}${chip('blocked', '⛔ Заблоковані', s.blocked)}${s.expired ? chip('expired', 'Минув термін', s.expired) : ''}</div>
     <div class="pt-cards-list"></div>`;
@@ -585,6 +605,13 @@ async function cardsClick(e){
   const c = b.dataset.c;
   if(c === 'close'){ cadm.ov.remove(); cadm = null; return; }
   if(c === 'f'){ cadm.f = b.dataset.k; return cardsPaint(); }
+  if(c === 'sync'){
+    // Імена й групи з бази (школа могла виправити імʼя учня) — на сервері
+    const st = cadm; b.disabled = true;
+    const sum = await syncCards(st.rows.map(r => r.uid), (d, n) => { b.textContent = `🔄 Оновлюю… ${d} з ${n}`; });
+    if(cadm !== st) return;
+    st.synced = sum; await cardsLoad(); return;
+  }
   if(c === 'block' || c === 'unblock'){
     const no = b.closest('[data-no]').dataset.no, r = cadm.rows.find(x => x.no === no); if(!r) return;
     const yes = c === 'block'
