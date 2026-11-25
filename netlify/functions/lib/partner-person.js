@@ -1,6 +1,6 @@
 // 🤝 Дані людини для PUSH School Card — спільне для partner-card.js і card-check.js
 const crypto = require('crypto');
-const { emailKey, groupsOf, fullNameOf, rolesOf } = require('./partner-card-core');
+const { emailKey, groupsOf, fullNameOf, rolesOf, shortName } = require('./partner-card-core');
 const DB = 'https://test-4eb3e-default-rtdb.europe-west1.firebasedatabase.app';
 
 const b64url = buf => Buffer.from(buf).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -64,4 +64,21 @@ async function dropCard(token, no, uid) {
     if (mine === no) await fetch(url(token, `partner_card_of/${uid}`), { method: 'DELETE' });
   }
 }
-module.exports = { accessToken, readDb, writeDb, putIfAbsent, personOf, dropCard };
+// Оновити картку людини з бази: імʼя, коротке імʼя, групи. Вибула —
+// картку прибрати. Блок і термін не чіпаємо (термін продовжує сама людина,
+// відкривши «Моя картка»). Повертає: none | dropped | noname | same | updated.
+async function refreshCard(token, uid) {
+  const no = await readDb(token, `partner_card_of/${uid}`);
+  if (typeof no !== 'string' || !/^\d{12}$/.test(no)) return 'none';
+  const card = await readDb(token, `partner_cards/${no}`);
+  if (!card || typeof card !== 'object') return 'none';
+  const p = await personOf(token, uid);
+  if (!p.groups.length) { await dropCard(token, no, uid); return 'dropped'; }
+  if (!p.name) return 'noname';
+  const groups = Object.fromEntries(p.groups.map(g => [g, true]));
+  const short = shortName(p.name);
+  if (card.name === p.name && card.short === short && JSON.stringify(card.groups || {}) === JSON.stringify(groups)) return 'same';
+  await writeDb(token, `partner_cards/${no}`, { name: p.name, short, groups }, 'PATCH');
+  return 'updated';
+}
+module.exports = { accessToken, readDb, writeDb, putIfAbsent, personOf, dropCard, refreshCard };
